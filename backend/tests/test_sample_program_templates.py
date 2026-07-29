@@ -70,11 +70,7 @@ class TestCatalogIntegrity:
 
     def test_orientation_has_annual_compliance_items(self):
         orientation = SAMPLE_TEMPLATES["new-member-orientation"]
-        names = {
-            req.name
-            for phase in orientation.phases
-            for req in phase.requirements
-        }
+        names = {req.name for phase in orientation.phases for req in phase.requirements}
         assert any("HIPAA" in n for n in names)
         assert any("Bloodborne" in n for n in names)
         annual = [

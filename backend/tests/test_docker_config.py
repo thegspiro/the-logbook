@@ -11,9 +11,10 @@ Run with:
 
 import os
 import re
+from pathlib import Path
+
 import pytest
 import yaml
-from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -64,9 +65,7 @@ def _parse_dockerfile_stages(content: str) -> list[dict]:
 
         if instruction == "FROM":
             # e.g. "python:3.13-slim as base" or "dependencies as production"
-            from_match = re.match(
-                r"(.+?)\s+[Aa][Ss]\s+(\S+)", args
-            )
+            from_match = re.match(r"(.+?)\s+[Aa][Ss]\s+(\S+)", args)
             if from_match:
                 base_image, stage_name = from_match.groups()
             else:
@@ -114,45 +113,43 @@ class TestBackendDockerfile:
 
     def test_has_production_stage(self):
         stage_names = [s["name"] for s in self.stages]
-        assert "production" in stage_names, (
-            f"Missing 'production' stage. Found: {stage_names}"
-        )
+        assert (
+            "production" in stage_names
+        ), f"Missing 'production' stage. Found: {stage_names}"
 
     def test_has_development_stage(self):
         stage_names = [s["name"] for s in self.stages]
-        assert "development" in stage_names, (
-            f"Missing 'development' stage. Found: {stage_names}"
-        )
+        assert (
+            "development" in stage_names
+        ), f"Missing 'development' stage. Found: {stage_names}"
 
     def test_production_stage_has_healthcheck(self):
         prod = next(s for s in self.stages if s["name"] == "production")
         healthchecks = _get_instructions(prod, "HEALTHCHECK")
-        assert len(healthchecks) > 0, (
-            "Production stage is missing a HEALTHCHECK instruction"
-        )
+        assert (
+            len(healthchecks) > 0
+        ), "Production stage is missing a HEALTHCHECK instruction"
 
     def test_healthcheck_targets_health_endpoint(self):
         prod = next(s for s in self.stages if s["name"] == "production")
         healthchecks = _get_instructions(prod, "HEALTHCHECK")
         hc_text = " ".join(healthchecks)
-        assert "/health" in hc_text, (
-            f"HEALTHCHECK does not reference /health endpoint: {hc_text}"
-        )
+        assert (
+            "/health" in hc_text
+        ), f"HEALTHCHECK does not reference /health endpoint: {hc_text}"
 
     def test_production_exposes_correct_port(self):
         prod = next(s for s in self.stages if s["name"] == "production")
         exposed = _get_instructions(prod, "EXPOSE")
-        assert any("3001" in e for e in exposed), (
-            f"Production stage should EXPOSE 3001, got: {exposed}"
-        )
+        assert any(
+            "3001" in e for e in exposed
+        ), f"Production stage should EXPOSE 3001, got: {exposed}"
 
     def test_production_runs_as_non_root(self):
         prod = next(s for s in self.stages if s["name"] == "production")
         users = _get_instructions(prod, "USER")
         assert len(users) > 0, "Production stage should switch to a non-root USER"
-        assert users[-1].strip() != "root", (
-            "Production stage should not run as root"
-        )
+        assert users[-1].strip() != "root", "Production stage should not run as root"
 
     def test_production_copies_application_code(self):
         prod = next(s for s in self.stages if s["name"] == "production")
@@ -166,24 +163,24 @@ class TestBackendDockerfile:
         cmds = _get_instructions(prod, "CMD")
         assert len(cmds) > 0, "Production stage must have a CMD instruction"
         cmd_text = " ".join(cmds)
-        assert "uvicorn" in cmd_text, (
-            f"Production CMD should run uvicorn, got: {cmd_text}"
-        )
+        assert (
+            "uvicorn" in cmd_text
+        ), f"Production CMD should run uvicorn, got: {cmd_text}"
 
     def test_base_uses_slim_image(self):
         base = self.stages[0]
-        assert "slim" in base["base"] or "alpine" in base["base"], (
-            f"Base image should use a slim/alpine variant for smaller size, got: {base['base']}"
-        )
+        assert (
+            "slim" in base["base"] or "alpine" in base["base"]
+        ), f"Base image should use a slim/alpine variant for smaller size, got: {base['base']}"
 
     def test_python_env_vars_set(self):
         """Verify recommended Python environment variables for containers."""
-        assert "PYTHONUNBUFFERED" in self.content, (
-            "PYTHONUNBUFFERED should be set for proper container logging"
-        )
-        assert "PYTHONDONTWRITEBYTECODE" in self.content, (
-            "PYTHONDONTWRITEBYTECODE should be set to avoid .pyc files in containers"
-        )
+        assert (
+            "PYTHONUNBUFFERED" in self.content
+        ), "PYTHONUNBUFFERED should be set for proper container logging"
+        assert (
+            "PYTHONDONTWRITEBYTECODE" in self.content
+        ), "PYTHONDONTWRITEBYTECODE should be set to avoid .pyc files in containers"
 
 
 # ===========================================================================
@@ -204,51 +201,49 @@ class TestFrontendDockerfile:
         assert self.path.exists(), "frontend/Dockerfile is missing"
 
     def test_has_multi_stage_build(self):
-        assert len(self.stages) >= 2, (
-            f"Expected at least 2 build stages, found {len(self.stages)}"
-        )
+        assert (
+            len(self.stages) >= 2
+        ), f"Expected at least 2 build stages, found {len(self.stages)}"
 
     def test_has_production_stage(self):
         stage_names = [s["name"] for s in self.stages]
-        assert "production" in stage_names, (
-            f"Missing 'production' stage. Found: {stage_names}"
-        )
+        assert (
+            "production" in stage_names
+        ), f"Missing 'production' stage. Found: {stage_names}"
 
     def test_production_uses_nginx(self):
         prod = next(s for s in self.stages if s["name"] == "production")
-        assert "nginx" in prod["base"], (
-            f"Production stage should use nginx, got: {prod['base']}"
-        )
+        assert (
+            "nginx" in prod["base"]
+        ), f"Production stage should use nginx, got: {prod['base']}"
 
     def test_production_stage_has_healthcheck(self):
         prod = next(s for s in self.stages if s["name"] == "production")
         healthchecks = _get_instructions(prod, "HEALTHCHECK")
-        assert len(healthchecks) > 0, (
-            "Frontend production stage is missing a HEALTHCHECK instruction"
-        )
+        assert (
+            len(healthchecks) > 0
+        ), "Frontend production stage is missing a HEALTHCHECK instruction"
 
     def test_production_exposes_port_80(self):
         prod = next(s for s in self.stages if s["name"] == "production")
         exposed = _get_instructions(prod, "EXPOSE")
-        assert any("80" in e for e in exposed), (
-            f"Frontend production stage should EXPOSE 80, got: {exposed}"
-        )
+        assert any(
+            "80" in e for e in exposed
+        ), f"Frontend production stage should EXPOSE 80, got: {exposed}"
 
     def test_copies_nginx_config(self):
         prod = next(s for s in self.stages if s["name"] == "production")
         copies = _get_instructions(prod, "COPY")
         copy_text = " ".join(copies)
-        assert "nginx.conf" in copy_text, (
-            "Production stage must COPY custom nginx.conf"
-        )
+        assert "nginx.conf" in copy_text, "Production stage must COPY custom nginx.conf"
 
     def test_copies_built_assets(self):
         prod = next(s for s in self.stages if s["name"] == "production")
         copies = _get_instructions(prod, "COPY")
         copy_text = " ".join(copies)
-        assert "dist" in copy_text or "build" in copy_text, (
-            "Production stage must COPY built frontend assets"
-        )
+        assert (
+            "dist" in copy_text or "build" in copy_text
+        ), "Production stage must COPY built frontend assets"
 
     def test_build_stage_has_build_command(self):
         build = next(
@@ -259,9 +254,9 @@ class TestFrontendDockerfile:
             pytest.skip("No explicit 'build' stage found")
         runs = _get_instructions(build, "RUN")
         run_text = " ".join(runs)
-        assert "build" in run_text, (
-            f"Build stage should run a build command, got: {run_text}"
-        )
+        assert (
+            "build" in run_text
+        ), f"Build stage should run a build command, got: {run_text}"
 
 
 # ===========================================================================
@@ -334,23 +329,23 @@ class TestDockerCompose:
         for svc_name in ("mysql", "redis", "backend", "frontend"):
             svc = self.config["services"][svc_name]
             svc_networks = svc.get("networks", [])
-            assert network_name in svc_networks, (
-                f"Service '{svc_name}' must be on the '{network_name}' network"
-            )
+            assert (
+                network_name in svc_networks
+            ), f"Service '{svc_name}' must be on the '{network_name}' network"
 
     def test_mysql_port_not_exposed_by_default(self):
         """SEC-14: Database port should NOT be exposed to the host."""
         mysql = self.config["services"]["mysql"]
-        assert "ports" not in mysql, (
-            "MySQL port should NOT be exposed to the host by default (SEC-14)"
-        )
+        assert (
+            "ports" not in mysql
+        ), "MySQL port should NOT be exposed to the host by default (SEC-14)"
 
     def test_redis_port_not_exposed_by_default(self):
         """SEC-14: Redis port should NOT be exposed to the host."""
         redis_svc = self.config["services"]["redis"]
-        assert "ports" not in redis_svc, (
-            "Redis port should NOT be exposed to the host by default (SEC-14)"
-        )
+        assert (
+            "ports" not in redis_svc
+        ), "Redis port should NOT be exposed to the host by default (SEC-14)"
 
     def test_backend_has_restart_policy(self):
         backend = self.config["services"]["backend"]
@@ -359,8 +354,16 @@ class TestDockerCompose:
     def test_backend_environment_has_required_vars(self):
         backend = self.config["services"]["backend"]
         env = backend.get("environment", {})
-        required_vars = {"DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD",
-                         "REDIS_HOST", "REDIS_PORT", "SECRET_KEY"}
+        required_vars = {
+            "DB_HOST",
+            "DB_PORT",
+            "DB_NAME",
+            "DB_USER",
+            "DB_PASSWORD",
+            "REDIS_HOST",
+            "REDIS_PORT",
+            "SECRET_KEY",
+        }
         if isinstance(env, dict):
             env_keys = set(env.keys())
         else:
@@ -393,9 +396,9 @@ class TestDockerComposeMinimal:
         backend = self.config["services"]["backend"]
         cmd = backend.get("command", [])
         cmd_str = " ".join(cmd) if isinstance(cmd, list) else str(cmd)
-        assert "--workers" in cmd_str and "1" in cmd_str, (
-            "Minimal profile backend should use a single worker"
-        )
+        assert (
+            "--workers" in cmd_str and "1" in cmd_str
+        ), "Minimal profile backend should use a single worker"
 
     def test_has_resource_limits(self):
         """Minimal profile should set memory limits for constrained environments."""
@@ -404,9 +407,9 @@ class TestDockerComposeMinimal:
             deploy = svc.get("deploy", {})
             resources = deploy.get("resources", {})
             limits = resources.get("limits", {})
-            assert "memory" in limits, (
-                f"Service '{svc_name}' should have memory limits in minimal profile"
-            )
+            assert (
+                "memory" in limits
+            ), f"Service '{svc_name}' should have memory limits in minimal profile"
 
 
 class TestDockerComposeArm:
@@ -429,13 +432,13 @@ class TestDockerComposeArm:
         arm_platforms_found = False
         for svc_name, svc in services.items():
             if "platform" in svc:
-                assert "arm64" in svc["platform"] or "arm" in svc["platform"], (
-                    f"Service '{svc_name}' platform should specify ARM architecture"
-                )
+                assert (
+                    "arm64" in svc["platform"] or "arm" in svc["platform"]
+                ), f"Service '{svc_name}' platform should specify ARM architecture"
                 arm_platforms_found = True
-        assert arm_platforms_found, (
-            "ARM compose file should specify ARM platform for at least one service"
-        )
+        assert (
+            arm_platforms_found
+        ), "ARM compose file should specify ARM platform for at least one service"
 
 
 # ===========================================================================
@@ -454,48 +457,46 @@ class TestHealthEndpointContract:
         self.main_py = _read(BACKEND_DIR / "main.py")
 
     def test_health_endpoint_is_defined(self):
-        assert '@app.get("/health")' in self.main_py, (
-            "main.py must define a GET /health endpoint"
-        )
+        assert (
+            '@app.get("/health")' in self.main_py
+        ), "main.py must define a GET /health endpoint"
 
     def test_health_detailed_endpoint_is_defined(self):
-        assert '@app.get("/health/detailed")' in self.main_py, (
-            "main.py must define a GET /health/detailed endpoint"
-        )
+        assert (
+            '@app.get("/health/detailed")' in self.main_py
+        ), "main.py must define a GET /health/detailed endpoint"
 
     def test_health_returns_required_fields(self):
         """The health response dict must include status, version, environment, timestamp."""
         # Look for the health_status dict construction
         for field in ("status", "version", "environment", "timestamp"):
-            assert f'"{field}"' in self.main_py, (
-                f"Health endpoint response must include '{field}' field"
-            )
+            assert (
+                f'"{field}"' in self.main_py
+            ), f"Health endpoint response must include '{field}' field"
 
     def test_health_checks_database(self):
-        assert "database" in self.main_py, (
-            "Health endpoint must check database connectivity"
-        )
+        assert (
+            "database" in self.main_py
+        ), "Health endpoint must check database connectivity"
 
     def test_health_checks_redis(self):
-        assert "redis" in self.main_py, (
-            "Health endpoint must check Redis connectivity"
-        )
+        assert "redis" in self.main_py, "Health endpoint must check Redis connectivity"
 
     def test_health_has_status_levels(self):
         """Verify the endpoint can report healthy, degraded, and unhealthy states."""
         for status in ("healthy", "degraded", "unhealthy"):
-            assert f'"{status}"' in self.main_py, (
-                f"Health endpoint must support '{status}' status level"
-            )
+            assert (
+                f'"{status}"' in self.main_py
+            ), f"Health endpoint must support '{status}' status level"
 
     def test_detailed_health_blocked_in_production(self):
         """The detailed endpoint must be restricted in production."""
         # Find the detailed health function
         detailed_idx = self.main_py.index("health_check_detailed")
-        nearby = self.main_py[detailed_idx:detailed_idx + 500]
-        assert "production" in nearby, (
-            "/health/detailed must check for production environment"
-        )
+        nearby = self.main_py[detailed_idx : detailed_idx + 500]
+        assert (
+            "production" in nearby
+        ), "/health/detailed must check for production environment"
 
 
 # ===========================================================================
@@ -518,23 +519,23 @@ class TestSupportingFiles:
     def test_nginx_conf_has_spa_routing(self):
         """SPA routing must fall back to index.html."""
         nginx_conf = _read(FRONTEND_DIR / "nginx.conf")
-        assert "try_files" in nginx_conf and "index.html" in nginx_conf, (
-            "nginx.conf must have SPA try_files fallback to index.html"
-        )
+        assert (
+            "try_files" in nginx_conf and "index.html" in nginx_conf
+        ), "nginx.conf must have SPA try_files fallback to index.html"
 
     def test_nginx_conf_proxies_health(self):
         """nginx should proxy /health to the backend."""
         nginx_conf = _read(FRONTEND_DIR / "nginx.conf")
-        assert "/health" in nginx_conf and "proxy_pass" in nginx_conf, (
-            "nginx.conf should proxy /health requests to the backend"
-        )
+        assert (
+            "/health" in nginx_conf and "proxy_pass" in nginx_conf
+        ), "nginx.conf should proxy /health requests to the backend"
 
     def test_nginx_conf_proxies_api(self):
         """nginx should proxy /api to the backend."""
         nginx_conf = _read(FRONTEND_DIR / "nginx.conf")
-        assert "/api" in nginx_conf, (
-            "nginx.conf should proxy /api requests to the backend"
-        )
+        assert (
+            "/api" in nginx_conf
+        ), "nginx.conf should proxy /api requests to the backend"
 
     def test_requirements_has_uvicorn(self):
         reqs = _read(BACKEND_DIR / "requirements.txt")
@@ -547,6 +548,6 @@ class TestSupportingFiles:
     def test_requirements_has_requests_for_healthcheck(self):
         """The backend Dockerfile HEALTHCHECK uses 'requests' library."""
         reqs = _read(BACKEND_DIR / "requirements.txt")
-        assert "requests" in reqs, (
-            "requirements.txt must include 'requests' (used by Dockerfile HEALTHCHECK)"
-        )
+        assert (
+            "requests" in reqs
+        ), "requirements.txt must include 'requests' (used by Dockerfile HEALTHCHECK)"

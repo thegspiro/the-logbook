@@ -20,10 +20,10 @@ import pytest
 from app.models.inventory import ItemStatus, TrackingType
 from app.services.inventory_service import InventoryService
 
-
 # ============================================
 # Fixtures / helpers
 # ============================================
+
 
 @pytest.fixture
 def mock_db():
@@ -113,6 +113,7 @@ def _prefs(uid, **kwargs):
 # _format_needed_size
 # ============================================
 
+
 class TestFormatNeededSize:
 
     def test_none_prefs_or_field(self):
@@ -136,14 +137,10 @@ class TestFormatNeededSize:
             == "10 (Wide)"
         )
         assert (
-            InventoryService._format_needed_size(
-                _prefs("u", boot_size="10"), "boot"
-            )
+            InventoryService._format_needed_size(_prefs("u", boot_size="10"), "boot")
             == "10"
         )
-        assert (
-            InventoryService._format_needed_size(_prefs("u"), "boot") is None
-        )
+        assert InventoryService._format_needed_size(_prefs("u"), "boot") is None
 
     def test_pant_combinations(self):
         assert (
@@ -153,24 +150,19 @@ class TestFormatNeededSize:
             == "34 x 32"
         )
         assert (
-            InventoryService._format_needed_size(
-                _prefs("u", pant_waist="34"), "pant"
-            )
+            InventoryService._format_needed_size(_prefs("u", pant_waist="34"), "pant")
             == "34"
         )
-        assert (
-            InventoryService._format_needed_size(_prefs("u"), "pant") is None
-        )
+        assert InventoryService._format_needed_size(_prefs("u"), "pant") is None
 
     def test_missing_value_returns_none(self):
-        assert (
-            InventoryService._format_needed_size(_prefs("u"), "shirt") is None
-        )
+        assert InventoryService._format_needed_size(_prefs("u"), "shirt") is None
 
 
 # ============================================
 # analyze_impact
 # ============================================
+
 
 class TestAnalyzeImpact:
 
@@ -268,8 +260,9 @@ class TestAnalyzeImpact:
     async def test_contact_visibility_per_field(self, service, mock_db):
         org_id = str(uuid4())
         users = [
-            _user("u1", "Amy", "Adams", email="amy@x.org",
-                  phone="555-1", mobile="555-9"),
+            _user(
+                "u1", "Amy", "Adams", email="amy@x.org", phone="555-1", mobile="555-9"
+            ),
         ]
         # Email shown, phone hidden -> phone falls through to mobile (hidden too)
         mock_db.execute.side_effect = [_scalars_result(users)]
@@ -277,7 +270,9 @@ class TestAnalyzeImpact:
             organization_id=org_id,
             filters={},
             contact_visibility={
-                "show_email": True, "show_phone": False, "show_mobile": False,
+                "show_email": True,
+                "show_phone": False,
+                "show_mobile": False,
             },
         )
         m = result["members"][0]
@@ -293,7 +288,9 @@ class TestAnalyzeImpact:
             organization_id=org_id,
             filters={},
             contact_visibility={
-                "show_email": False, "show_phone": False, "show_mobile": True,
+                "show_email": False,
+                "show_phone": False,
+                "show_mobile": True,
             },
         )
         m = result["members"][0]
@@ -307,7 +304,9 @@ class TestAnalyzeImpact:
         users = [_user("u1", "Amy", "Adams", phone="555-1", mobile="555-9")]
         mock_db.execute.side_effect = [_scalars_result(users)]
         result = await service.analyze_impact(
-            organization_id=org_id, filters={}, contact_visibility={},
+            organization_id=org_id,
+            filters={},
+            contact_visibility={},
         )
         m = result["members"][0]
         assert m["email"] is None and m["phone"] is None
@@ -328,6 +327,7 @@ class TestAnalyzeImpact:
 # ============================================
 # Stock-aware shortfall
 # ============================================
+
 
 class TestNormalizeSizeKey:
 
@@ -361,10 +361,7 @@ class TestItemStockSizeValue:
             )
             == "l"
         )
-        assert (
-            InventoryService._item_stock_size_value(_stock_item(size="M"))
-            == "M"
-        )
+        assert InventoryService._item_stock_size_value(_stock_item(size="M")) == "M"
 
 
 class TestStockAndCostBySize:
@@ -382,9 +379,7 @@ class TestStockAndCostBySize:
             _stock_item(standard_size="l", status=ItemStatus.AVAILABLE),
         ]
         mock_db.execute.side_effect = [_scalars_result(items)]
-        stock, _unit, _avg = await service._get_stock_and_cost_by_size(
-            "org", "cat"
-        )
+        stock, _unit, _avg = await service._get_stock_and_cost_by_size("org", "cat")
         assert stock == {"m": 3, "l": 1}
 
     @pytest.mark.asyncio
@@ -399,9 +394,7 @@ class TestStockAndCostBySize:
             _stock_item(standard_size="xl"),
         ]
         mock_db.execute.side_effect = [_scalars_result(items)]
-        _stock, unit_cost, avg = await service._get_stock_and_cost_by_size(
-            "org", "cat"
-        )
+        _stock, unit_cost, avg = await service._get_stock_and_cost_by_size("org", "cat")
         assert unit_cost["m"] == 110.0
         assert unit_cost["l"] == 200.0
         assert "xl" not in unit_cost
@@ -425,8 +418,8 @@ class TestAnalyzeImpactStockAware:
             _stock_item(standard_size="m", pool=True, quantity=2, issued=0),
         ]
         mock_db.execute.side_effect = [
-            _scalars_result(users),       # users
-            _scalars_result(prefs),       # size prefs
+            _scalars_result(users),  # users
+            _scalars_result(prefs),  # size prefs
             _scalars_result(stock_items),  # stock lookup
         ]
 
@@ -516,6 +509,7 @@ class TestAnalyzeImpactStockAware:
 # Replacement-aware targeting
 # ============================================
 
+
 class TestReplacementAware:
 
     @pytest.mark.asyncio
@@ -523,10 +517,10 @@ class TestReplacementAware:
         org_id = str(uuid4())
         cat_id = str(uuid4())
         users = [
-            _user("u1", "Amy", "Adams"),   # worn item -> needs replacement
-            _user("u2", "Bob", "Baker"),   # good item -> covered
-            _user("u3", "Cy", "Clark"),    # expired item -> needs replacement
-            _user("u4", "Di", "Dunn"),     # holds nothing -> needs item
+            _user("u1", "Amy", "Adams"),  # worn item -> needs replacement
+            _user("u2", "Bob", "Baker"),  # good item -> covered
+            _user("u3", "Cy", "Clark"),  # expired item -> needs replacement
+            _user("u4", "Di", "Dunn"),  # holds nothing -> needs item
         ]
         past = date.today() - timedelta(days=1)
         # (user_id, name, condition, retirement_date, retired_by_age)
@@ -593,12 +587,11 @@ class TestReplacementAware:
 # create_reorder_from_plan
 # ============================================
 
+
 class TestCreateReorderFromPlan:
 
     @pytest.mark.asyncio
-    async def test_creates_one_reorder_per_size_with_shortfall(
-        self, service, mock_db
-    ):
+    async def test_creates_one_reorder_per_size_with_shortfall(self, service, mock_db):
         org_id = str(uuid4())
         cat_id = str(uuid4())
         users = [
@@ -643,10 +636,10 @@ class TestCreateReorderFromPlan:
         names = {r["item_name"] for r in result["reorder_requests"]}
         assert names == {"Jackets — M", "Jackets — L"}
         # Reorder rows were added with the chosen vendor/urgency
-        added = {r.item_name: r for r in
-                 (c.args[0] for c in mock_db.add.call_args_list)}
-        assert all(r.vendor == "Acme" and r.urgency == "high"
-                   for r in added.values())
+        added = {
+            r.item_name: r for r in (c.args[0] for c in mock_db.add.call_args_list)
+        }
+        assert all(r.vendor == "Acme" and r.urgency == "high" for r in added.values())
         assert all(r.category_id == cat_id for r in added.values())
         # The cost estimate flows onto the reorders: M from its own price,
         # L from the category-average fallback (no L-specific price).
@@ -676,6 +669,7 @@ class TestCreateReorderFromPlan:
 # bulk_issue_from_plan
 # ============================================
 
+
 class TestBulkIssueFromPlan:
 
     @pytest.mark.asyncio
@@ -683,10 +677,10 @@ class TestBulkIssueFromPlan:
         org_id = str(uuid4())
         cat_id = str(uuid4())
         users = [
-            _user("u1", "Amy", "Adams"),   # M, will be issued
-            _user("u2", "Bob", "Baker"),   # already has -> not a target
-            _user("u3", "Cy", "Clark"),    # no size -> skipped
-            _user("u4", "Di", "Dunn"),     # L, no L stock -> skipped
+            _user("u1", "Amy", "Adams"),  # M, will be issued
+            _user("u2", "Bob", "Baker"),  # already has -> not a target
+            _user("u3", "Cy", "Clark"),  # no size -> skipped
+            _user("u4", "Di", "Dunn"),  # L, no L stock -> skipped
         ]
         prefs = [
             _prefs("u1", shirt_size="M"),
@@ -703,12 +697,12 @@ class TestBulkIssueFromPlan:
             it.id = "item-m"
             it.name = "Dept Polo M"
         mock_db.execute.side_effect = [
-            _scalars_result(users),          # analyze: users
-            _scalars_result(prefs),          # analyze: size prefs
-            _rows_result(assign_rows),       # analyze: related assignments
-            _rows_result([]),                # analyze: related issuances
-            _scalars_result([]),             # analyze: stock+cost lookup
-            _scalars_result(pool_items),     # bulk: available pool items
+            _scalars_result(users),  # analyze: users
+            _scalars_result(prefs),  # analyze: size prefs
+            _rows_result(assign_rows),  # analyze: related assignments
+            _rows_result([]),  # analyze: related issuances
+            _scalars_result([]),  # analyze: stock+cost lookup
+            _scalars_result(pool_items),  # bulk: available pool items
         ]
         # issue_from_pool is exercised separately; stub it here.
         service.issue_from_pool = AsyncMock(
@@ -750,15 +744,16 @@ class TestBulkIssueFromPlan:
 # Request member sizes
 # ============================================
 
+
 class TestRequestMemberSizes:
 
     @pytest.mark.asyncio
     async def test_notifies_only_missing_size_members(self, service, mock_db):
         org_id = str(uuid4())
         users = [
-            _user("u1", "Amy", "Adams"),   # has size -> not notified
-            _user("u2", "Bob", "Baker"),   # no size -> notified
-            _user("u3", "Cy", "Clark"),    # no size -> notified
+            _user("u1", "Amy", "Adams"),  # has size -> not notified
+            _user("u2", "Bob", "Baker"),  # no size -> notified
+            _user("u3", "Cy", "Clark"),  # no size -> notified
         ]
         prefs = [_prefs("u1", shirt_size="M")]
         # analyze: users, prefs (size_field set); no related/stock.
@@ -786,14 +781,13 @@ class TestRequestMemberSizes:
     @pytest.mark.asyncio
     async def test_requires_size_field(self, service, mock_db):
         with pytest.raises(ValueError):
-            await service.request_member_sizes(
-                organization_id=str(uuid4()), filters={}
-            )
+            await service.request_member_sizes(organization_id=str(uuid4()), filters={})
 
 
 # ============================================
 # Allowance-aware planning
 # ============================================
+
 
 class TestAllowanceAware:
 
@@ -802,21 +796,24 @@ class TestAllowanceAware:
         org_id = str(uuid4())
         cat_id = str(uuid4())
         users = [
-            _user("u1", "Amy", "Adams"),   # 3 issued, cap 3 -> over
-            _user("u2", "Bob", "Baker"),   # 1 issued, cap 3 -> ok
+            _user("u1", "Amy", "Adams"),  # 3 issued, cap 3 -> over
+            _user("u2", "Bob", "Baker"),  # 1 issued, cap 3 -> ok
         ]
         # org-wide allowance: max 3 annual
         allowance = SimpleNamespace(
-            id="a1", role_id=None, max_quantity=3, period_type="annual",
+            id="a1",
+            role_id=None,
+            max_quantity=3,
+            period_type="annual",
         )
         # No size_field -> no prefs/stock lookups. Calls: users(1),
         # allowances(2), positions(3), item_ids(4), issued(5).
         mock_db.execute.side_effect = [
-            _scalars_result(users),                  # users
-            _scalars_result([allowance]),            # allowances
-            _rows_result([]),                        # user_positions (none)
-            _rows_result([("item-1",)]),             # pool item ids
-            _rows_result([("u1", 3), ("u2", 1)]),    # issued per user
+            _scalars_result(users),  # users
+            _scalars_result([allowance]),  # allowances
+            _rows_result([]),  # user_positions (none)
+            _rows_result([("item-1",)]),  # pool item ids
+            _rows_result([("u1", 3), ("u2", 1)]),  # issued per user
         ]
 
         result = await service.analyze_impact(
@@ -840,17 +837,23 @@ class TestAllowanceAware:
         cat_id = str(uuid4())
         users = [_user("u1", "Amy", "Adams")]
         org_wide = SimpleNamespace(
-            id="a-org", role_id=None, max_quantity=5, period_type="career",
+            id="a-org",
+            role_id=None,
+            max_quantity=5,
+            period_type="career",
         )
         role_specific = SimpleNamespace(
-            id="a-role", role_id="pos-1", max_quantity=1, period_type="career",
+            id="a-role",
+            role_id="pos-1",
+            max_quantity=1,
+            period_type="career",
         )
         mock_db.execute.side_effect = [
             _scalars_result(users),
             _scalars_result([org_wide, role_specific]),
-            _rows_result([("u1", "pos-1")]),         # u1 holds position pos-1
+            _rows_result([("u1", "pos-1")]),  # u1 holds position pos-1
             _rows_result([("item-1",)]),
-            _rows_result([("u1", 1)]),               # 1 issued, role cap 1 -> over
+            _rows_result([("u1", 1)]),  # 1 issued, role cap 1 -> over
         ]
         result = await service.analyze_impact(
             organization_id=org_id,
@@ -869,7 +872,7 @@ class TestAllowanceAware:
         # allowances query returns empty -> helper returns early (no more calls)
         mock_db.execute.side_effect = [
             _scalars_result(users),
-            _scalars_result([]),     # no allowances -> helper returns early
+            _scalars_result([]),  # no allowances -> helper returns early
         ]
         result = await service.analyze_impact(
             organization_id=org_id,
@@ -886,6 +889,7 @@ class TestAllowanceAware:
 # ============================================
 # Saved plans (CRUD)
 # ============================================
+
 
 class TestSavedPlans:
 
@@ -911,17 +915,18 @@ class TestSavedPlans:
     @pytest.mark.asyncio
     async def test_update_plan_not_found(self, service, mock_db):
         mock_db.scalar = AsyncMock(return_value=None)
-        plan, error = await service.update_impact_plan(
-            "missing", "org", {"name": "x"}
-        )
+        plan, error = await service.update_impact_plan("missing", "org", {"name": "x"})
         assert plan is None
         assert error == "Impact plan not found"
 
     @pytest.mark.asyncio
     async def test_update_plan_applies_changes(self, service, mock_db):
         existing = SimpleNamespace(
-            id="p1", organization_id="org", name="Old",
-            description=None, filters={},
+            id="p1",
+            organization_id="org",
+            name="Old",
+            description=None,
+            filters={},
         )
         mock_db.scalar = AsyncMock(return_value=existing)
         mock_db.flush = AsyncMock()
@@ -952,6 +957,7 @@ class TestSavedPlans:
 # PDF rendering
 # ============================================
 
+
 class TestImpactPlanPdf:
 
     def _data(self, **overrides):
@@ -970,10 +976,15 @@ class TestImpactPlanPdf:
             "size_breakdown": [],
             "members": [
                 {
-                    "full_name": "Amy Adams", "membership_number": "001",
-                    "rank": "firefighter", "station": "S1", "needed_size": None,
-                    "has_related_item": False, "needs_replacement": False,
-                    "email": None, "phone": None,
+                    "full_name": "Amy Adams",
+                    "membership_number": "001",
+                    "rank": "firefighter",
+                    "station": "S1",
+                    "needed_size": None,
+                    "has_related_item": False,
+                    "needs_replacement": False,
+                    "email": None,
+                    "phone": None,
                 },
             ],
         }
@@ -985,9 +996,14 @@ class TestImpactPlanPdf:
 
         buf = render_impact_plan_pdf(
             self._data(),
-            {"org_name": "Test FD", "generated_at": datetime(2026, 6, 22, 12, 0),
-             "parameters": [], "show_size": False, "show_existing": False,
-             "show_contact": False},
+            {
+                "org_name": "Test FD",
+                "generated_at": datetime(2026, 6, 22, 12, 0),
+                "parameters": [],
+                "show_size": False,
+                "show_existing": False,
+                "show_contact": False,
+            },
         )
         out = buf.getvalue()
         assert out[:4] == b"%PDF"
@@ -1005,23 +1021,47 @@ class TestImpactPlanPdf:
             replacement_aware=True,
             members_needing_replacement=1,
             size_breakdown=[
-                {"size": "M", "needing": 2, "on_hand": 0, "shortfall": 2,
-                 "unit_cost": 180.0, "estimated_cost": 360.0},
-                {"size": "Unknown", "needing": 1, "on_hand": 0, "shortfall": 1,
-                 "unit_cost": 180.0, "estimated_cost": 180.0},
+                {
+                    "size": "M",
+                    "needing": 2,
+                    "on_hand": 0,
+                    "shortfall": 2,
+                    "unit_cost": 180.0,
+                    "estimated_cost": 360.0,
+                },
+                {
+                    "size": "Unknown",
+                    "needing": 1,
+                    "on_hand": 0,
+                    "shortfall": 1,
+                    "unit_cost": 180.0,
+                    "estimated_cost": 180.0,
+                },
             ],
             members=[
-                {"full_name": "Amy Adams", "membership_number": "001",
-                 "rank": "ff", "station": "S1", "needed_size": "M",
-                 "has_related_item": False, "needs_replacement": True,
-                 "email": "amy@x.org", "phone": "555"},
+                {
+                    "full_name": "Amy Adams",
+                    "membership_number": "001",
+                    "rank": "ff",
+                    "station": "S1",
+                    "needed_size": "M",
+                    "has_related_item": False,
+                    "needs_replacement": True,
+                    "email": "amy@x.org",
+                    "phone": "555",
+                },
             ],
         )
         buf = render_impact_plan_pdf(
             data,
-            {"org_name": "Test FD", "generated_at": datetime(2026, 6, 22, 12, 0),
-             "parameters": ["Size: Jacket", "Replacement-aware"],
-             "show_size": True, "show_existing": True, "show_contact": True},
+            {
+                "org_name": "Test FD",
+                "generated_at": datetime(2026, 6, 22, 12, 0),
+                "parameters": ["Size: Jacket", "Replacement-aware"],
+                "show_size": True,
+                "show_existing": True,
+                "show_contact": True,
+            },
         )
         assert buf.getvalue()[:4] == b"%PDF"
 
@@ -1029,6 +1069,7 @@ class TestImpactPlanPdf:
 # ============================================
 # get_impact_planner_options
 # ============================================
+
 
 class TestImpactPlannerOptions:
 

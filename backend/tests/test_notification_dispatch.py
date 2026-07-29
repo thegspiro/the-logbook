@@ -95,9 +95,7 @@ class TestSendIntegrationNotification:
             sender,
         )
         assert (
-            await nd.send_integration_notification(
-                _integration("discord"), "bogus", {}
-            )
+            await nd.send_integration_notification(_integration("discord"), "bogus", {})
             is False
         )
         sender.assert_not_awaited()

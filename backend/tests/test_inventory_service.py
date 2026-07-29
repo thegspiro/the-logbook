@@ -17,17 +17,13 @@ Covers:
   - Status transition matrix
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
 
+import pytest
+
+from app.models.inventory import ItemCondition, ItemStatus, TrackingType
 from app.services.inventory_service import InventoryService
-from app.models.inventory import (
-    ItemStatus,
-    ItemCondition,
-    TrackingType,
-)
-
 
 # ============================================
 # Fixtures

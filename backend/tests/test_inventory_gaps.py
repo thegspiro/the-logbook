@@ -103,6 +103,7 @@ async def _make_pool_item(svc, org_id, user_id, quantity=10):
 
 # ── Issuance Allowance Enforcement ─────────────────────────────────
 
+
 class TestIssuanceAllowanceEnforcement:
 
     @pytest.mark.asyncio
@@ -122,7 +123,9 @@ class TestIssuanceAllowanceEnforcement:
         assert issuance is not None
 
     @pytest.mark.asyncio
-    async def test_issue_blocked_when_over_allowance(self, db_session, setup_org_and_user):
+    async def test_issue_blocked_when_over_allowance(
+        self, db_session, setup_org_and_user
+    ):
         org_id, user_id, member_id = await setup_org_and_user
         svc = InventoryService(db_session)
         cat, item = await _make_pool_item(svc, org_id, user_id)
@@ -193,6 +196,7 @@ class TestIssuanceAllowanceEnforcement:
 
 # ── Retirement Notification on Write-Off ───────────────────────────
 
+
 class TestRetirementNotificationQueued:
 
     @pytest.mark.asyncio
@@ -244,6 +248,7 @@ class TestRetirementNotificationQueued:
 
 
 # ── Equipment Request Fulfillment ──────────────────────────────────
+
 
 class TestEquipmentRequestFulfillment:
 
@@ -318,6 +323,7 @@ class TestEquipmentRequestFulfillment:
 
 
 # ── Write-Off Releases Holder Records ──────────────────────────────
+
 
 class TestWriteOffReleasesHolders:
 
@@ -405,6 +411,7 @@ class TestWriteOffReleasesHolders:
 
 # ── NFPA Inspection Write Path ─────────────────────────────────────
 
+
 class TestNFPAInspectionWritePath:
 
     @pytest.mark.asyncio
@@ -416,7 +423,11 @@ class TestNFPAInspectionWritePath:
 
         item, _ = await svc.create_item(
             organization_id=uuid.UUID(org_id),
-            item_data={"name": "Turnout Coat", "condition": "good", "status": "available"},
+            item_data={
+                "name": "Turnout Coat",
+                "condition": "good",
+                "status": "available",
+            },
             created_by=uuid.UUID(user_id),
         )
 
@@ -450,6 +461,7 @@ class TestNFPAInspectionWritePath:
 
 
 # ── Category Soft-Delete ───────────────────────────────────────────
+
 
 class TestCategoryDelete:
 

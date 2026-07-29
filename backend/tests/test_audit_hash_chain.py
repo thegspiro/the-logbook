@@ -10,11 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.core import audit as audit_module
-from app.core.audit import (
-    _CURRENT_HASH_VERSION,
-    _LEGACY_HASH_VERSION,
-    AuditLogger,
-)
+from app.core.audit import _CURRENT_HASH_VERSION, _LEGACY_HASH_VERSION, AuditLogger
 
 _LOG_DATA = {
     "timestamp": "2026-07-21T00:00:00.000000+00:00",

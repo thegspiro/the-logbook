@@ -30,7 +30,10 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install linting tools
-        run: pip install flake8 black isort
+        # Pinned to the versions in backend/requirements.txt — an unpinned
+        # `black` here once resolved to a newer major whose formatting
+        # disagrees with the repo-wide pinned format.
+        run: pip install 'flake8==7.2.0' 'black==25.1.0' 'isort==5.13.2'
 
       - name: Run flake8
         run: flake8 app/

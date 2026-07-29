@@ -4112,9 +4112,7 @@ Best regards,
         Returns: (pdf_buffer, error, filename)
         """
         from app.models.meeting import Meeting
-        from app.utils.pre_meeting_package_pdf import (
-            render_pre_meeting_package_pdf,
-        )
+        from app.utils.pre_meeting_package_pdf import render_pre_meeting_package_pdf
 
         election = await self.get_election(election_id, organization_id)
         if not election:

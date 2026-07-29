@@ -5,12 +5,11 @@ This module provides pytest fixtures and configuration for all tests.
 It sets up test database, async sessions, and common test data.
 """
 
-import pytest
 from collections.abc import AsyncGenerator
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import configure_mappers
-
-from app.core.database import async_session_factory, database_manager
 
 # Eagerly register EVERY model and resolve all mappers at import time, before any
 # test module is collected. String-based relationships (e.g.
@@ -22,6 +21,7 @@ from app.core.database import async_session_factory, database_manager
 # it here — like the app does at startup — makes mapper resolution independent of
 # test collection order.
 import app.models  # noqa: E402,F401
+from app.core.database import async_session_factory, database_manager
 
 configure_mappers()
 

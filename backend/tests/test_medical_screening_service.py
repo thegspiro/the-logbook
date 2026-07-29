@@ -9,19 +9,19 @@ Covers:
   - CRUD delegation (create_requirement, create_record, etc.)
 """
 
-import pytest
 from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-from app.services.medical_screening_service import MedicalScreeningService
+import pytest
+
 from app.models.medical_screening import (
     ScreeningRecord,
     ScreeningRequirement,
     ScreeningStatus,
     ScreeningType,
 )
-
+from app.services.medical_screening_service import MedicalScreeningService
 
 # ============================================
 # Fixtures
@@ -110,21 +110,17 @@ class TestComplianceStatus:
 
     async def test_fully_compliant_no_requirements(self, service, org_id, user_id):
         """When there are no requirements, the user is fully compliant."""
-        with patch.object(
-            service, "list_requirements", return_value=[]
-        ), patch.object(service, "list_records", return_value=[]):
-            summary = await service.get_compliance_status(
-                org_id, user_id=user_id
-            )
+        with patch.object(service, "list_requirements", return_value=[]), patch.object(
+            service, "list_records", return_value=[]
+        ):
+            summary = await service.get_compliance_status(org_id, user_id=user_id)
 
         assert summary.is_fully_compliant is True
         assert summary.total_requirements == 0
         assert summary.compliant_count == 0
         assert summary.non_compliant_count == 0
 
-    async def test_fully_compliant_with_passing_records(
-        self, service, org_id, user_id
-    ):
+    async def test_fully_compliant_with_passing_records(self, service, org_id, user_id):
         """User with passing records for all requirements is fully compliant."""
         req = make_requirement(org_id)
         rec = make_record(
@@ -137,9 +133,7 @@ class TestComplianceStatus:
         with patch.object(
             service, "list_requirements", return_value=[req]
         ), patch.object(service, "list_records", return_value=[rec]):
-            summary = await service.get_compliance_status(
-                org_id, user_id=user_id
-            )
+            summary = await service.get_compliance_status(org_id, user_id=user_id)
 
         assert summary.is_fully_compliant is True
         assert summary.compliant_count == 1
@@ -152,17 +146,13 @@ class TestComplianceStatus:
         with patch.object(
             service, "list_requirements", return_value=[req]
         ), patch.object(service, "list_records", return_value=[]):
-            summary = await service.get_compliance_status(
-                org_id, user_id=user_id
-            )
+            summary = await service.get_compliance_status(org_id, user_id=user_id)
 
         assert summary.is_fully_compliant is False
         assert summary.compliant_count == 0
         assert summary.non_compliant_count == 1
 
-    async def test_non_compliant_when_record_expired(
-        self, service, org_id, user_id
-    ):
+    async def test_non_compliant_when_record_expired(self, service, org_id, user_id):
         """User with expired screening record is non-compliant."""
         req = make_requirement(org_id)
         rec = make_record(
@@ -175,9 +165,7 @@ class TestComplianceStatus:
         with patch.object(
             service, "list_requirements", return_value=[req]
         ), patch.object(service, "list_records", return_value=[rec]):
-            summary = await service.get_compliance_status(
-                org_id, user_id=user_id
-            )
+            summary = await service.get_compliance_status(org_id, user_id=user_id)
 
         assert summary.is_fully_compliant is False
         assert summary.non_compliant_count == 1
@@ -197,16 +185,12 @@ class TestComplianceStatus:
         with patch.object(
             service, "list_requirements", return_value=[req]
         ), patch.object(service, "list_records", return_value=[rec]):
-            summary = await service.get_compliance_status(
-                org_id, user_id=user_id
-            )
+            summary = await service.get_compliance_status(org_id, user_id=user_id)
 
         assert summary.expiring_soon_count == 1
         assert summary.is_fully_compliant is True  # still compliant
 
-    async def test_no_expiration_means_always_compliant(
-        self, service, org_id, user_id
-    ):
+    async def test_no_expiration_means_always_compliant(self, service, org_id, user_id):
         """A passing record with no expiration date is considered indefinitely compliant."""
         req = make_requirement(org_id)
         rec = make_record(
@@ -219,9 +203,7 @@ class TestComplianceStatus:
         with patch.object(
             service, "list_requirements", return_value=[req]
         ), patch.object(service, "list_records", return_value=[rec]):
-            summary = await service.get_compliance_status(
-                org_id, user_id=user_id
-            )
+            summary = await service.get_compliance_status(org_id, user_id=user_id)
 
         assert summary.is_fully_compliant is True
         assert summary.expiring_soon_count == 0
@@ -251,18 +233,14 @@ class TestComplianceStatus:
         with patch.object(
             service, "list_requirements", return_value=[req1, req2]
         ), patch.object(service, "list_records", return_value=[rec]):
-            summary = await service.get_compliance_status(
-                org_id, user_id=user_id
-            )
+            summary = await service.get_compliance_status(org_id, user_id=user_id)
 
         assert summary.is_fully_compliant is False
         assert summary.compliant_count == 1
         assert summary.non_compliant_count == 1
         assert summary.total_requirements == 2
 
-    async def test_waived_record_counts_as_compliant(
-        self, service, org_id, user_id
-    ):
+    async def test_waived_record_counts_as_compliant(self, service, org_id, user_id):
         """A waived screening record is treated as compliant."""
         req = make_requirement(org_id)
         rec = make_record(
@@ -275,9 +253,7 @@ class TestComplianceStatus:
         with patch.object(
             service, "list_requirements", return_value=[req]
         ), patch.object(service, "list_records", return_value=[rec]):
-            summary = await service.get_compliance_status(
-                org_id, user_id=user_id
-            )
+            summary = await service.get_compliance_status(org_id, user_id=user_id)
 
         assert summary.is_fully_compliant is True
 
@@ -301,9 +277,7 @@ class TestExpiringSoon:
         result = await service.get_expiring_soon(org_id, days=30)
         assert result == []
 
-    async def test_calculates_days_until_expiration(
-        self, service, mock_db, org_id
-    ):
+    async def test_calculates_days_until_expiration(self, service, mock_db, org_id):
         """Days until expiration is correctly calculated."""
         exp_date = date.today() + timedelta(days=15)
         record = make_record(
@@ -394,9 +368,7 @@ class TestCRUD:
         assert mock_db.add.called
         assert result.organization_id == org_id
 
-    async def test_update_record_returns_none_when_not_found(
-        self, service, org_id
-    ):
+    async def test_update_record_returns_none_when_not_found(self, service, org_id):
         """Updating a non-existent record returns None."""
         from app.schemas.medical_screening import ScreeningRecordUpdate
 

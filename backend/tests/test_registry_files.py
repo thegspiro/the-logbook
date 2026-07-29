@@ -64,9 +64,7 @@ def test_every_registry_file_loads_with_importable_requirements():
 def test_each_ems_level_has_its_national_component_scoped_to_that_level():
     for level, code in EMS_LEVEL_CODES.items():
         data = _load(level)
-        national = [
-            r for r in data["requirements"] if r.get("registry_code") == code
-        ]
+        national = [r for r in data["requirements"] if r.get("registry_code") == code]
         assert len(national) == 1, f"{level} should have exactly one {code} component"
         comp = national[0]
         assert comp["requirement_type"] == "hours"

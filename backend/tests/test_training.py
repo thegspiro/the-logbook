@@ -9,42 +9,42 @@ Tests cover:
 5. Seed data module imports
 """
 
-import pytest
 import json
+from datetime import date, datetime
 from pathlib import Path
 from uuid import uuid4
-from datetime import date, datetime
 
+import pytest
 from pydantic import ValidationError
 
 from app.models.training import (
+    ApprovalStatus,
+    DueDateType,
+    EnrollmentStatus,
+    ExternalProviderType,
+    ExternalTrainingProvider,
+    ProgramEnrollment,
+    ProgramMilestone,
+    ProgramPhase,
+    ProgramRequirement,
+    ProgramStructureType,
+    RequirementFrequency,
+    RequirementProgress,
+    RequirementProgressStatus,
+    RequirementSource,
+    RequirementType,
+    SkillCheckoff,
+    SkillEvaluation,
+    SyncStatus,
+    TrainingApproval,
     TrainingCategory,
     TrainingCourse,
+    TrainingProgram,
     TrainingRecord,
     TrainingRequirement,
     TrainingSession,
-    TrainingApproval,
-    TrainingProgram,
-    ProgramPhase,
-    ProgramRequirement,
-    ProgramMilestone,
-    ProgramEnrollment,
-    RequirementProgress,
-    SkillEvaluation,
-    SkillCheckoff,
-    ExternalTrainingProvider,
     TrainingStatus,
     TrainingType,
-    RequirementType,
-    RequirementSource,
-    RequirementFrequency,
-    DueDateType,
-    ProgramStructureType,
-    EnrollmentStatus,
-    RequirementProgressStatus,
-    ApprovalStatus,
-    ExternalProviderType,
-    SyncStatus,
 )
 from app.schemas.training import (
     TrainingCategoryCreate,
@@ -53,9 +53,9 @@ from app.schemas.training import (
     TrainingRequirementCreate,
 )
 from app.schemas.training_program import (
-    TrainingRequirementEnhancedCreate,
-    TrainingProgramCreate,
     ProgramEnrollmentCreate,
+    TrainingProgramCreate,
+    TrainingRequirementEnhancedCreate,
 )
 
 # ============================================
@@ -1074,9 +1074,9 @@ class TestRegistryData:
             data = self._load_registry(filename)
             assert "registry_name" in data
             # Each level's name is namespaced under NREMT.
-            assert data["registry_name"].startswith("NREMT"), (
-                f"{filename} registry_name should start with 'NREMT'"
-            )
+            assert data["registry_name"].startswith(
+                "NREMT"
+            ), f"{filename} registry_name should start with 'NREMT'"
             assert "registry_description" in data
             assert isinstance(data["requirements"], list)
             assert len(data["requirements"]) > 0
@@ -1246,21 +1246,21 @@ class TestSeedTrainingData:
     def test_training_models_importable(self):
         """Verify all training model classes can be imported"""
         from app.models.training import (
+            ExternalTrainingProvider,
+            ProgramEnrollment,
+            ProgramMilestone,
+            ProgramPhase,
+            ProgramRequirement,
+            RequirementProgress,
+            SkillCheckoff,
+            SkillEvaluation,
+            TrainingApproval,
             TrainingCategory,
             TrainingCourse,
+            TrainingProgram,
             TrainingRecord,
             TrainingRequirement,
             TrainingSession,
-            TrainingApproval,
-            TrainingProgram,
-            ProgramPhase,
-            ProgramRequirement,
-            ProgramMilestone,
-            ProgramEnrollment,
-            RequirementProgress,
-            SkillEvaluation,
-            SkillCheckoff,
-            ExternalTrainingProvider,
         )
 
         # Verify they are actual classes, not None
@@ -1284,17 +1284,17 @@ class TestSeedTrainingData:
         """Verify all training schema classes can be imported"""
         from app.schemas.training import (
             TrainingCategoryCreate,
-            TrainingCategoryUpdate,
             TrainingCategoryResponse,
+            TrainingCategoryUpdate,
             TrainingCourseCreate,
-            TrainingCourseUpdate,
             TrainingCourseResponse,
+            TrainingCourseUpdate,
             TrainingRecordCreate,
-            TrainingRecordUpdate,
             TrainingRecordResponse,
+            TrainingRecordUpdate,
             TrainingRequirementCreate,
-            TrainingRequirementUpdate,
             TrainingRequirementResponse,
+            TrainingRequirementUpdate,
         )
 
         assert TrainingCategoryCreate is not None
@@ -1313,24 +1313,24 @@ class TestSeedTrainingData:
     def test_training_program_schemas_importable(self):
         """Verify all training program schema classes can be imported"""
         from app.schemas.training_program import (
-            TrainingRequirementEnhancedCreate,
-            TrainingRequirementEnhancedUpdate,
-            TrainingRequirementEnhancedResponse,
-            TrainingProgramCreate,
-            TrainingProgramUpdate,
-            TrainingProgramResponse,
-            ProgramPhaseCreate,
-            ProgramPhaseUpdate,
-            ProgramPhaseResponse,
-            ProgramRequirementCreate,
-            ProgramRequirementUpdate,
-            ProgramRequirementResponse,
-            ProgramMilestoneCreate,
-            ProgramMilestoneUpdate,
-            ProgramMilestoneResponse,
             ProgramEnrollmentCreate,
-            ProgramEnrollmentUpdate,
             ProgramEnrollmentResponse,
+            ProgramEnrollmentUpdate,
+            ProgramMilestoneCreate,
+            ProgramMilestoneResponse,
+            ProgramMilestoneUpdate,
+            ProgramPhaseCreate,
+            ProgramPhaseResponse,
+            ProgramPhaseUpdate,
+            ProgramRequirementCreate,
+            ProgramRequirementResponse,
+            ProgramRequirementUpdate,
+            TrainingProgramCreate,
+            TrainingProgramResponse,
+            TrainingProgramUpdate,
+            TrainingRequirementEnhancedCreate,
+            TrainingRequirementEnhancedResponse,
+            TrainingRequirementEnhancedUpdate,
         )
 
         assert TrainingRequirementEnhancedCreate is not None

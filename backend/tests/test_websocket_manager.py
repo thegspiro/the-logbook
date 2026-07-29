@@ -15,8 +15,9 @@ for _mod_name in ("redis", "redis.asyncio"):
     if _mod_name not in sys.modules:
         sys.modules[_mod_name] = MagicMock()
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from app.core.websocket_manager import ConnectionManager
 

@@ -1917,12 +1917,12 @@ async def reset_onboarding(request: Request, db: AsyncSession = Depends(get_db))
     await validate_session(request, db)
 
     # Import models for deletion
+    from app.models.facilities import Facility
+    from app.models.location import Location
     from app.models.onboarding import (  # OnboardingStatus already imported at module level
         OnboardingChecklistItem,
         OnboardingSessionModel,
     )
-    from app.models.facilities import Facility
-    from app.models.location import Location
     from app.models.user import Organization, Role, User
 
     try:

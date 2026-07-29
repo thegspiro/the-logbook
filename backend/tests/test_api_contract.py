@@ -22,6 +22,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.integration]
 # available. In that case, skip the whole module.
 try:
     from main import app
+
     schema = schemathesis.openapi.from_asgi("/openapi.json", app=app)
     SCHEMA_AVAILABLE = True
 except Exception:
@@ -44,6 +45,7 @@ class TestAPIContract:
     # Only test public/unauthenticated endpoints to start.
     # Authenticated endpoints need token injection (add later).
     if SCHEMA_AVAILABLE and schema is not None:
+
         @schema.include(path_regex=r"^/api/public/").parametrize()
         def test_public_endpoints(self, case):
             """Public endpoints should return valid responses."""

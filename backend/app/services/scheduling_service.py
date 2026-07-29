@@ -790,9 +790,7 @@ class SchedulingService:
     ) -> Optional[str]:
         """Return the member's calendar-feed token, generating one on first
         use. Scoped to the org so a caller can only touch their own record."""
-        from app.services.integration_services.ical_service import (
-            generate_feed_token,
-        )
+        from app.services.integration_services.ical_service import generate_feed_token
 
         user = (
             await self.db.execute(
@@ -813,9 +811,7 @@ class SchedulingService:
         self, user_id: UUID, organization_id: UUID
     ) -> Optional[str]:
         """Issue a new calendar-feed token, invalidating any existing feed URL."""
-        from app.services.integration_services.ical_service import (
-            generate_feed_token,
-        )
+        from app.services.integration_services.ical_service import generate_feed_token
 
         user = (
             await self.db.execute(

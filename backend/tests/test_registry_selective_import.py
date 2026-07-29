@@ -125,10 +125,16 @@ class TestSectionCategoryLinkage:
         # Five topic-area categories were created (Airway, Cardio, Trauma,
         # Medical, Operations).
         assert cats == 5
-        created_cats = [o for o in db.added if str(getattr(o, "registry_code", "")).startswith("NCCR-")]
+        created_cats = [
+            o
+            for o in db.added
+            if str(getattr(o, "registry_code", "")).startswith("NCCR-")
+        ]
         assert len(created_cats) == 5
         # The national-component requirement was linked to those categories.
-        national = next(o for o in db.added if getattr(o, "registry_code", None) == "NREMT")
+        national = next(
+            o for o in db.added if getattr(o, "registry_code", None) == "NREMT"
+        )
         assert national.category_ids and len(national.category_ids) == 5
 
     async def test_second_section_reference_reuses_created_category(self):

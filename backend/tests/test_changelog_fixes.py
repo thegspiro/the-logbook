@@ -13,19 +13,20 @@ Run with:
     pytest tests/test_changelog_fixes.py -v
 """
 
-import inspect
 import ast
+import inspect
 import os
-import pytest
 from collections import defaultdict
 
+import pytest
 from sqlalchemy import Index as SAIndex
+
+from app.core.database import Base
 
 # ---------------------------------------------------------------------------
 # Import all models to register them with Base.metadata
 # ---------------------------------------------------------------------------
 from app.models import *  # noqa: F401,F403
-from app.core.database import Base
 
 _metadata = Base.metadata
 _tables = _metadata.tables
@@ -129,9 +130,10 @@ class TestNoDuplicateIndexes:
                             f"create_all() on MySQL with 'Duplicate key name'"
                         )
 
-        assert not duplicates, (
-            "Duplicate index definitions found that will crash MySQL:\n"
-            + "\n".join(duplicates)
+        assert (
+            not duplicates
+        ), "Duplicate index definitions found that will crash MySQL:\n" + "\n".join(
+            duplicates
         )
 
     def test_location_organization_id_no_duplicate(self):
@@ -150,7 +152,10 @@ class TestNoDuplicateIndexes:
         if org_col.index is True:
             for idx in table.indexes:
                 idx_cols = [c.name for c in idx.columns]
-                if idx_cols == ["organization_id"] and idx.name == "ix_locations_organization_id":
+                if (
+                    idx_cols == ["organization_id"]
+                    and idx.name == "ix_locations_organization_id"
+                ):
                     pytest.fail(
                         "Location.organization_id has both index=True AND "
                         "explicit Index('ix_locations_organization_id') — "
@@ -194,14 +199,15 @@ class TestNoDuplicateIndexes:
                 seen_names[idx.name] += 1
 
             duplicates = {
-                name: count
-                for name, count in seen_names.items()
-                if count > 1
+                name: count for name, count in seen_names.items() if count > 1
             }
             assert not duplicates, (
                 f"Table '{table_name}' has duplicate index names "
                 f"(will crash MySQL create_all()):\n"
-                + "\n".join(f"  {name}: appears {count} times" for name, count in duplicates.items())
+                + "\n".join(
+                    f"  {name}: appears {count} times"
+                    for name, count in duplicates.items()
+                )
             )
 
 
@@ -242,12 +248,12 @@ class TestDependencyOrdering:
                 elif node.name == "AllPermissionChecker":
                     all_permission_checker_line = node.lineno
 
-        assert get_current_user_line is not None, (
-            "get_current_user not found in dependencies module"
-        )
-        assert permission_checker_line is not None, (
-            "PermissionChecker not found in dependencies module"
-        )
+        assert (
+            get_current_user_line is not None
+        ), "get_current_user not found in dependencies module"
+        assert (
+            permission_checker_line is not None
+        ), "PermissionChecker not found in dependencies module"
 
         assert get_current_user_line < permission_checker_line, (
             f"get_current_user (line {get_current_user_line}) must be defined "
@@ -264,22 +270,26 @@ class TestDependencyOrdering:
     def test_permission_checker_can_be_imported(self):
         """PermissionChecker should import without NameError."""
         from app.api.dependencies import PermissionChecker
+
         assert PermissionChecker is not None
 
     def test_all_permission_checker_can_be_imported(self):
         """AllPermissionChecker should import without NameError."""
         from app.api.dependencies import AllPermissionChecker
+
         assert AllPermissionChecker is not None
 
     def test_require_permission_returns_permission_checker(self):
         """require_permission factory returns a PermissionChecker instance."""
-        from app.api.dependencies import require_permission, PermissionChecker
+        from app.api.dependencies import PermissionChecker, require_permission
+
         checker = require_permission("admin.access")
         assert isinstance(checker, PermissionChecker)
 
     def test_permission_checker_stores_permissions(self):
         """PermissionChecker should store the required permissions list."""
         from app.api.dependencies import PermissionChecker
+
         checker = PermissionChecker(["foo.bar", "baz.qux"])
         assert checker.required_permissions == ["foo.bar", "baz.qux"]
 
@@ -327,8 +337,7 @@ class TestDocumentsServiceAPI:
 
         assert not tuple_returns, (
             "Document service methods returning tuples "
-            "(should return objects or raise exceptions):\n"
-            + "\n".join(tuple_returns)
+            "(should return objects or raise exceptions):\n" + "\n".join(tuple_returns)
         )
 
 
@@ -361,14 +370,14 @@ class TestPublicPortalImplementation:
             source = f.read()
 
         # Should reference User model for member count
-        assert "User" in source, (
-            "Public portal should query the User model for member count"
-        )
+        assert (
+            "User" in source
+        ), "Public portal should query the User model for member count"
 
         # Should reference Apparatus model for apparatus count
-        assert "Apparatus" in source, (
-            "Public portal should query the Apparatus model for apparatus count"
-        )
+        assert (
+            "Apparatus" in source
+        ), "Public portal should query the Apparatus model for apparatus count"
 
         # Should NOT have hardcoded return values
         tree = ast.parse(source)
@@ -403,9 +412,9 @@ class TestPublicPortalImplementation:
             source = f.read()
 
         # Should reference Event model
-        assert "Event" in source, (
-            "Public portal should query the Event model for public events"
-        )
+        assert (
+            "Event" in source
+        ), "Public portal should query the Event model for public events"
 
         # Should filter by event type (PUBLIC_EDUCATION or similar)
         has_event_type_filter = (
@@ -413,9 +422,9 @@ class TestPublicPortalImplementation:
             or "public_education" in source
             or "EventType" in source
         )
-        assert has_event_type_filter, (
-            "Public portal should filter events by type (e.g., PUBLIC_EDUCATION)"
-        )
+        assert (
+            has_event_type_filter
+        ), "Public portal should filter events by type (e.g., PUBLIC_EDUCATION)"
 
     def test_portal_has_whitelist_filtering(self):
         """
@@ -436,9 +445,7 @@ class TestPublicPortalImplementation:
             or "check_field_whitelisted" in source
             or "filter_data_by_whitelist" in source
         )
-        assert has_whitelist, (
-            "Public portal should use whitelist-based data filtering"
-        )
+        assert has_whitelist, "Public portal should use whitelist-based data filtering"
 
 
 # ===========================================================================
@@ -459,9 +466,7 @@ class TestFastPathInit:
         _fast_path_init() should skip the alembic_version table when
         dropping existing tables and the count should reflect that.
         """
-        main_path = os.path.join(
-            os.path.dirname(__file__), "..", "main.py"
-        )
+        main_path = os.path.join(os.path.dirname(__file__), "..", "main.py")
         if not os.path.exists(main_path):
             pytest.skip("main.py not found")
 
@@ -472,9 +477,9 @@ class TestFastPathInit:
         assert "_fast_path_init" in source, "_fast_path_init not found in main.py"
 
         # Verify alembic_version is explicitly skipped
-        assert 'alembic_version' in source, (
-            "_fast_path_init should reference alembic_version to skip it"
-        )
+        assert (
+            "alembic_version" in source
+        ), "_fast_path_init should reference alembic_version to skip it"
 
         # Look for the skip pattern: alembic_version excluded from drops
         has_skip = (
@@ -483,15 +488,11 @@ class TestFastPathInit:
             or '!= "alembic_version"' in source
             or "!= 'alembic_version'" in source
         )
-        assert has_skip, (
-            "_fast_path_init should skip alembic_version table during drop"
-        )
+        assert has_skip, "_fast_path_init should skip alembic_version table during drop"
 
     def test_fast_path_calls_create_all(self):
         """Fast-path should use Base.metadata.create_all() for speed."""
-        main_path = os.path.join(
-            os.path.dirname(__file__), "..", "main.py"
-        )
+        main_path = os.path.join(os.path.dirname(__file__), "..", "main.py")
         if not os.path.exists(main_path):
             pytest.skip("main.py not found")
 
@@ -508,9 +509,7 @@ class TestFastPathInit:
         After create_all(), fast-path must stamp alembic to 'head'
         so future startups don't re-run migrations.
         """
-        main_path = os.path.join(
-            os.path.dirname(__file__), "..", "main.py"
-        )
+        main_path = os.path.join(os.path.dirname(__file__), "..", "main.py")
         if not os.path.exists(main_path):
             pytest.skip("main.py not found")
 
@@ -518,8 +517,8 @@ class TestFastPathInit:
             source = f.read()
 
         msg = "_fast_path_init should stamp alembic to 'head' after create_all()"
-        assert 'stamp' in source, msg
-        assert 'head' in source, msg
+        assert "stamp" in source, msg
+        assert "head" in source, msg
 
 
 # ===========================================================================
@@ -545,14 +544,20 @@ class TestFrontendErrorHandling:
     """
 
     ERROR_HANDLING_PATH = os.path.join(
-        os.path.dirname(__file__), "..", "..", "frontend", "src", "utils", "errorHandling.ts"
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "frontend",
+        "src",
+        "utils",
+        "errorHandling.ts",
     )
 
     def test_error_handling_file_exists(self):
         """The error handling utility file must exist."""
-        assert os.path.exists(self.ERROR_HANDLING_PATH), (
-            "frontend/src/utils/errorHandling.ts not found"
-        )
+        assert os.path.exists(
+            self.ERROR_HANDLING_PATH
+        ), "frontend/src/utils/errorHandling.ts not found"
 
     def test_toAppError_checks_response_before_instanceof(self):
         """
@@ -576,12 +581,12 @@ class TestFrontendErrorHandling:
 
         instanceof_check_pos = source.find("instanceof Error")
 
-        assert response_check_pos != -1, (
-            "toAppError() should check for 'response' property (Axios errors)"
-        )
-        assert instanceof_check_pos != -1, (
-            "toAppError() should check for instanceof Error"
-        )
+        assert (
+            response_check_pos != -1
+        ), "toAppError() should check for 'response' property (Axios errors)"
+        assert (
+            instanceof_check_pos != -1
+        ), "toAppError() should check for instanceof Error"
         assert response_check_pos < instanceof_check_pos, (
             f"toAppError() checks 'instanceof Error' (pos {instanceof_check_pos}) "
             f"BEFORE 'response' in error (pos {response_check_pos}). "
@@ -597,9 +602,9 @@ class TestFrontendErrorHandling:
         with open(self.ERROR_HANDLING_PATH) as f:
             source = f.read()
 
-        assert "status" in source, (
-            "toAppError() should extract HTTP status from error responses"
-        )
+        assert (
+            "status" in source
+        ), "toAppError() should extract HTTP status from error responses"
 
     def test_toAppError_extracts_detail_message(self):
         """toAppError() should extract API detail message from response data."""
@@ -623,9 +628,9 @@ class TestFrontendErrorHandling:
         with open(self.ERROR_HANDLING_PATH) as f:
             source = f.read()
 
-        assert "fallback" in source, (
-            "getErrorMessage() should accept a fallback parameter"
-        )
+        assert (
+            "fallback" in source
+        ), "getErrorMessage() should accept a fallback parameter"
 
     def test_error_handling_exports_required_functions(self):
         """The module must export toAppError, getErrorMessage, and isAppError."""
@@ -636,9 +641,9 @@ class TestFrontendErrorHandling:
             source = f.read()
 
         for fn_name in ["toAppError", "getErrorMessage", "isAppError"]:
-            assert f"export function {fn_name}" in source, (
-                f"errorHandling.ts must export '{fn_name}'"
-            )
+            assert (
+                f"export function {fn_name}" in source
+            ), f"errorHandling.ts must export '{fn_name}'"
 
     def test_no_catch_err_any_pattern(self):
         """
@@ -656,17 +661,17 @@ class TestFrontendErrorHandling:
             for filename in files:
                 if not filename.endswith((".ts", ".tsx")):
                     continue
-                if filename.endswith((".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx")):
+                if filename.endswith(
+                    (".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx")
+                ):
                     continue
                 filepath = os.path.join(root, filename)
                 with open(filepath) as f:
                     content = f.read()
                 # Look for catch (err: any) or catch (error: any) patterns
                 import re
-                matches = re.findall(
-                    r'catch\s*\(\s*\w+\s*:\s*any\s*\)',
-                    content
-                )
+
+                matches = re.findall(r"catch\s*\(\s*\w+\s*:\s*any\s*\)", content)
                 if matches:
                     rel_path = os.path.relpath(filepath, frontend_src)
                     violations.append(f"{rel_path}: {len(matches)} occurrences")
@@ -690,9 +695,7 @@ class TestMakefileCorrectness:
     of `pip`/`pytest`/`alembic`.
     """
 
-    MAKEFILE_PATH = os.path.join(
-        os.path.dirname(__file__), "..", "..", "Makefile"
-    )
+    MAKEFILE_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "Makefile")
 
     def test_makefile_exists(self):
         """The Makefile should exist at the project root."""
@@ -707,9 +710,9 @@ class TestMakefileCorrectness:
             content = f.read()
 
         # Check that pytest is used somewhere (for backend testing)
-        assert "pytest" in content, (
-            "Makefile should use 'pytest' for backend test targets"
-        )
+        assert (
+            "pytest" in content
+        ), "Makefile should use 'pytest' for backend test targets"
 
 
 # ===========================================================================
@@ -725,9 +728,7 @@ class TestAlembicMigrationChain:
     Regression: Duplicate revision IDs caused backend startup crashes.
     """
 
-    VERSIONS_DIR = os.path.join(
-        os.path.dirname(__file__), "..", "alembic", "versions"
-    )
+    VERSIONS_DIR = os.path.join(os.path.dirname(__file__), "..", "alembic", "versions")
 
     def _parse_migration_files(self):
         """Parse all migration files to extract revision metadata."""
@@ -744,11 +745,18 @@ class TestAlembicMigrationChain:
 
             # Extract revision and down_revision
             import re
-            rev_match = re.search(r"^revision(?:\s*:\s*\w+)?\s*=\s*['\"]([^'\"]+)['\"]", content, re.MULTILINE)
+
+            rev_match = re.search(
+                r"^revision(?:\s*:\s*\w+)?\s*=\s*['\"]([^'\"]+)['\"]",
+                content,
+                re.MULTILINE,
+            )
             # Capture the whole RHS so merge migrations with a tuple/list of
             # parents (e.g. down_revision = ("a", "b")) parse correctly instead
             # of being misread as roots.
-            down_match = re.search(r"^down_revision\s*(?::[^=]+)?=\s*(.+)$", content, re.MULTILINE)
+            down_match = re.search(
+                r"^down_revision\s*(?::[^=]+)?=\s*(.+)$", content, re.MULTILINE
+            )
 
             if rev_match:
                 revision = rev_match.group(1)
@@ -783,20 +791,17 @@ class TestAlembicMigrationChain:
                 content = f.read()
 
             import re
-            rev_match = re.search(r"^revision\s*[:=]\s*['\"]([^'\"]+)['\"]", content, re.MULTILINE)
+
+            rev_match = re.search(
+                r"^revision\s*[:=]\s*['\"]([^'\"]+)['\"]", content, re.MULTILINE
+            )
             if rev_match:
                 revisions[rev_match.group(1)].append(filename)
 
-        duplicates = {
-            rev: files
-            for rev, files in revisions.items()
-            if len(files) > 1
-        }
+        duplicates = {rev: files for rev, files in revisions.items() if len(files) > 1}
         assert not duplicates, (
             "Duplicate Alembic revision IDs (will crash backend startup):\n"
-            + "\n".join(
-                f"  {rev}: {files}" for rev, files in duplicates.items()
-            )
+            + "\n".join(f"  {rev}: {files}" for rev, files in duplicates.items())
         )
 
     def test_down_revisions_reference_existing_revisions(self):
@@ -824,10 +829,9 @@ class TestAlembicMigrationChain:
                         f"down_revision='{parent}' which does not exist"
                     )
 
-        assert not broken, (
-            "Broken migration chain (orphaned down_revisions):\n"
-            + "\n".join(broken)
-        )
+        assert (
+            not broken
+        ), "Broken migration chain (orphaned down_revisions):\n" + "\n".join(broken)
 
     def test_exactly_one_root_migration(self):
         """
@@ -866,9 +870,7 @@ class TestModelImports:
         models/__init__.py should import all .py model files to register
         them with Base.metadata.
         """
-        models_dir = os.path.join(
-            os.path.dirname(__file__), "..", "app", "models"
-        )
+        models_dir = os.path.join(os.path.dirname(__file__), "..", "app", "models")
         init_path = os.path.join(models_dir, "__init__.py")
 
         assert os.path.exists(init_path), "app/models/__init__.py not found"
@@ -898,6 +900,5 @@ class TestModelImports:
 
         assert not missing, (
             "Model files not imported in models/__init__.py "
-            "(will be missing from Base.metadata.create_all()):\n"
-            + "\n".join(missing)
+            "(will be missing from Base.metadata.create_all()):\n" + "\n".join(missing)
         )

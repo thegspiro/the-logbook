@@ -95,16 +95,16 @@ class TestDeleteProgram:
         req_id = str(uuid4())
         db = RecordingSession(
             [
-                _rows([(str(uuid4()),)]),   # enrollment ids
-                _rows([(req_id,)]),         # requirement ids on links
-                MagicMock(),                # delete RequirementProgress
-                MagicMock(),                # delete ProgramEnrollment
-                MagicMock(),                # delete ProgramMilestone
-                MagicMock(),                # delete ProgramRequirement
-                MagicMock(),                # delete ProgramPhase
-                _one(None),                 # orphan check -> unused
-                MagicMock(),                # delete TrainingRequirement
-                MagicMock(),                # delete TrainingProgram
+                _rows([(str(uuid4()),)]),  # enrollment ids
+                _rows([(req_id,)]),  # requirement ids on links
+                MagicMock(),  # delete RequirementProgress
+                MagicMock(),  # delete ProgramEnrollment
+                MagicMock(),  # delete ProgramMilestone
+                MagicMock(),  # delete ProgramRequirement
+                MagicMock(),  # delete ProgramPhase
+                _one(None),  # orphan check -> unused
+                MagicMock(),  # delete TrainingRequirement
+                MagicMock(),  # delete TrainingProgram
             ]
         )
         svc = TrainingProgramService(db)
@@ -130,14 +130,21 @@ class TestUpdatePhase:
 
     async def test_ignores_phase_number_but_sets_others(self):
         phase = SimpleNamespace(
-            name="Old", description=None, phase_number=1, requires_manual_advancement=False
+            name="Old",
+            description=None,
+            phase_number=1,
+            requires_manual_advancement=False,
         )
         db = RecordingSession([])
         svc = TrainingProgramService(db)
         svc._get_program_phase = AsyncMock(return_value=phase)
         _, error = await svc.update_program_phase(
-            uuid4(), uuid4(), uuid4(),
-            ProgramPhaseUpdate(name="New", phase_number=9, requires_manual_advancement=True),
+            uuid4(),
+            uuid4(),
+            uuid4(),
+            ProgramPhaseUpdate(
+                name="New", phase_number=9, requires_manual_advancement=True
+            ),
         )
         assert error is None
         assert phase.name == "New"
@@ -175,11 +182,11 @@ class TestDeletePhase:
         remaining = SimpleNamespace(id=str(uuid4()), phase_number=2)
         db = RecordingSession(
             [
-                _rows([(link_id, req_id)]),          # requirement links on phase
+                _rows([(link_id, req_id)]),  # requirement links on phase
                 _rows([(e1, phase_id), (e2, "other")]),  # enrollments
-                MagicMock(),                          # delete RequirementProgress
-                _scalars([remaining]),                # remaining phases
-                MagicMock(),                          # update re-anchor
+                MagicMock(),  # delete RequirementProgress
+                _scalars([remaining]),  # remaining phases
+                MagicMock(),  # update re-anchor
             ]
         )
         svc = TrainingProgramService(db)
@@ -203,11 +210,11 @@ class TestRemoveRequirement:
         e1 = str(uuid4())
         db = RecordingSession(
             [
-                _one(link),           # the link
-                _rows([(e1,)]),       # program enrollments
-                MagicMock(),          # delete RequirementProgress
-                _one(None),           # no other program references it -> orphan
-                MagicMock(),          # delete TrainingRequirement
+                _one(link),  # the link
+                _rows([(e1,)]),  # program enrollments
+                MagicMock(),  # delete RequirementProgress
+                _one(None),  # no other program references it -> orphan
+                MagicMock(),  # delete TrainingRequirement
             ]
         )
         svc = TrainingProgramService(db)

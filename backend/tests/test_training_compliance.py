@@ -15,9 +15,9 @@ from types import SimpleNamespace
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import (
     WaiverPeriod,
+    adjust_required,
     count_waived_months,
     total_months_in_period,
-    adjust_required,
 )
 
 # ---------------------------------------------------------------------------

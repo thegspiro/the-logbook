@@ -13,13 +13,14 @@ start containers. They are marked with the 'docker' marker so they can be
 run or excluded selectively.
 """
 
-import os
 import json
-import time
+import os
 import shutil
 import subprocess
-import pytest
+import time
 from pathlib import Path
+
+import pytest
 
 ROOT_DIR = Path(__file__).resolve().parents[2]  # the-logbook/
 BACKEND_DIR = ROOT_DIR / "backend"
@@ -68,7 +69,9 @@ _TAG_PREFIX = "logbook-test"
 # ---------------------------------------------------------------------------
 
 
-def _run(cmd: list[str], *, timeout: int = 300, **kwargs) -> subprocess.CompletedProcess:
+def _run(
+    cmd: list[str], *, timeout: int = 300, **kwargs
+) -> subprocess.CompletedProcess:
     """Run a subprocess and return the result."""
     return subprocess.run(
         cmd,
@@ -79,7 +82,9 @@ def _run(cmd: list[str], *, timeout: int = 300, **kwargs) -> subprocess.Complete
     )
 
 
-def _docker_build(context: Path, target: str | None = None, tag: str = "") -> subprocess.CompletedProcess:
+def _docker_build(
+    context: Path, target: str | None = None, tag: str = ""
+) -> subprocess.CompletedProcess:
     """Build a Docker image and return the result."""
     cmd = ["docker", "build", str(context)]
     if target:
@@ -141,9 +146,9 @@ class TestBackendImageBuild:
         tag = f"{_TAG_PREFIX}-backend-base"
         try:
             result = _docker_build(BACKEND_DIR, target="base", tag=tag)
-            assert result.returncode == 0, (
-                f"Backend 'base' stage failed to build:\n{result.stderr[-2000:]}"
-            )
+            assert (
+                result.returncode == 0
+            ), f"Backend 'base' stage failed to build:\n{result.stderr[-2000:]}"
         finally:
             _docker_rm_image(tag)
 
@@ -151,9 +156,9 @@ class TestBackendImageBuild:
         tag = f"{_TAG_PREFIX}-backend-deps"
         try:
             result = _docker_build(BACKEND_DIR, target="dependencies", tag=tag)
-            assert result.returncode == 0, (
-                f"Backend 'dependencies' stage failed to build:\n{result.stderr[-2000:]}"
-            )
+            assert (
+                result.returncode == 0
+            ), f"Backend 'dependencies' stage failed to build:\n{result.stderr[-2000:]}"
         finally:
             _docker_rm_image(tag)
 
@@ -161,9 +166,9 @@ class TestBackendImageBuild:
         tag = f"{_TAG_PREFIX}-backend-dev"
         try:
             result = _docker_build(BACKEND_DIR, target="development", tag=tag)
-            assert result.returncode == 0, (
-                f"Backend 'development' stage failed to build:\n{result.stderr[-2000:]}"
-            )
+            assert (
+                result.returncode == 0
+            ), f"Backend 'development' stage failed to build:\n{result.stderr[-2000:]}"
         finally:
             _docker_rm_image(tag)
 
@@ -171,9 +176,9 @@ class TestBackendImageBuild:
         tag = f"{_TAG_PREFIX}-backend-prod"
         try:
             result = _docker_build(BACKEND_DIR, target="production", tag=tag)
-            assert result.returncode == 0, (
-                f"Backend 'production' stage failed to build:\n{result.stderr[-2000:]}"
-            )
+            assert (
+                result.returncode == 0
+            ), f"Backend 'production' stage failed to build:\n{result.stderr[-2000:]}"
         finally:
             _docker_rm_image(tag)
 
@@ -188,9 +193,9 @@ class TestBackendImageBuild:
             hc = config.get("Healthcheck", {})
             assert hc, "Production image must have a HEALTHCHECK configured"
             test_cmd = hc.get("Test", [])
-            assert any("/health" in part for part in test_cmd), (
-                f"HEALTHCHECK must target /health, got: {test_cmd}"
-            )
+            assert any(
+                "/health" in part for part in test_cmd
+            ), f"HEALTHCHECK must target /health, got: {test_cmd}"
         finally:
             _docker_rm_image(tag)
 
@@ -203,9 +208,9 @@ class TestBackendImageBuild:
             info = _docker_inspect(tag)
             config = info.get("Config", {})
             exposed = config.get("ExposedPorts", {})
-            assert "3001/tcp" in exposed, (
-                f"Production image must expose port 3001, got: {list(exposed.keys())}"
-            )
+            assert (
+                "3001/tcp" in exposed
+            ), f"Production image must expose port 3001, got: {list(exposed.keys())}"
         finally:
             _docker_rm_image(tag)
 
@@ -218,9 +223,9 @@ class TestBackendImageBuild:
             info = _docker_inspect(tag)
             config = info.get("Config", {})
             user = config.get("User", "")
-            assert user and user != "root" and user != "0", (
-                f"Production image should run as non-root user, got: '{user}'"
-            )
+            assert (
+                user and user != "root" and user != "0"
+            ), f"Production image should run as non-root user, got: '{user}'"
         finally:
             _docker_rm_image(tag)
 
@@ -237,9 +242,9 @@ class TestFrontendImageBuild:
         tag = f"{_TAG_PREFIX}-frontend-dev"
         try:
             result = _docker_build(FRONTEND_DIR, target="development", tag=tag)
-            assert result.returncode == 0, (
-                f"Frontend 'development' stage failed to build:\n{result.stderr[-2000:]}"
-            )
+            assert (
+                result.returncode == 0
+            ), f"Frontend 'development' stage failed to build:\n{result.stderr[-2000:]}"
         finally:
             _docker_rm_image(tag)
 
@@ -247,9 +252,9 @@ class TestFrontendImageBuild:
         tag = f"{_TAG_PREFIX}-frontend-prod"
         try:
             result = _docker_build(FRONTEND_DIR, target="production", tag=tag)
-            assert result.returncode == 0, (
-                f"Frontend 'production' stage failed to build:\n{result.stderr[-2000:]}"
-            )
+            assert (
+                result.returncode == 0
+            ), f"Frontend 'production' stage failed to build:\n{result.stderr[-2000:]}"
         finally:
             _docker_rm_image(tag)
 
@@ -275,9 +280,9 @@ class TestFrontendImageBuild:
             info = _docker_inspect(tag)
             config = info.get("Config", {})
             exposed = config.get("ExposedPorts", {})
-            assert "80/tcp" in exposed, (
-                f"Frontend image must expose port 80, got: {list(exposed.keys())}"
-            )
+            assert (
+                "80/tcp" in exposed
+            ), f"Frontend image must expose port 80, got: {list(exposed.keys())}"
         finally:
             _docker_rm_image(tag)
 
@@ -312,19 +317,32 @@ class TestBackendContainerHealth:
 
     def test_container_starts_without_crash(self):
         """Container should start and stay running (not exit immediately)."""
-        result = _run([
-            "docker", "run", "-d",
-            "--name", self._container,
-            "-e", "ENVIRONMENT=development",
-            "-e", "SECRET_KEY=test-secret-key-for-docker-integration",
-            "-e", "ENCRYPTION_KEY=test-encryption-key-1234567890abcdef",
-            "-e", "ENCRYPTION_SALT=test-salt-value",
-            "-e", "DB_HOST=localhost",
-            "-e", "DB_NAME=test_db",
-            "-e", "DB_USER=test_user",
-            "-e", "DB_PASSWORD=test_pass",
-            self._tag,
-        ])
+        result = _run(
+            [
+                "docker",
+                "run",
+                "-d",
+                "--name",
+                self._container,
+                "-e",
+                "ENVIRONMENT=development",
+                "-e",
+                "SECRET_KEY=test-secret-key-for-docker-integration",
+                "-e",
+                "ENCRYPTION_KEY=test-encryption-key-1234567890abcdef",
+                "-e",
+                "ENCRYPTION_SALT=test-salt-value",
+                "-e",
+                "DB_HOST=localhost",
+                "-e",
+                "DB_NAME=test_db",
+                "-e",
+                "DB_USER=test_user",
+                "-e",
+                "DB_PASSWORD=test_pass",
+                self._tag,
+            ]
+        )
         assert result.returncode == 0, f"Container failed to start: {result.stderr}"
 
         # Give it a few seconds to potentially crash
@@ -346,20 +364,34 @@ class TestBackendContainerHealth:
 
     def test_container_listens_on_port(self):
         """Container should accept TCP connections on port 3001."""
-        result = _run([
-            "docker", "run", "-d",
-            "--name", self._container,
-            "-p", "13001:3001",
-            "-e", "ENVIRONMENT=development",
-            "-e", "SECRET_KEY=test-secret-key-for-docker-integration",
-            "-e", "ENCRYPTION_KEY=test-encryption-key-1234567890abcdef",
-            "-e", "ENCRYPTION_SALT=test-salt-value",
-            "-e", "DB_HOST=localhost",
-            "-e", "DB_NAME=test_db",
-            "-e", "DB_USER=test_user",
-            "-e", "DB_PASSWORD=test_pass",
-            self._tag,
-        ])
+        result = _run(
+            [
+                "docker",
+                "run",
+                "-d",
+                "--name",
+                self._container,
+                "-p",
+                "13001:3001",
+                "-e",
+                "ENVIRONMENT=development",
+                "-e",
+                "SECRET_KEY=test-secret-key-for-docker-integration",
+                "-e",
+                "ENCRYPTION_KEY=test-encryption-key-1234567890abcdef",
+                "-e",
+                "ENCRYPTION_SALT=test-salt-value",
+                "-e",
+                "DB_HOST=localhost",
+                "-e",
+                "DB_NAME=test_db",
+                "-e",
+                "DB_USER=test_user",
+                "-e",
+                "DB_PASSWORD=test_pass",
+                self._tag,
+            ]
+        )
         if result.returncode != 0:
             pytest.skip(f"Container failed to start: {result.stderr}")
 
@@ -367,17 +399,25 @@ class TestBackendContainerHealth:
         deadline = time.time() + 30
         listening = False
         while time.time() < deadline:
-            check = _run([
-                "docker", "exec", self._container,
-                "python", "-c",
-                "import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1',3001)); s.close(); print('OK')",
-            ], timeout=10)
+            check = _run(
+                [
+                    "docker",
+                    "exec",
+                    self._container,
+                    "python",
+                    "-c",
+                    "import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1',3001)); s.close(); print('OK')",
+                ],
+                timeout=10,
+            )
             if check.returncode == 0 and "OK" in check.stdout:
                 listening = True
                 break
             time.sleep(2)
 
-        assert listening, "Backend container did not start listening on port 3001 within 30s"
+        assert (
+            listening
+        ), "Backend container did not start listening on port 3001 within 30s"
 
 
 class TestFrontendContainerHealth:
@@ -396,11 +436,16 @@ class TestFrontendContainerHealth:
         _docker_rm_image(self._tag)
 
     def test_container_starts_without_crash(self):
-        result = _run([
-            "docker", "run", "-d",
-            "--name", self._container,
-            self._tag,
-        ])
+        result = _run(
+            [
+                "docker",
+                "run",
+                "-d",
+                "--name",
+                self._container,
+                self._tag,
+            ]
+        )
         assert result.returncode == 0, f"Container failed to start: {result.stderr}"
 
         time.sleep(3)
@@ -418,11 +463,16 @@ class TestFrontendContainerHealth:
 
     def test_nginx_serves_index(self):
         """Frontend container should serve index.html on port 80."""
-        result = _run([
-            "docker", "run", "-d",
-            "--name", self._container,
-            self._tag,
-        ])
+        result = _run(
+            [
+                "docker",
+                "run",
+                "-d",
+                "--name",
+                self._container,
+                self._tag,
+            ]
+        )
         if result.returncode != 0:
             pytest.skip(f"Container failed to start: {result.stderr}")
 
@@ -430,11 +480,19 @@ class TestFrontendContainerHealth:
         deadline = time.time() + 20
         served = False
         while time.time() < deadline:
-            check = _run([
-                "docker", "exec", self._container,
-                "wget", "--quiet", "--tries=1", "--spider",
-                "http://localhost/",
-            ], timeout=10)
+            check = _run(
+                [
+                    "docker",
+                    "exec",
+                    self._container,
+                    "wget",
+                    "--quiet",
+                    "--tries=1",
+                    "--spider",
+                    "http://localhost/",
+                ],
+                timeout=10,
+            )
             if check.returncode == 0:
                 served = True
                 break
@@ -444,15 +502,20 @@ class TestFrontendContainerHealth:
 
     def test_frontend_becomes_healthy(self):
         """Frontend container should pass its own HEALTHCHECK."""
-        result = _run([
-            "docker", "run", "-d",
-            "--name", self._container,
-            "--health-interval=5s",
-            "--health-timeout=3s",
-            "--health-start-period=5s",
-            "--health-retries=3",
-            self._tag,
-        ])
+        result = _run(
+            [
+                "docker",
+                "run",
+                "-d",
+                "--name",
+                self._container,
+                "--health-interval=5s",
+                "--health-timeout=3s",
+                "--health-start-period=5s",
+                "--health-retries=3",
+                self._tag,
+            ]
+        )
         if result.returncode != 0:
             pytest.skip(f"Container failed to start: {result.stderr}")
 
@@ -484,9 +547,9 @@ class TestDockerComposeConfig:
             timeout=30,
             cwd=str(ROOT_DIR),
         )
-        assert result.returncode == 0, (
-            f"docker-compose.yml failed validation:\n{result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"docker-compose.yml failed validation:\n{result.stderr}"
 
     @pytest.mark.skipif(
         not _compose_available,
@@ -495,17 +558,21 @@ class TestDockerComposeConfig:
     def test_minimal_compose_validates(self):
         result = _run(
             [
-                "docker", "compose",
-                "-f", "docker-compose.yml",
-                "-f", "docker-compose.minimal.yml",
-                "config", "--quiet",
+                "docker",
+                "compose",
+                "-f",
+                "docker-compose.yml",
+                "-f",
+                "docker-compose.minimal.yml",
+                "config",
+                "--quiet",
             ],
             timeout=30,
             cwd=str(ROOT_DIR),
         )
-        assert result.returncode == 0, (
-            f"Minimal compose override failed validation:\n{result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Minimal compose override failed validation:\n{result.stderr}"
 
     @pytest.mark.skipif(
         not _compose_available,
@@ -517,14 +584,18 @@ class TestDockerComposeConfig:
             pytest.skip("docker-compose.arm.yml not present")
         result = _run(
             [
-                "docker", "compose",
-                "-f", "docker-compose.yml",
-                "-f", "docker-compose.arm.yml",
-                "config", "--quiet",
+                "docker",
+                "compose",
+                "-f",
+                "docker-compose.yml",
+                "-f",
+                "docker-compose.arm.yml",
+                "config",
+                "--quiet",
             ],
             timeout=30,
             cwd=str(ROOT_DIR),
         )
-        assert result.returncode == 0, (
-            f"ARM compose override failed validation:\n{result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"ARM compose override failed validation:\n{result.stderr}"

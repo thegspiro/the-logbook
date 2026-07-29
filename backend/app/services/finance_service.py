@@ -19,8 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
-from app.utils.csv_export import SafeCsvWriter
-
 from app.models.finance import (
     ApprovalChain,
     ApprovalChainStep,
@@ -46,6 +44,7 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.models.user import User
+from app.utils.csv_export import SafeCsvWriter
 
 
 class FinanceService:

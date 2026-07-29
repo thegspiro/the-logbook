@@ -8,15 +8,15 @@ Covers:
   - Full end-to-end lifecycle (draft -> publish -> RSVP -> check-in -> finalize)
 """
 
-import pytest
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.event_service import EventService
 from app.schemas.event import EventCreate, EventUpdate, RSVPCreate
+from app.services.event_service import EventService
 
 pytestmark = [pytest.mark.integration]
 
@@ -52,9 +52,7 @@ def _make_event_create(
 
     rsvp_deadline = None
     if requires_rsvp:
-        rsvp_deadline = overrides.pop(
-            "rsvp_deadline", start - timedelta(hours=1)
-        )
+        rsvp_deadline = overrides.pop("rsvp_deadline", start - timedelta(hours=1))
 
     return EventCreate(
         title=title,
@@ -149,7 +147,9 @@ class TestEventCRUD:
         svc = EventService(db_session)
 
         await svc.create_event(
-            event_data=_make_event_create(title="Meeting", event_type="business_meeting"),
+            event_data=_make_event_create(
+                title="Meeting", event_type="business_meeting"
+            ),
             organization_id=uuid.UUID(org_id),
             created_by=uuid.UUID(user_id),
         )
@@ -515,7 +515,9 @@ class TestEventAttendance:
         assert err is None
         assert updated_count == 2
 
-    async def test_cannot_check_in_cancelled_event(self, db_session, setup_org_and_users):
+    async def test_cannot_check_in_cancelled_event(
+        self, db_session, setup_org_and_users
+    ):
         org_id, user_id, _ = await setup_org_and_users
         svc = EventService(db_session)
 

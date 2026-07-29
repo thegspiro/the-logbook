@@ -11,28 +11,28 @@ Covers previously untested areas:
   - Batch checkout/return edge cases
 """
 
-import pytest
 import uuid
-from unittest.mock import MagicMock
 from io import BytesIO
+from unittest.mock import MagicMock
 
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.inventory_service import InventoryService
 
 pytestmark = [pytest.mark.integration]
+from app.models.inventory import (
+    ClearanceLineDisposition,
+    ClearanceStatus,
+    InventoryActionType,
+    ItemStatus,
+)
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_notification_service import InventoryNotificationService
-from app.models.inventory import (
-    ItemStatus,
-    ClearanceStatus,
-    ClearanceLineDisposition,
-    InventoryActionType,
-)
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
+
 
 def _uid() -> str:
     return str(uuid.uuid4())
@@ -50,7 +50,13 @@ async def setup_org_and_user(db_session: AsyncSession):
             "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
             "VALUES (:id, :name, :otype, :slug, :tz)"
         ),
-        {"id": org_id, "name": "Test Dept", "otype": "fire_department", "slug": f"test-{org_id[:8]}", "tz": "UTC"},
+        {
+            "id": org_id,
+            "name": "Test Dept",
+            "otype": "fire_department",
+            "slug": f"test-{org_id[:8]}",
+            "tz": "UTC",
+        },
     )
     for uid, uname, fn, ln in [
         (user_id, "jsmith", "John", "Smith"),
@@ -62,9 +68,13 @@ async def setup_org_and_user(db_session: AsyncSession):
                 "password_hash, status) VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
             ),
             {
-                "id": uid, "org": org_id, "un": uname,
-                "fn": fn, "ln": ln,
-                "em": f"{uname}@test.com", "pw": "hashed",
+                "id": uid,
+                "org": org_id,
+                "un": uname,
+                "fn": fn,
+                "ln": ln,
+                "em": f"{uname}@test.com",
+                "pw": "hashed",
             },
         )
     await db_session.flush()
@@ -73,10 +83,13 @@ async def setup_org_and_user(db_session: AsyncSession):
 
 # ── Departure Clearance Tests ──────────────────────────────────────
 
+
 class TestDepartureClearance:
 
     @pytest.mark.asyncio
-    async def test_initiate_clearance_with_assigned_item(self, db_session, setup_org_and_user):
+    async def test_initiate_clearance_with_assigned_item(
+        self, db_session, setup_org_and_user
+    ):
         """Initiating clearance snapshots assigned items into line items."""
         org_id, user_id, _ = await setup_org_and_user
         inv_svc = InventoryService(db_session)
@@ -84,7 +97,12 @@ class TestDepartureClearance:
         # Create and assign an item
         item, _ = await inv_svc.create_item(
             organization_id=uuid.UUID(org_id),
-            item_data={"name": "Helmet", "condition": "good", "status": "available", "barcode": "BC-HELM-001"},
+            item_data={
+                "name": "Helmet",
+                "condition": "good",
+                "status": "available",
+                "barcode": "BC-HELM-001",
+            },
             created_by=uuid.UUID(user_id),
         )
         await inv_svc.assign_item_to_user(
@@ -131,18 +149,24 @@ class TestDepartureClearance:
         assert clearance.items_outstanding == 0
 
     @pytest.mark.asyncio
-    async def test_cannot_initiate_duplicate_clearance(self, db_session, setup_org_and_user):
+    async def test_cannot_initiate_duplicate_clearance(
+        self, db_session, setup_org_and_user
+    ):
         """Cannot create a second open clearance for the same member."""
         org_id, user_id, _ = await setup_org_and_user
         clr_svc = DepartureClearanceService(db_session)
 
         _, err1 = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
         assert err1 is None
 
         _, err2 = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
         assert err2 is not None
         assert "already exists" in err2.lower()
@@ -168,7 +192,9 @@ class TestDepartureClearance:
 
         clr_svc = DepartureClearanceService(db_session)
         clearance, _ = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
 
         # Get the clearance with line items
@@ -203,7 +229,11 @@ class TestDepartureClearance:
 
         item, _ = await inv_svc.create_item(
             organization_id=uuid.UUID(org_id),
-            item_data={"name": "Lost Radio", "condition": "good", "status": "available"},
+            item_data={
+                "name": "Lost Radio",
+                "condition": "good",
+                "status": "available",
+            },
             created_by=uuid.UUID(user_id),
         )
         await inv_svc.assign_item_to_user(
@@ -215,7 +245,9 @@ class TestDepartureClearance:
 
         clr_svc = DepartureClearanceService(db_session)
         clearance, _ = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
         full_clearance = await clr_svc.get_clearance(str(clearance.id), org_id)
         line_item = full_clearance.line_items[0]
@@ -237,7 +269,9 @@ class TestDepartureClearance:
         assert refreshed.status == ItemStatus.ASSIGNED
 
     @pytest.mark.asyncio
-    async def test_cannot_resolve_already_resolved_item(self, db_session, setup_org_and_user):
+    async def test_cannot_resolve_already_resolved_item(
+        self, db_session, setup_org_and_user
+    ):
         """Cannot resolve a line item that's already resolved."""
         org_id, user_id, _ = await setup_org_and_user
         inv_svc = InventoryService(db_session)
@@ -256,7 +290,9 @@ class TestDepartureClearance:
 
         clr_svc = DepartureClearanceService(db_session)
         clearance, _ = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
         full_clearance = await clr_svc.get_clearance(str(clearance.id), org_id)
         line_item = full_clearance.line_items[0]
@@ -282,7 +318,9 @@ class TestDepartureClearance:
         assert "already resolved" in err.lower()
 
     @pytest.mark.asyncio
-    async def test_complete_clearance_all_resolved(self, db_session, setup_org_and_user):
+    async def test_complete_clearance_all_resolved(
+        self, db_session, setup_org_and_user
+    ):
         """Completing clearance when all items are resolved sets status to COMPLETED."""
         org_id, user_id, _ = await setup_org_and_user
         inv_svc = InventoryService(db_session)
@@ -301,7 +339,9 @@ class TestDepartureClearance:
 
         clr_svc = DepartureClearanceService(db_session)
         clearance, _ = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
         full_clearance = await clr_svc.get_clearance(str(clearance.id), org_id)
         line_item = full_clearance.line_items[0]
@@ -329,7 +369,9 @@ class TestDepartureClearance:
         assert completed.completed_at is not None
 
     @pytest.mark.asyncio
-    async def test_complete_clearance_pending_items_blocked(self, db_session, setup_org_and_user):
+    async def test_complete_clearance_pending_items_blocked(
+        self, db_session, setup_org_and_user
+    ):
         """Cannot complete clearance with pending items unless force_close=True."""
         org_id, user_id, _ = await setup_org_and_user
         inv_svc = InventoryService(db_session)
@@ -348,7 +390,9 @@ class TestDepartureClearance:
 
         clr_svc = DepartureClearanceService(db_session)
         clearance, _ = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
 
         # Try to complete without resolving
@@ -380,7 +424,9 @@ class TestDepartureClearance:
 
         clr_svc = DepartureClearanceService(db_session)
         clearance, _ = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
 
         completed, err = await clr_svc.complete_clearance(
@@ -401,7 +447,9 @@ class TestDepartureClearance:
         clr_svc = DepartureClearanceService(db_session)
 
         clearance, _ = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
 
         # Complete it (no items, so we can complete directly)
@@ -427,7 +475,9 @@ class TestDepartureClearance:
         clr_svc = DepartureClearanceService(db_session)
 
         await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
 
         clearance = await clr_svc.get_clearance_for_user(user_id, org_id)
@@ -441,10 +491,14 @@ class TestDepartureClearance:
         clr_svc = DepartureClearanceService(db_session)
 
         await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
         await clr_svc.initiate_clearance(
-            user_id=user2_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user2_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
 
         summaries, total = await clr_svc.list_clearances(org_id)
@@ -474,7 +528,9 @@ class TestDepartureClearance:
 
         clr_svc = DepartureClearanceService(db_session)
         clearance, _ = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
         full_clearance = await clr_svc.get_clearance(str(clearance.id), org_id)
         line_item = full_clearance.line_items[0]
@@ -490,7 +546,9 @@ class TestDepartureClearance:
         assert "invalid" in err.lower()
 
     @pytest.mark.asyncio
-    async def test_resolve_disposition_pending_blocked(self, db_session, setup_org_and_user):
+    async def test_resolve_disposition_pending_blocked(
+        self, db_session, setup_org_and_user
+    ):
         """Cannot set disposition back to pending."""
         org_id, user_id, _ = await setup_org_and_user
         inv_svc = InventoryService(db_session)
@@ -509,7 +567,9 @@ class TestDepartureClearance:
 
         clr_svc = DepartureClearanceService(db_session)
         clearance, _ = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
         full_clearance = await clr_svc.get_clearance(str(clearance.id), org_id)
         line_item = full_clearance.line_items[0]
@@ -525,7 +585,9 @@ class TestDepartureClearance:
         assert "pending" in err.lower()
 
     @pytest.mark.asyncio
-    async def test_clearance_with_checkout_and_issuance(self, db_session, setup_org_and_user):
+    async def test_clearance_with_checkout_and_issuance(
+        self, db_session, setup_org_and_user
+    ):
         """Clearance snapshots checkouts and pool issuances too."""
         org_id, user_id, _ = await setup_org_and_user
         inv_svc = InventoryService(db_session)
@@ -547,8 +609,11 @@ class TestDepartureClearance:
         item2, _ = await inv_svc.create_item(
             organization_id=uuid.UUID(org_id),
             item_data={
-                "name": "T-Shirts", "condition": "good", "status": "available",
-                "tracking_type": "pool", "quantity": 20,
+                "name": "T-Shirts",
+                "condition": "good",
+                "status": "available",
+                "tracking_type": "pool",
+                "quantity": 20,
             },
             created_by=uuid.UUID(user_id),
         )
@@ -562,7 +627,9 @@ class TestDepartureClearance:
 
         clr_svc = DepartureClearanceService(db_session)
         clearance, err = await clr_svc.initiate_clearance(
-            user_id=user_id, organization_id=org_id, initiated_by=user_id,
+            user_id=user_id,
+            organization_id=org_id,
+            initiated_by=user_id,
         )
 
         assert err is None
@@ -575,6 +642,7 @@ class TestDepartureClearance:
 
 
 # ── Notification Service Netting Tests ─────────────────────────────
+
 
 class TestNotificationNetting:
     """Test the netting logic directly (unit-style, no DB needed)."""
@@ -626,8 +694,12 @@ class TestNotificationNetting:
         """Actions on different items don't cancel each other."""
         svc = InventoryNotificationService.__new__(InventoryNotificationService)
         records = [
-            self._make_record("item-1", InventoryActionType.ASSIGNED, item_name="Helmet"),
-            self._make_record("item-2", InventoryActionType.UNASSIGNED, item_name="Coat"),
+            self._make_record(
+                "item-1", InventoryActionType.ASSIGNED, item_name="Helmet"
+            ),
+            self._make_record(
+                "item-2", InventoryActionType.UNASSIGNED, item_name="Coat"
+            ),
         ]
         result = svc._net_actions(records)
         assert len(result) == 2
@@ -646,6 +718,7 @@ class TestNotificationNetting:
 
 # ── Notification Service Email Rendering Tests ─────────────────────
 
+
 class TestNotificationRendering:
 
     def test_build_item_list_html_empty(self):
@@ -656,13 +729,15 @@ class TestNotificationRendering:
     def test_build_item_list_html_with_items(self):
         """HTML rendering includes item names and action labels."""
         svc = InventoryNotificationService.__new__(InventoryNotificationService)
-        items = [{
-            "item_name": "Helmet",
-            "item_serial_number": "SN-001",
-            "item_asset_tag": None,
-            "action_type": InventoryActionType.ASSIGNED,
-            "quantity": 1,
-        }]
+        items = [
+            {
+                "item_name": "Helmet",
+                "item_serial_number": "SN-001",
+                "item_asset_tag": None,
+                "action_type": InventoryActionType.ASSIGNED,
+                "quantity": 1,
+            }
+        ]
         html = svc._build_item_list_html(items, "Items Issued")
         assert "Helmet" in html
         assert "SN-001" in html
@@ -672,13 +747,15 @@ class TestNotificationRendering:
     def test_build_item_list_html_quantity_display(self):
         """Quantity > 1 shows (xN) in output."""
         svc = InventoryNotificationService.__new__(InventoryNotificationService)
-        items = [{
-            "item_name": "Gloves",
-            "item_serial_number": None,
-            "item_asset_tag": None,
-            "action_type": InventoryActionType.ISSUED,
-            "quantity": 5,
-        }]
+        items = [
+            {
+                "item_name": "Gloves",
+                "item_serial_number": None,
+                "item_asset_tag": None,
+                "action_type": InventoryActionType.ISSUED,
+                "quantity": 5,
+            }
+        ]
         html = svc._build_item_list_html(items, "Items")
         assert "(x5)" in html
 
@@ -690,13 +767,15 @@ class TestNotificationRendering:
     def test_build_item_list_html_escapes_item_name(self):
         """Member-supplied item names must be HTML-escaped (no injection)."""
         svc = InventoryNotificationService.__new__(InventoryNotificationService)
-        items = [{
-            "item_name": "<script>alert(1)</script>Coat",
-            "item_serial_number": None,
-            "item_asset_tag": None,
-            "action_type": InventoryActionType.ISSUED,
-            "quantity": 1,
-        }]
+        items = [
+            {
+                "item_name": "<script>alert(1)</script>Coat",
+                "item_serial_number": None,
+                "item_asset_tag": None,
+                "action_type": InventoryActionType.ISSUED,
+                "quantity": 1,
+            }
+        ]
         html = svc._build_item_list_html(items, "Items")
         assert "<script>" not in html
         assert "&lt;script&gt;" in html
@@ -704,13 +783,15 @@ class TestNotificationRendering:
     def test_build_item_list_text_with_items(self):
         """Text rendering includes item names and action labels."""
         svc = InventoryNotificationService.__new__(InventoryNotificationService)
-        items = [{
-            "item_name": "Radio",
-            "item_serial_number": None,
-            "item_asset_tag": "AT-100",
-            "action_type": InventoryActionType.CHECKED_OUT,
-            "quantity": 1,
-        }]
+        items = [
+            {
+                "item_name": "Radio",
+                "item_serial_number": None,
+                "item_asset_tag": "AT-100",
+                "action_type": InventoryActionType.CHECKED_OUT,
+                "quantity": 1,
+            }
+        ]
         text = svc._build_item_list_text(items, "Items Checked Out")
         assert "Radio" in text
         assert "AT-100" in text
@@ -718,6 +799,7 @@ class TestNotificationRendering:
 
 
 # ── Retirement Notification Tests ──────────────────────────────────
+
 
 class TestRetirementNotification:
     """The RETIRED action type must be renderable so members are told when
@@ -751,13 +833,15 @@ class TestRetirementNotification:
     def test_retired_renders_with_label(self):
         """The retirement line renders with its human label."""
         svc = InventoryNotificationService.__new__(InventoryNotificationService)
-        items = [{
-            "item_name": "Old Helmet",
-            "item_serial_number": "SN-OLD",
-            "item_asset_tag": None,
-            "action_type": InventoryActionType.RETIRED,
-            "quantity": 1,
-        }]
+        items = [
+            {
+                "item_name": "Old Helmet",
+                "item_serial_number": "SN-OLD",
+                "item_asset_tag": None,
+                "action_type": InventoryActionType.RETIRED,
+                "quantity": 1,
+            }
+        ]
         html = svc._build_item_list_html(items, "Items Removed")
         assert "Old Helmet" in html
         assert "Retired / Removed" in html
@@ -765,10 +849,13 @@ class TestRetirementNotification:
 
 # ── Batch Return Edge Cases ────────────────────────────────────────
 
+
 class TestBatchReturnEdgeCases:
 
     @pytest.mark.asyncio
-    async def test_batch_return_invalid_condition_rejected(self, db_session, setup_org_and_user):
+    async def test_batch_return_invalid_condition_rejected(
+        self, db_session, setup_org_and_user
+    ):
         """Batch return with invalid condition string is rejected (not silently defaulted)."""
         org_id, user_id, _ = await setup_org_and_user
         svc = InventoryService(db_session)
@@ -776,7 +863,12 @@ class TestBatchReturnEdgeCases:
         # Create and assign item
         item, _ = await svc.create_item(
             organization_id=uuid.UUID(org_id),
-            item_data={"name": "Tool", "barcode": "BC-TOOL-001", "condition": "good", "status": "available"},
+            item_data={
+                "name": "Tool",
+                "barcode": "BC-TOOL-001",
+                "condition": "good",
+                "status": "available",
+            },
             created_by=uuid.UUID(user_id),
         )
         await svc.assign_item_to_user(
@@ -790,7 +882,13 @@ class TestBatchReturnEdgeCases:
             user_id=uuid.UUID(user_id),
             organization_id=uuid.UUID(org_id),
             performed_by=uuid.UUID(user_id),
-            items=[{"code": "BC-TOOL-001", "return_condition": "totally_invalid", "quantity": 1}],
+            items=[
+                {
+                    "code": "BC-TOOL-001",
+                    "return_condition": "totally_invalid",
+                    "quantity": 1,
+                }
+            ],
         )
 
         assert result["failed"] == 1
@@ -798,7 +896,9 @@ class TestBatchReturnEdgeCases:
         assert "invalid" in result["results"][0]["error"].lower()
 
     @pytest.mark.asyncio
-    async def test_batch_return_item_not_held_by_user(self, db_session, setup_org_and_user):
+    async def test_batch_return_item_not_held_by_user(
+        self, db_session, setup_org_and_user
+    ):
         """Batch return fails for items not held by the specified user."""
         org_id, user_id, user2_id = await setup_org_and_user
         svc = InventoryService(db_session)
@@ -806,7 +906,12 @@ class TestBatchReturnEdgeCases:
         # Create item assigned to user2
         item, _ = await svc.create_item(
             organization_id=uuid.UUID(org_id),
-            item_data={"name": "Wrench", "barcode": "BC-WRENCH", "condition": "good", "status": "available"},
+            item_data={
+                "name": "Wrench",
+                "barcode": "BC-WRENCH",
+                "condition": "good",
+                "status": "available",
+            },
             created_by=uuid.UUID(user_id),
         )
         await svc.assign_item_to_user(
@@ -829,6 +934,7 @@ class TestBatchReturnEdgeCases:
 
 
 # ── Category Update Tests ──────────────────────────────────────────
+
 
 class TestCategoryUpdate:
 
@@ -900,10 +1006,13 @@ class TestCategoryUpdate:
 
 # ── Pool Item Quantity Validation ──────────────────────────────────
 
+
 class TestPoolItemValidation:
 
     @pytest.mark.asyncio
-    async def test_pool_item_quantity_zero_rejected(self, db_session, setup_org_and_user):
+    async def test_pool_item_quantity_zero_rejected(
+        self, db_session, setup_org_and_user
+    ):
         """Pool items with quantity 0 should be rejected."""
         org_id, user_id, _ = await setup_org_and_user
         svc = InventoryService(db_session)
@@ -925,6 +1034,7 @@ class TestPoolItemValidation:
 
 
 # ── Barcode Label Generation Tests ─────────────────────────────────
+
 
 class TestBarcodeLabels:
 
@@ -1021,7 +1131,9 @@ class TestBarcodeLabels:
         assert content[:5] == b"%PDF-"
 
     @pytest.mark.asyncio
-    async def test_generate_labels_no_items_raises(self, db_session, setup_org_and_user):
+    async def test_generate_labels_no_items_raises(
+        self, db_session, setup_org_and_user
+    ):
         """Label generation with no valid items raises ValueError."""
         org_id, user_id, _ = await setup_org_and_user
         svc = InventoryService(db_session)
@@ -1033,7 +1145,9 @@ class TestBarcodeLabels:
             )
 
     @pytest.mark.asyncio
-    async def test_generate_labels_invalid_format_raises(self, db_session, setup_org_and_user):
+    async def test_generate_labels_invalid_format_raises(
+        self, db_session, setup_org_and_user
+    ):
         """Label generation with invalid format raises ValueError."""
         org_id, user_id, _ = await setup_org_and_user
         svc = InventoryService(db_session)
@@ -1057,7 +1171,9 @@ class TestBarcodeLabels:
             )
 
     @pytest.mark.asyncio
-    async def test_generate_labels_custom_without_dimensions_raises(self, db_session, setup_org_and_user):
+    async def test_generate_labels_custom_without_dimensions_raises(
+        self, db_session, setup_org_and_user
+    ):
         """Custom format without dimensions raises ValueError."""
         org_id, user_id, _ = await setup_org_and_user
         svc = InventoryService(db_session)
@@ -1123,8 +1239,13 @@ class TestBarcodeLabels:
         )
 
         all_formats = [
-            "dymo_30252", "dymo_30256", "dymo_30334", "dymo_30336",
-            "rollo_4x6", "rollo_2x1", "thermal_1x1",
+            "dymo_30252",
+            "dymo_30256",
+            "dymo_30334",
+            "dymo_30336",
+            "rollo_4x6",
+            "rollo_2x1",
+            "thermal_1x1",
         ]
         for fmt in all_formats:
             pdf_buf, _ = await svc.generate_barcode_labels(
@@ -1172,7 +1293,9 @@ class TestBarcodeLabels:
         assert pdf_rotated.read()[:5] == b"%PDF-"
 
     @pytest.mark.asyncio
-    async def test_auto_rotate_default_from_format(self, db_session, setup_org_and_user):
+    async def test_auto_rotate_default_from_format(
+        self, db_session, setup_org_and_user
+    ):
         """Formats use their own auto_rotate default when not overridden."""
         org_id, user_id, _ = await setup_org_and_user
         svc = InventoryService(db_session)
@@ -1206,7 +1329,9 @@ class TestBarcodeLabels:
         assert pdf_rollo.read()[:5] == b"%PDF-"
 
     @pytest.mark.asyncio
-    async def test_auto_rotate_portrait_label_no_rotation(self, db_session, setup_org_and_user):
+    async def test_auto_rotate_portrait_label_no_rotation(
+        self, db_session, setup_org_and_user
+    ):
         """Portrait labels are not rotated even when auto_rotate=True."""
         org_id, user_id, _ = await setup_org_and_user
         svc = InventoryService(db_session)
@@ -1234,6 +1359,7 @@ class TestBarcodeLabels:
 
 
 # ── Additional Batch Checkout Tests ────────────────────────────────
+
 
 class TestBatchCheckoutExtended:
 
@@ -1271,7 +1397,9 @@ class TestBatchCheckoutExtended:
         assert refreshed.quantity_issued == 5
 
     @pytest.mark.asyncio
-    async def test_batch_checkout_unavailable_item(self, db_session, setup_org_and_user):
+    async def test_batch_checkout_unavailable_item(
+        self, db_session, setup_org_and_user
+    ):
         """Batch checkout fails for items in maintenance."""
         org_id, user_id, _ = await setup_org_and_user
         svc = InventoryService(db_session)

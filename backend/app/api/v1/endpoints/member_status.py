@@ -116,9 +116,7 @@ async def _send_property_return_email(
             # Try loading the admin-configured template (same session).
             try:
                 from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import (
-                    EmailTemplateService,
-                )
+                from app.services.email_template_service import EmailTemplateService
 
                 tmpl_svc = EmailTemplateService(session)
                 template = await tmpl_svc.get_template(

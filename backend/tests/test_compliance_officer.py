@@ -5,10 +5,13 @@ Tests for ISO readiness scoring, compliance attestation validation,
 record completeness evaluation, and annual compliance report helpers.
 """
 
-import pytest
 from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from app.models.admin_hours import AdminHoursEntryStatus
+from app.models.training import RenewalTaskStatus
 from app.services.compliance_officer_service import (
     ISO_CATEGORIES,
     AnnualComplianceReportService,
@@ -17,9 +20,6 @@ from app.services.compliance_officer_service import (
     ISOReadinessService,
     RecordCompletenessService,
 )
-from app.models.admin_hours import AdminHoursEntryStatus
-from app.models.training import RenewalTaskStatus
-
 
 # ============================================
 # ISO_CATEGORIES Structure Tests
@@ -62,31 +62,31 @@ class TestISOCategories:
 
     def test_required_hours_are_positive(self):
         for cat in ISO_CATEGORIES:
-            assert cat["required_hours"] > 0, (
-                f"Category '{cat['name']}' has non-positive required_hours"
-            )
+            assert (
+                cat["required_hours"] > 0
+            ), f"Category '{cat['name']}' has non-positive required_hours"
 
     def test_training_types_are_non_empty_lists(self):
         for cat in ISO_CATEGORIES:
             assert isinstance(cat["training_types"], list)
-            assert len(cat["training_types"]) > 0, (
-                f"Category '{cat['name']}' has empty training_types"
-            )
+            assert (
+                len(cat["training_types"]) > 0
+            ), f"Category '{cat['name']}' has empty training_types"
 
     def test_training_types_are_strings(self):
         for cat in ISO_CATEGORIES:
             for t in cat["training_types"]:
                 assert isinstance(t, str)
-                assert t == t.lower(), (
-                    f"Training type '{t}' in '{cat['name']}' is not lowercase"
-                )
+                assert (
+                    t == t.lower()
+                ), f"Training type '{t}' in '{cat['name']}' is not lowercase"
 
     def test_no_duplicate_training_types_within_category(self):
         for cat in ISO_CATEGORIES:
             types = cat["training_types"]
-            assert len(types) == len(set(types)), (
-                f"Category '{cat['name']}' has duplicate training_types"
-            )
+            assert len(types) == len(
+                set(types)
+            ), f"Category '{cat['name']}' has duplicate training_types"
 
     def test_company_training_has_expected_types(self):
         company = next(c for c in ISO_CATEGORIES if c["name"] == "Company Training")
@@ -195,9 +195,9 @@ class TestEstimateISOClass:
         ]
         for pct, expected_class in boundaries:
             result = ISOReadinessService._estimate_iso_class(pct)
-            assert result == expected_class, (
-                f"Expected class {expected_class} for {pct}%, got {result}"
-            )
+            assert (
+                result == expected_class
+            ), f"Expected class {expected_class} for {pct}%, got {result}"
 
     def test_just_below_boundaries(self):
         """Test values just below each boundary threshold."""
@@ -214,18 +214,16 @@ class TestEstimateISOClass:
         ]
         for pct, expected_class in below_boundaries:
             result = ISOReadinessService._estimate_iso_class(pct)
-            assert result == expected_class, (
-                f"Expected class {expected_class} for {pct}%, got {result}"
-            )
+            assert (
+                result == expected_class
+            ), f"Expected class {expected_class} for {pct}%, got {result}"
 
     def test_class_monotonic(self):
         """Higher readiness should give equal or better (lower) class."""
         prev_class = 10
         for pct in range(0, 101, 5):
             cls = ISOReadinessService._estimate_iso_class(pct)
-            assert cls <= prev_class, (
-                f"Class {cls} at {pct}% should be <= {prev_class}"
-            )
+            assert cls <= prev_class, f"Class {cls} at {pct}% should be <= {prev_class}"
             prev_class = cls
 
 
@@ -318,9 +316,7 @@ class TestComplianceAttestationValidation:
         mock_db = AsyncMock()
         service = ComplianceAttestationService(mock_db)
 
-        with pytest.raises(
-            ValueError, match="period_quarter must be 1, 2, 3, or 4"
-        ):
+        with pytest.raises(ValueError, match="period_quarter must be 1, 2, 3, or 4"):
             await service.create_attestation(
                 organization_id="org-1",
                 attestation_data={
@@ -335,9 +331,7 @@ class TestComplianceAttestationValidation:
         mock_db = AsyncMock()
         service = ComplianceAttestationService(mock_db)
 
-        with pytest.raises(
-            ValueError, match="period_quarter must be 1, 2, 3, or 4"
-        ):
+        with pytest.raises(ValueError, match="period_quarter must be 1, 2, 3, or 4"):
             await service.create_attestation(
                 organization_id="org-1",
                 attestation_data={
@@ -353,9 +347,7 @@ class TestComplianceAttestationValidation:
         mock_db = AsyncMock()
         service = ComplianceAttestationService(mock_db)
 
-        with pytest.raises(
-            ValueError, match="period_quarter must be 1, 2, 3, or 4"
-        ):
+        with pytest.raises(ValueError, match="period_quarter must be 1, 2, 3, or 4"):
             await service.create_attestation(
                 organization_id="org-1",
                 attestation_data={
@@ -512,9 +504,7 @@ class TestComplianceAttestationValidation:
         "app.services.compliance_officer_service.generate_uuid",
         return_value="test-uuid-5",
     )
-    async def test_audit_event_called_with_correct_params(
-        self, mock_uuid, mock_audit
-    ):
+    async def test_audit_event_called_with_correct_params(self, mock_uuid, mock_audit):
         mock_db = AsyncMock()
         service = ComplianceAttestationService(mock_db)
 
@@ -1313,9 +1303,7 @@ class TestContributedHoursService:
 
         # Second call: training hours (user-1 has 40 hours)
         training_result = MagicMock()
-        training_result.__iter__ = MagicMock(
-            return_value=iter([("user-1", 40.0)])
-        )
+        training_result.__iter__ = MagicMock(return_value=iter([("user-1", 40.0)]))
 
         # Third call: admin hours (none)
         admin_result = MagicMock()

@@ -8,7 +8,7 @@ validators and catch edge cases that example-based tests miss.
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from hypothesis import given, settings, HealthCheck
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
@@ -21,7 +21,6 @@ from app.schemas.event import (
 )
 from app.schemas.user import EmergencyContact
 
-
 # ============================================================
 # Strategies for generating valid data
 # ============================================================
@@ -32,10 +31,17 @@ valid_title = st.text(
     max_size=200,
 ).filter(lambda s: s.strip())
 
-valid_event_types = st.sampled_from([
-    "business_meeting", "public_education", "training",
-    "social", "fundraiser", "ceremony", "other",
-])
+valid_event_types = st.sampled_from(
+    [
+        "business_meeting",
+        "public_education",
+        "training",
+        "social",
+        "fundraiser",
+        "ceremony",
+        "other",
+    ]
+)
 
 valid_rsvp_statuses = st.sampled_from(["going", "not_going", "maybe"])
 

@@ -187,7 +187,9 @@ class TestShiftCRUD:
         org_id, _, _ = await setup_org_and_users
         svc = SchedulingService(db_session)
 
-        result, err = await svc.update_shift(uuid.uuid4(), uuid.UUID(org_id), {"notes": "x"})
+        result, err = await svc.update_shift(
+            uuid.uuid4(), uuid.UUID(org_id), {"notes": "x"}
+        )
         assert result is None
         assert "not found" in err.lower()
 
@@ -363,19 +365,13 @@ class TestShiftCRUD:
         org_id, user_id, _ = await setup_org_and_users
         svc = SchedulingService(db_session)
 
-        token1 = await svc.ensure_calendar_token(
-            uuid.UUID(user_id), uuid.UUID(org_id)
-        )
+        token1 = await svc.ensure_calendar_token(uuid.UUID(user_id), uuid.UUID(org_id))
         assert token1
         # Idempotent — a second call returns the same token.
-        token1b = await svc.ensure_calendar_token(
-            uuid.UUID(user_id), uuid.UUID(org_id)
-        )
+        token1b = await svc.ensure_calendar_token(uuid.UUID(user_id), uuid.UUID(org_id))
         assert token1b == token1
 
-        token2 = await svc.rotate_calendar_token(
-            uuid.UUID(user_id), uuid.UUID(org_id)
-        )
+        token2 = await svc.rotate_calendar_token(uuid.UUID(user_id), uuid.UUID(org_id))
         assert token2 and token2 != token1
 
         # The new token resolves to the owning member; the old one no longer does.
@@ -400,16 +396,12 @@ class TestShiftCRUD:
             uuid.UUID(user_id),
         )
         # A shift that was never finalized cannot be reopened.
-        result, err = await svc.reopen_shift(
-            uuid.UUID(shift.id), uuid.UUID(org_id)
-        )
+        result, err = await svc.reopen_shift(uuid.UUID(shift.id), uuid.UUID(org_id))
         assert result is None
         assert "not finalized" in err.lower()
 
     @pytest.mark.asyncio
-    async def test_restrict_checkin_to_assigned(
-        self, db_session, setup_org_and_users
-    ):
+    async def test_restrict_checkin_to_assigned(self, db_session, setup_org_and_users):
         from app.services.shift_eligibility_service import ShiftEligibilityService
 
         org_id, user_id, user2_id = await setup_org_and_users
@@ -429,9 +421,7 @@ class TestShiftCRUD:
         )
 
         # An unrostered member is blocked from checking in.
-        result, err = await svc.member_check_in(
-            shift.id, user2_id, uuid.UUID(org_id)
-        )
+        result, err = await svc.member_check_in(shift.id, user2_id, uuid.UUID(org_id))
         assert result is None
         assert "not assigned" in err.lower()
 
@@ -442,9 +432,7 @@ class TestShiftCRUD:
             {"user_id": user2_id, "position": "firefighter"},
             uuid.UUID(user_id),
         )
-        result2, err2 = await svc.member_check_in(
-            shift.id, user2_id, uuid.UUID(org_id)
-        )
+        result2, err2 = await svc.member_check_in(shift.id, user2_id, uuid.UUID(org_id))
         assert err2 is None
         assert result2 is not None
 
@@ -585,11 +573,15 @@ class TestTemplateManagement:
         org_id, _, _, template = await setup_template
         svc = SchedulingService(db_session)
 
-        success, err = await svc.delete_template(uuid.UUID(template.id), uuid.UUID(org_id))
+        success, err = await svc.delete_template(
+            uuid.UUID(template.id), uuid.UUID(org_id)
+        )
         assert success is True
         assert err is None
 
-        fetched = await svc.get_template_by_id(uuid.UUID(template.id), uuid.UUID(org_id))
+        fetched = await svc.get_template_by_id(
+            uuid.UUID(template.id), uuid.UUID(org_id)
+        )
         assert fetched is None
 
 
@@ -743,7 +735,9 @@ class TestPatternGeneration:
         shift = shifts[0]
         # End time should be 07:00 the next day
         assert shift.end_time > shift.start_time
-        assert shift.end_time.day == shift.start_time.day + 1 or (shift.start_time.month != shift.end_time.month)
+        assert shift.end_time.day == shift.start_time.day + 1 or (
+            shift.start_time.month != shift.end_time.month
+        )
 
     @pytest.mark.asyncio
     async def test_pattern_auto_assigns_members(self, db_session, setup_template):
@@ -772,11 +766,15 @@ class TestPatternGeneration:
         assert err is None
         assert len(shifts) == 1
 
-        assignments = await svc.get_shift_assignments(uuid.UUID(shifts[0].id), uuid.UUID(org_id))
+        assignments = await svc.get_shift_assignments(
+            uuid.UUID(shifts[0].id), uuid.UUID(org_id)
+        )
         assert len(assignments) == 2
 
     @pytest.mark.asyncio
-    async def test_platoon_rotation_assigns_per_platoon(self, db_session, setup_template):
+    async def test_platoon_rotation_assigns_per_platoon(
+        self, db_session, setup_template
+    ):
         """A multi-platoon 24/48 rotation should create one shift per day and
         staff each day with only the on-duty platoon's members."""
         org_id, user_id, user2_id, template = await setup_template
@@ -834,7 +832,9 @@ class TestPatternGeneration:
         assert day2 == []
 
     @pytest.mark.asyncio
-    async def test_platoon_without_platoons_assigns_all(self, db_session, setup_template):
+    async def test_platoon_without_platoons_assigns_all(
+        self, db_session, setup_template
+    ):
         """A platoon pattern with no platoons configured keeps the original
         behavior: every assigned member is placed on each on-day."""
         org_id, user_id, user2_id, template = await setup_template
@@ -1002,7 +1002,9 @@ class TestPatternGeneration:
         assert day0 == []
 
     @pytest.mark.asyncio
-    async def test_platoon_roster_reports_member_status(self, db_session, setup_template):
+    async def test_platoon_roster_reports_member_status(
+        self, db_session, setup_template
+    ):
         """The platoon roster reports each member as assigned, available, or
         on_leave for hold-over decisions."""
         org_id, user_id, user2_id, template = await setup_template
@@ -1058,7 +1060,9 @@ class TestPatternGeneration:
         }
 
     @pytest.mark.asyncio
-    async def test_generate_missing_template_returns_error(self, db_session, setup_org_and_users):
+    async def test_generate_missing_template_returns_error(
+        self, db_session, setup_org_and_users
+    ):
         org_id, user_id, _ = await setup_org_and_users
         svc = SchedulingService(db_session)
 
@@ -1083,7 +1087,9 @@ class TestPatternGeneration:
         assert "template" in err.lower()
 
     @pytest.mark.asyncio
-    async def test_duplicate_guard_prevents_double_generation(self, db_session, setup_template):
+    async def test_duplicate_guard_prevents_double_generation(
+        self, db_session, setup_template
+    ):
         """Running generate twice for the same range should not create duplicates."""
         org_id, user_id, _, template = await setup_template
         svc = SchedulingService(db_session)
@@ -1114,7 +1120,9 @@ class TestPatternGeneration:
         assert len(shifts2) == 0
 
         # Total shifts for this range should be 3, not 6
-        all_shifts, total = await svc.get_shifts(uuid.UUID(org_id), start_date=start, end_date=end)
+        all_shifts, total = await svc.get_shifts(
+            uuid.UUID(org_id), start_date=start, end_date=end
+        )
         assert total == 3
 
 
@@ -1147,11 +1155,15 @@ class TestAssignmentManagement:
         assert err is None
         assert assignment is not None
 
-        assignments = await svc.get_shift_assignments(uuid.UUID(shift.id), uuid.UUID(org_id))
+        assignments = await svc.get_shift_assignments(
+            uuid.UUID(shift.id), uuid.UUID(org_id)
+        )
         assert len(assignments) == 1
 
     @pytest.mark.asyncio
-    async def test_create_assignment_nonexistent_shift(self, db_session, setup_org_and_users):
+    async def test_create_assignment_nonexistent_shift(
+        self, db_session, setup_org_and_users
+    ):
         org_id, user_id, _ = await setup_org_and_users
         svc = SchedulingService(db_session)
 
@@ -1242,14 +1254,20 @@ class TestAssignmentManagement:
             uuid.UUID(user_id),
         )
 
-        success, err = await svc.delete_assignment(uuid.UUID(assignment.id), uuid.UUID(org_id))
+        success, err = await svc.delete_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(org_id)
+        )
         assert success is True
 
-        remaining = await svc.get_shift_assignments(uuid.UUID(shift.id), uuid.UUID(org_id))
+        remaining = await svc.get_shift_assignments(
+            uuid.UUID(shift.id), uuid.UUID(org_id)
+        )
         assert len(remaining) == 0
 
     @pytest.mark.asyncio
-    async def test_get_user_assignments_date_range(self, db_session, setup_org_and_users):
+    async def test_get_user_assignments_date_range(
+        self, db_session, setup_org_and_users
+    ):
         org_id, user_id, user2_id = await setup_org_and_users
         svc = SchedulingService(db_session)
 
@@ -1280,7 +1298,9 @@ class TestAssignmentManagement:
         assert len(assignments) == 2
 
     @pytest.mark.asyncio
-    async def test_officer_assignment_sets_default_shift_officer(self, db_session, setup_org_and_users):
+    async def test_officer_assignment_sets_default_shift_officer(
+        self, db_session, setup_org_and_users
+    ):
         """When a member is assigned the officer position and no shift officer is set, auto-populate it."""
         org_id, user_id, user2_id = await setup_org_and_users
         svc = SchedulingService(db_session)
@@ -1306,11 +1326,15 @@ class TestAssignmentManagement:
         assert err is None
 
         # Re-fetch the shift to verify shift_officer_id was set
-        updated_shift = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        updated_shift = await svc.get_shift_by_id(
+            uuid.UUID(shift.id), uuid.UUID(org_id)
+        )
         assert updated_shift.shift_officer_id == user2_id
 
     @pytest.mark.asyncio
-    async def test_captain_assignment_sets_default_shift_officer(self, db_session, setup_org_and_users):
+    async def test_captain_assignment_sets_default_shift_officer(
+        self, db_session, setup_org_and_users
+    ):
         """Captain position should also auto-set shift officer."""
         org_id, user_id, user2_id = await setup_org_and_users
         svc = SchedulingService(db_session)
@@ -1333,11 +1357,15 @@ class TestAssignmentManagement:
         )
         assert err is None
 
-        updated_shift = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        updated_shift = await svc.get_shift_by_id(
+            uuid.UUID(shift.id), uuid.UUID(org_id)
+        )
         assert updated_shift.shift_officer_id == user2_id
 
     @pytest.mark.asyncio
-    async def test_officer_assignment_does_not_override_existing(self, db_session, setup_org_and_users):
+    async def test_officer_assignment_does_not_override_existing(
+        self, db_session, setup_org_and_users
+    ):
         """If a shift already has a shift officer, assigning another officer should NOT override."""
         org_id, user_id, user2_id = await setup_org_and_users
         svc = SchedulingService(db_session)
@@ -1363,11 +1391,15 @@ class TestAssignmentManagement:
         )
         assert err is None
 
-        updated_shift = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        updated_shift = await svc.get_shift_by_id(
+            uuid.UUID(shift.id), uuid.UUID(org_id)
+        )
         assert updated_shift.shift_officer_id == user_id  # unchanged
 
     @pytest.mark.asyncio
-    async def test_firefighter_assignment_does_not_set_shift_officer(self, db_session, setup_org_and_users):
+    async def test_firefighter_assignment_does_not_set_shift_officer(
+        self, db_session, setup_org_and_users
+    ):
         """Non-officer positions (firefighter, driver, etc.) should NOT auto-set shift officer."""
         org_id, user_id, user2_id = await setup_org_and_users
         svc = SchedulingService(db_session)
@@ -1390,7 +1422,9 @@ class TestAssignmentManagement:
         )
         assert err is None
 
-        updated_shift = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        updated_shift = await svc.get_shift_by_id(
+            uuid.UUID(shift.id), uuid.UUID(org_id)
+        )
         assert updated_shift.shift_officer_id is None
 
 
@@ -1426,7 +1460,9 @@ class TestSwapRequests:
         assert total >= 1
 
     @pytest.mark.asyncio
-    async def test_approve_swap_performs_assignment_swap(self, db_session, setup_org_and_users):
+    async def test_approve_swap_performs_assignment_swap(
+        self, db_session, setup_org_and_users
+    ):
         org_id, user_id, user2_id = await setup_org_and_users
         svc = SchedulingService(db_session)
 
@@ -1444,7 +1480,9 @@ class TestSwapRequests:
             uuid.UUID(org_id),
             {
                 "shift_date": tomorrow,
-                "start_time": datetime(tomorrow.year, tomorrow.month, tomorrow.day, 7, 0),
+                "start_time": datetime(
+                    tomorrow.year, tomorrow.month, tomorrow.day, 7, 0
+                ),
             },
             uuid.UUID(user_id),
         )
@@ -1552,7 +1590,9 @@ class TestSwapRequests:
         assert "no longer pending" in err.lower()
 
     @pytest.mark.asyncio
-    async def test_cancel_swap_by_wrong_user_fails(self, db_session, setup_org_and_users):
+    async def test_cancel_swap_by_wrong_user_fails(
+        self, db_session, setup_org_and_users
+    ):
         org_id, user_id, user2_id = await setup_org_and_users
         svc = SchedulingService(db_session)
 
@@ -1571,7 +1611,9 @@ class TestSwapRequests:
             {"offering_shift_id": shift.id},
         )
 
-        result, err = await svc.cancel_swap_request(uuid.UUID(swap.id), uuid.UUID(org_id), uuid.UUID(user2_id))
+        result, err = await svc.cancel_swap_request(
+            uuid.UUID(swap.id), uuid.UUID(org_id), uuid.UUID(user2_id)
+        )
         assert result is None
         assert "only the requesting user" in err.lower()
 
@@ -1595,7 +1637,9 @@ class TestSwapRequests:
             {"offering_shift_id": shift.id},
         )
 
-        cancelled, err = await svc.cancel_swap_request(uuid.UUID(swap.id), uuid.UUID(org_id), uuid.UUID(user_id))
+        cancelled, err = await svc.cancel_swap_request(
+            uuid.UUID(swap.id), uuid.UUID(org_id), uuid.UUID(user_id)
+        )
         assert err is None
         assert cancelled.status == SwapRequestStatus.CANCELLED
 
@@ -1662,7 +1706,9 @@ class TestTimeOff:
             },
         )
 
-        result, err = await svc.cancel_time_off(uuid.UUID(time_off.id), uuid.UUID(org_id), uuid.UUID(user2_id))
+        result, err = await svc.cancel_time_off(
+            uuid.UUID(time_off.id), uuid.UUID(org_id), uuid.UUID(user2_id)
+        )
         assert result is None
         assert "only the requesting user" in err.lower()
 
@@ -1680,12 +1726,16 @@ class TestTimeOff:
             },
         )
 
-        cancelled, err = await svc.cancel_time_off(uuid.UUID(time_off.id), uuid.UUID(org_id), uuid.UUID(user_id))
+        cancelled, err = await svc.cancel_time_off(
+            uuid.UUID(time_off.id), uuid.UUID(org_id), uuid.UUID(user_id)
+        )
         assert err is None
         assert cancelled.status == TimeOffStatus.CANCELLED
 
     @pytest.mark.asyncio
-    async def test_get_availability_returns_approved_only(self, db_session, setup_org_and_users):
+    async def test_get_availability_returns_approved_only(
+        self, db_session, setup_org_and_users
+    ):
         org_id, user_id, user2_id = await setup_org_and_users
         svc = SchedulingService(db_session)
 
@@ -1750,7 +1800,9 @@ class TestAttendance:
         assert len(records) == 1
 
     @pytest.mark.asyncio
-    async def test_update_attendance_calculates_duration(self, db_session, setup_org_and_users):
+    async def test_update_attendance_calculates_duration(
+        self, db_session, setup_org_and_users
+    ):
         org_id, user_id, user2_id = await setup_org_and_users
         svc = SchedulingService(db_session)
 
@@ -1770,8 +1822,12 @@ class TestAttendance:
             {"user_id": user2_id},
         )
 
-        check_in = datetime(today.year, today.month, today.day, 7, 0, tzinfo=timezone.utc)
-        check_out = datetime(today.year, today.month, today.day, 19, 0, tzinfo=timezone.utc)
+        check_in = datetime(
+            today.year, today.month, today.day, 7, 0, tzinfo=timezone.utc
+        )
+        check_out = datetime(
+            today.year, today.month, today.day, 19, 0, tzinfo=timezone.utc
+        )
 
         updated, err = await svc.update_attendance(
             uuid.UUID(att.id),
@@ -1805,7 +1861,9 @@ class TestAttendance:
         success, err = await svc.remove_attendance(uuid.UUID(att.id), uuid.UUID(org_id))
         assert success is True
 
-        remaining = await svc.get_shift_attendance(uuid.UUID(shift.id), uuid.UUID(org_id))
+        remaining = await svc.get_shift_attendance(
+            uuid.UUID(shift.id), uuid.UUID(org_id)
+        )
         assert len(remaining) == 0
 
 
@@ -1892,7 +1950,9 @@ class TestShiftCalls:
             {"incident_type": "ems"},
         )
 
-        success, err = await svc.delete_shift_call(uuid.UUID(call.id), uuid.UUID(org_id))
+        success, err = await svc.delete_shift_call(
+            uuid.UUID(call.id), uuid.UUID(org_id)
+        )
         assert success is True
 
         remaining = await svc.get_shift_calls(uuid.UUID(shift.id), uuid.UUID(org_id))
@@ -1925,8 +1985,12 @@ class TestReporting:
             uuid.UUID(org_id),
             {"user_id": user2_id},
         )
-        check_in = datetime(today.year, today.month, today.day, 7, 0, tzinfo=timezone.utc)
-        check_out = datetime(today.year, today.month, today.day, 19, 0, tzinfo=timezone.utc)
+        check_in = datetime(
+            today.year, today.month, today.day, 7, 0, tzinfo=timezone.utc
+        )
+        check_out = datetime(
+            today.year, today.month, today.day, 19, 0, tzinfo=timezone.utc
+        )
         await svc.update_attendance(
             uuid.UUID(att.id),
             uuid.UUID(org_id),

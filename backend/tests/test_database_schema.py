@@ -14,14 +14,16 @@ Run with:
 import enum
 
 import pytest
-from sqlalchemy import inspect as sa_inspect, String, Integer, BigInteger, Boolean
+from sqlalchemy import BigInteger, Boolean, Integer, String
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import RelationshipProperty
+
+from app.core.database import Base
 
 # ---------------------------------------------------------------------------
 # Import all models to register them with Base.metadata
 # ---------------------------------------------------------------------------
 from app.models import *  # noqa: F401,F403
-from app.core.database import Base
 
 # ---------------------------------------------------------------------------
 # Helpers

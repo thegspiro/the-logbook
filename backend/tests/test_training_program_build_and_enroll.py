@@ -113,7 +113,9 @@ class TestBuildProgram:
         # code and manual-advancement flag are persisted, not dropped.
         assert program.code == "RECRUIT"
         added = db.added
-        assert any(isinstance(o, ProgramPhase) and o.requires_manual_advancement for o in added)
+        assert any(
+            isinstance(o, ProgramPhase) and o.requires_manual_advancement for o in added
+        )
         assert any(isinstance(o, TrainingRequirement) for o in added)
         assert any(isinstance(o, ProgramRequirement) for o in added)
         assert any(isinstance(o, ProgramMilestone) for o in added)

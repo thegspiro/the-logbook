@@ -15,7 +15,6 @@ from app.core.seed_admin_hours import (
     seed_event_hour_mappings,
 )
 
-
 # ============================================
 # Default Category Definitions
 # ============================================
@@ -29,14 +28,17 @@ class TestDefaultCategories:
 
     def test_required_keys_present(self):
         required = {
-            "name", "description", "color", "require_approval",
-            "auto_approve_under_hours", "max_hours_per_session", "sort_order",
+            "name",
+            "description",
+            "color",
+            "require_approval",
+            "auto_approve_under_hours",
+            "max_hours_per_session",
+            "sort_order",
         }
         for cat in DEFAULT_ADMIN_HOURS_CATEGORIES:
             missing = required - cat.keys()
-            assert not missing, (
-                f"Category '{cat['name']}' missing keys: {missing}"
-            )
+            assert not missing, f"Category '{cat['name']}' missing keys: {missing}"
 
     def test_names_unique(self):
         names = [c["name"] for c in DEFAULT_ADMIN_HOURS_CATEGORIES]
@@ -93,9 +95,9 @@ class TestDefaultEventMappings:
     def test_category_names_reference_valid_categories(self):
         valid_names = {c["name"] for c in DEFAULT_ADMIN_HOURS_CATEGORIES}
         for m in DEFAULT_EVENT_HOUR_MAPPINGS:
-            assert m["category_name"] in valid_names, (
-                f"Mapping references unknown category: {m['category_name']}"
-            )
+            assert (
+                m["category_name"] in valid_names
+            ), f"Mapping references unknown category: {m['category_name']}"
 
     def test_expected_event_types(self):
         types = {m["event_type"] for m in DEFAULT_EVENT_HOUR_MAPPINGS}
@@ -120,9 +122,7 @@ class TestSeedCategories:
         no_result.scalar_one_or_none.return_value = None
         mock_db.execute.return_value = no_result
 
-        result = await seed_admin_hours_categories(
-            mock_db, "org-1", "user-1"
-        )
+        result = await seed_admin_hours_categories(mock_db, "org-1", "user-1")
 
         assert len(result) == len(DEFAULT_ADMIN_HOURS_CATEGORIES)
         for cat in DEFAULT_ADMIN_HOURS_CATEGORIES:
@@ -144,9 +144,7 @@ class TestSeedCategories:
         existing_result.scalar_one_or_none.return_value = existing_cat
         mock_db.execute.return_value = existing_result
 
-        result = await seed_admin_hours_categories(
-            mock_db, "org-1", "user-1"
-        )
+        result = await seed_admin_hours_categories(mock_db, "org-1", "user-1")
 
         # All map to the existing id
         for cat_name in result:
@@ -228,7 +226,9 @@ class TestSeedAdminHoursData:
     """Test the top-level orchestration function."""
 
     @patch("app.core.seed_admin_hours.seed_event_hour_mappings", new_callable=AsyncMock)
-    @patch("app.core.seed_admin_hours.seed_admin_hours_categories", new_callable=AsyncMock)
+    @patch(
+        "app.core.seed_admin_hours.seed_admin_hours_categories", new_callable=AsyncMock
+    )
     async def test_calls_both_seeders(self, mock_cats, mock_mappings):
         mock_db = AsyncMock()
         mock_cats.return_value = {"Cat A": "id-1", "Cat B": "id-2"}

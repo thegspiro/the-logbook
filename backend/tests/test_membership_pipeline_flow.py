@@ -67,9 +67,7 @@ async def setup_org_and_admin(db_session: AsyncSession):
 
 class TestPipelineManagement:
 
-    async def test_create_pipeline(
-        self, db_session: AsyncSession, setup_org_and_admin
-    ):
+    async def test_create_pipeline(self, db_session: AsyncSession, setup_org_and_admin):
         org_id, _ = setup_org_and_admin
         svc = MembershipPipelineService(db_session)
 
@@ -135,9 +133,7 @@ class TestPipelineManagement:
             "Membership Vote",
         ]
 
-    async def test_reorder_steps(
-        self, db_session: AsyncSession, setup_org_and_admin
-    ):
+    async def test_reorder_steps(self, db_session: AsyncSession, setup_org_and_admin):
         org_id, _ = setup_org_and_admin
         svc = MembershipPipelineService(db_session)
 
@@ -170,9 +166,7 @@ class TestPipelineManagement:
         assert reordered is not None
         assert [s.name for s in reordered] == ["Step C", "Step B", "Step A"]
 
-    async def test_list_pipelines(
-        self, db_session: AsyncSession, setup_org_and_admin
-    ):
+    async def test_list_pipelines(self, db_session: AsyncSession, setup_org_and_admin):
         org_id, _ = setup_org_and_admin
         svc = MembershipPipelineService(db_session)
 
@@ -193,9 +187,7 @@ class TestPipelineManagement:
 
 class TestProspectManagement:
 
-    async def test_create_prospect(
-        self, db_session: AsyncSession, setup_org_and_admin
-    ):
+    async def test_create_prospect(self, db_session: AsyncSession, setup_org_and_admin):
         org_id, admin_id = setup_org_and_admin
         svc = MembershipPipelineService(db_session)
 
@@ -257,18 +249,14 @@ class TestProspectManagement:
             prospect_hold.id, org_id, {"status": "on_hold"}, updated_by=admin_id
         )
 
-        active_list, active_count = await svc.list_prospects(
-            org_id, status="active"
-        )
+        active_list, active_count = await svc.list_prospects(org_id, status="active")
         assert active_count >= 1
         assert all(
             str(p.status.value if hasattr(p.status, "value") else p.status) == "active"
             for p in active_list
         )
 
-        hold_list, hold_count = await svc.list_prospects(
-            org_id, status="on_hold"
-        )
+        hold_list, hold_count = await svc.list_prospects(org_id, status="on_hold")
         assert hold_count >= 1
         assert all(
             str(p.status.value if hasattr(p.status, "value") else p.status) == "on_hold"
@@ -337,9 +325,7 @@ class TestProspectProgression:
             steps.append(step)
         return pipeline, steps
 
-    async def test_complete_step(
-        self, db_session: AsyncSession, setup_org_and_admin
-    ):
+    async def test_complete_step(self, db_session: AsyncSession, setup_org_and_admin):
         org_id, admin_id = setup_org_and_admin
         svc = MembershipPipelineService(db_session)
 
@@ -366,11 +352,7 @@ class TestProspectProgression:
         assert updated is not None
         # The first step should be completed in the progress records
         first_progress = next(
-            (
-                p
-                for p in updated.step_progress
-                if str(p.step_id) == str(steps[0].id)
-            ),
+            (p for p in updated.step_progress if str(p.step_id) == str(steps[0].id)),
             None,
         )
         assert first_progress is not None
@@ -447,11 +429,7 @@ class TestProspectProgression:
 
         assert result is not None
         completed_statuses = [
-            (
-                p.status.value
-                if hasattr(p.status, "value")
-                else p.status
-            )
+            (p.status.value if hasattr(p.status, "value") else p.status)
             for p in result.step_progress
         ]
         assert completed_statuses.count("completed") == 2
@@ -568,9 +546,7 @@ class TestTransferToMembership:
         # way, the prospect's original email should be preserved in one
         # of the email columns.
         user_emails = await db_session.execute(
-            text(
-                "SELECT email, personal_email FROM users WHERE id = :uid"
-            ),
+            text("SELECT email, personal_email FROM users WHERE id = :uid"),
             {"uid": result["user_id"]},
         )
         email_row = user_emails.fetchone()

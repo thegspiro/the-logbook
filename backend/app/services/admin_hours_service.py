@@ -21,9 +21,9 @@ from app.models.admin_hours import (
     AdminHoursEntryStatus,
     EventHourMapping,
 )
-from app.utils.csv_export import SafeCsvWriter
 from app.models.event import Event
 from app.models.user import Organization, User
+from app.utils.csv_export import SafeCsvWriter
 
 # A single manual admin-hours entry cannot span more than a day — bounds the
 # absurd-duration self-credit vector on client-supplied times.

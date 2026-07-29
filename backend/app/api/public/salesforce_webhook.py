@@ -24,13 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
-from app.utils.webhook_replay import is_duplicate_webhook
 from app.models.integration import Integration
 from app.services.integration_services.salesforce_service import SalesforceService
 from app.services.integration_services.salesforce_sync_service import (
     SalesforceSyncService,
     build_salesforce_credentials,
 )
+from app.utils.webhook_replay import is_duplicate_webhook
 
 router = APIRouter(
     prefix="/public/v1/webhooks/salesforce",

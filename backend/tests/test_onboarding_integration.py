@@ -14,16 +14,17 @@ Test Coverage:
 - Onboarding status tracking
 """
 
-import pytest
 import uuid
+
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.onboarding import OnboardingService
 
 pytestmark = [pytest.mark.integration]
-from app.models.user import Organization, User, Position
 from app.models.onboarding import OnboardingStatus
+from app.models.user import Organization, Position, User
 
 
 class TestOnboardingIntegration:
@@ -67,8 +68,7 @@ class TestOnboardingIntegration:
         # Verify IT Manager position exists (created automatically by create_organization)
         result = await db_session.execute(
             select(Position).where(
-                Position.organization_id == org_id,
-                Position.slug == "it_manager"
+                Position.organization_id == org_id, Position.slug == "it_manager"
             )
         )
         it_manager_position = result.scalar_one_or_none()
@@ -89,7 +89,9 @@ class TestOnboardingIntegration:
         try:
             user = await service.create_system_owner(**owner_data)
         except Exception as e:
-            pytest.fail(f"System owner creation raised exception: {type(e).__name__}: {e}")
+            pytest.fail(
+                f"System owner creation raised exception: {type(e).__name__}: {e}"
+            )
 
         # Verify success
         assert user is not None
@@ -98,8 +100,10 @@ class TestOnboardingIntegration:
 
         # CRITICAL: Verify the user has the IT Manager position
         # This tests that await db.refresh(user, ['positions']) worked correctly
-        await db_session.refresh(user, ['positions'])
-        assert len(user.positions) > 0, "User should have at least one position assigned"
+        await db_session.refresh(user, ["positions"])
+        assert (
+            len(user.positions) > 0
+        ), "User should have at least one position assigned"
 
         position_slugs = [pos.slug for pos in user.positions]
         assert "it_manager" in position_slugs, "User should have IT Manager position"
@@ -255,8 +259,7 @@ class TestOnboardingIntegration:
         if status is None:
             # Create initial status by starting onboarding
             initial_status = await service.start_onboarding(
-                ip_address="127.0.0.1",
-                user_agent="pytest"
+                ip_address="127.0.0.1", user_agent="pytest"
             )
             assert initial_status is not None
             assert not initial_status.is_completed

@@ -5,9 +5,9 @@ Tests for recertification pathways, competency tracking, instructor qualificatio
 training effectiveness, multi-agency training, and xAPI support.
 """
 
-import pytest
 from datetime import date, datetime, timezone
 
+import pytest
 from pydantic import ValidationError
 
 from app.models.training import (
@@ -39,7 +39,6 @@ from app.schemas.training_enhancements import (
     XAPIBatchCreate,
     XAPIStatementCreate,
 )
-
 
 # ============================================
 # Enum Tests

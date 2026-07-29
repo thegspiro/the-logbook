@@ -21,13 +21,13 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.security_middleware import get_client_ip
 from app.core.permissions import (
     get_admin_role_slugs,
     get_permission_details,
     get_permissions_by_category,
     permission_matches,
 )
+from app.core.security_middleware import get_client_ip
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.user import User
 from app.schemas.role import (
