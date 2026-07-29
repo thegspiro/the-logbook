@@ -4777,10 +4777,13 @@ Best regards,
         # For a positionless vote, match only other positionless votes —
         # `Vote.position == None if position is None` would otherwise degrade
         # to a no-op filter and any prior vote (for any position) would block.
+        # Match is_test so a manager's test ballot never consumes their real
+        # vote slot — mirroring the `test:` namespace in the dedup hash.
         existing_votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == election.id)
             .where(Vote.voter_hash == voting_token.voter_hash)
+            .where(Vote.is_test == voting_token.is_test)
             .where(Vote.deleted_at.is_(None))
             .where(Vote.position == position if position else Vote.position.is_(None))
         )
@@ -4980,11 +4983,15 @@ Best regards,
             # Determine the position for this vote (use ballot item id as position)
             position = ballot_item.get("position") or ballot_item_id
 
-            # Check if already voted for this position (prevents double-voting within the ballot)
+            # Check if already voted for this position (prevents double-voting
+            # within the ballot). Match is_test so a test ballot never blocks
+            # the same member's real ballot — mirroring the dedup-hash
+            # namespace (`test:` prefix).
             existing_check = await self.db.execute(
                 select(Vote)
                 .where(Vote.election_id == election.id)
                 .where(Vote.voter_hash == voting_token.voter_hash)
+                .where(Vote.is_test == voting_token.is_test)
                 .where(Vote.position == position)
                 .where(Vote.deleted_at.is_(None))
             )
