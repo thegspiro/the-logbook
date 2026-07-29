@@ -4,6 +4,13 @@ Revision ID: add_meeting_minutes
 Revises: 20260212_0600
 Create Date: 2026-02-12 12:00:00.000000
 
+NOTE: the minutes action-items table is created directly as
+``minutes_action_items`` (the model's final name). The original version
+created it as ``meeting_action_items``, which collides with the
+meetings-module table of that name from 20260212_0300 — so this CREATE
+failed on every real chain run (deployed databases are stamped past it,
+built by create_all). 20260312_0200, which renamed the table to match
+the model, early-returns when the final name already exists.
 """
 from alembic import op
 import sqlalchemy as sa
@@ -78,9 +85,9 @@ def upgrade() -> None:
 
     op.create_index('ix_meeting_motions_minutes_id', 'meeting_motions', ['minutes_id'])
 
-    # Action Items table
+    # Action Items table — final model name; see module docstring
     op.create_table(
-        'meeting_action_items',
+        'minutes_action_items',
         sa.Column('id', sa.String(36), primary_key=True),
         sa.Column('minutes_id', sa.String(36), sa.ForeignKey('meeting_minutes.id', ondelete='CASCADE'), nullable=False),
         sa.Column('description', sa.Text(), nullable=False),
@@ -95,13 +102,13 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()),
     )
 
-    op.create_index('ix_meeting_action_items_minutes_id', 'meeting_action_items', ['minutes_id'])
-    op.create_index('ix_meeting_action_items_assignee_id', 'meeting_action_items', ['assignee_id'])
-    op.create_index('ix_meeting_action_items_status', 'meeting_action_items', ['status'])
-    op.create_index('ix_meeting_action_items_due_date', 'meeting_action_items', ['due_date'])
+    op.create_index('ix_minutes_action_items_minutes_id', 'minutes_action_items', ['minutes_id'])
+    op.create_index('ix_minutes_action_items_assignee_id', 'minutes_action_items', ['assignee_id'])
+    op.create_index('ix_minutes_action_items_status', 'minutes_action_items', ['status'])
+    op.create_index('ix_minutes_action_items_due_date', 'minutes_action_items', ['due_date'])
 
 
 def downgrade() -> None:
-    op.drop_table('meeting_action_items')
+    op.drop_table('minutes_action_items')
     op.drop_table('meeting_motions')
     op.drop_table('meeting_minutes')
