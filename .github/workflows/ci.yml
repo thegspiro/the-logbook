@@ -128,11 +128,16 @@ jobs:
           MYSQL_PASSWORD: test_password
         ports:
           - 3306:3306
+        # start-period + generous retries: MySQL's first-boot InnoDB
+        # initialization can take 30s+ on a slow runner, and a failed health
+        # probe during that window previously killed the whole job before
+        # checkout ("Failed to initialize container mysql:8.0").
         options: >-
           --health-cmd="mysqladmin ping -h localhost"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=10
+          --health-start-period=40s
       redis:
         image: redis:7-alpine
         ports:
