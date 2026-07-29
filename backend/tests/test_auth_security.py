@@ -429,15 +429,20 @@ class TestEncryption:
     def test_tampered_gcm_fails_closed(self):
         """A tampered AES-256-GCM ciphertext must raise (never return unverified
         bytes) — GCM's authentication tag makes this fail closed."""
+        import base64
+
         from cryptography.exceptions import InvalidTag
 
         from app.core.security import _GCM_PREFIX, decrypt_data, encrypt_data
 
         ct = encrypt_data("do not tamper")
-        # Flip a character in the base64 body (after the marker).
-        body = ct[len(_GCM_PREFIX) :]
-        flipped = ("A" if body[-2] != "A" else "B") + body[-1]
-        tampered = _GCM_PREFIX + body[:-2] + flipped
+        # Tamper a real ciphertext byte, not a base64 character: flipping a
+        # trailing base64 char can land on padding bits the decoder ignores
+        # (the old version of this test did exactly that and passed or failed
+        # depending on the random nonce).
+        body = bytearray(base64.urlsafe_b64decode(ct[len(_GCM_PREFIX) :]))
+        body[-1] ^= 0x01  # flip one bit inside the GCM auth tag
+        tampered = _GCM_PREFIX + base64.urlsafe_b64encode(bytes(body)).decode()
         with pytest.raises(InvalidTag):
             decrypt_data(tampered)
 
