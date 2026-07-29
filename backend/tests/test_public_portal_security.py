@@ -17,9 +17,28 @@ import pytest
 # Stub out heavy transitive imports that are not available in the test
 # environment (bcrypt → cryptography → _cffi_backend).  We only need the
 # rate-limit cache data structures and helpers, not the actual crypto.
+
+
+def _module_available(name: str) -> bool:
+    """True if the real module can be imported.
+
+    Stub only what is genuinely unavailable: planting a stub for an
+    importable module poisons sys.modules for the whole pytest run —
+    module-level code executes at collection, so a MagicMock aiomysql
+    broke every real-database integration test in CI.
+    """
+    import importlib
+
+    try:
+        importlib.import_module(name)
+        return True
+    except ImportError:
+        return False
+
+
 _stubs: dict[str, ModuleType] = {}
 for _mod_name in ("bcrypt",):
-    if _mod_name not in sys.modules:
+    if _mod_name not in sys.modules and not _module_available(_mod_name):
         stub = ModuleType(_mod_name)
         stub.__dict__.setdefault("gensalt", lambda: b"$2b$12$fakesalt")
         stub.__dict__.setdefault("hashpw", lambda pw, salt: b"$2b$12$fakehash")
@@ -38,7 +57,7 @@ for _mod_name in (
     "redis",
     "redis.asyncio",
 ):
-    if _mod_name not in sys.modules:
+    if _mod_name not in sys.modules and not _module_available(_mod_name):
         stub = MagicMock()
         sys.modules[_mod_name] = stub
         _stubs[_mod_name] = stub

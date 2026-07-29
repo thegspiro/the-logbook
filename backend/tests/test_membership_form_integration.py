@@ -9,6 +9,7 @@ MembershipPipelineService, covering:
 These tests mock the database layer and verify the service logic.
 """
 
+import importlib
 import sys
 from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock
@@ -98,7 +99,15 @@ _STUB_MODULES = [
 ]
 
 for _mod_name in _STUB_MODULES:
-    if _mod_name not in sys.modules:
+    if _mod_name in sys.modules:
+        continue
+    # Stub only what is genuinely unavailable. Planting a stub for an
+    # importable module poisons sys.modules for the whole pytest run —
+    # module-level code executes at collection, so (e.g.) a MagicMock
+    # aiomysql broke every real-database integration test in CI.
+    try:
+        importlib.import_module(_mod_name)
+    except ImportError:
         sys.modules[_mod_name] = _stub(_mod_name)
 
 from app.services.forms_service import FormsService  # noqa: E402
@@ -1109,8 +1118,6 @@ class TestPipelineDeletionGuard:
     """delete_pipeline should raise ValueError when active prospects exist."""
 
     async def test_blocks_deletion_with_active_prospects(self, mock_db):
-        from app.models.membership_pipeline import ProspectStatus
-
         service = MembershipPipelineService(mock_db)
         pipeline_id = str(uuid4())
         org_id = str(uuid4())
