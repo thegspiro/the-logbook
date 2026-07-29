@@ -391,7 +391,12 @@ class TestNominationPhase(TestNominationSetup):
 class TestManualBallots(TestNominationSetup):
 
     async def _open_election_with_candidates(
-        self, db_session: AsyncSession, org_id: str, creator_id: str
+        self,
+        db_session: AsyncSession,
+        org_id: str,
+        creator_id: str,
+        *,
+        end: datetime | None = None,
     ):
         now = datetime.now(timezone.utc)
         election_id = await self._insert_election(
@@ -400,7 +405,7 @@ class TestManualBallots(TestNominationSetup):
             creator_id,
             status="open",
             start=now - timedelta(days=1),
-            end=now + timedelta(days=1),
+            end=end or (now + timedelta(days=1)),
         )
         cand_ids = []
         for name, order in [("Casey Chief", 0), ("Dana Deputy", 1)]:
@@ -510,8 +515,14 @@ class TestManualBallots(TestNominationSetup):
         self, db_session: AsyncSession, setup_org_and_users
     ):
         org_id, user1_id, _ = setup_org_and_users
+        # end_date in the past: results are gated on now > end_date AND
+        # status CLOSED. Manual-ballot recording only checks status OPEN,
+        # so the paper tally can still be keyed in before closing.
         election_id, cand_ids = await self._open_election_with_candidates(
-            db_session, org_id, user1_id
+            db_session,
+            org_id,
+            user1_id,
+            end=datetime.now(timezone.utc) - timedelta(minutes=5),
         )
         svc = ElectionService(db_session)
 
