@@ -19,6 +19,7 @@ import {
   UserCheck,
   Handshake,
   FileText,
+  Megaphone,
 } from 'lucide-react';
 import type { Election } from '../../../types/election';
 import { ElectionStatus } from '../../../constants/enums';
@@ -46,6 +47,7 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
 }) => {
   const tabs = useMemo((): Tab[] => {
     const isDraft = election.status === ElectionStatus.DRAFT;
+    const isNominations = election.status === ElectionStatus.NOMINATIONS;
     const isOpen = election.status === ElectionStatus.OPEN;
     const isClosed = election.status === ElectionStatus.CLOSED;
     const isCancelled = election.status === ElectionStatus.CANCELLED;
@@ -59,6 +61,14 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
         icon: ClipboardList,
         badge: ballotItemCount,
         show: canManage && !isCancelled,
+      },
+      {
+        id: 'nominations',
+        label: 'Nominations',
+        icon: Megaphone,
+        // Members see the tab while nominations are open; managers keep it
+        // in draft too so they can review pending acceptances.
+        show: isNominations || (canManage && isDraft),
       },
       {
         id: 'candidates',
@@ -76,7 +86,7 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
         id: 'attendance',
         label: 'Attendance',
         icon: FileText,
-        show: canManage && !isCancelled && (isDraft || isOpen),
+        show: canManage && !isCancelled && (isDraft || isNominations || isOpen),
       },
       {
         id: 'overrides',

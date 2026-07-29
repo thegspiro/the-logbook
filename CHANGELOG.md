@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Elections: nomination phase + paper-ballot entry (2026-07-29)
+
+**Added**
+
+- **Nomination phase**: a draft positional election can enter a
+  `nominations` status (`POST /elections/{id}/open-nominations`). While
+  open, any member can nominate a member — or themselves — for a position
+  (`POST /elections/{id}/nominations`); third-party nominees appear as
+  *pending* and must accept before they reach the ballot
+  (`.../nominations/{candidate_id}/accept` / `/decline` — nominee only;
+  declining removes the entry, with the audit log keeping the record).
+  Closing nominations returns the election to draft for ballot
+  finalization; setting `nomination_deadline` lets the `election_lifecycle`
+  task close the phase automatically. New Nominations tab on the election
+  page (member-facing during the phase), lifecycle stepper and workflow
+  tabs updated. Audited as `nominations_opened` / `nominations_closed` /
+  `nominations_auto_closed` / `candidate_nominated` /
+  `nomination_accepted` / `nomination_declined`.
+- **Paper-ballot entry**: `POST /elections/{id}/manual-ballots` records an
+  in-room paper tally as individual vote rows flagged `is_manual` and
+  attributed to the recording officer (`recorded_by`). Manual votes carry
+  no voter identity or dedup hash — the officer's attested count is the
+  source of truth — and are signed and chained like electronic votes, so
+  integrity verification covers the full mixed ballot box (the vote
+  signature now also covers the `is_manual` flag, so a stored paper vote
+  cannot be silently re-labeled). "Record Paper Ballots" action on open
+  elections. Audited as `election_manual_ballots_recorded`; corrections
+  use the existing soft-delete vote endpoint. Note: manual ballots count
+  in results/totals; identity-based turnout metrics cannot include them.
+- Migration `20260801_0005` (new single head): `elections.status` ENUM
+  gains `nominations`, plus `elections.nomination_deadline`,
+  `votes.is_manual`, `votes.recorded_by`.
+
 ### Elections: non-voter reminders + lifecycle automation (2026-07-29)
 
 **Added**

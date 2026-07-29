@@ -224,6 +224,13 @@ class ElectionBase(BaseModel):
             "election closes (null = no automatic reminder)"
         ),
     )
+    nomination_deadline: Optional[datetime] = Field(
+        default=None,
+        description=(
+            "When set, the nomination phase closes automatically at this "
+            "time (null = close nominations manually)"
+        ),
+    )
 
     @field_validator("quorum_type")
     @classmethod
@@ -286,6 +293,7 @@ class ElectionUpdate(BaseModel):
     quorum_value: Optional[int] = Field(None, ge=1, le=100)
     auto_open: Optional[bool] = None
     reminder_hours_before_close: Optional[int] = Field(None, ge=1, le=720)
+    nomination_deadline: Optional[datetime] = None
 
     @field_validator("quorum_type")
     @classmethod
@@ -344,6 +352,7 @@ class ElectionResponse(UTCResponseBase):
     auto_open: bool = False
     reminder_hours_before_close: Optional[int] = None
     reminder_sent_at: Optional[datetime] = None
+    nomination_deadline: Optional[datetime] = None
     status: str
     created_by: Optional[UUID] = None
     created_at: datetime
@@ -446,6 +455,43 @@ class CandidateUpdate(BaseModel):
     photo_url: Optional[str] = Field(None, max_length=500)
     accepted: Optional[bool] = None
     display_order: Optional[int] = None
+
+
+class NominationCreate(BaseModel):
+    """Nominate a member (or yourself) for a position during the
+    nomination phase. Omit nominee_user_id to self-nominate."""
+
+    position: str = Field(..., min_length=1, max_length=100)
+    nominee_user_id: Optional[UUID] = None
+    statement: Optional[str] = Field(None, max_length=2000)
+
+
+class NominationActionResponse(BaseModel):
+    """Result of accepting or declining a nomination."""
+
+    success: bool
+    message: str
+
+
+class ManualBallotEntry(BaseModel):
+    """One paper-tally line: N ballots for a candidate."""
+
+    candidate_id: UUID
+    count: int = Field(..., ge=1, le=500)
+
+
+class ManualBallotsRequest(BaseModel):
+    """Record an in-room paper-ballot tally."""
+
+    entries: List[ManualBallotEntry] = Field(..., min_length=1, max_length=50)
+    notes: Optional[str] = Field(None, max_length=1000)
+
+
+class ManualBallotsResponse(BaseModel):
+    """Result of recording paper ballots."""
+
+    recorded: int
+    message: str
 
 
 class CandidateResponse(UTCResponseBase):

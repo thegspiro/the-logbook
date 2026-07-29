@@ -85,6 +85,7 @@ export interface Election {
   auto_open?: boolean;
   reminder_hours_before_close?: number;
   reminder_sent_at?: string;
+  nomination_deadline?: string;
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -160,6 +161,7 @@ export interface ElectionCreate {
   max_runoff_rounds?: number | undefined;
   auto_open?: boolean | undefined;
   reminder_hours_before_close?: number | undefined;
+  nomination_deadline?: string | undefined;
 }
 
 export interface ElectionUpdate {
@@ -189,6 +191,7 @@ export interface ElectionUpdate {
   max_runoff_rounds?: number;
   auto_open?: boolean;
   reminder_hours_before_close?: number;
+  nomination_deadline?: string | undefined;
 }
 
 export interface Candidate {

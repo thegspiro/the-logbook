@@ -377,6 +377,68 @@ export const electionService = {
   },
 
   /**
+   * Open the nomination phase for a draft positional election.
+   */
+  async openNominations(electionId: string): Promise<Election> {
+    const response = await api.post<Election>(`/elections/${electionId}/open-nominations`);
+    return response.data;
+  },
+
+  /**
+   * Close the nomination phase, returning the election to draft.
+   */
+  async closeNominations(electionId: string): Promise<Election> {
+    const response = await api.post<Election>(`/elections/${electionId}/close-nominations`);
+    return response.data;
+  },
+
+  /**
+   * Nominate a member (or yourself — omit nominee_user_id) for a position.
+   */
+  async createNomination(
+    electionId: string,
+    payload: { position: string; nominee_user_id?: string | undefined; statement?: string | undefined },
+  ): Promise<Candidate> {
+    const response = await api.post<Candidate>(`/elections/${electionId}/nominations`, payload);
+    return response.data;
+  },
+
+  /**
+   * Accept your own nomination.
+   */
+  async acceptNomination(electionId: string, candidateId: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.post<{ success: boolean; message: string }>(
+      `/elections/${electionId}/nominations/${candidateId}/accept`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Decline your own nomination (removes the candidate entry).
+   */
+  async declineNomination(electionId: string, candidateId: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.post<{ success: boolean; message: string }>(
+      `/elections/${electionId}/nominations/${candidateId}/decline`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Record an in-room paper-ballot tally (one vote row per ballot,
+   * attributed to the recording officer).
+   */
+  async recordManualBallots(
+    electionId: string,
+    payload: { entries: Array<{ candidate_id: string; count: number }>; notes?: string | undefined },
+  ): Promise<{ recorded: number; message: string }> {
+    const response = await api.post<{ recorded: number; message: string }>(
+      `/elections/${electionId}/manual-ballots`,
+      payload,
+    );
+    return response.data;
+  },
+
+  /**
    * Send a reminder ballot email (fresh voting link) to eligible voters
    * who have not voted yet. Stamps reminder_sent_at server-side, which
    * also suppresses the automatic pre-close reminder.

@@ -288,9 +288,10 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 | `20260801_0001` | `20260731_0001` | `20260801_0001_add_voting_token_eligible_positions.py` | Add `voting_tokens.eligible_positions` (JSON, nullable) — send-time snapshot of the positions a token holder may vote for (R-D4); NULL = legacy/unrestricted |
 | `20260801_0002` | `20260801_0001` | `20260801_0002_align_enum_columns_with_models.py` | Widen `event_rsvps.status` (+`waitlisted`) and `inventory_notification_queue.action_type` (+`retired`) — model enums gained values the chain never added |
 | `20260801_0003` | `20260801_0002` | `20260801_0003_add_election_datetime_defaults.py` | Add `DEFAULT CURRENT_TIMESTAMP` to election datetime columns (elections, candidates, votes, voting_tokens) — models declare `server_default=func.now()` but 20260118_0004/20260119_0006 created the columns without DB defaults, so ORM inserts of service-created rows failed with error 1364 |
-| `20260801_0004` | `20260801_0003` | `20260801_0004_add_election_lifecycle_fields.py` | Add election lifecycle-automation fields: `auto_open` (opt-in auto-open at start_date), `reminder_hours_before_close` (automatic non-voter reminder window), `reminder_sent_at` (once-only stamp) — **current single head** |
+| `20260801_0004` | `20260801_0003` | `20260801_0004_add_election_lifecycle_fields.py` | Add election lifecycle-automation fields: `auto_open` (opt-in auto-open at start_date), `reminder_hours_before_close` (automatic non-voter reminder window), `reminder_sent_at` (once-only stamp) |
+| `20260801_0005` | `20260801_0004` | `20260801_0005_add_nominations_and_manual_ballots.py` | Nomination phase + paper ballots: `elections.status` ENUM gains `nominations`, `elections.nomination_deadline`, `votes.is_manual` + `votes.recorded_by` (officer-attributed paper-tally votes) — **current single head** |
 
-> **Single head as of 2026-07-29:** `20260801_0004` is the linear head of the
+> **Single head as of 2026-07-29:** `20260801_0005` is the linear head of the
 > chain, so `alembic upgrade head` is unambiguous.
 > `tests/test_alembic_migrations.py` validates the single-head DAG (it
 > understands merge migrations).

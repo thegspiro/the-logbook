@@ -87,6 +87,8 @@ def _make_vote(election_id: str, **overrides) -> SimpleNamespace:
         chain_hash=None,
         receipt_hash=None,
         is_test=False,
+        is_manual=False,
+        recorded_by=None,
         is_proxy_vote=False,
         proxy_voter_id=None,
         proxy_authorization_id=None,

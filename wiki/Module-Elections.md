@@ -96,6 +96,9 @@ transitions and reminders:
   creator enabled **Open Automatically at Start Time** (`auto_open`). The
   real open path runs, so an invalid draft (e.g. no candidates) is skipped
   and retried, never force-opened.
+- **Nomination auto-close**: an election in the nomination phase with a
+  `nomination_deadline` returns to draft automatically once the deadline
+  passes (audited as `nominations_auto_closed`).
 - **Automatic reminder**: when `reminder_hours_before_close` is set, the
   task sends exactly one reminder ballot email to members who haven't
   voted once the window opens. Any reminder (manual or automatic) stamps
@@ -124,6 +127,12 @@ POST   /api/v1/elections/{id}/vote/bulk      # Cast votes atomically (approval/r
 GET    /api/v1/elections/{id}/eligibility    # Check current user's eligibility
 GET    /api/v1/elections/{id}/results        # Get results (visibility-gated)
 GET    /api/v1/elections/{id}/stats          # Ballot counts / turnout (manage)
+POST   /api/v1/elections/{id}/open-nominations  # Draft -> nomination phase (manage)
+POST   /api/v1/elections/{id}/close-nominations # Nomination phase -> draft (manage)
+POST   /api/v1/elections/{id}/nominations    # Nominate a member or yourself (any member)
+POST   /api/v1/elections/{id}/nominations/{cid}/accept   # Nominee accepts
+POST   /api/v1/elections/{id}/nominations/{cid}/decline  # Nominee declines (entry removed)
+POST   /api/v1/elections/{id}/manual-ballots # Record in-room paper-ballot tally (manage)
 GET    /api/v1/elections/{id}/non-voters     # Eligible voters who haven't voted (manage)
 POST   /api/v1/elections/{id}/remind-non-voters # Reminder ballot email (fresh link) to non-voters only (manage)
 POST   /api/v1/elections/{id}/send-ballot    # Email ballots with unique voting tokens

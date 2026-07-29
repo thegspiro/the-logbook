@@ -20,6 +20,10 @@ class ElectionStatus(str, Enum):
     """Election status enumeration"""
 
     DRAFT = "draft"
+    # Optional pre-ballot phase: members may nominate candidates (and
+    # nominees accept/decline). Closing nominations returns the election
+    # to DRAFT so the secretary finalizes the ballot before opening.
+    NOMINATIONS = "nominations"
     OPEN = "open"
     CLOSED = "closed"
     CANCELLED = "cancelled"
@@ -96,6 +100,11 @@ class Election(Base):
     # and no reminder (manual or automatic) has been sent yet.
     reminder_hours_before_close = Column(Integer, nullable=True)
     reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Nomination phase: when the election is in NOMINATIONS status and a
+    # deadline is set, the lifecycle task closes nominations (back to DRAFT)
+    # once the deadline passes. NULL = nominations close manually.
+    nomination_deadline = Column(DateTime(timezone=True), nullable=True)
 
     # Status
     status = Column(
@@ -401,6 +410,14 @@ class Vote(Base):
 
     # Test ballot flag — test votes are excluded from real results/stats
     is_test = Column(Boolean, nullable=False, default=False)
+
+    # Manual (paper-ballot) entry: votes keyed in by an officer from an
+    # in-room paper tally. No voter identity or dedup hash — the officer's
+    # attested count is the source of truth; recorded_by attributes it.
+    is_manual = Column(Boolean, nullable=False, default=False, server_default="0")
+    recorded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Proxy voting — tracks when a vote is cast on behalf of another member
     is_proxy_vote = Column(Boolean, nullable=False, default=False)

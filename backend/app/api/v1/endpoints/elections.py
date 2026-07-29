@@ -59,6 +59,10 @@ from app.schemas.election import (
     EmailBallotResponse,
     ForensicsResponse,
     ImportMeetingAttendeesResponse,
+    ManualBallotsRequest,
+    ManualBallotsResponse,
+    NominationActionResponse,
+    NominationCreate,
     NonVotersResponse,
     PackageRecipientsResponse,
     PreMeetingPackageResponse,
@@ -776,7 +780,7 @@ async def update_election(
             )
 
     # For draft elections, validate dates if they're being updated
-    elif election.status == ElectionStatus.DRAFT:
+    elif election.status in (ElectionStatus.DRAFT, ElectionStatus.NOMINATIONS):
         if "end_date" in update_data and "start_date" not in update_data:
             new_end = update_data["end_date"]
             if new_end and new_end.tzinfo is None:
@@ -1044,6 +1048,213 @@ async def close_election(
         raise HTTPException(status_code=status_code, detail=error)
 
     return await _build_election_response(db, election)
+
+
+@router.post("/{election_id}/open-nominations", response_model=ElectionResponse)
+async def open_nominations(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Open the nomination phase for a draft positional election.
+
+    While nominations are open, members can nominate each other (or
+    themselves) for the election's positions; third-party nominees must
+    accept before they appear on the ballot.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    election, error = await service.open_nominations(
+        election_id, current_user.organization_id
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return await _build_election_response(db, election)
+
+
+@router.post("/{election_id}/close-nominations", response_model=ElectionResponse)
+async def close_nominations(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Close the nomination phase, returning the election to draft so the
+    ballot can be finalized before voting opens.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    election, error = await service.close_nominations(
+        election_id, current_user.organization_id
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return await _build_election_response(db, election)
+
+
+@router.post(
+    "/{election_id}/nominations",
+    response_model=CandidateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_nomination(
+    election_id: UUID,
+    nomination: NominationCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.view")),
+):
+    """
+    Nominate a member (or yourself) for a position while nominations are
+    open. Third-party nominations require the nominee's acceptance before
+    they appear on the ballot; self-nominations are accepted implicitly.
+
+    **Authentication required**
+    **Requires permission: elections.view (any member)**
+    """
+    service = ElectionService(db)
+    candidate, error = await service.create_nomination(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        nominator_id=str(current_user.id),
+        position=nomination.position,
+        nominee_user_id=(
+            str(nomination.nominee_user_id) if nomination.nominee_user_id else None
+        ),
+        statement=nomination.statement,
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return candidate
+
+
+@router.post(
+    "/{election_id}/nominations/{candidate_id}/accept",
+    response_model=NominationActionResponse,
+)
+async def accept_nomination(
+    election_id: UUID,
+    candidate_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.view")),
+):
+    """
+    Accept your nomination — only the nominee can accept.
+
+    **Authentication required**
+    """
+    service = ElectionService(db)
+    ok, error = await service.respond_to_nomination(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        candidate_id=candidate_id,
+        user_id=str(current_user.id),
+        accept=True,
+    )
+    if not ok:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if error and "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return {"success": True, "message": "Nomination accepted"}
+
+
+@router.post(
+    "/{election_id}/nominations/{candidate_id}/decline",
+    response_model=NominationActionResponse,
+)
+async def decline_nomination(
+    election_id: UUID,
+    candidate_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.view")),
+):
+    """
+    Decline your nomination — only the nominee can decline. The candidate
+    entry is removed; the audit log retains the record.
+
+    **Authentication required**
+    """
+    service = ElectionService(db)
+    ok, error = await service.respond_to_nomination(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        candidate_id=candidate_id,
+        user_id=str(current_user.id),
+        accept=False,
+    )
+    if not ok:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if error and "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return {"success": True, "message": "Nomination declined"}
+
+
+@router.post("/{election_id}/manual-ballots", response_model=ManualBallotsResponse)
+async def record_manual_ballots(
+    election_id: UUID,
+    payload: ManualBallotsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Record an in-room paper-ballot tally for an open election.
+
+    Creates one vote row per paper ballot, flagged is_manual and
+    attributed to the recording officer. Manual votes carry no voter
+    identity — the officer's attested count is the source of truth — and
+    are signed and chained like electronic votes so integrity
+    verification covers the full ballot box.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    recorded, error = await service.record_manual_ballots(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        recorded_by=str(current_user.id),
+        entries=[
+            {"candidate_id": str(e.candidate_id), "count": e.count}
+            for e in payload.entries
+        ],
+        notes=payload.notes,
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return {
+        "recorded": recorded,
+        "message": f"Recorded {recorded} paper ballot(s)",
+    }
 
 
 @router.post("/{election_id}/rollback", response_model=ElectionRollbackResponse)

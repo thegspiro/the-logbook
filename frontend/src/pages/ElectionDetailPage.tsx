@@ -32,6 +32,8 @@ import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../ut
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
 import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
+import NominationsPanel from '../components/election-detail/NominationsPanel';
+import RecordPaperBallotsModal from '../components/election-detail/RecordPaperBallotsModal';
 import DeleteElectionModal from '../components/election-detail/DeleteElectionModal';
 import ExtendElectionModal from '../components/election-detail/ExtendElectionModal';
 import EditDatesModal from '../components/election-detail/EditDatesModal';
@@ -100,12 +102,18 @@ export const ElectionDetailPage: React.FC = () => {
   // Upcoming events state
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
 
+  // Paper-ballot entry state
+  const [showPaperBallotsModal, setShowPaperBallotsModal] = useState(false);
+  const [isRecordingPaper, setIsRecordingPaper] = useState(false);
+  const [paperBallotsError, setPaperBallotsError] = useState<string | null>(null);
+  const [paperCandidates, setPaperCandidates] = useState<Candidate[]>([]);
+
   // Meeting binding state
   const [showMeetingSelector, setShowMeetingSelector] = useState(false);
   const [availableMeetings, setAvailableMeetings] = useState<MeetingRecord[]>([]);
   const [isImportingAttendees, setIsImportingAttendees] = useState(false);
 
-  const { checkPermission } = useAuthStore();
+  const { checkPermission, user: currentUser } = useAuthStore();
   const canManage = checkPermission('elections.manage');
   const tz = useTimezone();
 
@@ -263,6 +271,63 @@ export const ElectionDetailPage: React.FC = () => {
       toast.success('Election closed successfully');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to close election'));
+    }
+  };
+
+  const handleOpenNominations = async () => {
+    if (!electionId) return;
+    try {
+      const updated = await electionService.openNominations(electionId);
+      setElection(updated);
+      setActiveTab('nominations');
+      toast.success('Nominations opened');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to open nominations'));
+    }
+  };
+
+  const handleCloseNominations = async () => {
+    if (!electionId) return;
+    try {
+      const updated = await electionService.closeNominations(electionId);
+      setElection(updated);
+      toast.success('Nominations closed — finalize the ballot, then open voting');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to close nominations'));
+    }
+  };
+
+  const handleShowPaperBallots = async () => {
+    if (!electionId) return;
+    try {
+      const candidatesData = await electionService.getCandidates(electionId);
+      setPaperCandidates(candidatesData.filter((c: Candidate) => c.accepted));
+      setPaperBallotsError(null);
+      setShowPaperBallotsModal(true);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load candidates'));
+    }
+  };
+
+  const handleRecordPaperBallots = async (
+    entries: Array<{ candidate_id: string; count: number }>,
+    notes: string,
+  ) => {
+    if (!electionId || entries.length === 0) return;
+    try {
+      setIsRecordingPaper(true);
+      setPaperBallotsError(null);
+      const result = await electionService.recordManualBallots(electionId, {
+        entries,
+        notes: notes.trim() || undefined,
+      });
+      setShowPaperBallotsModal(false);
+      toast.success(result.message);
+      await fetchElection();
+    } catch (err: unknown) {
+      setPaperBallotsError(getErrorMessage(err, 'Failed to record paper ballots'));
+    } finally {
+      setIsRecordingPaper(false);
     }
   };
 
@@ -587,13 +652,18 @@ export const ElectionDetailPage: React.FC = () => {
   // ── Lifecycle stepper config ────────────────────────────────────
   const lifecycleSteps = [
     { key: 'draft', label: 'Draft', description: 'Configure ballot & candidates' },
+    ...(election.status === ElectionStatus.NOMINATIONS
+      ? [{ key: 'nominations', label: 'Nominations', description: 'Members nominate candidates' }]
+      : []),
     { key: 'open', label: 'Voting Open', description: 'Members can cast votes' },
     { key: 'closed', label: 'Closed', description: 'Results finalized' },
-  ] as const;
+  ];
 
   /** Determines whether a lifecycle step is completed, current, or upcoming based on election status. */
   const getStepStatus = (stepKey: string): 'completed' | 'current' | 'upcoming' => {
-    const order = ['draft', 'open', 'closed'];
+    const order = election.status === ElectionStatus.NOMINATIONS
+      ? ['draft', 'nominations', 'open', 'closed']
+      : ['draft', 'open', 'closed'];
     const currentIdx = election.status === ElectionStatus.CANCELLED
       ? -1
       : order.indexOf(election.status);
@@ -947,6 +1017,14 @@ export const ElectionDetailPage: React.FC = () => {
                     >
                       Edit Dates
                     </button>
+                    {(election.positions?.length ?? 0) > 0 && (
+                      <button
+                        onClick={() => { void handleOpenNominations(); }}
+                        className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm"
+                      >
+                        Open Nominations
+                      </button>
+                    )}
                     <button
                       onClick={() => { void handleOpenElection(); }}
                       className="btn-success rounded-md text-sm"
@@ -956,8 +1034,23 @@ export const ElectionDetailPage: React.FC = () => {
                   </>
                 )}
 
+                {election.status === ElectionStatus.NOMINATIONS && (
+                  <button
+                    onClick={() => { void handleCloseNominations(); }}
+                    className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm"
+                  >
+                    Close Nominations
+                  </button>
+                )}
+
                 {election.status === ElectionStatus.OPEN && (
                   <>
+                    <button
+                      onClick={() => { void handleShowPaperBallots(); }}
+                      className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 text-sm"
+                    >
+                      Record Paper Ballots
+                    </button>
                     <button
                       onClick={() => {
                         setShowExtendModal(true);
@@ -1149,6 +1242,18 @@ export const ElectionDetailPage: React.FC = () => {
                 </div>
               )}
 
+            </div>
+          )}
+
+          {/* Tab: Nominations */}
+          {activeTab === 'nominations' && election.status !== ElectionStatus.CANCELLED && (
+            <div className="mb-6">
+              <NominationsPanel
+                electionId={electionId}
+                election={election}
+                currentUserId={currentUser?.id ?? null}
+                nominationsOpen={election.status === ElectionStatus.NOMINATIONS}
+              />
             </div>
           )}
 
@@ -1540,6 +1645,16 @@ export const ElectionDetailPage: React.FC = () => {
           onSubmit={(payload) => { void handleSendBallotEmails(payload); }}
           onClose={() => { setShowSendEmailModal(false); setSendEmailError(null); }}
           timezone={tz}
+        />
+      )}
+
+      {showPaperBallotsModal && election && (
+        <RecordPaperBallotsModal
+          candidates={paperCandidates}
+          recording={isRecordingPaper}
+          error={paperBallotsError}
+          onSubmit={(entries, notes) => { void handleRecordPaperBallots(entries, notes); }}
+          onClose={() => { setShowPaperBallotsModal(false); setPaperBallotsError(null); }}
         />
       )}
 

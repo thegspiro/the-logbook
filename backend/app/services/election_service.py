@@ -1262,11 +1262,15 @@ class ElectionService:
         # sign None (the ORM default only applies at flush), but the reloaded
         # row yields False — "None" vs "False" flagged every non-proxy vote
         # as tampered on verification.
+        # bool() canonicalization also applies to is_manual (paper-ballot
+        # entry): covering it stops a stored paper vote from being silently
+        # re-labeled as an electronic one (or vice versa).
         data = (
             f"{vote.id}:{vote.election_id}:{vote.candidate_id}"
             f":{vote.voter_hash or vote.voter_id}:{vote.position}"
             f":{vote.vote_rank}:{bool(vote.is_proxy_vote)}"
             f":{vote.proxy_delegating_user_id}:{voted_at_canon}"
+            f":{bool(vote.is_manual)}"
         )
         return hmac.new(
             key=signing_key.encode(),
@@ -2255,6 +2259,341 @@ class ElectionService:
         )
         return sent, failed, skipped, skipped_details
 
+    async def open_nominations(
+        self, election_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[Election], Optional[str]]:
+        """Move a DRAFT election into the NOMINATIONS phase.
+
+        Only positional elections take nominations — ballot-item elections
+        have no candidates to nominate.
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None, "Election not found"
+        if election.status != ElectionStatus.DRAFT:
+            return None, (
+                f"Cannot open nominations for an election with status "
+                f"'{election.status.value}'. Only draft elections can "
+                f"enter the nomination phase."
+            )
+        if not election.positions:
+            return None, (
+                "Nominations require at least one position — ballot-item "
+                "elections have no candidates to nominate."
+            )
+
+        election.status = ElectionStatus.NOMINATIONS
+        await self.db.commit()
+        await self.db.refresh(election)
+
+        logger.info(f"Nominations opened | election={election_id}")
+        await self._audit(
+            "nominations_opened",
+            {
+                "election_id": str(election_id),
+                "title": election.title,
+                "nomination_deadline": (
+                    election.nomination_deadline.isoformat()
+                    if election.nomination_deadline
+                    else None
+                ),
+            },
+        )
+        return election, None
+
+    async def close_nominations(
+        self, election_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[Election], Optional[str]]:
+        """Close the nomination phase, returning the election to DRAFT.
+
+        The secretary then finalizes the ballot (pending acceptances,
+        ordering) before opening voting — open_election validates that at
+        least one accepted candidate exists.
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None, "Election not found"
+        if election.status != ElectionStatus.NOMINATIONS:
+            return None, "Election is not in the nomination phase"
+
+        election.status = ElectionStatus.DRAFT
+        await self.db.commit()
+        await self.db.refresh(election)
+
+        logger.info(f"Nominations closed | election={election_id}")
+        await self._audit(
+            "nominations_closed",
+            {"election_id": str(election_id), "title": election.title},
+        )
+        return election, None
+
+    async def create_nomination(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        nominator_id: str,
+        position: str,
+        nominee_user_id: Optional[str] = None,
+        statement: Optional[str] = None,
+    ) -> Tuple[Optional[Candidate], Optional[str]]:
+        """Nominate a member (or yourself) for a position.
+
+        Third-party nominations are stored with accepted=False and only
+        appear on the ballot once the nominee accepts; self-nominations are
+        accepted implicitly.
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return None, "Election not found"
+        if election.status != ElectionStatus.NOMINATIONS:
+            return None, "Nominations are not open for this election"
+        if position not in (election.positions or []):
+            return None, f"'{position}' is not a position in this election"
+
+        nominee_id = str(nominee_user_id or nominator_id)
+        # XC-1: the nominee must be an active member of the caller's org.
+        user_result = await self.db.execute(
+            select(User)
+            .where(User.id == nominee_id)
+            .where(User.organization_id == str(organization_id))
+        )
+        nominee = user_result.scalar_one_or_none()
+        if not nominee or not nominee.is_active:
+            return None, "Nominee must be an active member of this organization"
+
+        dup_result = await self.db.execute(
+            select(func.count(Candidate.id))
+            .where(Candidate.election_id == str(election_id))
+            .where(Candidate.user_id == nominee_id)
+            .where(Candidate.position == position)
+        )
+        if (dup_result.scalar() or 0) > 0:
+            return None, f"{nominee.full_name} is already nominated for {position}"
+
+        is_self = nominee_id == str(nominator_id)
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        order_result = await self.db.execute(
+            select(func.count(Candidate.id)).where(
+                Candidate.election_id == str(election_id)
+            )
+        )
+        candidate = Candidate(
+            id=str(uuid4()),
+            election_id=str(election_id),
+            user_id=nominee_id,
+            name=nominee.full_name,
+            position=position,
+            statement=statement,
+            nomination_date=now,
+            nominated_by=str(nominator_id),
+            accepted=is_self,
+            is_write_in=False,
+            display_order=order_result.scalar() or 0,
+        )
+        self.db.add(candidate)
+        await self.db.commit()
+        await self.db.refresh(candidate)
+
+        logger.info(
+            f"Nomination created | election={election_id} nominee={nominee_id} "
+            f"position={position} self={is_self}"
+        )
+        await self._audit(
+            "candidate_nominated",
+            {
+                "election_id": str(election_id),
+                "candidate_id": str(candidate.id),
+                "nominee_user_id": nominee_id,
+                "position": position,
+                "self_nomination": is_self,
+            },
+            user_id=str(nominator_id),
+        )
+        return candidate, None
+
+    async def respond_to_nomination(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        candidate_id: UUID,
+        user_id: str,
+        accept: bool,
+    ) -> Tuple[bool, Optional[str]]:
+        """Nominee accepts or declines their nomination.
+
+        Allowed during NOMINATIONS and afterwards while the election is
+        still DRAFT (a nominee may respond after the phase closes but
+        before the ballot opens). Declining removes the candidate row; the
+        audit log keeps the record.
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return False, "Election not found"
+        if election.status not in (
+            ElectionStatus.NOMINATIONS,
+            ElectionStatus.DRAFT,
+        ):
+            return False, "Nominations can no longer be changed for this election"
+
+        cand_result = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.id == str(candidate_id))
+            .where(Candidate.election_id == str(election_id))
+        )
+        candidate = cand_result.scalar_one_or_none()
+        if not candidate:
+            return False, "Nomination not found"
+        if str(candidate.user_id) != str(user_id):
+            return False, "Only the nominee can respond to this nomination"
+        if candidate.is_write_in:
+            return False, "Write-in candidates cannot respond to nominations"
+
+        if accept:
+            candidate.accepted = True
+            event = "nomination_accepted"
+        else:
+            await self.db.delete(candidate)
+            event = "nomination_declined"
+        await self.db.commit()
+
+        logger.info(
+            f"Nomination response | election={election_id} "
+            f"candidate={candidate_id} accepted={accept}"
+        )
+        await self._audit(
+            event,
+            {
+                "election_id": str(election_id),
+                "candidate_id": str(candidate_id),
+                "position": candidate.position,
+                "candidate_name": candidate.name,
+            },
+            user_id=str(user_id),
+        )
+        return True, None
+
+    async def record_manual_ballots(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        recorded_by: str,
+        entries: List[Dict],
+        notes: Optional[str] = None,
+    ) -> Tuple[int, Optional[str]]:
+        """Record an in-room paper-ballot tally as vote rows.
+
+        Each entry is {"candidate_id", "count"}. The created votes carry no
+        voter identity and no dedup hash — the recording officer's attested
+        count is the source of truth, attributed via recorded_by and the
+        audit log. Votes are signed and chained like electronic ones so
+        integrity verification covers the full ballot box.
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            return 0, "Election not found"
+        if election.status != ElectionStatus.OPEN:
+            return 0, "Paper ballots can only be recorded while voting is open"
+        if not entries:
+            return 0, "No ballot entries provided"
+
+        total = sum(int(e.get("count", 0)) for e in entries)
+        if total <= 0:
+            return 0, "Ballot counts must be positive"
+        if total > 2000:
+            return 0, "Cannot record more than 2000 paper ballots at once"
+
+        candidate_ids = [str(e["candidate_id"]) for e in entries]
+        cand_result = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.election_id == str(election_id))
+            .where(Candidate.id.in_(candidate_ids))
+        )
+        candidates = {c.id: c for c in cand_result.scalars().all()}
+
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        recorded = 0
+        breakdown = []
+        for entry in entries:
+            cand = candidates.get(str(entry["candidate_id"]))
+            if cand is None:
+                return 0, "One or more candidates do not belong to this election"
+            if not cand.accepted and not cand.is_write_in:
+                return 0, f"{cand.name} has not accepted nomination"
+            count = int(entry.get("count", 0))
+            if count < 0:
+                return 0, "Ballot counts must be positive"
+            for _ in range(count):
+                vote = Vote(
+                    id=str(uuid4()),
+                    election_id=str(election_id),
+                    candidate_id=cand.id,
+                    voter_id=None,
+                    voter_hash=None,
+                    position=cand.position,
+                    voted_at=now,
+                    is_test=False,
+                    is_manual=True,
+                    recorded_by=str(recorded_by),
+                    vote_dedup_hash=None,
+                )
+                vote.vote_signature = self._sign_vote(vote)
+                vote.chain_hash = self._compute_chain_hash(
+                    election.last_chain_hash, vote.vote_signature
+                )
+                vote.receipt_hash = self._compute_receipt_hash(
+                    str(vote.id), vote.vote_signature
+                )
+                self.db.add(vote)
+                election.last_chain_hash = vote.chain_hash
+                recorded += 1
+            breakdown.append({"candidate": cand.name, "count": count})
+
+        await self.db.commit()
+
+        logger.info(
+            f"Manual ballots recorded | election={election_id} total={recorded} "
+            f"recorded_by={recorded_by}"
+        )
+        await self._audit(
+            "election_manual_ballots_recorded",
+            {
+                "election_id": str(election_id),
+                "total": recorded,
+                "breakdown": breakdown,
+                "notes": notes,
+            },
+            user_id=str(recorded_by),
+        )
+        return recorded, None
+
     async def process_election_lifecycle(self, organization_id: UUID) -> int:
         """Run scheduled lifecycle transitions for one organization.
 
@@ -2277,7 +2616,13 @@ class ElectionService:
         result = await self.db.execute(
             select(Election.id, Election.status).where(
                 Election.organization_id == str(organization_id),
-                Election.status.in_([ElectionStatus.DRAFT, ElectionStatus.OPEN]),
+                Election.status.in_(
+                    [
+                        ElectionStatus.DRAFT,
+                        ElectionStatus.NOMINATIONS,
+                        ElectionStatus.OPEN,
+                    ]
+                ),
             )
         )
         rows = result.all()
@@ -2292,6 +2637,30 @@ class ElectionService:
                 continue
             start = self._ensure_utc(election.start_date)
             end = self._ensure_utc(election.end_date)
+
+            if election.status == ElectionStatus.NOMINATIONS:
+                deadline = self._ensure_utc(election.nomination_deadline)
+                if deadline and deadline <= now:
+                    _closed, err = await self.close_nominations(
+                        UUID(str(election.id)), organization_id
+                    )
+                    if err:
+                        logger.warning(
+                            f"Auto-close nominations failed | "
+                            f"election={election.id} reason={err}"
+                        )
+                    else:
+                        actions += 1
+                        await self._audit(
+                            "nominations_auto_closed",
+                            {
+                                "election_id": str(election.id),
+                                "title": election.title,
+                            },
+                        )
+                # Auto-open (if flagged) picks the election up on the next
+                # tick, once it is back in DRAFT.
+                continue
 
             if (
                 election.status == ElectionStatus.DRAFT
