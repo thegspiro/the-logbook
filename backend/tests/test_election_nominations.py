@@ -452,6 +452,10 @@ class TestManualBallots(TestNominationSetup):
                 {"candidate_id": cand_ids[1], "count": 2},
             ],
             notes="Paper ballots from the March meeting",
+            # The fixture org has only 2 eligible members, so 5 ballots trip
+            # the plausibility guard (covered by TestHardening); this test is
+            # about counting/signing/chaining, so override it.
+            allow_over_count=True,
         )
         assert err is None
         assert recorded == 5
@@ -531,6 +535,9 @@ class TestManualBallots(TestNominationSetup):
             organization_id=uuid.UUID(org_id),
             recorded_by=user1_id,
             entries=[{"candidate_id": cand_ids[1], "count": 4}],
+            # 4 ballots > 2 eligible members trips the plausibility guard
+            # (covered by TestHardening); this test is about results counting.
+            allow_over_count=True,
         )
         assert err is None
 
