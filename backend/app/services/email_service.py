@@ -5,7 +5,9 @@ Handles sending emails using SMTP or organization-specific email service configu
 """
 
 import asyncio
+import base64
 import html as _html
+import mimetypes
 import os
 import re
 import smtplib
@@ -599,6 +601,56 @@ class EmailService:
         logger.info("Batch send complete: {}/{} succeeded", succeeded, len(results))
         return results
 
+    # The Cloudflare Email Sending API caps the total message (body +
+    # base64 attachments) at 5 MiB; leave headroom for the HTML body.
+    _CLOUDFLARE_ATTACHMENT_BUDGET = int(4.5 * 1024 * 1024)
+
+    @classmethod
+    def _build_cloudflare_attachments(
+        cls,
+        attachment_paths: Optional[List[str]],
+        budget_bytes: Optional[int] = None,
+    ) -> List[Dict[str, str]]:
+        """Read attachment files into Cloudflare Email API attachment dicts.
+
+        Returns ``[{filename, type, content (base64), disposition}]``.
+        Missing files are skipped with a warning (matching the SMTP path);
+        attachments that would push the base64 payload past the API's 5 MiB
+        total-message cap are skipped with a warning rather than failing the
+        whole send.
+        """
+        budget = (
+            budget_bytes
+            if budget_bytes is not None
+            else cls._CLOUDFLARE_ATTACHMENT_BUDGET
+        )
+        attachments: List[Dict[str, str]] = []
+        used = 0
+        for filepath in attachment_paths or []:
+            resolved = os.path.realpath(filepath)
+            if not os.path.isfile(resolved):
+                logger.warning("Attachment not found, skipping")
+                continue
+            with open(resolved, "rb") as f:
+                content_b64 = base64.b64encode(f.read()).decode("ascii")
+            if used + len(content_b64) > budget:
+                logger.warning(
+                    "Attachment exceeds Cloudflare 5 MiB message cap, " "skipping: {}",
+                    os.path.basename(resolved),
+                )
+                continue
+            used += len(content_b64)
+            mime_type, _ = mimetypes.guess_type(resolved)
+            attachments.append(
+                {
+                    "filename": _sanitize_header(os.path.basename(resolved)),
+                    "type": mime_type or "application/octet-stream",
+                    "content": content_b64,
+                    "disposition": "attachment",
+                }
+            )
+        return attachments
+
     async def _cloudflare_send(
         self,
         to_emails: List[str],
@@ -608,12 +660,14 @@ class EmailService:
         cc_emails: Optional[List[str]] = None,
         bcc_emails: Optional[List[str]] = None,
         reply_to: Optional[str] = None,
+        attachments: Optional[List[Dict[str, str]]] = None,
     ) -> List[bool]:
         """Send emails via Cloudflare Email Service REST API.
 
         Sends up to 5 requests concurrently (per-recipient). Retries
         transient errors (429 rate-limit, 5xx server errors) up to 3
-        times with exponential backoff.
+        times with exponential backoff. Attachments are base64 dicts from
+        ``_build_cloudflare_attachments``.
         """
         import httpx
 
@@ -656,6 +710,8 @@ class EmailService:
                 payload["bcc"] = bcc_emails
             if reply_to:
                 payload["reply_to"] = reply_to
+            if attachments:
+                payload["attachments"] = attachments
 
             async with concurrency:
                 for attempt in range(max_retries + 1):
@@ -851,11 +907,7 @@ class EmailService:
 
         # --- Cloudflare Email Service path (REST API, no SMTP) ---
         if self._use_cloudflare:
-            if attachment_paths:
-                logger.warning(
-                    "Cloudflare Email Service does not support file attachments; "
-                    "attachments will be omitted"
-                )
+            cf_attachments = self._build_cloudflare_attachments(attachment_paths)
             results = await self._cloudflare_send(
                 to_emails=to_emails,
                 subject=subject,
@@ -864,6 +916,7 @@ class EmailService:
                 cc_emails=cc_emails,
                 bcc_emails=bcc_emails,
                 reply_to=reply_to,
+                attachments=cf_attachments,
             )
         else:
             # --- SMTP path ---

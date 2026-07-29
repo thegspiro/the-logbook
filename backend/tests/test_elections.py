@@ -968,3 +968,71 @@ class TestBulkVoteCreateSchema:
 
         with pytest.raises(pydantic.ValidationError):
             BulkVoteCreate(election_id=uuid4(), votes=[])
+
+
+class TestPreMeetingPackageSchemas:
+    """Pre-meeting package request/response contracts."""
+
+    def test_valid_send_payload(self):
+        from app.schemas.election import PreMeetingPackageSend
+
+        payload = PreMeetingPackageSend(
+            recipient_emails=["sec@dept.org", "counsel@lawfirm.example"],
+            message="See attached",
+            include_full_roster=True,
+        )
+        assert len(payload.recipient_emails) == 2
+        assert payload.include_full_roster is True
+
+    def test_empty_recipient_list_rejected(self):
+        import pydantic
+
+        from app.schemas.election import PreMeetingPackageSend
+
+        with pytest.raises(pydantic.ValidationError):
+            PreMeetingPackageSend(recipient_emails=[])
+
+    def test_invalid_email_rejected(self):
+        import pydantic
+
+        from app.schemas.election import PreMeetingPackageSend
+
+        with pytest.raises(pydantic.ValidationError):
+            PreMeetingPackageSend(recipient_emails=["not-an-email"])
+
+    def test_full_roster_defaults_off(self):
+        """The privacy-sensitive variant must be opt-in."""
+        from app.schemas.election import PreMeetingPackageSend
+
+        payload = PreMeetingPackageSend(recipient_emails=["sec@dept.org"])
+        assert payload.include_full_roster is False
+
+
+class TestVotingTokenHash:
+    """ELEC-5 — voting tokens are stored as SHA-256 at rest."""
+
+    def test_hash_is_deterministic_sha256_hex(self):
+        from app.services.election_service import ElectionService
+
+        h1 = ElectionService._hash_voting_token("raw-token-value")
+        h2 = ElectionService._hash_voting_token("raw-token-value")
+        assert h1 == h2
+        assert len(h1) == 64
+        assert h1 == hashlib.sha256(b"raw-token-value").hexdigest()
+
+    def test_different_tokens_hash_differently(self):
+        from app.services.election_service import ElectionService
+
+        assert ElectionService._hash_voting_token(
+            "a"
+        ) != ElectionService._hash_voting_token("b")
+
+    def test_migration_guard_skips_already_hashed_values(self):
+        """The in-place migration only rewrites non-hex rows; a raw
+        token_urlsafe(64) value (86 chars, URL-safe base64) must not look
+        like a SHA-256 digest, or the guard would skip it."""
+        import re as _re
+
+        raw = secrets.token_urlsafe(64)
+        looks_hashed = len(raw) == 64 and bool(_re.fullmatch(r"[a-f0-9]+", raw))
+        assert not looks_hashed

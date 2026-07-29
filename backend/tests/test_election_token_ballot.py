@@ -127,9 +127,12 @@ class TestTokenBallotSetup:
         is_test: bool = False,
         eligible_item_ids=None,
     ):
-        """Generate a voting token via the real service helper."""
+        """Generate a voting token via the real service helper.
+
+        Returns (VotingToken, raw_token) — the row stores only the hash.
+        """
         svc = ElectionService(db_session)
-        token = await svc._generate_voting_token(
+        token, raw = await svc._generate_voting_token(
             user_id=uuid.UUID(data["user_id"]),
             election_id=uuid.UUID(data["election_id"]),
             organization_id=uuid.UUID(data["org_id"]),
@@ -139,7 +142,7 @@ class TestTokenBallotSetup:
             eligible_item_ids=eligible_item_ids,
         )
         await db_session.flush()
-        return token
+        return token, raw
 
 
 # ── Per-item eligibility enforcement (B2) ─────────────────────────────
@@ -150,11 +153,13 @@ class TestPerItemEligibility(TestTokenBallotSetup):
         self, db_session: AsyncSession, setup_ballot_election
     ):
         data = await setup_ballot_election
-        token = await self._issue_token(db_session, data, eligible_item_ids=["item_a"])
+        token, raw_token = await self._issue_token(
+            db_session, data, eligible_item_ids=["item_a"]
+        )
         svc = ElectionService(db_session)
 
         result, err = await svc.submit_ballot_with_token(
-            token=token.token,
+            token=raw_token,
             votes=[
                 {"ballot_item_id": "item_a", "choice": "approve"},
                 {"ballot_item_id": "item_b", "choice": "approve"},
@@ -170,11 +175,13 @@ class TestPerItemEligibility(TestTokenBallotSetup):
         self, db_session: AsyncSession, setup_ballot_election
     ):
         data = await setup_ballot_election
-        token = await self._issue_token(db_session, data, eligible_item_ids=["item_a"])
+        token, raw_token = await self._issue_token(
+            db_session, data, eligible_item_ids=["item_a"]
+        )
         svc = ElectionService(db_session)
 
         result, err = await svc.submit_ballot_with_token(
-            token=token.token,
+            token=raw_token,
             votes=[
                 {"ballot_item_id": "item_a", "choice": "approve"},
                 {"ballot_item_id": "item_b", "choice": "abstain"},
@@ -191,11 +198,13 @@ class TestPerItemEligibility(TestTokenBallotSetup):
         """Tokens issued before the migration have eligible_item_ids=NULL and
         must keep working (fail-open bounded by token expiry)."""
         data = await setup_ballot_election
-        token = await self._issue_token(db_session, data, eligible_item_ids=None)
+        token, raw_token = await self._issue_token(
+            db_session, data, eligible_item_ids=None
+        )
         svc = ElectionService(db_session)
 
         result, err = await svc.submit_ballot_with_token(
-            token=token.token,
+            token=raw_token,
             votes=[
                 {"ballot_item_id": "item_a", "choice": "approve"},
                 {"ballot_item_id": "item_b", "choice": "deny"},
@@ -214,11 +223,11 @@ class TestTestBallotTokens(TestTokenBallotSetup):
         self, db_session: AsyncSession, setup_ballot_election
     ):
         data = await setup_ballot_election
-        token = await self._issue_token(db_session, data, is_test=True)
+        token, raw_token = await self._issue_token(db_session, data, is_test=True)
         svc = ElectionService(db_session)
 
         result, err = await svc.submit_ballot_with_token(
-            token=token.token,
+            token=raw_token,
             votes=[{"ballot_item_id": "item_a", "choice": "approve"}],
         )
         assert err is None, f"Expected success, got: {err}"
@@ -250,18 +259,18 @@ class TestTestBallotTokens(TestTokenBallotSetup):
         """A manager's test submission must not consume their real vote slot
         (the dedup input is namespaced for test tokens)."""
         data = await setup_ballot_election
-        test_token = await self._issue_token(db_session, data, is_test=True)
+        test_token, test_raw = await self._issue_token(db_session, data, is_test=True)
         svc = ElectionService(db_session)
 
         _, err_test = await svc.submit_ballot_with_token(
-            token=test_token.token,
+            token=test_raw,
             votes=[{"ballot_item_id": "item_a", "choice": "approve"}],
         )
         assert err_test is None, f"Test ballot failed: {err_test}"
 
-        real_token = await self._issue_token(db_session, data, is_test=False)
+        real_token, real_raw = await self._issue_token(db_session, data, is_test=False)
         result, err_real = await svc.submit_ballot_with_token(
-            token=real_token.token,
+            token=real_raw,
             votes=[{"ballot_item_id": "item_a", "choice": "deny"}],
         )
         assert err_real is None, f"Real ballot blocked by prior test ballot: {err_real}"
@@ -283,11 +292,11 @@ class TestReceiptHashes(TestTokenBallotSetup):
         self, db_session: AsyncSession, setup_ballot_election
     ):
         data = await setup_ballot_election
-        token = await self._issue_token(db_session, data)
+        token, raw_token = await self._issue_token(db_session, data)
         svc = ElectionService(db_session)
 
         result, err = await svc.submit_ballot_with_token(
-            token=token.token,
+            token=raw_token,
             votes=[
                 {"ballot_item_id": "item_a", "choice": "approve"},
                 {"ballot_item_id": "item_b", "choice": "deny"},
@@ -371,7 +380,7 @@ class TestPositionlessTokenVote(TestTokenBallotSetup):
         data = await setup_candidate_election
         svc = ElectionService(db_session)
 
-        token = await svc._generate_voting_token(
+        token, raw_token = await svc._generate_voting_token(
             user_id=uuid.UUID(data["user_id"]),
             election_id=uuid.UUID(data["poll_id"]),
             organization_id=uuid.UUID(data["org_id"]),
@@ -399,7 +408,7 @@ class TestPositionlessTokenVote(TestTokenBallotSetup):
         await db_session.flush()
 
         vote, err = await svc.cast_vote_with_token(
-            token=token.token,
+            token=raw_token,
             candidate_id=uuid.UUID(data["poll_candidate_id"]),
             position=None,
         )
@@ -409,3 +418,30 @@ class TestPositionlessTokenVote(TestTokenBallotSetup):
         ), f"Positionless vote wrongly blocked by positioned vote: {err}"
         assert vote is not None
         assert vote.position is None
+
+
+# ── Token hashing at rest (ELEC-5) ────────────────────────────────────
+
+
+class TestTokenHashedAtRest(TestTokenBallotSetup):
+    async def test_stored_token_is_hash_and_raw_resolves(
+        self, db_session: AsyncSession, setup_ballot_election
+    ):
+        """The DB row must hold SHA-256(token); the raw token (emailed link)
+        resolves, and the stored hash itself must NOT work as a credential —
+        exactly what makes DB read access useless to an attacker."""
+        data = await setup_ballot_election
+        token, raw_token = await self._issue_token(db_session, data)
+
+        assert token.token != raw_token
+        assert len(token.token) == 64
+        assert all(c in "0123456789abcdef" for c in token.token)
+
+        svc = ElectionService(db_session)
+        election, resolved, err = await svc.get_ballot_by_token(raw_token)
+        assert err is None, f"Raw token must resolve: {err}"
+        assert str(resolved.id) == str(token.id)
+
+        # Presenting the stored hash is re-hashed on lookup and must fail
+        _, _, err2 = await svc.get_ballot_by_token(token.token)
+        assert err2 is not None

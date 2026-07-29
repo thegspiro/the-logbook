@@ -90,25 +90,31 @@ works. This is a deliberate behavior change: the refused case is exactly the
 unsafe one. The alternative (retaining the salt post-close) would weaken
 SEC-12 and was rejected.
 
-### ELEC-5 — MEDIUM — Voting tokens stored/compared in plaintext (contradicts "hashed" docs)
-`_generate_voting_token` stores the raw `token_urlsafe(64)` and
-`get_ballot_by_token` looks it up with `VotingToken.token == token` — plaintext
-equality, not a hash lookup. Entropy (512-bit) makes guessing impractical, but
-the model + endpoint docstrings claim the token is "hashed," and anyone with
-read access to `voting_tokens` obtains live ballot credentials.
-**Status:** flagged — real fix is to store only a SHA-256 of the token and look
-up by that (migration + code change). Left for deliberate work; the docstrings
-should be corrected in the same change to stop over-claiming.
+### ELEC-5 — MEDIUM — Voting tokens stored/compared in plaintext — ✅ FIXED
+`_generate_voting_token` stored the raw `token_urlsafe(64)` and
+`get_ballot_by_token` looked it up with plaintext equality, so anyone with
+read access to `voting_tokens` obtained live ballot credentials.
+**Fix (2026-07-28):** tokens are now SHA-256 at rest — `_generate_voting_token`
+returns `(VotingToken, raw_token)` with only the hash stored, the emailed link
+carries the raw value, and `get_ballot_by_token` hashes the presented token
+before lookup. Migration `20260731_0001` hashes existing rows in place
+(idempotent hex guard), so in-flight emailed links keep resolving. An unsalted
+hash suffices: 512-bit random tokens have no brute-force/rainbow surface.
+Downgrade is deliberately a no-op (one-way).
 
-### ELEC-6 — MEDIUM — Ballot secrecy holds only against non-DB actors, only after close
-For anonymous elections each `Vote` still stores `voter_hash` (deterministic
-HMAC keyed by a salt in the *same* `elections` row) plus `ip_address` and
-`user_agent`. Until `close_election` nulls the salt, anyone with DB read access
-can recompute every member's hash and map `voter_hash → candidate_id`;
-`get_election_forensics` further exposes per-IP distributions and proxy→delegator
-maps to any `elections.manage` admin.
-**Status:** flagged (documented limitation) — recommend minimizing stored
-IP/user-agent for anonymous elections and treating forensics as break-glass.
+### ELEC-6 — MEDIUM — Ballot secrecy holds only against non-DB actors, only after close — ✅ FIXED (residual noted)
+For anonymous elections each `Vote` stored `voter_hash` plus raw `ip_address`
+and `user_agent` forever, and `get_election_forensics` returned a full per-IP
+vote map — enough to correlate votes to voters in a small department.
+**Fix (2026-07-28):** `close_election` now purges per-vote IP/user-agent for
+anonymous elections at the same moment the salt is destroyed (live
+ballot-stuffing detection is unaffected while voting is open; audited as
+`ip_metadata_purged`), and forensics exposes only the thresholded
+`suspicious_ips` set plus `unique_ip_count` / `ip_metadata_purged` — the full
+`ip_vote_distribution` map is gone from service, schema, and frontend types.
+**Residual:** the tamper-proof audit log still records an IP per `vote_cast*`
+event with the vote id; minimizing that requires an audit-schema decision and
+is tracked in KNOWN_LIMITATIONS.
 
 ### ELEC-7 — LOW — `create_candidate` stores client-supplied `user_id` unvalidated (XC-1)
 `Candidate(..., **candidate.model_dump())` persists `user_id` with no in-org
@@ -202,16 +208,47 @@ the same change unless marked deferred. Migration `20260730_0001` adds
   coincidence). (e) `UNCACHEABLE_PREFIXES` used `'/elections/'` so the list
   endpoint `GET /elections` was cached; now `'/elections'`.
 
+### Follow-up fixes (practical-workflow review, 2026-07-28)
+
+- **R-11 — MEDIUM — Runoffs didn't inherit the parent's rule set.**
+  `_check_and_create_runoff` built the child election by hand and omitted:
+  the **anonymity salt** (anonymous runoffs hashed voters with an empty key —
+  pre-computable from user ids, defeating SEC-12 for every runoff round),
+  **quorum** (a quorum-required election's runoff had none),
+  **position_eligibility** (position-level voter-type limits vanished in the
+  deciding round), and the meeting/event link, attendees, and voter
+  overrides (electorate context lost). Fixed: runoffs now inherit
+  quorum/eligibility/links/overrides and generate a **fresh** salt (never
+  the parent's — that one is destroyed at close).
+- **R-12 — MEDIUM — Same-meeting runoffs were practically impossible.**
+  Runoffs default to `start = now + 1h`; every vote path rejects votes
+  before `start_date`; and the UI had no way to edit a draft election's
+  dates ("Extend Time" is open-status, end-date-only). Opening the runoff at
+  the meeting meant an hour of "Election has not started yet". Fixed twice
+  over: `open_election` now clamps a future `start_date` to the open time
+  (opening *is* the declaration that voting starts; audited as
+  `start_adjusted_to_open_time`) and refuses to open an election whose
+  `end_date` already passed; and the detail page has an **Edit Dates**
+  modal for draft elections (start + end, quarter-hour granularity,
+  15-min/30-min/1-hour/1-day quick durations).
+
+- **R-13 — LOW/correctness — Eligibility roster reported zero eligible
+  voters for positional elections.** `get_eligibility_roster` could only
+  accrue eligibility from ballot items, so every member of a
+  candidate/position-only election (no structured ballot items) showed as
+  ineligible — wrong in the in-app roster and in anything derived from it
+  (found while building the pre-meeting package's eligible-voter prefill).
+  Fixed: positional elections now apply election-level rules — restricted
+  voter list, membership-tier `voting_eligible`, secretary overrides — with
+  a tier-based ineligibility reason.
+
 ### Open / deferred
 
-- **R-D1 — ELEC-5 remains:** voting tokens are stored in plaintext at rest
-  (512-bit entropy is the guessing defense). Fix requires storing a SHA-256
-  and an in-flight-token compatibility decision. Docstrings claiming tokens
-  are "hashed" were corrected in this change.
-- **R-D2 — ELEC-6 remains:** forensics exposes `ip_vote_distribution` and
-  per-hour timelines to any `elections.manage` holder — enough to correlate
-  voters with anonymous ballots in a small department. Treat forensics as
-  break-glass; recommend threshold-only exposure in a follow-up.
+- **R-D1 — ELEC-5: ✅ resolved 2026-07-28** (tokens hashed at rest — see the
+  ELEC-5 entry above).
+- **R-D2 — ELEC-6: ✅ resolved 2026-07-28** (IP/user-agent purged at close for
+  anonymous elections; forensics threshold-only — see the ELEC-6 entry above.
+  Residual: per-event IPs in the audit log).
 - **R-D3 — Ballot token in GET query/path:** `GET /elections/ballot?token=`
   and `GET /elections/ballot/{token}/candidates` put the live credential in
   server/proxy logs and browser history, contradicting the POST-body

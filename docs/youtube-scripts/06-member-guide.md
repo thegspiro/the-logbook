@@ -334,7 +334,13 @@ Copy button, and Reset link]**
 > officers. You can only vote once per election, so make sure you're done
 > before submitting."
 
-**[CALLOUT: "Your vote is confidential — only aggregate results are published"]**
+**[SCREEN: Show the confirmation screen with the vote receipt]**
+
+> "After you submit, you'll see a vote receipt — a code that proves your vote
+> was recorded without revealing who you voted for. Save it if you ever want to
+> verify your vote was counted."
+
+**[CALLOUT: "Your vote is confidential — only aggregate results are published. Save your receipt!"]**
 
 ### MEETING MINUTES (17:00 – 17:30)
 

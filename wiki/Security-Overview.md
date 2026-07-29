@@ -32,6 +32,46 @@ strong foundation and closed the remaining implicit-trust gaps:
 - **TLS:** startup warns when `DB_SSL`/`REDIS_SSL` is enabled without a CA
   (encrypted but the server certificate is unverified).
 
+### Elections Security Review (2026-07-28)
+
+A dedicated review of the elections module (findings R-1…R-10 in
+[`docs/module-audit/elections.md`](../docs/module-audit/elections.md)) closed
+the remaining voting-integrity gaps:
+
+- **Eligibility enforced at the ballot box:** per-item voter-type and
+  attendance restrictions are snapshotted on each voting token and enforced
+  when votes are submitted (previously only checked at email-send time — any
+  token holder could vote on restricted items).
+- **Roster leak closed:** the public ballot endpoint no longer returns
+  attendee names, eligible-voter lists, or email recipients to token holders.
+- **Test ballots isolated:** test-ballot votes are flagged and excluded from
+  all tallies, and never consume the sender's real vote.
+- **Double-voting hardening:** approval/ranked-choice voting now works with
+  method-aware dedup (single-vote dedup unchanged); reopening a closed
+  anonymous election with votes is refused (the destroyed anonymity salt would
+  otherwise allow undetected re-voting); runoffs trigger on early closes.
+- **Verifiable votes:** receipt hashes are returned to voters, making the
+  public receipt-verification endpoint usable end-to-end.
+- **Runoff anonymity restored (follow-up):** auto-created runoff elections
+  previously had **no anonymity salt** — their voter hashes were keyed with an
+  empty string and thus pre-computable from user ids, defeating ballot
+  secrecy for every runoff round — and dropped the parent's quorum and
+  position-eligibility rules. Runoffs now generate a fresh per-election salt
+  and inherit the parent's full rule set.
+
+- **Tokens hashed at rest (follow-up):** voting tokens are now stored as
+  SHA-256 — the raw credential exists only in the emailed ballot link, so
+  database read access no longer yields live ballots (in-place migration
+  keeps in-flight links working).
+- **IP metadata purged at close (follow-up):** anonymous elections erase
+  per-vote IP/user-agent when they close (alongside the anonymity salt), and
+  forensics exposes only a thresholded suspicious-IP set instead of the full
+  per-IP vote map. Residual: per-event IPs in the audit log (tracked in
+  KNOWN_LIMITATIONS).
+
+Remaining residual items are tracked in
+[`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
+
 ### Module-by-Module Security Audit (2026-07)
 
 A rotating, module-by-module security audit covered all 27 modules/domains

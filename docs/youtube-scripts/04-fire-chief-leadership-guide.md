@@ -250,6 +250,11 @@ RSVP list and check-in status]**
 
 ## CHAPTER 5: Running Elections (14:00 – 18:00)
 
+> **Producer note:** this chapter is the overview. The canonical elections
+> deep-dive — including eligibility, proxies, runoffs, and auditing — is
+> **Script 12** (with its edge-case shorts pack 12a–12j). Keep this chapter
+> high-level and point viewers to Script 12 in the end card.
+
 ### CREATING AN ELECTION (14:00 – 15:30)
 
 **[SCREEN: Navigate to Elections (ElectionsPage)]**
@@ -266,9 +271,11 @@ RSVP list and check-in status]**
 
 **[SCREEN: Fill in the election creation form]**
 
-> "Choose your voting method. Simple majority is the most common — whoever gets
-> the most votes wins. Ranked choice is also available for departments that
-> prefer it."
+> "Choose your voting method. Simple majority is the most common — each voter
+> picks one candidate per office. Ranked choice, approval voting — where members
+> can approve as many candidates as they like — and supermajority are also
+> available. And if you enable runoffs, the system automatically creates a
+> runoff election when no candidate meets the victory condition."
 
 > "Set eligibility rules — who can vote? Active members only? Minimum tenure of
 > one year? The system automatically determines eligible voters based on your
@@ -309,19 +316,25 @@ RSVP list and check-in status]**
 > how many eligible voters have cast ballots, the participation percentage —
 > without seeing individual votes."
 
-### CERTIFYING RESULTS (17:30 – 18:00)
+### CLOSING & PUBLISHING RESULTS (17:30 – 18:00)
 
-> "When the voting period closes, the system automatically tabulates results.
-> As Chief or President, you review and certify the results before they're
-> published to the membership."
+> "When voting ends — automatically at the scheduled time, or when you close it
+> manually at the end of the meeting — the system tabulates the results. If no
+> candidate meets the victory condition and runoffs are enabled, a runoff
+> election is created automatically."
 
-**[SCREEN: Show the results certification page]**
+**[SCREEN: Show the closed election with the Publish Results panel]**
 
-> "Certified results are recorded permanently in the system. You can publish
-> them to the membership, export them as a PDF for your records, and the winners
-> are reflected in the member profiles."
+> "Review the results, then use the Publish Results panel to make them visible
+> to the membership and email the results report. One tip: if you closed voting
+> early, flip 'results visible immediately' so members don't have to wait for
+> the originally scheduled end time."
 
-**[CALLOUT: "Election results are permanently archived for historical records"]**
+> "Results are recorded permanently, every vote carries a cryptographic
+> signature, and a full forensic audit trail is available if an election is
+> ever disputed."
+
+**[CALLOUT: "Election results are permanently archived with a tamper-evident audit trail"]**
 
 **[TRANSITION: Communications]**
 

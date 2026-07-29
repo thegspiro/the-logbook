@@ -1,6 +1,6 @@
 # Ballot Forensics Guide
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-07-28
 **Audience:** Election administrators, system auditors, organization leadership
 
 ---
@@ -20,8 +20,10 @@ This guide explains how to investigate a disputed election using The Logbook's b
 | **Election Stats** | `GET /elections/{id}/stats` | Ballot counts and turnout |
 | **Election Results** | `GET /elections/{id}/results` | Candidate vote counts |
 | **Soft-Delete Vote** | `DELETE /elections/{id}/votes/{vote_id}` | Remove vote with reason |
+| **Receipt Verification** | `GET /elections/{id}/verify-receipt?receipt=` | Confirm a voter's receipt maps to a recorded vote |
 
-All endpoints require `elections.manage` permission.
+All endpoints require `elections.manage` permission, except receipt verification,
+which is public (rate-limited) so voters can check their own receipts.
 
 ---
 
@@ -63,7 +65,10 @@ In the forensics report, look at the `vote_integrity` section:
 - **PASS** — All vote signatures are valid. No database-level tampering detected.
 - **FAIL** — One or more votes have been modified after casting. The `tampered_vote_ids` array identifies exactly which votes were altered.
 
-**How it works:** Each vote is signed with `HMAC-SHA256(vote_id:election_id:candidate_id:voter_hash:position:voted_at, VOTE_SIGNING_KEY)`. If any field is changed in the database, the signature won't match.
+**How it works:** Each vote is signed with
+`HMAC-SHA256(vote_id:election_id:candidate_id:voter_hash:position:vote_rank:is_proxy_vote:proxy_delegating_user_id:voted_at, VOTE_SIGNING_KEY)`.
+If any of these fields is changed in the database — including a rank change on a
+ranked-choice vote or converting a proxy vote — the signature won't match.
 
 ### Step 3: Review Anomaly Detection
 
@@ -75,16 +80,15 @@ Check the `anomaly_detection` section:
     "suspicious_ips": {
       "192.168.1.50": 12
     },
-    "ip_vote_distribution": {
-      "192.168.1.50": 12,
-      "10.0.0.5": 3,
-      "10.0.0.8": 2
-    }
+    "unique_ip_count": 7,
+    "ip_metadata_purged": false
   }
 }
 ```
 
 - **`suspicious_ips`** — Any IP address that cast more than 5 votes. In a fire department election, this could be a shared station computer (normal) or could indicate someone voting from the same device multiple times (suspicious).
+- **`unique_ip_count`** — How many distinct IPs cast votes, without listing them. The full per-IP vote map is deliberately **not** exposed (since 2026-07): in a small department it allowed correlating anonymous votes to voters.
+- **`ip_metadata_purged`** — `true` once an anonymous election has closed: per-vote IP/user-agent metadata is erased at close (alongside the anonymity salt), so run IP-based analysis **while voting is open** — after close it is gone by design.
 - **Context matters:** A shared computer at the station will naturally have multiple votes from one IP. But 20+ votes from a home IP is unusual.
 
 ### Step 4: Examine the Voting Timeline
@@ -183,6 +187,13 @@ Every status rollback requires a reason and is emailed to all leadership members
 - Did the rollback extend the voting window unfairly?
 - Were additional votes cast during the reopened window?
 
+**Guard (since 2026-07):** a closed **anonymous** election that already has
+recorded votes cannot be rolled back to open. The anonymity salt is destroyed at
+close, so reopening would let members who already voted vote a second time
+undetected — the system refuses the rollback and directs the admin to create a
+new election. If you see a CLOSED→OPEN rollback on an anonymous election with
+votes in older history, treat it as a red flag for exactly this reason.
+
 ### Step 8: Examine Token Usage (Anonymous Voting)
 
 ```json
@@ -206,6 +217,16 @@ Check for:
 - **Tokens never used** — Did all eligible voters receive their tokens?
 - **High access counts** — A token accessed many times but not used may indicate someone struggling with the system (or attempting unauthorized access)
 - **Token usage timing** — Were tokens used before the election opened? (should be impossible)
+
+**Notes on token data (since 2026-07):**
+- Tokens issued via **"send test ballot"** are flagged `is_test`; votes cast with
+  them are stored `is_test` and excluded from results, stats, and rosters. When
+  reconciling counts, remember test votes appear in the raw `votes` table but
+  not in any tally.
+- Each token stores the **ballot items its voter was eligible for** at issue
+  time (`eligible_item_ids`), and submissions are validated against that
+  snapshot — so a vote on a restricted item cannot appear even from a valid
+  token. A `NULL` snapshot means a legacy token issued before this feature.
 
 ---
 
@@ -271,7 +292,9 @@ If you suspect fraud and may need to escalate:
 For anonymous elections:
 - `voter_id` is **never stored** on votes
 - Voters are tracked via `voter_hash` (HMAC-SHA256 of user ID + election-specific salt)
-- The salt (`voter_anonymity_salt`) can be destroyed after the election to make de-anonymization **permanently impossible**
+- The salt (`voter_anonymity_salt`) is destroyed automatically when the election closes, making de-anonymization **permanently impossible**
+- Per-vote **IP addresses and user-agents are purged at close** as well (since 2026-07) — they exist only while voting is open, for live fraud detection
+- Voting tokens are stored as **SHA-256 hashes** (since 2026-07) — database read access never yields a live ballot credential
 - Even with the salt, recovering voter identity requires access to both the salt and user IDs, plus the hashing algorithm
 
 ---
@@ -323,6 +346,24 @@ For anonymous elections:
 }
 ```
 
+### `GET /elections/{id}/verify-receipt?receipt=...`
+
+**Permission:** Public (rate-limited)
+
+Voters receive their receipt hash(es) when they submit a ballot. This endpoint
+confirms a receipt maps to a recorded vote without revealing its content:
+
+```json
+{
+  "valid": true,
+  "voted_at": "2026-02-10T09:15:00Z",
+  "position": "Chief"
+}
+```
+
+Useful in disputes: a voter who saved their receipt can prove their vote was
+recorded (or expose that it wasn't) without anyone learning who they voted for.
+
 ---
 
 ## Audit Event Reference
@@ -345,3 +386,5 @@ All election events are logged to the tamper-proof `audit_logs` table with `even
 | `ballot_emails_sent` | Email ballots distributed | Election ID, success/failed counts |
 | `runoff_election_created` | Automatic runoff | Parent and runoff election IDs |
 | `forensics_report_generated` | Forensics report pulled | Election ID |
+| `pre_meeting_package_sent` | Pre-meeting package emailed | Election ID, recipient count, roster variant |
+| `pre_meeting_package_downloaded` | Package PDF downloaded | Election ID, variant |

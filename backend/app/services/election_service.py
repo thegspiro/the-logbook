@@ -8,14 +8,19 @@ import copy
 import hashlib
 import hmac
 import html
+import os
+import re
 import secrets
+import tempfile
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from loguru import logger
 from sqlalchemy import func, select
+from sqlalchemy import update as sql_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -1493,12 +1498,20 @@ class ElectionService:
             ip = v.ip_address or "unknown"
             ip_vote_counts[ip] = ip_vote_counts.get(ip, 0) + 1
 
-        # Flag IPs with suspiciously high vote counts (> 5 from same IP)
+        # Flag IPs with suspiciously high vote counts (> 5 from same IP).
+        # SEC (ELEC-6): only the thresholded suspicious set is exposed — the
+        # full per-IP vote map allowed vote-to-voter correlation in small
+        # departments. For anonymous elections the underlying per-vote
+        # IP/user-agent metadata is purged entirely at close.
         suspicious_ips = {
             ip: count
             for ip, count in ip_vote_counts.items()
             if count > 5 and ip != "unknown"
         }
+        unique_ip_count = sum(1 for ip in ip_vote_counts if ip != "unknown")
+        ip_metadata_purged = (
+            election.anonymous_voting and election.status == ElectionStatus.CLOSED
+        )
 
         # 6. Voting timeline (votes per hour)
         voting_timeline: Dict[str, int] = {}
@@ -1557,7 +1570,8 @@ class ElectionService:
             },
             "anomaly_detection": {
                 "suspicious_ips": suspicious_ips,
-                "ip_vote_distribution": ip_vote_counts,
+                "unique_ip_count": unique_ip_count,
+                "ip_metadata_purged": ip_metadata_purged,
             },
             "proxy_voting": {
                 "authorizations": election.proxy_authorizations or [],
@@ -2195,10 +2209,20 @@ class ElectionService:
             # Default to top 2
             advancing_candidates = sorted_candidates[:2]
 
-        # Create runoff election
+        # Create runoff election. The runoff must inherit the parent's full
+        # rule set — a runoff round with looser rules than round one would
+        # decide the race under different (weaker) conditions:
+        #   - quorum: a quorum-required election's runoff needs the same bar
+        #   - position_eligibility: position-level voter-type restrictions
+        #   - meeting/event link + attendees: the electorate context
+        #   - voter_overrides: members granted eligibility for this race
+        # The anonymity salt is generated FRESH (never copied): salts are
+        # strictly per-election, and the parent's salt is destroyed at close.
+        # Without a salt of its own, an anonymous runoff's voter hashes would
+        # be keyed with "" and be pre-computable from user ids (SEC-12).
         runoff_start = datetime.now(timezone.utc) + timedelta(
             hours=1
-        )  # Start 1 hour from now
+        )  # Default; open_election clamps a future start to "now" on open
         runoff_end = runoff_start + timedelta(days=1)  # 1 day duration by default
 
         runoff_election = Election(
@@ -2210,17 +2234,26 @@ class ElectionService:
             description=f"Runoff election for {election.title}. No candidate received the required votes in the previous round.",
             election_type=election.election_type,
             positions=election.positions,
+            position_eligibility=copy.deepcopy(election.position_eligibility),
             start_date=runoff_start,
             end_date=runoff_end,
             anonymous_voting=election.anonymous_voting,
+            voter_anonymity_salt=secrets.token_hex(32),
             allow_write_ins=False,  # No write-ins in runoffs
             max_votes_per_position=election.max_votes_per_position,
             results_visible_immediately=election.results_visible_immediately,
             eligible_voters=election.eligible_voters,
+            voter_overrides=copy.deepcopy(election.voter_overrides),
+            meeting_id=election.meeting_id,
+            event_id=election.event_id,
+            meeting_date=election.meeting_date,
+            attendees=copy.deepcopy(election.attendees),
             voting_method=election.voting_method,
             victory_condition=election.victory_condition,
             victory_threshold=election.victory_threshold,
             victory_percentage=election.victory_percentage,
+            quorum_type=election.quorum_type,
+            quorum_value=election.quorum_value,
             enable_runoffs=election.enable_runoffs,
             runoff_type=election.runoff_type,
             max_runoff_rounds=election.max_runoff_rounds,
@@ -2286,6 +2319,21 @@ class ElectionService:
         # SEC: Destroy the per-election anonymity salt so voter hashes can
         # never be reversed back to user IDs, even with full DB access.
         election.voter_anonymity_salt = None
+
+        # SEC (ELEC-6): For anonymous elections, purge the per-vote IP and
+        # user-agent metadata at the same moment. During voting they feed the
+        # live ballot-stuffing detection; after close they would let anyone
+        # with DB or forensics access correlate votes to voters in a small
+        # department. The tamper-proof audit log keeps its own event trail.
+        ip_metadata_purged = False
+        if election.anonymous_voting:
+            await self.db.execute(
+                sql_update(Vote)
+                .where(Vote.election_id == str(election_id))
+                .values(ip_address=None, user_agent=None)
+            )
+            ip_metadata_purged = True
+
         await self.db.commit()
         await self.db.refresh(election)
 
@@ -2299,6 +2347,7 @@ class ElectionService:
                 "election_id": str(election_id),
                 "title": election.title,
                 "anonymity_salt_destroyed": True,
+                "ip_metadata_purged": ip_metadata_purged,
             },
         )
 
@@ -2464,12 +2513,33 @@ class ElectionService:
                 "Election must have at least one accepted candidate or ballot item",
             )
 
+        now = datetime.now(timezone.utc)
+        end = self._ensure_utc(election.end_date)
+        if end and end <= now:
+            return (
+                None,
+                "Election end date has already passed — update the dates "
+                "before opening",
+            )
+
+        # Opening the election is the declaration that voting starts now.
+        # Every vote path rejects votes before start_date, and auto-created
+        # runoffs default to a start one hour out — without this clamp, a
+        # runoff opened at the meeting would bounce every vote with
+        # "Election has not started yet" until the scheduled start.
+        start = self._ensure_utc(election.start_date)
+        start_adjusted = False
+        if start and start > now:
+            election.start_date = now
+            start_adjusted = True
+
         election.status = ElectionStatus.OPEN
         await self.db.commit()
         await self.db.refresh(election)
 
         logger.info(
-            f"Election opened | election={election_id} title={election.title!r}"
+            f"Election opened | election={election_id} title={election.title!r} "
+            f"start_adjusted={start_adjusted}"
         )
         await self._audit(
             "election_opened",
@@ -2477,6 +2547,8 @@ class ElectionService:
                 "election_id": str(election_id),
                 "title": election.title,
                 "candidate_count": candidate_count,
+                # True when a future start_date was clamped to the open time
+                "start_adjusted_to_open_time": start_adjusted,
             },
         )
 
@@ -2981,10 +3053,14 @@ Best regards,
                 at send time (None = unrestricted / positional election)
 
         Returns:
-            VotingToken instance
+            (VotingToken, raw_token) — the raw token exists only in this
+            return value (for the emailed ballot link); the row stores its
+            SHA-256, so DB read access never yields a live credential
+            (module-audit ELEC-5).
         """
-        # Generate secure random token
-        token = secrets.token_urlsafe(64)
+        # Generate secure random token; store only its hash
+        raw_token = secrets.token_urlsafe(64)
+        token = self._hash_voting_token(raw_token)
 
         # Generate voter hash (same method as used in voting)
         voter_hash = self._generate_voter_hash(user_id, election_id, anonymity_salt)
@@ -3008,7 +3084,16 @@ Best regards,
         )
 
         self.db.add(voting_token)
-        return voting_token
+        return voting_token, raw_token
+
+    @staticmethod
+    def _hash_voting_token(raw_token: str) -> str:
+        """SHA-256 a voting token for at-rest storage / lookup (ELEC-5).
+
+        Tokens are 512-bit random values, so an unsalted hash is sufficient
+        (no feasible brute-force or rainbow-table attack surface).
+        """
+        return hashlib.sha256(raw_token.encode()).hexdigest()
 
     # ------------------------------------------------------------------
     # Proxy voting
@@ -3602,7 +3687,7 @@ Best regards,
             # elections the recipient's eligible item ids are snapshotted on
             # the token so per-item eligibility can be enforced at submission
             # time (the token itself carries no user identity).
-            voting_token = await self._generate_voting_token(
+            voting_token, raw_ballot_token = await self._generate_voting_token(
                 user_id=recipient.id,
                 election_id=election_id,
                 organization_id=organization_id,
@@ -3616,9 +3701,10 @@ Best regards,
                 ),
             )
 
-            # Build unique ballot URL with token
+            # Build unique ballot URL with the RAW token (the row stores only
+            # its hash — the raw value never touches the database)
             ballot_url = (
-                f"{base_ballot_url}?token={voting_token.token}"
+                f"{base_ballot_url}?token={raw_ballot_token}"
                 if base_ballot_url
                 else None
             )
@@ -3884,6 +3970,396 @@ Best regards,
                 f"failures={failure_count}"
             )
             return False, "Failed to send election report email"
+
+    # ------------------------------------------------------------------
+    # Pre-meeting package (secretary meeting prep)
+    # ------------------------------------------------------------------
+
+    async def get_package_recipients(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        mode: str,
+    ) -> Tuple[Optional[List[Dict]], Optional[str]]:
+        """Resolve a prefill recipient list for the pre-meeting package modal.
+
+        mode:
+        - "leadership": active members holding a leadership role slug
+        - "eligible_voters": roster members who will receive a ballot
+
+        The list is only a starting point — the secretary edits it freely in
+        the modal (remove anyone, add outside addresses) before sending.
+
+        Returns: (recipients [{user_id, name, email}], error)
+        """
+        election = await self.get_election(election_id, organization_id)
+        if not election:
+            return None, "Election not found"
+
+        recipients: List[Dict] = []
+        if mode == "leadership":
+            users_result = await self.db.execute(
+                select(User)
+                .where(User.organization_id == str(organization_id))
+                .where(User.is_active == True)  # noqa: E712
+                .options(selectinload(User.roles))
+                .order_by(User.last_name, User.first_name)
+            )
+            for user in users_result.scalars().all():
+                if not user.email:
+                    continue
+                if any(role.slug in LEADERSHIP_ROLE_SLUGS for role in user.roles):
+                    recipients.append(
+                        {
+                            "user_id": str(user.id),
+                            "name": user.full_name or user.username,
+                            "email": user.email,
+                        }
+                    )
+        elif mode == "eligible_voters":
+            roster = await self.get_eligibility_roster(election_id, organization_id)
+            for member in roster.get("roster", []):
+                if member.get("will_receive_ballot") and member.get("email"):
+                    recipients.append(
+                        {
+                            "user_id": member["user_id"],
+                            "name": member["full_name"],
+                            "email": member["email"],
+                        }
+                    )
+        else:
+            return None, f"Unknown recipient mode: {mode}"
+
+        return recipients, None
+
+    async def build_pre_meeting_package_pdf(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        include_ineligibility_detail: bool = False,
+    ) -> Tuple[Optional[BytesIO], Optional[str], str]:
+        """Assemble package data and render the PDF.
+
+        Two variants: the member variant lists eligible voters and counts
+        only; the full variant (leadership) adds per-member ineligibility
+        reasons and granted overrides.
+
+        Returns: (pdf_buffer, error, filename)
+        """
+        from app.models.meeting import Meeting
+        from app.utils.pre_meeting_package_pdf import (
+            render_pre_meeting_package_pdf,
+        )
+
+        election = await self.get_election(election_id, organization_id)
+        if not election:
+            return None, "Election not found", ""
+        if election.status in (ElectionStatus.CLOSED, ElectionStatus.CANCELLED):
+            return (
+                None,
+                "Pre-meeting packages are only available for draft or open "
+                "elections",
+                "",
+            )
+
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+        if not organization:
+            return None, "Organization not found", ""
+
+        tz = ZoneInfo(organization.timezone or "America/New_York")
+
+        def _fmt_local(dt) -> str:
+            dt = self._ensure_utc(dt)
+            if not dt:
+                return ""
+            return dt.astimezone(tz).strftime("%B %d, %Y at %I:%M %p")
+
+        # Meeting context (org-scoped — a stale/foreign meeting_id must not
+        # surface another org's meeting in the package)
+        meeting_data: Optional[Dict] = None
+        if election.meeting_id:
+            meeting_result = await self.db.execute(
+                select(Meeting)
+                .where(Meeting.id == election.meeting_id)
+                .where(Meeting.organization_id == str(organization_id))
+            )
+            meeting = meeting_result.scalar_one_or_none()
+            if meeting:
+                date_display = ""
+                if meeting.meeting_date:
+                    date_display = meeting.meeting_date.strftime("%B %d, %Y")
+                    if meeting.start_time:
+                        date_display += f" at {meeting.start_time.strftime('%I:%M %p')}"
+                meeting_type = meeting.meeting_type
+                meeting_data = {
+                    "title": meeting.title,
+                    "meeting_type": (
+                        meeting_type.value.replace("_", " ").title()
+                        if hasattr(meeting_type, "value")
+                        else str(meeting_type or "")
+                    ),
+                    "date_display": date_display,
+                    "location": meeting.location,
+                    "agenda": meeting.agenda,
+                }
+
+        # Roster (single source of truth for eligibility)
+        roster = await self.get_eligibility_roster(election_id, organization_id)
+        roster_members = roster.get("roster", [])
+        eligible = [
+            {
+                "full_name": m["full_name"],
+                "membership_type": m.get("membership_type"),
+                "has_override": m.get("has_override", False),
+            }
+            for m in roster_members
+            if m.get("will_receive_ballot")
+        ]
+        ineligible = [
+            {
+                "full_name": m["full_name"],
+                "reason": m.get("ineligibility_reason") or "Not eligible",
+            }
+            for m in roster_members
+            if not m.get("will_receive_ballot")
+        ]
+        names_by_id = {m["user_id"]: m["full_name"] for m in roster_members}
+        overrides = [
+            {
+                "full_name": names_by_id.get(
+                    record.get("user_id"), record.get("user_id")
+                ),
+                "reason": record.get("reason"),
+                "overridden_by_name": record.get("overridden_by_name"),
+            }
+            for record in (election.voter_overrides or [])
+        ]
+
+        # Accepted candidates in ballot order
+        candidates_result = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.election_id == str(election_id))
+            .where(Candidate.accepted == True)  # noqa: E712
+            .order_by(Candidate.position, Candidate.display_order)
+        )
+        candidates = [
+            {
+                "name": c.name,
+                "position": c.position,
+                "statement": c.statement,
+            }
+            for c in candidates_result.scalars().all()
+        ]
+
+        data = {
+            "election": {
+                "title": election.title,
+                "description": election.description,
+                "positions": election.positions,
+                "start_display": _fmt_local(election.start_date),
+                "end_display": _fmt_local(election.end_date),
+                "voting_method": election.voting_method,
+                "victory_condition": election.victory_condition,
+                "victory_percentage": election.victory_percentage,
+                "victory_threshold": election.victory_threshold,
+                "anonymous_voting": election.anonymous_voting,
+                "allow_write_ins": election.allow_write_ins,
+                "quorum_type": election.quorum_type,
+                "quorum_value": election.quorum_value,
+                "enable_runoffs": election.enable_runoffs,
+                "runoff_type": election.runoff_type,
+                "max_runoff_rounds": election.max_runoff_rounds,
+                "proxy_voting_enabled": self._is_proxy_voting_enabled(organization),
+            },
+            "meeting": meeting_data,
+            "ballot_items": election.ballot_items or [],
+            "candidates": candidates,
+            "roster": {
+                "total_members": roster.get("total_members", 0),
+                "total_eligible": roster.get("total_eligible", 0),
+                "total_ineligible": roster.get("total_ineligible", 0),
+                "total_overrides": roster.get("total_overrides", 0),
+                "eligible": eligible,
+                "ineligible": ineligible,
+                "overrides": overrides,
+            },
+        }
+        meta = {
+            "org_name": organization.name,
+            "generated_at": datetime.now(timezone.utc).astimezone(tz),
+        }
+
+        slug = re.sub(r"[^a-z0-9]+", "-", (election.title or "election").lower())
+        filename = f"pre-meeting-package-{slug.strip('-') or 'election'}.pdf"
+
+        buf = render_pre_meeting_package_pdf(
+            data, meta, include_ineligibility_detail=include_ineligibility_detail
+        )
+        return buf, None, filename
+
+    async def generate_and_send_pre_meeting_package(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        sent_by: UUID,
+        recipient_emails: List[str],
+        message: Optional[str] = None,
+        include_full_roster: bool = False,
+    ) -> Tuple[bool, str, int]:
+        """Email the pre-meeting package PDF to a secretary-edited list.
+
+        ``recipient_emails`` is the FINAL list — prefills (leadership /
+        eligible voters) are resolved in the modal and freely edited there,
+        including outside addresses. Recipients go on BCC so addresses are
+        not exposed to each other.
+
+        Returns: (success, message, sent_count)
+        """
+        # Deduplicate case-insensitively, preserving order
+        seen: set = set()
+        cleaned_emails: List[str] = []
+        for email_addr in recipient_emails:
+            addr = (email_addr or "").strip()
+            if addr and addr.lower() not in seen:
+                seen.add(addr.lower())
+                cleaned_emails.append(addr)
+        if not cleaned_emails:
+            return False, "No recipient email addresses provided", 0
+
+        buf, error, filename = await self.build_pre_meeting_package_pdf(
+            election_id, organization_id, include_full_roster
+        )
+        if error or buf is None:
+            return False, error or "Failed to generate package PDF", 0
+
+        election = await self.get_election(election_id, organization_id)
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+
+        # The sender goes on To (so the email has a visible recipient and the
+        # secretary gets a copy); the edited list goes on BCC.
+        sender_result = await self.db.execute(
+            select(User)
+            .where(User.id == str(sent_by))
+            .where(User.organization_id == str(organization_id))
+        )
+        sender = sender_result.scalar_one_or_none()
+        if sender and sender.email:
+            to_emails = [sender.email]
+            bcc_emails = [e for e in cleaned_emails if e != sender.email]
+        else:
+            to_emails = [cleaned_emails[0]]
+            bcc_emails = cleaned_emails[1:]
+
+        tz = ZoneInfo(
+            (organization.timezone if organization else None) or "America/New_York"
+        )
+        start_local = self._ensure_utc(election.start_date).astimezone(tz)
+        end_local = self._ensure_utc(election.end_date).astimezone(tz)
+
+        message_html = ""
+        message_text = ""
+        if message and message.strip():
+            safe_message = html.escape(message.strip()).replace("\n", "<br/>")
+            message_html = f"<p style='white-space:pre-line'>{safe_message}</p><hr/>"
+            message_text = f"{message.strip()}\n\n---\n\n"
+
+        variant_note = (
+            "the full voter-eligibility roster (including ineligibility " "reasons)"
+            if include_full_roster
+            else "the eligible-voter list"
+        )
+        body_html = (
+            f"{message_html}"
+            f"<p>The pre-meeting package for "
+            f"<strong>{html.escape(election.title)}</strong> is attached "
+            f"as a PDF. It contains the meeting details, the ballot preview "
+            f"with candidates, and {variant_note}.</p>"
+            f"<p>Voting opens "
+            f"{start_local.strftime('%B %d, %Y at %I:%M %p')} and closes "
+            f"{end_local.strftime('%B %d, %Y at %I:%M %p')}.</p>"
+        )
+        body_text = (
+            f"{message_text}"
+            f"The pre-meeting package for {election.title} is attached as a "
+            f"PDF. It contains the meeting details, the ballot preview with "
+            f"candidates, and {variant_note}.\n\n"
+            f"Voting opens {start_local.strftime('%B %d, %Y at %I:%M %p')} "
+            f"and closes {end_local.strftime('%B %d, %Y at %I:%M %p')}."
+        )
+
+        from app.services.email_service import wrap_email_body
+
+        html_body = wrap_email_body(
+            organization,
+            title=f"Pre-Meeting Package: {html.escape(election.title)}",
+            body_html=body_html,
+        )
+
+        email_service = EmailService(organization)
+        # Unique temp dir so the human-readable attachment filename (used as
+        # the attachment name by send_email) can't collide across concurrent
+        # sends of the same election
+        tmp_dir = tempfile.mkdtemp(prefix="premeeting-pkg-")
+        tmp_path = os.path.join(tmp_dir, filename)
+        try:
+            with open(tmp_path, "wb") as tmp:
+                tmp.write(buf.getvalue())
+
+            success_count, failure_count = await email_service.send_email(
+                to_emails=to_emails,
+                subject=f"Pre-Meeting Package: {election.title}",
+                html_body=html_body,
+                text_body=body_text,
+                attachment_paths=[tmp_path],
+                bcc_emails=bcc_emails,
+                db=self.db,
+                template_type="pre_meeting_package",
+                sent_by=str(sent_by),
+            )
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            try:
+                os.rmdir(tmp_dir)
+            except OSError:
+                pass
+
+        sent_count = len(cleaned_emails) if success_count > 0 else 0
+        await self._audit(
+            "pre_meeting_package_sent",
+            {
+                "election_id": str(election_id),
+                "title": election.title,
+                "recipient_count": len(cleaned_emails),
+                "full_roster_variant": include_full_roster,
+                "success": success_count > 0,
+            },
+            user_id=str(sent_by),
+        )
+
+        if success_count > 0:
+            logger.info(
+                f"Pre-meeting package sent | election={election_id} "
+                f"recipients={len(cleaned_emails)} full={include_full_roster}"
+            )
+            return (
+                True,
+                f"Pre-meeting package sent to {len(cleaned_emails)} " f"recipient(s)",
+                sent_count,
+            )
+        logger.error(
+            f"Failed to send pre-meeting package | election={election_id} "
+            f"failures={failure_count}"
+        )
+        return False, "Failed to send pre-meeting package email", 0
 
     async def send_eligibility_summary_email(
         self,
@@ -4207,9 +4683,13 @@ Best regards,
 
         Returns: (Election, VotingToken, error_message)
         """
-        # Find the voting token
+        # Tokens are stored as SHA-256 hashes (ELEC-5) — hash the presented
+        # raw token before lookup. Pre-migration rows were hashed in place
+        # (migration 20260731_0001), so old emailed links keep working.
         result = await self.db.execute(
-            select(VotingToken).where(VotingToken.token == token)
+            select(VotingToken).where(
+                VotingToken.token == self._hash_voting_token(token)
+            )
         )
         voting_token = result.scalar_one_or_none()
 
@@ -4756,6 +5236,14 @@ Best regards,
         ballot_items = election.ballot_items or []
         override_user_ids = {o.get("user_id") for o in (election.voter_overrides or [])}
 
+        # Membership tier definitions for the positional (no-ballot-items)
+        # eligibility path below
+        tier_defs = (
+            ((organization.settings or {}) if organization else {})
+            .get("membership_tiers", {})
+            .get("tiers", [])
+        )
+
         roster = []
         for user in users:
             user_id = str(user.id)
@@ -4818,11 +5306,37 @@ Best regards,
                         )
                     break
 
+            # Positional elections (no structured ballot items): eligibility
+            # is election-level — restricted voter list, tier voting rules,
+            # and secretary overrides. Without this branch every member of a
+            # candidate/position-only election would show as ineligible
+            # (eligible_count can only accrue from ballot items).
+            positional_eligible = False
+            positional_reason = None
+            if not ballot_items and in_eligible_list:
+                if has_override:
+                    positional_eligible = True
+                else:
+                    member_tier_id = getattr(user, "membership_type", None) or "active"
+                    tier_def = next(
+                        (t for t in tier_defs if t.get("id") == member_tier_id),
+                        None,
+                    )
+                    benefits = (tier_def or {}).get("benefits", {})
+                    positional_eligible = benefits.get("voting_eligible", True)
+                    if not positional_eligible:
+                        tier_name = (tier_def or {}).get("name", member_tier_id)
+                        positional_reason = (
+                            f"Membership tier '{tier_name}' is not eligible " f"to vote"
+                        )
+
             # Overall ineligibility reason
             overall_reason = None
             if not in_eligible_list and not has_override:
                 overall_reason = "Not in eligible voters list"
                 eligible_count = 0
+            elif not ballot_items:
+                overall_reason = positional_reason
             elif eligible_count == 0 and not has_override:
                 overall_reason = await self._get_ineligibility_reason_for_user(
                     user,
@@ -4832,7 +5346,7 @@ Best regards,
                 )
 
             will_receive_ballot = (
-                eligible_count > 0 or has_override
+                eligible_count > 0 or has_override or positional_eligible
             ) and in_eligible_list
 
             member_type = getattr(user, "membership_type", None) or "active"

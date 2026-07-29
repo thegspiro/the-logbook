@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
 
@@ -626,6 +626,50 @@ class ElectionReportResponse(BaseModel):
     message: str
 
 
+# Pre-Meeting Package Schemas
+
+
+class PackageRecipient(BaseModel):
+    """One prefill recipient for the pre-meeting package modal"""
+
+    user_id: str
+    name: str
+    email: str
+
+
+class PackageRecipientsResponse(BaseModel):
+    """Prefill recipient list (leadership or eligible voters)"""
+
+    recipients: List[PackageRecipient]
+
+
+class PreMeetingPackageSend(BaseModel):
+    """Send the pre-meeting package to a secretary-edited email list.
+
+    recipient_emails is the FINAL list — prefills are resolved and freely
+    edited (including outside addresses) in the modal before submission.
+    """
+
+    recipient_emails: List[EmailStr] = Field(..., min_length=1)
+    message: Optional[str] = Field(None, max_length=5000)
+    include_full_roster: bool = Field(
+        default=False,
+        description=(
+            "Attach the full roster variant including per-member "
+            "ineligibility reasons (leadership detail) instead of the "
+            "member variant (eligible-voter names and counts only)"
+        ),
+    )
+
+
+class PreMeetingPackageResponse(BaseModel):
+    """Response after sending the pre-meeting package"""
+
+    success: bool
+    message: str
+    sent_count: int
+
+
 class ElectionDelete(BaseModel):
     """Schema for deleting an election. Reason required for non-draft elections."""
 
@@ -932,10 +976,18 @@ class AuditLogSummary(BaseModel):
 
 
 class AnomalyDetection(BaseModel):
-    """Anomaly detection section of forensics report"""
+    """Anomaly detection section of forensics report.
+
+    SEC (ELEC-6): deliberately does NOT expose a full per-IP vote map —
+    only the thresholded suspicious set plus an aggregate count. A full
+    distribution allowed vote-to-voter correlation in small departments.
+    """
 
     suspicious_ips: Dict[str, int] = {}
-    ip_vote_distribution: Dict[str, int] = {}
+    unique_ip_count: int = 0
+    # True once an anonymous election has closed and per-vote IP/user-agent
+    # metadata has been purged (counts above will be empty/"unknown")
+    ip_metadata_purged: bool = False
 
 
 class ProxyVoteRecord(BaseModel):

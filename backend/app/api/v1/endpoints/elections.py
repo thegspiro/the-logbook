@@ -10,6 +10,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -59,6 +60,9 @@ from app.schemas.election import (
     ForensicsResponse,
     ImportMeetingAttendeesResponse,
     NonVotersResponse,
+    PackageRecipientsResponse,
+    PreMeetingPackageResponse,
+    PreMeetingPackageSend,
     ProxyAuthorizationCreate,
     ProxyAuthorizationListResponse,
     ProxyAuthorizationResponse,
@@ -1684,6 +1688,143 @@ async def send_election_report(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
     return ElectionReportResponse(success=True, message=message)
+
+
+# ============================================
+# Pre-Meeting Package (secretary meeting prep)
+# ============================================
+
+
+@router.get(
+    "/{election_id}/package-recipients",
+    response_model=PackageRecipientsResponse,
+)
+async def get_package_recipients(
+    election_id: UUID,
+    mode: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Prefill recipient list for the pre-meeting package modal.
+
+    mode=leadership → active members holding a leadership role;
+    mode=eligible_voters → roster members who will receive a ballot.
+    The secretary edits the list freely before sending.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    try:
+        recipients, error = await service.get_package_recipients(
+            election_id, current_user.organization_id, mode
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    return PackageRecipientsResponse(recipients=recipients or [])
+
+
+@router.get("/{election_id}/package-pdf")
+async def download_package_pdf(
+    election_id: UUID,
+    variant: str = "member",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Download the pre-meeting package PDF (no email sent).
+
+    variant=member → eligible-voter names and counts only;
+    variant=full → adds per-member ineligibility reasons and overrides
+    (leadership detail).
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    if variant not in ("member", "full"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="variant must be 'member' or 'full'",
+        )
+
+    service = ElectionService(db)
+    try:
+        buf, error, filename = await service.build_pre_meeting_package_pdf(
+            election_id,
+            current_user.organization_id,
+            include_ineligibility_detail=(variant == "full"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    if error or buf is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "Failed to generate package PDF",
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="pre_meeting_package_downloaded",
+        event_category="elections",
+        severity="info",
+        event_data={"election_id": str(election_id), "variant": variant},
+        user_id=str(current_user.id),
+    )
+
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/{election_id}/send-package", response_model=PreMeetingPackageResponse)
+async def send_pre_meeting_package(
+    election_id: UUID,
+    payload: PreMeetingPackageSend,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Email the pre-meeting package PDF to the given (secretary-edited)
+    email list. Recipients are BCC'd so addresses are not exposed to
+    each other.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    try:
+        success, message, sent_count = (
+            await service.generate_and_send_pre_meeting_package(
+                election_id=election_id,
+                organization_id=current_user.organization_id,
+                sent_by=current_user.id,
+                recipient_emails=[str(e) for e in payload.recipient_emails],
+                message=payload.message,
+                include_full_roster=payload.include_full_roster,
+            )
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+
+    return PreMeetingPackageResponse(
+        success=True, message=message, sent_count=sent_count
+    )
 
 
 @router.get("/{election_id}/non-voters", response_model=NonVotersResponse)

@@ -383,7 +383,10 @@ export interface ForensicsReport {
   };
   anomaly_detection: {
     suspicious_ips: Record<string, number>;
-    ip_vote_distribution: Record<string, number>;
+    unique_ip_count?: number;
+    // True once an anonymous election closed and per-vote IP/user-agent
+    // metadata was purged (ELEC-6)
+    ip_metadata_purged?: boolean;
   };
   voting_timeline: Record<string, number>;
 }
@@ -416,6 +419,29 @@ export interface ImportMeetingAttendeesResponse {
 export interface ElectionReportResponse {
   success: boolean;
   message: string;
+}
+
+// Pre-meeting package (secretary meeting prep)
+
+/** Which PDF variant: 'member' = names + counts; 'full' = adds ineligibility reasons. */
+export type PackageVariant = 'member' | 'full';
+
+export interface PackageRecipient {
+  user_id: string;
+  name: string;
+  email: string;
+}
+
+export interface PreMeetingPackageSend {
+  recipient_emails: string[];
+  message?: string | undefined;
+  include_full_roster: boolean;
+}
+
+export interface PreMeetingPackageResponse {
+  success: boolean;
+  message: string;
+  sent_count: number;
 }
 
 // Vote receipt verification

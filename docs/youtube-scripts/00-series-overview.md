@@ -30,10 +30,17 @@ services.
 | 9 | Training Pipelines — An Officer's Guide | Training officers, RTOs/FTOs | 20–25 min |
 | 10 | Your Training Pipeline — A Member's Guide | Recruits, probationary & enrolled members | 8–12 min |
 | 11 | Building a Training Pipeline — Step-by-Step Setup | Training officers (first-time setup) | 12–16 min |
+| 12 | Creating, Running & Auditing Elections — The Complete Guide | Secretaries, presidents, election admins | 38–42 min |
 
 > Scripts 9–11 form a **training-pipeline mini-series**: 11 builds a pipeline, 9
 > runs it day to day, and 10 shows the member's side. They complement Script 5
 > (the broad Training Officer guide) rather than replacing it.
+
+> Script 12 is the canonical elections deep-dive — it supersedes the elections
+> chapters in Scripts 4 and 7 and ships with its own **edge-case shorts pack
+> (12a–12j)** covering eligibility debugging, test ballots, early-close
+> results, receipts, proxies, runoffs, quorum, the rollback rule, dispute
+> forensics, and voting-method selection.
 
 ### Quick Tips / Shorts (1–3 minutes, extracted from role guides or standalone)
 
@@ -47,6 +54,17 @@ services.
 | 8f | Adding a New Member to the System | Script 3/7 |
 | 8g | Setting Up Two-Factor Authentication | Script 3 |
 | 8h | Viewing the Scheduling Dashboard | Script 5/7 |
+| 12a | "Why Can't This Member Vote?" — Eligibility Debugging | Script 12 |
+| 12b | Test Ballots — Practice Without Polluting the Results | Script 12 |
+| 12c | Closed Early? Here's Why Results Are Hidden | Script 12 |
+| 12d | Your Vote Receipt — Proof Without Exposure | Script 12 |
+| 12e | Proxy Voting in Two Minutes | Script 12 |
+| 12f | Nobody Won — Automatic Runoffs | Script 12 |
+| 12g | Quorum — Making Elections Count (Literally) | Script 12 |
+| 12h | Why You Can't Reopen a Closed Election | Script 12 |
+| 12i | Investigating a Disputed Election | Script 12 |
+| 12j | Choosing a Voting Method | Script 12 |
+| 12k | The Pre-Meeting Package | Script 12 |
 
 ---
 

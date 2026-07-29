@@ -264,9 +264,10 @@ class VotingToken(Base):
     Voting token model for secure anonymous ballot access
 
     Each eligible voter receives a unique high-entropy token via email to access
-    their ballot. The token is stored as issued (not hashed at rest — see
-    module-audit ELEC-5); its 512-bit entropy is the guessing defense.
-    The token ensures anonymous voting while preventing duplicate votes.
+    their ballot. Only the token's SHA-256 is stored (ELEC-5) — the raw value
+    exists solely in the emailed link, so database read access never yields a
+    live ballot credential. The token ensures anonymous voting while
+    preventing duplicate votes.
     """
 
     __tablename__ = "voting_tokens"
@@ -279,7 +280,7 @@ class VotingToken(Base):
         String(36), ForeignKey("elections.id", ondelete="CASCADE"), nullable=False
     )
 
-    # Secure token for ballot access (sent via email)
+    # SHA-256 of the ballot-access token (raw token sent via email only)
     token = Column(String(128), nullable=False, unique=True)
 
     # Hashed voter identifier (for tracking without revealing identity)

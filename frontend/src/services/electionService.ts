@@ -29,6 +29,10 @@ import type {
   EmailBallotResponse,
   ForensicsReport,
   ImportMeetingAttendeesResponse,
+  PackageRecipient,
+  PackageVariant,
+  PreMeetingPackageResponse,
+  PreMeetingPackageSend,
   ProxyAuthorization,
   ProxyAuthorizationCreate,
   ProxyVoteCreate,
@@ -409,6 +413,44 @@ export const electionService = {
    */
   async sendReport(electionId: string): Promise<ElectionReportResponse> {
     const response = await api.post<ElectionReportResponse>(`/elections/${electionId}/send-report`);
+    return response.data;
+  },
+
+  /**
+   * Prefill recipient list for the pre-meeting package modal
+   * (mode: 'leadership' | 'eligible_voters'). The secretary edits the
+   * list freely before sending.
+   */
+  async getPackageRecipients(electionId: string, mode: string): Promise<PackageRecipient[]> {
+    const response = await api.get<{ recipients: PackageRecipient[] }>(
+      `/elections/${electionId}/package-recipients`,
+      { params: { mode } }
+    );
+    return response.data.recipients;
+  },
+
+  /**
+   * Download the pre-meeting package PDF (no email sent).
+   */
+  async downloadPackagePdf(electionId: string, variant: PackageVariant): Promise<Blob> {
+    const response = await api.get(`/elections/${electionId}/package-pdf`, {
+      params: { variant },
+      responseType: 'blob',
+    });
+    return response.data as Blob;
+  },
+
+  /**
+   * Email the pre-meeting package PDF to a secretary-edited email list.
+   */
+  async sendPreMeetingPackage(
+    electionId: string,
+    payload: PreMeetingPackageSend
+  ): Promise<PreMeetingPackageResponse> {
+    const response = await api.post<PreMeetingPackageResponse>(
+      `/elections/${electionId}/send-package`,
+      payload
+    );
     return response.data;
   },
 

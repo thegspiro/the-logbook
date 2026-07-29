@@ -515,7 +515,7 @@ Each election shows:
    - Positions load from your organization's operational ranks (Chief, Captain, etc.) with type-ahead filtering
 4. For each item, add **candidates** and configure options:
    - Allow write-ins (auto-fills name with "Write-in Candidate")
-   - Victory condition (plurality, majority, ranked choice)
+   - Voting method (simple majority, ranked choice, approval, supermajority) and victory condition (most votes, majority, supermajority, threshold)
    - Number of winners
    - Move candidates between positions using the position dropdown in the edit form
 5. Configure **proxy voting** in Election Settings if needed (enable/disable, set max proxies per person).
@@ -527,7 +527,11 @@ Each election shows:
 
 ### Public Ballot Access
 
-Elections can provide a public ballot URL that uses unique tokens, allowing members to vote from any device without logging in. The token is single-use and tied to the member.
+Elections can provide a public ballot URL that uses unique tokens, allowing members to vote from any device without logging in. The token is single-use, tied to the member, and records which ballot items that member is eligible for — the eligibility rules are enforced again when the ballot is submitted, and the voter only sees their eligible items.
+
+### Pre-Meeting Package
+
+For annual and special meetings, the secretary can generate a **pre-meeting package** — a print-ready PDF with the meeting agenda, the election configuration, the full ballot preview with candidates, and the voter-eligibility roster — and email it out ahead of the meeting (editable BCC recipient list) or download it to distribute manually. Two privacy variants keep per-member ineligibility reasons restricted to leadership. See [Elections & Voting > The Pre-Meeting Package](./14-elections.md#the-pre-meeting-package).
 
 ---
 
@@ -866,16 +870,19 @@ Events support three check-in window modes that control when QR and manual check
 | Scenario | Behavior |
 |----------|----------|
 | Vote integrity chain | Each vote computes `SHA256(previous_chain_hash + vote_signature)` and stores it as `last_chain_hash` on the election. An unbroken chain proves no votes were deleted or reordered. |
-| Voter receipt hash | Each vote generates a `receipt_hash = SHA256(vote_id + signature + nonce)` returned to the voter. Can be used for individual vote verification, though no frontend UI currently exposes this. |
-| Double-vote prevention | Enforced at two levels: application-level check first, then a database `UNIQUE` constraint on `vote_dedup_hash`. Race conditions are caught at the DB level and logged as `vote_double_attempt` audit events. |
-| Anonymous voter salt | A per-election `voter_anonymity_salt` generates voter hashes. The salt can theoretically be destroyed post-election to make de-anonymization permanently impossible, but this is not automated. |
+| Voter receipt hash | Each vote generates a `receipt_hash = SHA256(vote_id + signature + nonce)` returned to the voter on the submission confirmation screen. Anyone holding the receipt can verify the vote was recorded via the public `verify-receipt` endpoint without revealing its content. |
+| Double-vote prevention | Enforced at two levels: application-level check first, then a database `UNIQUE` constraint on `vote_dedup_hash`. Approval and ranked-choice elections legitimately record several votes per voter (one per approved candidate / one per rank) — duplicates are still rejected. Race conditions are caught at the DB level and logged as `vote_double_attempt` audit events. |
+| Anonymous voter salt | A per-election `voter_anonymity_salt` generates voter hashes. The salt is **automatically destroyed when the election closes**, making de-anonymization permanently impossible — which is also why a closed anonymous election with votes cannot be reopened via rollback. |
+| Test ballots | "Send test ballot" issues a flagged token; its votes are stored `is_test` and excluded from results, statistics, and rosters, and never consume the sender's real vote. |
 
 ### Voting Eligibility
 
 | Scenario | Behavior |
 |----------|----------|
 | Tier requires meeting attendance for voting | System queries actual meeting attendance over `voting_attendance_period_months` and compares against `voting_min_attendance_pct`. Members below the threshold are denied voting rights. |
-| Secretary voter override | Overrides bypass ALL eligibility checks — tier, attendance, role restrictions. Only the secretary can add overrides. |
+| Per-ballot-item restrictions | `eligible_voter_types` and `require_attendance` are enforced **when the vote is submitted**, not just when ballots are emailed — a voter cannot vote on a restricted item even by crafting the request manually. |
+| Secretary voter override | Overrides bypass ALL eligibility checks — tier, attendance, role restrictions. Only the secretary can add overrides. Override members also count in quorum/turnout denominators. |
+| Non-voting tiers and quorum | Turnout and quorum denominators count only voting-eligible members — tiers marked not voting-eligible are excluded, so a percentage quorum can't fail because of members who were never allowed to vote. |
 | Ballot-item-only elections (no candidates) | Can be opened and voted on. `open_election` no longer requires candidates. |
 
 ---
@@ -889,8 +896,8 @@ Events support three check-in window modes that control when QR and manual check
 | Cannot RSVP to an event | Check that the event is still open for RSVPs and that you are logged in. Past events cannot be RSVP'd to. |
 | Training records not created from event | The event must have a linked Training Session that has been finalized and approved. |
 | Minutes not showing attendees | If creating minutes from an event, attendees are imported from check-in records, not RSVPs. Ensure members checked in. |
-| "Already voted" error | Each member can only vote once per election. This is by design. |
-| Election results not visible | The election creator controls when results are visible. Results may be hidden until the voting period ends. |
+| "Already voted" error | Each member can only vote once per candidate/position (approval and ranked-choice elections allow additional votes for *different* candidates or ranks). This is by design — votes are never overwritten. |
+| Election results not visible | Results are gated until the election is closed **and** its scheduled end date has passed (or `results_visible_immediately` is on). If the election was closed early, flip "results visible immediately" on the closed election to show them now. |
 | Candidates not showing in ballot preview | Fixed in March 2026 — ballot items from templates were missing the `position` field for candidate matching. Pull latest and rebuild. |
 | Ballot builder only shows one candidate per position | As of 2026-03-06, one ballot item per position is enforced. Use separate positions for multiple candidate races. |
 | Election settings not saving or loading | Fixed in March 2026 — GET/PATCH endpoints returned wrong structure. Pull latest and restart. |

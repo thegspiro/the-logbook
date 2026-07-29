@@ -188,7 +188,9 @@ printable QR code.]**
 
 **[SCREEN: Show the ballot from a voter's perspective — quick]**
 
-> "When voting closes, results are tabulated automatically. Review and certify."
+> "When voting closes, results are tabulated automatically. Review them and
+> publish to the membership — and if nobody wins outright, a runoff is created
+> for you."
 
 **[SCREEN: Show the results page with vote totals]**
 

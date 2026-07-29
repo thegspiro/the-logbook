@@ -7,6 +7,141 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: elections review — ballot eligibility enforcement, roster leak, test ballots, runoffs, multi-vote methods (2026-07-28)
+
+Full security & correctness review of the elections module (findings recorded
+in `docs/module-audit/elections.md`, R-1…R-10; closes audit items ELEC-3,
+ELEC-4, ELEC-8, ELEC-9). Migration `20260730_0001` adds
+`voting_tokens.is_test` and `voting_tokens.eligible_item_ids`.
+
+**Security**
+
+- **Per-ballot-item eligibility is enforced at vote submission.** Restrictions
+  (`eligible_voter_types`, `require_attendance`) were only checked when ballot
+  emails were sent, so any token holder could vote on restricted items (e.g.
+  life-member-only bylaw votes) by POSTing their ids. The eligible item set is
+  now snapshotted on each voting token at issue time and enforced on
+  submission; the public ballot endpoint returns only the voter's eligible
+  items; the authenticated path now runs the same per-position/item checks.
+- **Public `GET /elections/ballot` no longer leaks the member roster.** It
+  returned the full election record — attendee names, eligible-voter list,
+  email recipients, creator — to anyone holding (or forwarded) a ballot link.
+  Now returns a minimal ballot view (`BallotElectionResponse`).
+- **Test ballots no longer cast real votes.** `Vote.is_test` was never set;
+  "send test ballot" issued a normal token whose votes counted in results and
+  consumed the manager's real vote slot. Test tokens are now flagged and their
+  votes excluded from results/stats/rosters with a namespaced dedup input.
+- **Fabricated attendance blocked**: `attendees` removed from the election
+  create schema — check-ins must use the audited attendee endpoints.
+- **Rollback guard**: reopening a closed anonymous election with recorded
+  votes is refused (the salt destroyed at close would otherwise let prior
+  voters vote again undetected).
+- **`/elections/settings` route permission-gated** (`elections.manage`).
+
+**Correctness**
+
+- **Runoffs now trigger on early close** — the runoff check previously hit the
+  results-visibility gate and silently skipped whenever an election was closed
+  before its scheduled end date (the normal end-of-meeting flow).
+- **Approval and ranked-choice voting fixed** — both were rejected at the
+  dedup and app-check layers; votes now carry a method-aware dedup
+  discriminator (legacy hash unchanged for single-vote elections), the
+  authenticated bulk endpoint is truly atomic with a typed payload, and the
+  ballot UI submits approvals/rankings in one atomic call.
+- **Quorum/turnout denominators exclude non-voting membership tiers** (a
+  percentage quorum could fail even at 100% eligible turnout); override
+  members counted back in.
+- **Vote receipts returned to voters** (single + bulk token paths), making
+  the public verify-receipt endpoint usable end-to-end.
+- **Ballot preview and the real ballot now share one eligibility source of
+  truth** (`annotate_ballot_items_for_user`).
+- Positionless token votes no longer blocked by unrelated positioned votes;
+  missing `is_test` filters added to runoff tally/stats/non-voters; blank
+  election page for non-managers fixed; exact candidate↔ballot-item matching;
+  `GET /elections` list excluded from the API cache.
+
+**Follow-up (practical-workflow review, 2026-07-28)**
+
+- **Runoffs inherit the parent's full rule set** — quorum, position
+  eligibility, meeting/event link, attendees, and voter overrides were all
+  dropped when the runoff was auto-created, and anonymous runoffs got **no
+  anonymity salt** (voter hashes keyed with an empty string — pre-computable,
+  defeating SEC-12 for every runoff round). Runoffs now inherit the rules and
+  generate a fresh salt of their own.
+- **Same-meeting runoffs actually work** — `open_election` now clamps a
+  future `start_date` to the open time (previously a runoff opened at the
+  meeting rejected every vote with "Election has not started yet" for an
+  hour, and the UI had no way to edit a draft's dates) and refuses to open an
+  election whose end date already passed. New **Edit Dates** modal on draft
+  elections (start + end, Start Now, 15-min/30-min/1-hour/1-day quick
+  durations).
+
+**Security: elections known-limitations resolved (2026-07-28)**
+
+- **Voting tokens hashed at rest (ELEC-5).** Tokens were stored and compared
+  in plaintext — database read access yielded live ballot credentials. Only
+  SHA-256 hashes are stored now; the raw token exists solely in the emailed
+  ballot link, and lookups hash the presented value. Migration
+  `20260731_0001` hashes existing rows in place (idempotent hex guard), so
+  in-flight links keep resolving. Downgrade is a deliberate no-op (one-way).
+- **Anonymous-vote IP metadata purged at close (ELEC-6).** Per-vote
+  IP/user-agent stayed forever and forensics returned a full per-IP vote
+  map — de-anonymizable in a small department. Closing an anonymous
+  election now erases per-vote IP/user-agent alongside the anonymity salt
+  (audited as `ip_metadata_purged`; live ballot-stuffing detection is
+  unaffected while voting is open), and forensics exposes only the
+  thresholded `suspicious_ips` set plus `unique_ip_count` /
+  `ip_metadata_purged`. Residual (documented): the audit log still records
+  an IP per vote event.
+- **Cloudflare email attachments implemented.** The Cloudflare Email
+  Sending API supports base64 attachments (5 MiB total-message cap);
+  `EmailService` now sends them instead of silently dropping — so
+  pre-meeting package emails arrive with their PDF on every backend.
+  Over-budget attachments are skipped with a warning.
+
+**Feature: Pre-Meeting Package (2026-07-28)**
+
+- Secretaries can generate a print-ready **pre-meeting package PDF** for
+  annual/special meetings — linked-meeting details and agenda, election
+  configuration (voting method, victory condition, quorum, proxies,
+  runoffs), full ballot preview with candidates and statements, and the
+  voter-eligibility roster. Two privacy variants: *member* (eligible-voter
+  names + counts) and *full* (adds per-member ineligibility reasons and
+  overrides — leadership detail, not broadcast department-wide).
+- Email flow with a **fully editable recipient list**: prefill from
+  leadership or the eligible-voter roster, remove anyone, add outside
+  addresses; recipients are BCC'd; PDF attached. Or **download-only** —
+  grab either variant from the election page and distribute it yourself.
+- New endpoints (`elections.manage`): `GET /{id}/package-recipients`,
+  `GET /{id}/package-pdf?variant=member|full`, `POST /{id}/send-package`.
+  Sends and downloads audit-logged. New reportlab renderer
+  (`app/utils/pre_meeting_package_pdf.py`), `PreMeetingPackageModal` on the
+  election detail page (available for draft and open elections).
+- Fixed along the way: `get_eligibility_roster` reported **zero eligible
+  voters for positional elections** (no ballot items) — eligibility for
+  those now follows election-level rules (voter list, tier voting rules,
+  overrides), fixing the in-app roster and the package alike.
+- Known limitation (documented in `KNOWN_LIMITATIONS.md`): the Cloudflare
+  email backend drops attachments, so package emails sent through it arrive
+  without the PDF — use the download-only flow there.
+
+**Docs** — full documentation sweep to match actual behavior: elections wiki
+page (correct endpoint paths, 2026-07-28 improvements section), training guide
+(voting-method tables, token expiry, double-vote semantics, rollback guard,
+receipt verification, early-close results visibility), events & meetings guide
+(vote-integrity and eligibility tables), ballot forensics guide (signature
+formula, rollback guard, test tokens, receipt reference), YouTube scripts
+(chief/secretary/member/shorts — replaced the nonexistent "certify results"
+flow with close-and-publish, added receipts and eligibility roster),
+`Database-Schema` wiki (real `votes`/`voting_tokens` tables — there is no
+"encrypted `ballots`" table), `Security-Overview` wiki (2026-07-28 review
+section), `Security-Audit-Logging` wiki (actual election audit events),
+`ALEMBIC_MIGRATIONS.md` (26 missing rows appended; head now `20260730_0001`),
+training README release note; `KNOWN_LIMITATIONS.md` rows for ELEC-3/ELEC-4
+marked resolved. New **Script 12 — "Creating, Running & Auditing Elections"**
+(full-lifecycle YouTube deep-dive incl. integrity/forensics) with edge-case
+shorts pack 12a–12j; registered in the series overview.
+
 ### Security: zero-trust review — deployment posture, host/proxy trust, WebSocket sessions, cross-tenant FKs (2026-07-27)
 
 A zero-trust pass over the whole stack ("never trust, always verify"): nothing
