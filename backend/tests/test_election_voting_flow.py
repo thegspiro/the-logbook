@@ -966,3 +966,95 @@ class TestIpMetadataPurge(TestElectionSetup):
         assert anomaly["ip_metadata_purged"] is False
         # 2 votes from one IP is below the >5 threshold — not suspicious
         assert anomaly["suspicious_ips"] == {}
+
+
+# ── Audit-log IP minimization for anonymous elections (ELEC-6) ────────
+
+
+class TestAnonymousAuditIpMinimization(TestElectionSetup):
+    """Voter-action audit events must not record an IP for anonymous
+    elections: audit rows are hash-chained and can never be scrubbed,
+    unlike Vote.ip_address (purged at close)."""
+
+    async def _last_audit_ip(self, db_session, election_id: str, event_type: str):
+        from sqlalchemy import text
+
+        row = await db_session.execute(
+            text(
+                "SELECT ip_address FROM audit_logs "
+                "WHERE event_type = :etype "
+                "AND JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.election_id')) = :eid "
+                "ORDER BY id DESC LIMIT 1"
+            ),
+            {"etype": event_type, "eid": election_id},
+        )
+        return row.scalar_one()
+
+    async def test_anonymous_vote_audit_has_no_ip(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = await setup_election
+        svc = ElectionService(db_session)
+
+        _, err = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+            ip_address="203.0.113.7",
+            user_agent="test-agent",
+        )
+        assert err is None
+
+        ip = await self._last_audit_ip(db_session, data["election_id"], "vote_cast")
+        assert ip is None, "Anonymous election must not write voter IP to audit log"
+
+    async def test_non_anonymous_vote_audit_keeps_ip(
+        self, db_session: AsyncSession, setup_election
+    ):
+        from sqlalchemy import text
+
+        data = await setup_election
+        await db_session.execute(
+            text("UPDATE elections SET anonymous_voting = 0 WHERE id = :id"),
+            {"id": data["election_id"]},
+        )
+        await db_session.flush()
+        svc = ElectionService(db_session)
+
+        _, err = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+            ip_address="203.0.113.7",
+            user_agent="test-agent",
+        )
+        assert err is None
+
+        ip = await self._last_audit_ip(db_session, data["election_id"], "vote_cast")
+        assert ip == "203.0.113.7", "Non-anonymous elections keep audit IPs"
+
+    async def test_audit_chain_valid_after_anonymous_vote(
+        self, db_session: AsyncSession, setup_election
+    ):
+        """A NULL-IP audit row is a normal chain input — integrity holds."""
+        from app.core.audit import AuditLogger
+
+        data = await setup_election
+        svc = ElectionService(db_session)
+
+        _, err = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+            ip_address="203.0.113.7",
+        )
+        assert err is None
+
+        result = await AuditLogger().verify_integrity(db_session)
+        assert result["verified"] is True, result

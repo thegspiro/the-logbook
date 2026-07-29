@@ -77,6 +77,18 @@ class ElectionService:
             ip_address=ip_address,
         )
 
+    @staticmethod
+    def _audit_ip(election: "Election", ip_address: Optional[str]) -> Optional[str]:
+        """IP to record on a voter-action audit event, or None.
+
+        Audit rows are hash-chained (ip_address is part of the chain input),
+        so they can never be scrubbed after the fact — unlike Vote.ip_address,
+        which feeds live ballot-stuffing detection and is purged at close.
+        For anonymous elections a voter's IP therefore must not enter the
+        audit log at all (ELEC-6 residual). Non-anonymous elections keep it.
+        """
+        return None if election.anonymous_voting else ip_address
+
     # ------------------------------------------------------------------
     # Election CRUD helpers
     # ------------------------------------------------------------------
@@ -1046,7 +1058,7 @@ class ElectionService:
                     "bulk": True,
                 },
                 user_id=str(user_id),
-                ip_address=ip_address,
+                ip_address=self._audit_ip(election, ip_address),
             )
             return vote, None
 
@@ -1069,7 +1081,7 @@ class ElectionService:
                 },
                 severity="warning",
                 user_id=str(user_id),
-                ip_address=ip_address,
+                ip_address=self._audit_ip(election, ip_address),
             )
             if position:
                 return (
@@ -1095,7 +1107,7 @@ class ElectionService:
                 "anonymous": election.anonymous_voting,
             },
             user_id=str(user_id),
-            ip_address=ip_address,
+            ip_address=self._audit_ip(election, ip_address),
         )
 
         return vote, None
@@ -3455,7 +3467,7 @@ Best regards,
                 },
                 severity="warning",
                 user_id=str(proxy_user_id),
-                ip_address=ip_address,
+                ip_address=self._audit_ip(election, ip_address),
             )
             return (
                 None,
@@ -3480,7 +3492,7 @@ Best regards,
             },
             severity="info",
             user_id=str(proxy_user_id),
-            ip_address=ip_address,
+            ip_address=self._audit_ip(election, ip_address),
         )
 
         return vote, None
@@ -4872,7 +4884,7 @@ Best regards,
                     "position": position,
                 },
                 severity="warning",
-                ip_address=ip_address,
+                ip_address=self._audit_ip(election, ip_address),
             )
             if position:
                 return (
@@ -4894,7 +4906,7 @@ Best regards,
                 "vote_id": str(vote.id),
                 "position": position,
             },
-            ip_address=ip_address,
+            ip_address=self._audit_ip(election, ip_address),
         )
 
         return vote, None
@@ -5140,7 +5152,7 @@ Best regards,
                     "type": "bulk_ballot_submission",
                 },
                 severity="warning",
-                ip_address=ip_address,
+                ip_address=self._audit_ip(election, ip_address),
             )
             return None, "This ballot has already been submitted"
 
@@ -5155,7 +5167,7 @@ Best regards,
                 "votes_cast": len(created_votes),
                 "abstentions": abstentions,
             },
-            ip_address=ip_address,
+            ip_address=self._audit_ip(election, ip_address),
         )
 
         return {
