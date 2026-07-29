@@ -173,6 +173,16 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      - name: Align database collation with production
+        # Service containers can't take command-line flags, so this MySQL
+        # runs the 8.0 default collation (utf8mb4_0900_ai_ci) while
+        # docker-compose runs --collation-server=utf8mb4_unicode_ci.
+        # Migrations create some tables with an explicit unicode_ci
+        # collation, and FKs across the two collations fail (error 3780).
+        run: |
+          mysql --host 127.0.0.1 --port 3306 -uroot -proot \
+            -e "ALTER DATABASE intranet_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
       - name: Run database migrations
         run: alembic upgrade head
 
