@@ -422,7 +422,7 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "election_title": "Captain Election 2026",
             "meeting_date": "April 1, 2026 at 07:00 PM",
             "custom_message": "Please review the candidates before voting.",
-            "ballot_url": "https://example.com/ballot?token=sample-token",
+            "ballot_url": "https://example.com/ballot#token=sample-token",
             "voting_opens": "March 28, 2026 at 08:00 AM",
             "voting_closes": "April 1, 2026 at 05:00 PM",
             "positions": "Captain, Lieutenant",

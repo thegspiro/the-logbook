@@ -3763,9 +3763,13 @@ Best regards,
             )
 
             # Build unique ballot URL with the RAW token (the row stores only
-            # its hash — the raw value never touches the database)
+            # its hash — the raw value never touches the database). The token
+            # rides in the URL *fragment*: browsers never send fragments to
+            # any server, so the live credential stays out of frontend-host /
+            # proxy access logs (R-D3). The voting page reads it from
+            # location.hash and POSTs it in request bodies from then on.
             ballot_url = (
-                f"{base_ballot_url}?token={raw_ballot_token}"
+                f"{base_ballot_url}#token={raw_ballot_token}"
                 if base_ballot_url
                 else None
             )

@@ -111,6 +111,12 @@ export interface BallotElection {
   max_votes_per_position: number;
 }
 
+/** POST /elections/ballot/lookup — election + candidates in one round-trip */
+export interface BallotLookupResponse {
+  election: BallotElection;
+  candidates: Candidate[];
+}
+
 export interface ElectionListItem {
   id: string;
   title: string;

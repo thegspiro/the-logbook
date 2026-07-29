@@ -342,27 +342,45 @@ async def get_ballot_templates(
 # ============================================
 
 
-@router.get("/ballot", response_model=BallotElectionResponse)
-async def get_ballot_by_token(
-    token: str,
+class BallotLookupRequest(BaseModel):
+    """Ballot lookup payload — the token travels in the body, never a URL."""
+
+    token: str
+
+
+class BallotLookupResponse(BaseModel):
+    """Election view + candidates for a token holder, in one round-trip."""
+
+    election: BallotElectionResponse
+    candidates: list[CandidateResponse] = []
+
+
+@router.post("/ballot/lookup", response_model=BallotLookupResponse)
+async def lookup_ballot_by_token(
+    payload: BallotLookupRequest,
     db: AsyncSession = Depends(get_db),
     _rate: None = Depends(_ballot_read_rate_limit),
 ):
     """
-    Get ballot information using a voting token
+    Get ballot information and candidates using a voting token
 
     This endpoint is public (no authentication required) and uses the
-    high-entropy token from the email link.
+    high-entropy token from the email link. The token must be provided in
+    the request body (not a query parameter or path segment) so the live
+    credential never lands in server/proxy logs or browser history — the
+    same rationale as the vote endpoints (R-D3). The emailed link carries
+    the token in the URL *fragment*, which browsers never send to servers.
 
     SECURITY: returns only the minimal ballot view (BallotElectionResponse).
     The full ElectionResponse would leak the member roster — attendees,
     eligible_voters, email_recipients — to any token holder. Ballot items
-    are filtered to the ones this voter is eligible for.
+    are filtered to the ones this voter is eligible for, and positions and
+    candidates to the voter's eligible_positions snapshot (R-D4).
 
     **No authentication required**
     """
     service = ElectionService(db)
-    election, voting_token, error = await service.get_ballot_by_token(token)
+    election, voting_token, error = await service.get_ballot_by_token(payload.token)
 
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
@@ -373,35 +391,29 @@ async def get_ballot_by_token(
         response.ballot_items = [
             item for item in response.ballot_items if item.id in allowed
         ]
-    return response
 
-
-@router.get("/ballot/{token}/candidates", response_model=list[CandidateResponse])
-async def get_ballot_candidates(
-    token: str,
-    db: AsyncSession = Depends(get_db),
-    _rate: None = Depends(_ballot_read_rate_limit),
-):
-    """
-    Get candidates for a ballot using voting token
-
-    **No authentication required**
-    """
-    service = ElectionService(db)
-    election, voting_token, error = await service.get_ballot_by_token(token)
-
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-
-    # Get candidates for this election
     result = await db.execute(
         select(Candidate)
         .where(Candidate.election_id == election.id)
         .where(Candidate.accepted == True)  # noqa: E712
         .order_by(Candidate.position, Candidate.display_order)
     )
+    candidates = list(result.scalars().all())
 
-    return result.scalars().all()
+    # Position-restricted token: hide positions/candidates the voter may
+    # not vote for (mirrors the enforcement in cast_vote_with_token).
+    if voting_token.eligible_positions is not None:
+        allowed_positions = set(voting_token.eligible_positions)
+        if response.positions is not None:
+            response.positions = [
+                p for p in response.positions if p in allowed_positions
+            ]
+        candidates = [c for c in candidates if c.position in allowed_positions]
+
+    return BallotLookupResponse(
+        election=response,
+        candidates=[CandidateResponse.model_validate(c) for c in candidates],
+    )
 
 
 class VoteWithToken(VoteCreate):
@@ -1574,7 +1586,8 @@ async def send_ballot_emails(
     # SEC: use the server-configured FRONTEND_URL, NOT request.base_url — the
     # latter derives from the client-controlled Host header, so a spoofed Host
     # would send members ballot links (with voting tokens) to an attacker's
-    # domain. The token is appended by the service: /ballot?token=xxx
+    # domain. The token is appended by the service as a URL fragment:
+    # /ballot#token=xxx (fragments never reach any server — R-D3)
     frontend_origin = settings.FRONTEND_URL.rstrip("/")
     base_ballot_url = (
         f"{frontend_origin}/ballot" if email_data.include_ballot_link else None

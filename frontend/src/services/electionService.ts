@@ -6,8 +6,8 @@ import api from './apiClient';
 import type {
   Attendee,
   AttendeeCheckInResponse,
-  BallotElection,
   BallotItemVote,
+  BallotLookupResponse,
   BallotPreview,
   BallotSubmissionResponse,
   BallotTemplate,
@@ -249,19 +249,13 @@ export const electionService = {
   },
 
   /**
-   * Get ballot by voting token (public/anonymous access).
-   * Returns the minimal BallotElection view — no roster/PII fields.
+   * Look up a ballot by voting token (public/anonymous access).
+   * Returns the minimal BallotElection view plus candidates in one call —
+   * no roster/PII fields. POST with the token in the body so the live
+   * credential never appears in a URL (server/proxy logs, history).
    */
-  async getBallotByToken(token: string): Promise<BallotElection> {
-    const response = await api.get<BallotElection>('/elections/ballot', { params: { token } });
-    return response.data;
-  },
-
-  /**
-   * Get candidates for a ballot by voting token
-   */
-  async getBallotCandidates(token: string): Promise<Candidate[]> {
-    const response = await api.get<Candidate[]>(`/elections/ballot/${token}/candidates`);
+  async lookupBallot(token: string): Promise<BallotLookupResponse> {
+    const response = await api.post<BallotLookupResponse>('/elections/ballot/lookup', { token });
     return response.data;
   },
 

@@ -6,8 +6,12 @@
  * a user login. The token maps to a voter_hash for anonymous voting.
  *
  * Flow:
- * 1. Member clicks "Vote Now" in email → /ballot?token=xxx
- * 2. Page loads election data and ballot items via token
+ * 1. Member clicks "Vote Now" in email → /ballot#token=xxx (the token rides
+ *    in the URL fragment — browsers never send fragments to any server, so
+ *    the live credential stays out of access logs; ?token= is still accepted
+ *    for links emailed before the fragment change)
+ * 2. Page captures the token into state, scrubs it from the address bar,
+ *    and loads election data + candidates via POST /elections/ballot/lookup
  * 3. Member votes on each item (approve, deny, write-in, or abstain)
  * 4. Member clicks "Submit Ballot"
  * 5. Confirmation modal shows summary of all choices
@@ -16,7 +20,6 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { electionService } from '../services/api';
 import type {
   BallotElection,
@@ -53,10 +56,24 @@ const ranksToOrderedIds = (ranks: Record<string, number>): string[] =>
     .sort((a, b) => a[1] - b[1])
     .map(([cid]) => cid);
 
+/**
+ * Capture the voting token from the URL (fragment preferred, query-string
+ * fallback for pre-fragment emails) and scrub it from the address bar so it
+ * can't linger in browser history or be leaked via a copied URL.
+ */
+const captureTokenFromUrl = (): string => {
+  const hashToken = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token');
+  const queryToken = new URLSearchParams(window.location.search).get('token');
+  const token = hashToken || queryToken || '';
+  if (token) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+  return token;
+};
+
 export const BallotVotingPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
   const tz = useTimezone();
-  const token = searchParams.get('token') || '';
+  const [token] = useState<string>(captureTokenFromUrl);
 
   const [election, setElection] = useState<BallotElection | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -82,10 +99,8 @@ export const BallotVotingPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const [electionData, candidateData] = await Promise.all([
-        electionService.getBallotByToken(token),
-        electionService.getBallotCandidates(token),
-      ]);
+      const { election: electionData, candidates: candidateData } =
+        await electionService.lookupBallot(token);
       setElection(electionData);
       setCandidates(candidateData);
 

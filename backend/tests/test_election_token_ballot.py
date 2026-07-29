@@ -706,9 +706,8 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
 
         svc = ElectionService(db_session)
         with patch(
-            "app.services.email_service.EmailService.send_email",
-            new_callable=AsyncMock,
-            return_value=(1, 0),
+            "app.services.email_service.EmailService.send_batch",
+            new=AsyncMock(side_effect=lambda batch: [True] * len(batch)),
         ):
             sent, failed, skipped, skipped_details = await svc.send_ballot_emails(
                 election_id=uuid.UUID(data["election_id"]),
@@ -1058,3 +1057,114 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
             position="Board",
         )
         assert err3 is None
+
+
+# ── Token out of GET URLs (R-D3) ──────────────────────────────────────
+
+
+class TestBallotTokenUrlHygiene(TestPositionEligibilityTokens):
+    """The emailed link carries the token in a URL fragment (never sent to
+    any server) and the lookup endpoint takes it in a POST body."""
+
+    async def test_emailed_ballot_link_uses_fragment(
+        self, db_session: AsyncSession, setup_positional_election
+    ):
+        from unittest.mock import AsyncMock, patch
+
+        data = await setup_positional_election
+        svc = ElectionService(db_session)
+
+        captured_urls = []
+
+        async def _capture_render(**kwargs):
+            captured_urls.append(kwargs.get("ballot_url"))
+            return ("subject", "<html></html>", "text")
+
+        with (
+            patch(
+                "app.services.email_service.EmailService.render_ballot_notification",
+                new=AsyncMock(side_effect=_capture_render),
+            ),
+            patch(
+                "app.services.email_service.EmailService.send_batch",
+                new=AsyncMock(side_effect=lambda batch: [True] * len(batch)),
+            ),
+        ):
+            sent, failed, skipped, _ = await svc.send_ballot_emails(
+                election_id=uuid.UUID(data["election_id"]),
+                organization_id=uuid.UUID(data["org_id"]),
+                recipient_user_ids=[uuid.UUID(data["user_id"])],
+                base_ballot_url="https://fd.example/ballot",
+            )
+
+        assert sent == 1, f"send failed (failed={failed}, skipped={skipped})"
+        assert len(captured_urls) == 1
+        url = captured_urls[0]
+        assert url.startswith("https://fd.example/ballot#token="), url
+        assert "?token=" not in url
+
+    async def test_lookup_endpoint_filters_by_eligible_positions(
+        self, db_session: AsyncSession, setup_positional_election
+    ):
+        from app.api.v1.endpoints.elections import (
+            BallotLookupRequest,
+            lookup_ballot_by_token,
+        )
+
+        data = await setup_positional_election
+        _, raw = await self._issue_token(
+            db_session,
+            data,
+            user_id=data["admin_id"],
+            eligible_positions=["President"],
+        )
+
+        result = await lookup_ballot_by_token(
+            payload=BallotLookupRequest(token=raw),
+            db=db_session,
+            _rate=None,
+        )
+
+        assert result.election.title == "Officer Election 2026"
+        assert result.election.positions == ["President"]
+        candidate_positions = {c.position for c in result.candidates}
+        assert candidate_positions == {"President"}
+
+    async def test_lookup_endpoint_unrestricted_token_sees_everything(
+        self, db_session: AsyncSession, setup_positional_election
+    ):
+        from app.api.v1.endpoints.elections import (
+            BallotLookupRequest,
+            lookup_ballot_by_token,
+        )
+
+        data = await setup_positional_election
+        _, raw = await self._issue_token(db_session, data, user_id=data["user_id"])
+
+        result = await lookup_ballot_by_token(
+            payload=BallotLookupRequest(token=raw),
+            db=db_session,
+            _rate=None,
+        )
+
+        assert result.election.positions == ["Chief", "President"]
+        assert {c.position for c in result.candidates} == {"Chief", "President"}
+
+    async def test_lookup_endpoint_rejects_invalid_token(
+        self, db_session: AsyncSession, setup_positional_election
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints.elections import (
+            BallotLookupRequest,
+            lookup_ballot_by_token,
+        )
+
+        await setup_positional_election
+        with pytest.raises(HTTPException) as exc_info:
+            await lookup_ballot_by_token(
+                payload=BallotLookupRequest(token="not-a-real-token"),
+                db=db_session,
+                _rate=None,
+            )
+        assert exc_info.value.status_code == 400
