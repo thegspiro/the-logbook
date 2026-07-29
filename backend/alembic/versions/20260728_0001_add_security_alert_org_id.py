@@ -24,6 +24,15 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # security_alerts is a model-only table — no migration creates it;
+    # deployments materialize it via create_all(), which already includes
+    # organization_id and these indexes. On a fresh chain run there is
+    # nothing to alter or backfill.
+    from sqlalchemy import inspect
+
+    if "security_alerts" not in inspect(op.get_bind()).get_table_names():
+        return
+
     op.add_column(
         "security_alerts",
         sa.Column("organization_id", sa.String(length=36), nullable=True),
