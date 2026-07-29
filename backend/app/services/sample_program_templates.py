@@ -29,8 +29,8 @@ from typing import Dict, List
 from app.schemas.training_program import (
     ProgramBuildMilestoneInput,
     ProgramBuildPhaseInput,
-    ProgramBuildRequirementInput,
     ProgramBuildRequest,
+    ProgramBuildRequirementInput,
     TrainingProgramCreate,
 )
 

@@ -115,11 +115,22 @@ The tests use the actual **MySQL database** configured in your Docker environmen
 ### How Test Isolation Works
 
 ```python
-# Each test gets a fresh session
-async with async_session_factory() as session:
-    async with session.begin():
+# Each test runs inside a connection-level transaction that is always
+# rolled back. The session joins it with create_savepoint, so even
+# service-level commit() calls only release a SAVEPOINT — nothing is
+# permanently written.
+async with database_manager.engine.connect() as conn:
+    outer = await conn.begin()
+    session = AsyncSession(
+        bind=conn,
+        join_transaction_mode="create_savepoint",
+        expire_on_commit=False,
+    )
+    try:
         yield session
-        # Transaction automatically rolls back here
+    finally:
+        await session.close()
+        await outer.rollback()
 ```
 
 This means:

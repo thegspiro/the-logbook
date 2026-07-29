@@ -374,13 +374,15 @@ describe("MemberIdCardPage", () => {
 
       renderWithRouter(<MemberIdCardPage />);
 
-      await waitFor(async () => {
-        const printButton = screen.getByRole("button", {
-          name: /print id card/i,
-        });
-        await user.click(printButton);
+      // Click outside waitFor — an async side effect inside a retried
+      // waitFor callback can land in an abandoned retry and flake.
+      const printButton = await screen.findByRole("button", {
+        name: /print id card/i,
       });
+      await user.click(printButton);
 
+      // window.print() genuinely takes no arguments, so the zero-arg
+      // toHaveBeenCalledWith() is the precise assertion here.
       expect(window.print).toHaveBeenCalledWith();
     });
   });

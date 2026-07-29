@@ -75,7 +75,9 @@ class TestEventSettingsDeepCopy:
                 "app.api.v1.endpoints.events.require_permission",
                 return_value=lambda: user,
             ),
-            patch("app.api.v1.endpoints.events.log_audit_event", new_callable=AsyncMock),
+            patch(
+                "app.api.v1.endpoints.events.log_audit_event", new_callable=AsyncMock
+            ),
         ):
             from app.api.v1.endpoints.events import update_event_settings
 
@@ -95,9 +97,7 @@ class TestEventSettingsDeepCopy:
             assert result1["custom_event_categories"][0]["value"] == "drill"
 
             # Step 2: Toggle visibility for that category
-            update2 = EventSettingsUpdate(
-                visible_custom_categories=["drill"]
-            )
+            update2 = EventSettingsUpdate(visible_custom_categories=["drill"])
             result2 = await update_event_settings(update2, db, user)
 
             # Both the category AND the visibility should be present
@@ -119,7 +119,11 @@ class TestEventSettingsDeepCopy:
         """Verify deepcopy prevents mutation of the original settings dict."""
         initial_events = {
             "custom_event_categories": [
-                {"value": "drill", "label": "Drill", "color": "bg-blue-100 text-blue-800"}
+                {
+                    "value": "drill",
+                    "label": "Drill",
+                    "color": "bg-blue-100 text-blue-800",
+                }
             ],
             "visible_custom_categories": [],
         }
@@ -133,15 +137,14 @@ class TestEventSettingsDeepCopy:
                 "app.api.v1.endpoints.events.require_permission",
                 return_value=lambda: user,
             ),
-            patch("app.api.v1.endpoints.events.log_audit_event", new_callable=AsyncMock),
+            patch(
+                "app.api.v1.endpoints.events.log_audit_event", new_callable=AsyncMock
+            ),
         ):
             from app.api.v1.endpoints.events import update_event_settings
-
             from app.schemas.event import EventSettingsUpdate
 
-            update = EventSettingsUpdate(
-                visible_custom_categories=["drill"]
-            )
+            update = EventSettingsUpdate(visible_custom_categories=["drill"])
 
             # Simulate SQLAlchemy committed state check: if the endpoint
             # mutates via shared references, before_snapshot would also change
@@ -182,6 +185,6 @@ class TestEventSettingsDefaults:
             "outreach_event_types",
         ]
         for key in list_keys:
-            assert isinstance(EVENT_SETTINGS_DEFAULTS[key], list), (
-                f"{key} should be a list, got {type(EVENT_SETTINGS_DEFAULTS[key])}"
-            )
+            assert isinstance(
+                EVENT_SETTINGS_DEFAULTS[key], list
+            ), f"{key} should be a list, got {type(EVENT_SETTINGS_DEFAULTS[key])}"

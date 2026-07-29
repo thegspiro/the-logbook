@@ -73,7 +73,7 @@ async def setup_org_and_user(db_session: AsyncSession):
 @pytest.fixture
 async def setup_with_category(db_session: AsyncSession, setup_org_and_user):
     """Create a category that can be matched during import."""
-    org_id, user_id = await setup_org_and_user
+    org_id, user_id = setup_org_and_user
     svc = InventoryService(db_session)
     cat, err = await svc.create_category(
         organization_id=uuid.UUID(org_id),
@@ -81,6 +81,7 @@ async def setup_with_category(db_session: AsyncSession, setup_org_and_user):
             "name": "Portable Radios",
             "item_type": "electronics",
         },
+        created_by=uuid.UUID(user_id),
     )
     assert err is None
     return org_id, user_id, str(cat.id)
@@ -93,7 +94,7 @@ class TestInventoryCSVImport:
 
     async def test_import_full_row(self, db_session, setup_with_category):
         """Import a CSV with all common columns populated."""
-        org_id, user_id, cat_id = await setup_with_category
+        org_id, user_id, cat_id = setup_with_category
         svc = InventoryService(db_session)
 
         csv_content = (
@@ -167,7 +168,7 @@ class TestInventoryCSVImport:
 
     async def test_import_name_only(self, db_session, setup_org_and_user):
         """Import a CSV with only the required Name column."""
-        org_id, user_id = await setup_org_and_user
+        org_id, user_id = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, error = await svc.create_item(
@@ -187,7 +188,7 @@ class TestInventoryCSVImport:
         self, db_session, setup_with_category
     ):
         """Category matching should be case-insensitive."""
-        org_id, user_id, cat_id = await setup_with_category
+        org_id, user_id, cat_id = setup_with_category
         svc = InventoryService(db_session)
 
         categories = await svc.get_categories(
@@ -203,7 +204,7 @@ class TestInventoryCSVImport:
 
     async def test_import_without_category_match(self, db_session, setup_org_and_user):
         """Items should import even when category name doesn't match."""
-        org_id, user_id = await setup_org_and_user
+        org_id, user_id = setup_org_and_user
         svc = InventoryService(db_session)
 
         # Import with no category set
@@ -219,7 +220,7 @@ class TestInventoryCSVImport:
 
     async def test_barcode_not_from_csv(self, db_session, setup_org_and_user):
         """Barcode should be auto-generated even if provided in item_data."""
-        org_id, user_id = await setup_org_and_user
+        org_id, user_id = setup_org_and_user
         svc = InventoryService(db_session)
 
         # Without barcode — should auto-generate
@@ -235,7 +236,7 @@ class TestInventoryCSVImport:
 
     async def test_import_pool_item(self, db_session, setup_org_and_user):
         """Pool items with quantity should import correctly."""
-        org_id, user_id = await setup_org_and_user
+        org_id, user_id = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, error = await svc.create_item(
@@ -254,7 +255,7 @@ class TestInventoryCSVImport:
 
     async def test_import_multiple_items(self, db_session, setup_org_and_user):
         """Multiple items can be created in sequence."""
-        org_id, user_id = await setup_org_and_user
+        org_id, user_id = setup_org_and_user
         svc = InventoryService(db_session)
 
         names = ["Item A", "Item B", "Item C"]
@@ -276,7 +277,7 @@ class TestInventoryCSVImport:
         self, db_session, setup_org_and_user
     ):
         """Duplicate serial numbers within org should be rejected."""
-        org_id, user_id = await setup_org_and_user
+        org_id, user_id = setup_org_and_user
         svc = InventoryService(db_session)
 
         item1, err1 = await svc.create_item(

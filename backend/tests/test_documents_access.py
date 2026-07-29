@@ -144,12 +144,14 @@ class TestCanAccessDocument:
         chief = _user(roles=[(["documents.manage"], "chief")])
         assert await svc.can_access_document(doc, "org-1", chief) is True
 
-    async def test_missing_folder_falls_back_to_accessible(self):
+    async def test_missing_folder_fails_closed(self):
+        """An unresolvable folder reference must deny, not fall through the
+        ACL — see can_access_document's fail-closed contract."""
         svc = _svc()
         svc.get_folder_by_id = AsyncMock(return_value=None)
         doc = SimpleNamespace(folder_id="gone")
         user = _user(roles=[([], "ff")])
-        assert await svc.can_access_document(doc, "org-1", user) is True
+        assert await svc.can_access_document(doc, "org-1", user) is False
 
 
 class TestAccessibleFolderIds:

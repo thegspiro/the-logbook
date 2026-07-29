@@ -9,6 +9,7 @@ and practice mode flag for test sessions that should not be recorded.
 """
 
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 from alembic import op
 
@@ -20,6 +21,13 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # skill_templates / skill_tests are model-only tables — no migration
+    # creates them; deployments materialize them via create_all(), which
+    # already includes these columns. On a fresh chain run (CI) the tables
+    # don't exist yet, so there is nothing to alter.
+    if "skill_templates" not in inspect(op.get_bind()).get_table_names():
+        return
+
     op.add_column(
         "skill_templates",
         sa.Column(

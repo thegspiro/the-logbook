@@ -265,10 +265,7 @@ async def get_oauth_config(
         )
         provider = auth_settings.get("provider", "local")
 
-        from app.services.oauth_service import (
-            GoogleOAuthService,
-            MicrosoftOAuthService,
-        )
+        from app.services.oauth_service import GoogleOAuthService, MicrosoftOAuthService
 
         return {
             # Only advertise a provider when the org selected it AND the server
@@ -456,10 +453,7 @@ async def oauth_microsoft_callback(
     Handle Microsoft's redirect back: verify state, exchange the code, map the
     Azure AD identity to an existing local user, and establish the session.
     """
-    from app.services.oauth_service import (
-        MicrosoftOAuthError,
-        MicrosoftOAuthService,
-    )
+    from app.services.oauth_service import MicrosoftOAuthError, MicrosoftOAuthService
 
     if not MicrosoftOAuthService.is_configured():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")

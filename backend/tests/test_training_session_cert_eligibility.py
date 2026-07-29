@@ -102,4 +102,4 @@ class TestCertificationEligibilityGate:
         updates = await svc._finalize_training_records(approval, [attendee], uuid4())
 
         assert len(db.added) == 1
-        assert updates == [(str(user), "prog-1", "req-1", 2.0)]
+        assert updates == [(str(user), "prog-1", "req-1", 2.0, "sess-1")]

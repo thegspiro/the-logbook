@@ -89,6 +89,10 @@ class MembershipPipelineService:
                 )
             )
             .options(selectinload(MembershipPipeline.steps))
+            # Refresh identity-map instances so a pipeline read after
+            # add_step/reorder in the same session sees the current steps
+            # collection, not the one cached at creation time.
+            .execution_options(populate_existing=True)
         )
         result = await self.db.execute(query)
         return result.scalars().first()
@@ -629,6 +633,10 @@ class MembershipPipelineService:
                     ProspectStepProgress.step
                 ),
             )
+            # Refresh identity-map instances: the prospect's pipeline/steps
+            # may already be cached in this session from an earlier call, and
+            # advance/complete logic must see the committed collections.
+            .execution_options(populate_existing=True)
         )
         result = await self.db.execute(query)
         return result.scalars().first()

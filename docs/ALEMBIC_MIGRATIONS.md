@@ -284,9 +284,16 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 | `20260728_0001` | `20260727_0001` | `20260728_0001_add_security_alert_org_id.py` | Add `organization_id` to security alerts |
 | `20260729_0001` | `20260728_0001` | `20260729_0001_widen_public_portal_api_key_prefix.py` | Widen public-portal API key prefix for selective lookup (PP-4) |
 | `20260730_0001` | `20260729_0001` | `20260730_0001_add_voting_token_test_and_eligibility.py` | Add `is_test` + `eligible_item_ids` to `voting_tokens` (elections security review R-1/R-3) |
-| `20260731_0001` | `20260730_0001` | `20260731_0001_hash_voting_tokens_at_rest.py` | Hash voting tokens at rest with SHA-256, in place, idempotent hex guard (ELEC-5); downgrade is a deliberate no-op — **current single head** |
+| `20260731_0001` | `20260730_0001` | `20260731_0001_hash_voting_tokens_at_rest.py` | Hash voting tokens at rest with SHA-256, in place, idempotent hex guard (ELEC-5); downgrade is a deliberate no-op |
+| `20260801_0001` | `20260731_0001` | `20260801_0001_add_voting_token_eligible_positions.py` | Add `voting_tokens.eligible_positions` (JSON, nullable) — send-time snapshot of the positions a token holder may vote for (R-D4); NULL = legacy/unrestricted |
+| `20260801_0002` | `20260801_0001` | `20260801_0002_align_enum_columns_with_models.py` | Widen `event_rsvps.status` (+`waitlisted`) and `inventory_notification_queue.action_type` (+`retired`) — model enums gained values the chain never added |
+| `20260801_0003` | `20260801_0002` | `20260801_0003_add_election_datetime_defaults.py` | Add `DEFAULT CURRENT_TIMESTAMP` to election datetime columns (elections, candidates, votes, voting_tokens) — models declare `server_default=func.now()` but 20260118_0004/20260119_0006 created the columns without DB defaults, so ORM inserts of service-created rows failed with error 1364 |
+| `20260801_0004` | `20260801_0003` | `20260801_0004_add_election_lifecycle_fields.py` | Add election lifecycle-automation fields: `auto_open` (opt-in auto-open at start_date), `reminder_hours_before_close` (automatic non-voter reminder window), `reminder_sent_at` (once-only stamp) |
+| `20260801_0005` | `20260801_0004` | `20260801_0005_add_nominations_and_manual_ballots.py` | Nomination phase + paper ballots: `elections.status` ENUM gains `nominations`, `elections.nomination_deadline`, `votes.is_manual` + `votes.recorded_by` (officer-attributed paper-tally votes) |
+| `20260801_0006` | `20260801_0005` | `20260801_0006_add_manual_ballot_batch_id.py` | Add `votes.manual_batch_id` (indexed) — every paper-tally entry shares a batch id so a mis-keyed batch can be voided in one audited action |
+| `20260801_0007` | `20260801_0006` | `20260801_0007_add_manual_ballot_attestations.py` | Add `manual_ballot_batches` + `manual_ballot_attestations` — paper batches stay pending (excluded from results) until the org-required number of officers attest them — **current single head** |
 
-> **Single head as of 2026-07-28:** `20260731_0001` is the linear head of the
+> **Single head as of 2026-07-29:** `20260801_0007` is the linear head of the
 > chain, so `alembic upgrade head` is unambiguous.
 > `tests/test_alembic_migrations.py` validates the single-head DAG (it
 > understands merge migrations).

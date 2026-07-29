@@ -10,8 +10,9 @@ Run with:
 """
 
 import re
-import pytest
 from pathlib import Path
+
+import pytest
 
 VERSIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 

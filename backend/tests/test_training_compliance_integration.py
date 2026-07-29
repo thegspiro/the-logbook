@@ -244,9 +244,7 @@ class TestHoursRequirementCompliance:
         assert progress.is_complete is False
         assert progress.percentage_complete < 100.0
 
-    async def test_full_hours_met(
-        self, db_session: AsyncSession, setup_org_and_user
-    ):
+    async def test_full_hours_met(self, db_session: AsyncSession, setup_org_and_user):
         """30 hours against a 24-hour requirement should be marked complete."""
         org_id, user_id = setup_org_and_user
         req_id = await _insert_hours_requirement(
@@ -407,9 +405,7 @@ class TestCertificationCompliance:
         )
 
         svc = TrainingService(db_session)
-        expiring = await svc.get_expiring_certifications(
-            UUID(org_id), days_ahead=90
-        )
+        expiring = await svc.get_expiring_certifications(UUID(org_id), days_ahead=90)
 
         expiring_names = [r.course_name for r in expiring]
         assert "Hazmat Ops" in expiring_names

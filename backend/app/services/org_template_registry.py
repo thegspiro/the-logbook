@@ -40,11 +40,7 @@ from app.models.document import DocumentFolder
 from app.models.email_template import EmailTemplate
 from app.models.event import EventTemplate
 from app.models.event_request import EventRequestEmailTemplate
-from app.models.facilities import (
-    FacilityMaintenanceType,
-    FacilityStatus,
-    FacilityType,
-)
+from app.models.facilities import FacilityMaintenanceType, FacilityStatus, FacilityType
 from app.models.finance import (
     ApprovalChain,
     ApprovalChainStep,
@@ -64,17 +60,11 @@ from app.models.inventory import (
 )
 from app.models.location import Location
 from app.models.medical_screening import ScreeningRequirement
-from app.models.membership_pipeline import (
-    MembershipPipeline,
-    MembershipPipelineStep,
-)
+from app.models.membership_pipeline import MembershipPipeline, MembershipPipelineStep
 from app.models.minute import MinutesTemplate
 from app.models.notification import NotificationRule
 from app.models.operational_rank import OperationalRank
-from app.models.public_portal import (
-    PublicPortalConfig,
-    PublicPortalDataWhitelist,
-)
+from app.models.public_portal import PublicPortalConfig, PublicPortalDataWhitelist
 from app.models.skills_testing import SkillTemplate
 from app.models.training import (
     BasicApparatus,

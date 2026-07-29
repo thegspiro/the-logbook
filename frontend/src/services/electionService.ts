@@ -6,8 +6,8 @@ import api from './apiClient';
 import type {
   Attendee,
   AttendeeCheckInResponse,
-  BallotElection,
   BallotItemVote,
+  BallotLookupResponse,
   BallotPreview,
   BallotSubmissionResponse,
   BallotTemplate,
@@ -29,6 +29,7 @@ import type {
   EmailBallotResponse,
   ForensicsReport,
   ImportMeetingAttendeesResponse,
+  ManualBallotBatch,
   PackageRecipient,
   PackageVariant,
   PreMeetingPackageResponse,
@@ -249,19 +250,13 @@ export const electionService = {
   },
 
   /**
-   * Get ballot by voting token (public/anonymous access).
-   * Returns the minimal BallotElection view — no roster/PII fields.
+   * Look up a ballot by voting token (public/anonymous access).
+   * Returns the minimal BallotElection view plus candidates in one call —
+   * no roster/PII fields. POST with the token in the body so the live
+   * credential never appears in a URL (server/proxy logs, history).
    */
-  async getBallotByToken(token: string): Promise<BallotElection> {
-    const response = await api.get<BallotElection>('/elections/ballot', { params: { token } });
-    return response.data;
-  },
-
-  /**
-   * Get candidates for a ballot by voting token
-   */
-  async getBallotCandidates(token: string): Promise<Candidate[]> {
-    const response = await api.get<Candidate[]>(`/elections/ballot/${token}/candidates`);
+  async lookupBallot(token: string): Promise<BallotLookupResponse> {
+    const response = await api.post<BallotLookupResponse>('/elections/ballot/lookup', { token });
     return response.data;
   },
 
@@ -379,6 +374,143 @@ export const electionService = {
    */
   async getNonVoters(electionId: string): Promise<{ non_voters: Array<{ id: string; full_name: string; email: string }>; count: number }> {
     const response = await api.get<{ non_voters: Array<{ id: string; full_name: string; email: string }>; count: number }>(`/elections/${electionId}/non-voters`);
+    return response.data;
+  },
+
+  /**
+   * Open the nomination phase for a draft positional election.
+   */
+  async openNominations(electionId: string): Promise<Election> {
+    const response = await api.post<Election>(`/elections/${electionId}/open-nominations`);
+    return response.data;
+  },
+
+  /**
+   * Close the nomination phase, returning the election to draft.
+   */
+  async closeNominations(electionId: string): Promise<Election> {
+    const response = await api.post<Election>(`/elections/${electionId}/close-nominations`);
+    return response.data;
+  },
+
+  /**
+   * Nominate a member (or yourself — omit nominee_user_id) for a position.
+   */
+  async createNomination(
+    electionId: string,
+    payload: { position: string; nominee_user_id?: string | undefined; statement?: string | undefined },
+  ): Promise<Candidate> {
+    const response = await api.post<Candidate>(`/elections/${electionId}/nominations`, payload);
+    return response.data;
+  },
+
+  /**
+   * Accept your own nomination.
+   */
+  async acceptNomination(electionId: string, candidateId: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.post<{ success: boolean; message: string }>(
+      `/elections/${electionId}/nominations/${candidateId}/accept`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Decline your own nomination (removes the candidate entry).
+   */
+  async declineNomination(electionId: string, candidateId: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.post<{ success: boolean; message: string }>(
+      `/elections/${electionId}/nominations/${candidateId}/decline`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Record an in-room paper-ballot tally (one vote row per ballot,
+   * attributed to the recording officer).
+   */
+  async recordManualBallots(
+    electionId: string,
+    payload: {
+      entries: Array<{ candidate_id: string; count: number }>;
+      notes?: string | undefined;
+      allow_over_count?: boolean | undefined;
+    },
+  ): Promise<{
+    recorded: number;
+    batch_id?: string;
+    status?: string;
+    attestations_required?: number;
+    message: string;
+  }> {
+    const response = await api.post<{
+      recorded: number;
+      batch_id?: string;
+      status?: string;
+      attestations_required?: number;
+      message: string;
+    }>(`/elections/${electionId}/manual-ballots`, payload);
+    return response.data;
+  },
+
+  /**
+   * List paper-ballot batches with their attestation trail.
+   */
+  async getManualBallotBatches(
+    electionId: string,
+  ): Promise<{ batches: ManualBallotBatch[] }> {
+    const response = await api.get<{ batches: ManualBallotBatch[] }>(
+      `/elections/${electionId}/manual-ballots`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Attest that a paper-ballot batch matches the physical count. The
+   * recording officer cannot attest their own batch; once the required
+   * number of officers have attested, the batch's votes count in results.
+   */
+  async attestManualBallots(
+    electionId: string,
+    batchId: string,
+  ): Promise<{ attestations: number; required: number; status: string; message: string }> {
+    const response = await api.post<{
+      attestations: number;
+      required: number;
+      status: string;
+      message: string;
+    }>(`/elections/${electionId}/manual-ballots/${batchId}/attest`);
+    return response.data;
+  },
+
+  /**
+   * Void (soft-delete) every paper ballot recorded in one batch — the
+   * correction path for a mis-keyed tally.
+   */
+  async voidManualBallots(
+    electionId: string,
+    batchId: string,
+    reason: string,
+  ): Promise<{ voided: number; message: string }> {
+    const response = await api.post<{ voided: number; message: string }>(
+      `/elections/${electionId}/manual-ballots/${batchId}/void`,
+      { reason },
+    );
+    return response.data;
+  },
+
+  /**
+   * Send a reminder ballot email (fresh voting link) to eligible voters
+   * who have not voted yet. Stamps reminder_sent_at server-side, which
+   * also suppresses the automatic pre-close reminder.
+   */
+  async remindNonVoters(
+    electionId: string,
+    payload?: { subject?: string; message?: string },
+  ): Promise<EmailBallotResponse> {
+    const response = await api.post<EmailBallotResponse>(
+      `/elections/${electionId}/remind-non-voters`,
+      payload ?? {},
+    );
     return response.data;
   },
 

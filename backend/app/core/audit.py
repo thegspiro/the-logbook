@@ -165,8 +165,12 @@ class AuditLogger:
                 last_log = result.scalar_one_or_none()
                 previous_hash = last_log.current_hash if last_log else "0" * 64
 
-                # Create log entry data
-                timestamp = datetime.now(UTC)
+                # Create log entry data. Microseconds are zeroed on the STORED
+                # value, not just in the hash input: MySQL DATETIME(0) ROUNDS
+                # fractional seconds on insert, so storing 12.7s would read
+                # back as 13s and fail verification about half the time.
+                # timestamp_nanos preserves sub-second ordering losslessly.
+                timestamp = datetime.now(UTC).replace(microsecond=0)
                 timestamp_nanos = time.time_ns()
 
                 log_data = {

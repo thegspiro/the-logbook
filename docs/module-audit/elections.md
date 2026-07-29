@@ -102,7 +102,7 @@ before lookup. Migration `20260731_0001` hashes existing rows in place
 hash suffices: 512-bit random tokens have no brute-force/rainbow surface.
 Downgrade is deliberately a no-op (one-way).
 
-### ELEC-6 — MEDIUM — Ballot secrecy holds only against non-DB actors, only after close — ✅ FIXED (residual noted)
+### ELEC-6 — MEDIUM — Ballot secrecy holds only against non-DB actors, only after close — ✅ FIXED (residual closed forward)
 For anonymous elections each `Vote` stored `voter_hash` plus raw `ip_address`
 and `user_agent` forever, and `get_election_forensics` returned a full per-IP
 vote map — enough to correlate votes to voters in a small department.
@@ -112,9 +112,13 @@ ballot-stuffing detection is unaffected while voting is open; audited as
 `ip_metadata_purged`), and forensics exposes only the thresholded
 `suspicious_ips` set plus `unique_ip_count` / `ip_metadata_purged` — the full
 `ip_vote_distribution` map is gone from service, schema, and frontend types.
-**Residual:** the tamper-proof audit log still records an IP per `vote_cast*`
-event with the vote id; minimizing that requires an audit-schema decision and
-is tracked in KNOWN_LIMITATIONS.
+**Residual — closed going forward (2026-07-29):** voter-action audit events
+(`vote_cast`, `vote_cast_token`, `ballot_submitted_token`, the
+`*_double_attempt*` variants, and both proxy events) no longer record an IP
+for anonymous elections (`ElectionService._audit_ip`). Audit rows written
+before that change retain their IPs permanently: `ip_address` is part of the
+audit hash-chain input, so scrubbing them would break `verify_integrity` —
+which is exactly the tamper-evidence the chain exists to provide.
 
 ### ELEC-7 — LOW — `create_candidate` stores client-supplied `user_id` unvalidated (XC-1)
 `Candidate(..., **candidate.model_dump())` persists `user_id` with no in-org
@@ -246,21 +250,40 @@ the same change unless marked deferred. Migration `20260730_0001` adds
 
 - **R-D1 — ELEC-5: ✅ resolved 2026-07-28** (tokens hashed at rest — see the
   ELEC-5 entry above).
-- **R-D2 — ELEC-6: ✅ resolved 2026-07-28** (IP/user-agent purged at close for
-  anonymous elections; forensics threshold-only — see the ELEC-6 entry above.
-  Residual: per-event IPs in the audit log).
-- **R-D3 — Ballot token in GET query/path:** `GET /elections/ballot?token=`
-  and `GET /elections/ballot/{token}/candidates` put the live credential in
-  server/proxy logs and browser history, contradicting the POST-body
-  rationale on the vote endpoints. The emailed link itself is `?token=`, so a
-  full fix needs a redeem-and-store flow.
-- **R-D4 — `position_eligibility` unenforced on the token path** for
-  positional (non-ballot-item) elections — R-1 covers ballot-item elections
-  only. Mirroring the fix needs eligible positions persisted on the token.
-- **R-D5 — Token single-vote limitation:** `cast_vote_with_token` still
-  allows only one vote per position, so approval/ranked voting via the
-  single-vote token endpoint is not supported (the bulk ballot path and the
-  authenticated path are). Acceptable: the ballot UI uses the bulk path.
+- **R-D2 — ELEC-6: ✅ resolved 2026-07-28, residual closed 2026-07-29**
+  (IP/user-agent purged at close for anonymous elections; forensics
+  threshold-only — see the ELEC-6 entry above. The audit-log residual is now
+  closed going forward: voter-action audit events (`vote_cast*`,
+  `*_double_attempt*`, proxy and token variants) no longer record an IP for
+  anonymous elections (`_audit_ip` helper). Audit rows written before that
+  change keep their IPs permanently — `ip_address` is part of the
+  hash-chain input, so scrubbing them would break `verify_integrity`.)
+- **R-D3 — Ballot token in GET query/path: ✅ resolved 2026-07-29.** The two
+  GET read endpoints were replaced by `POST /elections/ballot/lookup` (token
+  in the body; returns election + candidates in one round-trip, applying the
+  `eligible_item_ids` and `eligible_positions` filters), and the emailed link
+  now carries the token in the URL **fragment** (`/ballot#token=…`) —
+  browsers never send fragments to any server, so no redeem-and-store flow
+  was needed. The voting page scrubs the token from the address bar after
+  capture. Residual: `?token=` links emailed before the change keep working
+  (and logging) until those tokens expire (≤ election end / 30 days).
+- **R-D4 — `position_eligibility` on the token path: ✅ resolved 2026-07-29.**
+  The recipient's eligible positions are snapshotted on the token at send
+  time (`eligible_positions`, migration `20260801_0001`, mirroring
+  `eligible_item_ids`), enforced in `cast_vote_with_token` (with a
+  `candidate.position` fallback so omitting the position can't bypass it),
+  and applied to the lookup response (positions + candidates). Members
+  eligible for zero positions are skipped at send time with a reason. NULL
+  snapshot = legacy token — unrestricted, time-bounded by token expiry.
+- **R-D5 — Token single-vote limitation: ✅ resolved 2026-07-29.**
+  `cast_vote_with_token` now mirrors `cast_vote`'s method-aware rules
+  (accepts `vote_rank`; ranked = one vote per rank, approval = one per
+  candidate, else `max_votes_per_position`), and the bulk ballot payload
+  gained `candidate_ids` (approval/multi-vote) and `rankings` (ordered,
+  index 0 = rank 1) so multi-select and ranked ballots are expressible —
+  with the ballot UI rendering checkboxes / rank selects accordingly.
+  Dedup hashes reuse the ELEC-3 discriminators (`rank:<n>` / `cand:<id>`);
+  legacy single-choice hashes are unchanged.
 
 ## Notes
 - `check_eligibility` and the vote endpoints use bare `get_current_user`; they

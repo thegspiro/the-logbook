@@ -21,11 +21,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.utils.label_renderer import (
-    LabelSpec,
-    is_known_label_format,
-    render_labels,
-)
+from app.utils.label_renderer import LabelSpec, is_known_label_format, render_labels
 
 # A builder fetches the module's records (org-scoped) for the given ids and
 # returns (label specs, count of records whose barcode was auto-populated).

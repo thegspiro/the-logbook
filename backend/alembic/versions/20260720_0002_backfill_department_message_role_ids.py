@@ -27,6 +27,12 @@ depends_on = None
 def upgrade() -> None:
     bind = op.get_bind()
 
+    # positions is a model-only table (deployments materialize it via
+    # create_all). On a fresh chain run it doesn't exist — and there are no
+    # messages to backfill either.
+    if "positions" not in sa.inspect(bind).get_table_names():
+        return
+
     # Map (organization_id, role_name) -> role_id for every position.
     name_to_id = {}
     for row in bind.execute(

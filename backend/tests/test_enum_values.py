@@ -7,9 +7,11 @@ This test verifies that:
 3. Database accepts lowercase enum values
 4. Enum values can be read back correctly
 """
+
 import pytest
 from sqlalchemy import text
-from app.models.user import Organization, OrganizationType, IdentifierType, UserStatus
+
+from app.models.user import IdentifierType, Organization, OrganizationType, UserStatus
 
 pytestmark = [pytest.mark.integration]
 
@@ -50,7 +52,7 @@ async def test_organization_type_database_insert(db_session):
             slug=f"test-{org_type.value}-{generate_uuid()[:8]}",
             organization_type=org_type,
             identifier_type=IdentifierType.DEPARTMENT_ID,
-            timezone="America/New_York"
+            timezone="America/New_York",
         )
         db_session.add(org)
 
@@ -58,7 +60,9 @@ async def test_organization_type_database_insert(db_session):
 
     # Verify all were inserted
     result = await db_session.execute(
-        text("SELECT organization_type, COUNT(*) FROM organizations GROUP BY organization_type")
+        text(
+            "SELECT organization_type, COUNT(*) FROM organizations GROUP BY organization_type"
+        )
     )
     rows = result.fetchall()
 
@@ -82,13 +86,14 @@ async def test_organization_type_query_by_enum(db_session):
         slug=f"test-fire-{generate_uuid()[:8]}",
         organization_type=OrganizationType.FIRE_DEPARTMENT,
         identifier_type=IdentifierType.FDID,
-        timezone="America/New_York"
+        timezone="America/New_York",
     )
     db_session.add(org)
     await db_session.commit()
 
     # Query using enum member
     from sqlalchemy import select
+
     result = await db_session.execute(
         select(Organization).where(
             Organization.organization_type == OrganizationType.FIRE_DEPARTMENT
@@ -97,20 +102,26 @@ async def test_organization_type_query_by_enum(db_session):
     found_orgs = result.scalars().all()
 
     assert len(found_orgs) > 0
-    assert all(org.organization_type == OrganizationType.FIRE_DEPARTMENT for org in found_orgs)
+    assert all(
+        org.organization_type == OrganizationType.FIRE_DEPARTMENT for org in found_orgs
+    )
 
 
 @pytest.mark.asyncio
 async def test_organization_type_database_enum_definition(db_session):
     """Test that the database ENUM type has correct lowercase values"""
 
-    result = await db_session.execute(text("""
+    result = await db_session.execute(
+        text(
+            """
         SELECT COLUMN_TYPE
         FROM INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
         AND TABLE_NAME = 'organizations'
         AND COLUMN_NAME = 'organization_type'
-    """))
+    """
+        )
+    )
 
     row = result.fetchone()
     assert row is not None, "organization_type column not found"
@@ -124,11 +135,13 @@ async def test_organization_type_database_enum_definition(db_session):
 
     # Verify all values are lowercase
     expected_values = ["fire_department", "ems_only", "fire_ems_combined"]
-    assert set(values) == set(expected_values), \
-        f"ENUM values mismatch. Expected {expected_values}, got {values}"
+    assert set(values) == set(
+        expected_values
+    ), f"ENUM values mismatch. Expected {expected_values}, got {values}"
 
     # Verify NO uppercase values exist
     uppercase_values = ["FIRE_DEPARTMENT", "EMS_ONLY", "FIRE_EMS_COMBINED"]
     for uppercase_val in uppercase_values:
-        assert uppercase_val not in values, \
-            f"Found uppercase value '{uppercase_val}' in ENUM - this should not exist!"
+        assert (
+            uppercase_val not in values
+        ), f"Found uppercase value '{uppercase_val}' in ENUM - this should not exist!"

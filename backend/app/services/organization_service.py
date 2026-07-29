@@ -126,18 +126,18 @@ class OrganizationService:
             # dual-writes during onboarding.
 
         # ── Migration from OnboardingStatus ──
-        # Must be scoped to THIS org — an unfiltered `select(OnboardingStatus)
-        # .limit(1)` would seed one org's enabled_modules from an arbitrary
-        # other org's onboarding row (and then persist it below). When `org`
-        # isn't available we cannot scope it safely, so fall through to defaults.
+        # OnboardingStatus is a system-wide singleton (single-org install) with
+        # no organization_id column, so the row can only be tied to an org by
+        # the organization_name it recorded during setup. Require that match —
+        # seeding from a row that names a different org would leak another
+        # tenant's module choices (and then persist them below). No match →
+        # fall through to defaults (fail closed).
         onboarding = None
         if org is not None:
-            onboarding_result = await self.db.execute(
-                select(OnboardingStatus).where(
-                    OnboardingStatus.organization_id == str(org.id)
-                )
-            )
-            onboarding = onboarding_result.scalars().first()
+            onboarding_result = await self.db.execute(select(OnboardingStatus).limit(1))
+            candidate = onboarding_result.scalars().first()
+            if candidate is not None and candidate.organization_name == org.name:
+                onboarding = candidate
 
         if onboarding and onboarding.enabled_modules:
             enabled_list = onboarding.enabled_modules

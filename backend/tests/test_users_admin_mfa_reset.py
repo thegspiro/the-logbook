@@ -33,9 +33,9 @@ class TestResetMfaEndpoint:
     PATH = "/{user_id}/reset-mfa"
 
     def test_route_exists(self):
-        assert _get_route_deps(self.PATH, "POST") is not None, (
-            "Route /{user_id}/reset-mfa POST not found"
-        )
+        assert (
+            _get_route_deps(self.PATH, "POST") is not None
+        ), "Route /{user_id}/reset-mfa POST not found"
 
     def test_requires_admin_permission(self):
         deps = _get_route_deps(self.PATH, "POST")

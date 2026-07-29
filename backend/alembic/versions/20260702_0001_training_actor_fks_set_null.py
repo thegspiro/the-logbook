@@ -89,8 +89,17 @@ def _drop_user_fks(inspector, table: str, column: str) -> None:
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
+    existing_tables = set(inspector.get_table_names())
 
     for table, column in ACTOR_FKS:
+        # Model-only tables (recertification_pathways, competency matrices,
+        # instructor qualifications, ...) are materialized by the startup
+        # create_all() on deployments — their models already declare these
+        # FKs with ondelete=SET NULL, so on a fresh chain run where they
+        # don't exist yet there is nothing to convert.
+        if table not in existing_tables:
+            continue
+
         # Reflection results are cached per inspector; clear before each
         # lookup so tables with two target columns (e.g.
         # instructor_qualifications) always see current, post-drop state.

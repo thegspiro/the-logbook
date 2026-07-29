@@ -41,7 +41,9 @@ def upgrade() -> None:
             'interviewer_id',
             sa.String(36),
             sa.ForeignKey('users.id', ondelete='SET NULL'),
-            nullable=False,
+            # SET NULL requires a nullable column (MySQL error 1830) — the
+            # model has nullable=True; only this migration said otherwise.
+            nullable=True,
         ),
         sa.Column('interviewer_role', sa.String(100), nullable=True),
         sa.Column('notes', sa.Text, nullable=True),

@@ -27,6 +27,14 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # positions is a model-only table (the chain created roles/user_roles;
+    # deployments materialize positions via create_all + seeds). On a fresh
+    # chain run it doesn't exist — and has no rows to rename anyway.
+    from sqlalchemy import inspect
+
+    if "positions" not in inspect(op.get_bind()).get_table_names():
+        return
+
     op.execute(
         sa.text(
             "UPDATE positions "

@@ -7,17 +7,16 @@ These are unit-level tests that inspect endpoint signatures and
 test the shared validation helpers without needing a running server.
 """
 
-import pytest
 from datetime import date, timedelta
 
+import pytest
 from fastapi import HTTPException
 
 from app.api.v1.endpoints.scheduling import (
-    _parse_and_validate_report_dates,
     MAX_REPORT_DAYS,
+    _parse_and_validate_report_dates,
     router,
 )
-
 
 # ── Permission Annotation Tests ──────────────────────────────────────
 
@@ -70,14 +69,21 @@ class TestEndpointPermissions:
         assert any("get_current_user" in d for d in deps)
 
     def test_reports_require_scheduling_report(self):
-        for path in ["/reports/member-hours", "/reports/coverage", "/reports/call-volume", "/reports/compliance"]:
+        for path in [
+            "/reports/member-hours",
+            "/reports/coverage",
+            "/reports/call-volume",
+            "/reports/compliance",
+        ]:
             deps = self._get_route_deps(path, "GET")
             assert deps is not None, f"Route {path} GET not found"
             assert any("require_permission" in d or "scheduling" in d for d in deps)
 
     def test_swap_review_requires_scheduling_manage(self):
         deps = self._get_route_deps("/swap-requests/{request_id}/review", "POST")
-        assert deps is not None, "Route /swap-requests/{request_id}/review POST not found"
+        assert (
+            deps is not None
+        ), "Route /swap-requests/{request_id}/review POST not found"
         assert any("require_permission" in d or "scheduling" in d for d in deps)
 
 

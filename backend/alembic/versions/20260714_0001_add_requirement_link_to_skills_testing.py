@@ -14,6 +14,7 @@ Create Date: 2026-07-14 00:00:00.000000
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = "20260714_0001"
@@ -23,6 +24,13 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # skill_templates / skill_tests are model-only tables — no migration
+    # creates them; deployments materialize them via create_all(), which
+    # already includes requirement_id. On a fresh chain run (CI) the tables
+    # don't exist yet, so there is nothing to alter.
+    if "skill_templates" not in inspect(op.get_bind()).get_table_names():
+        return
+
     op.add_column(
         "skill_templates",
         sa.Column(

@@ -15,10 +15,10 @@ review fixes were implemented:
     / improvement-text alert; verifies the configurable threshold.
 """
 
-import pytest
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -193,12 +193,8 @@ class TestShiftRemindersRosterFilter:
         db_session: AsyncSession,
     ):
         org_id = await _insert_org(db_session)
-        active_a = await _insert_user(
-            db_session, org_id=org_id, first_name="Alice"
-        )
-        active_b = await _insert_user(
-            db_session, org_id=org_id, first_name="Bob"
-        )
+        active_a = await _insert_user(db_session, org_id=org_id, first_name="Alice")
+        active_b = await _insert_user(db_session, org_id=org_id, first_name="Bob")
         deactivated = await _insert_user(
             db_session,
             org_id=org_id,
@@ -269,23 +265,31 @@ class TestShiftRemindersRosterFilter:
 
         await run_shift_reminders(db_session)
         first_count = (
-            await db_session.execute(
-                select(NotificationLog).where(
-                    NotificationLog.organization_id == org_id,
-                    NotificationLog.category == "shift_reminder",
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == org_id,
+                        NotificationLog.category == "shift_reminder",
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         await run_shift_reminders(db_session)
         second_count = (
-            await db_session.execute(
-                select(NotificationLog).where(
-                    NotificationLog.organization_id == org_id,
-                    NotificationLog.category == "shift_reminder",
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == org_id,
+                        NotificationLog.category == "shift_reminder",
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         assert len(first_count) == 1
         assert len(second_count) == 1
@@ -480,18 +484,10 @@ class TestLowRatingTrainingOfficerAlert:
         if org_settings_json is None:
             org_id = await _insert_org(db)
         else:
-            org_id = await _insert_org(
-                db, settings_json=org_settings_json
-            )
-        officer_id = await _insert_user(
-            db, org_id=org_id, first_name="Mike"
-        )
-        trainee_id = await _insert_user(
-            db, org_id=org_id, first_name="Probie"
-        )
-        t_officer_id = await _insert_user(
-            db, org_id=org_id, first_name="Trainer"
-        )
+            org_id = await _insert_org(db, settings_json=org_settings_json)
+        officer_id = await _insert_user(db, org_id=org_id, first_name="Mike")
+        trainee_id = await _insert_user(db, org_id=org_id, first_name="Probie")
+        t_officer_id = await _insert_user(db, org_id=org_id, first_name="Trainer")
 
         position_id = _uid()
         await db.execute(
@@ -551,13 +547,9 @@ class TestLowRatingTrainingOfficerAlert:
             .scalars()
             .all()
         )
-        followup = [
-            n for n in notifs if "follow-up" in (n.subject or "").lower()
-        ]
+        followup = [n for n in notifs if "follow-up" in (n.subject or "").lower()]
         assert len(followup) == 1
-        assert (followup[0].notification_metadata or {}).get(
-            "low_rating"
-        ) is True
+        assert (followup[0].notification_metadata or {}).get("low_rating") is True
 
     async def test_high_rating_no_improvement_does_not_alert(
         self,
@@ -593,9 +585,7 @@ class TestLowRatingTrainingOfficerAlert:
             .scalars()
             .all()
         )
-        followup = [
-            n for n in notifs if "follow-up" in (n.subject or "").lower()
-        ]
+        followup = [n for n in notifs if "follow-up" in (n.subject or "").lower()]
         assert followup == []
 
     async def test_areas_for_improvement_alone_triggers_alert(
@@ -633,9 +623,7 @@ class TestLowRatingTrainingOfficerAlert:
             .scalars()
             .all()
         )
-        followup = [
-            n for n in notifs if "follow-up" in (n.subject or "").lower()
-        ]
+        followup = [n for n in notifs if "follow-up" in (n.subject or "").lower()]
         assert len(followup) == 1
 
     async def test_configurable_threshold_raises_trigger_bar(
@@ -646,11 +634,7 @@ class TestLowRatingTrainingOfficerAlert:
         import json
 
         settings_json = json.dumps(
-            {
-                "shift_reports": {
-                    "follow_up": {"low_rating_threshold": 4}
-                }
-            }
+            {"shift_reports": {"follow_up": {"low_rating_threshold": 4}}}
         )
         (
             org_id,
@@ -697,11 +681,7 @@ class TestLowRatingTrainingOfficerAlert:
         import json
 
         settings_json = json.dumps(
-            {
-                "shift_reports": {
-                    "follow_up": {"low_rating_threshold": 0}
-                }
-            }
+            {"shift_reports": {"follow_up": {"low_rating_threshold": 0}}}
         )
         (
             org_id,
@@ -751,12 +731,8 @@ class TestLowRatingTrainingOfficerAlert:
         officer role, they shouldn't get an alert about their own
         report."""
         org_id = await _insert_org(db_session)
-        officer_id = await _insert_user(
-            db_session, org_id=org_id, first_name="Mike"
-        )
-        trainee_id = await _insert_user(
-            db_session, org_id=org_id, first_name="Probie"
-        )
+        officer_id = await _insert_user(db_session, org_id=org_id, first_name="Mike")
+        trainee_id = await _insert_user(db_session, org_id=org_id, first_name="Probie")
         position_id = _uid()
         await db_session.execute(
             text(
@@ -871,8 +847,7 @@ class TestTraineeReportEscalation:
         # Backdate created_at to land before the 7-day cutoff
         await db_session.execute(
             text(
-                "UPDATE shift_completion_reports "
-                "SET created_at = :ts WHERE id = :id"
+                "UPDATE shift_completion_reports " "SET created_at = :ts WHERE id = :id"
             ),
             {
                 "ts": datetime.now(timezone.utc) - timedelta(days=10),
@@ -990,8 +965,6 @@ class TestActivitiesFlagPersistence:
         await run_shift_reminders(db_session)
 
         refreshed = (
-            await db_session.execute(
-                select(Shift).where(Shift.id == shift_id)
-            )
+            await db_session.execute(select(Shift).where(Shift.id == shift_id))
         ).scalar_one()
         assert (refreshed.activities or {}).get("start_reminder_sent") is True

@@ -82,6 +82,68 @@ Beyond membership type, a member may also be restricted by:
 
 ---
 
+## Per-Department Feature Toggles (2026-07-29)
+
+Election Settings → **Features** lets each department turn optional
+workflows on or off (all ON by default; stored in
+`org.settings.election_features`; enforced in the service layer, hidden
+in the UI):
+
+- `nominations_enabled` — nomination phase and member nominations
+- `paper_ballots_enabled` — officer paper-tally entry
+- `reminders_enabled` — manual and automatic non-voter reminders
+- `auto_open_enabled` — scheduled opening of flagged drafts
+- `paper_ballot_attestations_required` — officers (besides the recorder)
+  who must confirm each paper batch before it counts (0–3, default **2**)
+
+Not toggleable by design: automatic closing at `end_date` and the
+nomination-deadline auto-close. Closing finalizes results and runs the
+anonymous-election IP/salt purge — a privacy guarantee, not a
+convenience — and an in-flight nomination phase must always be closeable.
+
+### Paper-Ballot Attestation (2026-07-29)
+
+With attestations required (the default is 2 — e.g. the secretary records,
+the President and Chief or their designees validate), a recorded batch
+starts **pending**: its votes are signed and chained immediately but
+excluded from results and stats. Officers with `elections.manage` attest
+via the batch panel on the election page; the recorder can never attest
+their own batch and each officer counts once. When the snapshotted
+requirement is met the batch flips to **confirmed** and its ballots count.
+A disputed batch is voided with a reason (the existing correction path).
+Attestation is only possible while voting is open — a batch still pending
+at close stays out of the certified results and the close writes a warning
+`election_manual_ballots_unattested_at_close` audit event.
+
+## Lifecycle Automation (2026-07-29)
+
+The `election_lifecycle` scheduled task (every 15 minutes) automates status
+transitions and reminders:
+
+- **Auto-close**: OPEN elections past `end_date` are closed automatically.
+  Votes are already rejected after `end_date`; closing is what finalizes
+  results, evaluates runoffs, and runs the anonymous-election IP purge and
+  salt destruction — so an overdue election left open was a privacy
+  liability. No opt-in.
+- **Auto-open**: DRAFT elections are opened at `start_date` only when the
+  creator enabled **Open Automatically at Start Time** (`auto_open`). The
+  real open path runs, so an invalid draft (e.g. no candidates) is skipped
+  and retried, never force-opened.
+- **Nomination auto-close**: an election in the nomination phase with a
+  `nomination_deadline` returns to draft automatically once the deadline
+  passes (audited as `nominations_auto_closed`).
+- **Automatic reminder**: when `reminder_hours_before_close` is set, the
+  task sends exactly one reminder ballot email to members who haven't
+  voted once the window opens. Any reminder (manual or automatic) stamps
+  `reminder_sent_at`, which suppresses the automatic one.
+
+Reminders reuse the real ballot-send path, so each reminded member gets a
+fresh voting link. Earlier unused tokens stay valid deliberately: the vote
+dedup hash already guarantees at most one vote per member, and expiring the
+old token could disenfranchise a member whose reminder email bounces.
+Audit events: `election_auto_opened`, `election_auto_closed`,
+`election_reminder_sent`.
+
 ## API Endpoints
 
 ```
@@ -98,7 +160,17 @@ POST   /api/v1/elections/{id}/vote/bulk      # Cast votes atomically (approval/r
 GET    /api/v1/elections/{id}/eligibility    # Check current user's eligibility
 GET    /api/v1/elections/{id}/results        # Get results (visibility-gated)
 GET    /api/v1/elections/{id}/stats          # Ballot counts / turnout (manage)
+POST   /api/v1/elections/{id}/open-nominations  # Draft -> nomination phase (manage)
+POST   /api/v1/elections/{id}/close-nominations # Nomination phase -> draft (manage)
+POST   /api/v1/elections/{id}/nominations    # Nominate a member or yourself (any member)
+POST   /api/v1/elections/{id}/nominations/{cid}/accept   # Nominee accepts
+POST   /api/v1/elections/{id}/nominations/{cid}/decline  # Nominee declines (entry removed)
+POST   /api/v1/elections/{id}/manual-ballots # Record in-room paper-ballot tally (manage; plausibility-guarded)
+GET    /api/v1/elections/{id}/manual-ballots # List paper batches with attestation trail (manage)
+POST   /api/v1/elections/{id}/manual-ballots/{batch}/attest # Attest a batch's count (manage; not the recorder)
+POST   /api/v1/elections/{id}/manual-ballots/{batch}/void # Void a mis-keyed paper batch (manage)
 GET    /api/v1/elections/{id}/non-voters     # Eligible voters who haven't voted (manage)
+POST   /api/v1/elections/{id}/remind-non-voters # Reminder ballot email (fresh link) to non-voters only (manage)
 POST   /api/v1/elections/{id}/send-ballot    # Email ballots with unique voting tokens
 POST   /api/v1/elections/{id}/send-test-ballot  # Send a test ballot to yourself (votes excluded from results)
 POST   /api/v1/elections/{id}/send-report    # Email election results report
@@ -121,11 +193,12 @@ GET    /api/v1/elections/settings               # Get election settings (proxy v
 PATCH  /api/v1/elections/settings               # Update election settings
 GET    /api/v1/elections/{id}/eligibility-roster  # Full eligibility breakdown for secretary
 
-# Public token-ballot endpoints (no auth, rate-limited)
-GET    /api/v1/elections/ballot?token=       # Load ballot (minimal view, items filtered to eligibility)
-GET    /api/v1/elections/ballot/{token}/candidates  # Candidates for a token ballot
-POST   /api/v1/elections/ballot/vote         # Cast one vote (token in body)
-POST   /api/v1/elections/ballot/vote/bulk    # Submit full ballot atomically (token in body)
+# Public token-ballot endpoints (no auth, rate-limited; the token always
+# travels in the POST body — never a query string or path — so the live
+# credential stays out of server/proxy logs)
+POST   /api/v1/elections/ballot/lookup       # Load ballot + candidates in one call (minimal view; items, positions, and candidates filtered to the voter's eligibility snapshots)
+POST   /api/v1/elections/ballot/vote         # Cast one vote (method-aware: accepts vote_rank for ranked-choice; approval allows one vote per candidate)
+POST   /api/v1/elections/ballot/vote/bulk    # Submit full ballot atomically (single choice, candidate_ids multi-select, or rankings per item)
 ```
 
 ---
@@ -162,7 +235,7 @@ findings R-1…R-10) fixed the following. Migration `20260730_0001` adds
 `voting_tokens.is_test` and `voting_tokens.eligible_item_ids`.
 
 - **Per-item eligibility enforced at vote submission**: Ballot-item restrictions (`eligible_voter_types`, `require_attendance`) were previously checked only when ballot emails were sent — a token holder could vote on restricted items by submitting their ids. The eligible item set is now snapshotted on each voting token at issue time and enforced when the ballot is submitted; the public ballot endpoint also only returns the items the voter may vote on. The authenticated vote path now runs the same per-position/per-item checks
-- **Public ballot response minimized**: `GET /elections/ballot` previously returned the full election record — attendee names, eligible-voter lists, email recipients — to any ballot-link holder. It now returns a minimal ballot view with no roster/PII fields
+- **Public ballot response minimized**: the token ballot lookup previously returned the full election record — attendee names, eligible-voter lists, email recipients — to any ballot-link holder. It now returns a minimal ballot view with no roster/PII fields
 - **Test ballots are excluded from results**: "Send test ballot" now issues a flagged token; votes cast with it are stored `is_test`, excluded from results/stats/rosters, and never consume the sender's real vote
 - **Runoffs trigger on early close**: Closing an election before its scheduled end date (the normal end-of-meeting flow) previously skipped runoff creation silently; runoff conditions are now evaluated on every close
 - **Approval & ranked-choice voting fixed**: Both methods were rejected at the vote-dedup layer (any second vote collided) and the UI submitted votes non-atomically. Votes now carry a method-aware dedup discriminator, duplicate rules are per-candidate/per-rank, and the ballot UI submits all approvals/rankings in one atomic bulk call
@@ -177,6 +250,10 @@ findings R-1…R-10) fixed the following. Migration `20260730_0001` adds
 - **Voting tokens hashed at rest** *(follow-up, ELEC-5)*: only SHA-256 hashes are stored; the raw token exists solely in the emailed ballot link (migration `20260731_0001` hashes existing rows in place — old links keep working)
 - **IP metadata purged at close** *(follow-up, ELEC-6)*: anonymous elections erase per-vote IP/user-agent when closed, and the forensics report returns a thresholded suspicious-IP set (`suspicious_ips`, `unique_ip_count`, `ip_metadata_purged`) instead of the full per-IP vote map
 - **Cloudflare email attachments** *(follow-up)*: the pre-meeting package PDF now attaches on the Cloudflare email backend too (base64 API attachments, 5 MiB cap with skip-and-warn)
+- **Ballot tokens never appear in URLs** *(follow-up, R-D3, 2026-07-29)*: the emailed link now carries the token in the URL **fragment** (`/ballot#token=…` — browsers never send fragments to any server), the voting page scrubs it from the address bar after capture, and the two GET read endpoints were replaced by `POST /elections/ballot/lookup` with the token in the body. Links emailed before the change (`?token=`) keep working until those tokens expire
+- **Position eligibility enforced for token ballots** *(follow-up, R-D4, 2026-07-29)*: positional elections' `position_eligibility` rules now apply to email-token voters too — eligible positions are snapshotted on the token at send time (`eligible_positions`, migration `20260801_0001`), enforced at vote time, and used to filter the positions/candidates the ballot page shows. Members eligible for no position are skipped at send time with a reason
+- **Method-aware token voting** *(follow-up, R-D5, 2026-07-29)*: approval and ranked-choice elections now work end-to-end by email ballot — the ballot page renders checkbox multi-select (approval / multi-vote) and per-candidate rank selects (ranked choice), submitted as `candidate_ids` / `rankings` on the bulk endpoint; the single-vote token endpoint mirrors the authenticated path's per-candidate/per-rank duplicate rules
+- **Anonymous elections keep voter IPs out of the audit log** *(follow-up, ELEC-6 residual, 2026-07-29)*: voter-action audit events no longer record an IP for anonymous elections (audit rows are hash-chained and can never be scrubbed, so this had to be a write-time fix; rows written earlier keep their IPs)
 
 ### Edge Cases (2026-07-28)
 
@@ -193,6 +270,11 @@ findings R-1…R-10) fixed the following. Migration `20260730_0001` adds
 | Runoff created from a quorum/position-restricted election | Inherits quorum, position eligibility, meeting/event link, attendees, and overrides — with a **fresh** anonymity salt of its own |
 | Runoff opened at the meeting (default start is +1h) | Opening clamps a future start to "now" — voting works immediately; draft dates are also editable via the new **Edit Dates** modal |
 | Opening an election whose end date already passed | Refused — update the dates first |
+| Token holder votes for a position their membership type can't vote for | Rejected ("You are not eligible to vote for …") — omitting the position field can't bypass it (falls back to the candidate's position) |
+| Token restricted to one position casts that vote | Token marked fully used, even though the election has more positions |
+| Approval election by email ballot | Voter checks every candidate they support; one vote per checked candidate, duplicate candidate rejected |
+| Ranked-choice election by email ballot | Voter assigns unique ranks per candidate; submission order defines rank 1..n |
+| Old `?token=` ballot link (emailed before the fragment change) | Still works — the page falls back to the query string, then scrubs the URL |
 
 ---
 

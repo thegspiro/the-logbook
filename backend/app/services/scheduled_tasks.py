@@ -78,6 +78,9 @@ Recommended crontab (add to host or container cron):
 
 # Every 30 minutes — auto-sync Salesforce for orgs with auto-sync enabled
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=salesforce_auto_sync
+
+# Every 15 minutes — election lifecycle: auto-open flagged drafts, auto-close overdue elections, pre-close non-voter reminders
+*/15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=election_lifecycle
 -----------------------------------------------------
 """
 
@@ -94,6 +97,17 @@ from app.services.email_service import _redact_email
 
 # Schedule definitions (for documentation and frontend display)
 SCHEDULE = {
+    "election_lifecycle": {
+        "description": (
+            "Auto-open flagged draft elections at their start date, "
+            "auto-close open elections past their end date (finalizing "
+            "results, runoffs, and the anonymous-election IP/salt purge), "
+            "and send the one automatic pre-close non-voter reminder"
+        ),
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15",
+        "cron": "*/15 * * * *",
+    },
     "cert_expiration_alerts": {
         "description": "Send tiered certification expiration alerts (90/60/30/7-day + expired escalation)",
         "frequency": "daily",
@@ -4362,8 +4376,31 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
 
 
 # Task runner map
+async def run_election_lifecycle(db: AsyncSession) -> Dict[str, Any]:
+    """Run election lifecycle transitions for every organization.
+
+    Auto-opens DRAFT elections explicitly flagged auto_open once their
+    start_date arrives (real open_election path — candidate validation still
+    applies), auto-closes OPEN elections past end_date (votes are already
+    rejected after end_date, and closing is what runs result finalization,
+    runoff creation, and the anonymous-election IP purge / salt destruction,
+    so an overdue election left open is a privacy liability), and sends the
+    single automatic pre-close reminder to non-voters where configured.
+    """
+    from uuid import UUID
+
+    from app.services.election_service import ElectionService
+
+    async def _process(db_session, org):
+        service = ElectionService(db_session)
+        return await service.process_election_lifecycle(UUID(str(org.id)))
+
+    return await _for_each_org(db, "election_lifecycle", _process)
+
+
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
+    "election_lifecycle": run_election_lifecycle,
     "struggling_member_check": run_struggling_member_check,
     "enrollment_deadline_warnings": run_enrollment_deadline_warnings,
     "recert_resets": run_recert_resets,
@@ -4411,6 +4448,7 @@ TASK_RUNNERS = {
 TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Every 15 minutes
     "inventory_notifications": 900,
+    "election_lifecycle": 900,
     "shift_auto_checkout": 900,
     "publish_scheduled_messages": 900,
     # Every 30 minutes

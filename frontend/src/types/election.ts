@@ -82,6 +82,10 @@ export interface Election {
   runoff_round: number;
   quorum_type?: string; // none, percentage, count
   quorum_value?: number;
+  auto_open?: boolean;
+  reminder_hours_before_close?: number;
+  reminder_sent_at?: string;
+  nomination_deadline?: string;
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -108,6 +112,13 @@ export interface BallotElection {
   ballot_items?: BallotItem[];
   allow_write_ins: boolean;
   voting_method: VotingMethod;
+  max_votes_per_position: number;
+}
+
+/** POST /elections/ballot/lookup — election + candidates in one round-trip */
+export interface BallotLookupResponse {
+  election: BallotElection;
+  candidates: Candidate[];
 }
 
 export interface ElectionListItem {
@@ -148,6 +159,9 @@ export interface ElectionCreate {
   enable_runoffs?: boolean | undefined;
   runoff_type?: string | undefined;
   max_runoff_rounds?: number | undefined;
+  auto_open?: boolean | undefined;
+  reminder_hours_before_close?: number | undefined;
+  nomination_deadline?: string | undefined;
 }
 
 export interface ElectionUpdate {
@@ -175,6 +189,9 @@ export interface ElectionUpdate {
   enable_runoffs?: boolean;
   runoff_type?: string;
   max_runoff_rounds?: number;
+  auto_open?: boolean;
+  reminder_hours_before_close?: number;
+  nomination_deadline?: string | undefined;
 }
 
 export interface Candidate {
@@ -470,7 +487,10 @@ export interface BallotTemplate {
 
 export interface BallotItemVote {
   ballot_item_id: string;
-  choice: string; // 'approve', 'deny', 'abstain', 'write_in', or a candidate UUID
+  // Exactly one selection form per item; none at all = abstain.
+  choice?: string | undefined; // 'approve', 'deny', 'abstain', 'write_in', or a candidate UUID
+  candidate_ids?: string[] | undefined; // multi-select (approval / multi-vote items)
+  rankings?: string[] | undefined; // ordered candidate ids, index 0 = rank 1 (ranked choice)
   write_in_name?: string | undefined;
 }
 
@@ -545,6 +565,41 @@ export interface ElectionSettings {
   default_quorum_value?: number;
   proxy_voting_enabled?: boolean;
   max_proxies_per_person?: number;
+  // Per-department feature toggles (all default ON)
+  nominations_enabled?: boolean;
+  paper_ballots_enabled?: boolean;
+  reminders_enabled?: boolean;
+  auto_open_enabled?: boolean;
+  // Officers (other than the recorder) who must attest a paper-ballot
+  // batch before its votes count. 0 disables attestation. Default 2.
+  paper_ballot_attestations_required?: number;
+}
+
+// Paper-ballot batches (attestation workflow)
+export interface ManualBallotAttestation {
+  user_id?: string | null;
+  name?: string | null;
+  attested_at?: string | null;
+}
+
+export interface ManualBallotBatchTotal {
+  candidate_id: string;
+  candidate_name: string;
+  position?: string | null;
+  count: number;
+}
+
+export interface ManualBallotBatch {
+  batch_id: string;
+  status: 'pending' | 'confirmed' | 'voided';
+  recorded_by?: string | null;
+  recorded_by_name?: string | null;
+  recorded_at?: string | null;
+  notes?: string | null;
+  required_attestations: number;
+  attestations: ManualBallotAttestation[];
+  totals: ManualBallotBatchTotal[];
+  total_ballots: number;
 }
 
 // Ballot Preview (secretary view with eligibility annotations)

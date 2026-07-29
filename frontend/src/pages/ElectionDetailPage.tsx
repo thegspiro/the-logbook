@@ -4,14 +4,14 @@
  * Shows detailed information about an election including results.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { electionService, eventService, meetingsService } from '../services/api';
 import type { MeetingRecord } from '../services/api';
 import { electionPackageService, applicantService } from '../modules/prospective-members/services/api';
 import type { ElectionPackage } from '../modules/prospective-members/types';
-import type { Election, ForensicsReport, VoteIntegrityResult, Candidate } from '../types/election';
+import type { Election, ForensicsReport, VoteIntegrityResult, Candidate, ManualBallotBatch } from '../types/election';
 import type { EventListItem } from '../types/event';
 import { ElectionResults } from '../components/ElectionResults';
 import { ElectionBallot } from '../components/ElectionBallot';
@@ -32,6 +32,9 @@ import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../ut
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
 import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
+import NominationsPanel from '../components/election-detail/NominationsPanel';
+import RecordPaperBallotsModal from '../components/election-detail/RecordPaperBallotsModal';
+import PaperBallotBatchesPanel from '../components/election-detail/PaperBallotBatchesPanel';
 import DeleteElectionModal from '../components/election-detail/DeleteElectionModal';
 import ExtendElectionModal from '../components/election-detail/ExtendElectionModal';
 import EditDatesModal from '../components/election-detail/EditDatesModal';
@@ -100,14 +103,52 @@ export const ElectionDetailPage: React.FC = () => {
   // Upcoming events state
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
 
+  // Org-level feature toggles (default ON until settings load)
+  const [featureFlags, setFeatureFlags] = useState({
+    nominations_enabled: true,
+    paper_ballots_enabled: true,
+    reminders_enabled: true,
+    auto_open_enabled: true,
+    paper_ballot_attestations_required: 2,
+  });
+
+  // Paper-ballot entry state
+  const [showPaperBallotsModal, setShowPaperBallotsModal] = useState(false);
+  const [isRecordingPaper, setIsRecordingPaper] = useState(false);
+  const [paperBallotsError, setPaperBallotsError] = useState<string | null>(null);
+  const [paperCandidates, setPaperCandidates] = useState<Candidate[]>([]);
+  const [paperBatches, setPaperBatches] = useState<ManualBallotBatch[]>([]);
+  const [attestingBatchId, setAttestingBatchId] = useState<string | null>(null);
+
   // Meeting binding state
   const [showMeetingSelector, setShowMeetingSelector] = useState(false);
   const [availableMeetings, setAvailableMeetings] = useState<MeetingRecord[]>([]);
   const [isImportingAttendees, setIsImportingAttendees] = useState(false);
 
-  const { checkPermission } = useAuthStore();
+  const { checkPermission, user: currentUser } = useAuthStore();
   const canManage = checkPermission('elections.manage');
   const tz = useTimezone();
+
+  useEffect(() => {
+    // Settings require elections.manage; members keep the all-on defaults
+    // (their only feature surface, the nominations tab, is driven by the
+    // election's actual status).
+    if (!canManage) return;
+    void (async () => {
+      try {
+        const s = await electionService.getSettings();
+        setFeatureFlags({
+          nominations_enabled: s.nominations_enabled ?? true,
+          paper_ballots_enabled: s.paper_ballots_enabled ?? true,
+          reminders_enabled: s.reminders_enabled ?? true,
+          auto_open_enabled: s.auto_open_enabled ?? true,
+          paper_ballot_attestations_required: s.paper_ballot_attestations_required ?? 2,
+        });
+      } catch {
+        // Non-fatal: buttons stay visible; the backend gates enforcement.
+      }
+    })();
+  }, [canManage]);
 
   useEffect(() => {
     if (electionId) {
@@ -263,6 +304,115 @@ export const ElectionDetailPage: React.FC = () => {
       toast.success('Election closed successfully');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to close election'));
+    }
+  };
+
+  const handleOpenNominations = async () => {
+    if (!electionId) return;
+    try {
+      const updated = await electionService.openNominations(electionId);
+      setElection(updated);
+      setActiveTab('nominations');
+      toast.success('Nominations opened');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to open nominations'));
+    }
+  };
+
+  const handleCloseNominations = async () => {
+    if (!electionId) return;
+    try {
+      const updated = await electionService.closeNominations(electionId);
+      setElection(updated);
+      toast.success('Nominations closed — finalize the ballot, then open voting');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to close nominations'));
+    }
+  };
+
+  const handleShowPaperBallots = async () => {
+    if (!electionId) return;
+    try {
+      const candidatesData = await electionService.getCandidates(electionId);
+      setPaperCandidates(candidatesData.filter((c: Candidate) => c.accepted));
+      setPaperBallotsError(null);
+      setShowPaperBallotsModal(true);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load candidates'));
+    }
+  };
+
+  const handleRecordPaperBallots = async (
+    entries: Array<{ candidate_id: string; count: number }>,
+    notes: string,
+    allowOverCount: boolean,
+  ) => {
+    if (!electionId || entries.length === 0) return;
+    try {
+      setIsRecordingPaper(true);
+      setPaperBallotsError(null);
+      const result = await electionService.recordManualBallots(electionId, {
+        entries,
+        notes: notes.trim() || undefined,
+        allow_over_count: allowOverCount || undefined,
+      });
+      setShowPaperBallotsModal(false);
+      toast.success(result.message);
+      await fetchElection();
+      await loadPaperBatches();
+    } catch (err: unknown) {
+      setPaperBallotsError(getErrorMessage(err, 'Failed to record paper ballots'));
+    } finally {
+      setIsRecordingPaper(false);
+    }
+  };
+
+  const loadPaperBatches = useCallback(async () => {
+    if (!electionId || !canManage) return;
+    try {
+      const result = await electionService.getManualBallotBatches(electionId);
+      setPaperBatches(result.batches);
+    } catch {
+      // Non-fatal: the panel simply stays hidden.
+    }
+  }, [electionId, canManage]);
+
+  useEffect(() => {
+    void loadPaperBatches();
+  }, [loadPaperBatches]);
+
+  const handleAttestPaperBatch = async (batchId: string) => {
+    if (!electionId) return;
+    try {
+      setAttestingBatchId(batchId);
+      const result = await electionService.attestManualBallots(electionId, batchId);
+      toast.success(result.message);
+      await loadPaperBatches();
+      await fetchElection();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to attest paper ballots'));
+    } finally {
+      setAttestingBatchId(null);
+    }
+  };
+
+  const handleVoidPaperBatch = async (batchId: string) => {
+    if (!electionId) return;
+    const reason = window.prompt(
+      'Why is this paper-ballot batch being voided? (recorded in the audit log)',
+    );
+    if (!reason || reason.trim().length < 3) return;
+    try {
+      const result = await electionService.voidManualBallots(
+        electionId,
+        batchId,
+        reason.trim(),
+      );
+      toast.success(result.message);
+      await loadPaperBatches();
+      await fetchElection();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to void paper ballots'));
     }
   };
 
@@ -431,10 +581,11 @@ export const ElectionDetailPage: React.FC = () => {
       setIsSendingReminders(true);
       setRemindError(null);
 
-      const response = await electionService.sendBallotEmail(electionId, {
-        recipient_user_ids: nonVoterIds,
+      // Dedicated endpoint: the server recomputes the non-voter list at
+      // send time (no stale client-side list) and stamps reminder_sent_at,
+      // which suppresses the automatic pre-close reminder.
+      const response = await electionService.remindNonVoters(electionId, {
         message: message || 'This is a reminder to cast your vote. The voting window will be closing soon.',
-        include_ballot_link: true,
       });
 
       setShowRemindModal(false);
@@ -586,13 +737,18 @@ export const ElectionDetailPage: React.FC = () => {
   // ── Lifecycle stepper config ────────────────────────────────────
   const lifecycleSteps = [
     { key: 'draft', label: 'Draft', description: 'Configure ballot & candidates' },
+    ...(election.status === ElectionStatus.NOMINATIONS
+      ? [{ key: 'nominations', label: 'Nominations', description: 'Members nominate candidates' }]
+      : []),
     { key: 'open', label: 'Voting Open', description: 'Members can cast votes' },
     { key: 'closed', label: 'Closed', description: 'Results finalized' },
-  ] as const;
+  ];
 
   /** Determines whether a lifecycle step is completed, current, or upcoming based on election status. */
   const getStepStatus = (stepKey: string): 'completed' | 'current' | 'upcoming' => {
-    const order = ['draft', 'open', 'closed'];
+    const order = election.status === ElectionStatus.NOMINATIONS
+      ? ['draft', 'nominations', 'open', 'closed']
+      : ['draft', 'open', 'closed'];
     const currentIdx = election.status === ElectionStatus.CANCELLED
       ? -1
       : order.indexOf(election.status);
@@ -946,6 +1102,14 @@ export const ElectionDetailPage: React.FC = () => {
                     >
                       Edit Dates
                     </button>
+                    {featureFlags.nominations_enabled && (election.positions?.length ?? 0) > 0 && (
+                      <button
+                        onClick={() => { void handleOpenNominations(); }}
+                        className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm"
+                      >
+                        Open Nominations
+                      </button>
+                    )}
                     <button
                       onClick={() => { void handleOpenElection(); }}
                       className="btn-success rounded-md text-sm"
@@ -955,8 +1119,25 @@ export const ElectionDetailPage: React.FC = () => {
                   </>
                 )}
 
+                {election.status === ElectionStatus.NOMINATIONS && (
+                  <button
+                    onClick={() => { void handleCloseNominations(); }}
+                    className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm"
+                  >
+                    Close Nominations
+                  </button>
+                )}
+
                 {election.status === ElectionStatus.OPEN && (
                   <>
+                    {featureFlags.paper_ballots_enabled && (
+                      <button
+                        onClick={() => { void handleShowPaperBallots(); }}
+                        className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 text-sm"
+                      >
+                        Record Paper Ballots
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setShowExtendModal(true);
@@ -1015,7 +1196,7 @@ export const ElectionDetailPage: React.FC = () => {
                       {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
                     </button>
                   )}
-                  {election.status === ElectionStatus.OPEN && election.email_sent && (
+                  {featureFlags.reminders_enabled && election.status === ElectionStatus.OPEN && election.email_sent && (
                     <button
                       onClick={() => { void handleOpenRemindModal(); }}
                       disabled={isLoadingNonVoters}
@@ -1068,6 +1249,18 @@ export const ElectionDetailPage: React.FC = () => {
           electionId={electionId}
           election={election}
           onUpdate={setElection}
+        />
+      )}
+
+      {/* Paper-ballot batches + attestation trail (secretary) */}
+      {canManage && featureFlags.paper_ballots_enabled && paperBatches.length > 0 && (
+        <PaperBallotBatchesPanel
+          batches={paperBatches}
+          currentUserId={currentUser?.id ?? null}
+          electionOpen={election.status === ElectionStatus.OPEN}
+          attestingBatchId={attestingBatchId}
+          onAttest={(batchId) => { void handleAttestPaperBatch(batchId); }}
+          onVoid={(batchId) => { void handleVoidPaperBatch(batchId); }}
         />
       )}
 
@@ -1148,6 +1341,18 @@ export const ElectionDetailPage: React.FC = () => {
                 </div>
               )}
 
+            </div>
+          )}
+
+          {/* Tab: Nominations */}
+          {activeTab === 'nominations' && election.status !== ElectionStatus.CANCELLED && (
+            <div className="mb-6">
+              <NominationsPanel
+                electionId={electionId}
+                election={election}
+                currentUserId={currentUser?.id ?? null}
+                nominationsOpen={election.status === ElectionStatus.NOMINATIONS}
+              />
             </div>
           )}
 
@@ -1539,6 +1744,17 @@ export const ElectionDetailPage: React.FC = () => {
           onSubmit={(payload) => { void handleSendBallotEmails(payload); }}
           onClose={() => { setShowSendEmailModal(false); setSendEmailError(null); }}
           timezone={tz}
+        />
+      )}
+
+      {showPaperBallotsModal && election && (
+        <RecordPaperBallotsModal
+          candidates={paperCandidates}
+          recording={isRecordingPaper}
+          error={paperBallotsError}
+          attestationsRequired={featureFlags.paper_ballot_attestations_required}
+          onSubmit={(entries, notes, allowOverCount) => { void handleRecordPaperBallots(entries, notes, allowOverCount); }}
+          onClose={() => { setShowPaperBallotsModal(false); setPaperBallotsError(null); }}
         />
       )}
 

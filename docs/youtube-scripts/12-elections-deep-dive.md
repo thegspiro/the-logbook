@@ -343,9 +343,18 @@ public ballot page]**
 
 > "Members click the link and vote from any device — no login. The token *is*
 > the authentication, and it's a 512-bit random value with rate limiting on
-> every public ballot endpoint. The page shows only that voter's eligible
-> items. Every item defaults to abstain, so skipping a question is always an
-> explicit choice."
+> every public ballot endpoint. The link carries the token in the URL
+> fragment — the part after the hash mark that browsers never send to any
+> server — and the page removes it from the address bar the moment it loads,
+> so the credential never sits in an access log or a copied URL. The page
+> shows only that voter's eligible items — and in a positional election,
+> only the positions their membership type may vote for. Every item defaults
+> to abstain, so skipping a question is always an explicit choice."
+
+> "The ballot also adapts to your voting method. Single-choice elections get
+> radio buttons. Approval elections get checkboxes — select every candidate
+> you support. Ranked choice gets a rank dropdown next to each candidate:
+> one is your first preference, and each rank can only be used once."
 
 **[SCREEN: Walk the ballot: approve a membership item, pick a Chief candidate,
 type a write-in on another, leave one item on abstain. Review the

@@ -5,12 +5,15 @@ Tests for fiscal years, budgets, purchase requests, expense reports,
 check requests, dues, and approval chains.
 """
 
+import uuid
+
 import pytest
 
 pytestmark = [pytest.mark.integration]
 
 from datetime import datetime, timezone
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import (
@@ -22,6 +25,52 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.services.finance_service import FinanceService
+
+
+@pytest.fixture
+async def sample_org_data(db_session: AsyncSession):
+    """Create a real organization + admin user for finance tests.
+
+    Overrides the conftest fixture of the same name (a plain data dict):
+    every finance row FKs to organizations.id and users.id, so the tests
+    need persisted rows and their generated ids ("id" / "admin_id").
+    """
+    org_id = str(uuid.uuid4())
+    admin_id = str(uuid.uuid4())
+
+    await db_session.execute(
+        text(
+            "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
+            "VALUES (:id, :name, :otype, :slug, :tz)"
+        ),
+        {
+            "id": org_id,
+            "name": "Finance Test Dept",
+            "otype": "fire_department",
+            "slug": f"fin-{org_id[:8]}",
+            "tz": "UTC",
+        },
+    )
+    await db_session.execute(
+        text(
+            "INSERT INTO users (id, organization_id, username, first_name, last_name, "
+            "email, password_hash, status) "
+            "VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
+        ),
+        {
+            "id": admin_id,
+            "org": org_id,
+            "un": f"finadmin-{admin_id[:8]}",
+            "fn": "Fin",
+            "ln": "Admin",
+            "em": f"finadmin-{admin_id[:8]}@test.com",
+            "pw": "hashed",
+        },
+    )
+    await db_session.flush()
+
+    return {"id": org_id, "admin_id": admin_id}
+
 
 # ============================================
 # Fiscal Year Tests

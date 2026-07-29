@@ -147,9 +147,7 @@ async def test_email_lastname_strategy_constrains_query():
     sf = AsyncMock()
     sf.query.side_effect = query
     sf.update_record.return_value = True
-    service, _ = make_sync_service(
-        config={"match_strategy": "email_lastname"}, sf=sf
-    )
+    service, _ = make_sync_service(config={"match_strategy": "email_lastname"}, sf=sf)
 
     _sf_id, action = await service.upsert_member(
         {"id": "m1", "last_name": "Doe", "email": "jane@dept.org"}
@@ -163,9 +161,7 @@ async def test_member_without_lastname_is_skipped():
     sf = AsyncMock()
     service, _ = make_sync_service(config={}, sf=sf)
 
-    sf_id, action = await service.upsert_member(
-        {"id": "m1", "email": "jane@dept.org"}
-    )
+    sf_id, action = await service.upsert_member({"id": "m1", "email": "jane@dept.org"})
     assert sf_id is None
     assert action == "skipped"
     sf.create_record.assert_not_awaited()
@@ -320,9 +316,7 @@ async def test_check_readiness_flags_missing_external_id():
     assert report["connected"] is True
     assert report["ready"] is False
     assert report["external_id_fields_ready"] is False
-    assert (
-        "Logbook_Member_ID__c" in report["objects"]["Contact"]["missing_fields"]
-    )
+    assert "Logbook_Member_ID__c" in report["objects"]["Contact"]["missing_fields"]
 
 
 async def test_check_readiness_ready_when_external_ids_present():
@@ -340,10 +334,8 @@ async def test_check_readiness_ready_when_external_ids_present():
         from app.services.integration_services import salesforce_sync_service as s
 
         expected = {
-            "Contact": s._custom_fields(s.MEMBER_TO_CONTACT)
-            | {"Logbook_Member_ID__c"},
-            "Event": s._custom_fields(s.EVENT_TO_SF_EVENT)
-            | {"Logbook_Event_ID__c"},
+            "Contact": s._custom_fields(s.MEMBER_TO_CONTACT) | {"Logbook_Member_ID__c"},
+            "Event": s._custom_fields(s.EVENT_TO_SF_EVENT) | {"Logbook_Event_ID__c"},
             "Task": s._custom_fields(s.TRAINING_RECORD_TO_TASK)
             | s._custom_fields(s.INCIDENT_TO_TASK)
             | {"Logbook_Training_ID__c", "Logbook_Call_ID__c", "Task_Source__c"},
@@ -463,9 +455,7 @@ def test_build_authorization_url_requires_client_id(monkeypatch):
     monkeypatch.setattr(settings, "SALESFORCE_CLIENT_ID", None)
     integ = make_integration(secrets={})
     with pytest.raises(sfoauth.SalesforceOAuthError):
-        sfoauth.build_authorization_url(
-            integ, state="s", redirect_uri="https://app/cb"
-        )
+        sfoauth.build_authorization_url(integ, state="s", redirect_uri="https://app/cb")
 
 
 def test_build_authorization_url_uses_sandbox_and_scopes():
@@ -534,9 +524,15 @@ def make_inbound_service(*, config=None, results=None):
 
 
 def test_inbound_enabled_respects_sync_direction():
-    assert make_inbound_service(config={"sync_direction": "push"}).inbound_enabled is False
-    assert make_inbound_service(config={"sync_direction": "pull"}).inbound_enabled is True
-    assert make_inbound_service(config={"sync_direction": "both"}).inbound_enabled is True
+    assert (
+        make_inbound_service(config={"sync_direction": "push"}).inbound_enabled is False
+    )
+    assert (
+        make_inbound_service(config={"sync_direction": "pull"}).inbound_enabled is True
+    )
+    assert (
+        make_inbound_service(config={"sync_direction": "both"}).inbound_enabled is True
+    )
 
 
 async def test_apply_inbound_updates_matched_user_by_external_id():

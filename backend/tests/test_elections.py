@@ -87,6 +87,8 @@ def _make_vote(election_id: str, **overrides) -> SimpleNamespace:
         chain_hash=None,
         receipt_hash=None,
         is_test=False,
+        is_manual=False,
+        recorded_by=None,
         is_proxy_vote=False,
         proxy_voter_id=None,
         proxy_authorization_id=None,
@@ -1036,3 +1038,68 @@ class TestVotingTokenHash:
         raw = secrets.token_urlsafe(64)
         looks_hashed = len(raw) == 64 and bool(_re.fullmatch(r"[a-f0-9]+", raw))
         assert not looks_hashed
+
+
+class TestBallotItemVoteSchema:
+    """R-D5 — the bulk ballot payload accepts exactly one selection form."""
+
+    U1 = "11111111-1111-1111-1111-111111111111"
+    U2 = "22222222-2222-2222-2222-222222222222"
+
+    def test_choice_only_still_valid(self):
+        from app.schemas.election import BallotItemVote
+
+        v = BallotItemVote(ballot_item_id="i", choice="approve")
+        assert v.choice == "approve"
+        assert v.candidate_ids is None
+        assert v.rankings is None
+
+    def test_no_selection_is_abstain(self):
+        from app.schemas.election import BallotItemVote
+
+        v = BallotItemVote(ballot_item_id="i")
+        assert v.choice is None
+
+    def test_multi_select_and_rankings_forms(self):
+        from app.schemas.election import BallotItemVote
+
+        assert BallotItemVote(
+            ballot_item_id="i", candidate_ids=[self.U1, self.U2]
+        ).candidate_ids == [self.U1, self.U2]
+        assert BallotItemVote(
+            ballot_item_id="i", rankings=[self.U2, self.U1]
+        ).rankings == [self.U2, self.U1]
+
+    def test_two_forms_rejected(self):
+        import pydantic
+
+        from app.schemas.election import BallotItemVote
+
+        with pytest.raises(pydantic.ValidationError):
+            BallotItemVote(
+                ballot_item_id="i", choice="approve", candidate_ids=[self.U1]
+            )
+
+    def test_duplicates_rejected(self):
+        import pydantic
+
+        from app.schemas.election import BallotItemVote
+
+        with pytest.raises(pydantic.ValidationError):
+            BallotItemVote(ballot_item_id="i", rankings=[self.U1, self.U1])
+
+    def test_empty_list_rejected(self):
+        import pydantic
+
+        from app.schemas.election import BallotItemVote
+
+        with pytest.raises(pydantic.ValidationError):
+            BallotItemVote(ballot_item_id="i", candidate_ids=[])
+
+    def test_non_uuid_entries_rejected(self):
+        import pydantic
+
+        from app.schemas.election import BallotItemVote
+
+        with pytest.raises(pydantic.ValidationError):
+            BallotItemVote(ballot_item_id="i", candidate_ids=["approve"])

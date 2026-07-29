@@ -409,7 +409,7 @@ class PropertyReturnService:
     <!-- Letterhead -->
     <div style="border-bottom:3px solid #dc2626;padding-bottom:16px;margin-bottom:24px;">
         <h1 style="margin:0;font-size:22px;color:#111827;">{escape(data['organization_name'])}</h1>
-        {f'<p style="margin:4px 0 0;color:#4b5563;font-size:12px;">{escape(data["organization_address"]).replace(chr(10)," | ")}</p>' if data['organization_address'] else ''}
+        {f'<p style="margin:4px 0 0;color:#4b5563;font-size:12px;">{escape(data["organization_address"]).replace(chr(10), " | ")}</p>' if data['organization_address'] else ''}
     </div>
 
     <!-- Date -->

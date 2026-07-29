@@ -15,11 +15,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.models.training import (
-    ProgressCreditSource,
-    SubmissionStatus,
-    TrainingStatus,
-)
+from app.models.training import ProgressCreditSource, SubmissionStatus, TrainingStatus
 from app.services.training_program_service import TrainingProgramService
 from app.services.training_submission_service import TrainingSubmissionService
 

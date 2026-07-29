@@ -75,6 +75,11 @@ class TestCreateLeave:
         db.add = MagicMock()
         db.commit = AsyncMock()
         db.refresh = AsyncMock()
+        # create_leave verifies the member belongs to the caller's org (XC-1)
+        # before writing; resolve that lookup to "member found".
+        member_check = MagicMock()
+        member_check.scalar_one_or_none.return_value = "u1"
+        db.execute = AsyncMock(return_value=member_check)
         return MemberLeaveService(db), db
 
     async def test_creates_linked_waiver_by_default(self):

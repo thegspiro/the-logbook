@@ -10,7 +10,7 @@ import globals from 'globals';
 export default tseslint.config(
   // Global ignores (replaces ignorePatterns)
   {
-    ignores: ['dist/', '*.config.ts', '*.config.js'],
+    ignores: ['dist/', 'coverage/', '*.config.ts', '*.config.js'],
   },
 
   // Base recommended configs

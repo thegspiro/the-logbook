@@ -6,8 +6,12 @@
  * a user login. The token maps to a voter_hash for anonymous voting.
  *
  * Flow:
- * 1. Member clicks "Vote Now" in email → /ballot?token=xxx
- * 2. Page loads election data and ballot items via token
+ * 1. Member clicks "Vote Now" in email → /ballot#token=xxx (the token rides
+ *    in the URL fragment — browsers never send fragments to any server, so
+ *    the live credential stays out of access logs; ?token= is still accepted
+ *    for links emailed before the fragment change)
+ * 2. Page captures the token into state, scrubs it from the address bar,
+ *    and loads election data + candidates via POST /elections/ballot/lookup
  * 3. Member votes on each item (approve, deny, write-in, or abstain)
  * 4. Member clicks "Submit Ballot"
  * 5. Confirmation modal shows summary of all choices
@@ -16,7 +20,6 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { electionService } from '../services/api';
 import type {
   BallotElection,
@@ -34,12 +37,43 @@ import { useTimezone } from '../hooks/useTimezone';
 type ItemChoice = {
   choice: string; // 'approve' | 'deny' | 'write_in' | 'abstain' | candidate UUID
   write_in_name: string;
+  // Multi-select for approval / multi-vote items (candidate UUIDs)
+  candidate_ids: string[];
+  // Ranked choice: candidate UUID → rank number (unique per item)
+  ranks: Record<string, number>;
+};
+
+const emptyChoice = (): ItemChoice => ({
+  choice: BallotChoice.ABSTAIN,
+  write_in_name: '',
+  candidate_ids: [],
+  ranks: {},
+});
+
+/** Ordered candidate ids for the wire payload — index 0 = rank 1. */
+const ranksToOrderedIds = (ranks: Record<string, number>): string[] =>
+  Object.entries(ranks)
+    .sort((a, b) => a[1] - b[1])
+    .map(([cid]) => cid);
+
+/**
+ * Capture the voting token from the URL (fragment preferred, query-string
+ * fallback for pre-fragment emails) and scrub it from the address bar so it
+ * can't linger in browser history or be leaked via a copied URL.
+ */
+const captureTokenFromUrl = (): string => {
+  const hashToken = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token');
+  const queryToken = new URLSearchParams(window.location.search).get('token');
+  const token = hashToken || queryToken || '';
+  if (token) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+  return token;
 };
 
 export const BallotVotingPage: React.FC = () => {
-  const [searchParams] = useSearchParams();
   const tz = useTimezone();
-  const token = searchParams.get('token') || '';
+  const [token] = useState<string>(captureTokenFromUrl);
 
   const [election, setElection] = useState<BallotElection | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -65,17 +99,15 @@ export const BallotVotingPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const [electionData, candidateData] = await Promise.all([
-        electionService.getBallotByToken(token),
-        electionService.getBallotCandidates(token),
-      ]);
+      const { election: electionData, candidates: candidateData } =
+        await electionService.lookupBallot(token);
       setElection(electionData);
       setCandidates(candidateData);
 
       // Initialize choices with 'abstain' for all ballot items
       const initialChoices: Record<string, ItemChoice> = {};
       for (const item of electionData.ballot_items || []) {
-        initialChoices[item.id] = { choice: BallotChoice.ABSTAIN, write_in_name: '' };
+        initialChoices[item.id] = emptyChoice();
       }
       setChoices(initialChoices);
     } catch (err: unknown) {
@@ -91,11 +123,14 @@ export const BallotVotingPage: React.FC = () => {
   };
 
   const updateChoice = useCallback((itemId: string, choice: string, writeInName?: string) => {
+    // Picking any single-selection option clears multi-select / rank state
     setChoices((prev) => ({
       ...prev,
       [itemId]: {
         choice,
         write_in_name: writeInName !== undefined ? writeInName : prev[itemId]?.write_in_name || '',
+        candidate_ids: [],
+        ranks: {},
       },
     }));
   }, []);
@@ -104,10 +139,42 @@ export const BallotVotingPage: React.FC = () => {
     setChoices((prev) => ({
       ...prev,
       [itemId]: {
-        ...(prev[itemId] ?? { choice: '', write_in_name: '' }),
+        ...(prev[itemId] ?? emptyChoice()),
         write_in_name: name,
       },
     } as Record<string, ItemChoice>));
+  }, []);
+
+  /** Toggle a candidate in an approval / multi-vote item's checkbox list. */
+  const toggleCandidate = useCallback((itemId: string, candidateId: string, maxSelections: number | null) => {
+    setChoices((prev) => {
+      const current = prev[itemId] ?? emptyChoice();
+      const selected = current.candidate_ids.includes(candidateId)
+        ? current.candidate_ids.filter((id) => id !== candidateId)
+        : maxSelections !== null && current.candidate_ids.length >= maxSelections
+          ? current.candidate_ids // at the cap — ignore (box is disabled anyway)
+          : [...current.candidate_ids, candidateId];
+      return {
+        ...prev,
+        [itemId]: { ...current, choice: '', candidate_ids: selected, ranks: {} },
+      };
+    });
+  }, []);
+
+  /** Assign a rank to a candidate; a rank held by another candidate is freed. */
+  const setCandidateRank = useCallback((itemId: string, candidateId: string, rank: number | null) => {
+    setChoices((prev) => {
+      const current = prev[itemId] ?? emptyChoice();
+      const ranks: Record<string, number> = {};
+      for (const [cid, r] of Object.entries(current.ranks)) {
+        if (cid !== candidateId && r !== rank) ranks[cid] = r;
+      }
+      if (rank !== null) ranks[candidateId] = rank;
+      return {
+        ...prev,
+        [itemId]: { ...current, choice: '', candidate_ids: [], ranks },
+      };
+    });
   }, []);
 
   /** Validates all choices (e.g. write-ins must have names) then shows the confirmation modal. */
@@ -132,11 +199,21 @@ export const BallotVotingPage: React.FC = () => {
       setSubmitting(true);
       setError(null);
 
-      const votes: BallotItemVote[] = Object.entries(choices).map(([itemId, itemChoice]) => ({
-        ballot_item_id: itemId,
-        choice: itemChoice.choice,
-        write_in_name: itemChoice.choice === BallotChoice.WRITE_IN ? itemChoice.write_in_name.trim() : undefined,
-      }));
+      const votes: BallotItemVote[] = Object.entries(choices).map(([itemId, itemChoice]) => {
+        if (itemChoice.candidate_ids.length > 0) {
+          return { ballot_item_id: itemId, candidate_ids: itemChoice.candidate_ids };
+        }
+        const ordered = ranksToOrderedIds(itemChoice.ranks);
+        if (ordered.length > 0) {
+          return { ballot_item_id: itemId, rankings: ordered };
+        }
+        return {
+          ballot_item_id: itemId,
+          choice: itemChoice.choice || BallotChoice.ABSTAIN,
+          write_in_name:
+            itemChoice.choice === BallotChoice.WRITE_IN ? itemChoice.write_in_name.trim() : undefined,
+        };
+      });
 
       const result = await electionService.submitBallot(token, votes);
       setSubmitResult(result);
@@ -150,10 +227,22 @@ export const BallotVotingPage: React.FC = () => {
     }
   };
 
-  /** Converts a choice value (approve/deny/abstain/write_in/UUID) to a display label. */
+  const candidateName = (candidateId: string): string =>
+    candidates.find((c) => c.id === candidateId)?.name ?? candidateId;
+
+  /** Converts a selection (choice/multi-select/rankings) to a display label. */
   const getChoiceLabel = (itemId: string): string => {
     const itemChoice = choices[itemId];
     if (!itemChoice) return 'Abstain';
+
+    if (itemChoice.candidate_ids.length > 0) {
+      return `Approved: ${itemChoice.candidate_ids.map(candidateName).join(', ')}`;
+    }
+    const ordered = ranksToOrderedIds(itemChoice.ranks);
+    if (ordered.length > 0) {
+      return `Ranked: ${ordered.map((cid, i) => `${i + 1}. ${candidateName(cid)}`).join(', ')}`;
+    }
+    if (!itemChoice.choice) return 'Abstain (No Vote)';
 
     switch (itemChoice.choice) {
       case BallotChoice.APPROVE:
@@ -292,6 +381,18 @@ export const BallotVotingPage: React.FC = () => {
             const itemChoice = choices[item.id];
             const itemCandidates = getCandidatesForItem(item);
             const isApprovalType = item.vote_type === VoteType.APPROVAL;
+            // Items may override the election-level method (mirrors backend)
+            const effectiveMethod = item.voting_method ?? election.voting_method;
+            const maxVotes = election.max_votes_per_position || 1;
+            const isRanked = !isApprovalType && effectiveMethod === 'ranked_choice';
+            const isMultiSelect =
+              !isApprovalType && !isRanked && (effectiveMethod === 'approval' || maxVotes > 1);
+            // Approval-method items have no selection cap; multi-vote items do
+            const selectionCap = effectiveMethod === 'approval' ? null : maxVotes;
+            const atCap =
+              isMultiSelect &&
+              selectionCap !== null &&
+              (itemChoice?.candidate_ids.length ?? 0) >= selectionCap;
 
             return (
               <div
@@ -341,6 +442,86 @@ export const BallotVotingPage: React.FC = () => {
                         />
                         <span className="font-medium text-theme-text-primary">Deny</span>
                       </label>
+                    </>
+                  ) : isRanked ? (
+                    <>
+                      {/* Ranked choice: assign a unique rank per candidate */}
+                      <p className="text-xs text-theme-text-muted">
+                        Rank the candidates in order of preference (1 = first choice).
+                        Leave a candidate unranked to exclude them.
+                      </p>
+                      {itemCandidates.map((candidate) => {
+                        const currentRank = itemChoice?.ranks[candidate.id];
+                        return (
+                          <div
+                            key={candidate.id}
+                            className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:border-blue-300 transition-colors"
+                          >
+                            <select
+                              value={currentRank ?? ''}
+                              onChange={(e) =>
+                                setCandidateRank(
+                                  item.id,
+                                  candidate.id,
+                                  e.target.value ? Number(e.target.value) : null,
+                                )
+                              }
+                              aria-label={`Rank for ${candidate.name}`}
+                              className="w-16 border border-theme-surface-border rounded-md py-1 px-2 text-sm bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                            >
+                              <option value="">—</option>
+                              {itemCandidates.map((_, rankIdx) => (
+                                <option key={rankIdx + 1} value={rankIdx + 1}>
+                                  {rankIdx + 1}
+                                </option>
+                              ))}
+                            </select>
+                            <div>
+                              <span className="font-medium text-theme-text-primary">{candidate.name}</span>
+                              {candidate.statement && (
+                                <p className="text-sm text-theme-text-muted mt-0.5">{candidate.statement}</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  ) : isMultiSelect ? (
+                    <>
+                      {/* Approval / multi-vote: select every candidate you support */}
+                      <p className="text-xs text-theme-text-muted">
+                        {selectionCap === null
+                          ? 'Select every candidate you approve of.'
+                          : `Select up to ${selectionCap} candidates.`}
+                      </p>
+                      {itemCandidates.map((candidate) => {
+                        const isChecked = itemChoice?.candidate_ids.includes(candidate.id) ?? false;
+                        const disabled = !isChecked && atCap;
+                        return (
+                          <label
+                            key={candidate.id}
+                            className={`flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border transition-colors ${
+                              disabled
+                                ? 'opacity-50 cursor-not-allowed'
+                                : 'cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:border-blue-300'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              disabled={disabled}
+                              onChange={() => toggleCandidate(item.id, candidate.id, selectionCap)}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-theme-focus-ring"
+                            />
+                            <div>
+                              <span className="font-medium text-theme-text-primary">{candidate.name}</span>
+                              {candidate.statement && (
+                                <p className="text-sm text-theme-text-muted mt-0.5">{candidate.statement}</p>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
                     </>
                   ) : (
                     <>
@@ -460,7 +641,7 @@ export const BallotVotingPage: React.FC = () => {
               <div className="space-y-4">
                 {ballotItems.map((item, index) => {
                   const label = getChoiceLabel(item.id);
-                  const isAbstain = choices[item.id]?.choice === BallotChoice.ABSTAIN;
+                  const isAbstain = label.startsWith('Abstain');
 
                   return (
                     <div

@@ -32,6 +32,7 @@ from app.schemas.election import (
     AttendeeCheckIn,
     AttendeeCheckInResponse,
     AttendeeListResponse,
+    AttestManualBallotsResponse,
     BallotElectionResponse,
     BallotPreviewResponse,
     BallotSubmission,
@@ -59,6 +60,11 @@ from app.schemas.election import (
     EmailBallotResponse,
     ForensicsResponse,
     ImportMeetingAttendeesResponse,
+    ManualBallotBatchListResponse,
+    ManualBallotsRequest,
+    ManualBallotsResponse,
+    NominationActionResponse,
+    NominationCreate,
     NonVotersResponse,
     PackageRecipientsResponse,
     PreMeetingPackageResponse,
@@ -70,6 +76,8 @@ from app.schemas.election import (
     SoftDeleteVoteResponse,
     SuccessResponse,
     TestBallotResponse,
+    VoidManualBallotsRequest,
+    VoidManualBallotsResponse,
     VoteCreate,
     VoteIntegrityResponse,
     VoteReceiptResponse,
@@ -342,27 +350,45 @@ async def get_ballot_templates(
 # ============================================
 
 
-@router.get("/ballot", response_model=BallotElectionResponse)
-async def get_ballot_by_token(
-    token: str,
+class BallotLookupRequest(BaseModel):
+    """Ballot lookup payload — the token travels in the body, never a URL."""
+
+    token: str
+
+
+class BallotLookupResponse(BaseModel):
+    """Election view + candidates for a token holder, in one round-trip."""
+
+    election: BallotElectionResponse
+    candidates: list[CandidateResponse] = []
+
+
+@router.post("/ballot/lookup", response_model=BallotLookupResponse)
+async def lookup_ballot_by_token(
+    payload: BallotLookupRequest,
     db: AsyncSession = Depends(get_db),
     _rate: None = Depends(_ballot_read_rate_limit),
 ):
     """
-    Get ballot information using a voting token
+    Get ballot information and candidates using a voting token
 
     This endpoint is public (no authentication required) and uses the
-    high-entropy token from the email link.
+    high-entropy token from the email link. The token must be provided in
+    the request body (not a query parameter or path segment) so the live
+    credential never lands in server/proxy logs or browser history — the
+    same rationale as the vote endpoints (R-D3). The emailed link carries
+    the token in the URL *fragment*, which browsers never send to servers.
 
     SECURITY: returns only the minimal ballot view (BallotElectionResponse).
     The full ElectionResponse would leak the member roster — attendees,
     eligible_voters, email_recipients — to any token holder. Ballot items
-    are filtered to the ones this voter is eligible for.
+    are filtered to the ones this voter is eligible for, and positions and
+    candidates to the voter's eligible_positions snapshot (R-D4).
 
     **No authentication required**
     """
     service = ElectionService(db)
-    election, voting_token, error = await service.get_ballot_by_token(token)
+    election, voting_token, error = await service.get_ballot_by_token(payload.token)
 
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
@@ -373,35 +399,29 @@ async def get_ballot_by_token(
         response.ballot_items = [
             item for item in response.ballot_items if item.id in allowed
         ]
-    return response
 
-
-@router.get("/ballot/{token}/candidates", response_model=list[CandidateResponse])
-async def get_ballot_candidates(
-    token: str,
-    db: AsyncSession = Depends(get_db),
-    _rate: None = Depends(_ballot_read_rate_limit),
-):
-    """
-    Get candidates for a ballot using voting token
-
-    **No authentication required**
-    """
-    service = ElectionService(db)
-    election, voting_token, error = await service.get_ballot_by_token(token)
-
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-
-    # Get candidates for this election
     result = await db.execute(
         select(Candidate)
         .where(Candidate.election_id == election.id)
         .where(Candidate.accepted == True)  # noqa: E712
         .order_by(Candidate.position, Candidate.display_order)
     )
+    candidates = list(result.scalars().all())
 
-    return result.scalars().all()
+    # Position-restricted token: hide positions/candidates the voter may
+    # not vote for (mirrors the enforcement in cast_vote_with_token).
+    if voting_token.eligible_positions is not None:
+        allowed_positions = set(voting_token.eligible_positions)
+        if response.positions is not None:
+            response.positions = [
+                p for p in response.positions if p in allowed_positions
+            ]
+        candidates = [c for c in candidates if c.position in allowed_positions]
+
+    return BallotLookupResponse(
+        election=response,
+        candidates=[CandidateResponse.model_validate(c) for c in candidates],
+    )
 
 
 class VoteWithToken(VoteCreate):
@@ -438,6 +458,7 @@ async def cast_vote_with_token(
         position=vote_data.position,
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
+        vote_rank=vote_data.vote_rank,
     )
 
     if error:
@@ -517,6 +538,20 @@ class ElectionSettingsUpdate(BaseModel):
     default_quorum_value: Optional[int] = None
     max_proxies_per_person: Optional[int] = None
     proxy_voting_enabled: Optional[bool] = None
+    nominations_enabled: Optional[bool] = None
+    paper_ballots_enabled: Optional[bool] = None
+    reminders_enabled: Optional[bool] = None
+    auto_open_enabled: Optional[bool] = None
+    paper_ballot_attestations_required: Optional[int] = Field(
+        None,
+        ge=0,
+        le=3,
+        description=(
+            "Officers (other than the recorder) who must attest a "
+            "paper-ballot batch before its votes count. 0 disables "
+            "attestation."
+        ),
+    )
 
 
 @router.get("/settings", response_model=ElectionSettingsResponse)
@@ -546,6 +581,7 @@ async def get_election_settings(
     org_settings = org.settings or {}
     election_defaults = org_settings.get("election_defaults", {})
     proxy_config = org_settings.get("proxy_voting", {})
+    features = org_settings.get("election_features", {})
 
     from app.core.config import settings as app_settings
 
@@ -566,6 +602,13 @@ async def get_election_settings(
         "default_quorum_value": election_defaults.get("quorum_value"),
         "proxy_voting_enabled": proxy_config.get("enabled", False),
         "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
+        "nominations_enabled": features.get("nominations_enabled", True),
+        "paper_ballots_enabled": features.get("paper_ballots_enabled", True),
+        "reminders_enabled": features.get("reminders_enabled", True),
+        "auto_open_enabled": features.get("auto_open_enabled", True),
+        "paper_ballot_attestations_required": features.get(
+            "paper_ballot_attestations_required", 2
+        ),
         "security": {
             "vote_signing_key_configured": signing_key_configured,
             "anonymity_salt_auto_destroy": True,
@@ -604,6 +647,7 @@ async def update_election_settings(
     org_settings = copy.deepcopy(org.settings or {})
     election_defaults = org_settings.get("election_defaults", {})
     proxy_config = org_settings.get("proxy_voting", {})
+    features = org_settings.get("election_features", {})
 
     update_data = settings_update.model_dump(exclude_unset=True)
 
@@ -627,8 +671,19 @@ async def update_election_settings(
     if "max_proxies_per_person" in update_data:
         proxy_config["max_proxies_per_person"] = update_data["max_proxies_per_person"]
 
+    for flag in (
+        "nominations_enabled",
+        "paper_ballots_enabled",
+        "reminders_enabled",
+        "auto_open_enabled",
+        "paper_ballot_attestations_required",
+    ):
+        if flag in update_data:
+            features[flag] = update_data[flag]
+
     org_settings["election_defaults"] = election_defaults
     org_settings["proxy_voting"] = proxy_config
+    org_settings["election_features"] = features
     org.settings = org_settings
 
     await db.commit()
@@ -657,6 +712,13 @@ async def update_election_settings(
         "default_quorum_value": election_defaults.get("quorum_value"),
         "proxy_voting_enabled": proxy_config.get("enabled", False),
         "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
+        "nominations_enabled": features.get("nominations_enabled", True),
+        "paper_ballots_enabled": features.get("paper_ballots_enabled", True),
+        "reminders_enabled": features.get("reminders_enabled", True),
+        "auto_open_enabled": features.get("auto_open_enabled", True),
+        "paper_ballot_attestations_required": features.get(
+            "paper_ballot_attestations_required", 2
+        ),
     }
 
 
@@ -763,7 +825,7 @@ async def update_election(
             )
 
     # For draft elections, validate dates if they're being updated
-    elif election.status == ElectionStatus.DRAFT:
+    elif election.status in (ElectionStatus.DRAFT, ElectionStatus.NOMINATIONS):
         if "end_date" in update_data and "start_date" not in update_data:
             new_end = update_data["end_date"]
             if new_end and new_end.tzinfo is None:
@@ -1031,6 +1093,338 @@ async def close_election(
         raise HTTPException(status_code=status_code, detail=error)
 
     return await _build_election_response(db, election)
+
+
+@router.post("/{election_id}/open-nominations", response_model=ElectionResponse)
+async def open_nominations(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Open the nomination phase for a draft positional election.
+
+    While nominations are open, members can nominate each other (or
+    themselves) for the election's positions; third-party nominees must
+    accept before they appear on the ballot.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    election, error = await service.open_nominations(
+        election_id,
+        current_user.organization_id,
+        acting_user_id=str(current_user.id),
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return await _build_election_response(db, election)
+
+
+@router.post("/{election_id}/close-nominations", response_model=ElectionResponse)
+async def close_nominations(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Close the nomination phase, returning the election to draft so the
+    ballot can be finalized before voting opens.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    election, error = await service.close_nominations(
+        election_id, current_user.organization_id
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return await _build_election_response(db, election)
+
+
+@router.post(
+    "/{election_id}/nominations",
+    response_model=CandidateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_nomination(
+    election_id: UUID,
+    nomination: NominationCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.view")),
+):
+    """
+    Nominate a member (or yourself) for a position while nominations are
+    open. Third-party nominations require the nominee's acceptance before
+    they appear on the ballot; self-nominations are accepted implicitly.
+
+    **Authentication required**
+    **Requires permission: elections.view (any member)**
+    """
+    service = ElectionService(db)
+    candidate, error = await service.create_nomination(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        nominator_id=str(current_user.id),
+        position=nomination.position,
+        nominee_user_id=(
+            str(nomination.nominee_user_id) if nomination.nominee_user_id else None
+        ),
+        statement=nomination.statement,
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return candidate
+
+
+@router.post(
+    "/{election_id}/nominations/{candidate_id}/accept",
+    response_model=NominationActionResponse,
+)
+async def accept_nomination(
+    election_id: UUID,
+    candidate_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.view")),
+):
+    """
+    Accept your nomination — only the nominee can accept.
+
+    **Authentication required**
+    """
+    service = ElectionService(db)
+    ok, error = await service.respond_to_nomination(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        candidate_id=candidate_id,
+        user_id=str(current_user.id),
+        accept=True,
+    )
+    if not ok:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if error and "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return {"success": True, "message": "Nomination accepted"}
+
+
+@router.post(
+    "/{election_id}/nominations/{candidate_id}/decline",
+    response_model=NominationActionResponse,
+)
+async def decline_nomination(
+    election_id: UUID,
+    candidate_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.view")),
+):
+    """
+    Decline your nomination — only the nominee can decline. The candidate
+    entry is removed; the audit log retains the record.
+
+    **Authentication required**
+    """
+    service = ElectionService(db)
+    ok, error = await service.respond_to_nomination(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        candidate_id=candidate_id,
+        user_id=str(current_user.id),
+        accept=False,
+    )
+    if not ok:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if error and "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return {"success": True, "message": "Nomination declined"}
+
+
+@router.post("/{election_id}/manual-ballots", response_model=ManualBallotsResponse)
+async def record_manual_ballots(
+    election_id: UUID,
+    payload: ManualBallotsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Record an in-room paper-ballot tally for an open election.
+
+    Creates one vote row per paper ballot, flagged is_manual and
+    attributed to the recording officer. Manual votes carry no voter
+    identity — the officer's attested count is the source of truth — and
+    are signed and chained like electronic votes so integrity
+    verification covers the full ballot box.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    recorded, batch_id, error = await service.record_manual_ballots(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        recorded_by=str(current_user.id),
+        entries=[
+            {"candidate_id": str(e.candidate_id), "count": e.count}
+            for e in payload.entries
+        ],
+        notes=payload.notes,
+        allow_over_count=payload.allow_over_count,
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    required = await service.get_required_attestations(current_user.organization_id)
+    if required > 0:
+        message = (
+            f"Recorded {recorded} paper ballot(s) — awaiting {required} "
+            f"officer attestation(s) before they count in results"
+        )
+    else:
+        message = f"Recorded {recorded} paper ballot(s)"
+    return {
+        "recorded": recorded,
+        "batch_id": batch_id,
+        "status": "pending" if required > 0 else "confirmed",
+        "attestations_required": required,
+        "message": message,
+    }
+
+
+@router.get(
+    "/{election_id}/manual-ballots",
+    response_model=ManualBallotBatchListResponse,
+)
+async def list_manual_ballot_batches(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    List every paper-ballot batch for an election with its recorded
+    totals, status (pending / confirmed / voided), and attestation trail.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    election = await service.get_election(election_id, current_user.organization_id)
+    if not election:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+    batches = await service.list_manual_ballot_batches(
+        election_id, current_user.organization_id
+    )
+    return {"batches": batches}
+
+
+@router.post(
+    "/{election_id}/manual-ballots/{batch_id}/attest",
+    response_model=AttestManualBallotsResponse,
+)
+async def attest_manual_ballots(
+    election_id: UUID,
+    batch_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Attest that a paper-ballot batch matches the physical count.
+
+    The recording officer cannot attest their own batch and each officer
+    counts once. When the required number of attestations is reached the
+    batch is confirmed and its votes count in results.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    result, error = await service.attest_manual_ballot_batch(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        batch_id=batch_id,
+        attested_by=str(current_user.id),
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    assert result is not None
+    if result["status"] == "confirmed":
+        message = "Batch fully attested — its ballots now count in results"
+    else:
+        remaining = result["required"] - result["attestations"]
+        message = f"Attestation recorded — {remaining} more needed"
+    return {**result, "message": message}
+
+
+@router.post(
+    "/{election_id}/manual-ballots/{batch_id}/void",
+    response_model=VoidManualBallotsResponse,
+)
+async def void_manual_ballots(
+    election_id: UUID,
+    batch_id: str,
+    payload: VoidManualBallotsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Void (soft-delete) every paper ballot recorded in one batch — the
+    correction path for a mis-keyed tally. Rows are retained with the
+    deletion reason and appear in the forensics report.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    voided, error = await service.void_manual_ballot_batch(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        batch_id=batch_id,
+        deleted_by=str(current_user.id),
+        reason=payload.reason,
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "no active" in error.lower() or "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return {
+        "voided": voided,
+        "message": f"Voided {voided} paper ballot(s) from batch",
+    }
 
 
 @router.post("/{election_id}/rollback", response_model=ElectionRollbackResponse)
@@ -1573,7 +1967,8 @@ async def send_ballot_emails(
     # SEC: use the server-configured FRONTEND_URL, NOT request.base_url — the
     # latter derives from the client-controlled Host header, so a spoofed Host
     # would send members ballot links (with voting tokens) to an attacker's
-    # domain. The token is appended by the service: /ballot?token=xxx
+    # domain. The token is appended by the service as a URL fragment:
+    # /ballot#token=xxx (fragments never reach any server — R-D3)
     frontend_origin = settings.FRONTEND_URL.rstrip("/")
     base_ballot_url = (
         f"{frontend_origin}/ballot" if email_data.include_ballot_link else None
@@ -1581,7 +1976,7 @@ async def send_ballot_emails(
 
     service = ElectionService(db)
     try:
-        recipients_count, failed_count, skipped_count, skipped_details = (
+        recipients_count, failed_count, skipped_count, skipped_details, _sent_ids = (
             await service.send_ballot_emails(
                 election_id=election_id,
                 organization_id=current_user.organization_id,
@@ -1849,6 +2244,63 @@ async def get_non_voters(
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
     return {"non_voters": non_voters, "count": len(non_voters)}
+
+
+class RemindNonVotersRequest(BaseModel):
+    """Optional overrides for the reminder email."""
+
+    subject: Optional[str] = Field(None, max_length=200)
+    message: Optional[str] = Field(None, max_length=2000)
+
+
+@router.post("/{election_id}/remind-non-voters", response_model=EmailBallotResponse)
+async def remind_non_voters(
+    election_id: UUID,
+    payload: Optional[RemindNonVotersRequest] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Send a reminder ballot email — with a fresh voting link — to every
+    eligible voter who has not yet cast a vote.
+
+    Members who already voted are not contacted. Also stamps the election's
+    reminder_sent_at, which suppresses the automatic pre-close reminder.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    # SEC: server-configured FRONTEND_URL, never the Host header (see
+    # send-ballot above) — the link carries a live voting token.
+    frontend_origin = settings.FRONTEND_URL.rstrip("/")
+
+    service = ElectionService(db)
+    try:
+        reminded, failed, skipped, skipped_details = await service.remind_non_voters(
+            election_id=election_id,
+            organization_id=current_user.organization_id,
+            user_id=str(current_user.id),
+            subject=payload.subject if payload else None,
+            message=payload.message if payload else None,
+            base_ballot_url=f"{frontend_origin}/ballot",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    if reminded == 0 and failed == 0 and skipped == 0:
+        message = "Everyone eligible has already voted — no reminders needed"
+    else:
+        message = f"Reminder sent to {reminded} non-voter(s)"
+    return {
+        "success": failed == 0,
+        "recipients_count": reminded,
+        "failed_count": failed,
+        "skipped_count": skipped,
+        "skipped_details": skipped_details,
+        "message": message,
+    }
 
 
 @router.get(
@@ -2783,7 +3235,7 @@ async def send_test_ballot(
 
     service = ElectionService(db)
     try:
-        recipients_count, failed_count, skipped_count, _skipped_details = (
+        recipients_count, failed_count, skipped_count, _skipped_details, _sent_ids = (
             await service.send_ballot_emails(
                 election_id=election_id,
                 organization_id=current_user.organization_id,

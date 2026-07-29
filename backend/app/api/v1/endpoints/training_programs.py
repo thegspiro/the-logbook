@@ -18,14 +18,15 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
-from app.core.permissions import permission_matches
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.permissions import permission_matches
 from app.models.user import User
 from app.schemas.training_program import (  # Requirements; Programs; Phases; Program Requirements; Milestones; Enrollments; Progress; Registry
     ApplyTrainingRecordRequest,
     MemberEligibilityResponse,
     MemberProgramProgress,
+    PhaseReorderRequest,
     ProgramBuildRequest,
     ProgramEnrollmentCreate,
     ProgramEnrollmentResponse,
@@ -41,13 +42,12 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     ProgramRequirementResponse,
     ProgramRequirementUpdate,
     ProgramWithPhasesAndRequirements,
-    PhaseReorderRequest,
     RegistryImportResult,
     RegistryRequirementPreview,
     RegistrySelectiveImport,
-    RequirementReorderRequest,
     RequirementProgressResponse,
     RequirementProgressUpdate,
+    RequirementReorderRequest,
     SampleTemplateInstantiate,
     SampleTemplateSummary,
     TrainingProgramCreate,

@@ -8,10 +8,7 @@ path). Uses a stub DB session so no database is required.
 
 from fastapi import BackgroundTasks
 
-from app.utils.security_notifications import (
-    _send_security_email,
-    notify_security_event,
-)
+from app.utils.security_notifications import _send_security_email, notify_security_event
 
 
 class _StubDB:

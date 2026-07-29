@@ -98,10 +98,12 @@ class TestPackageSetup:
                 "start_date, end_date, status, anonymous_voting, "
                 "allow_write_ins, max_votes_per_position, voting_method, "
                 "victory_condition, voter_anonymity_salt, quorum_type, "
-                "created_by) "
+                "created_by, email_sent, results_visible_immediately, "
+                "enable_runoffs, runoff_type, max_runoff_rounds, "
+                "is_runoff, runoff_round, created_at, updated_at) "
                 "VALUES (:id, :org, :title, :etype, :positions, "
                 ":start, :end, :status, :anon, 0, 1, "
-                "'simple_majority', 'majority', :salt, 'none', :creator)"
+                "'simple_majority', 'majority', :salt, 'none', :creator, 0, 0, 0, 'top_two', 3, 0, 0, NOW(), NOW())"
             ),
             {
                 "id": election_id,
@@ -121,7 +123,8 @@ class TestPackageSetup:
             text(
                 "INSERT INTO candidates "
                 "(id, election_id, name, position, accepted, is_write_in, "
-                "display_order) VALUES (:id, :eid, 'Jane Doe', 'Chief', 1, 0, 0)"
+                "display_order, nomination_date, created_at, updated_at) "
+                "VALUES (:id, :eid, 'Jane Doe', 'Chief', 1, 0, 0, NOW(), NOW(), NOW())"
             ),
             {"id": candidate_id, "eid": election_id},
         )
@@ -139,7 +142,7 @@ class TestPackageRecipients(TestPackageSetup):
     async def test_leadership_prefill(
         self, db_session: AsyncSession, setup_package_election
     ):
-        data = await setup_package_election
+        data = setup_package_election
         svc = ElectionService(db_session)
 
         recipients, err = await svc.get_package_recipients(
@@ -157,7 +160,7 @@ class TestPackageRecipients(TestPackageSetup):
     async def test_eligible_voters_prefill(
         self, db_session: AsyncSession, setup_package_election
     ):
-        data = await setup_package_election
+        data = setup_package_election
         svc = ElectionService(db_session)
 
         recipients, err = await svc.get_package_recipients(
@@ -174,7 +177,7 @@ class TestPackageRecipients(TestPackageSetup):
     async def test_unknown_mode_rejected(
         self, db_session: AsyncSession, setup_package_election
     ):
-        data = await setup_package_election
+        data = setup_package_election
         svc = ElectionService(db_session)
 
         recipients, err = await svc.get_package_recipients(
@@ -188,7 +191,7 @@ class TestPackagePdfBuild(TestPackageSetup):
     async def test_build_returns_pdf_and_filename(
         self, db_session: AsyncSession, setup_package_election
     ):
-        data = await setup_package_election
+        data = setup_package_election
         svc = ElectionService(db_session)
 
         buf, err, filename = await svc.build_pre_meeting_package_pdf(
@@ -203,7 +206,7 @@ class TestPackagePdfBuild(TestPackageSetup):
     async def test_closed_election_rejected(
         self, db_session: AsyncSession, setup_package_election
     ):
-        data = await setup_package_election
+        data = setup_package_election
         await db_session.execute(
             text("UPDATE elections SET status = 'closed' WHERE id = :id"),
             {"id": data["election_id"]},
@@ -221,7 +224,7 @@ class TestPackagePdfBuild(TestPackageSetup):
     async def test_cross_org_rejected(
         self, db_session: AsyncSession, setup_package_election
     ):
-        data = await setup_package_election
+        data = setup_package_election
         svc = ElectionService(db_session)
 
         buf, err, _ = await svc.build_pre_meeting_package_pdf(
@@ -235,7 +238,7 @@ class TestPackageSend(TestPackageSetup):
     async def test_send_to_edited_list_with_free_form_address(
         self, db_session: AsyncSession, setup_package_election
     ):
-        data = await setup_package_election
+        data = setup_package_election
         svc = ElectionService(db_session)
 
         with patch(
@@ -273,7 +276,7 @@ class TestPackageSend(TestPackageSetup):
     async def test_empty_recipient_list_rejected(
         self, db_session: AsyncSession, setup_package_election
     ):
-        data = await setup_package_election
+        data = setup_package_election
         svc = ElectionService(db_session)
 
         success, message, sent_count = await svc.generate_and_send_pre_meeting_package(
@@ -288,7 +291,7 @@ class TestPackageSend(TestPackageSetup):
     async def test_send_failure_reported(
         self, db_session: AsyncSession, setup_package_election
     ):
-        data = await setup_package_election
+        data = setup_package_election
         svc = ElectionService(db_session)
 
         with patch(

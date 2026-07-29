@@ -41,7 +41,18 @@ _BOOL_DEFAULTS = {
 
 
 def upgrade() -> None:
+    # Several of these are model-only columns that no migration adds —
+    # deployments get them from the startup missing-column repair, so on a
+    # fresh chain run they may not exist yet. Backfill only what's present.
+    from sqlalchemy import inspect
+
+    existing = {
+        col["name"]
+        for col in inspect(op.get_bind()).get_columns("training_module_configs")
+    }
     for column, default in _BOOL_DEFAULTS.items():
+        if column not in existing:
+            continue
         op.execute(
             f"UPDATE training_module_configs "
             f"SET {column} = {1 if default else 0} "

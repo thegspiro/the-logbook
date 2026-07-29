@@ -21,6 +21,14 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # positions is a model-only table (the chain created roles/user_roles;
+    # deployments materialize positions via create_all, which already
+    # includes settings). On a fresh chain run there is nothing to alter.
+    from sqlalchemy import inspect
+
+    if "positions" not in inspect(op.get_bind()).get_table_names():
+        return
+
     op.add_column("positions", sa.Column("settings", sa.JSON(), nullable=True))
 
 

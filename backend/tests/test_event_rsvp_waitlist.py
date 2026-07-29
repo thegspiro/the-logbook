@@ -80,10 +80,19 @@ class TestRsvpGuards:
 
 
 class TestRsvpCapacity:
+    @staticmethod
+    def _svc(db):
+        """EventService with the training phase gate stubbed — the gate has
+        its own suite (test_event_phase_gate.py) and its extra queries would
+        desync the positional execute() mocks here."""
+        svc = EventService(db)
+        svc._evaluate_session_phase_warning = AsyncMock(return_value=None)
+        return svc
+
     async def test_new_going_under_capacity_stays_going(self):
         ev = _event(max_attendees=5)
         db = _db([_one(ev), _one(None), _scalar(2)])  # event, no existing, 2 going
-        rsvp, err = await EventService(db).create_or_update_rsvp(
+        rsvp, err = await self._svc(db).create_or_update_rsvp(
             "e1", "u1", RSVPCreate(status="going"), "org-1"
         )
         assert err is None
@@ -93,7 +102,7 @@ class TestRsvpCapacity:
     async def test_new_going_at_capacity_is_waitlisted(self):
         ev = _event(max_attendees=2)
         db = _db([_one(ev), _one(None), _scalar(2)])  # 2 going == cap
-        rsvp, err = await EventService(db).create_or_update_rsvp(
+        rsvp, err = await self._svc(db).create_or_update_rsvp(
             "e1", "u1", RSVPCreate(status="going"), "org-1"
         )
         assert err is None

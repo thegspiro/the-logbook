@@ -55,7 +55,9 @@ def test_verify_totp_get_timestep_rejects_replay():
     step = mfa_service.verify_totp_get_timestep(secret, code, last_timestep=None)
     assert step is not None
     # Same code, now that its step is recorded as last-used -> replay -> None.
-    assert mfa_service.verify_totp_get_timestep(secret, code, last_timestep=step) is None
+    assert (
+        mfa_service.verify_totp_get_timestep(secret, code, last_timestep=step) is None
+    )
     # An older last_timestep does not block the current, un-consumed step.
     assert (
         mfa_service.verify_totp_get_timestep(secret, code, last_timestep=step - 1)
@@ -83,7 +85,9 @@ def test_find_matching_recovery_code_hashed_store():
     codes = mfa_service.generate_recovery_codes(3)
     stored = [mfa_service.hash_recovery_code(c) for c in codes]
     # Correct code (any case/spacing) matches its stored hash.
-    assert mfa_service.find_matching_recovery_code(codes[0].upper(), stored) == stored[0]
+    assert (
+        mfa_service.find_matching_recovery_code(codes[0].upper(), stored) == stored[0]
+    )
     # Wrong code matches nothing.
     assert mfa_service.find_matching_recovery_code("zzzzz-zzzzz", stored) is None
 

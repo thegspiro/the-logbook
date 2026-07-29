@@ -14,10 +14,7 @@ from app.services.org_template_registry import (
     modules,
     specs_for_modules,
 )
-from app.services.org_template_service import (
-    _parent_table,
-    null_columns_for,
-)
+from app.services.org_template_service import _parent_table, null_columns_for
 
 
 def test_specs_have_unique_tables():

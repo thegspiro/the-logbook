@@ -15,7 +15,6 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import Role, User
-from app.services.org_template_service import OrgTemplateService
 from app.schemas.organization import (
     AuthSettings,
     ContactInfoSettings,
@@ -30,6 +29,7 @@ from app.schemas.organization import (
     SetupChecklistItem,
     SetupChecklistResponse,
 )
+from app.services.org_template_service import OrgTemplateService
 from app.services.organization_service import OrganizationService
 
 router = APIRouter()

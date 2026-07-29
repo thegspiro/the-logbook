@@ -18,7 +18,6 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security import encrypt_data
 from app.core.utils import safe_error_detail
-from app.utils.url_validator import validate_integration_url
 from app.models.training import (
     ExternalCategoryMapping,
     ExternalTrainingImport,
@@ -50,6 +49,7 @@ from app.schemas.training import (
 from app.schemas.training import SyncStatus as SyncStatusEnum
 from app.schemas.training import TestConnectionResponse
 from app.services.external_training_service import ExternalTrainingSyncService
+from app.utils.url_validator import validate_integration_url
 
 router = APIRouter()
 

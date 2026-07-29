@@ -12,9 +12,10 @@ CRITICAL: This test prevents issues like the organization_type enum bug where
 the database had UPPERCASE values but the application sent lowercase values.
 """
 
-import pytest
 import re
 from pathlib import Path
+
+import pytest
 
 
 class TestEnumConsistency:
@@ -37,7 +38,7 @@ class TestEnumConsistency:
                 enum_name = match.group(2)
 
                 # Extract values (anything in quotes before 'name=')
-                values_section = full_match.split('name=')[0]
+                values_section = full_match.split("name=")[0]
                 values = re.findall(r"['\"]([^'\"]+)['\"]", values_section)
 
                 if values and enum_name not in enums:
@@ -58,7 +59,9 @@ class TestEnumConsistency:
             # Pattern: class EnumName(str, enum.Enum): followed by optional docstring then values
             enum_class_pattern = r"class (\w+)\(str, enum\.Enum\):.*?\n(?:\s*\"\"\".*?\"\"\".*?\n)?((?:    \w+ = ['\"].*?\n)+)"
 
-            for match in re.finditer(enum_class_pattern, content, re.MULTILINE | re.DOTALL):
+            for match in re.finditer(
+                enum_class_pattern, content, re.MULTILINE | re.DOTALL
+            ):
                 class_name = match.group(1)
                 values_block = match.group(2)
 
@@ -73,11 +76,19 @@ class TestEnumConsistency:
     @pytest.fixture
     def frontend_enums(self) -> dict[str, list[str]]:
         """Extract enum/union type definitions from TypeScript files"""
-        frontend_dir = Path(__file__).parent.parent.parent / "frontend" / "src" / "modules" / "onboarding"
+        frontend_dir = (
+            Path(__file__).parent.parent.parent
+            / "frontend"
+            / "src"
+            / "modules"
+            / "onboarding"
+        )
         enums = {}
 
         # Pattern for TypeScript union types: type EnumName = 'value1' | 'value2' | 'value3';
-        union_type_pattern = r"type (\w+) = (['\"][^'\"]+['\"](?:\s*\|\s*['\"][^'\"]+['\"])*)"
+        union_type_pattern = (
+            r"type (\w+) = (['\"][^'\"]+['\"](?:\s*\|\s*['\"][^'\"]+['\"])*)"
+        )
 
         for ts_file in frontend_dir.rglob("*.tsx"):
             content = ts_file.read_text()
@@ -94,25 +105,29 @@ class TestEnumConsistency:
 
         return enums
 
-    def test_organization_type_consistency(self, migration_enums, model_enums, frontend_enums):
+    def test_organization_type_consistency(
+        self, migration_enums, model_enums, frontend_enums
+    ):
         """
         Test that organization_type enum values match across all layers.
 
         This is the enum that caused the critical bug - this test prevents regression.
         """
         # Database migration values
-        db_values = set(migration_enums.get('organizationtype', []))
+        db_values = set(migration_enums.get("organizationtype", []))
 
         # Backend model values
-        backend_values = set(model_enums.get('OrganizationType', []))
+        backend_values = set(model_enums.get("OrganizationType", []))
 
         # Frontend type values
-        frontend_values = set(frontend_enums.get('OrganizationType', []))
+        frontend_values = set(frontend_enums.get("OrganizationType", []))
 
         # All should be defined
         assert db_values, "Database enum 'organizationtype' not found in migrations"
         assert backend_values, "Backend enum 'OrganizationType' not found in models"
-        assert frontend_values, "Frontend type 'OrganizationType' not found in TypeScript"
+        assert (
+            frontend_values
+        ), "Frontend type 'OrganizationType' not found in TypeScript"
 
         # All should match exactly
         assert db_values == backend_values, (
@@ -136,16 +151,18 @@ class TestEnumConsistency:
                 f"Convention: all enum values should be lowercase."
             )
 
-    def test_identifier_type_consistency(self, migration_enums, model_enums, frontend_enums):
+    def test_identifier_type_consistency(
+        self, migration_enums, model_enums, frontend_enums
+    ):
         """Test that identifier_type enum values match across all layers"""
         # Database migration values
-        db_values = set(migration_enums.get('identifiertype', []))
+        db_values = set(migration_enums.get("identifiertype", []))
 
         # Backend model values
-        backend_values = set(model_enums.get('IdentifierType', []))
+        backend_values = set(model_enums.get("IdentifierType", []))
 
         # Frontend type values
-        frontend_values = set(frontend_enums.get('IdentifierType', []))
+        frontend_values = set(frontend_enums.get("IdentifierType", []))
 
         # All should be defined
         assert db_values, "Database enum 'identifiertype' not found in migrations"
@@ -180,28 +197,30 @@ class TestEnumConsistency:
                     continue
 
                 if value != value.lower():
-                    violations.append(f"{enum_name}: '{value}' should be '{value.lower()}'")
+                    violations.append(
+                        f"{enum_name}: '{value}' should be '{value.lower()}'"
+                    )
 
         assert not violations, (
-            f"Found {len(violations)} enum values that are not lowercase:\n" +
-            "\n".join(f"  - {v}" for v in violations) +
-            "\n\nCONVENTION: All enum values should be lowercase to prevent case-sensitivity issues."
+            f"Found {len(violations)} enum values that are not lowercase:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+            + "\n\nCONVENTION: All enum values should be lowercase to prevent case-sensitivity issues."
         )
 
     def test_critical_onboarding_enums_exist(self, migration_enums, model_enums):
         """Ensure critical onboarding enums are defined"""
-        critical_db_enums = ['organizationtype', 'identifiertype']
-        critical_model_enums = ['OrganizationType', 'IdentifierType']
+        critical_db_enums = ["organizationtype", "identifiertype"]
+        critical_model_enums = ["OrganizationType", "IdentifierType"]
 
         for enum_name in critical_db_enums:
-            assert enum_name in migration_enums, (
-                f"Critical enum '{enum_name}' not found in database migrations"
-            )
+            assert (
+                enum_name in migration_enums
+            ), f"Critical enum '{enum_name}' not found in database migrations"
 
         for enum_name in critical_model_enums:
-            assert enum_name in model_enums, (
-                f"Critical enum '{enum_name}' not found in backend models"
-            )
+            assert (
+                enum_name in model_enums
+            ), f"Critical enum '{enum_name}' not found in backend models"
 
     def test_enum_values_not_empty(self, migration_enums, model_enums):
         """Ensure no enum has empty value list"""
@@ -260,7 +279,9 @@ def verify_enum_consistency() -> tuple[bool, list[str]]:
     # --- Extract frontend enums ---
     frontend_dir = base_dir.parent / "frontend" / "src" / "modules" / "onboarding"
     frontend_enums: dict[str, list[str]] = {}
-    union_type_pattern = r"type (\w+) = (['\"][^'\"]+['\"](?:\s*\|\s*['\"][^'\"]+['\"])*)"
+    union_type_pattern = (
+        r"type (\w+) = (['\"][^'\"]+['\"](?:\s*\|\s*['\"][^'\"]+['\"])*)"
+    )
 
     if frontend_dir.exists():
         for ts_file in frontend_dir.rglob("*.tsx"):
@@ -328,7 +349,9 @@ if __name__ == "__main__":
     success, errors = verify_enum_consistency()
 
     if success:
-        print("✅ All enum values are consistent across database, backend, and frontend")
+        print(
+            "✅ All enum values are consistent across database, backend, and frontend"
+        )
         exit(0)
     else:
         print(f"❌ Enum consistency check failed ({len(errors)} issue(s)):")

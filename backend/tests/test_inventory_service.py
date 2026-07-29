@@ -17,21 +17,18 @@ Covers:
   - Status transition matrix
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
 
+import pytest
+
+from app.models.inventory import ItemCondition, ItemStatus, TrackingType
 from app.services.inventory_service import InventoryService
-from app.models.inventory import (
-    ItemStatus,
-    ItemCondition,
-    TrackingType,
-)
-
 
 # ============================================
 # Fixtures
 # ============================================
+
 
 @pytest.fixture
 def mock_db():
@@ -69,6 +66,7 @@ def user_id():
 # ============================================
 # State Validation Tests
 # ============================================
+
 
 class TestValidateItemState:
     """Tests for _validate_item_state static method."""
@@ -135,6 +133,7 @@ class TestValidateItemState:
 # Category Requirement Validation Tests
 # ============================================
 
+
 class TestValidateCategoryRequirements:
 
     @pytest.mark.asyncio
@@ -146,13 +145,13 @@ class TestValidateCategoryRequirements:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_category_not_found_passes(self, service):
-        """If category doesn't exist, skip validation."""
+    async def test_category_not_found_rejected(self, service):
+        """An unresolvable (out-of-org) category_id fails closed (XC-1)."""
         service.get_category_by_id = AsyncMock(return_value=None)
         result = await service._validate_category_requirements(
             {"name": "Test", "category_id": str(uuid4())}, "org-123"
         )
-        assert result is None
+        assert result == "Invalid category"
 
     @pytest.mark.asyncio
     async def test_requires_serial_number_fails_when_missing(self, service):
@@ -178,7 +177,12 @@ class TestValidateCategoryRequirements:
         service.get_category_by_id = AsyncMock(return_value=mock_category)
 
         result = await service._validate_category_requirements(
-            {"name": "Test Radio", "category_id": str(uuid4()), "serial_number": "SN-001"}, "org-123"
+            {
+                "name": "Test Radio",
+                "category_id": str(uuid4()),
+                "serial_number": "SN-001",
+            },
+            "org-123",
         )
         assert result is None
 
@@ -218,6 +222,7 @@ class TestValidateCategoryRequirements:
 # ============================================
 # Create Item Tests
 # ============================================
+
 
 class TestCreateItem:
 
@@ -261,7 +266,9 @@ class TestCreateItem:
         assert "quantity" in error.lower()
 
     @pytest.mark.asyncio
-    async def test_create_item_duplicate_serial_rejected(self, service, org_id, user_id):
+    async def test_create_item_duplicate_serial_rejected(
+        self, service, org_id, user_id
+    ):
         """Items with duplicate serial numbers within the org are rejected."""
         service._validate_category_requirements = AsyncMock(return_value=None)
         service._check_serial_number_unique = AsyncMock(
@@ -300,7 +307,9 @@ class TestCreateItem:
         assert "retired" in error.lower() or "invalid" in error.lower()
 
     @pytest.mark.asyncio
-    async def test_create_item_category_validation_fails(self, service, org_id, user_id):
+    async def test_create_item_category_validation_fails(
+        self, service, org_id, user_id
+    ):
         """When category requirements fail, creation is rejected."""
         service._validate_category_requirements = AsyncMock(
             return_value="Category 'Radios' requires a serial number"
@@ -320,7 +329,9 @@ class TestCreateItem:
         assert "serial number" in error.lower()
 
     @pytest.mark.asyncio
-    async def test_create_item_db_exception_rolls_back(self, service, mock_db, org_id, user_id):
+    async def test_create_item_db_exception_rolls_back(
+        self, service, mock_db, org_id, user_id
+    ):
         """Database exceptions cause rollback and return error."""
         service._validate_category_requirements = AsyncMock(return_value=None)
         service._check_serial_number_unique = AsyncMock(return_value=None)
@@ -344,6 +355,7 @@ class TestCreateItem:
 # Create Category Tests
 # ============================================
 
+
 class TestCreateCategory:
 
     @pytest.mark.asyncio
@@ -364,7 +376,9 @@ class TestCreateCategory:
         mock_db.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_category_renames_metadata(self, service, mock_db, org_id, user_id):
+    async def test_create_category_renames_metadata(
+        self, service, mock_db, org_id, user_id
+    ):
         """Metadata key is renamed to extra_data to avoid SQLAlchemy conflict."""
         category, error = await service.create_category(
             organization_id=org_id,
@@ -395,6 +409,7 @@ class TestCreateCategory:
 # ============================================
 # Update Category Tests
 # ============================================
+
 
 class TestUpdateCategory:
 
@@ -431,6 +446,7 @@ class TestUpdateCategory:
 # Serial Number Uniqueness Tests
 # ============================================
 
+
 class TestSerialNumberUniqueness:
 
     @pytest.mark.asyncio
@@ -465,6 +481,7 @@ class TestSerialNumberUniqueness:
 # Helper: mock InventoryItem
 # ============================================
 
+
 def _make_item(**overrides) -> MagicMock:
     """Build a MagicMock that mimics an InventoryItem with sensible defaults."""
     defaults = {
@@ -495,6 +512,7 @@ def _make_item(**overrides) -> MagicMock:
 # ============================================
 # Update Item Validation Tests
 # ============================================
+
 
 class TestUpdateItem:
 
@@ -584,6 +602,7 @@ class TestUpdateItem:
 # Retire Item Tests
 # ============================================
 
+
 class TestRetireItem:
 
     @pytest.mark.unit
@@ -603,7 +622,9 @@ class TestRetireItem:
         item = _make_item(assigned_to_user_id=str(uuid4()))
         service.get_item_by_id = AsyncMock(return_value=item)
 
-        success, err = await service.retire_item(UUID(item.id), UUID(item.organization_id))
+        success, err = await service.retire_item(
+            UUID(item.id), UUID(item.organization_id)
+        )
         assert success is False
         assert "assigned" in err.lower() or "unassign" in err.lower()
 
@@ -619,13 +640,17 @@ class TestRetireItem:
         mock_result.scalar.return_value = 1
         mock_db.execute = AsyncMock(return_value=mock_result)
 
-        success, err = await service.retire_item(UUID(item.id), UUID(item.organization_id))
+        success, err = await service.retire_item(
+            UUID(item.id), UUID(item.organization_id)
+        )
         assert success is False
         assert "checkout" in err.lower() or "check" in err.lower()
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_retire_pool_item_blocked_with_unreturned_issuances(self, service, mock_db):
+    async def test_retire_pool_item_blocked_with_unreturned_issuances(
+        self, service, mock_db
+    ):
         """retire_item should block a POOL item that has unreturned issuances."""
         item = _make_item(assigned_to_user_id=None, tracking_type=TrackingType.POOL)
         service.get_item_by_id = AsyncMock(return_value=item)
@@ -637,7 +662,9 @@ class TestRetireItem:
         iss_result.scalar.return_value = 1
         mock_db.execute = AsyncMock(side_effect=[co_result, iss_result])
 
-        success, err = await service.retire_item(UUID(item.id), UUID(item.organization_id))
+        success, err = await service.retire_item(
+            UUID(item.id), UUID(item.organization_id)
+        )
         assert success is False
         assert "issuance" in err.lower() or "pool" in err.lower()
 
@@ -645,7 +672,9 @@ class TestRetireItem:
     @pytest.mark.asyncio
     async def test_retire_item_success(self, service, mock_db):
         """retire_item should succeed and update status/condition/active."""
-        item = _make_item(assigned_to_user_id=None, tracking_type=TrackingType.INDIVIDUAL)
+        item = _make_item(
+            assigned_to_user_id=None, tracking_type=TrackingType.INDIVIDUAL
+        )
         service.get_item_by_id = AsyncMock(return_value=item)
 
         # active checkouts count = 0
@@ -680,7 +709,9 @@ class TestRetireItem:
         mock_db.commit = AsyncMock(side_effect=Exception("DB error"))
 
         with patch("app.core.audit.log_audit_event", new_callable=AsyncMock):
-            success, err = await service.retire_item(UUID(item.id), UUID(item.organization_id))
+            success, err = await service.retire_item(
+                UUID(item.id), UUID(item.organization_id)
+            )
 
         assert success is False
         assert "DB error" in err
@@ -690,6 +721,7 @@ class TestRetireItem:
 # ============================================
 # Checkout Item Tests
 # ============================================
+
 
 class TestCheckoutItem:
 
@@ -702,8 +734,10 @@ class TestCheckoutItem:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         checkout, err = await service.checkout_item(
-            item_id=uuid4(), user_id=uuid4(),
-            organization_id=uuid4(), checked_out_by=uuid4()
+            item_id=uuid4(),
+            user_id=uuid4(),
+            organization_id=uuid4(),
+            checked_out_by=uuid4(),
         )
         assert checkout is None
         assert "not found" in err.lower()
@@ -718,8 +752,10 @@ class TestCheckoutItem:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         checkout, err = await service.checkout_item(
-            item_id=UUID(item.id), user_id=uuid4(),
-            organization_id=UUID(item.organization_id), checked_out_by=uuid4()
+            item_id=UUID(item.id),
+            user_id=uuid4(),
+            organization_id=UUID(item.organization_id),
+            checked_out_by=uuid4(),
         )
         assert checkout is None
         assert "not available" in err.lower()
@@ -733,10 +769,14 @@ class TestCheckoutItem:
         mock_result.scalar_one_or_none.return_value = item
         mock_db.execute = AsyncMock(return_value=mock_result)
 
-        with patch.object(service, "_queue_inventory_notification", new_callable=AsyncMock):
+        with patch.object(
+            service, "_queue_inventory_notification", new_callable=AsyncMock
+        ):
             checkout, err = await service.checkout_item(
-                item_id=UUID(item.id), user_id=uuid4(),
-                organization_id=UUID(item.organization_id), checked_out_by=uuid4()
+                item_id=UUID(item.id),
+                user_id=uuid4(),
+                organization_id=UUID(item.organization_id),
+                checked_out_by=uuid4(),
             )
         assert err is None
         assert item.status == ItemStatus.CHECKED_OUT
@@ -753,8 +793,10 @@ class TestCheckoutItem:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         checkout, err = await service.checkout_item(
-            item_id=UUID(item.id), user_id=uuid4(),
-            organization_id=UUID(item.organization_id), checked_out_by=uuid4()
+            item_id=UUID(item.id),
+            user_id=uuid4(),
+            organization_id=UUID(item.organization_id),
+            checked_out_by=uuid4(),
         )
         assert checkout is None
         assert "not available" in err.lower()
@@ -769,8 +811,10 @@ class TestCheckoutItem:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         checkout, err = await service.checkout_item(
-            item_id=UUID(item.id), user_id=uuid4(),
-            organization_id=UUID(item.organization_id), checked_out_by=uuid4()
+            item_id=UUID(item.id),
+            user_id=uuid4(),
+            organization_id=UUID(item.organization_id),
+            checked_out_by=uuid4(),
         )
         assert checkout is None
         assert "not available" in err.lower()
@@ -779,6 +823,7 @@ class TestCheckoutItem:
 # ============================================
 # Check-in Item Tests
 # ============================================
+
 
 class TestCheckinItem:
 
@@ -791,8 +836,10 @@ class TestCheckinItem:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         success, err = await service.checkin_item(
-            checkout_id=uuid4(), organization_id=uuid4(),
-            checked_in_by=uuid4(), return_condition=ItemCondition.GOOD
+            checkout_id=uuid4(),
+            organization_id=uuid4(),
+            checked_in_by=uuid4(),
+            return_condition=ItemCondition.GOOD,
         )
         assert success is False
         assert "not found" in err.lower()
@@ -809,8 +856,10 @@ class TestCheckinItem:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         success, err = await service.checkin_item(
-            checkout_id=uuid4(), organization_id=uuid4(),
-            checked_in_by=uuid4(), return_condition=ItemCondition.GOOD
+            checkout_id=uuid4(),
+            organization_id=uuid4(),
+            checked_in_by=uuid4(),
+            return_condition=ItemCondition.GOOD,
         )
         assert success is False
         assert "already" in err.lower()
@@ -833,10 +882,14 @@ class TestCheckinItem:
         service._get_item_locked = AsyncMock(return_value=item)
         mock_db.execute = AsyncMock(return_value=co_result)
 
-        with patch.object(service, "_queue_inventory_notification", new_callable=AsyncMock):
+        with patch.object(
+            service, "_queue_inventory_notification", new_callable=AsyncMock
+        ):
             success, err = await service.checkin_item(
-                checkout_id=uuid4(), organization_id=uuid4(),
-                checked_in_by=uuid4(), return_condition=ItemCondition.GOOD
+                checkout_id=uuid4(),
+                organization_id=uuid4(),
+                checked_in_by=uuid4(),
+                return_condition=ItemCondition.GOOD,
             )
         assert err is None
         assert item.status == ItemStatus.AVAILABLE
@@ -847,6 +900,7 @@ class TestCheckinItem:
 # ============================================
 # Assign / Unassign Item Tests
 # ============================================
+
 
 class TestAssignItem:
 
@@ -859,8 +913,10 @@ class TestAssignItem:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         assignment, err = await service.assign_item_to_user(
-            item_id=uuid4(), user_id=uuid4(),
-            organization_id=uuid4(), assigned_by=uuid4()
+            item_id=uuid4(),
+            user_id=uuid4(),
+            organization_id=uuid4(),
+            assigned_by=uuid4(),
         )
         assert assignment is None
         assert "not found" in err.lower()
@@ -875,8 +931,10 @@ class TestAssignItem:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         assignment, err = await service.assign_item_to_user(
-            item_id=UUID(item.id), user_id=uuid4(),
-            organization_id=UUID(item.organization_id), assigned_by=uuid4()
+            item_id=UUID(item.id),
+            user_id=uuid4(),
+            organization_id=UUID(item.organization_id),
+            assigned_by=uuid4(),
         )
         assert assignment is None
         assert "not available" in err.lower()
@@ -891,8 +949,10 @@ class TestAssignItem:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         assignment, err = await service.assign_item_to_user(
-            item_id=UUID(item.id), user_id=uuid4(),
-            organization_id=UUID(item.organization_id), assigned_by=uuid4()
+            item_id=UUID(item.id),
+            user_id=uuid4(),
+            organization_id=UUID(item.organization_id),
+            assigned_by=uuid4(),
         )
         assert assignment is None
         assert "not available" in err.lower()
@@ -907,8 +967,10 @@ class TestAssignItem:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         assignment, err = await service.assign_item_to_user(
-            item_id=UUID(item.id), user_id=uuid4(),
-            organization_id=UUID(item.organization_id), assigned_by=uuid4()
+            item_id=UUID(item.id),
+            user_id=uuid4(),
+            organization_id=UUID(item.organization_id),
+            assigned_by=uuid4(),
         )
         assert assignment is None
         assert "not available" in err.lower()
@@ -923,11 +985,15 @@ class TestAssignItem:
         mock_result.scalar_one_or_none.return_value = item
         mock_db.execute = AsyncMock(return_value=mock_result)
 
-        with patch.object(service, "_queue_inventory_notification", new_callable=AsyncMock):
+        with patch.object(
+            service, "_queue_inventory_notification", new_callable=AsyncMock
+        ):
             assignment, err = await service.assign_item_to_user(
-                item_id=UUID(item.id), user_id=user_id,
-                organization_id=UUID(item.organization_id), assigned_by=uuid4(),
-                reason="New member issue"
+                item_id=UUID(item.id),
+                user_id=user_id,
+                organization_id=UUID(item.organization_id),
+                assigned_by=uuid4(),
+                reason="New member issue",
             )
         assert err is None
         assert item.status == ItemStatus.ASSIGNED
@@ -952,10 +1018,14 @@ class TestAssignItem:
         # Mock unassign_item to just pass
         service.unassign_item = AsyncMock(return_value=(True, None))
 
-        with patch.object(service, "_queue_inventory_notification", new_callable=AsyncMock):
+        with patch.object(
+            service, "_queue_inventory_notification", new_callable=AsyncMock
+        ):
             assignment, err = await service.assign_item_to_user(
-                item_id=UUID(item.id), user_id=new_user,
-                organization_id=UUID(item.organization_id), assigned_by=uuid4()
+                item_id=UUID(item.id),
+                user_id=new_user,
+                organization_id=UUID(item.organization_id),
+                assigned_by=uuid4(),
             )
         assert err is None
         service.unassign_item.assert_awaited_once()
@@ -965,11 +1035,14 @@ class TestAssignItem:
 # Pool Issuance Validation Tests
 # ============================================
 
+
 class TestPoolIssuanceValidation:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_create_pool_item_zero_quantity_rejected(self, service, mock_db, org_id, user_id):
+    async def test_create_pool_item_zero_quantity_rejected(
+        self, service, mock_db, org_id, user_id
+    ):
         """Pool item with quantity=0 should be rejected."""
         service._validate_category_requirements = AsyncMock(return_value=None)
 
@@ -989,7 +1062,9 @@ class TestPoolIssuanceValidation:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_create_pool_item_positive_quantity_accepted(self, service, mock_db, org_id, user_id):
+    async def test_create_pool_item_positive_quantity_accepted(
+        self, service, mock_db, org_id, user_id
+    ):
         """Pool item with quantity >= 1 should be accepted."""
         service._validate_category_requirements = AsyncMock(return_value=None)
         service._check_serial_number_unique = AsyncMock(return_value=None)
@@ -1012,6 +1087,7 @@ class TestPoolIssuanceValidation:
 # ============================================
 # Status Transition Matrix Tests
 # ============================================
+
 
 class TestStatusTransitionMatrix:
     """Verify the full matrix of status/condition combinations."""

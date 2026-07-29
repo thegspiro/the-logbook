@@ -17,9 +17,9 @@ slowapi==0.1.9
 sqlalchemy==2.0.46
 alembic==1.18.4
 pymysql==1.1.1
-aiomysql==0.2.0
+aiomysql==0.3.0
 greenlet==3.3.2  # Required by SQLAlchemy for async operations
-cryptography==44.0.3  # Required by PyMySQL for secure connections (CVE-2024-12797 fix, OpenSSL 3.4.1)
+cryptography==48.0.1  # Required by PyMySQL for secure connections (CVE-2024-12797 fix, OpenSSL 3.4.1)
 
 # ============================================
 # Redis & Caching
@@ -32,12 +32,12 @@ hiredis==3.1.0
 # ============================================
 PyJWT[crypto]==2.11.0
 bcrypt==4.3.0
-python-multipart==0.0.22
+python-multipart==0.0.31
 pyotp==2.9.0
 qrcode==8.0
 
 # OAuth & SSO
-authlib==1.6.8
+authlib==1.6.12
 python-ldap==3.4.5
 pysaml2==7.5.4
 
@@ -71,15 +71,15 @@ python-magic==0.4.27
 python-docx==1.1.2
 openpyxl==3.1.5
 reportlab==4.3.0
-pypdf==5.1.0
-Pillow==11.3.0
+pypdf==6.14.1
+Pillow==12.3.0
 defusedxml==0.7.1  # Safe XML parsing (blocks XXE / entity-expansion attacks)
 
 # ============================================
 # API & Networking
 # ============================================
 httpx==0.28.1
-requests==2.32.3  # For health checks (CVE-2024-35195 & CVE-2024-47081 fixes)
+requests==2.33.0  # For health checks (CVE-2024-35195 & CVE-2024-47081 fixes)
 aiofiles==24.1.0
 websockets==14.2
 
@@ -116,7 +116,7 @@ celery==5.6.2
 # ============================================
 # Microsoft & Google Integrations
 # ============================================
-msal==1.31.1
+msal==1.37.0
 msgraph-core==1.2.0
 google-auth==2.37.0
 google-auth-oauthlib==1.2.1
@@ -125,8 +125,8 @@ google-api-python-client==2.159.0
 # ============================================
 # Development & Testing
 # ============================================
-pytest==8.3.4
-pytest-asyncio==0.25.0
+pytest==8.4.2
+pytest-asyncio==1.4.0
 pytest-cov==6.0.0
 pytest-randomly==3.16.0
 pytest-timeout==2.3.1
@@ -145,5 +145,5 @@ pylint==3.3.4
 # ============================================
 # Utilities
 # ============================================
-python-dotenv==1.0.1
-click==8.1.8
+python-dotenv==1.2.2
+click==8.3.3

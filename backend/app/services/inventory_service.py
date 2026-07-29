@@ -415,7 +415,7 @@ class InventoryService:
     ) -> List[InventoryCategory]:
         """Get categories for an organization with pagination"""
         query = select(InventoryCategory).where(
-            InventoryCategory.organization_id == organization_id
+            InventoryCategory.organization_id == str(organization_id)
         )
 
         if item_type:

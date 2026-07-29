@@ -288,6 +288,98 @@ export const ElectionsSettingsPage: React.FC = () => {
           </div>
         </section>
 
+        {/* Feature Toggles */}
+        <section className="bg-theme-surface rounded-lg p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-theme-text-primary mb-2">
+            Features
+          </h2>
+          <p className="text-sm text-theme-text-muted mb-4">
+            Turn optional election workflows on or off for your department. All
+            features are on by default. Automatic closing at the end date is
+            always on — it finalizes results and runs the anonymity purge.
+          </p>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="nominations_enabled"
+                checked={settings.nominations_enabled ?? true}
+                onChange={(e) => updateField('nominations_enabled', e.target.checked)}
+                className="h-4 w-4 text-red-600 rounded border-theme-input-border"
+              />
+              <label htmlFor="nominations_enabled" className="text-sm text-theme-text-secondary">
+                Nomination phase — members nominate candidates (with accept/decline) before the ballot opens
+              </label>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="paper_ballots_enabled"
+                checked={settings.paper_ballots_enabled ?? true}
+                onChange={(e) => updateField('paper_ballots_enabled', e.target.checked)}
+                className="h-4 w-4 text-red-600 rounded border-theme-input-border"
+              />
+              <label htmlFor="paper_ballots_enabled" className="text-sm text-theme-text-secondary">
+                Paper-ballot entry — officers record in-room paper tallies into the results
+              </label>
+            </div>
+
+            <div className="flex items-center gap-3 pl-7">
+              <label
+                htmlFor="paper_ballot_attestations_required"
+                className="text-sm text-theme-text-secondary"
+              >
+                Officers who must confirm each paper batch before it counts
+                (besides the recorder):
+              </label>
+              <select
+                id="paper_ballot_attestations_required"
+                value={settings.paper_ballot_attestations_required ?? 2}
+                onChange={(e) =>
+                  updateField(
+                    'paper_ballot_attestations_required',
+                    parseInt(e.target.value, 10),
+                  )
+                }
+                className="bg-theme-input-bg border border-theme-input-border rounded-md py-1 px-2 text-sm text-theme-text-primary"
+              >
+                <option value={0}>None — counts immediately</option>
+                <option value={1}>1 attestation</option>
+                <option value={2}>2 attestations (recommended)</option>
+                <option value={3}>3 attestations</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="reminders_enabled"
+                checked={settings.reminders_enabled ?? true}
+                onChange={(e) => updateField('reminders_enabled', e.target.checked)}
+                className="h-4 w-4 text-red-600 rounded border-theme-input-border"
+              />
+              <label htmlFor="reminders_enabled" className="text-sm text-theme-text-secondary">
+                Non-voter reminders — manual and automatic reminder emails with fresh ballot links
+              </label>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="auto_open_enabled"
+                checked={settings.auto_open_enabled ?? true}
+                onChange={(e) => updateField('auto_open_enabled', e.target.checked)}
+                className="h-4 w-4 text-red-600 rounded border-theme-input-border"
+              />
+              <label htmlFor="auto_open_enabled" className="text-sm text-theme-text-secondary">
+                Scheduled opening — elections flagged "open automatically" open themselves at their start time
+              </label>
+            </div>
+          </div>
+        </section>
+
         {/* Test Ballot */}
         <section className="bg-theme-surface rounded-lg p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-2">Test Ballot</h2>

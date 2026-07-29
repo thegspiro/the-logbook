@@ -9,6 +9,7 @@ original migration (20260212_1200) created the table as "meeting_action_items".
 This migration renames the table and its indexes to match the model.
 """
 from alembic import op
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision = '20260312_0200'
@@ -18,6 +19,14 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Fresh chain runs: 20260212_1200 now creates the table directly under
+    # the model's final name (its original CREATE collided with the
+    # meetings-module meeting_action_items from 20260212_0300 and failed on
+    # every real run). Nothing to rename in that case — and renaming here
+    # would grab the unrelated meetings-module table.
+    if 'minutes_action_items' in inspect(op.get_bind()).get_table_names():
+        return
+
     # Rename the table to match the SQLAlchemy model
     op.rename_table('meeting_action_items', 'minutes_action_items')
 

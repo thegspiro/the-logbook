@@ -66,9 +66,7 @@ class TestMessageHistorySchemas:
             recipient_count=1,
             sent_at=datetime.now(timezone.utc),
         )
-        resp = MessageHistoryListResponse(
-            items=[item], total=1, skip=0, limit=50
-        )
+        resp = MessageHistoryListResponse(items=[item], total=1, skip=0, limit=50)
         assert resp.total == 1
         assert len(resp.items) == 1
 
@@ -80,7 +78,5 @@ class TestMessageHistorySchemas:
 
     def test_send_test_email_request_with_template(self):
         """Validate test email request with template_id."""
-        req = SendTestEmailRequest(
-            to_email="admin@example.com", template_id="tmpl-123"
-        )
+        req = SendTestEmailRequest(to_email="admin@example.com", template_id="tmpl-123")
         assert req.template_id == "tmpl-123"

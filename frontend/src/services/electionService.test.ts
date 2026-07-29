@@ -407,29 +407,19 @@ describe('electionService', () => {
     });
   });
 
-  // --- getBallotByToken ---
-  describe('getBallotByToken', () => {
-    it('should GET /elections/ballot with token param', async () => {
-      const election = { id: 'el1', title: 'Board Election' };
-      mockGet.mockResolvedValueOnce({ data: election });
+  // --- lookupBallot ---
+  describe('lookupBallot', () => {
+    it('should POST the token in the body (never a URL) to /elections/ballot/lookup', async () => {
+      const lookup = {
+        election: { id: 'el1', title: 'Board Election' },
+        candidates: [{ id: 'c1', name: 'Jane' }],
+      };
+      mockPost.mockResolvedValueOnce({ data: lookup });
 
-      const result = await electionService.getBallotByToken('tok-abc123');
+      const result = await electionService.lookupBallot('tok-abc123');
 
-      expect(mockGet).toHaveBeenCalledWith('/elections/ballot', { params: { token: 'tok-abc123' } });
-      expect(result).toEqual(election);
-    });
-  });
-
-  // --- getBallotCandidates ---
-  describe('getBallotCandidates', () => {
-    it('should GET /elections/ballot/:token/candidates', async () => {
-      const candidates = [{ id: 'c1', name: 'Jane' }];
-      mockGet.mockResolvedValueOnce({ data: candidates });
-
-      const result = await electionService.getBallotCandidates('tok-abc123');
-
-      expect(mockGet).toHaveBeenCalledWith('/elections/ballot/tok-abc123/candidates');
-      expect(result).toEqual(candidates);
+      expect(mockPost).toHaveBeenCalledWith('/elections/ballot/lookup', { token: 'tok-abc123' });
+      expect(result).toEqual(lookup);
     });
   });
 
@@ -444,6 +434,18 @@ describe('electionService', () => {
 
       expect(mockPost).toHaveBeenCalledWith('/elections/ballot/vote/bulk', { votes, token: 'tok-abc123' });
       expect(result).toEqual(response);
+    });
+
+    it('should pass multi-select and ranked payload forms through unchanged', async () => {
+      const votes = [
+        { ballot_item_id: 'bi1', candidate_ids: ['c1', 'c2'] },
+        { ballot_item_id: 'bi2', rankings: ['c3', 'c1'] },
+      ];
+      mockPost.mockResolvedValueOnce({ data: { success: true, votes_cast: 4 } });
+
+      await electionService.submitBallot('tok-abc123', votes as never);
+
+      expect(mockPost).toHaveBeenCalledWith('/elections/ballot/vote/bulk', { votes, token: 'tok-abc123' });
     });
   });
 

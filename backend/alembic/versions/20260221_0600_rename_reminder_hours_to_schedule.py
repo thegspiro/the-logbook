@@ -30,8 +30,11 @@ def upgrade() -> None:
             """
         )
 
-        # Set NOT NULL now that data is populated
-        op.alter_column(table, "reminder_schedule", nullable=False)
+        # Set NOT NULL now that data is populated. MySQL ALTERs are
+        # CHANGE/MODIFY statements, so alembic requires the existing type.
+        op.alter_column(
+            table, "reminder_schedule", existing_type=sa.JSON(), nullable=False
+        )
 
         # Drop old column
         op.drop_column(table, "reminder_hours_before")

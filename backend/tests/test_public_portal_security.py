@@ -8,17 +8,37 @@ Covers:
 """
 
 import sys
-import pytest
 from datetime import datetime, timezone
 from types import ModuleType
 from unittest.mock import MagicMock
 
+import pytest
+
 # Stub out heavy transitive imports that are not available in the test
 # environment (bcrypt → cryptography → _cffi_backend).  We only need the
 # rate-limit cache data structures and helpers, not the actual crypto.
+
+
+def _module_available(name: str) -> bool:
+    """True if the real module can be imported.
+
+    Stub only what is genuinely unavailable: planting a stub for an
+    importable module poisons sys.modules for the whole pytest run —
+    module-level code executes at collection, so a MagicMock aiomysql
+    broke every real-database integration test in CI.
+    """
+    import importlib
+
+    try:
+        importlib.import_module(name)
+        return True
+    except ImportError:
+        return False
+
+
 _stubs: dict[str, ModuleType] = {}
 for _mod_name in ("bcrypt",):
-    if _mod_name not in sys.modules:
+    if _mod_name not in sys.modules and not _module_available(_mod_name):
         stub = ModuleType(_mod_name)
         stub.__dict__.setdefault("gensalt", lambda: b"$2b$12$fakesalt")
         stub.__dict__.setdefault("hashpw", lambda pw, salt: b"$2b$12$fakehash")
@@ -37,25 +57,27 @@ for _mod_name in (
     "redis",
     "redis.asyncio",
 ):
-    if _mod_name not in sys.modules:
+    if _mod_name not in sys.modules and not _module_available(_mod_name):
         stub = MagicMock()
         sys.modules[_mod_name] = stub
         _stubs[_mod_name] = stub
 
+from datetime import timedelta
+
+from fastapi import HTTPException
+
 from app.core.public_portal_security import (
+    _LAST_USED_THROTTLE_SECONDS,
+    _MAX_IP_RATE_LIMIT_KEYS,
+    _MAX_RATE_LIMIT_KEYS,
+    _last_used_is_stale,
     authenticate_api_key,
     check_ip_rate_limit,
     cleanup_rate_limit_cache,
     generate_api_key,
     ip_rate_limit_cache,
     rate_limit_cache,
-    _last_used_is_stale,
-    _LAST_USED_THROTTLE_SECONDS,
-    _MAX_RATE_LIMIT_KEYS,
-    _MAX_IP_RATE_LIMIT_KEYS,
 )
-from datetime import timedelta
-from fastapi import HTTPException
 
 
 @pytest.fixture(autouse=True)
@@ -248,7 +270,9 @@ class TestLastUsedThrottle:
 
     @pytest.mark.unit
     def test_malformed_is_stale(self):
-        assert _last_used_is_stale("not-a-timestamp", datetime.now(timezone.utc)) is True
+        assert (
+            _last_used_is_stale("not-a-timestamp", datetime.now(timezone.utc)) is True
+        )
 
     @pytest.mark.unit
     def test_naive_timestamp_treated_as_utc(self):

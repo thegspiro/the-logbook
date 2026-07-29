@@ -9,6 +9,7 @@ MembershipPipelineService, covering:
 These tests mock the database layer and verify the service logic.
 """
 
+import importlib
 import sys
 from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock
@@ -22,6 +23,7 @@ import pytest
 # We only need MembershipPipelineService + its model constants, so we stub
 # everything else.
 # ---------------------------------------------------------------------------
+
 
 def _stub(name: str) -> ModuleType:
     """Create a stub module that returns MagicMock for any attribute access."""
@@ -38,42 +40,82 @@ def _stub(name: str) -> ModuleType:
 
 
 _STUB_MODULES = [
-    "jwt", "redis", "redis.asyncio",
-    "authlib", "authlib.integrations", "authlib.integrations.starlette_client",
-    "celery", "celery.result", "stripe",
-    "fastapi", "fastapi.security", "fastapi.templating",
-    "fastapi.responses", "fastapi.routing",
-    "fastapi.middleware", "fastapi.middleware.cors",
-    "fastapi_mail", "sentry_sdk",
-    "twilio", "twilio.rest", "pyotp",
-    "argon2", "argon2.exceptions", "bcrypt",
-    "cryptography", "cryptography.hazmat", "cryptography.hazmat._oid",
-    "cryptography.hazmat.primitives", "cryptography.hazmat.primitives.asymmetric",
+    "jwt",
+    "redis",
+    "redis.asyncio",
+    "authlib",
+    "authlib.integrations",
+    "authlib.integrations.starlette_client",
+    "celery",
+    "celery.result",
+    "stripe",
+    "fastapi",
+    "fastapi.security",
+    "fastapi.templating",
+    "fastapi.responses",
+    "fastapi.routing",
+    "fastapi.middleware",
+    "fastapi.middleware.cors",
+    "fastapi_mail",
+    "sentry_sdk",
+    "twilio",
+    "twilio.rest",
+    "pyotp",
+    "argon2",
+    "argon2.exceptions",
+    "bcrypt",
+    "cryptography",
+    "cryptography.hazmat",
+    "cryptography.hazmat._oid",
+    "cryptography.hazmat.primitives",
+    "cryptography.hazmat.primitives.asymmetric",
     "cryptography.hazmat.primitives.asymmetric.ec",
     "cryptography.hazmat.primitives.ciphers",
     "cryptography.hazmat.primitives.ciphers.algorithms",
     "cryptography.hazmat.primitives.ciphers.modes",
-    "cryptography.hazmat.primitives.kdf", "cryptography.hazmat.primitives.kdf.pbkdf2",
-    "cryptography.hazmat.primitives.padding", "cryptography.hazmat.primitives.hashes",
-    "cryptography.hazmat.backends", "cryptography.fernet",
-    "ldap3", "onelogin", "onelogin.saml2", "onelogin.saml2.auth",
-    "cffi", "_cffi_backend",
-    "aiomysql", "jinja2", "httpx",
-    "starlette", "starlette.requests", "starlette.responses",
-    "starlette.middleware", "starlette.middleware.base",
+    "cryptography.hazmat.primitives.kdf",
+    "cryptography.hazmat.primitives.kdf.pbkdf2",
+    "cryptography.hazmat.primitives.padding",
+    "cryptography.hazmat.primitives.hashes",
+    "cryptography.hazmat.backends",
+    "cryptography.fernet",
+    "ldap3",
+    "onelogin",
+    "onelogin.saml2",
+    "onelogin.saml2.auth",
+    "cffi",
+    "_cffi_backend",
+    "aiomysql",
+    "jinja2",
+    "httpx",
+    "starlette",
+    "starlette.requests",
+    "starlette.responses",
+    "starlette.middleware",
+    "starlette.middleware.base",
     "starlette.types",
     "elasticsearch",
     "minio",
 ]
 
 for _mod_name in _STUB_MODULES:
-    if _mod_name not in sys.modules:
+    if _mod_name in sys.modules:
+        continue
+    # Stub only what is genuinely unavailable. Planting a stub for an
+    # importable module poisons sys.modules for the whole pytest run —
+    # module-level code executes at collection, so (e.g.) a MagicMock
+    # aiomysql broke every real-database integration test in CI.
+    try:
+        importlib.import_module(_mod_name)
+    except ImportError:
         sys.modules[_mod_name] = _stub(_mod_name)
 
-# Now safe to import the services under test.
-from app.services.membership_pipeline_service import MembershipPipelineService  # noqa: E402
 from app.services.forms_service import FormsService  # noqa: E402
 
+# Now safe to import the services under test.
+from app.services.membership_pipeline_service import (  # noqa: E402
+    MembershipPipelineService,
+)
 
 # ============================================
 # Helpers
@@ -181,9 +223,7 @@ class TestDirectPath:
         mock_db.commit.assert_not_called()
         assert not mock_db.add.called
 
-    async def test_warns_when_form_not_found(
-        self, service, mock_db, form_id, org_id
-    ):
+    async def test_warns_when_form_not_found(self, service, mock_db, form_id, org_id):
         mock_db.execute.side_effect = [
             _make_result_chain(),  # Form query — not found
         ]
@@ -216,9 +256,9 @@ class TestLegacyPathCreatesNew:
             _make_field("Phone Number"),
         ]
         mock_db.execute.side_effect = [
-            _make_result_chain(form),       # Form query
-            _make_result_chain(),            # no existing integration
-            _make_result_chain(*fields),     # form fields
+            _make_result_chain(form),  # Form query
+            _make_result_chain(),  # no existing integration
+            _make_result_chain(*fields),  # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -234,22 +274,24 @@ class TestLegacyPathCreatesNew:
     async def test_skips_when_no_fields(self, service, mock_db, form_id, org_id):
         form = _make_form(integration_type="equipment_assignment")
         mock_db.execute.side_effect = [
-            _make_result_chain(form),   # Form query
-            _make_result_chain(),       # no existing integration
-            _make_result_chain(),       # no fields
+            _make_result_chain(form),  # Form query
+            _make_result_chain(),  # no existing integration
+            _make_result_chain(),  # no fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
 
         assert not mock_db.add.called
 
-    async def test_skips_when_no_mappable_fields(self, service, mock_db, form_id, org_id):
+    async def test_skips_when_no_mappable_fields(
+        self, service, mock_db, form_id, org_id
+    ):
         form = _make_form(integration_type="equipment_assignment")
         fields = [_make_field("Favorite Color"), _make_field("Preferred Shift")]
         mock_db.execute.side_effect = [
-            _make_result_chain(form),        # Form query
-            _make_result_chain(),             # no existing integration
-            _make_result_chain(*fields),      # unmappable fields
+            _make_result_chain(form),  # Form query
+            _make_result_chain(),  # no existing integration
+            _make_result_chain(*fields),  # unmappable fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -273,9 +315,9 @@ class TestLegacyPathRepairsExisting:
         existing.field_mappings = {}
 
         mock_db.execute.side_effect = [
-            _make_result_chain(form),          # Form query
-            _make_result_chain(existing),       # existing integration
-            _make_result_chain(*fields),        # form fields
+            _make_result_chain(form),  # Form query
+            _make_result_chain(existing),  # existing integration
+            _make_result_chain(*fields),  # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -286,9 +328,7 @@ class TestLegacyPathRepairsExisting:
         assert {"first_name", "last_name", "email"} <= targets
         mock_db.commit.assert_called()
 
-    async def test_repairs_none_field_mappings(
-        self, service, mock_db, form_id, org_id
-    ):
+    async def test_repairs_none_field_mappings(self, service, mock_db, form_id, org_id):
         form = _make_form(integration_type="equipment_assignment")
         fields = [
             _make_field("First Name"),
@@ -299,9 +339,9 @@ class TestLegacyPathRepairsExisting:
         existing.field_mappings = None
 
         mock_db.execute.side_effect = [
-            _make_result_chain(form),         # Form query
-            _make_result_chain(existing),      # existing integration
-            _make_result_chain(*fields),       # form fields
+            _make_result_chain(form),  # Form query
+            _make_result_chain(existing),  # existing integration
+            _make_result_chain(*fields),  # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -322,9 +362,9 @@ class TestLegacyPathRepairsExisting:
         existing.field_mappings = {old_id: "first_name"}
 
         mock_db.execute.side_effect = [
-            _make_result_chain(form),           # Form query
-            _make_result_chain(existing),        # existing integration
-            _make_result_chain(*fields),         # form fields
+            _make_result_chain(form),  # Form query
+            _make_result_chain(existing),  # existing integration
+            _make_result_chain(*fields),  # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -351,9 +391,9 @@ class TestLegacyPathRepairsExisting:
         }
 
         mock_db.execute.side_effect = [
-            _make_result_chain(form),           # Form query
-            _make_result_chain(existing),        # existing integration
-            _make_result_chain(*fields),         # form fields
+            _make_result_chain(form),  # Form query
+            _make_result_chain(existing),  # existing integration
+            _make_result_chain(*fields),  # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -377,9 +417,9 @@ class TestLegacyPathRepairsExisting:
         existing.field_mappings = {str(field_ph.id): "phone"}
 
         mock_db.execute.side_effect = [
-            _make_result_chain(form),            # Form query
-            _make_result_chain(existing),         # existing integration
-            _make_result_chain(*fields),          # form fields
+            _make_result_chain(form),  # Form query
+            _make_result_chain(existing),  # existing integration
+            _make_result_chain(*fields),  # form fields
         ]
 
         await service._ensure_membership_form_integration(form_id, org_id)
@@ -496,14 +536,15 @@ class TestMembershipInterestPipelineId:
 
         # _resolve_pipeline_for_form runs first, then duplicate guard
         mock_db.execute.side_effect = [
-            _make_result_chain(pipeline_id),   # _resolve_pipeline_for_form
-            _make_result_chain(),              # duplicate guard (no existing)
+            _make_result_chain(pipeline_id),  # _resolve_pipeline_for_form
+            _make_result_chain(),  # duplicate guard (no existing)
         ]
 
         prospect = _make_prospect(prospect_id, str(submission.id))
 
         # Patch MembershipPipelineService.create_prospect
         import app.services.membership_pipeline_service as mps_mod
+
         original_init = mps_mod.MembershipPipelineService.__init__
         original_create = mps_mod.MembershipPipelineService.create_prospect
 
@@ -556,13 +597,14 @@ class TestMembershipInterestPipelineId:
 
         # _resolve_pipeline_for_form runs first, then duplicate guard
         mock_db.execute.side_effect = [
-            _make_result_chain(),   # _resolve_pipeline_for_form → None
-            _make_result_chain(),   # duplicate guard (no existing)
+            _make_result_chain(),  # _resolve_pipeline_for_form → None
+            _make_result_chain(),  # duplicate guard (no existing)
         ]
 
         prospect = _make_prospect(prospect_id, str(submission.id))
 
         import app.services.membership_pipeline_service as mps_mod
+
         original_init = mps_mod.MembershipPipelineService.__init__
         original_create = mps_mod.MembershipPipelineService.create_prospect
 
@@ -639,7 +681,7 @@ class TestReprocessReassignment:
         # _resolve_pipeline_for_form runs first, then duplicate guard
         mock_db.execute.side_effect = [
             _make_result_chain(correct_pipeline_id),  # _resolve_pipeline_for_form
-            _make_result_chain(existing_prospect),     # duplicate guard → found
+            _make_result_chain(existing_prospect),  # duplicate guard → found
         ]
 
         # Patch _reassign_prospect_pipeline to track calls
@@ -671,9 +713,7 @@ class TestReprocessReassignment:
             FormsService._reassign_prospect_pipeline = original_reassign
             FormsService._complete_form_submission_step = original_complete
 
-    async def test_no_reassignment_when_pipeline_matches(
-        self, forms_service, mock_db
-    ):
+    async def test_no_reassignment_when_pipeline_matches(self, forms_service, mock_db):
         frm_id = str(uuid4())
         org_id = str(uuid4())
         pipeline_id = str(uuid4())
@@ -699,8 +739,8 @@ class TestReprocessReassignment:
 
         # _resolve_pipeline_for_form runs first, then duplicate guard
         mock_db.execute.side_effect = [
-            _make_result_chain(pipeline_id),        # _resolve_pipeline_for_form
-            _make_result_chain(existing_prospect),   # duplicate guard → found
+            _make_result_chain(pipeline_id),  # _resolve_pipeline_for_form
+            _make_result_chain(existing_prospect),  # duplicate guard → found
         ]
 
         reassign_calls = []
@@ -756,8 +796,8 @@ class TestReprocessReassignment:
 
         # _resolve_pipeline_for_form returns None, then duplicate guard finds existing
         mock_db.execute.side_effect = [
-            _make_result_chain(),                    # _resolve_pipeline_for_form → None
-            _make_result_chain(existing_prospect),   # duplicate guard → found
+            _make_result_chain(),  # _resolve_pipeline_for_form → None
+            _make_result_chain(existing_prospect),  # duplicate guard → found
         ]
 
         reassign_calls = []
@@ -814,7 +854,10 @@ class TestSharedFieldMap:
 
         assert MembershipPipelineService._LABEL_MAP is LABEL_MAP
         assert MembershipPipelineService._FIELD_TYPE_MAP is FIELD_TYPE_MAP
-        assert MembershipPipelineService._REQUIRED_PROSPECT_FIELDS is REQUIRED_PROSPECT_FIELDS
+        assert (
+            MembershipPipelineService._REQUIRED_PROSPECT_FIELDS
+            is REQUIRED_PROSPECT_FIELDS
+        )
 
     def test_display_labels_cover_all_required_fields(self):
         from app.utils.prospect_fields import (
@@ -823,9 +866,9 @@ class TestSharedFieldMap:
         )
 
         for field in REQUIRED_PROSPECT_FIELDS:
-            assert field in FIELD_DISPLAY_LABELS, (
-                f"Required field '{field}' missing from FIELD_DISPLAY_LABELS"
-            )
+            assert (
+                field in FIELD_DISPLAY_LABELS
+            ), f"Required field '{field}' missing from FIELD_DISPLAY_LABELS"
 
 
 # ============================================
@@ -988,9 +1031,7 @@ class TestCompleteFormStepIdempotency:
     async def test_already_completed_updates_action_result_only(
         self, forms_service, mock_db
     ):
-        from app.models.membership_pipeline import (
-            StepProgressStatus,
-        )
+        from app.models.membership_pipeline import StepProgressStatus
 
         prospect_id = str(uuid4())
         step_id = str(uuid4())
@@ -1023,13 +1064,14 @@ class TestCompleteFormStepIdempotency:
         #   1. Find form_submission steps for this pipeline → .scalars().all()
         #   2. Find progress record → .scalars().first()
         mock_db.execute.side_effect = [
-            _make_result_chain(step),     # step query → .all() returns [step]
-            _make_result_chain(progress), # progress query → .first() returns progress
+            _make_result_chain(step),  # step query → .all() returns [step]
+            _make_result_chain(progress),  # progress query → .first() returns progress
         ]
 
         pipeline_service = MagicMock()
 
         import logging
+
         logger = logging.getLogger("test")
 
         await forms_service._complete_form_submission_step(
@@ -1076,8 +1118,6 @@ class TestPipelineDeletionGuard:
     """delete_pipeline should raise ValueError when active prospects exist."""
 
     async def test_blocks_deletion_with_active_prospects(self, mock_db):
-        from app.models.membership_pipeline import ProspectStatus
-
         service = MembershipPipelineService(mock_db)
         pipeline_id = str(uuid4())
         org_id = str(uuid4())
@@ -1091,7 +1131,7 @@ class TestPipelineDeletionGuard:
 
         mock_db.execute.side_effect = [
             _make_result_chain(pipeline),  # get_pipeline
-            _make_count_result(3),          # active prospect count
+            _make_count_result(3),  # active prospect count
         ]
 
         with pytest.raises(ValueError, match="3 active/on-hold"):
@@ -1108,7 +1148,7 @@ class TestPipelineDeletionGuard:
 
         mock_db.execute.side_effect = [
             _make_result_chain(pipeline),  # get_pipeline
-            _make_count_result(0),          # no active prospects
+            _make_count_result(0),  # no active prospects
         ]
 
         result = await service.delete_pipeline(pipeline_id, org_id)

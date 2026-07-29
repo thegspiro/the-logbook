@@ -9,12 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.exc import OperationalError
 
-from app.utils.db_retry import (
-    is_transient_db_error,
-    retry_on_db_error,
-    with_db_retry,
-)
-
+from app.utils.db_retry import is_transient_db_error, retry_on_db_error, with_db_retry
 
 # ---------------------------------------------------------------------------
 # is_transient_db_error
@@ -44,7 +39,9 @@ class TestIsTransientDbError:
         assert is_transient_db_error(exc) is True
 
     def test_lost_connection(self):
-        exc = _make_operational_error(2013, "Lost connection to MySQL server during query")
+        exc = _make_operational_error(
+            2013, "Lost connection to MySQL server during query"
+        )
         assert is_transient_db_error(exc) is True
 
     def test_non_transient_operational_error(self):

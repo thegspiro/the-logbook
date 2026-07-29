@@ -26,6 +26,7 @@ export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
 // ============================================
 export const ElectionStatus = {
   DRAFT: 'draft',
+  NOMINATIONS: 'nominations',
   OPEN: 'open',
   CLOSED: 'closed',
   CANCELLED: 'cancelled',

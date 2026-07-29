@@ -15,19 +15,20 @@ Covers:
   - Cross-module bridge (create_from_meeting)
 """
 
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import pytest
+
 from app.models.minute import (
+    DEFAULT_SPECIAL_SECTIONS,
     ActionItemPriority,
     MeetingMinutes,
     MinutesActionItemStatus,
     MinutesMeetingType,
     MinutesStatus,
     MotionStatus,
-    DEFAULT_SPECIAL_SECTIONS,
 )
 from app.schemas.minute import (
     ActionItemCreate,
@@ -38,7 +39,6 @@ from app.schemas.minute import (
     MotionUpdate,
 )
 from app.services.minute_service import MinuteService
-
 
 # ============================================
 # Fixtures

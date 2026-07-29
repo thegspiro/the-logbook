@@ -17,14 +17,15 @@ Covers:
   - Unicode and special-character handling
 """
 
-import pytest
-import jwt as pyjwt
-from datetime import timedelta, datetime, timezone
+from datetime import datetime, timedelta, timezone
 
+import jwt as pyjwt
+import pytest
 
 # ---------------------------------------------------------------------------
 # Password Hashing & Verification
 # ---------------------------------------------------------------------------
+
 
 class TestPasswordHashing:
 
@@ -94,6 +95,7 @@ class TestPasswordHashing:
 # ---------------------------------------------------------------------------
 # Password Strength Validation
 # ---------------------------------------------------------------------------
+
 
 class TestPasswordStrengthValidation:
 
@@ -192,12 +194,16 @@ class TestPasswordStrengthValidation:
 # Temporary Password Generation
 # ---------------------------------------------------------------------------
 
+
 class TestTemporaryPasswordGeneration:
 
     @pytest.mark.unit
     def test_generated_password_passes_strength_check(self):
         """generate_temporary_password must produce a password that passes validation."""
-        from app.core.security import generate_temporary_password, validate_password_strength
+        from app.core.security import (
+            generate_temporary_password,
+            validate_password_strength,
+        )
 
         password = generate_temporary_password()
         is_valid, err = validate_password_strength(password)
@@ -214,8 +220,8 @@ class TestTemporaryPasswordGeneration:
     @pytest.mark.unit
     def test_generated_password_minimum_length_clamp(self):
         """Requesting a length shorter than PASSWORD_MIN_LENGTH is clamped upward."""
-        from app.core.security import generate_temporary_password
         from app.core.config import settings
+        from app.core.security import generate_temporary_password
 
         password = generate_temporary_password(length=4)
         assert len(password) >= settings.PASSWORD_MIN_LENGTH
@@ -232,6 +238,7 @@ class TestTemporaryPasswordGeneration:
 # ---------------------------------------------------------------------------
 # JWT Token Creation & Decoding
 # ---------------------------------------------------------------------------
+
 
 class TestJWTTokens:
 
@@ -283,7 +290,11 @@ class TestJWTTokens:
     @pytest.mark.unit
     def test_refresh_token_longer_expiry(self):
         """Refresh token should expire further in the future than a default access token."""
-        from app.core.security import create_access_token, create_refresh_token, decode_token
+        from app.core.security import (
+            create_access_token,
+            create_refresh_token,
+            decode_token,
+        )
 
         access = decode_token(create_access_token({"sub": "u"}))
         refresh = decode_token(create_refresh_token({"sub": "u"}))
@@ -292,8 +303,9 @@ class TestJWTTokens:
     @pytest.mark.unit
     def test_decode_token_expired(self):
         """decode_token should raise when the token is expired."""
-        from app.core.security import create_access_token, decode_token
         from jwt.exceptions import ExpiredSignatureError
+
+        from app.core.security import create_access_token, decode_token
 
         token = create_access_token(
             {"sub": "user-123"},
@@ -305,9 +317,10 @@ class TestJWTTokens:
     @pytest.mark.unit
     def test_decode_token_invalid_signature(self):
         """decode_token should raise when the signature is invalid."""
-        from app.core.security import decode_token
-        from app.core.config import settings
         from jwt.exceptions import InvalidSignatureError
+
+        from app.core.config import settings
+        from app.core.security import decode_token
 
         bad_token = pyjwt.encode(
             {"sub": "user-123", "exp": datetime.now(timezone.utc) + timedelta(hours=1)},
@@ -354,12 +367,13 @@ class TestJWTTokens:
 # Data Encryption / Decryption
 # ---------------------------------------------------------------------------
 
+
 class TestEncryption:
 
     @pytest.mark.unit
     def test_encrypt_decrypt_roundtrip(self):
         """Encrypting then decrypting should return the original string."""
-        from app.core.security import encrypt_data, decrypt_data
+        from app.core.security import decrypt_data, encrypt_data
 
         plaintext = "Sensitive patient data 12345"
         encrypted = encrypt_data(plaintext)
@@ -393,7 +407,7 @@ class TestEncryption:
     @pytest.mark.unit
     def test_new_ciphertext_uses_aesgcm_marker(self):
         """New values are AES-256-GCM, version-marked (not a legacy Fernet token)."""
-        from app.core.security import encrypt_data, _GCM_PREFIX
+        from app.core.security import _GCM_PREFIX, encrypt_data
 
         ct = encrypt_data("Sensitive patient data")
         assert ct.startswith(_GCM_PREFIX)
@@ -404,6 +418,7 @@ class TestEncryption:
         """Backward compatibility: a value written by the legacy Fernet cipher
         (before the GCM migration) is still readable via decrypt_data."""
         from cryptography.fernet import Fernet
+
         from app.core.security import decrypt_data, get_encryption_key
 
         legacy_token = Fernet(get_encryption_key()).encrypt(b"legacy secret").decode()
@@ -414,15 +429,20 @@ class TestEncryption:
     def test_tampered_gcm_fails_closed(self):
         """A tampered AES-256-GCM ciphertext must raise (never return unverified
         bytes) — GCM's authentication tag makes this fail closed."""
-        from app.core.security import encrypt_data, decrypt_data, _GCM_PREFIX
+        import base64
 
         from cryptography.exceptions import InvalidTag
 
+        from app.core.security import _GCM_PREFIX, decrypt_data, encrypt_data
+
         ct = encrypt_data("do not tamper")
-        # Flip a character in the base64 body (after the marker).
-        body = ct[len(_GCM_PREFIX):]
-        flipped = ("A" if body[-2] != "A" else "B") + body[-1]
-        tampered = _GCM_PREFIX + body[:-2] + flipped
+        # Tamper a real ciphertext byte, not a base64 character: flipping a
+        # trailing base64 char can land on padding bits the decoder ignores
+        # (the old version of this test did exactly that and passed or failed
+        # depending on the random nonce).
+        body = bytearray(base64.urlsafe_b64decode(ct[len(_GCM_PREFIX) :]))
+        body[-1] ^= 0x01  # flip one bit inside the GCM auth tag
+        tampered = _GCM_PREFIX + base64.urlsafe_b64encode(bytes(body)).decode()
         with pytest.raises(InvalidTag):
             decrypt_data(tampered)
 
@@ -430,6 +450,7 @@ class TestEncryption:
 # ---------------------------------------------------------------------------
 # Secure Token & Verification Code Generation
 # ---------------------------------------------------------------------------
+
 
 class TestTokenGeneration:
 
@@ -473,6 +494,7 @@ class TestTokenGeneration:
 # SHA-256 Hashing & Hash Chain Verification
 # ---------------------------------------------------------------------------
 
+
 class TestHashUtilities:
 
     @pytest.mark.unit
@@ -496,6 +518,7 @@ class TestHashUtilities:
     def test_verify_hash_chain_valid(self):
         """verify_hash_chain should return True for a valid chain."""
         import hashlib
+
         from app.core.security import verify_hash_chain
 
         prev_hash = "abc123"
@@ -514,6 +537,7 @@ class TestHashUtilities:
 # ---------------------------------------------------------------------------
 # Input Sanitization & Data Masking
 # ---------------------------------------------------------------------------
+
 
 class TestSanitizationAndMasking:
 
@@ -584,6 +608,7 @@ class TestSanitizationAndMasking:
 # Additional Edge Cases
 # ---------------------------------------------------------------------------
 
+
 class TestPasswordEdgeCases:
     """Edge-case coverage for password-related functions."""
 
@@ -632,8 +657,8 @@ class TestJWTEdgeCases:
     @pytest.mark.unit
     def test_access_token_default_expiry_within_expected_range(self):
         """Default access token expiry should match ACCESS_TOKEN_EXPIRE_MINUTES."""
-        from app.core.security import create_access_token, decode_token
         from app.core.config import settings
+        from app.core.security import create_access_token, decode_token
 
         token = create_access_token({"sub": "user-1"})
         payload = decode_token(token)
@@ -646,8 +671,8 @@ class TestJWTEdgeCases:
     @pytest.mark.unit
     def test_refresh_token_expiry_matches_config(self):
         """Refresh token expiry should match REFRESH_TOKEN_EXPIRE_DAYS."""
-        from app.core.security import create_refresh_token, decode_token
         from app.core.config import settings
+        from app.core.security import create_refresh_token, decode_token
 
         token = create_refresh_token({"sub": "user-1"})
         payload = decode_token(token)
@@ -671,7 +696,7 @@ class TestEncryptionEdgeCases:
     @pytest.mark.unit
     def test_encrypt_decrypt_unicode(self):
         """Unicode data should round-trip through encryption."""
-        from app.core.security import encrypt_data, decrypt_data
+        from app.core.security import decrypt_data, encrypt_data
 
         text = "Patientendaten: \u00e4\u00f6\u00fc\u00df \u2603"
         assert decrypt_data(encrypt_data(text)) == text
@@ -679,7 +704,7 @@ class TestEncryptionEdgeCases:
     @pytest.mark.unit
     def test_encrypt_decrypt_long_string(self):
         """Large payloads should encrypt and decrypt correctly."""
-        from app.core.security import encrypt_data, decrypt_data
+        from app.core.security import decrypt_data, encrypt_data
 
         text = "A" * 100_000
         assert decrypt_data(encrypt_data(text)) == text
@@ -687,8 +712,9 @@ class TestEncryptionEdgeCases:
     @pytest.mark.unit
     def test_decrypt_invalid_ciphertext_raises(self):
         """Decrypting garbage data should raise an exception."""
-        from app.core.security import decrypt_data
         from cryptography.fernet import InvalidToken
+
+        from app.core.security import decrypt_data
 
         # Not $gcm1$-marked, so it takes the legacy Fernet path, which rejects a
         # non-token with InvalidToken.

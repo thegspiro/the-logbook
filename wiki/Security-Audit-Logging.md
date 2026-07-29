@@ -11,7 +11,7 @@ Every significant action in the system is recorded in the audit log with:
 - **Who** — User ID and username
 - **What** — Action performed (create, update, delete, login, etc.)
 - **When** — Timestamp (UTC)
-- **Where** — IP address and user agent
+- **Where** — IP address and user agent (voter-action events in **anonymous elections** deliberately omit the IP — audit rows are hash-chained and can never be scrubbed, so recording a voter's IP would undermine ballot secrecy permanently)
 - **Details** — Specific changes (old value → new value)
 - **Hash** — Keyed HMAC-SHA256 hash linking to the previous entry (legacy pre-upgrade rows use unkeyed SHA-256)
 

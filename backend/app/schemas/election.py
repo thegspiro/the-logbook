@@ -8,7 +8,14 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.schemas.base import UTCResponseBase
 
@@ -203,6 +210,28 @@ class ElectionBase(BaseModel):
         description="Quorum value (percentage or count depending on quorum_type)",
     )
 
+    # Lifecycle automation
+    auto_open: bool = Field(
+        default=False,
+        description="Automatically open this election at its start date",
+    )
+    reminder_hours_before_close: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=720,
+        description=(
+            "Automatically remind non-voters this many hours before the "
+            "election closes (null = no automatic reminder)"
+        ),
+    )
+    nomination_deadline: Optional[datetime] = Field(
+        default=None,
+        description=(
+            "When set, the nomination phase closes automatically at this "
+            "time (null = close nominations manually)"
+        ),
+    )
+
     @field_validator("quorum_type")
     @classmethod
     def validate_quorum_type(cls, v: str) -> str:
@@ -262,6 +291,9 @@ class ElectionUpdate(BaseModel):
     max_runoff_rounds: Optional[int] = Field(None, ge=1, le=10)
     quorum_type: Optional[str] = None
     quorum_value: Optional[int] = Field(None, ge=1, le=100)
+    auto_open: Optional[bool] = None
+    reminder_hours_before_close: Optional[int] = Field(None, ge=1, le=720)
+    nomination_deadline: Optional[datetime] = None
 
     @field_validator("quorum_type")
     @classmethod
@@ -317,6 +349,10 @@ class ElectionResponse(UTCResponseBase):
     max_runoff_rounds: int = 3
     quorum_type: str = "none"
     quorum_value: Optional[int] = None
+    auto_open: bool = False
+    reminder_hours_before_close: Optional[int] = None
+    reminder_sent_at: Optional[datetime] = None
+    nomination_deadline: Optional[datetime] = None
     status: str
     created_by: Optional[UUID] = None
     created_at: datetime
@@ -378,6 +414,7 @@ class BallotElectionResponse(UTCResponseBase):
     ballot_items: Optional[List[BallotItem]] = None
     allow_write_ins: bool = False
     voting_method: str = "simple_majority"
+    max_votes_per_position: int = 1
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -418,6 +455,115 @@ class CandidateUpdate(BaseModel):
     photo_url: Optional[str] = Field(None, max_length=500)
     accepted: Optional[bool] = None
     display_order: Optional[int] = None
+
+
+class NominationCreate(BaseModel):
+    """Nominate a member (or yourself) for a position during the
+    nomination phase. Omit nominee_user_id to self-nominate."""
+
+    position: str = Field(..., min_length=1, max_length=100)
+    nominee_user_id: Optional[UUID] = None
+    statement: Optional[str] = Field(None, max_length=2000)
+
+
+class NominationActionResponse(BaseModel):
+    """Result of accepting or declining a nomination."""
+
+    success: bool
+    message: str
+
+
+class ManualBallotEntry(BaseModel):
+    """One paper-tally line: N ballots for a candidate."""
+
+    candidate_id: UUID
+    count: int = Field(..., ge=1, le=500)
+
+
+class ManualBallotsRequest(BaseModel):
+    """Record an in-room paper-ballot tally."""
+
+    entries: List[ManualBallotEntry] = Field(..., min_length=1, max_length=50)
+    notes: Optional[str] = Field(None, max_length=1000)
+    allow_over_count: bool = Field(
+        default=False,
+        description=(
+            "Bypass the per-position plausibility check (total ballots vs "
+            "eligible voters). The override is recorded in the audit log."
+        ),
+    )
+
+
+class ManualBallotsResponse(BaseModel):
+    """Result of recording paper ballots."""
+
+    recorded: int
+    batch_id: Optional[str] = None
+    # 'pending' until the required officer attestations are in;
+    # 'confirmed' immediately when the org has attestations disabled.
+    status: str = "confirmed"
+    attestations_required: int = 0
+    message: str
+
+
+class ManualBallotAttestationInfo(BaseModel):
+    """One officer's attestation of a paper-tally batch."""
+
+    user_id: Optional[str] = None
+    name: Optional[str] = None
+    attested_at: Optional[datetime] = None
+
+
+class ManualBallotBatchTotal(BaseModel):
+    """Recorded count for one candidate within a batch."""
+
+    candidate_id: str
+    candidate_name: str
+    position: Optional[str] = None
+    count: int
+
+
+class ManualBallotBatchInfo(BaseModel):
+    """One paper-tally batch with its attestation trail."""
+
+    batch_id: str
+    status: str  # pending | confirmed | voided
+    recorded_by: Optional[str] = None
+    recorded_by_name: Optional[str] = None
+    recorded_at: Optional[datetime] = None
+    notes: Optional[str] = None
+    required_attestations: int = 0
+    attestations: List[ManualBallotAttestationInfo] = []
+    totals: List[ManualBallotBatchTotal] = []
+    total_ballots: int = 0
+
+
+class ManualBallotBatchListResponse(BaseModel):
+    """All paper-tally batches for an election."""
+
+    batches: List[ManualBallotBatchInfo]
+
+
+class AttestManualBallotsResponse(BaseModel):
+    """Result of attesting a paper-ballot batch."""
+
+    attestations: int
+    required: int
+    status: str
+    message: str
+
+
+class VoidManualBallotsRequest(BaseModel):
+    """Void every paper ballot recorded in one batch."""
+
+    reason: str = Field(..., min_length=3, max_length=500)
+
+
+class VoidManualBallotsResponse(BaseModel):
+    """Result of voiding a paper-ballot batch."""
+
+    voided: int
+    message: str
 
 
 class CandidateResponse(UTCResponseBase):
@@ -529,6 +675,10 @@ class ElectionStats(BaseModel):
     total_voters: int  # Unique voters
     voter_turnout_percentage: float
     votes_by_position: Dict[str, int]
+    # Paper-tally transparency: discrepancies between the room count and
+    # the electronic count must be visible, not buried in vote rows.
+    manual_votes: int = 0
+    electronic_votes: int = 0
     voting_timeline: Optional[List[Dict[str, Any]]] = Field(
         None, description="Votes over time for charts"
     )
@@ -756,13 +906,62 @@ class BallotTemplatesResponse(BaseModel):
 
 
 class BallotItemVote(BaseModel):
-    """A single vote within a ballot submission"""
+    """A single vote within a ballot submission.
+
+    Exactly one selection form may be used per item:
+    - ``choice`` — the single-selection form (yes/no items, single-winner
+      candidate items, write-ins). Kept required-compatible for existing
+      clients.
+    - ``candidate_ids`` — multi-select for approval / multi-vote items.
+    - ``rankings`` — ordered candidate ids for ranked-choice items
+      (index 0 = rank 1).
+    Sending none of the three counts as an abstention.
+    """
 
     ballot_item_id: str = Field(..., description="ID of the ballot item being voted on")
-    choice: str = Field(
-        ..., description="'approve', 'deny', 'abstain', 'write_in', or a candidate UUID"
+    choice: Optional[str] = Field(
+        None,
+        description="'approve', 'deny', 'abstain', 'write_in', or a candidate UUID",
+    )
+    candidate_ids: Optional[List[str]] = Field(
+        None,
+        description="Multi-select candidate ids (approval / multi-vote items)",
+    )
+    rankings: Optional[List[str]] = Field(
+        None,
+        description="Ordered candidate ids, index 0 = rank 1 (ranked choice)",
     )
     write_in_name: Optional[str] = Field(None, description="Name for write-in votes")
+
+    @model_validator(mode="after")
+    def validate_selection(self) -> "BallotItemVote":
+        forms = [
+            self.choice is not None,
+            self.candidate_ids is not None,
+            self.rankings is not None,
+        ]
+        if sum(forms) > 1:
+            raise ValueError(
+                "Use only one of choice, candidate_ids, or rankings per item"
+            )
+        for label, ids in (
+            ("candidate_ids", self.candidate_ids),
+            ("rankings", self.rankings),
+        ):
+            if ids is None:
+                continue
+            if not ids:
+                raise ValueError(f"{label} must not be empty when provided")
+            if len(ids) > 50:
+                raise ValueError(f"{label} cannot exceed 50 entries")
+            if len(set(ids)) != len(ids):
+                raise ValueError(f"{label} contains duplicate candidates")
+            for cid in ids:
+                try:
+                    UUID(cid)
+                except (ValueError, TypeError):
+                    raise ValueError(f"{label} entries must be candidate UUIDs")
+        return self
 
 
 class BallotSubmission(BaseModel):
@@ -879,6 +1078,14 @@ class ElectionSettingsResponse(BaseModel):
     default_quorum_value: Optional[int] = None
     proxy_voting_enabled: Optional[bool] = False
     max_proxies_per_person: Optional[int] = 1
+    # Per-department feature toggles (all default ON)
+    nominations_enabled: Optional[bool] = True
+    paper_ballots_enabled: Optional[bool] = True
+    reminders_enabled: Optional[bool] = True
+    auto_open_enabled: Optional[bool] = True
+    # Officers (other than the recorder) who must attest a paper-ballot
+    # batch before its votes count. 0 disables attestation.
+    paper_ballot_attestations_required: Optional[int] = 2
     security: Optional[Dict[str, Any]] = None
 
 

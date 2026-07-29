@@ -17,6 +17,19 @@ from typing import Any
 from loguru import logger
 
 
+def _https_urlopen(request: urllib.request.Request, timeout: int = 10):
+    """urlopen restricted to https.
+
+    Every provider endpoint in this module is a hardcoded https URL, but
+    urlopen itself would also follow file:// or custom schemes — guard the
+    scheme centrally so a refactor can't silently widen it (Bandit B310).
+    """
+    scheme = urllib.parse.urlparse(request.full_url).scheme
+    if scheme != "https":
+        raise ValueError(f"Refusing non-https URL scheme: {scheme!r}")
+    return urllib.request.urlopen(request, timeout=timeout)  # nosec B310
+
+
 def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:
     """
     Test SMTP connection with provided configuration
@@ -322,7 +335,7 @@ def _validate_google_oauth_token(
             method="POST",
         )
 
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with _https_urlopen(request, timeout=10) as response:
             result = json.loads(response.read().decode("utf-8"))
 
             if "access_token" in result:
@@ -471,7 +484,7 @@ def _validate_microsoft_oauth_token(
             method="POST",
         )
 
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with _https_urlopen(request, timeout=10) as response:
             result = json.loads(response.read().decode("utf-8"))
 
             if "access_token" in result:
@@ -572,7 +585,7 @@ def _check_microsoft_mail_permission(access_token: str) -> bool:
             method="GET",
         )
 
-        with urllib.request.urlopen(request, timeout=10):
+        with _https_urlopen(request, timeout=10):
             # If we can access organization info, the token is valid
             # Mail.Send permission would need to be verified separately
             # but for testing purposes, this confirms the credentials work
@@ -641,7 +654,7 @@ def test_cloudflare_email(
             method="GET",
         )
 
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with _https_urlopen(request, timeout=10) as response:
             result = json.loads(response.read().decode("utf-8"))
 
             if result.get("success"):

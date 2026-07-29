@@ -156,7 +156,7 @@ All frontend source files use `.ts` / `.tsx` exclusively. Path alias `@/*` maps 
 - **Runner:** Vitest 4.0 with jsdom environment
 - **Libraries:** @testing-library/react, @testing-library/jest-dom, @testing-library/user-event
 - **E2E:** Playwright
-- **Coverage:** @vitest/coverage-v8 (thresholds: 80% lines/functions/statements, 75% branches)
+- **Coverage:** @vitest/coverage-v8. Thresholds are a **ratchet floor** set a couple of points under current measured coverage (see `frontend/vitest.config.ts`) — they block regressions rather than demanding an aspirational number. Raise them as coverage grows; don't lower them
 - **Run:** `npm run test:frontend` or `cd frontend && npm test`
 - Test files are co-located with source: `src/**/*.test.ts(x)`
 

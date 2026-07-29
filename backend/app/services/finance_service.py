@@ -19,8 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
-from app.utils.csv_export import SafeCsvWriter
-
 from app.models.finance import (
     ApprovalChain,
     ApprovalChainStep,
@@ -46,6 +44,7 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.models.user import User
+from app.utils.csv_export import SafeCsvWriter
 
 
 class FinanceService:
@@ -550,11 +549,18 @@ class FinanceService:
         result = await self.db.execute(
             select(ApprovalStepRecord)
             .options(selectinload(ApprovalStepRecord.step))
+            .join(
+                ApprovalChainStep,
+                ApprovalChainStep.id == ApprovalStepRecord.step_id,
+            )
             .where(
                 ApprovalStepRecord.entity_type == entity_type,
                 ApprovalStepRecord.entity_id == entity_id,
             )
-            .order_by(ApprovalStepRecord.created_at)
+            # Chain position, not created_at: records for one entity are
+            # created in the same instant, so DATETIME ties would make the
+            # "current pending step" nondeterministic.
+            .order_by(ApprovalChainStep.step_order, ApprovalStepRecord.created_at)
         )
         return list(result.scalars().all())
 

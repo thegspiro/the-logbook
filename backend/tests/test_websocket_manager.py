@@ -7,16 +7,25 @@ Covers:
   - Broadcast dead connection cleanup
 """
 
+# Stub out heavy transitive imports not available in the test environment.
+# Stub only what is genuinely unavailable — planting a stub for an importable
+# module poisons sys.modules for the whole pytest run (module-level code
+# executes at collection).
+import importlib
 import sys
 from unittest.mock import MagicMock
 
-# Stub out heavy transitive imports not available in the test environment
 for _mod_name in ("redis", "redis.asyncio"):
-    if _mod_name not in sys.modules:
+    if _mod_name in sys.modules:
+        continue
+    try:
+        importlib.import_module(_mod_name)
+    except ImportError:
         sys.modules[_mod_name] = MagicMock()
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from app.core.websocket_manager import ConnectionManager
 

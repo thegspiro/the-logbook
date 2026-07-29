@@ -1102,10 +1102,9 @@ The Reports module (`/reports`) generates cross-module reports:
 | Endpoint | Token Type | Purpose |
 |----------|-----------|---------|
 | `GET/POST /training/sessions/approve/{token}` | Approval token | Training session approval |
-| `GET /elections/ballot` | Ballot token (query param) | Get ballot |
-| `GET /elections/ballot/{token}/candidates` | Ballot token | Get candidates |
-| `POST /elections/ballot/{token}/vote` | Ballot token | Cast vote |
-| `POST /elections/ballot/{token}/submit` | Ballot token | Submit ballot |
+| `POST /elections/ballot/lookup` | Ballot token (request body) | Get ballot + candidates |
+| `POST /elections/ballot/vote` | Ballot token (request body) | Cast vote |
+| `POST /elections/ballot/vote/bulk` | Ballot token (request body) | Submit ballot |
 | `GET /event-requests/status/{token}` | Request token | Check request status |
 | `POST /event-requests/status/{token}/cancel` | Request token | Cancel request |
 

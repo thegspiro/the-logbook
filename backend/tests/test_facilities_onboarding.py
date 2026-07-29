@@ -17,13 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = [pytest.mark.integration]
 
-from app.models.facilities import (
-    Facility,
-    FacilityStatus,
-    FacilityType,
-)
+from app.models.facilities import Facility, FacilityStatus, FacilityType
 from app.models.location import Location
-from app.models.user import Organization
+from app.models.user import Organization, OrganizationType
 from app.services.onboarding import OnboardingService
 
 
@@ -34,6 +30,7 @@ def _unique_slug(prefix: str = "test") -> str:
 # ---------------------------------------------------------------------------
 # Shared org-data builders
 # ---------------------------------------------------------------------------
+
 
 def _org_data(
     *,
@@ -75,6 +72,38 @@ def _org_data(
         "email": email,
         "county": county,
     }
+
+
+async def _make_second_org(db_session, service, slug: str) -> Organization:
+    """Build an additional organization directly.
+
+    Single-instance onboarding provisions exactly ONE organization (a second
+    create_organization call is rejected by design), so isolation tests build
+    the second org via the ORM and reuse the headquarters-facility helper for
+    parity with onboarding output.
+    """
+    data = _org_data(slug=slug)
+    org = Organization(
+        id=str(uuid.uuid4()),
+        name=data["name"],
+        slug=data["slug"],
+        organization_type=OrganizationType.FIRE_DEPARTMENT,
+        timezone=data["timezone"],
+        mailing_address_line1=data["mailing_address_line1"],
+        mailing_city=data["mailing_city"],
+        mailing_state=data["mailing_state"],
+        mailing_zip=data["mailing_zip"],
+        mailing_country=data["mailing_country"],
+        physical_address_same=data["physical_address_same"],
+        phone=data["phone"],
+        email=data["email"],
+        county=data["county"],
+    )
+    db_session.add(org)
+    await db_session.flush()
+    await service._create_headquarters_facility(org)
+    await db_session.flush()
+    return org
 
 
 # ===================================================================
@@ -138,9 +167,7 @@ class TestHeadquartersFacilityCreation:
         assert location.display_code is not None
         assert len(location.display_code) >= 8
 
-    async def test_facility_has_valid_type_and_status(
-        self, db_session: AsyncSession
-    ):
+    async def test_facility_has_valid_type_and_status(self, db_session: AsyncSession):
         """Facility must be assigned an active type and status."""
         service = OnboardingService(db_session)
         org = await service.create_organization(**_org_data())
@@ -156,9 +183,7 @@ class TestHeadquartersFacilityCreation:
 
         fac_type = (
             await db_session.execute(
-                select(FacilityType).where(
-                    FacilityType.id == facility.facility_type_id
-                )
+                select(FacilityType).where(FacilityType.id == facility.facility_type_id)
             )
         ).scalar_one()
         assert fac_type.is_active is True
@@ -166,9 +191,7 @@ class TestHeadquartersFacilityCreation:
 
         fac_status = (
             await db_session.execute(
-                select(FacilityStatus).where(
-                    FacilityStatus.id == facility.status_id
-                )
+                select(FacilityStatus).where(FacilityStatus.id == facility.status_id)
             )
         ).scalar_one()
         assert fac_status.is_active is True
@@ -193,9 +216,7 @@ class TestHeadquartersFacilityCreation:
 # ===================================================================
 class TestPhysicalAddressHandling:
 
-    async def test_physical_address_used_when_different(
-        self, db_session: AsyncSession
-    ):
+    async def test_physical_address_used_when_different(self, db_session: AsyncSession):
         """When physical_address_same=False and physical fields are provided,
         the facility should use the physical address."""
         data = _org_data(
@@ -295,16 +316,12 @@ class TestFacilityTypeMapping:
         ).scalar_one()
         ftype = (
             await db_session.execute(
-                select(FacilityType).where(
-                    FacilityType.id == facility.facility_type_id
-                )
+                select(FacilityType).where(FacilityType.id == facility.facility_type_id)
             )
         ).scalar_one()
         assert ftype.name == "Fire Station"
 
-    async def test_ems_only_gets_ems_station_type(
-        self, db_session: AsyncSession
-    ):
+    async def test_ems_only_gets_ems_station_type(self, db_session: AsyncSession):
         service = OnboardingService(db_session)
         org = await service.create_organization(
             **_org_data(organization_type="ems_only")
@@ -316,16 +333,12 @@ class TestFacilityTypeMapping:
         ).scalar_one()
         ftype = (
             await db_session.execute(
-                select(FacilityType).where(
-                    FacilityType.id == facility.facility_type_id
-                )
+                select(FacilityType).where(FacilityType.id == facility.facility_type_id)
             )
         ).scalar_one()
         assert ftype.name == "EMS Station"
 
-    async def test_combined_gets_fire_station_type(
-        self, db_session: AsyncSession
-    ):
+    async def test_combined_gets_fire_station_type(self, db_session: AsyncSession):
         service = OnboardingService(db_session)
         org = await service.create_organization(
             **_org_data(organization_type="fire_ems_combined")
@@ -337,9 +350,7 @@ class TestFacilityTypeMapping:
         ).scalar_one()
         ftype = (
             await db_session.execute(
-                select(FacilityType).where(
-                    FacilityType.id == facility.facility_type_id
-                )
+                select(FacilityType).where(FacilityType.id == facility.facility_type_id)
             )
         ).scalar_one()
         assert ftype.name == "Fire Station"
@@ -350,9 +361,7 @@ class TestFacilityTypeMapping:
 # ===================================================================
 class TestContactInfoPropagation:
 
-    async def test_phone_and_email_carried_over(
-        self, db_session: AsyncSession
-    ):
+    async def test_phone_and_email_carried_over(self, db_session: AsyncSession):
         service = OnboardingService(db_session)
         org = await service.create_organization(
             **_org_data(phone="555-1234", email="ops@dept.example")
@@ -367,9 +376,7 @@ class TestContactInfoPropagation:
 
     async def test_fax_carried_over(self, db_session: AsyncSession):
         service = OnboardingService(db_session)
-        org = await service.create_organization(
-            **_org_data(fax="555-9999")
-        )
+        org = await service.create_organization(**_org_data(fax="555-9999"))
         facility = (
             await db_session.execute(
                 select(Facility).where(Facility.organization_id == org.id)
@@ -377,9 +384,7 @@ class TestContactInfoPropagation:
         ).scalar_one()
         assert facility.fax == "555-9999"
 
-    async def test_optional_contact_fields_can_be_none(
-        self, db_session: AsyncSession
-    ):
+    async def test_optional_contact_fields_can_be_none(self, db_session: AsyncSession):
         data = _org_data(phone=None, email=None, fax=None)
         service = OnboardingService(db_session)
         org = await service.create_organization(**data)
@@ -415,9 +420,7 @@ class TestFacilityModuleUsability:
         assert len(facilities) == 1
         assert facilities[0].name == org.name
 
-    async def test_location_queryable_for_events(
-        self, db_session: AsyncSession
-    ):
+    async def test_location_queryable_for_events(self, db_session: AsyncSession):
         """Events module location picker queries active locations by org."""
         service = OnboardingService(db_session)
         org = await service.create_organization(**_org_data())
@@ -432,9 +435,7 @@ class TestFacilityModuleUsability:
         assert len(locations) == 1
         assert locations[0].facility_id is not None
 
-    async def test_facility_type_and_status_accessible(
-        self, db_session: AsyncSession
-    ):
+    async def test_facility_type_and_status_accessible(self, db_session: AsyncSession):
         """The facilities page loads types and statuses — verify they exist
         for the organization or as system defaults."""
         service = OnboardingService(db_session)
@@ -443,40 +444,46 @@ class TestFacilityModuleUsability:
         from sqlalchemy import or_
 
         types = (
-            await db_session.execute(
-                select(FacilityType).where(
-                    or_(
-                        FacilityType.organization_id == org.id,
-                        FacilityType.organization_id.is_(None),
-                    ),
-                    FacilityType.is_active.is_(True),
+            (
+                await db_session.execute(
+                    select(FacilityType).where(
+                        or_(
+                            FacilityType.organization_id == org.id,
+                            FacilityType.organization_id.is_(None),
+                        ),
+                        FacilityType.is_active.is_(True),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         statuses = (
-            await db_session.execute(
-                select(FacilityStatus).where(
-                    or_(
-                        FacilityStatus.organization_id == org.id,
-                        FacilityStatus.organization_id.is_(None),
-                    ),
-                    FacilityStatus.is_active.is_(True),
+            (
+                await db_session.execute(
+                    select(FacilityStatus).where(
+                        or_(
+                            FacilityStatus.organization_id == org.id,
+                            FacilityStatus.organization_id.is_(None),
+                        ),
+                        FacilityStatus.is_active.is_(True),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         assert len(types) > 0, "At least one facility type must be available"
         assert len(statuses) > 0, "At least one facility status must be available"
 
-    async def test_display_code_unique_and_present(
-        self, db_session: AsyncSession
-    ):
+    async def test_display_code_unique_and_present(self, db_session: AsyncSession):
         """Each location must have a unique display_code for the kiosk URL."""
         service = OnboardingService(db_session)
 
         org1 = await service.create_organization(**_org_data(slug=_unique_slug("a")))
-        org2 = await service.create_organization(**_org_data(slug=_unique_slug("b")))
+        org2 = await _make_second_org(db_session, service, _unique_slug("b"))
 
         loc1 = (
             await db_session.execute(
@@ -501,9 +508,7 @@ class TestCountyPropagation:
 
     async def test_county_set_on_facility(self, db_session: AsyncSession):
         service = OnboardingService(db_session)
-        org = await service.create_organization(
-            **_org_data(county="Cook")
-        )
+        org = await service.create_organization(**_org_data(county="Cook"))
         facility = (
             await db_session.execute(
                 select(Facility).where(Facility.organization_id == org.id)
@@ -511,9 +516,7 @@ class TestCountyPropagation:
         ).scalar_one()
         assert facility.county == "Cook"
 
-    async def test_county_none_when_not_provided(
-        self, db_session: AsyncSession
-    ):
+    async def test_county_none_when_not_provided(self, db_session: AsyncSession):
         data = _org_data(county=None)
         service = OnboardingService(db_session)
         org = await service.create_organization(**data)
@@ -530,28 +533,30 @@ class TestCountyPropagation:
 # ===================================================================
 class TestOrgIsolation:
 
-    async def test_facilities_isolated_between_orgs(
-        self, db_session: AsyncSession
-    ):
+    async def test_facilities_isolated_between_orgs(self, db_session: AsyncSession):
         """Facilities from one org must not appear in another org's queries."""
         service = OnboardingService(db_session)
-        org1 = await service.create_organization(
-            **_org_data(slug=_unique_slug("iso1"))
-        )
-        org2 = await service.create_organization(
-            **_org_data(slug=_unique_slug("iso2"))
-        )
+        org1 = await service.create_organization(**_org_data(slug=_unique_slug("iso1")))
+        org2 = await _make_second_org(db_session, service, _unique_slug("iso2"))
 
         fac1 = (
-            await db_session.execute(
-                select(Facility).where(Facility.organization_id == org1.id)
+            (
+                await db_session.execute(
+                    select(Facility).where(Facility.organization_id == org1.id)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         fac2 = (
-            await db_session.execute(
-                select(Facility).where(Facility.organization_id == org2.id)
+            (
+                await db_session.execute(
+                    select(Facility).where(Facility.organization_id == org2.id)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         assert len(fac1) == 1
         assert len(fac2) == 1

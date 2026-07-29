@@ -21,7 +21,6 @@ from typing import Any
 from xml.etree import ElementTree
 
 import defusedxml.ElementTree as safe_etree
-
 from loguru import logger
 
 from app.schemas.integration import EPCRImportRow

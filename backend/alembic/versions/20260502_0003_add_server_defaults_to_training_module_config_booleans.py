@@ -58,7 +58,18 @@ _COLUMNS = [
 
 
 def upgrade() -> None:
+    # Some of these are model-only columns that no migration adds —
+    # deployments get them from the startup missing-column repair, so on a
+    # fresh chain run they may not exist yet. Touch only what's present.
+    from sqlalchemy import inspect
+
+    existing = {
+        col["name"]
+        for col in inspect(op.get_bind()).get_columns("training_module_configs")
+    }
     for column, default in _COLUMNS:
+        if column not in existing:
+            continue
         default_value = 1 if default else 0
         # Backfill any rows where this column is currently NULL.
         op.execute(
@@ -75,7 +86,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    from sqlalchemy import inspect
+
+    existing = {
+        col["name"]
+        for col in inspect(op.get_bind()).get_columns("training_module_configs")
+    }
     for column, _ in _COLUMNS:
+        if column not in existing:
+            continue
         op.execute(
             f"ALTER TABLE training_module_configs "
             f"ALTER COLUMN {column} DROP DEFAULT"

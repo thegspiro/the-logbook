@@ -14,32 +14,20 @@ Covers:
   - Category requires_* enforcement
 """
 
-import pytest
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.inventory_service import InventoryService
 
 pytestmark = [pytest.mark.integration]
-from app.models.inventory import (
-    InventoryCategory,
-    InventoryItem,
-    ItemAssignment,
-    CheckOutRecord,
-    ItemIssuance,
-    MaintenanceRecord,
-    ItemType,
-    ItemCondition,
-    ItemStatus,
-    TrackingType,
-    AssignmentType,
-)
-
+from app.models.inventory import ItemCondition, ItemStatus
 
 # ── Helpers ──────────────────────────────────────────────────────────
+
 
 def _uid() -> str:
     return str(uuid.uuid4())
@@ -57,7 +45,13 @@ async def setup_org_and_user(db_session: AsyncSession):
             "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
             "VALUES (:id, :name, :otype, :slug, :tz)"
         ),
-        {"id": org_id, "name": "Test Dept", "otype": "fire_department", "slug": f"test-{org_id[:8]}", "tz": "UTC"},
+        {
+            "id": org_id,
+            "name": "Test Dept",
+            "otype": "fire_department",
+            "slug": f"test-{org_id[:8]}",
+            "tz": "UTC",
+        },
     )
     for uid, uname, fn, ln in [
         (user_id, "jsmith", "John", "Smith"),
@@ -69,9 +63,13 @@ async def setup_org_and_user(db_session: AsyncSession):
                 "password_hash, status) VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
             ),
             {
-                "id": uid, "org": org_id, "un": uname,
-                "fn": fn, "ln": ln,
-                "em": f"{uname}@test.com", "pw": "hashed",
+                "id": uid,
+                "org": org_id,
+                "un": uname,
+                "fn": fn,
+                "ln": ln,
+                "em": f"{uname}@test.com",
+                "pw": "hashed",
             },
         )
     await db_session.flush()
@@ -80,11 +78,12 @@ async def setup_org_and_user(db_session: AsyncSession):
 
 # ── Category Tests ───────────────────────────────────────────────────
 
+
 class TestCategoryManagement:
 
     @pytest.mark.asyncio
     async def test_create_and_list_categories(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         cat, err = await svc.create_category(
@@ -95,6 +94,7 @@ class TestCategoryManagement:
                 "requires_serial_number": True,
                 "requires_maintenance": True,
             },
+            created_by=uuid.UUID(user_id),
         )
         assert err is None
         assert cat is not None
@@ -106,12 +106,13 @@ class TestCategoryManagement:
 
     @pytest.mark.asyncio
     async def test_get_category_by_id(self, db_session, setup_org_and_user):
-        org_id, _, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         cat, _ = await svc.create_category(
             organization_id=uuid.UUID(org_id),
             category_data={"name": "Radios", "item_type": "electronics"},
+            created_by=uuid.UUID(user_id),
         )
         fetched = await svc.get_category_by_id(uuid.UUID(cat.id), uuid.UUID(org_id))
         assert fetched is not None
@@ -120,11 +121,12 @@ class TestCategoryManagement:
 
 # ── Item CRUD Tests ──────────────────────────────────────────────────
 
+
 class TestItemCRUD:
 
     @pytest.mark.asyncio
     async def test_create_item(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, err = await svc.create_item(
@@ -146,7 +148,7 @@ class TestItemCRUD:
 
     @pytest.mark.asyncio
     async def test_update_item(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -166,7 +168,7 @@ class TestItemCRUD:
 
     @pytest.mark.asyncio
     async def test_retire_item(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -175,7 +177,9 @@ class TestItemCRUD:
             created_by=uuid.UUID(user_id),
         )
 
-        success, err = await svc.retire_item(uuid.UUID(item.id), uuid.UUID(org_id), notes="End of life")
+        success, err = await svc.retire_item(
+            uuid.UUID(item.id), uuid.UUID(org_id), notes="End of life"
+        )
         assert success is True
         assert err is None
 
@@ -187,11 +191,14 @@ class TestItemCRUD:
 
 # ── State Validation Tests ───────────────────────────────────────────
 
+
 class TestStateValidation:
 
     @pytest.mark.asyncio
-    async def test_reject_invalid_status_condition_combo(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+    async def test_reject_invalid_status_condition_combo(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         # Can't create a RETIRED item with condition GOOD
@@ -205,12 +212,16 @@ class TestStateValidation:
 
     @pytest.mark.asyncio
     async def test_retire_blocked_when_assigned(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
             organization_id=uuid.UUID(org_id),
-            item_data={"name": "Assigned Helmet", "condition": "good", "status": "available"},
+            item_data={
+                "name": "Assigned Helmet",
+                "condition": "good",
+                "status": "available",
+            },
             created_by=uuid.UUID(user_id),
         )
 
@@ -228,13 +239,19 @@ class TestStateValidation:
         assert "assigned" in err.lower() or "unassign" in err.lower()
 
     @pytest.mark.asyncio
-    async def test_retire_blocked_when_checked_out(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+    async def test_retire_blocked_when_checked_out(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
             organization_id=uuid.UUID(org_id),
-            item_data={"name": "Checked Out Tool", "condition": "good", "status": "available"},
+            item_data={
+                "name": "Checked Out Tool",
+                "condition": "good",
+                "status": "available",
+            },
             created_by=uuid.UUID(user_id),
         )
 
@@ -252,16 +269,24 @@ class TestStateValidation:
 
 # ── Category Requires_* Enforcement ──────────────────────────────────
 
+
 class TestCategoryRequirements:
 
     @pytest.mark.asyncio
-    async def test_reject_item_without_required_serial(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+    async def test_reject_item_without_required_serial(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         cat, _ = await svc.create_category(
             organization_id=uuid.UUID(org_id),
-            category_data={"name": "SCBA", "item_type": "ppe", "requires_serial_number": True},
+            category_data={
+                "name": "SCBA",
+                "item_type": "ppe",
+                "requires_serial_number": True,
+            },
+            created_by=uuid.UUID(user_id),
         )
 
         item, err = await svc.create_item(
@@ -278,13 +303,20 @@ class TestCategoryRequirements:
         assert "serial number" in err.lower()
 
     @pytest.mark.asyncio
-    async def test_accept_item_with_required_serial(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+    async def test_accept_item_with_required_serial(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         cat, _ = await svc.create_category(
             organization_id=uuid.UUID(org_id),
-            category_data={"name": "SCBA2", "item_type": "ppe", "requires_serial_number": True},
+            category_data={
+                "name": "SCBA2",
+                "item_type": "ppe",
+                "requires_serial_number": True,
+            },
+            created_by=uuid.UUID(user_id),
         )
 
         item, err = await svc.create_item(
@@ -304,11 +336,12 @@ class TestCategoryRequirements:
 
 # ── Assignment Tests ─────────────────────────────────────────────────
 
+
 class TestAssignment:
 
     @pytest.mark.asyncio
     async def test_assign_and_unassign(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -344,12 +377,16 @@ class TestAssignment:
 
     @pytest.mark.asyncio
     async def test_cannot_assign_unavailable_item(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
             organization_id=uuid.UUID(org_id),
-            item_data={"name": "Broken Tool", "condition": "damaged", "status": "in_maintenance"},
+            item_data={
+                "name": "Broken Tool",
+                "condition": "damaged",
+                "status": "in_maintenance",
+            },
             created_by=uuid.UUID(user_id),
         )
 
@@ -365,11 +402,12 @@ class TestAssignment:
 
 # ── Checkout / Check-in Tests ────────────────────────────────────────
 
+
 class TestCheckoutCheckin:
 
     @pytest.mark.asyncio
     async def test_checkout_and_checkin(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -405,12 +443,16 @@ class TestCheckoutCheckin:
 
     @pytest.mark.asyncio
     async def test_cannot_checkout_unavailable(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
             organization_id=uuid.UUID(org_id),
-            item_data={"name": "Assigned Item", "condition": "good", "status": "available"},
+            item_data={
+                "name": "Assigned Item",
+                "condition": "good",
+                "status": "available",
+            },
             created_by=uuid.UUID(user_id),
         )
 
@@ -435,11 +477,12 @@ class TestCheckoutCheckin:
 
 # ── Pool Issuance Tests ──────────────────────────────────────────────
 
+
 class TestPoolIssuance:
 
     @pytest.mark.asyncio
     async def test_issue_and_return_pool(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -481,7 +524,7 @@ class TestPoolIssuance:
 
     @pytest.mark.asyncio
     async def test_issue_exceeds_stock(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -504,16 +547,21 @@ class TestPoolIssuance:
             quantity=10,
         )
         assert err is not None
-        assert "insufficient" in err.lower() or "stock" in err.lower() or "available" in err.lower()
+        assert (
+            "insufficient" in err.lower()
+            or "stock" in err.lower()
+            or "available" in err.lower()
+        )
 
 
 # ── Batch Operations ─────────────────────────────────────────────────
+
 
 class TestBatchOperations:
 
     @pytest.mark.asyncio
     async def test_batch_checkout(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         items_data = []
@@ -543,7 +591,7 @@ class TestBatchOperations:
 
     @pytest.mark.asyncio
     async def test_batch_checkout_partial_failure(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -574,11 +622,14 @@ class TestBatchOperations:
 
 # ── Maintenance Tests ────────────────────────────────────────────────
 
+
 class TestMaintenance:
 
     @pytest.mark.asyncio
-    async def test_maintenance_sets_next_inspection(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+    async def test_maintenance_sets_next_inspection(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -603,6 +654,7 @@ class TestMaintenance:
                 "condition_after": "good",
                 "performed_by": user_id,
             },
+            created_by=uuid.UUID(user_id),
         )
         assert err is None
 
@@ -614,11 +666,12 @@ class TestMaintenance:
 
 # ── Lookup Tests ─────────────────────────────────────────────────────
 
+
 class TestLookup:
 
     @pytest.mark.asyncio
     async def test_lookup_by_barcode(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -640,7 +693,7 @@ class TestLookup:
 
     @pytest.mark.asyncio
     async def test_lookup_not_found(self, db_session, setup_org_and_user):
-        org_id, _, _ = await setup_org_and_user
+        org_id, _, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         result = await svc.lookup_by_code("NONEXISTENT", uuid.UUID(org_id))
@@ -649,17 +702,22 @@ class TestLookup:
 
 # ── Members Inventory Summary Tests ──────────────────────────────────
 
+
 class TestMembersInventorySummary:
 
     @pytest.mark.asyncio
     async def test_summary_counts(self, db_session, setup_org_and_user):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         # Create and assign an item
         item, _ = await svc.create_item(
             organization_id=uuid.UUID(org_id),
-            item_data={"name": "Assigned Helmet", "condition": "good", "status": "available"},
+            item_data={
+                "name": "Assigned Helmet",
+                "condition": "good",
+                "status": "available",
+            },
             created_by=uuid.UUID(user_id),
         )
         await svc.assign_item_to_user(

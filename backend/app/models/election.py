@@ -8,7 +8,7 @@ from enum import Enum
 
 from sqlalchemy import JSON, Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -20,6 +20,10 @@ class ElectionStatus(str, Enum):
     """Election status enumeration"""
 
     DRAFT = "draft"
+    # Optional pre-ballot phase: members may nominate candidates (and
+    # nominees accept/decline). Closing nominations returns the election
+    # to DRAFT so the secretary finalizes the ballot before opening.
+    NOMINATIONS = "nominations"
     OPEN = "open"
     CLOSED = "closed"
     CANCELLED = "cancelled"
@@ -82,6 +86,25 @@ class Election(Base):
     # Timing
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=False)
+
+    # Lifecycle automation (election_lifecycle scheduled task).
+    # auto_open: opt-in — a half-configured draft must never open itself, so
+    # the task only auto-opens drafts explicitly flagged by the creator.
+    # Auto-CLOSE needs no flag: every vote path already rejects votes after
+    # end_date, and closing runs the IP purge / salt destruction, so leaving
+    # an overdue election open is strictly worse than closing it.
+    auto_open = Column(Boolean, nullable=False, default=False, server_default="0")
+
+    # Auto-reminder to non-voters: NULL = disabled. When set, the lifecycle
+    # task sends ONE reminder once now >= end_date - reminder_hours_before_close
+    # and no reminder (manual or automatic) has been sent yet.
+    reminder_hours_before_close = Column(Integer, nullable=True)
+    reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Nomination phase: when the election is in NOMINATIONS status and a
+    # deadline is set, the lifecycle task closes nominations (back to DRAFT)
+    # once the deadline passes. NULL = nominations close manually.
+    nomination_deadline = Column(DateTime(timezone=True), nullable=True)
 
     # Status
     status = Column(
@@ -306,6 +329,13 @@ class VotingToken(Base):
     # time. NULL = legacy token or positional election (no per-item limit).
     eligible_item_ids = Column(JSON, nullable=True)
 
+    # Positions this voter was eligible for at send time (the election's
+    # position_eligibility voter_types evaluated against the recipient) —
+    # the positional-election mirror of eligible_item_ids, and snapshotted
+    # for the same reason. NULL = legacy token or election without position
+    # rules (unrestricted).
+    eligible_positions = Column(JSON, nullable=True)
+
     # Access tracking
     first_accessed_at = Column(DateTime(timezone=True), nullable=True)
     access_count = Column(Integer, nullable=False, default=0)
@@ -381,6 +411,17 @@ class Vote(Base):
     # Test ballot flag — test votes are excluded from real results/stats
     is_test = Column(Boolean, nullable=False, default=False)
 
+    # Manual (paper-ballot) entry: votes keyed in by an officer from an
+    # in-room paper tally. No voter identity or dedup hash — the officer's
+    # attested count is the source of truth; recorded_by attributes it.
+    is_manual = Column(Boolean, nullable=False, default=False, server_default="0")
+    recorded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Shared id across one paper-tally entry, so a mis-keyed batch can be
+    # voided in a single audited action.
+    manual_batch_id = Column(String(36), nullable=True, index=True)
+
     # Proxy voting — tracks when a vote is cast on behalf of another member
     is_proxy_vote = Column(Boolean, nullable=False, default=False)
     proxy_voter_id = Column(
@@ -412,4 +453,86 @@ class Vote(Base):
         Index("ix_votes_voter_id", "voter_id"),
         Index("ix_votes_voter_hash", "voter_hash"),
         Index("ix_votes_deleted_at", "deleted_at"),
+    )
+
+
+class ManualBallotBatch(Base):
+    """One paper-tally entry — the set of manual votes sharing a batch id.
+
+    The batch is the unit of officer attestation: when the organization
+    requires N attestations, the batch starts ``pending`` and its votes are
+    excluded from results and stats until N distinct officers (other than
+    the recording officer) confirm the counts. ``voided`` mirrors the
+    soft-deleted votes of a corrected batch.
+    """
+
+    __tablename__ = "manual_ballot_batches"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    election_id = Column(
+        String(36),
+        ForeignKey("elections.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    recorded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    notes = Column(Text, nullable=True)
+    # 'pending' (awaiting attestations) | 'confirmed' | 'voided'
+    status = Column(String(20), nullable=False, default="pending")
+    # Snapshot of the org's requirement at record time, so changing the
+    # setting later never silently confirms or un-confirms an old batch.
+    required_attestations = Column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    confirmed_at = Column(DateTime(timezone=True), nullable=True)
+
+    attestations = relationship(
+        "ManualBallotAttestation",
+        back_populates="batch",
+        cascade="all, delete-orphan",
+    )
+
+
+class ManualBallotAttestation(Base):
+    """One officer's confirmation that a paper-tally batch matches the
+    physical count. The unique constraint makes double-attestation by the
+    same officer impossible at the DB level."""
+
+    __tablename__ = "manual_ballot_attestations"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    batch_id = Column(
+        String(36),
+        ForeignKey("manual_ballot_batches.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    attested_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    attested_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    batch = relationship("ManualBallotBatch", back_populates="attestations")
+
+    __table_args__ = (
+        UniqueConstraint("batch_id", "attested_by", name="uq_batch_attester"),
     )

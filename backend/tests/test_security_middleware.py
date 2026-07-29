@@ -9,15 +9,16 @@ Covers:
   - verify_csrf_token FastAPI dependency (double-submit cookie pattern)
 """
 
-import pytest
-import time
 import secrets
+import time
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.core.security_middleware import (
-    RateLimiter,
     CSRFProtection,
     InputSanitizer,
+    RateLimiter,
     SecurityHeadersMiddleware,
     verify_csrf_token,
 )

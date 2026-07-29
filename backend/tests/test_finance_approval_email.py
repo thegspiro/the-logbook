@@ -63,7 +63,9 @@ class TestApprovalRequestEmail:
 
     async def test_skips_when_no_token(self):
         svc = FinanceService(MagicMock())
-        assert await svc.send_approval_request_email(_record(token=None), _step()) is False
+        assert (
+            await svc.send_approval_request_email(_record(token=None), _step()) is False
+        )
 
     async def test_never_raises_on_email_failure(self, monkeypatch):
         monkeypatch.setattr(

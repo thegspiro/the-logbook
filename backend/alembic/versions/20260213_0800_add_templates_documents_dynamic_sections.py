@@ -7,6 +7,7 @@ Create Date: 2026-02-13 08:00:00
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 from sqlalchemy.dialects import mysql
 
 # revision identifiers
@@ -44,6 +45,29 @@ def upgrade() -> None:
     op.add_column('meeting_minutes', sa.Column('published_document_id', sa.String(36), nullable=True))
 
     # ── Document Folders ──
+    # 20260212_0300 already created document_folders/documents with the
+    # model-aligned shapes (parent_id, name, SET NULL folder FK), so on a
+    # fresh chain run these two CREATEs would collide (error 1050) — they
+    # only ever succeeded on databases that skipped 0300. Keep the existing
+    # tables in that case. (Deployed instances build schema from the models
+    # via create_all and are stamped, so neither shape reaches production.)
+    existing_tables = inspect(op.get_bind()).get_table_names()
+    if 'document_folders' in existing_tables and 'documents' in existing_tables:
+        # Bring 0300's shapes up to the model columns this era introduced —
+        # the folder seeds in 20260215_0200 insert slug/sort_order/is_system,
+        # and generated documents (published minutes) use document_type /
+        # content_html / source tracking.
+        op.add_column('document_folders', sa.Column('slug', sa.String(100), nullable=True))
+        op.add_column('document_folders', sa.Column('is_system', sa.Boolean(), nullable=False, server_default='0'))
+        op.add_column('document_folders', sa.Column('sort_order', sa.Integer(), nullable=False, server_default='0'))
+        op.add_column('documents', sa.Column('document_type', sa.Enum('uploaded', 'generated', name='documenttype'), nullable=False, server_default='uploaded'))
+        op.add_column('documents', sa.Column('content_html', mysql.LONGTEXT(), nullable=True))
+        op.add_column('documents', sa.Column('source_type', sa.String(50), nullable=True))
+        op.add_column('documents', sa.Column('source_id', sa.String(36), nullable=True))
+        op.create_index('ix_documents_source', 'documents', ['source_type', 'source_id'])
+        _migrate_sections()
+        return
+
     op.create_table(
         'document_folders',
         sa.Column('id', sa.String(36), primary_key=True),
@@ -90,6 +114,10 @@ def upgrade() -> None:
     op.create_index('ix_documents_source', 'documents', ['source_type', 'source_id'])
     op.create_index('ix_documents_document_type', 'documents', ['document_type'])
 
+    _migrate_sections()
+
+
+def _migrate_sections() -> None:
     # ── Migrate existing minutes data into sections JSON ──
     # Populate the new sections column from legacy fields for existing rows
     op.execute("""
