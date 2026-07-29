@@ -121,11 +121,12 @@ GET    /api/v1/elections/settings               # Get election settings (proxy v
 PATCH  /api/v1/elections/settings               # Update election settings
 GET    /api/v1/elections/{id}/eligibility-roster  # Full eligibility breakdown for secretary
 
-# Public token-ballot endpoints (no auth, rate-limited)
-GET    /api/v1/elections/ballot?token=       # Load ballot (minimal view, items filtered to eligibility)
-GET    /api/v1/elections/ballot/{token}/candidates  # Candidates for a token ballot
-POST   /api/v1/elections/ballot/vote         # Cast one vote (token in body)
-POST   /api/v1/elections/ballot/vote/bulk    # Submit full ballot atomically (token in body)
+# Public token-ballot endpoints (no auth, rate-limited; the token always
+# travels in the POST body — never a query string or path — so the live
+# credential stays out of server/proxy logs)
+POST   /api/v1/elections/ballot/lookup       # Load ballot + candidates in one call (minimal view; items, positions, and candidates filtered to the voter's eligibility snapshots)
+POST   /api/v1/elections/ballot/vote         # Cast one vote (method-aware: accepts vote_rank for ranked-choice; approval allows one vote per candidate)
+POST   /api/v1/elections/ballot/vote/bulk    # Submit full ballot atomically (single choice, candidate_ids multi-select, or rankings per item)
 ```
 
 ---
@@ -162,7 +163,7 @@ findings R-1…R-10) fixed the following. Migration `20260730_0001` adds
 `voting_tokens.is_test` and `voting_tokens.eligible_item_ids`.
 
 - **Per-item eligibility enforced at vote submission**: Ballot-item restrictions (`eligible_voter_types`, `require_attendance`) were previously checked only when ballot emails were sent — a token holder could vote on restricted items by submitting their ids. The eligible item set is now snapshotted on each voting token at issue time and enforced when the ballot is submitted; the public ballot endpoint also only returns the items the voter may vote on. The authenticated vote path now runs the same per-position/per-item checks
-- **Public ballot response minimized**: `GET /elections/ballot` previously returned the full election record — attendee names, eligible-voter lists, email recipients — to any ballot-link holder. It now returns a minimal ballot view with no roster/PII fields
+- **Public ballot response minimized**: the token ballot lookup previously returned the full election record — attendee names, eligible-voter lists, email recipients — to any ballot-link holder. It now returns a minimal ballot view with no roster/PII fields
 - **Test ballots are excluded from results**: "Send test ballot" now issues a flagged token; votes cast with it are stored `is_test`, excluded from results/stats/rosters, and never consume the sender's real vote
 - **Runoffs trigger on early close**: Closing an election before its scheduled end date (the normal end-of-meeting flow) previously skipped runoff creation silently; runoff conditions are now evaluated on every close
 - **Approval & ranked-choice voting fixed**: Both methods were rejected at the vote-dedup layer (any second vote collided) and the UI submitted votes non-atomically. Votes now carry a method-aware dedup discriminator, duplicate rules are per-candidate/per-rank, and the ballot UI submits all approvals/rankings in one atomic bulk call
@@ -177,6 +178,10 @@ findings R-1…R-10) fixed the following. Migration `20260730_0001` adds
 - **Voting tokens hashed at rest** *(follow-up, ELEC-5)*: only SHA-256 hashes are stored; the raw token exists solely in the emailed ballot link (migration `20260731_0001` hashes existing rows in place — old links keep working)
 - **IP metadata purged at close** *(follow-up, ELEC-6)*: anonymous elections erase per-vote IP/user-agent when closed, and the forensics report returns a thresholded suspicious-IP set (`suspicious_ips`, `unique_ip_count`, `ip_metadata_purged`) instead of the full per-IP vote map
 - **Cloudflare email attachments** *(follow-up)*: the pre-meeting package PDF now attaches on the Cloudflare email backend too (base64 API attachments, 5 MiB cap with skip-and-warn)
+- **Ballot tokens never appear in URLs** *(follow-up, R-D3, 2026-07-29)*: the emailed link now carries the token in the URL **fragment** (`/ballot#token=…` — browsers never send fragments to any server), the voting page scrubs it from the address bar after capture, and the two GET read endpoints were replaced by `POST /elections/ballot/lookup` with the token in the body. Links emailed before the change (`?token=`) keep working until those tokens expire
+- **Position eligibility enforced for token ballots** *(follow-up, R-D4, 2026-07-29)*: positional elections' `position_eligibility` rules now apply to email-token voters too — eligible positions are snapshotted on the token at send time (`eligible_positions`, migration `20260801_0001`), enforced at vote time, and used to filter the positions/candidates the ballot page shows. Members eligible for no position are skipped at send time with a reason
+- **Method-aware token voting** *(follow-up, R-D5, 2026-07-29)*: approval and ranked-choice elections now work end-to-end by email ballot — the ballot page renders checkbox multi-select (approval / multi-vote) and per-candidate rank selects (ranked choice), submitted as `candidate_ids` / `rankings` on the bulk endpoint; the single-vote token endpoint mirrors the authenticated path's per-candidate/per-rank duplicate rules
+- **Anonymous elections keep voter IPs out of the audit log** *(follow-up, ELEC-6 residual, 2026-07-29)*: voter-action audit events no longer record an IP for anonymous elections (audit rows are hash-chained and can never be scrubbed, so this had to be a write-time fix; rows written earlier keep their IPs)
 
 ### Edge Cases (2026-07-28)
 
@@ -193,6 +198,11 @@ findings R-1…R-10) fixed the following. Migration `20260730_0001` adds
 | Runoff created from a quorum/position-restricted election | Inherits quorum, position eligibility, meeting/event link, attendees, and overrides — with a **fresh** anonymity salt of its own |
 | Runoff opened at the meeting (default start is +1h) | Opening clamps a future start to "now" — voting works immediately; draft dates are also editable via the new **Edit Dates** modal |
 | Opening an election whose end date already passed | Refused — update the dates first |
+| Token holder votes for a position their membership type can't vote for | Rejected ("You are not eligible to vote for …") — omitting the position field can't bypass it (falls back to the candidate's position) |
+| Token restricted to one position casts that vote | Token marked fully used, even though the election has more positions |
+| Approval election by email ballot | Voter checks every candidate they support; one vote per checked candidate, duplicate candidate rejected |
+| Ranked-choice election by email ballot | Voter assigns unique ranks per candidate; submission order defines rank 1..n |
+| Old `?token=` ballot link (emailed before the fragment change) | Still works — the page falls back to the query string, then scrubs the URL |
 
 ---
 

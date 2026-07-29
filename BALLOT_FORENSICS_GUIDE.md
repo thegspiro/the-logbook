@@ -294,7 +294,8 @@ For anonymous elections:
 - Voters are tracked via `voter_hash` (HMAC-SHA256 of user ID + election-specific salt)
 - The salt (`voter_anonymity_salt`) is destroyed automatically when the election closes, making de-anonymization **permanently impossible**
 - Per-vote **IP addresses and user-agents are purged at close** as well (since 2026-07) — they exist only while voting is open, for live fraud detection
-- Voting tokens are stored as **SHA-256 hashes** (since 2026-07) — database read access never yields a live ballot credential
+- The **audit log records no voter IPs** for anonymous elections (since 2026-07) — audit rows are hash-chained and can never be scrubbed, so voter-action events omit the IP at write time (rows written before that change retain theirs)
+- Voting tokens are stored as **SHA-256 hashes** (since 2026-07) — database read access never yields a live ballot credential, and the raw token travels only in the emailed link's URL fragment (never sent to any server)
 - Even with the salt, recovering voter identity requires access to both the salt and user IDs, plus the hashing algorithm
 
 ---

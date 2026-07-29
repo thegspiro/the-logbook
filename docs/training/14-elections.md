@@ -244,8 +244,8 @@ When the election is ready:
 When you click **Send Ballots**, the system:
 
 1. Identifies all eligible voters (respecting tier, attendance, and override rules)
-2. Generates a unique voting token per voter — the token records which ballot items that voter is eligible for, and this is enforced again when the ballot is submitted (a voter cannot vote on restricted items even by crafting the request manually)
-3. Sends an email with a link to the public ballot page (`/ballot?token=...`)
+2. Generates a unique voting token per voter — the token records which ballot items (and, for positional elections, which positions) that voter is eligible for, and this is enforced again when the ballot is submitted (a voter cannot vote on restricted items or positions even by crafting the request manually)
+3. Sends an email with a link to the public ballot page (`/ballot#token=...` — the token rides in the URL fragment, which browsers never send to any server, so the credential stays out of access logs; the page also removes it from the address bar once loaded)
 4. Reports how many ballots were sent and which members were skipped (with reasons)
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the ballot send confirmation showing "42 ballots sent, 3 skipped" with a list of skipped members and reasons (e.g., "No email address", "Ineligible tier")._
@@ -277,8 +277,8 @@ When you click **Send Ballots**, the system:
 
 1. Open the ballot email from your department
 2. Click the voting link
-3. The public ballot page loads with your ballot items — you only see the items you are eligible to vote on
-4. Select your choices
+3. The public ballot page loads with your ballot items — you only see the items (and positions/candidates) you are eligible to vote on
+4. Select your choices. The ballot adapts to the election's voting method: radio buttons for single-choice, **checkboxes** for approval and multi-vote elections (select every candidate you support, up to any cap), and **rank dropdowns** for ranked choice (1 = first preference; each rank can be used once)
 5. Click **Submit** — no login required; the token authenticates you. The confirmation screen shows your vote receipts — save them if you want to verify your votes later
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the public ballot page showing the election title, a position ("Fire Chief") with three candidate options as radio buttons, a write-in text field, and a Submit button at the bottom._
