@@ -35,7 +35,18 @@ def upgrade() -> None:
     Add unique constraints to votes table to prevent double-voting.
 
     Uses partial unique indexes to handle nullable columns correctly.
+
+    NOTE: partial (WHERE-clause) unique indexes are PostgreSQL-only — MySQL
+    rejects the syntax outright, so on MySQL this migration is a no-op. The
+    real double-vote guarantee on MySQL is the unique ``vote_dedup_hash``
+    added in 20260305_0200, which also drops these indexes wherever they did
+    exist. (This branch only surfaced when `alembic upgrade head` first ran
+    against a fresh MySQL database; deployed instances are stamped past it.)
     """
+    if op.get_bind().dialect.name != "postgresql":
+        print("⏭  Skipped: partial unique indexes are PostgreSQL-only; MySQL")
+        print("   double-vote protection is vote_dedup_hash (20260305_0200)")
+        return
 
     # 1. Non-anonymous voting with positions
     # Ensures a user can only vote once per position in non-anonymous elections
@@ -83,6 +94,9 @@ def downgrade() -> None:
     WARNING: This will remove double-voting protection!
     Only run in development/testing environments.
     """
+    if op.get_bind().dialect.name != "postgresql":
+        return  # upgrade() created nothing on this dialect
+
     op.execute("DROP INDEX IF EXISTS idx_votes_unique_anon_single")
     op.execute("DROP INDEX IF EXISTS idx_votes_unique_anon_position")
     op.execute("DROP INDEX IF EXISTS idx_votes_unique_non_anon_single")
