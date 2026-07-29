@@ -82,6 +82,23 @@ Beyond membership type, a member may also be restricted by:
 
 ---
 
+## Per-Department Feature Toggles (2026-07-29)
+
+Election Settings → **Features** lets each department turn optional
+workflows on or off (all ON by default; stored in
+`org.settings.election_features`; enforced in the service layer, hidden
+in the UI):
+
+- `nominations_enabled` — nomination phase and member nominations
+- `paper_ballots_enabled` — officer paper-tally entry
+- `reminders_enabled` — manual and automatic non-voter reminders
+- `auto_open_enabled` — scheduled opening of flagged drafts
+
+Not toggleable by design: automatic closing at `end_date` and the
+nomination-deadline auto-close. Closing finalizes results and runs the
+anonymous-election IP/salt purge — a privacy guarantee, not a
+convenience — and an in-flight nomination phase must always be closeable.
+
 ## Lifecycle Automation (2026-07-29)
 
 The `election_lifecycle` scheduled task (every 15 minutes) automates status

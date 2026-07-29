@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Elections: per-department feature toggles (2026-07-29)
+
+**Added**
+
+- New **Features** section in Election Settings with four org-level
+  toggles, all ON by default so existing behavior is unchanged:
+  `nominations_enabled`, `paper_ballots_enabled`, `reminders_enabled`
+  (manual + automatic), and `auto_open_enabled` (scheduled opening).
+  Enforcement lives in the service layer — disabling a feature blocks its
+  endpoints (with a clear "enable it in Election Settings" message) and
+  the lifecycle task skips the corresponding automation; the UI hides the
+  affordances. Stored in `org.settings.election_features` (no migration
+  needed). Deliberately **not** toggleable: automatic closing at
+  `end_date` and nomination-deadline auto-close — closing finalizes
+  results and runs the anonymity IP/salt purge, and turning that off
+  would reintroduce the privacy gap; an in-flight nomination phase must
+  also always be closeable.
+
 ### Elections: nomination phase + paper-ballot entry (2026-07-29)
 
 **Added**

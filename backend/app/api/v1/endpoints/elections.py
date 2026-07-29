@@ -534,6 +534,10 @@ class ElectionSettingsUpdate(BaseModel):
     default_quorum_value: Optional[int] = None
     max_proxies_per_person: Optional[int] = None
     proxy_voting_enabled: Optional[bool] = None
+    nominations_enabled: Optional[bool] = None
+    paper_ballots_enabled: Optional[bool] = None
+    reminders_enabled: Optional[bool] = None
+    auto_open_enabled: Optional[bool] = None
 
 
 @router.get("/settings", response_model=ElectionSettingsResponse)
@@ -563,6 +567,7 @@ async def get_election_settings(
     org_settings = org.settings or {}
     election_defaults = org_settings.get("election_defaults", {})
     proxy_config = org_settings.get("proxy_voting", {})
+    features = org_settings.get("election_features", {})
 
     from app.core.config import settings as app_settings
 
@@ -583,6 +588,10 @@ async def get_election_settings(
         "default_quorum_value": election_defaults.get("quorum_value"),
         "proxy_voting_enabled": proxy_config.get("enabled", False),
         "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
+        "nominations_enabled": features.get("nominations_enabled", True),
+        "paper_ballots_enabled": features.get("paper_ballots_enabled", True),
+        "reminders_enabled": features.get("reminders_enabled", True),
+        "auto_open_enabled": features.get("auto_open_enabled", True),
         "security": {
             "vote_signing_key_configured": signing_key_configured,
             "anonymity_salt_auto_destroy": True,
@@ -621,6 +630,7 @@ async def update_election_settings(
     org_settings = copy.deepcopy(org.settings or {})
     election_defaults = org_settings.get("election_defaults", {})
     proxy_config = org_settings.get("proxy_voting", {})
+    features = org_settings.get("election_features", {})
 
     update_data = settings_update.model_dump(exclude_unset=True)
 
@@ -644,8 +654,18 @@ async def update_election_settings(
     if "max_proxies_per_person" in update_data:
         proxy_config["max_proxies_per_person"] = update_data["max_proxies_per_person"]
 
+    for flag in (
+        "nominations_enabled",
+        "paper_ballots_enabled",
+        "reminders_enabled",
+        "auto_open_enabled",
+    ):
+        if flag in update_data:
+            features[flag] = update_data[flag]
+
     org_settings["election_defaults"] = election_defaults
     org_settings["proxy_voting"] = proxy_config
+    org_settings["election_features"] = features
     org.settings = org_settings
 
     await db.commit()
@@ -674,6 +694,10 @@ async def update_election_settings(
         "default_quorum_value": election_defaults.get("quorum_value"),
         "proxy_voting_enabled": proxy_config.get("enabled", False),
         "max_proxies_per_person": proxy_config.get("max_proxies_per_person", 1),
+        "nominations_enabled": features.get("nominations_enabled", True),
+        "paper_ballots_enabled": features.get("paper_ballots_enabled", True),
+        "reminders_enabled": features.get("reminders_enabled", True),
+        "auto_open_enabled": features.get("auto_open_enabled", True),
     }
 
 

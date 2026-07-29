@@ -565,6 +565,11 @@ export interface ElectionSettings {
   default_quorum_value?: number;
   proxy_voting_enabled?: boolean;
   max_proxies_per_person?: number;
+  // Per-department feature toggles (all default ON)
+  nominations_enabled?: boolean;
+  paper_ballots_enabled?: boolean;
+  reminders_enabled?: boolean;
+  auto_open_enabled?: boolean;
 }
 
 // Ballot Preview (secretary view with eligibility annotations)

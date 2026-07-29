@@ -102,6 +102,14 @@ export const ElectionDetailPage: React.FC = () => {
   // Upcoming events state
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
 
+  // Org-level feature toggles (default ON until settings load)
+  const [featureFlags, setFeatureFlags] = useState({
+    nominations_enabled: true,
+    paper_ballots_enabled: true,
+    reminders_enabled: true,
+    auto_open_enabled: true,
+  });
+
   // Paper-ballot entry state
   const [showPaperBallotsModal, setShowPaperBallotsModal] = useState(false);
   const [isRecordingPaper, setIsRecordingPaper] = useState(false);
@@ -116,6 +124,26 @@ export const ElectionDetailPage: React.FC = () => {
   const { checkPermission, user: currentUser } = useAuthStore();
   const canManage = checkPermission('elections.manage');
   const tz = useTimezone();
+
+  useEffect(() => {
+    // Settings require elections.manage; members keep the all-on defaults
+    // (their only feature surface, the nominations tab, is driven by the
+    // election's actual status).
+    if (!canManage) return;
+    void (async () => {
+      try {
+        const s = await electionService.getSettings();
+        setFeatureFlags({
+          nominations_enabled: s.nominations_enabled ?? true,
+          paper_ballots_enabled: s.paper_ballots_enabled ?? true,
+          reminders_enabled: s.reminders_enabled ?? true,
+          auto_open_enabled: s.auto_open_enabled ?? true,
+        });
+      } catch {
+        // Non-fatal: buttons stay visible; the backend gates enforcement.
+      }
+    })();
+  }, [canManage]);
 
   useEffect(() => {
     if (electionId) {
@@ -1017,7 +1045,7 @@ export const ElectionDetailPage: React.FC = () => {
                     >
                       Edit Dates
                     </button>
-                    {(election.positions?.length ?? 0) > 0 && (
+                    {featureFlags.nominations_enabled && (election.positions?.length ?? 0) > 0 && (
                       <button
                         onClick={() => { void handleOpenNominations(); }}
                         className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm"
@@ -1045,12 +1073,14 @@ export const ElectionDetailPage: React.FC = () => {
 
                 {election.status === ElectionStatus.OPEN && (
                   <>
-                    <button
-                      onClick={() => { void handleShowPaperBallots(); }}
-                      className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 text-sm"
-                    >
-                      Record Paper Ballots
-                    </button>
+                    {featureFlags.paper_ballots_enabled && (
+                      <button
+                        onClick={() => { void handleShowPaperBallots(); }}
+                        className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 text-sm"
+                      >
+                        Record Paper Ballots
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setShowExtendModal(true);
@@ -1109,7 +1139,7 @@ export const ElectionDetailPage: React.FC = () => {
                       {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
                     </button>
                   )}
-                  {election.status === ElectionStatus.OPEN && election.email_sent && (
+                  {featureFlags.reminders_enabled && election.status === ElectionStatus.OPEN && election.email_sent && (
                     <button
                       onClick={() => { void handleOpenRemindModal(); }}
                       disabled={isLoadingNonVoters}

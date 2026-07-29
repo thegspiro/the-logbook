@@ -54,6 +54,33 @@ class ElectionService:
             return dt.replace(tzinfo=timezone.utc)
         return dt
 
+    # Per-organization feature flags (org.settings["election_features"]).
+    # Everything defaults ON so existing behavior is unchanged; departments
+    # opt OUT via Election Settings. Auto-close is deliberately NOT a flag:
+    # votes are already rejected after end_date, and closing is what runs
+    # result finalization and the anonymous-election IP/salt purge — a
+    # department cannot opt out of that privacy guarantee.
+    FEATURE_DEFAULTS = {
+        "nominations_enabled": True,
+        "paper_ballots_enabled": True,
+        "reminders_enabled": True,
+        "auto_open_enabled": True,
+    }
+
+    async def get_feature_flags(self, organization_id: UUID) -> Dict[str, bool]:
+        """Resolve the org's election feature toggles (missing keys = ON)."""
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = result.scalar_one_or_none()
+        features = ((org.settings or {}) if org else {}).get("election_features", {})
+        if not isinstance(features, dict):
+            features = {}
+        return {
+            key: bool(features.get(key, default))
+            for key, default in self.FEATURE_DEFAULTS.items()
+        }
+
     # ------------------------------------------------------------------
     # Audit helpers
     # ------------------------------------------------------------------
@@ -2220,6 +2247,12 @@ class ElectionService:
             raise ValueError("Election not found")
         if election.status != ElectionStatus.OPEN:
             raise ValueError("Reminders can only be sent for open elections")
+        flags = await self.get_feature_flags(organization_id)
+        if not flags["reminders_enabled"]:
+            raise ValueError(
+                "Non-voter reminders are disabled for this organization — "
+                "enable them in Election Settings"
+            )
 
         non_voters = await self.get_non_voters(election_id, organization_id)
         if not non_voters:
@@ -2276,6 +2309,12 @@ class ElectionService:
         election = result.scalar_one_or_none()
         if not election:
             return None, "Election not found"
+        flags = await self.get_feature_flags(organization_id)
+        if not flags["nominations_enabled"]:
+            return None, (
+                "Nominations are disabled for this organization — "
+                "enable them in Election Settings"
+            )
         if election.status != ElectionStatus.DRAFT:
             return None, (
                 f"Cannot open nominations for an election with status "
@@ -2364,6 +2403,12 @@ class ElectionService:
             return None, "Election not found"
         if election.status != ElectionStatus.NOMINATIONS:
             return None, "Nominations are not open for this election"
+        flags = await self.get_feature_flags(organization_id)
+        if not flags["nominations_enabled"]:
+            return None, (
+                "Nominations are disabled for this organization — "
+                "enable them in Election Settings"
+            )
         if position not in (election.positions or []):
             return None, f"'{position}' is not a position in this election"
 
@@ -2521,6 +2566,12 @@ class ElectionService:
             return 0, "Election not found"
         if election.status != ElectionStatus.OPEN:
             return 0, "Paper ballots can only be recorded while voting is open"
+        flags = await self.get_feature_flags(organization_id)
+        if not flags["paper_ballots_enabled"]:
+            return 0, (
+                "Paper-ballot entry is disabled for this organization — "
+                "enable it in Election Settings"
+            )
         if not entries:
             return 0, "No ballot entries provided"
 
@@ -2612,6 +2663,7 @@ class ElectionService:
         """
         now = datetime.now(timezone.utc)
         actions = 0
+        flags = await self.get_feature_flags(organization_id)
 
         result = await self.db.execute(
             select(Election.id, Election.status).where(
@@ -2664,6 +2716,7 @@ class ElectionService:
 
             if (
                 election.status == ElectionStatus.DRAFT
+                and flags["auto_open_enabled"]
                 and election.auto_open
                 and start
                 and start <= now
@@ -2705,7 +2758,8 @@ class ElectionService:
                 continue
 
             if (
-                election.reminder_hours_before_close
+                flags["reminders_enabled"]
+                and election.reminder_hours_before_close
                 and election.reminder_sent_at is None
                 and end
                 and now >= end - timedelta(hours=election.reminder_hours_before_close)

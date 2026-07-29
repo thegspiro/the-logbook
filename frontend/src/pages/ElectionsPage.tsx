@@ -49,6 +49,10 @@ export const ElectionsPage: React.FC = () => {
     reminder_hours_before_close: undefined,
   });
   const [positionInput, setPositionInput] = useState('');
+  const [featureFlags, setFeatureFlags] = useState({
+    reminders_enabled: true,
+    auto_open_enabled: true,
+  });
   const [showPositionDropdown, setShowPositionDropdown] = useState(false);
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
   const [upcomingEvents, setBusinessMeetingEvents] = useState<EventListItem[]>([]);
@@ -84,6 +88,21 @@ export const ElectionsPage: React.FC = () => {
       // Non-critical — meeting selector will just be empty
     }
   }, [tz]);
+
+  useEffect(() => {
+    if (!canManage) return;
+    void (async () => {
+      try {
+        const s = await electionService.getSettings();
+        setFeatureFlags({
+          reminders_enabled: s.reminders_enabled ?? true,
+          auto_open_enabled: s.auto_open_enabled ?? true,
+        });
+      } catch {
+        // Non-fatal: fields stay visible; the backend gates enforcement.
+      }
+    })();
+  }, [canManage]);
 
   useEffect(() => {
     void fetchElections();
@@ -889,19 +908,22 @@ export const ElectionsPage: React.FC = () => {
                     <span className="ml-2 text-sm text-theme-text-primary">Show Results Immediately</span>
                   </label>
 
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="election-auto-open"
-                      checked={formData.auto_open ?? false}
-                      onChange={(e) =>
-                        setFormData({ ...formData, auto_open: e.target.checked })
-                      }
-                      className="form-checkbox"
-                    />
-                    <span className="ml-2 text-sm text-theme-text-primary">Open Automatically at Start Time</span>
-                  </label>
+                  {featureFlags.auto_open_enabled && (
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="election-auto-open"
+                        checked={formData.auto_open ?? false}
+                        onChange={(e) =>
+                          setFormData({ ...formData, auto_open: e.target.checked })
+                        }
+                        className="form-checkbox"
+                      />
+                      <span className="ml-2 text-sm text-theme-text-primary">Open Automatically at Start Time</span>
+                    </label>
+                  )}
 
+                  {featureFlags.reminders_enabled && (
                   <div>
                     <label htmlFor="election-reminder-hours" className="block text-sm font-medium text-theme-text-primary">
                       Auto-Remind Non-Voters
@@ -930,6 +952,7 @@ export const ElectionsPage: React.FC = () => {
                       Members who haven&apos;t voted get one reminder email with a fresh ballot link.
                     </p>
                   </div>
+                  )}
                 </div>
               </div>
 

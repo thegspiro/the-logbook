@@ -1002,6 +1002,11 @@ class ElectionSettingsResponse(BaseModel):
     default_quorum_value: Optional[int] = None
     proxy_voting_enabled: Optional[bool] = False
     max_proxies_per_person: Optional[int] = 1
+    # Per-department feature toggles (all default ON)
+    nominations_enabled: Optional[bool] = True
+    paper_ballots_enabled: Optional[bool] = True
+    reminders_enabled: Optional[bool] = True
+    auto_open_enabled: Optional[bool] = True
     security: Optional[Dict[str, Any]] = None
 
 

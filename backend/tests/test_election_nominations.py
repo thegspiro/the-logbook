@@ -544,3 +544,146 @@ class TestManualBallots(TestNominationSetup):
         )
         counts = {c.candidate_name: c.vote_count for c in results.overall_results}
         assert counts.get("Dana Deputy") == 4
+
+
+class TestFeatureToggles(TestNominationSetup):
+    """Departments can turn each new feature off; auto-close never turns off."""
+
+    async def _disable_features(self, db_session, org_id, **flags):
+        import json
+
+        await db_session.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :id"),
+            {"s": json.dumps({"election_features": flags}), "id": org_id},
+        )
+        await db_session.flush()
+
+    async def test_open_nominations_blocked_when_disabled(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _ = setup_org_and_users
+        await self._disable_features(db_session, org_id, nominations_enabled=False)
+        election_id = await self._insert_election(db_session, org_id, user1_id)
+        svc = ElectionService(db_session)
+
+        election, err = await svc.open_nominations(
+            uuid.UUID(election_id), uuid.UUID(org_id)
+        )
+        assert election is None
+        assert "disabled" in err
+
+    async def test_manual_ballots_blocked_when_disabled(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _ = setup_org_and_users
+        await self._disable_features(db_session, org_id, paper_ballots_enabled=False)
+        now = datetime.now(timezone.utc)
+        election_id = await self._insert_election(
+            db_session,
+            org_id,
+            user1_id,
+            status="open",
+            start=now - timedelta(days=1),
+            end=now + timedelta(days=1),
+        )
+        svc = ElectionService(db_session)
+
+        recorded, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": _uid(), "count": 1}],
+        )
+        assert recorded == 0
+        assert "disabled" in err
+
+    async def test_reminders_blocked_when_disabled(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _ = setup_org_and_users
+        await self._disable_features(db_session, org_id, reminders_enabled=False)
+        now = datetime.now(timezone.utc)
+        election_id = await self._insert_election(
+            db_session,
+            org_id,
+            user1_id,
+            status="open",
+            start=now - timedelta(days=1),
+            end=now + timedelta(days=1),
+        )
+        svc = ElectionService(db_session)
+
+        with pytest.raises(ValueError, match="disabled"):
+            await svc.remind_non_voters(
+                election_id=uuid.UUID(election_id),
+                organization_id=uuid.UUID(org_id),
+            )
+
+    async def test_lifecycle_respects_auto_open_flag_but_still_closes(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        """With every toggle off, flagged drafts stay drafts — but overdue
+        open elections STILL close (finalization/privacy is not optional)."""
+        import json
+
+        org_id, user1_id, _ = setup_org_and_users
+        await db_session.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :id"),
+            {
+                "s": json.dumps(
+                    {
+                        "election_features": {
+                            "nominations_enabled": False,
+                            "paper_ballots_enabled": False,
+                            "reminders_enabled": False,
+                            "auto_open_enabled": False,
+                        }
+                    }
+                ),
+                "id": org_id,
+            },
+        )
+        await db_session.flush()
+
+        now = datetime.now(timezone.utc)
+        flagged_draft_id = await self._insert_election(
+            db_session,
+            org_id,
+            user1_id,
+            status="draft",
+            start=now - timedelta(minutes=10),
+            end=now + timedelta(days=1),
+        )
+        await db_session.execute(
+            text("UPDATE elections SET auto_open = 1 WHERE id = :id"),
+            {"id": flagged_draft_id},
+        )
+        # Give the draft an accepted candidate so the ONLY thing keeping it
+        # a draft is the disabled auto_open toggle, not open-validation.
+        await db_session.execute(
+            text(
+                "INSERT INTO candidates "
+                "(id, election_id, name, position, accepted, is_write_in, "
+                "display_order, nomination_date, created_at, updated_at) "
+                "VALUES (:id, :eid, 'Casey Chief', 'Chief', 1, 0, 0, "
+                "NOW(), NOW(), NOW())"
+            ),
+            {"id": _uid(), "eid": flagged_draft_id},
+        )
+        overdue_open_id = await self._insert_election(
+            db_session,
+            org_id,
+            user1_id,
+            status="open",
+            start=now - timedelta(days=2),
+            end=now - timedelta(hours=1),
+        )
+        await db_session.flush()
+
+        svc = ElectionService(db_session)
+        await svc.process_election_lifecycle(uuid.UUID(org_id))
+
+        draft = await self._get_election(db_session, flagged_draft_id)
+        closed = await self._get_election(db_session, overdue_open_id)
+        assert draft.status == ElectionStatus.DRAFT
+        assert closed.status == ElectionStatus.CLOSED
