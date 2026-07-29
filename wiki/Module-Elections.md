@@ -149,7 +149,8 @@ POST   /api/v1/elections/{id}/close-nominations # Nomination phase -> draft (man
 POST   /api/v1/elections/{id}/nominations    # Nominate a member or yourself (any member)
 POST   /api/v1/elections/{id}/nominations/{cid}/accept   # Nominee accepts
 POST   /api/v1/elections/{id}/nominations/{cid}/decline  # Nominee declines (entry removed)
-POST   /api/v1/elections/{id}/manual-ballots # Record in-room paper-ballot tally (manage)
+POST   /api/v1/elections/{id}/manual-ballots # Record in-room paper-ballot tally (manage; plausibility-guarded)
+POST   /api/v1/elections/{id}/manual-ballots/{batch}/void # Void a mis-keyed paper batch (manage)
 GET    /api/v1/elections/{id}/non-voters     # Eligible voters who haven't voted (manage)
 POST   /api/v1/elections/{id}/remind-non-voters # Reminder ballot email (fresh link) to non-voters only (manage)
 POST   /api/v1/elections/{id}/send-ballot    # Email ballots with unique voting tokens

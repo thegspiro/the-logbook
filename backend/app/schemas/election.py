@@ -485,12 +485,33 @@ class ManualBallotsRequest(BaseModel):
 
     entries: List[ManualBallotEntry] = Field(..., min_length=1, max_length=50)
     notes: Optional[str] = Field(None, max_length=1000)
+    allow_over_count: bool = Field(
+        default=False,
+        description=(
+            "Bypass the per-position plausibility check (total ballots vs "
+            "eligible voters). The override is recorded in the audit log."
+        ),
+    )
 
 
 class ManualBallotsResponse(BaseModel):
     """Result of recording paper ballots."""
 
     recorded: int
+    batch_id: Optional[str] = None
+    message: str
+
+
+class VoidManualBallotsRequest(BaseModel):
+    """Void every paper ballot recorded in one batch."""
+
+    reason: str = Field(..., min_length=3, max_length=500)
+
+
+class VoidManualBallotsResponse(BaseModel):
+    """Result of voiding a paper-ballot batch."""
+
+    voided: int
     message: str
 
 
@@ -603,6 +624,10 @@ class ElectionStats(BaseModel):
     total_voters: int  # Unique voters
     voter_turnout_percentage: float
     votes_by_position: Dict[str, int]
+    # Paper-tally transparency: discrepancies between the room count and
+    # the electronic count must be visible, not buried in vote rows.
+    manual_votes: int = 0
+    electronic_votes: int = 0
     voting_timeline: Optional[List[Dict[str, Any]]] = Field(
         None, description="Votes over time for charts"
     )

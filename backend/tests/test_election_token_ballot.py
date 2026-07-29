@@ -717,7 +717,7 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
             "app.services.email_service.EmailService.send_batch",
             new=AsyncMock(side_effect=lambda batch: [True] * len(batch)),
         ):
-            sent, failed, skipped, skipped_details = await svc.send_ballot_emails(
+            sent, failed, skipped, skipped_details, _sent_ids = await svc.send_ballot_emails(
                 election_id=uuid.UUID(data["election_id"]),
                 organization_id=uuid.UUID(data["org_id"]),
                 recipient_user_ids=[
@@ -1101,7 +1101,7 @@ class TestBallotTokenUrlHygiene(TestPositionEligibilityTokens):
                 new=AsyncMock(side_effect=lambda batch: [True] * len(batch)),
             ),
         ):
-            sent, failed, skipped, _ = await svc.send_ballot_emails(
+            sent, failed, skipped, _, _sent_ids = await svc.send_ballot_emails(
                 election_id=uuid.UUID(data["election_id"]),
                 organization_id=uuid.UUID(data["org_id"]),
                 recipient_user_ids=[uuid.UUID(data["user_id"])],

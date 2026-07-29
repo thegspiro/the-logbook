@@ -61,6 +61,8 @@ from app.schemas.election import (
     ImportMeetingAttendeesResponse,
     ManualBallotsRequest,
     ManualBallotsResponse,
+    VoidManualBallotsRequest,
+    VoidManualBallotsResponse,
     NominationActionResponse,
     NominationCreate,
     NonVotersResponse,
@@ -1092,7 +1094,9 @@ async def open_nominations(
     """
     service = ElectionService(db)
     election, error = await service.open_nominations(
-        election_id, current_user.organization_id
+        election_id,
+        current_user.organization_id,
+        acting_user_id=str(current_user.id),
     )
     if error:
         status_code = (
@@ -1258,7 +1262,7 @@ async def record_manual_ballots(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    recorded, error = await service.record_manual_ballots(
+    recorded, batch_id, error = await service.record_manual_ballots(
         election_id=election_id,
         organization_id=current_user.organization_id,
         recorded_by=str(current_user.id),
@@ -1267,6 +1271,7 @@ async def record_manual_ballots(
             for e in payload.entries
         ],
         notes=payload.notes,
+        allow_over_count=payload.allow_over_count,
     )
     if error:
         status_code = (
@@ -1277,7 +1282,48 @@ async def record_manual_ballots(
         raise HTTPException(status_code=status_code, detail=error)
     return {
         "recorded": recorded,
+        "batch_id": batch_id,
         "message": f"Recorded {recorded} paper ballot(s)",
+    }
+
+
+@router.post(
+    "/{election_id}/manual-ballots/{batch_id}/void",
+    response_model=VoidManualBallotsResponse,
+)
+async def void_manual_ballots(
+    election_id: UUID,
+    batch_id: str,
+    payload: VoidManualBallotsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Void (soft-delete) every paper ballot recorded in one batch — the
+    correction path for a mis-keyed tally. Rows are retained with the
+    deletion reason and appear in the forensics report.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    voided, error = await service.void_manual_ballot_batch(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        batch_id=batch_id,
+        deleted_by=str(current_user.id),
+        reason=payload.reason,
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "no active" in error.lower() or "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return {
+        "voided": voided,
+        "message": f"Voided {voided} paper ballot(s) from batch",
     }
 
 
@@ -1830,7 +1876,7 @@ async def send_ballot_emails(
 
     service = ElectionService(db)
     try:
-        recipients_count, failed_count, skipped_count, skipped_details = (
+        recipients_count, failed_count, skipped_count, skipped_details, _sent_ids = (
             await service.send_ballot_emails(
                 election_id=election_id,
                 organization_id=current_user.organization_id,
@@ -3089,7 +3135,7 @@ async def send_test_ballot(
 
     service = ElectionService(db)
     try:
-        recipients_count, failed_count, skipped_count, _skipped_details = (
+        recipients_count, failed_count, skipped_count, _skipped_details, _sent_ids = (
             await service.send_ballot_emails(
                 election_id=election_id,
                 organization_id=current_user.organization_id,

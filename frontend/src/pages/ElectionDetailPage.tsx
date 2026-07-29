@@ -115,6 +115,7 @@ export const ElectionDetailPage: React.FC = () => {
   const [isRecordingPaper, setIsRecordingPaper] = useState(false);
   const [paperBallotsError, setPaperBallotsError] = useState<string | null>(null);
   const [paperCandidates, setPaperCandidates] = useState<Candidate[]>([]);
+  const [lastPaperBatchId, setLastPaperBatchId] = useState<string | null>(null);
 
   // Meeting binding state
   const [showMeetingSelector, setShowMeetingSelector] = useState(false);
@@ -340,6 +341,7 @@ export const ElectionDetailPage: React.FC = () => {
   const handleRecordPaperBallots = async (
     entries: Array<{ candidate_id: string; count: number }>,
     notes: string,
+    allowOverCount: boolean,
   ) => {
     if (!electionId || entries.length === 0) return;
     try {
@@ -348,14 +350,36 @@ export const ElectionDetailPage: React.FC = () => {
       const result = await electionService.recordManualBallots(electionId, {
         entries,
         notes: notes.trim() || undefined,
+        allow_over_count: allowOverCount || undefined,
       });
       setShowPaperBallotsModal(false);
+      setLastPaperBatchId(result.batch_id ?? null);
       toast.success(result.message);
       await fetchElection();
     } catch (err: unknown) {
       setPaperBallotsError(getErrorMessage(err, 'Failed to record paper ballots'));
     } finally {
       setIsRecordingPaper(false);
+    }
+  };
+
+  const handleVoidLastPaperBatch = async () => {
+    if (!electionId || !lastPaperBatchId) return;
+    const reason = window.prompt(
+      'Why is this paper-ballot batch being voided? (recorded in the audit log)',
+    );
+    if (!reason || reason.trim().length < 3) return;
+    try {
+      const result = await electionService.voidManualBallots(
+        electionId,
+        lastPaperBatchId,
+        reason.trim(),
+      );
+      setLastPaperBatchId(null);
+      toast.success(result.message);
+      await fetchElection();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to void paper ballots'));
     }
   };
 
@@ -1081,6 +1105,14 @@ export const ElectionDetailPage: React.FC = () => {
                         Record Paper Ballots
                       </button>
                     )}
+                    {featureFlags.paper_ballots_enabled && lastPaperBatchId && (
+                      <button
+                        onClick={() => { void handleVoidLastPaperBatch(); }}
+                        className="px-4 py-2 border border-red-500/50 text-red-600 dark:text-red-400 rounded-md hover:bg-red-500/10 text-sm"
+                      >
+                        Void Last Paper Batch
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setShowExtendModal(true);
@@ -1683,7 +1715,7 @@ export const ElectionDetailPage: React.FC = () => {
           candidates={paperCandidates}
           recording={isRecordingPaper}
           error={paperBallotsError}
-          onSubmit={(entries, notes) => { void handleRecordPaperBallots(entries, notes); }}
+          onSubmit={(entries, notes, allowOverCount) => { void handleRecordPaperBallots(entries, notes, allowOverCount); }}
           onClose={() => { setShowPaperBallotsModal(false); setPaperBallotsError(null); }}
         />
       )}

@@ -226,7 +226,7 @@ class TestRemindNonVoters(TestLifecycleSetup):
             "app.services.email_service.EmailService.send_batch",
             new=AsyncMock(side_effect=lambda batch: [True] * len(batch)),
         ):
-            sent, _failed, _skipped, _details = await svc.send_ballot_emails(
+            sent, _failed, _skipped, _details, _sent_ids = await svc.send_ballot_emails(
                 election_id=uuid.UUID(election_id),
                 organization_id=uuid.UUID(org_id),
                 base_ballot_url="https://fd.example/ballot",

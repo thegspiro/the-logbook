@@ -60,6 +60,13 @@ class ElectionService:
     # votes are already rejected after end_date, and closing is what runs
     # result finalization and the anonymous-election IP/salt purge — a
     # department cannot opt out of that privacy guarantee.
+    # Minimum minutes between non-voter reminder sends (manual or automatic).
+    REMINDER_COOLDOWN_MINUTES = 60
+
+    # Anti-spam: a member may have at most this many PENDING (un-accepted)
+    # third-party nominations outstanding per election.
+    MAX_PENDING_NOMINATIONS_PER_MEMBER = 10
+
     FEATURE_DEFAULTS = {
         "nominations_enabled": True,
         "paper_ballots_enabled": True,
@@ -2132,6 +2139,7 @@ class ElectionService:
                     votes_by_position.get(vote.position, 0) + 1
                 )
 
+        manual_votes = sum(1 for v in all_votes if v.is_manual)
         return ElectionStats(
             election_id=election.id,
             total_candidates=total_candidates,
@@ -2140,6 +2148,8 @@ class ElectionService:
             total_voters=unique_voters,
             voter_turnout_percentage=round(voter_turnout, 2),
             votes_by_position=votes_by_position,
+            manual_votes=manual_votes,
+            electronic_votes=len(all_votes) - manual_votes,
             voting_timeline=None,  # Could be implemented for charts
         )
 
@@ -2232,6 +2242,14 @@ class ElectionService:
         can never yield more than one vote — while expiring the old token
         could disenfranchise a member whose reminder email bounces.
 
+        Hardening:
+        - A one-hour cooldown (against ``reminder_sent_at``) stops repeated
+          manual sends from spamming members with fresh links.
+        - After the send, prior unused tokens are expired — but ONLY for
+          members whose reminder email was confirmed handed to the SMTP
+          server. A member whose reminder failed keeps their old link, so a
+          bounce can never strand a voter with zero working ballots.
+
         Stamps ``reminder_sent_at`` so the automatic reminder (lifecycle
         task) fires at most once per election, counting manual reminders.
 
@@ -2254,25 +2272,94 @@ class ElectionService:
                 "enable them in Election Settings"
             )
 
+        # Cooldown: a manager double-clicking (or automation racing a manual
+        # send) must not spam members — each send mints fresh tokens.
+        now = datetime.now(timezone.utc)
+        last_sent = self._ensure_utc(election.reminder_sent_at)
+        if last_sent and now - last_sent < timedelta(
+            minutes=self.REMINDER_COOLDOWN_MINUTES
+        ):
+            wait_min = self.REMINDER_COOLDOWN_MINUTES - int(
+                (now - last_sent).total_seconds() // 60
+            )
+            raise ValueError(
+                f"A reminder was already sent recently — try again in about "
+                f"{max(wait_min, 1)} minute(s)"
+            )
+
         non_voters = await self.get_non_voters(election_id, organization_id)
         if not non_voters:
             return 0, 0, 0, []
 
-        sent, failed, skipped, skipped_details = await self.send_ballot_emails(
-            election_id=election_id,
-            organization_id=organization_id,
-            recipient_user_ids=[UUID(nv["id"]) for nv in non_voters],
-            subject=subject or f"Reminder: vote in {election.title}",
-            message=message
-            or (
-                "This is a reminder that you have not yet voted in "
-                f"{election.title}. Voting closes at "
-                f"{self._ensure_utc(election.end_date):%Y-%m-%d %H:%M} UTC."
-            ),
-            base_ballot_url=base_ballot_url,
+        # Snapshot each non-voter's PRE-EXISTING unused tokens so the ones
+        # superseded by this reminder can be expired after confirmed delivery
+        # (the tokens minted by the send below are not in this snapshot).
+        salt = election.voter_anonymity_salt or ""
+        hash_by_user = {
+            nv["id"]: self._generate_voter_hash(nv["id"], election_id, salt)
+            for nv in non_voters
+        }
+        prior_tokens_result = await self.db.execute(
+            select(VotingToken.id, VotingToken.voter_hash)
+            .where(VotingToken.election_id == str(election_id))
+            .where(VotingToken.voter_hash.in_(list(hash_by_user.values())))
+            .where(VotingToken.used == False)  # noqa: E712
+            .where(VotingToken.is_test == False)  # noqa: E712
+            .where(VotingToken.expires_at > now)
+        )
+        prior_token_ids_by_hash: Dict[str, List[str]] = {}
+        for token_id, voter_hash in prior_tokens_result.all():
+            prior_token_ids_by_hash.setdefault(voter_hash, []).append(token_id)
+
+        # Close time in the department's timezone, not UTC.
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+        try:
+            from zoneinfo import ZoneInfo
+
+            org_tz = ZoneInfo(
+                (organization.timezone if organization else None) or "UTC"
+            )
+        except Exception:
+            from zoneinfo import ZoneInfo
+
+            org_tz = ZoneInfo("UTC")
+        end_local = self._ensure_utc(election.end_date).astimezone(org_tz)
+
+        sent, failed, skipped, skipped_details, sent_user_ids = (
+            await self.send_ballot_emails(
+                election_id=election_id,
+                organization_id=organization_id,
+                recipient_user_ids=[UUID(nv["id"]) for nv in non_voters],
+                subject=subject or f"Reminder: vote in {election.title}",
+                message=message
+                or (
+                    "This is a reminder that you have not yet voted in "
+                    f"{election.title}. Voting closes at "
+                    f"{end_local:%Y-%m-%d %H:%M %Z}."
+                ),
+                base_ballot_url=base_ballot_url,
+            )
         )
 
-        election.reminder_sent_at = datetime.now(timezone.utc).replace(microsecond=0)
+        # Expire superseded tokens for confirmed deliveries only.
+        expired_count = 0
+        expire_ids: List[str] = []
+        for uid in sent_user_ids:
+            expire_ids.extend(prior_token_ids_by_hash.get(hash_by_user.get(uid), []))
+        if expire_ids:
+            from sqlalchemy import update as sa_update
+
+            await self.db.execute(
+                sa_update(VotingToken)
+                .where(VotingToken.id.in_(expire_ids))
+                .values(expires_at=now)
+            )
+            expired_count = len(expire_ids)
+
+        election.reminder_sent_at = now.replace(microsecond=0)
         await self.db.commit()
 
         logger.info(
@@ -2287,18 +2374,180 @@ class ElectionService:
                 "reminded": sent,
                 "failed": failed,
                 "skipped": skipped,
+                "superseded_tokens_expired": expired_count,
             },
             user_id=user_id,
         )
         return sent, failed, skipped, skipped_details
 
+    async def _org_local_time(self, organization, dt) -> str:
+        """Format an aware datetime in the organization's timezone."""
+        from zoneinfo import ZoneInfo
+
+        try:
+            tz = ZoneInfo((organization.timezone if organization else None) or "UTC")
+        except Exception:
+            tz = ZoneInfo("UTC")
+        local = self._ensure_utc(dt).astimezone(tz)
+        return f"{local:%Y-%m-%d %H:%M %Z}"
+
+    async def _announce_nominations_open(
+        self, election, organization_id: UUID, acting_user_id: Optional[str]
+    ) -> None:
+        """Email active members that the nomination phase is open.
+
+        Best-effort: any failure is logged, never raised — an email outage
+        must not block the phase transition.
+        """
+        try:
+            import html as html_mod
+
+            from app.services.email_service import EmailService, wrap_email_body
+
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+            organization = org_result.scalar_one_or_none()
+            if not organization:
+                return
+
+            members_result = await self.db.execute(
+                select(User)
+                .where(User.organization_id == str(organization_id))
+                .where(User.is_active == True)  # noqa: E712
+            )
+            members = members_result.scalars().all()
+            member_emails = [m.email for m in members if m.email]
+            if not member_emails:
+                return
+
+            # To: the acting officer (or org contact / creator) so member
+            # addresses stay in BCC and are never exposed to each other.
+            to_email = None
+            if acting_user_id:
+                actor = next(
+                    (m for m in members if str(m.id) == str(acting_user_id)), None
+                )
+                to_email = actor.email if actor else None
+            to_email = to_email or organization.email or member_emails[0]
+            bcc = [e for e in member_emails if e != to_email]
+
+            deadline_line = ""
+            if election.nomination_deadline:
+                deadline_local = await self._org_local_time(
+                    organization, election.nomination_deadline
+                )
+                deadline_line = (
+                    f"<p>Nominations close automatically at "
+                    f"<strong>{deadline_local}</strong>.</p>"
+                )
+
+            title = html_mod.escape(election.title)
+            positions = ", ".join(
+                html_mod.escape(p) for p in (election.positions or [])
+            )
+            body_html = (
+                f"<p>Nominations are now open for <strong>{title}</strong>.</p>"
+                f"<p>Positions: {positions}</p>"
+                f"{deadline_line}"
+                "<p>Sign in to the intranet to nominate a member — or "
+                "yourself — from the election's Nominations tab.</p>"
+            )
+            html_body = wrap_email_body(
+                organization,
+                title=f"Nominations Open: {title}",
+                body_html=body_html,
+            )
+            email_service = EmailService(organization)
+            await email_service.send_email(
+                to_emails=[to_email],
+                subject=f"Nominations Open: {election.title}",
+                html_body=html_body,
+                bcc_emails=bcc,
+                db=self.db,
+                template_type="custom",
+                sent_by=acting_user_id,
+            )
+        except Exception as e:
+            logger.warning(
+                f"Nominations-open announcement failed | "
+                f"election={election.id} error={e}"
+            )
+
+    async def _notify_nominee(self, election, candidate, organization_id: UUID) -> None:
+        """Email a third-party nominee that they must accept or decline.
+
+        Best-effort: a mail failure must never fail the nomination itself —
+        the pending nomination is still visible on the election page.
+        """
+        try:
+            import html as html_mod
+
+            from app.services.email_service import EmailService, wrap_email_body
+
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+            organization = org_result.scalar_one_or_none()
+            nominee_result = await self.db.execute(
+                select(User).where(User.id == str(candidate.user_id))
+            )
+            nominee = nominee_result.scalar_one_or_none()
+            if not organization or not nominee or not nominee.email:
+                return
+
+            deadline_line = ""
+            if election.nomination_deadline:
+                deadline_local = await self._org_local_time(
+                    organization, election.nomination_deadline
+                )
+                deadline_line = (
+                    f"<p>Please respond before nominations close at "
+                    f"<strong>{deadline_local}</strong>.</p>"
+                )
+
+            title = html_mod.escape(election.title)
+            position = html_mod.escape(candidate.position or "")
+            body_html = (
+                f"<p>You have been nominated for <strong>{position}</strong> "
+                f"in <strong>{title}</strong>.</p>"
+                "<p>Your name will only appear on the ballot if you accept. "
+                "Sign in to the intranet and open the election's Nominations "
+                "tab to accept or decline.</p>"
+                f"{deadline_line}"
+            )
+            html_body = wrap_email_body(
+                organization,
+                title=f"You've been nominated: {position}",
+                body_html=body_html,
+            )
+            email_service = EmailService(organization)
+            await email_service.send_email(
+                to_emails=[nominee.email],
+                subject=f"You've been nominated for {candidate.position} — "
+                f"{election.title}",
+                html_body=html_body,
+                db=self.db,
+                template_type="custom",
+            )
+        except Exception as e:
+            logger.warning(
+                f"Nominee notification failed | election={election.id} "
+                f"candidate={candidate.id} error={e}"
+            )
+
     async def open_nominations(
-        self, election_id: UUID, organization_id: UUID
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        acting_user_id: Optional[str] = None,
     ) -> Tuple[Optional[Election], Optional[str]]:
         """Move a DRAFT election into the NOMINATIONS phase.
 
         Only positional elections take nominations — ballot-item elections
-        have no candidates to nominate.
+        have no candidates to nominate. Announces the open phase to active
+        members by email (best-effort — announcement failure never blocks
+        the phase change).
         """
         result = await self.db.execute(
             select(Election)
@@ -2332,6 +2581,7 @@ class ElectionService:
         await self.db.refresh(election)
 
         logger.info(f"Nominations opened | election={election_id}")
+        await self._announce_nominations_open(election, organization_id, acting_user_id)
         await self._audit(
             "nominations_opened",
             {
@@ -2433,6 +2683,24 @@ class ElectionService:
             return None, f"{nominee.full_name} is already nominated for {position}"
 
         is_self = nominee_id == str(nominator_id)
+
+        # Anti-spam: cap how many PENDING third-party nominations one member
+        # can have outstanding in a single election. Self-nominations and
+        # accepted nominations don't count against the cap.
+        if not is_self:
+            pending_result = await self.db.execute(
+                select(func.count(Candidate.id))
+                .where(Candidate.election_id == str(election_id))
+                .where(Candidate.nominated_by == str(nominator_id))
+                .where(Candidate.accepted == False)  # noqa: E712
+            )
+            if (
+                pending_result.scalar() or 0
+            ) >= self.MAX_PENDING_NOMINATIONS_PER_MEMBER:
+                return None, (
+                    "You have too many pending nominations in this election — "
+                    "wait for nominees to respond before adding more"
+                )
         now = datetime.now(timezone.utc).replace(microsecond=0)
         order_result = await self.db.execute(
             select(func.count(Candidate.id)).where(
@@ -2455,6 +2723,11 @@ class ElectionService:
         self.db.add(candidate)
         await self.db.commit()
         await self.db.refresh(candidate)
+
+        # Third-party nominees must know they have a pending nomination —
+        # without this the nomination silently expires un-accepted.
+        if not is_self:
+            await self._notify_nominee(election, candidate, organization_id)
 
         logger.info(
             f"Nomination created | election={election_id} nominee={nominee_id} "
@@ -2546,7 +2819,8 @@ class ElectionService:
         recorded_by: str,
         entries: List[Dict],
         notes: Optional[str] = None,
-    ) -> Tuple[int, Optional[str]]:
+        allow_over_count: bool = False,
+    ) -> Tuple[int, Optional[str], Optional[str]]:
         """Record an in-room paper-ballot tally as vote rows.
 
         Each entry is {"candidate_id", "count"}. The created votes carry no
@@ -2554,6 +2828,16 @@ class ElectionService:
         count is the source of truth, attributed via recorded_by and the
         audit log. Votes are signed and chained like electronic ones so
         integrity verification covers the full ballot box.
+
+        Sanity guard: a batch that would push any position's total ballots
+        past what the eligible-voter count can produce is rejected — a typo
+        like 40-for-4 must be a conscious override (``allow_over_count``,
+        which is audited), never a silent success.
+
+        Every vote in the batch shares a ``manual_batch_id`` so a mis-keyed
+        batch can be voided in one action (void_manual_ballot_batch).
+
+        Returns: (recorded_count, batch_id, error)
         """
         result = await self.db.execute(
             select(Election)
@@ -2563,23 +2847,29 @@ class ElectionService:
         )
         election = result.scalar_one_or_none()
         if not election:
-            return 0, "Election not found"
+            return 0, None, "Election not found"
         if election.status != ElectionStatus.OPEN:
-            return 0, "Paper ballots can only be recorded while voting is open"
+            return (
+                0,
+                None,
+                "Paper ballots can only be recorded while voting is open",
+            )
         flags = await self.get_feature_flags(organization_id)
         if not flags["paper_ballots_enabled"]:
-            return 0, (
+            return (
+                0,
+                None,
                 "Paper-ballot entry is disabled for this organization — "
-                "enable it in Election Settings"
+                "enable it in Election Settings",
             )
         if not entries:
-            return 0, "No ballot entries provided"
+            return 0, None, "No ballot entries provided"
 
         total = sum(int(e.get("count", 0)) for e in entries)
         if total <= 0:
-            return 0, "Ballot counts must be positive"
+            return 0, None, "Ballot counts must be positive"
         if total > 2000:
-            return 0, "Cannot record more than 2000 paper ballots at once"
+            return 0, None, "Cannot record more than 2000 paper ballots at once"
 
         candidate_ids = [str(e["candidate_id"]) for e in entries]
         cand_result = await self.db.execute(
@@ -2589,18 +2879,75 @@ class ElectionService:
         )
         candidates = {c.id: c for c in cand_result.scalars().all()}
 
+        # ── Sanity guard: per-position plausibility ──────────────────
+        # cap = eligible voters × votes each voter may legitimately cast
+        # for the position (approval: one per accepted candidate; else
+        # max_votes_per_position). Existing non-test, non-deleted votes
+        # count toward the cap.
+        if not allow_over_count:
+            new_by_position: Dict[str, int] = {}
+            for entry in entries:
+                cand = candidates.get(str(entry["candidate_id"]))
+                if cand is not None and cand.position:
+                    new_by_position[cand.position] = new_by_position.get(
+                        cand.position, 0
+                    ) + int(entry.get("count", 0))
+
+            if new_by_position:
+                eligible_count = await self._count_eligible_voters(
+                    election, organization_id
+                )
+                existing_rows = await self.db.execute(
+                    select(Vote.position, func.count(Vote.id))
+                    .where(Vote.election_id == str(election_id))
+                    .where(Vote.deleted_at.is_(None))
+                    .where(Vote.is_test == False)  # noqa: E712
+                    .where(Vote.position.in_(list(new_by_position.keys())))
+                    .group_by(Vote.position)
+                )
+                existing_by_position = dict(existing_rows.all())
+
+                for pos, new_count in new_by_position.items():
+                    if election.voting_method == "approval":
+                        cand_count_result = await self.db.execute(
+                            select(func.count(Candidate.id))
+                            .where(Candidate.election_id == str(election_id))
+                            .where(Candidate.position == pos)
+                            .where(Candidate.accepted == True)  # noqa: E712
+                        )
+                        multiplier = max(cand_count_result.scalar() or 1, 1)
+                    else:
+                        multiplier = max(election.max_votes_per_position or 1, 1)
+                    cap = eligible_count * multiplier
+                    projected = existing_by_position.get(pos, 0) + new_count
+                    if cap and projected > cap:
+                        return (
+                            0,
+                            None,
+                            f"This batch would put {pos} at {projected} ballots, "
+                            f"but only {eligible_count} member(s) are eligible "
+                            f"(cap {cap}). Double-check the counts, or re-submit "
+                            f"with the over-count override if the tally is "
+                            f"correct.",
+                        )
+
+        batch_id = str(uuid4())
         now = datetime.now(timezone.utc).replace(microsecond=0)
         recorded = 0
         breakdown = []
         for entry in entries:
             cand = candidates.get(str(entry["candidate_id"]))
             if cand is None:
-                return 0, "One or more candidates do not belong to this election"
+                return (
+                    0,
+                    None,
+                    "One or more candidates do not belong to this election",
+                )
             if not cand.accepted and not cand.is_write_in:
-                return 0, f"{cand.name} has not accepted nomination"
+                return 0, None, f"{cand.name} has not accepted nomination"
             count = int(entry.get("count", 0))
             if count < 0:
-                return 0, "Ballot counts must be positive"
+                return 0, None, "Ballot counts must be positive"
             for _ in range(count):
                 vote = Vote(
                     id=str(uuid4()),
@@ -2613,6 +2960,7 @@ class ElectionService:
                     is_test=False,
                     is_manual=True,
                     recorded_by=str(recorded_by),
+                    manual_batch_id=batch_id,
                     vote_dedup_hash=None,
                 )
                 vote.vote_signature = self._sign_vote(vote)
@@ -2637,13 +2985,68 @@ class ElectionService:
             "election_manual_ballots_recorded",
             {
                 "election_id": str(election_id),
+                "batch_id": batch_id,
                 "total": recorded,
                 "breakdown": breakdown,
                 "notes": notes,
+                "over_count_override": allow_over_count,
             },
+            severity="warning" if allow_over_count else "info",
             user_id=str(recorded_by),
         )
-        return recorded, None
+        return recorded, batch_id, None
+
+    async def void_manual_ballot_batch(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        batch_id: str,
+        deleted_by: str,
+        reason: str,
+    ) -> Tuple[int, Optional[str]]:
+        """Void (soft-delete) every vote from one paper-tally batch.
+
+        Corrections for a mis-keyed batch in a single audited action instead
+        of vote-by-vote soft deletes. Uses the same soft-delete semantics as
+        the single-vote endpoint — rows are retained with deleted_at/by and
+        the reason, and appear in the forensics report.
+        """
+        result = await self.db.execute(
+            select(Vote)
+            .join(Election, Vote.election_id == Election.id)
+            .where(Election.organization_id == str(organization_id))
+            .where(Vote.election_id == str(election_id))
+            .where(Vote.manual_batch_id == batch_id)
+            .where(Vote.is_manual == True)  # noqa: E712
+            .where(Vote.deleted_at.is_(None))
+        )
+        votes = list(result.scalars().all())
+        if not votes:
+            return 0, "No active paper ballots found for this batch"
+
+        now = datetime.now(timezone.utc)
+        for vote in votes:
+            vote.deleted_at = now
+            vote.deleted_by = str(deleted_by)
+            vote.deletion_reason = reason
+        await self.db.commit()
+
+        logger.warning(
+            f"Manual ballot batch voided | election={election_id} "
+            f"batch={batch_id} count={len(votes)} by={deleted_by}"
+        )
+        await self._audit(
+            "election_manual_ballots_voided",
+            {
+                "election_id": str(election_id),
+                "batch_id": batch_id,
+                "count": len(votes),
+                "reason": reason,
+            },
+            severity="warning",
+            user_id=str(deleted_by),
+        )
+        return len(votes), None
 
     async def process_election_lifecycle(self, organization_id: UUID) -> int:
         """Run scheduled lifecycle transitions for one organization.
@@ -4148,7 +4551,7 @@ Best regards,
         message: Optional[str] = None,
         base_ballot_url: Optional[str] = None,
         is_test: bool = False,
-    ) -> Tuple[int, int, int, List[Dict]]:
+    ) -> Tuple[int, int, int, List[Dict], List[str]]:
         """
         Send ballot notification emails to eligible voters with unique voting links.
 
@@ -4159,7 +4562,10 @@ Best regards,
         votes cast with them are stored with is_test=True and excluded from
         results, stats, and rosters.
 
-        Returns: (recipients_count, failed_count, skipped_count, skipped_details)
+        Returns: (recipients_count, failed_count, skipped_count,
+        skipped_details, sent_user_ids) — sent_user_ids are the members whose
+        email was actually handed to the SMTP server, so callers can act on
+        confirmed deliveries (e.g. expiring superseded tokens).
         """
         # Get election
         election_result = await self.db.execute(
@@ -4174,7 +4580,7 @@ Best regards,
                 f"Cannot send ballot emails: election not found | "
                 f"election={election_id} org={organization_id}"
             )
-            return 0, 0, 0, []
+            return 0, 0, 0, [], []
 
         # Load organization separately to avoid INNER JOIN masking the election
         org_result = await self.db.execute(
@@ -4187,7 +4593,7 @@ Best regards,
                 f"Cannot send ballot emails: organization not found | "
                 f"election={election_id} org={organization_id}"
             )
-            return 0, 0, 0, []
+            return 0, 0, 0, [], []
 
         # Determine recipients (eagerly load roles for eligibility checks)
         if recipient_user_ids:
@@ -4231,7 +4637,7 @@ Best regards,
                 f"eligible_voters_set={election.eligible_voters is not None}"
                 f" recipient_ids_provided={bool(recipient_user_ids)}"
             )
-            return 0, 0, 0, []
+            return 0, 0, 0, [], []
 
         # Initialize email service with organization settings
         email_service = EmailService(organization)
@@ -4544,7 +4950,13 @@ Best regards,
             },
         )
 
-        return success_count, failed_count, skipped_count, skipped_details
+        return (
+            success_count,
+            failed_count,
+            skipped_count,
+            skipped_details,
+            sent_user_ids,
+        )
 
     async def generate_and_send_election_report(
         self,

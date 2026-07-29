@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Elections: hardening pass (2026-07-29)
+
+**Added**
+
+- **Nominee notifications**: a third-party nominee now gets an email
+  ("You've been nominated for X — accept or decline", with the org-local
+  response deadline), and opening the nomination phase emails all active
+  members an announcement (member addresses in BCC). Both are
+  best-effort — a mail outage never blocks the nomination or the phase
+  change.
+- **Paper-ballot plausibility guard**: a batch that would push a
+  position's total ballots past eligible-voters × allowed-votes is
+  rejected with the counts in the error; an explicit, audited
+  `allow_over_count` override records it anyway (the UI reveals the
+  override checkbox only after the guard fires).
+- **Paper-ballot batch void**: every tally entry stamps its vote rows
+  with a shared `manual_batch_id` (migration `20260801_0006`, new single
+  head); `POST /{id}/manual-ballots/{batch_id}/void` soft-deletes the
+  whole batch in one audited action, and the election page offers "Void
+  Last Paper Batch".
+- **Manual/electronic transparency**: election stats now report
+  `manual_votes` / `electronic_votes` so paper-tally discrepancies are
+  visible at a glance.
+- **Reminder cooldown**: non-voter reminders (manual or automatic) are
+  rate-limited to one per hour per election.
+- **Superseded-token expiry**: after a reminder, a member's older unused
+  tokens are expired — but only when the new reminder email was
+  confirmed handed to the SMTP server, so a bounce can never strand a
+  voter with zero working ballot links.
+- **Org-local times in email**: reminder and nomination emails render
+  close/deadline times in the department's timezone instead of UTC.
+- **Nomination anti-spam**: a member may have at most 10 pending
+  third-party nominations outstanding per election.
+
 ### Elections: per-department feature toggles (2026-07-29)
 
 **Added**

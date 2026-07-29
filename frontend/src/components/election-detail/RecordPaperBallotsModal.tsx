@@ -5,7 +5,11 @@ interface RecordPaperBallotsModalProps {
   candidates: Candidate[];
   recording: boolean;
   error: string | null;
-  onSubmit: (entries: Array<{ candidate_id: string; count: number }>, notes: string) => void;
+  onSubmit: (
+    entries: Array<{ candidate_id: string; count: number }>,
+    notes: string,
+    allowOverCount: boolean,
+  ) => void;
   onClose: () => void;
 }
 
@@ -23,6 +27,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
 }) => {
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
+  const [allowOverCount, setAllowOverCount] = useState(false);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -103,6 +108,20 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
             />
           </div>
 
+          {error && error.includes('over-count') && (
+            <label className="mt-4 flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allowOverCount}
+                onChange={(e) => setAllowOverCount(e.target.checked)}
+                className="form-checkbox"
+              />
+              <span className="text-sm text-theme-text-secondary">
+                The tally is correct — override the eligible-voter count check
+              </span>
+            </label>
+          )}
+
           <div className="mt-6 flex items-center justify-between">
             <span className="text-sm text-theme-text-muted" aria-live="polite">
               Total: {total} ballot{total !== 1 ? 's' : ''}
@@ -118,7 +137,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => onSubmit(entries, notes)}
+                onClick={() => onSubmit(entries, notes, allowOverCount)}
                 disabled={recording || total === 0}
                 className="btn-primary rounded-md disabled:opacity-50"
               >

@@ -418,6 +418,9 @@ class Vote(Base):
     recorded_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # Shared id across one paper-tally entry, so a mis-keyed batch can be
+    # voided in a single audited action.
+    manual_batch_id = Column(String(36), nullable=True, index=True)
 
     # Proxy voting — tracks when a vote is cast on behalf of another member
     is_proxy_vote = Column(Boolean, nullable=False, default=False)

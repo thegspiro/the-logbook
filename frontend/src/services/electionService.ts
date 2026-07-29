@@ -429,11 +429,31 @@ export const electionService = {
    */
   async recordManualBallots(
     electionId: string,
-    payload: { entries: Array<{ candidate_id: string; count: number }>; notes?: string | undefined },
-  ): Promise<{ recorded: number; message: string }> {
-    const response = await api.post<{ recorded: number; message: string }>(
+    payload: {
+      entries: Array<{ candidate_id: string; count: number }>;
+      notes?: string | undefined;
+      allow_over_count?: boolean | undefined;
+    },
+  ): Promise<{ recorded: number; batch_id?: string; message: string }> {
+    const response = await api.post<{ recorded: number; batch_id?: string; message: string }>(
       `/elections/${electionId}/manual-ballots`,
       payload,
+    );
+    return response.data;
+  },
+
+  /**
+   * Void (soft-delete) every paper ballot recorded in one batch — the
+   * correction path for a mis-keyed tally.
+   */
+  async voidManualBallots(
+    electionId: string,
+    batchId: string,
+    reason: string,
+  ): Promise<{ voided: number; message: string }> {
+    const response = await api.post<{ voided: number; message: string }>(
+      `/elections/${electionId}/manual-ballots/${batchId}/void`,
+      { reason },
     );
     return response.data;
   },
