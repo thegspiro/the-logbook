@@ -11,6 +11,7 @@ Mapping strategy:
   Shift Call       → Salesforce Task  (with custom fields)
 """
 
+import re
 from datetime import date, datetime
 from typing import Any, Optional
 
@@ -119,6 +120,30 @@ TASK_EXTERNAL_ID_FIELDS: tuple[str, ...] = (
 # that may already exist in the department's Salesforce org.
 VALID_MATCH_STRATEGIES = ("email", "email_lastname", "external_id")
 DEFAULT_MATCH_STRATEGY = "email"
+
+
+_SOQL_IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+
+
+def _soql_quote(value: str) -> str:
+    """Escape a value for interpolation inside a SOQL single-quoted literal.
+
+    Backslash must be escaped before the quote — escaping only the quote
+    lets a trailing backslash neutralise the closing quote and break out of
+    the literal.
+    """
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def _soql_identifier(name: str) -> str:
+    """Validate an sobject/field name for direct SOQL interpolation.
+
+    Identifiers can't be parameterized in SOQL; restrict them to the
+    Salesforce identifier alphabet so only code-defined names pass.
+    """
+    if not _SOQL_IDENTIFIER_RE.match(name):
+        raise ValueError(f"Invalid SOQL identifier: {name!r}")
+    return name
 
 
 def _custom_fields(mapping: dict[str, str]) -> set[str]:
@@ -281,10 +306,11 @@ class SalesforceSyncService:
         """Find a Salesforce Contact by email (optionally also last name)."""
         if not email:
             return None
-        safe_email = email.replace("'", "\\'")
-        soql = f"SELECT Id FROM Contact WHERE Email = '{safe_email}'"
+        safe_email = _soql_quote(email)
+        # Values are backslash+quote escaped; identifiers are literals (B608)
+        soql = f"SELECT Id FROM Contact WHERE Email = '{safe_email}'"  # nosec B608
         if last_name:
-            safe_last = last_name.replace("'", "\\'")
+            safe_last = _soql_quote(last_name)
             soql += f" AND LastName = '{safe_last}'"
         soql += " LIMIT 1"
         try:
@@ -691,9 +717,15 @@ class SalesforceSyncService:
         """Query Salesforce for a record with a specific external ID value."""
         if not value:
             return None
-        # Escape single quotes in SOQL
-        safe_value = value.replace("'", "\\'")
-        soql = f"SELECT Id FROM {sobject} " f"WHERE {field} = '{safe_value}' LIMIT 1"
+        # Identifiers can't be bound params in SOQL — validate them against the
+        # identifier alphabet; the value is backslash+quote escaped (B608).
+        safe_sobject = _soql_identifier(sobject)
+        safe_field = _soql_identifier(field)
+        safe_value = _soql_quote(value)
+        soql = (
+            f"SELECT Id FROM {safe_sobject} "  # nosec B608
+            f"WHERE {safe_field} = '{safe_value}' LIMIT 1"
+        )
         try:
             records = await self.sf.query(soql)
             if records:

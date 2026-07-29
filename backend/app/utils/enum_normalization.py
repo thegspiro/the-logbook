@@ -120,8 +120,12 @@ async def _normalize_one(db: AsyncSession, schema: str, spec: _EnumColumn) -> bo
     #    Mapping by name is exact and independent of any case relationship.
     for member in spec.enum_class:
         if member.name != member.value:
+            # tbl/col are backtick-quoted code constants from _EnumColumn
+            # specs (identifiers can't be bound params); values are bound.
             await db.execute(
-                text(f"UPDATE {tbl} SET {col} = :val WHERE {col} = :name"),
+                text(
+                    f"UPDATE {tbl} SET {col} = :val WHERE {col} = :name"  # nosec B608
+                ),
                 {"val": member.value, "name": member.name},
             )
 
