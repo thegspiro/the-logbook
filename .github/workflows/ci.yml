@@ -210,6 +210,46 @@ jobs:
           print("Schema repair complete")
           PYEOF
 
+      - name: Probe async DB connectivity (aiomysql)
+        # The test session's database_manager.connect() fails its first
+        # attempt invisibly (loguru warnings don't reach pytest output) and
+        # its 15s retry backoff then collides with the 30s per-test timeout,
+        # cascading into every DB test. This step reproduces the exact async
+        # connect outside pytest so the true exception lands in the job log.
+        run: |
+          python - <<'PYEOF'
+          import asyncio, sys, traceback
+
+          import aiomysql
+          from sqlalchemy import text
+          from sqlalchemy.ext.asyncio import create_async_engine
+
+          from app.core.config import settings
+
+          print("aiomysql", aiomysql.__version__)
+          url = settings.DATABASE_URL
+          pw = settings.DB_PASSWORD or ""
+          print("DATABASE_URL:", url.replace(pw, "***") if pw else url)
+          print("connect_args:", settings.get_db_connect_args())
+
+          async def main():
+              engine = create_async_engine(
+                  settings.DATABASE_URL,
+                  connect_args=settings.get_db_connect_args(),
+              )
+              async with engine.begin() as conn:
+                  result = await conn.execute(text("SELECT 1"))
+                  print("SELECT 1 ->", result.scalar())
+              await engine.dispose()
+
+          try:
+              asyncio.run(asyncio.wait_for(main(), timeout=20))
+              print("Async DB connectivity OK")
+          except Exception:
+              traceback.print_exc()
+              sys.exit(1)
+          PYEOF
+
       - name: Run integration tests
         # docker-marked tests build production images (minutes each — far
         # past the 30s per-test timeout) and belong to a dedicated
