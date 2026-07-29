@@ -3049,6 +3049,7 @@ Best regards,
         anonymity_salt: str = "",
         is_test: bool = False,
         eligible_item_ids: Optional[List[str]] = None,
+        eligible_positions: Optional[List[str]] = None,
     ) -> VotingToken:
         """
         Generate a secure voting token for a user-election pair
@@ -3063,6 +3064,9 @@ Best regards,
                 are flagged is_test and excluded from real results
             eligible_item_ids: Ballot items this voter may vote on, snapshotted
                 at send time (None = unrestricted / positional election)
+            eligible_positions: Positions this voter may vote for, snapshotted
+                at send time from position_eligibility (None = unrestricted /
+                election without position rules)
 
         Returns:
             (VotingToken, raw_token) — the raw token exists only in this
@@ -3093,6 +3097,7 @@ Best regards,
             used=False,
             is_test=is_test,
             eligible_item_ids=eligible_item_ids,
+            eligible_positions=eligible_positions,
         )
 
         self.db.add(voting_token)
@@ -3692,6 +3697,49 @@ Best regards,
                     )
                     continue
 
+            # Positional elections: snapshot which positions this recipient
+            # may vote for, mirroring the per-item snapshot below — the token
+            # carries no user identity, so position_eligibility (R-D4) can
+            # only be enforced at vote time from a send-time snapshot. None =
+            # no position rules on this election (unrestricted, and the
+            # used-token computation stays on election.positions).
+            eligible_positions: Optional[List[str]] = None
+            if (
+                not election.ballot_items
+                and election.positions
+                and election.position_eligibility
+            ):
+                eligible_positions = []
+                for pos in election.positions:
+                    pos_rules = election.position_eligibility.get(pos)
+                    if not pos_rules:
+                        # No rules for this position → everyone may vote
+                        # (mirrors check_voter_eligibility).
+                        eligible_positions.append(pos)
+                        continue
+                    voter_types = pos_rules.get("voter_types", ["all"])
+                    if await self._user_has_role_type(recipient, voter_types):
+                        eligible_positions.append(pos)
+                if not eligible_positions:
+                    skipped_count += 1
+                    reason = (
+                        "Not eligible for any position in this election — "
+                        "membership type does not match any position's "
+                        "voter-type rules"
+                    )
+                    skipped_details.append(
+                        {
+                            "user_id": str(recipient.id),
+                            "name": recipient.full_name or recipient.username,
+                            "reason": reason,
+                        }
+                    )
+                    logger.info(
+                        f"Skipping ballot email for user={recipient.id} "
+                        f"({reason}) | election={election_id}"
+                    )
+                    continue
+
             # Build ballot items lists for the email
             items_html, items_text = self._build_ballot_items_lists(eligible_items)
 
@@ -3711,6 +3759,7 @@ Best regards,
                     if election.ballot_items
                     else None
                 ),
+                eligible_positions=eligible_positions,
             )
 
             # Build unique ballot URL with the RAW token (the row stores only
@@ -4785,6 +4834,22 @@ Best regards,
         if position and candidate.position != position:
             return None, "Candidate is not running for this position"
 
+        # Enforce the send-time position-eligibility snapshot (R-D4). Fall
+        # back to candidate.position so omitting the position field can't
+        # bypass the check. NULL snapshot = legacy token or election without
+        # position rules — unrestricted (documented fail-open, time-bounded
+        # by token expiry).
+        effective_position = position or candidate.position
+        if (
+            voting_token.eligible_positions is not None
+            and effective_position not in voting_token.eligible_positions
+        ):
+            return None, (
+                f"You are not eligible to vote for {effective_position}"
+                if effective_position
+                else "You are not eligible to vote in this election"
+            )
+
         # Check if this token has already voted for this position.
         # For a positionless vote, match only other positionless votes —
         # `Vote.position == None if position is None` would otherwise degrade
@@ -4854,8 +4919,14 @@ Best regards,
             voting_token.positions_voted = positions_voted
 
         # Mark token as fully used only when all positions are voted
-        # or if it's a single-position election
-        election_positions = election.positions or []
+        # or if it's a single-position election. A position-restricted token
+        # is complete once its *eligible* positions are covered — measuring
+        # against election.positions would leave it forever un-used.
+        election_positions = (
+            voting_token.eligible_positions
+            if voting_token.eligible_positions is not None
+            else (election.positions or [])
+        )
         if not election_positions:
             # Single-position election — token used after first vote
             voting_token.used = True

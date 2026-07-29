@@ -306,6 +306,13 @@ class VotingToken(Base):
     # time. NULL = legacy token or positional election (no per-item limit).
     eligible_item_ids = Column(JSON, nullable=True)
 
+    # Positions this voter was eligible for at send time (the election's
+    # position_eligibility voter_types evaluated against the recipient) —
+    # the positional-election mirror of eligible_item_ids, and snapshotted
+    # for the same reason. NULL = legacy token or election without position
+    # rules (unrestricted).
+    eligible_positions = Column(JSON, nullable=True)
+
     # Access tracking
     first_accessed_at = Column(DateTime(timezone=True), nullable=True)
     access_count = Column(Integer, nullable=False, default=0)

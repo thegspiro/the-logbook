@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.election_service import ElectionService
@@ -126,6 +126,8 @@ class TestTokenBallotSetup:
         *,
         is_test: bool = False,
         eligible_item_ids=None,
+        eligible_positions=None,
+        user_id: str | None = None,
     ):
         """Generate a voting token via the real service helper.
 
@@ -133,13 +135,14 @@ class TestTokenBallotSetup:
         """
         svc = ElectionService(db_session)
         token, raw = await svc._generate_voting_token(
-            user_id=uuid.UUID(data["user_id"]),
+            user_id=uuid.UUID(user_id or data["user_id"]),
             election_id=uuid.UUID(data["election_id"]),
             organization_id=uuid.UUID(data["org_id"]),
             election_end_date=datetime.now(timezone.utc) + timedelta(days=1),
             anonymity_salt=data["salt"],
             is_test=is_test,
             eligible_item_ids=eligible_item_ids,
+            eligible_positions=eligible_positions,
         )
         await db_session.flush()
         return token, raw
@@ -445,3 +448,292 @@ class TestTokenHashedAtRest(TestTokenBallotSetup):
         # Presenting the stored hash is re-hashed on lookup and must fail
         _, _, err2 = await svc.get_ballot_by_token(token.token)
         assert err2 is not None
+
+
+# ── Position eligibility on the token path (R-D4) ─────────────────────
+
+
+class TestPositionEligibilityTokens(TestTokenBallotSetup):
+    """position_eligibility enforced for token ballots via the send-time
+    eligible_positions snapshot (tokens carry no user identity)."""
+
+    @pytest.fixture
+    async def setup_positional_election(self, db_session: AsyncSession):
+        """Two-position election: Chief (operational only), President (all).
+
+        Two members: an operational (active) firefighter and an
+        administrative member who may not vote for Chief.
+        """
+        org_id = _uid()
+        active_id = _uid()
+        admin_id = _uid()
+        election_id = _uid()
+        cand_chief_id = _uid()
+        cand_pres_id = _uid()
+        salt = secrets.token_hex(32)
+        now = datetime.now(timezone.utc)
+
+        await db_session.execute(
+            text(
+                "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
+                "VALUES (:id, :name, :otype, :slug, :tz)"
+            ),
+            {
+                "id": org_id,
+                "name": "Positional FD",
+                "otype": "fire_department",
+                "slug": f"pos-{org_id[:8]}",
+                "tz": "America/New_York",
+            },
+        )
+
+        for uid, uname, mtype in [
+            (active_id, "opmember", "active"),
+            (admin_id, "adminmember", "administrative"),
+        ]:
+            await db_session.execute(
+                text(
+                    "INSERT INTO users "
+                    "(id, organization_id, username, first_name, last_name, "
+                    "email, password_hash, status, membership_type) "
+                    "VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active', :mt)"
+                ),
+                {
+                    "id": uid,
+                    "org": org_id,
+                    "un": uname,
+                    "fn": uname.title(),
+                    "ln": "Member",
+                    "em": f"{uname}@test.com",
+                    "pw": "hashed",
+                    "mt": mtype,
+                },
+            )
+
+        await db_session.execute(
+            text(
+                "INSERT INTO elections "
+                "(id, organization_id, title, election_type, positions, "
+                "position_eligibility, start_date, end_date, status, "
+                "anonymous_voting, allow_write_ins, max_votes_per_position, "
+                "voting_method, victory_condition, voter_anonymity_salt, "
+                "quorum_type, created_by) "
+                "VALUES (:id, :org, :title, :etype, :positions, :pos_elig, "
+                ":start, :end, :status, :anon, :write_in, :max_votes, "
+                ":method, :victory, :salt, :quorum, :creator)"
+            ),
+            {
+                "id": election_id,
+                "org": org_id,
+                "title": "Officer Election 2026",
+                "etype": "officer",
+                "positions": '["Chief", "President"]',
+                "pos_elig": (
+                    '{"Chief": {"voter_types": ["operational"]}, '
+                    '"President": {"voter_types": ["all"]}}'
+                ),
+                "start": now - timedelta(days=1),
+                "end": now + timedelta(days=1),
+                "status": "open",
+                "anon": True,
+                "write_in": False,
+                "max_votes": 1,
+                "method": "simple_majority",
+                "victory": "most_votes",
+                "salt": salt,
+                "quorum": "none",
+                "creator": active_id,
+            },
+        )
+
+        for cid, pos, order in [
+            (cand_chief_id, "Chief", 0),
+            (cand_pres_id, "President", 1),
+        ]:
+            await db_session.execute(
+                text(
+                    "INSERT INTO candidates "
+                    "(id, election_id, name, position, accepted, is_write_in, "
+                    "display_order) "
+                    "VALUES (:id, :eid, :name, :pos, :acc, :wi, :ord)"
+                ),
+                {
+                    "id": cid,
+                    "eid": election_id,
+                    "name": f"Candidate {pos}",
+                    "pos": pos,
+                    "acc": True,
+                    "wi": False,
+                    "ord": order,
+                },
+            )
+
+        await db_session.flush()
+
+        return {
+            "org_id": org_id,
+            "user_id": active_id,
+            "admin_id": admin_id,
+            "election_id": election_id,
+            "cand_chief_id": cand_chief_id,
+            "cand_pres_id": cand_pres_id,
+            "salt": salt,
+        }
+
+    async def test_restricted_token_rejected_for_ineligible_position(
+        self, db_session: AsyncSession, setup_positional_election
+    ):
+        data = await setup_positional_election
+        _, raw = await self._issue_token(
+            db_session, data, user_id=data["admin_id"], eligible_positions=["President"]
+        )
+        svc = ElectionService(db_session)
+
+        vote, err = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_chief_id"]),
+            position="Chief",
+        )
+        assert vote is None
+        assert err == "You are not eligible to vote for Chief"
+
+    async def test_restricted_token_accepted_for_eligible_position(
+        self, db_session: AsyncSession, setup_positional_election
+    ):
+        data = await setup_positional_election
+        _, raw = await self._issue_token(
+            db_session, data, user_id=data["admin_id"], eligible_positions=["President"]
+        )
+        svc = ElectionService(db_session)
+
+        vote, err = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_pres_id"]),
+            position="President",
+        )
+        assert err is None, f"Eligible-position vote failed: {err}"
+        assert vote is not None
+
+    async def test_omitted_position_cannot_bypass_restriction(
+        self, db_session: AsyncSession, setup_positional_election
+    ):
+        """The check falls back to candidate.position when the payload omits
+        the position field."""
+        data = await setup_positional_election
+        _, raw = await self._issue_token(
+            db_session, data, user_id=data["admin_id"], eligible_positions=["President"]
+        )
+        svc = ElectionService(db_session)
+
+        vote, err = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_chief_id"]),
+            position=None,
+        )
+        assert vote is None
+        assert err == "You are not eligible to vote for Chief"
+
+    async def test_legacy_token_without_snapshot_unrestricted(
+        self, db_session: AsyncSession, setup_positional_election
+    ):
+        """NULL snapshot = pre-migration token — documented fail-open."""
+        data = await setup_positional_election
+        _, raw = await self._issue_token(
+            db_session, data, user_id=data["admin_id"], eligible_positions=None
+        )
+        svc = ElectionService(db_session)
+
+        vote, err = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_chief_id"]),
+            position="Chief",
+        )
+        assert err is None
+        assert vote is not None
+
+    async def test_restricted_token_used_after_covering_eligible_positions(
+        self, db_session: AsyncSession, setup_positional_election
+    ):
+        """A token restricted to one position is fully used after that one
+        vote, even though the election has more positions."""
+        from app.models.election import VotingToken
+
+        data = await setup_positional_election
+        token_row, raw = await self._issue_token(
+            db_session, data, user_id=data["admin_id"], eligible_positions=["President"]
+        )
+        svc = ElectionService(db_session)
+
+        vote, err = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_pres_id"]),
+            position="President",
+        )
+        assert err is None
+
+        refreshed = (
+            await db_session.execute(
+                select(VotingToken).where(VotingToken.id == token_row.id)
+            )
+        ).scalar_one()
+        assert refreshed.used is True
+        assert refreshed.used_at is not None
+
+    async def test_send_ballot_emails_snapshots_and_skips(
+        self, db_session: AsyncSession, setup_positional_election
+    ):
+        """The real send path computes per-member snapshots from
+        position_eligibility and skips members eligible for nothing."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.models.election import VotingToken
+
+        data = await setup_positional_election
+
+        # Restrict President to operational too, so the administrative
+        # member is eligible for zero positions and must be skipped.
+        await db_session.execute(
+            text("UPDATE elections SET position_eligibility = :pe WHERE id = :id"),
+            {
+                "pe": (
+                    '{"Chief": {"voter_types": ["operational"]}, '
+                    '"President": {"voter_types": ["operational"]}}'
+                ),
+                "id": data["election_id"],
+            },
+        )
+        await db_session.flush()
+
+        svc = ElectionService(db_session)
+        with patch(
+            "app.services.email_service.EmailService.send_email",
+            new_callable=AsyncMock,
+            return_value=(1, 0),
+        ):
+            sent, failed, skipped, skipped_details = await svc.send_ballot_emails(
+                election_id=uuid.UUID(data["election_id"]),
+                organization_id=uuid.UUID(data["org_id"]),
+                recipient_user_ids=[
+                    uuid.UUID(data["user_id"]),
+                    uuid.UUID(data["admin_id"]),
+                ],
+                base_ballot_url="https://fd.example/ballot",
+            )
+
+        assert sent == 1, f"expected 1 sent, got {sent} (skipped: {skipped_details})"
+        assert skipped == 1
+        assert "position" in skipped_details[0]["reason"]
+
+        tokens = (
+            (
+                await db_session.execute(
+                    select(VotingToken).where(
+                        VotingToken.election_id == data["election_id"]
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(tokens) == 1
+        assert tokens[0].eligible_positions == ["Chief", "President"]
