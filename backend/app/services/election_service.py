@@ -1258,10 +1258,14 @@ class ElectionService:
             if voted_at
             else None
         )
+        # bool(...) canonicalizes is_proxy_vote: constructors that omit it
+        # sign None (the ORM default only applies at flush), but the reloaded
+        # row yields False — "None" vs "False" flagged every non-proxy vote
+        # as tampered on verification.
         data = (
             f"{vote.id}:{vote.election_id}:{vote.candidate_id}"
             f":{vote.voter_hash or vote.voter_id}:{vote.position}"
-            f":{vote.vote_rank}:{vote.is_proxy_vote}"
+            f":{vote.vote_rank}:{bool(vote.is_proxy_vote)}"
             f":{vote.proxy_delegating_user_id}:{voted_at_canon}"
         )
         return hmac.new(
@@ -2557,7 +2561,10 @@ class ElectionService:
         start = self._ensure_utc(election.start_date)
         start_adjusted = False
         if start and start > now:
-            election.start_date = now
+            # Floor to the second: MySQL DATETIME(0) ROUNDS fractional
+            # seconds, so storing now=:12.7s would persist :13 and reject
+            # votes cast during the first second after opening.
+            election.start_date = now.replace(microsecond=0)
             start_adjusted = True
 
         election.status = ElectionStatus.OPEN
