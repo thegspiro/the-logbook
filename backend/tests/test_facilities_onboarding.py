@@ -19,7 +19,6 @@ pytestmark = [pytest.mark.integration]
 
 from app.models.facilities import Facility, FacilityStatus, FacilityType
 from app.models.location import Location
-from app.models.user import Organization
 from app.services.onboarding import OnboardingService
 
 

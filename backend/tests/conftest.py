@@ -21,7 +21,7 @@ from sqlalchemy.orm import configure_mappers
 # it here — like the app does at startup — makes mapper resolution independent of
 # test collection order.
 import app.models  # noqa: E402,F401
-from app.core.database import async_session_factory, database_manager
+from app.core.database import database_manager
 
 configure_mappers()
 
@@ -40,18 +40,31 @@ async def _initialize_database():
 @pytest.fixture
 async def db_session(_initialize_database) -> AsyncGenerator[AsyncSession]:
     """
-    Create a new database session for each test.
-    Uses the app's actual MySQL database.
+    Create a new database session for each test, isolated by an outer
+    connection-level transaction that is ALWAYS rolled back at teardown.
 
-    Each test runs in a transaction that is rolled back after the test,
-    ensuring test isolation without affecting the actual database.
+    join_transaction_mode="create_savepoint" is what makes service-level
+    ``commit()`` calls safe: because the session joins the connection's
+    already-begun transaction, each ``commit()`` releases a SAVEPOINT and
+    opens a new one instead of committing for real. The outer rollback then
+    discards everything the test wrote. (The previous implementation used
+    ``session.begin()`` on a pooled connection, so every service commit —
+    and even a clean fixture exit — committed permanently, leaking state
+    like unique organizations across tests.)
     """
-    async with async_session_factory() as session:
-        # Start a transaction
-        async with session.begin():
+    async with database_manager.engine.connect() as conn:
+        outer = await conn.begin()
+        session = AsyncSession(
+            bind=conn,
+            join_transaction_mode="create_savepoint",
+            expire_on_commit=False,
+        )
+        try:
             yield session
-            # Transaction will be rolled back automatically when exiting the context
-            # No need for explicit rollback
+        finally:
+            await session.close()
+            if outer.is_active:
+                await outer.rollback()
 
 
 @pytest.fixture

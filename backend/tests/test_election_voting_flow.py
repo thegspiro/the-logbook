@@ -92,10 +92,12 @@ class TestElectionSetup:
                 "start_date, end_date, status, anonymous_voting, "
                 "allow_write_ins, max_votes_per_position, voting_method, "
                 "victory_condition, voter_anonymity_salt, quorum_type, "
-                "created_by) "
+                "created_by, email_sent, results_visible_immediately, "
+                "enable_runoffs, runoff_type, max_runoff_rounds, "
+                "is_runoff, runoff_round) "
                 "VALUES (:id, :org, :title, :etype, :positions, "
                 ":start, :end, :status, :anon, :write_in, :max_votes, "
-                ":method, :victory, :salt, :quorum, :creator)"
+                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0)"
             ),
             {
                 "id": election_id,
@@ -161,7 +163,7 @@ class TestVoteCasting(TestElectionSetup):
     """Core voting flow: cast, chain linking, dedup, and has_user_voted."""
 
     async def test_cast_vote_success(self, db_session: AsyncSession, setup_election):
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         vote, err = await svc.cast_vote(
@@ -184,7 +186,7 @@ class TestVoteCasting(TestElectionSetup):
     async def test_cast_vote_creates_chain(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         vote1, err1 = await svc.cast_vote(
@@ -214,7 +216,7 @@ class TestVoteCasting(TestElectionSetup):
     async def test_has_user_voted_before_and_after(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         # Need the Election ORM object for anonymous-voting hash lookup
@@ -248,7 +250,7 @@ class TestVoteCasting(TestElectionSetup):
     async def test_cannot_vote_twice_same_position(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         vote1, err1 = await svc.cast_vote(
@@ -282,7 +284,7 @@ class TestElectionResults(TestElectionSetup):
         self, db_session: AsyncSession, setup_election
     ):
         """2 votes for candidate A, 1 for candidate B -> A wins."""
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         for uid in [data["user1_id"], data["user3_id"]]:
@@ -323,7 +325,7 @@ class TestElectionResults(TestElectionSetup):
     async def test_close_election_finalizes(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         vote, err = await svc.cast_vote(
@@ -354,7 +356,7 @@ class TestVoteIntegrity(TestElectionSetup):
     async def test_verify_vote_integrity(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         vote, err = await svc.cast_vote(
@@ -378,7 +380,7 @@ class TestVoteIntegrity(TestElectionSetup):
         assert integrity["chain_verified"] is True
 
     async def test_vote_forensics(self, db_session: AsyncSession, setup_election):
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         for uid, cid in [
@@ -427,7 +429,7 @@ class TestMultiVoteMethods(TestElectionSetup):
     async def test_approval_two_candidates_same_position(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         await self._set_method(db_session, data["election_id"], "approval")
         svc = ElectionService(db_session)
 
@@ -445,7 +447,7 @@ class TestMultiVoteMethods(TestElectionSetup):
     async def test_approval_duplicate_candidate_rejected(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         await self._set_method(db_session, data["election_id"], "approval")
         svc = ElectionService(db_session)
 
@@ -471,7 +473,7 @@ class TestMultiVoteMethods(TestElectionSetup):
     async def test_ranked_choice_multiple_ranks(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         await self._set_method(db_session, data["election_id"], "ranked_choice")
         svc = ElectionService(db_session)
 
@@ -493,7 +495,7 @@ class TestMultiVoteMethods(TestElectionSetup):
     async def test_ranked_choice_duplicate_rank_rejected(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         await self._set_method(db_session, data["election_id"], "ranked_choice")
         svc = ElectionService(db_session)
 
@@ -522,7 +524,7 @@ class TestMultiVoteMethods(TestElectionSetup):
     async def test_ranked_choice_duplicate_candidate_rejected(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         await self._set_method(db_session, data["election_id"], "ranked_choice")
         svc = ElectionService(db_session)
 
@@ -560,7 +562,7 @@ class TestRunoffCreation(TestElectionSetup):
         previously returned None and the runoff was silently skipped."""
         from sqlalchemy import text
 
-        data = await setup_election
+        data = setup_election
         await db_session.execute(
             text(
                 "UPDATE elections SET enable_runoffs = 1, "
@@ -612,7 +614,7 @@ class TestResultsVisibilityGate(TestElectionSetup):
     async def test_results_hidden_before_end_date_without_bypass(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         _, err = await svc.cast_vote(
@@ -646,7 +648,7 @@ class TestResultsVisibilityGate(TestElectionSetup):
         assert visible is not None
 
     async def test_results_org_scoped(self, db_session: AsyncSession, setup_election):
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         foreign = await svc.get_election_results(
@@ -666,7 +668,7 @@ class TestRollbackGuard(TestElectionSetup):
     ):
         """Reopening a closed anonymous election whose salt was destroyed
         would let prior voters vote again (their hashes no longer match)."""
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         _, err = await svc.cast_vote(
@@ -701,7 +703,7 @@ class TestRollbackGuard(TestElectionSetup):
     async def test_rollback_allowed_when_no_votes(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         closed, close_err = await svc.close_election(
@@ -735,7 +737,7 @@ class TestRunoffInheritance(TestElectionSetup):
         voter hashes pre-computable)."""
         from sqlalchemy import text
 
-        data = await setup_election
+        data = setup_election
         await db_session.execute(
             text(
                 "UPDATE elections SET enable_runoffs = 1, "
@@ -798,7 +800,7 @@ class TestOpenElectionStartClamp(TestElectionSetup):
         open, or every vote bounces with 'Election has not started yet'."""
         from sqlalchemy import text
 
-        data = await setup_election
+        data = setup_election
         future_start = datetime.now(timezone.utc) + timedelta(hours=1)
         await db_session.execute(
             text(
@@ -833,7 +835,7 @@ class TestOpenElectionStartClamp(TestElectionSetup):
     ):
         from sqlalchemy import text
 
-        data = await setup_election
+        data = setup_election
         past = datetime.now(timezone.utc) - timedelta(days=2)
         await db_session.execute(
             text(
@@ -868,7 +870,7 @@ class TestIpMetadataPurge(TestElectionSetup):
         (alongside the salt) so votes can't be correlated to voters."""
         from sqlalchemy import text
 
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         _, err = await svc.cast_vote(
@@ -902,7 +904,7 @@ class TestIpMetadataPurge(TestElectionSetup):
     ):
         from sqlalchemy import text
 
-        data = await setup_election
+        data = setup_election
         await db_session.execute(
             text("UPDATE elections SET anonymous_voting = 0 WHERE id = :id"),
             {"id": data["election_id"]},
@@ -939,7 +941,7 @@ class TestIpMetadataPurge(TestElectionSetup):
     ):
         """The forensics report must not contain a full per-IP vote map —
         only the thresholded suspicious set plus aggregate counts."""
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         for uid, cid in [
@@ -993,7 +995,7 @@ class TestAnonymousAuditIpMinimization(TestElectionSetup):
     async def test_anonymous_vote_audit_has_no_ip(
         self, db_session: AsyncSession, setup_election
     ):
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         _, err = await svc.cast_vote(
@@ -1015,7 +1017,7 @@ class TestAnonymousAuditIpMinimization(TestElectionSetup):
     ):
         from sqlalchemy import text
 
-        data = await setup_election
+        data = setup_election
         await db_session.execute(
             text("UPDATE elections SET anonymous_voting = 0 WHERE id = :id"),
             {"id": data["election_id"]},
@@ -1043,7 +1045,7 @@ class TestAnonymousAuditIpMinimization(TestElectionSetup):
         """A NULL-IP audit row is a normal chain input — integrity holds."""
         from app.core.audit import AuditLogger
 
-        data = await setup_election
+        data = setup_election
         svc = ElectionService(db_session)
 
         _, err = await svc.cast_vote(

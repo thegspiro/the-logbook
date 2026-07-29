@@ -86,7 +86,7 @@ async def setup_org_and_users(db_session: AsyncSession):
 @pytest.fixture
 async def setup_template(db_session: AsyncSession, setup_org_and_users):
     """Create an org, users, and a day-shift template."""
-    org_id, user_id, user2_id = await setup_org_and_users
+    org_id, user_id, user2_id = setup_org_and_users
     svc = SchedulingService(db_session)
 
     template, err = await svc.create_template(
@@ -111,7 +111,7 @@ class TestShiftCRUD:
 
     @pytest.mark.asyncio
     async def test_create_and_get_shift(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -135,7 +135,7 @@ class TestShiftCRUD:
 
     @pytest.mark.asyncio
     async def test_list_shifts_date_range(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         base = date.today()
@@ -161,7 +161,7 @@ class TestShiftCRUD:
 
     @pytest.mark.asyncio
     async def test_update_shift(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -184,7 +184,7 @@ class TestShiftCRUD:
 
     @pytest.mark.asyncio
     async def test_update_shift_not_found(self, db_session, setup_org_and_users):
-        org_id, _, _ = await setup_org_and_users
+        org_id, _, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         result, err = await svc.update_shift(
@@ -195,7 +195,7 @@ class TestShiftCRUD:
 
     @pytest.mark.asyncio
     async def test_delete_shift(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -216,7 +216,7 @@ class TestShiftCRUD:
 
     @pytest.mark.asyncio
     async def test_delete_shift_not_found(self, db_session, setup_org_and_users):
-        org_id, _, _ = await setup_org_and_users
+        org_id, _, _ = setup_org_and_users
         svc = SchedulingService(db_session)
         success, err = await svc.delete_shift(uuid.uuid4(), uuid.UUID(org_id))
         assert success is False
@@ -224,7 +224,7 @@ class TestShiftCRUD:
 
     @pytest.mark.asyncio
     async def test_cancel_shift(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -264,7 +264,7 @@ class TestShiftCRUD:
 
     @pytest.mark.asyncio
     async def test_cancel_shift_twice_blocked(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -290,7 +290,7 @@ class TestShiftCRUD:
     async def test_create_training_assignment_rejects_foreign_program(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -321,7 +321,7 @@ class TestShiftCRUD:
     async def test_update_assignment_blocks_force_confirm(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -362,7 +362,7 @@ class TestShiftCRUD:
     async def test_calendar_token_ensure_and_rotate(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         token1 = await svc.ensure_calendar_token(uuid.UUID(user_id), uuid.UUID(org_id))
@@ -383,7 +383,7 @@ class TestShiftCRUD:
     async def test_reopen_requires_finalized_shift(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -404,7 +404,7 @@ class TestShiftCRUD:
     async def test_restrict_checkin_to_assigned(self, db_session, setup_org_and_users):
         from app.services.shift_eligibility_service import ShiftEligibilityService
 
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
         await ShiftEligibilityService(db_session).update_scheduling_settings(
             org_id, restrict_checkin_to_assigned=True
@@ -438,7 +438,7 @@ class TestShiftCRUD:
 
     @pytest.mark.asyncio
     async def test_protected_fields_not_updated(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -469,7 +469,7 @@ class TestCalendarHelpers:
 
     @pytest.mark.asyncio
     async def test_get_week_shifts(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         # Create shifts for a full week
@@ -490,7 +490,7 @@ class TestCalendarHelpers:
 
     @pytest.mark.asyncio
     async def test_get_month_shifts(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         # Create a shift on the 15th
@@ -509,7 +509,7 @@ class TestCalendarHelpers:
 
     @pytest.mark.asyncio
     async def test_get_summary(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -535,7 +535,7 @@ class TestTemplateManagement:
 
     @pytest.mark.asyncio
     async def test_create_and_list_templates(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         t, err = await svc.create_template(
@@ -557,7 +557,7 @@ class TestTemplateManagement:
 
     @pytest.mark.asyncio
     async def test_update_template(self, db_session, setup_template):
-        org_id, user_id, _, template = await setup_template
+        org_id, user_id, _, template = setup_template
         svc = SchedulingService(db_session)
 
         updated, err = await svc.update_template(
@@ -570,7 +570,7 @@ class TestTemplateManagement:
 
     @pytest.mark.asyncio
     async def test_delete_template(self, db_session, setup_template):
-        org_id, _, _, template = await setup_template
+        org_id, _, _, template = setup_template
         svc = SchedulingService(db_session)
 
         success, err = await svc.delete_template(
@@ -592,7 +592,7 @@ class TestPatternGeneration:
 
     @pytest.mark.asyncio
     async def test_daily_pattern(self, db_session, setup_template):
-        org_id, user_id, _, template = await setup_template
+        org_id, user_id, _, template = setup_template
         svc = SchedulingService(db_session)
 
         pattern, err = await svc.create_pattern(
@@ -617,7 +617,7 @@ class TestPatternGeneration:
 
     @pytest.mark.asyncio
     async def test_weekly_pattern(self, db_session, setup_template):
-        org_id, user_id, _, template = await setup_template
+        org_id, user_id, _, template = setup_template
         svc = SchedulingService(db_session)
 
         # Monday and Wednesday only
@@ -644,7 +644,7 @@ class TestPatternGeneration:
 
     @pytest.mark.asyncio
     async def test_platoon_pattern(self, db_session, setup_template):
-        org_id, user_id, _, template = await setup_template
+        org_id, user_id, _, template = setup_template
         svc = SchedulingService(db_session)
 
         pattern, _ = await svc.create_pattern(
@@ -670,7 +670,7 @@ class TestPatternGeneration:
 
     @pytest.mark.asyncio
     async def test_custom_pattern(self, db_session, setup_template):
-        org_id, user_id, _, template = await setup_template
+        org_id, user_id, _, template = setup_template
         svc = SchedulingService(db_session)
 
         specific_dates = [
@@ -700,7 +700,7 @@ class TestPatternGeneration:
     @pytest.mark.asyncio
     async def test_overnight_shift_end_time(self, db_session, setup_org_and_users):
         """Shifts where end_time < start_time should end on the next day."""
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         # Create a night-shift template: 19:00 -> 07:00
@@ -741,7 +741,7 @@ class TestPatternGeneration:
 
     @pytest.mark.asyncio
     async def test_pattern_auto_assigns_members(self, db_session, setup_template):
-        org_id, user_id, user2_id, template = await setup_template
+        org_id, user_id, user2_id, template = setup_template
         svc = SchedulingService(db_session)
 
         pattern, _ = await svc.create_pattern(
@@ -777,7 +777,7 @@ class TestPatternGeneration:
     ):
         """A multi-platoon 24/48 rotation should create one shift per day and
         staff each day with only the on-duty platoon's members."""
-        org_id, user_id, user2_id, template = await setup_template
+        org_id, user_id, user2_id, template = setup_template
         svc = SchedulingService(db_session)
 
         start = date(2026, 1, 1)
@@ -837,7 +837,7 @@ class TestPatternGeneration:
     ):
         """A platoon pattern with no platoons configured keeps the original
         behavior: every assigned member is placed on each on-day."""
-        org_id, user_id, user2_id, template = await setup_template
+        org_id, user_id, user2_id, template = setup_template
         svc = SchedulingService(db_session)
 
         start = date(2026, 1, 1)
@@ -879,7 +879,7 @@ class TestPatternGeneration:
         """With no per-pattern crews, generation should staff each platoon's
         shifts from members' profile platoon (User.platoon) — the single
         source of truth."""
-        org_id, user_id, user2_id, template = await setup_template
+        org_id, user_id, user2_id, template = setup_template
         svc = SchedulingService(db_session)
 
         # Assign platoons on the member profiles (not on the pattern).
@@ -946,7 +946,7 @@ class TestPatternGeneration:
     ):
         """A platoon member with approved time-off on a shift date is left off
         that shift, so the slot stays open for fill-in / hold-over."""
-        org_id, user_id, user2_id, template = await setup_template
+        org_id, user_id, user2_id, template = setup_template
         svc = SchedulingService(db_session)
 
         await db_session.execute(
@@ -1007,7 +1007,7 @@ class TestPatternGeneration:
     ):
         """The platoon roster reports each member as assigned, available, or
         on_leave for hold-over decisions."""
-        org_id, user_id, user2_id, template = await setup_template
+        org_id, user_id, user2_id, template = setup_template
         svc = SchedulingService(db_session)
 
         for uid in (user_id, user2_id):
@@ -1063,7 +1063,7 @@ class TestPatternGeneration:
     async def test_generate_missing_template_returns_error(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         pattern, _ = await svc.create_pattern(
@@ -1091,7 +1091,7 @@ class TestPatternGeneration:
         self, db_session, setup_template
     ):
         """Running generate twice for the same range should not create duplicates."""
-        org_id, user_id, _, template = await setup_template
+        org_id, user_id, _, template = setup_template
         svc = SchedulingService(db_session)
 
         pattern, _ = await svc.create_pattern(
@@ -1133,7 +1133,7 @@ class TestAssignmentManagement:
 
     @pytest.mark.asyncio
     async def test_create_and_list_assignments(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1164,7 +1164,7 @@ class TestAssignmentManagement:
     async def test_create_assignment_nonexistent_shift(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         result, err = await svc.create_assignment(
@@ -1178,7 +1178,7 @@ class TestAssignmentManagement:
 
     @pytest.mark.asyncio
     async def test_confirm_assignment(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1207,7 +1207,7 @@ class TestAssignmentManagement:
 
     @pytest.mark.asyncio
     async def test_confirm_assignment_wrong_user(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1235,7 +1235,7 @@ class TestAssignmentManagement:
 
     @pytest.mark.asyncio
     async def test_delete_assignment(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1268,7 +1268,7 @@ class TestAssignmentManagement:
     async def test_get_user_assignments_date_range(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1302,7 +1302,7 @@ class TestAssignmentManagement:
         self, db_session, setup_org_and_users
     ):
         """When a member is assigned the officer position and no shift officer is set, auto-populate it."""
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1336,7 +1336,7 @@ class TestAssignmentManagement:
         self, db_session, setup_org_and_users
     ):
         """Captain position should also auto-set shift officer."""
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1367,7 +1367,7 @@ class TestAssignmentManagement:
         self, db_session, setup_org_and_users
     ):
         """If a shift already has a shift officer, assigning another officer should NOT override."""
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1401,7 +1401,7 @@ class TestAssignmentManagement:
         self, db_session, setup_org_and_users
     ):
         """Non-officer positions (firefighter, driver, etc.) should NOT auto-set shift officer."""
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1435,7 +1435,7 @@ class TestSwapRequests:
 
     @pytest.mark.asyncio
     async def test_create_and_list_swap_requests(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1463,7 +1463,7 @@ class TestSwapRequests:
     async def test_approve_swap_performs_assignment_swap(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1523,7 +1523,7 @@ class TestSwapRequests:
 
     @pytest.mark.asyncio
     async def test_deny_swap_request(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1554,7 +1554,7 @@ class TestSwapRequests:
 
     @pytest.mark.asyncio
     async def test_review_already_reviewed_fails(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1593,7 +1593,7 @@ class TestSwapRequests:
     async def test_cancel_swap_by_wrong_user_fails(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1619,7 +1619,7 @@ class TestSwapRequests:
 
     @pytest.mark.asyncio
     async def test_cancel_swap_success(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1651,7 +1651,7 @@ class TestTimeOff:
 
     @pytest.mark.asyncio
     async def test_create_and_list_time_off(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         time_off, err = await svc.create_time_off(
@@ -1671,7 +1671,7 @@ class TestTimeOff:
 
     @pytest.mark.asyncio
     async def test_approve_time_off(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         time_off, _ = await svc.create_time_off(
@@ -1694,7 +1694,7 @@ class TestTimeOff:
 
     @pytest.mark.asyncio
     async def test_cancel_time_off_by_wrong_user(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         time_off, _ = await svc.create_time_off(
@@ -1714,7 +1714,7 @@ class TestTimeOff:
 
     @pytest.mark.asyncio
     async def test_cancel_time_off_success(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         time_off, _ = await svc.create_time_off(
@@ -1736,7 +1736,7 @@ class TestTimeOff:
     async def test_get_availability_returns_approved_only(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1775,7 +1775,7 @@ class TestAttendance:
 
     @pytest.mark.asyncio
     async def test_add_and_get_attendance(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1803,7 +1803,7 @@ class TestAttendance:
     async def test_update_attendance_calculates_duration(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1839,7 +1839,7 @@ class TestAttendance:
 
     @pytest.mark.asyncio
     async def test_remove_attendance(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1874,7 +1874,7 @@ class TestShiftCalls:
 
     @pytest.mark.asyncio
     async def test_create_and_list_calls(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1902,7 +1902,7 @@ class TestShiftCalls:
 
     @pytest.mark.asyncio
     async def test_update_call(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1931,7 +1931,7 @@ class TestShiftCalls:
 
     @pytest.mark.asyncio
     async def test_delete_call(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -1966,7 +1966,7 @@ class TestReporting:
 
     @pytest.mark.asyncio
     async def test_member_hours_report(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -2005,7 +2005,7 @@ class TestReporting:
 
     @pytest.mark.asyncio
     async def test_coverage_report(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -2026,7 +2026,7 @@ class TestReporting:
 
     @pytest.mark.asyncio
     async def test_call_volume_report(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -2062,7 +2062,7 @@ class TestReporting:
 
     @pytest.mark.asyncio
     async def test_my_shifts(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = SchedulingService(db_session)
 
         today = date.today()
@@ -2108,6 +2108,9 @@ class TestCompliancePeriodBounds:
         req.due_date_type = kwargs.get("due_date_type")
         req.rolling_period_months = kwargs.get("rolling_period_months")
         req.period_start_month = kwargs.get("period_start_month", 1)
+        req.period_start_day = kwargs.get("period_start_day")
+        req.period_end_month = kwargs.get("period_end_month")
+        req.period_end_day = kwargs.get("period_end_day")
         req.start_date = kwargs.get("start_date")
         req.due_date = kwargs.get("due_date")
         return req

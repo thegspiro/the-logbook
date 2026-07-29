@@ -9,7 +9,6 @@ Run with:
     pytest tests/test_docker_config.py -v
 """
 
-import os
 import re
 from pathlib import Path
 

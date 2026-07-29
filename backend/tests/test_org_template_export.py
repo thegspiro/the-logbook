@@ -13,7 +13,7 @@ import zipfile
 import pytest
 
 from app.models.training import TrainingCategory
-from app.models.user import Organization, Position
+from app.models.user import Organization, Position, User
 from app.services.org_template_service import OrgTemplateService
 
 # Uses the real-database db_session fixture — must run in the integration job,
@@ -44,11 +44,21 @@ async def test_export_is_org_scoped_and_scrubbed(db_session):
     org_a = await _make_org(db_session, "Alpha FD")
     org_b = await _make_org(db_session, "Bravo FD")
 
+    # created_by FKs users.id, so the member reference must be a real row.
+    member_a = User(
+        id=str(uuid.uuid4()),
+        organization_id=org_a.id,
+        username=f"alpha-member-{uuid.uuid4().hex[:8]}",
+        email=f"alpha-{uuid.uuid4().hex[:8]}@test.com",
+    )
+    db_session.add(member_a)
+    await db_session.flush()
+
     cat_a = TrainingCategory(
         id=str(uuid.uuid4()),
         organization_id=org_a.id,
         name="Alpha Category",
-        created_by=str(uuid.uuid4()),  # member reference — must be scrubbed
+        created_by=member_a.id,  # member reference — must be scrubbed
     )
     cat_b = TrainingCategory(
         id=str(uuid.uuid4()),

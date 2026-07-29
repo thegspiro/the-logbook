@@ -108,7 +108,7 @@ class TestIssuanceAllowanceEnforcement:
 
     @pytest.mark.asyncio
     async def test_no_allowance_means_unlimited(self, db_session, setup_org_and_user):
-        org_id, user_id, member_id = await setup_org_and_user
+        org_id, user_id, member_id = setup_org_and_user
         svc = InventoryService(db_session)
         _, item = await _make_pool_item(svc, org_id, user_id)
 
@@ -126,7 +126,7 @@ class TestIssuanceAllowanceEnforcement:
     async def test_issue_blocked_when_over_allowance(
         self, db_session, setup_org_and_user
     ):
-        org_id, user_id, member_id = await setup_org_and_user
+        org_id, user_id, member_id = setup_org_and_user
         svc = InventoryService(db_session)
         cat, item = await _make_pool_item(svc, org_id, user_id)
 
@@ -166,7 +166,7 @@ class TestIssuanceAllowanceEnforcement:
 
     @pytest.mark.asyncio
     async def test_override_bypasses_allowance(self, db_session, setup_org_and_user):
-        org_id, user_id, member_id = await setup_org_and_user
+        org_id, user_id, member_id = setup_org_and_user
         svc = InventoryService(db_session)
         cat, item = await _make_pool_item(svc, org_id, user_id)
 
@@ -203,7 +203,7 @@ class TestRetirementNotificationQueued:
     async def test_writeoff_approval_queues_retirement_notice(
         self, db_session, setup_org_and_user
     ):
-        org_id, user_id, member_id = await setup_org_and_user
+        org_id, user_id, member_id = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -256,7 +256,7 @@ class TestEquipmentRequestFulfillment:
     async def test_fulfill_pool_request_creates_issuance(
         self, db_session, setup_org_and_user
     ):
-        org_id, user_id, member_id = await setup_org_and_user
+        org_id, user_id, member_id = setup_org_and_user
         svc = InventoryService(db_session)
         _, item = await _make_pool_item(svc, org_id, user_id)
 
@@ -296,7 +296,7 @@ class TestEquipmentRequestFulfillment:
     async def test_fulfill_requires_approved_status(
         self, db_session, setup_org_and_user
     ):
-        org_id, user_id, member_id = await setup_org_and_user
+        org_id, user_id, member_id = setup_org_and_user
         svc = InventoryService(db_session)
         _, item = await _make_pool_item(svc, org_id, user_id)
 
@@ -331,7 +331,7 @@ class TestWriteOffReleasesHolders:
     async def test_individual_item_is_unassigned_on_writeoff(
         self, db_session, setup_org_and_user
     ):
-        org_id, user_id, member_id = await setup_org_and_user
+        org_id, user_id, member_id = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -373,7 +373,7 @@ class TestWriteOffReleasesHolders:
     async def test_pool_issuances_closed_on_writeoff(
         self, db_session, setup_org_and_user
     ):
-        org_id, user_id, member_id = await setup_org_and_user
+        org_id, user_id, member_id = setup_org_and_user
         svc = InventoryService(db_session)
         _, item = await _make_pool_item(svc, org_id, user_id)
 
@@ -418,7 +418,7 @@ class TestNFPAInspectionWritePath:
     async def test_maintenance_create_persists_nfpa_inspection(
         self, db_session, setup_org_and_user
     ):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -469,7 +469,7 @@ class TestCategoryDelete:
     async def test_delete_blocked_with_active_items(
         self, db_session, setup_org_and_user
     ):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
         cat, item = await _make_pool_item(svc, org_id, user_id)
 
@@ -481,7 +481,7 @@ class TestCategoryDelete:
     async def test_delete_succeeds_without_active_items(
         self, db_session, setup_org_and_user
     ):
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
         cat, _ = await svc.create_category(
             organization_id=uuid.UUID(org_id),

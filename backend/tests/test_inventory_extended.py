@@ -91,7 +91,7 @@ class TestDepartureClearance:
         self, db_session, setup_org_and_user
     ):
         """Initiating clearance snapshots assigned items into line items."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         inv_svc = InventoryService(db_session)
 
         # Create and assign an item
@@ -134,7 +134,7 @@ class TestDepartureClearance:
     @pytest.mark.asyncio
     async def test_initiate_clearance_no_items(self, db_session, setup_org_and_user):
         """Initiating clearance when member has no items creates empty clearance."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         clr_svc = DepartureClearanceService(db_session)
 
         clearance, err = await clr_svc.initiate_clearance(
@@ -153,7 +153,7 @@ class TestDepartureClearance:
         self, db_session, setup_org_and_user
     ):
         """Cannot create a second open clearance for the same member."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         clr_svc = DepartureClearanceService(db_session)
 
         _, err1 = await clr_svc.initiate_clearance(
@@ -174,7 +174,7 @@ class TestDepartureClearance:
     @pytest.mark.asyncio
     async def test_resolve_line_item_returned(self, db_session, setup_org_and_user):
         """Resolving a line item as 'returned' unassigns the item."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         inv_svc = InventoryService(db_session)
 
         # Create, assign, initiate clearance
@@ -224,7 +224,7 @@ class TestDepartureClearance:
     @pytest.mark.asyncio
     async def test_resolve_line_item_written_off(self, db_session, setup_org_and_user):
         """Resolving a line item as 'written_off' does NOT change inventory."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         inv_svc = InventoryService(db_session)
 
         item, _ = await inv_svc.create_item(
@@ -273,7 +273,7 @@ class TestDepartureClearance:
         self, db_session, setup_org_and_user
     ):
         """Cannot resolve a line item that's already resolved."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         inv_svc = InventoryService(db_session)
 
         item, _ = await inv_svc.create_item(
@@ -322,7 +322,7 @@ class TestDepartureClearance:
         self, db_session, setup_org_and_user
     ):
         """Completing clearance when all items are resolved sets status to COMPLETED."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         inv_svc = InventoryService(db_session)
 
         item, _ = await inv_svc.create_item(
@@ -373,7 +373,7 @@ class TestDepartureClearance:
         self, db_session, setup_org_and_user
     ):
         """Cannot complete clearance with pending items unless force_close=True."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         inv_svc = InventoryService(db_session)
 
         item, _ = await inv_svc.create_item(
@@ -407,7 +407,7 @@ class TestDepartureClearance:
     @pytest.mark.asyncio
     async def test_force_close_with_pending_items(self, db_session, setup_org_and_user):
         """Force closing with pending items sets status to CLOSED_INCOMPLETE."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         inv_svc = InventoryService(db_session)
 
         item, _ = await inv_svc.create_item(
@@ -443,7 +443,7 @@ class TestDepartureClearance:
     @pytest.mark.asyncio
     async def test_cannot_complete_already_closed(self, db_session, setup_org_and_user):
         """Cannot complete a clearance that is already closed."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         clr_svc = DepartureClearanceService(db_session)
 
         clearance, _ = await clr_svc.initiate_clearance(
@@ -471,7 +471,7 @@ class TestDepartureClearance:
     @pytest.mark.asyncio
     async def test_get_clearance_for_user(self, db_session, setup_org_and_user):
         """Can retrieve active clearance for a specific user."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         clr_svc = DepartureClearanceService(db_session)
 
         await clr_svc.initiate_clearance(
@@ -487,7 +487,7 @@ class TestDepartureClearance:
     @pytest.mark.asyncio
     async def test_list_clearances(self, db_session, setup_org_and_user):
         """List clearances returns results with member names."""
-        org_id, user_id, user2_id = await setup_org_and_user
+        org_id, user_id, user2_id = setup_org_and_user
         clr_svc = DepartureClearanceService(db_session)
 
         await clr_svc.initiate_clearance(
@@ -511,7 +511,7 @@ class TestDepartureClearance:
     @pytest.mark.asyncio
     async def test_resolve_invalid_disposition(self, db_session, setup_org_and_user):
         """Resolving with invalid disposition returns error."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         inv_svc = InventoryService(db_session)
 
         item, _ = await inv_svc.create_item(
@@ -550,7 +550,7 @@ class TestDepartureClearance:
         self, db_session, setup_org_and_user
     ):
         """Cannot set disposition back to pending."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         inv_svc = InventoryService(db_session)
 
         item, _ = await inv_svc.create_item(
@@ -589,7 +589,7 @@ class TestDepartureClearance:
         self, db_session, setup_org_and_user
     ):
         """Clearance snapshots checkouts and pool issuances too."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         inv_svc = InventoryService(db_session)
 
         # Create individual item and check it out
@@ -857,7 +857,7 @@ class TestBatchReturnEdgeCases:
         self, db_session, setup_org_and_user
     ):
         """Batch return with invalid condition string is rejected (not silently defaulted)."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         # Create and assign item
@@ -900,7 +900,7 @@ class TestBatchReturnEdgeCases:
         self, db_session, setup_org_and_user
     ):
         """Batch return fails for items not held by the specified user."""
-        org_id, user_id, user2_id = await setup_org_and_user
+        org_id, user_id, user2_id = setup_org_and_user
         svc = InventoryService(db_session)
 
         # Create item assigned to user2
@@ -941,7 +941,7 @@ class TestCategoryUpdate:
     @pytest.mark.asyncio
     async def test_update_category_name(self, db_session, setup_org_and_user):
         """Can update a category's name."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         cat, _ = await svc.create_category(
@@ -961,7 +961,7 @@ class TestCategoryUpdate:
     @pytest.mark.asyncio
     async def test_update_category_not_found(self, db_session, setup_org_and_user):
         """Updating a non-existent category returns error."""
-        org_id, _, _ = await setup_org_and_user
+        org_id, _, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         _, err = await svc.update_category(
@@ -975,7 +975,7 @@ class TestCategoryUpdate:
     @pytest.mark.asyncio
     async def test_update_category_flags(self, db_session, setup_org_and_user):
         """Can update category boolean flags."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         cat, _ = await svc.create_category(
@@ -1014,7 +1014,7 @@ class TestPoolItemValidation:
         self, db_session, setup_org_and_user
     ):
         """Pool items with quantity 0 should be rejected."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, err = await svc.create_item(
@@ -1041,7 +1041,7 @@ class TestBarcodeLabels:
     @pytest.mark.asyncio
     async def test_generate_sheet_labels(self, db_session, setup_org_and_user):
         """Sheet label generation returns a valid BytesIO PDF."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         items = []
@@ -1073,7 +1073,7 @@ class TestBarcodeLabels:
     @pytest.mark.asyncio
     async def test_generate_thermal_labels(self, db_session, setup_org_and_user):
         """Thermal label generation (dymo_30252) returns valid PDF."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -1104,7 +1104,7 @@ class TestBarcodeLabels:
     @pytest.mark.asyncio
     async def test_generate_custom_labels(self, db_session, setup_org_and_user):
         """Custom dimensions label generation works."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -1135,7 +1135,7 @@ class TestBarcodeLabels:
         self, db_session, setup_org_and_user
     ):
         """Label generation with no valid items raises ValueError."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         with pytest.raises(ValueError, match="No valid items"):
@@ -1149,7 +1149,7 @@ class TestBarcodeLabels:
         self, db_session, setup_org_and_user
     ):
         """Label generation with invalid format raises ValueError."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -1175,7 +1175,7 @@ class TestBarcodeLabels:
         self, db_session, setup_org_and_user
     ):
         """Custom format without dimensions raises ValueError."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -1199,7 +1199,7 @@ class TestBarcodeLabels:
     @pytest.mark.asyncio
     async def test_label_fallback_to_asset_tag(self, db_session, setup_org_and_user):
         """Labels use asset_tag when barcode is not set."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -1224,7 +1224,7 @@ class TestBarcodeLabels:
     @pytest.mark.asyncio
     async def test_generate_all_thermal_formats(self, db_session, setup_org_and_user):
         """All predefined thermal formats generate valid PDFs."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -1259,7 +1259,7 @@ class TestBarcodeLabels:
     @pytest.mark.asyncio
     async def test_auto_rotate_override(self, db_session, setup_org_and_user):
         """auto_rotate parameter overrides format default."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -1297,7 +1297,7 @@ class TestBarcodeLabels:
         self, db_session, setup_org_and_user
     ):
         """Formats use their own auto_rotate default when not overridden."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -1333,7 +1333,7 @@ class TestBarcodeLabels:
         self, db_session, setup_org_and_user
     ):
         """Portrait labels are not rotated even when auto_rotate=True."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -1366,7 +1366,7 @@ class TestBatchCheckoutExtended:
     @pytest.mark.asyncio
     async def test_batch_checkout_pool_items(self, db_session, setup_org_and_user):
         """Batch checkout issues pool items correctly."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(
@@ -1401,7 +1401,7 @@ class TestBatchCheckoutExtended:
         self, db_session, setup_org_and_user
     ):
         """Batch checkout fails for items in maintenance."""
-        org_id, user_id, _ = await setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         item, _ = await svc.create_item(

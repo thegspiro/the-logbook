@@ -117,7 +117,7 @@ async def setup_org_and_users(db_session: AsyncSession):
 class TestEventCRUD:
 
     async def test_create_event(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = EventService(db_session)
 
         event_data = _make_event_create(
@@ -143,7 +143,7 @@ class TestEventCRUD:
         assert event.is_cancelled is False
 
     async def test_list_events_by_type(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = EventService(db_session)
 
         await svc.create_event(
@@ -174,7 +174,7 @@ class TestEventCRUD:
         assert trainings[0].title == "Drill"
 
     async def test_update_event(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = EventService(db_session)
 
         event = await svc.create_event(
@@ -200,7 +200,7 @@ class TestEventCRUD:
         assert updated.location == "Conference Room B"
 
     async def test_publish_draft_event(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = EventService(db_session)
 
         event = await svc.create_event(
@@ -218,7 +218,7 @@ class TestEventCRUD:
         assert published.is_draft is False
 
     async def test_delete_event(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = EventService(db_session)
 
         event = await svc.create_event(
@@ -237,7 +237,7 @@ class TestEventCRUD:
         assert all(e.id != event.id for e in events)
 
     async def test_duplicate_event(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = EventService(db_session)
 
         original = await svc.create_event(
@@ -272,7 +272,7 @@ class TestEventCRUD:
 class TestEventRSVP:
 
     async def test_create_rsvp_going(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = EventService(db_session)
 
         event = await svc.create_event(
@@ -298,7 +298,7 @@ class TestEventRSVP:
         assert rsvp.user_id == user_id
 
     async def test_update_rsvp_status(self, db_session, setup_org_and_users):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = EventService(db_session)
 
         event = await svc.create_event(
@@ -330,7 +330,7 @@ class TestEventRSVP:
         assert updated_rsvp.status.value == "not_going"
 
     async def test_multiple_rsvps(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = EventService(db_session)
 
         event = await svc.create_event(
@@ -365,7 +365,7 @@ class TestEventRSVP:
         assert len(rsvps) == 2
 
     async def test_rsvp_waitlist_when_full(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = EventService(db_session)
 
         event = await svc.create_event(
@@ -404,7 +404,7 @@ class TestEventAttendance:
 
     async def test_check_in_attendee(self, db_session, setup_org_and_users):
         """RSVP then check in within the check-in window."""
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = EventService(db_session)
 
         # Create event that starts NOW so the check-in window is open
@@ -450,7 +450,7 @@ class TestEventAttendance:
         assert checked_in.checked_in_at is not None
 
     async def test_manager_add_attendee(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = EventService(db_session)
 
         event = await svc.create_event(
@@ -475,7 +475,7 @@ class TestEventAttendance:
         assert rsvp.checked_in is True
 
     async def test_finalize_event_attendance(self, db_session, setup_org_and_users):
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = EventService(db_session)
 
         now = datetime.now(timezone.utc)
@@ -518,7 +518,7 @@ class TestEventAttendance:
     async def test_cannot_check_in_cancelled_event(
         self, db_session, setup_org_and_users
     ):
-        org_id, user_id, _ = await setup_org_and_users
+        org_id, user_id, _ = setup_org_and_users
         svc = EventService(db_session)
 
         event = await svc.create_event(
@@ -553,7 +553,7 @@ class TestEventLifecycleFlow:
         """
         End-to-end: draft -> publish -> RSVP -> check-in -> finalize.
         """
-        org_id, user_id, user2_id = await setup_org_and_users
+        org_id, user_id, user2_id = setup_org_and_users
         svc = EventService(db_session)
 
         # 1. Create as draft

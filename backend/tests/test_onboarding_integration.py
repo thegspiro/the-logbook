@@ -23,8 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.onboarding import OnboardingService
 
 pytestmark = [pytest.mark.integration]
-from app.models.onboarding import OnboardingStatus
-from app.models.user import Organization, Position, User
+from app.models.user import Organization, Position
 
 
 class TestOnboardingIntegration:
@@ -238,7 +237,7 @@ class TestOnboardingIntegration:
         # Try to create duplicate with same username
         # Should raise ValueError since create_system_owner raises exceptions on error
         with pytest.raises(ValueError):
-            user2 = await service.create_system_owner(**owner_data)
+            await service.create_system_owner(**owner_data)
 
     @pytest.mark.asyncio
     async def test_onboarding_status_tracking(

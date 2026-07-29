@@ -85,10 +85,12 @@ class TestTokenBallotSetup:
                 "start_date, end_date, status, anonymous_voting, "
                 "allow_write_ins, max_votes_per_position, voting_method, "
                 "victory_condition, voter_anonymity_salt, quorum_type, "
-                "created_by) "
+                "created_by, email_sent, results_visible_immediately, "
+                "enable_runoffs, runoff_type, max_runoff_rounds, "
+                "is_runoff, runoff_round) "
                 "VALUES (:id, :org, :title, :etype, :items, "
                 ":start, :end, :status, :anon, :write_in, :max_votes, "
-                ":method, :victory, :salt, :quorum, :creator)"
+                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0)"
             ),
             {
                 "id": election_id,
@@ -155,7 +157,7 @@ class TestPerItemEligibility(TestTokenBallotSetup):
     async def test_vote_on_ineligible_item_rejected(
         self, db_session: AsyncSession, setup_ballot_election
     ):
-        data = await setup_ballot_election
+        data = setup_ballot_election
         token, raw_token = await self._issue_token(
             db_session, data, eligible_item_ids=["item_a"]
         )
@@ -177,7 +179,7 @@ class TestPerItemEligibility(TestTokenBallotSetup):
     async def test_abstain_on_ineligible_item_allowed(
         self, db_session: AsyncSession, setup_ballot_election
     ):
-        data = await setup_ballot_election
+        data = setup_ballot_election
         token, raw_token = await self._issue_token(
             db_session, data, eligible_item_ids=["item_a"]
         )
@@ -200,7 +202,7 @@ class TestPerItemEligibility(TestTokenBallotSetup):
     ):
         """Tokens issued before the migration have eligible_item_ids=NULL and
         must keep working (fail-open bounded by token expiry)."""
-        data = await setup_ballot_election
+        data = setup_ballot_election
         token, raw_token = await self._issue_token(
             db_session, data, eligible_item_ids=None
         )
@@ -225,7 +227,7 @@ class TestTestBallotTokens(TestTokenBallotSetup):
     async def test_test_token_votes_marked_and_excluded_from_results(
         self, db_session: AsyncSession, setup_ballot_election
     ):
-        data = await setup_ballot_election
+        data = setup_ballot_election
         token, raw_token = await self._issue_token(db_session, data, is_test=True)
         svc = ElectionService(db_session)
 
@@ -261,7 +263,7 @@ class TestTestBallotTokens(TestTokenBallotSetup):
     ):
         """A manager's test submission must not consume their real vote slot
         (the dedup input is namespaced for test tokens)."""
-        data = await setup_ballot_election
+        data = setup_ballot_election
         test_token, test_raw = await self._issue_token(db_session, data, is_test=True)
         svc = ElectionService(db_session)
 
@@ -294,7 +296,7 @@ class TestReceiptHashes(TestTokenBallotSetup):
     async def test_submission_returns_verifiable_receipts(
         self, db_session: AsyncSession, setup_ballot_election
     ):
-        data = await setup_ballot_election
+        data = setup_ballot_election
         token, raw_token = await self._issue_token(db_session, data)
         svc = ElectionService(db_session)
 
@@ -328,7 +330,7 @@ class TestPositionlessTokenVote(TestTokenBallotSetup):
         self, db_session: AsyncSession, setup_ballot_election
     ):
         """Add a positionless candidate election in the same org."""
-        data = await setup_ballot_election
+        data = setup_ballot_election
         election_id = _uid()
         candidate_id = _uid()
         now = datetime.now(timezone.utc)
@@ -340,10 +342,12 @@ class TestPositionlessTokenVote(TestTokenBallotSetup):
                 "start_date, end_date, status, anonymous_voting, "
                 "allow_write_ins, max_votes_per_position, voting_method, "
                 "victory_condition, voter_anonymity_salt, quorum_type, "
-                "created_by) "
+                "created_by, email_sent, results_visible_immediately, "
+                "enable_runoffs, runoff_type, max_runoff_rounds, "
+                "is_runoff, runoff_round) "
                 "VALUES (:id, :org, :title, :etype, "
                 ":start, :end, :status, :anon, :write_in, :max_votes, "
-                ":method, :victory, :salt, :quorum, :creator)"
+                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0)"
             ),
             {
                 "id": election_id,
@@ -380,7 +384,7 @@ class TestPositionlessTokenVote(TestTokenBallotSetup):
         """A stray positioned vote by the same voter hash must not block a
         positionless submission (the old filter degraded to a no-op and
         matched every prior vote)."""
-        data = await setup_candidate_election
+        data = setup_candidate_election
         svc = ElectionService(db_session)
 
         token, raw_token = await svc._generate_voting_token(
@@ -433,7 +437,7 @@ class TestTokenHashedAtRest(TestTokenBallotSetup):
         """The DB row must hold SHA-256(token); the raw token (emailed link)
         resolves, and the stored hash itself must NOT work as a credential —
         exactly what makes DB read access useless to an attacker."""
-        data = await setup_ballot_election
+        data = setup_ballot_election
         token, raw_token = await self._issue_token(db_session, data)
 
         assert token.token != raw_token
@@ -517,10 +521,12 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
                 "position_eligibility, start_date, end_date, status, "
                 "anonymous_voting, allow_write_ins, max_votes_per_position, "
                 "voting_method, victory_condition, voter_anonymity_salt, "
-                "quorum_type, created_by) "
+                "quorum_type, created_by, email_sent, results_visible_immediately, "
+                "enable_runoffs, runoff_type, max_runoff_rounds, "
+                "is_runoff, runoff_round) "
                 "VALUES (:id, :org, :title, :etype, :positions, :pos_elig, "
                 ":start, :end, :status, :anon, :write_in, :max_votes, "
-                ":method, :victory, :salt, :quorum, :creator)"
+                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0)"
             ),
             {
                 "id": election_id,
@@ -583,7 +589,7 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
     async def test_restricted_token_rejected_for_ineligible_position(
         self, db_session: AsyncSession, setup_positional_election
     ):
-        data = await setup_positional_election
+        data = setup_positional_election
         _, raw = await self._issue_token(
             db_session, data, user_id=data["admin_id"], eligible_positions=["President"]
         )
@@ -600,7 +606,7 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
     async def test_restricted_token_accepted_for_eligible_position(
         self, db_session: AsyncSession, setup_positional_election
     ):
-        data = await setup_positional_election
+        data = setup_positional_election
         _, raw = await self._issue_token(
             db_session, data, user_id=data["admin_id"], eligible_positions=["President"]
         )
@@ -619,7 +625,7 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
     ):
         """The check falls back to candidate.position when the payload omits
         the position field."""
-        data = await setup_positional_election
+        data = setup_positional_election
         _, raw = await self._issue_token(
             db_session, data, user_id=data["admin_id"], eligible_positions=["President"]
         )
@@ -637,7 +643,7 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
         self, db_session: AsyncSession, setup_positional_election
     ):
         """NULL snapshot = pre-migration token — documented fail-open."""
-        data = await setup_positional_election
+        data = setup_positional_election
         _, raw = await self._issue_token(
             db_session, data, user_id=data["admin_id"], eligible_positions=None
         )
@@ -658,7 +664,7 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
         vote, even though the election has more positions."""
         from app.models.election import VotingToken
 
-        data = await setup_positional_election
+        data = setup_positional_election
         token_row, raw = await self._issue_token(
             db_session, data, user_id=data["admin_id"], eligible_positions=["President"]
         )
@@ -688,7 +694,7 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
 
         from app.models.election import VotingToken
 
-        data = await setup_positional_election
+        data = setup_positional_election
 
         # Restrict President to operational too, so the administrative
         # member is eligible for zero positions and must be skipped.
@@ -799,10 +805,12 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
                 "start_date, end_date, status, anonymous_voting, "
                 "allow_write_ins, max_votes_per_position, voting_method, "
                 "victory_condition, voter_anonymity_salt, quorum_type, "
-                "created_by) "
+                "created_by, email_sent, results_visible_immediately, "
+                "enable_runoffs, runoff_type, max_runoff_rounds, "
+                "is_runoff, runoff_round) "
                 "VALUES (:id, :org, :title, :etype, :items, "
                 ":start, :end, :status, :anon, :write_in, :max_votes, "
-                ":method, :victory, :salt, :quorum, :creator)"
+                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0)"
             ),
             {
                 "id": election_id,
@@ -861,7 +869,7 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
     async def test_bulk_approval_multi_select_creates_one_vote_per_candidate(
         self, db_session: AsyncSession, setup_candidate_election
     ):
-        data = await setup_candidate_election
+        data = setup_candidate_election
         _, raw = await self._issue_token(db_session, data)
         svc = ElectionService(db_session)
 
@@ -891,7 +899,7 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
     async def test_bulk_rankings_create_ranked_votes(
         self, db_session: AsyncSession, setup_candidate_election
     ):
-        data = await setup_candidate_election
+        data = setup_candidate_election
         await self._set_method(db_session, data["election_id"], "ranked_choice")
         _, raw = await self._issue_token(db_session, data)
         svc = ElectionService(db_session)
@@ -925,7 +933,7 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
     async def test_bulk_rankings_rejected_for_non_ranked_method(
         self, db_session: AsyncSession, setup_candidate_election
     ):
-        data = await setup_candidate_election  # approval method
+        data = setup_candidate_election  # approval method
         _, raw = await self._issue_token(db_session, data)
         svc = ElectionService(db_session)
 
@@ -939,7 +947,7 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
     async def test_bulk_multi_select_over_cap_rejected(
         self, db_session: AsyncSession, setup_candidate_election
     ):
-        data = await setup_candidate_election
+        data = setup_candidate_election
         # simple_majority with max 2 selections per position
         await self._set_method(db_session, data["election_id"], "simple_majority")
         await db_session.execute(
@@ -960,7 +968,7 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
     async def test_single_token_endpoint_ranked_requires_rank(
         self, db_session: AsyncSession, setup_candidate_election
     ):
-        data = await setup_candidate_election
+        data = setup_candidate_election
         await self._set_method(db_session, data["election_id"], "ranked_choice")
         _, raw = await self._issue_token(db_session, data)
         svc = ElectionService(db_session)
@@ -976,7 +984,7 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
     async def test_single_token_endpoint_ranked_flow(
         self, db_session: AsyncSession, setup_candidate_election
     ):
-        data = await setup_candidate_election
+        data = setup_candidate_election
         await self._set_method(db_session, data["election_id"], "ranked_choice")
         _, raw = await self._issue_token(db_session, data)
         svc = ElectionService(db_session)
@@ -1023,7 +1031,7 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
     ):
         from app.models.election import VotingToken
 
-        data = await setup_candidate_election  # approval method
+        data = setup_candidate_election  # approval method
         token_row, raw = await self._issue_token(db_session, data)
         svc = ElectionService(db_session)
 
@@ -1071,7 +1079,7 @@ class TestBallotTokenUrlHygiene(TestPositionEligibilityTokens):
     ):
         from unittest.mock import AsyncMock, patch
 
-        data = await setup_positional_election
+        data = setup_positional_election
         svc = ElectionService(db_session)
 
         captured_urls = []
@@ -1111,7 +1119,7 @@ class TestBallotTokenUrlHygiene(TestPositionEligibilityTokens):
             lookup_ballot_by_token,
         )
 
-        data = await setup_positional_election
+        data = setup_positional_election
         _, raw = await self._issue_token(
             db_session,
             data,
@@ -1138,7 +1146,7 @@ class TestBallotTokenUrlHygiene(TestPositionEligibilityTokens):
             lookup_ballot_by_token,
         )
 
-        data = await setup_positional_election
+        data = setup_positional_election
         _, raw = await self._issue_token(db_session, data, user_id=data["user_id"])
 
         result = await lookup_ballot_by_token(
@@ -1160,7 +1168,6 @@ class TestBallotTokenUrlHygiene(TestPositionEligibilityTokens):
             lookup_ballot_by_token,
         )
 
-        await setup_positional_election
         with pytest.raises(HTTPException) as exc_info:
             await lookup_ballot_by_token(
                 payload=BallotLookupRequest(token="not-a-real-token"),

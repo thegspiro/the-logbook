@@ -83,7 +83,7 @@ class TestReportCreation:
 
     @pytest.mark.asyncio
     async def test_create_report(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -104,7 +104,7 @@ class TestReportCreation:
 
     @pytest.mark.asyncio
     async def test_get_report_by_id(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -121,7 +121,7 @@ class TestReportCreation:
 
     @pytest.mark.asyncio
     async def test_get_reports_for_trainee(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         for i in range(3):
@@ -138,7 +138,7 @@ class TestReportCreation:
 
     @pytest.mark.asyncio
     async def test_get_reports_by_officer(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         await svc.create_report(
@@ -160,7 +160,7 @@ class TestAcknowledgement:
 
     @pytest.mark.asyncio
     async def test_trainee_acknowledges_report(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -183,7 +183,7 @@ class TestAcknowledgement:
     async def test_wrong_trainee_cannot_acknowledge(
         self, db_session, setup_training_org
     ):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -206,7 +206,7 @@ class TestReportReview:
 
     @pytest.mark.asyncio
     async def test_approve_report(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -231,7 +231,7 @@ class TestReportReview:
 
     @pytest.mark.asyncio
     async def test_flag_report(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -253,7 +253,7 @@ class TestReportReview:
 
     @pytest.mark.asyncio
     async def test_redact_fields(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -278,7 +278,7 @@ class TestReportReview:
 
     @pytest.mark.asyncio
     async def test_review_wrong_org_returns_none(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -300,7 +300,7 @@ class TestReportReview:
 
     @pytest.mark.asyncio
     async def test_get_reports_by_status(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         await svc.create_report(
@@ -323,7 +323,7 @@ class TestTraineeStats:
 
     @pytest.mark.asyncio
     async def test_get_trainee_stats(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         for i in range(3):
@@ -345,7 +345,7 @@ class TestTraineeStats:
 
     @pytest.mark.asyncio
     async def test_get_all_reports_with_filters(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         today = date.today()
@@ -430,7 +430,7 @@ async def two_orgs(db_session: AsyncSession):
 class TestCrossOrgIsolation:
 
     async def test_review_report_wrong_org(self, db_session, two_orgs):
-        d = await two_orgs
+        d = two_orgs
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -450,7 +450,7 @@ class TestCrossOrgIsolation:
         assert result is None
 
     async def test_acknowledge_report_wrong_org(self, db_session, two_orgs):
-        d = await two_orgs
+        d = two_orgs
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -469,7 +469,7 @@ class TestCrossOrgIsolation:
         assert result is None
 
     async def test_update_report_wrong_org(self, db_session, two_orgs):
-        d = await two_orgs
+        d = two_orgs
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -490,7 +490,7 @@ class TestCrossOrgIsolation:
             )
 
     async def test_update_report_wrong_officer(self, db_session, two_orgs):
-        d = await two_orgs
+        d = two_orgs
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -511,7 +511,7 @@ class TestCrossOrgIsolation:
             )
 
     async def test_reports_scoped_to_org(self, db_session, two_orgs):
-        d = await two_orgs
+        d = two_orgs
         svc = ShiftCompletionService(db_session)
 
         await svc.create_report(
@@ -541,7 +541,7 @@ class TestCrossOrgIsolation:
 class TestDraftLifecycle:
 
     async def test_create_draft_and_submit(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -569,7 +569,7 @@ class TestDraftLifecycle:
         assert updated.performance_rating == 4
 
     async def test_cannot_revert_to_draft(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -590,7 +590,7 @@ class TestDraftLifecycle:
             )
 
     async def test_update_enrollment_id_on_draft(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -620,7 +620,7 @@ class TestDraftLifecycle:
 class TestUpdateWhitelist:
 
     async def test_whitelisted_fields_apply(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -649,7 +649,7 @@ class TestUpdateWhitelist:
         assert updated.performance_rating == 3
 
     async def test_blocked_fields_ignored(self, db_session, setup_training_org):
-        org_id, officer_id, trainee_id = await setup_training_org
+        org_id, officer_id, trainee_id = setup_training_org
         svc = ShiftCompletionService(db_session)
 
         report = await svc.create_report(
@@ -781,7 +781,7 @@ async def setup_shift_with_crew(db_session: AsyncSession):
 class TestBatchCrewWorkflow:
 
     async def test_get_shift_crew_status(self, db_session, setup_shift_with_crew):
-        d = await setup_shift_with_crew
+        d = setup_shift_with_crew
         svc = ShiftCompletionService(db_session)
 
         crew = await svc.get_shift_crew_status(uuid.UUID(d["org_id"]), d["shift_id"])
@@ -795,7 +795,7 @@ class TestBatchCrewWorkflow:
     async def test_crew_status_wrong_org_returns_empty(
         self, db_session, setup_shift_with_crew
     ):
-        d = await setup_shift_with_crew
+        d = setup_shift_with_crew
         svc = ShiftCompletionService(db_session)
 
         crew = await svc.get_shift_crew_status(uuid.uuid4(), d["shift_id"])
@@ -804,7 +804,7 @@ class TestBatchCrewWorkflow:
     async def test_crew_status_marks_reported_members(
         self, db_session, setup_shift_with_crew
     ):
-        d = await setup_shift_with_crew
+        d = setup_shift_with_crew
         svc = ShiftCompletionService(db_session)
 
         await svc.create_report(
@@ -823,7 +823,7 @@ class TestBatchCrewWorkflow:
         assert d["crew_2"] in not_reported
 
     async def test_batch_create_reports(self, db_session, setup_shift_with_crew):
-        d = await setup_shift_with_crew
+        d = setup_shift_with_crew
         svc = ShiftCompletionService(db_session)
 
         result = await svc.batch_create_reports(
@@ -844,7 +844,7 @@ class TestBatchCrewWorkflow:
     async def test_batch_skips_duplicate_reports(
         self, db_session, setup_shift_with_crew
     ):
-        d = await setup_shift_with_crew
+        d = setup_shift_with_crew
         svc = ShiftCompletionService(db_session)
 
         await svc.create_report(
@@ -879,7 +879,7 @@ class TestShiftLinkedValidation:
     async def test_report_date_must_match_shift(
         self, db_session, setup_shift_with_crew
     ):
-        d = await setup_shift_with_crew
+        d = setup_shift_with_crew
         svc = ShiftCompletionService(db_session)
 
         with pytest.raises(ValueError, match="date does not match"):
@@ -895,7 +895,7 @@ class TestShiftLinkedValidation:
     async def test_duplicate_report_for_same_shift_trainee(
         self, db_session, setup_shift_with_crew
     ):
-        d = await setup_shift_with_crew
+        d = setup_shift_with_crew
         svc = ShiftCompletionService(db_session)
 
         await svc.create_report(
@@ -918,7 +918,7 @@ class TestShiftLinkedValidation:
             )
 
     async def test_shift_wrong_org_rejected(self, db_session, setup_shift_with_crew):
-        d = await setup_shift_with_crew
+        d = setup_shift_with_crew
         svc = ShiftCompletionService(db_session)
 
         with pytest.raises(ValueError, match="Shift not found"):
@@ -938,7 +938,7 @@ class TestShiftLinkedValidation:
 class TestShiftDataPreview:
 
     async def test_validate_shift_ownership(self, db_session, setup_shift_with_crew):
-        d = await setup_shift_with_crew
+        d = setup_shift_with_crew
         svc = ShiftCompletionService(db_session)
 
         assert await svc.validate_shift_ownership(d["shift_id"], uuid.UUID(d["org_id"]))

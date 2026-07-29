@@ -4,8 +4,8 @@ Tests for the Reports Service
 Unit tests for report generation logic.
 """
 
-from datetime import date, datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
