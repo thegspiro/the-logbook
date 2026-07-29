@@ -1865,6 +1865,63 @@ async def get_non_voters(
     return {"non_voters": non_voters, "count": len(non_voters)}
 
 
+class RemindNonVotersRequest(BaseModel):
+    """Optional overrides for the reminder email."""
+
+    subject: Optional[str] = Field(None, max_length=200)
+    message: Optional[str] = Field(None, max_length=2000)
+
+
+@router.post("/{election_id}/remind-non-voters", response_model=EmailBallotResponse)
+async def remind_non_voters(
+    election_id: UUID,
+    payload: Optional[RemindNonVotersRequest] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Send a reminder ballot email — with a fresh voting link — to every
+    eligible voter who has not yet cast a vote.
+
+    Members who already voted are not contacted. Also stamps the election's
+    reminder_sent_at, which suppresses the automatic pre-close reminder.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    # SEC: server-configured FRONTEND_URL, never the Host header (see
+    # send-ballot above) — the link carries a live voting token.
+    frontend_origin = settings.FRONTEND_URL.rstrip("/")
+
+    service = ElectionService(db)
+    try:
+        reminded, failed, skipped, skipped_details = await service.remind_non_voters(
+            election_id=election_id,
+            organization_id=current_user.organization_id,
+            user_id=str(current_user.id),
+            subject=payload.subject if payload else None,
+            message=payload.message if payload else None,
+            base_ballot_url=f"{frontend_origin}/ballot",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    if reminded == 0 and failed == 0 and skipped == 0:
+        message = "Everyone eligible has already voted — no reminders needed"
+    else:
+        message = f"Reminder sent to {reminded} non-voter(s)"
+    return {
+        "success": failed == 0,
+        "recipients_count": reminded,
+        "failed_count": failed,
+        "skipped_count": skipped,
+        "skipped_details": skipped_details,
+        "message": message,
+    }
+
+
 @router.get(
     "/{election_id}/eligibility-roster",
     response_model=EligibilityRosterResponse,

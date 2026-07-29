@@ -82,6 +82,9 @@ export interface Election {
   runoff_round: number;
   quorum_type?: string; // none, percentage, count
   quorum_value?: number;
+  auto_open?: boolean;
+  reminder_hours_before_close?: number;
+  reminder_sent_at?: string;
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -155,6 +158,8 @@ export interface ElectionCreate {
   enable_runoffs?: boolean | undefined;
   runoff_type?: string | undefined;
   max_runoff_rounds?: number | undefined;
+  auto_open?: boolean | undefined;
+  reminder_hours_before_close?: number | undefined;
 }
 
 export interface ElectionUpdate {
@@ -182,6 +187,8 @@ export interface ElectionUpdate {
   enable_runoffs?: boolean;
   runoff_type?: string;
   max_runoff_rounds?: number;
+  auto_open?: boolean;
+  reminder_hours_before_close?: number;
 }
 
 export interface Candidate {

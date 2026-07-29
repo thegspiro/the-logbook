@@ -431,10 +431,11 @@ export const ElectionDetailPage: React.FC = () => {
       setIsSendingReminders(true);
       setRemindError(null);
 
-      const response = await electionService.sendBallotEmail(electionId, {
-        recipient_user_ids: nonVoterIds,
+      // Dedicated endpoint: the server recomputes the non-voter list at
+      // send time (no stale client-side list) and stamps reminder_sent_at,
+      // which suppresses the automatic pre-close reminder.
+      const response = await electionService.remindNonVoters(electionId, {
         message: message || 'This is a reminder to cast your vote. The voting window will be closing soon.',
-        include_ballot_link: true,
       });
 
       setShowRemindModal(false);

@@ -2184,6 +2184,181 @@ class ElectionService:
 
         return non_voters
 
+    async def remind_non_voters(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        user_id: Optional[str] = None,
+        subject: Optional[str] = None,
+        message: Optional[str] = None,
+        base_ballot_url: Optional[str] = None,
+    ) -> Tuple[int, int, int, List[Dict]]:
+        """Send a reminder ballot email to eligible voters who haven't voted.
+
+        Reuses the real ballot-send path, so each reminded member gets a
+        FRESH voting token/link. Prior unused tokens deliberately stay valid:
+        the vote dedup hash is keyed on voter_hash, so multiple live tokens
+        can never yield more than one vote — while expiring the old token
+        could disenfranchise a member whose reminder email bounces.
+
+        Stamps ``reminder_sent_at`` so the automatic reminder (lifecycle
+        task) fires at most once per election, counting manual reminders.
+
+        Returns: (reminded_count, failed_count, skipped_count, skipped_details)
+        """
+        result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            raise ValueError("Election not found")
+        if election.status != ElectionStatus.OPEN:
+            raise ValueError("Reminders can only be sent for open elections")
+
+        non_voters = await self.get_non_voters(election_id, organization_id)
+        if not non_voters:
+            return 0, 0, 0, []
+
+        sent, failed, skipped, skipped_details = await self.send_ballot_emails(
+            election_id=election_id,
+            organization_id=organization_id,
+            recipient_user_ids=[UUID(nv["id"]) for nv in non_voters],
+            subject=subject or f"Reminder: vote in {election.title}",
+            message=message
+            or (
+                "This is a reminder that you have not yet voted in "
+                f"{election.title}. Voting closes at "
+                f"{self._ensure_utc(election.end_date):%Y-%m-%d %H:%M} UTC."
+            ),
+            base_ballot_url=base_ballot_url,
+        )
+
+        election.reminder_sent_at = datetime.now(timezone.utc).replace(microsecond=0)
+        await self.db.commit()
+
+        logger.info(
+            f"Non-voter reminder sent | election={election_id} "
+            f"reminded={sent} failed={failed} skipped={skipped}"
+        )
+        await self._audit(
+            "election_reminder_sent",
+            {
+                "election_id": str(election_id),
+                "title": election.title,
+                "reminded": sent,
+                "failed": failed,
+                "skipped": skipped,
+            },
+            user_id=user_id,
+        )
+        return sent, failed, skipped, skipped_details
+
+    async def process_election_lifecycle(self, organization_id: UUID) -> int:
+        """Run scheduled lifecycle transitions for one organization.
+
+        - Auto-open DRAFT elections flagged ``auto_open`` whose start_date
+          has arrived (and whose end_date hasn't passed). Uses the real
+          open_election path so candidate validation still applies — a
+          draft that fails validation is logged and retried next tick.
+        - Auto-close OPEN elections past end_date. Votes are already
+          rejected after end_date; closing runs finalization (results,
+          runoffs, anonymous-election IP purge and salt destruction), so
+          an overdue election left open is a privacy liability. No opt-in.
+        - Send the one automatic non-voter reminder for OPEN elections
+          configured with ``reminder_hours_before_close``.
+
+        Returns the number of lifecycle actions performed.
+        """
+        now = datetime.now(timezone.utc)
+        actions = 0
+
+        result = await self.db.execute(
+            select(Election.id, Election.status).where(
+                Election.organization_id == str(organization_id),
+                Election.status.in_([ElectionStatus.DRAFT, ElectionStatus.OPEN]),
+            )
+        )
+        rows = result.all()
+
+        for election_id, _status in rows:
+            # Re-read inside each unit of work; open/close/remind commit.
+            row = await self.db.execute(
+                select(Election).where(Election.id == election_id)
+            )
+            election = row.scalar_one_or_none()
+            if election is None:
+                continue
+            start = self._ensure_utc(election.start_date)
+            end = self._ensure_utc(election.end_date)
+
+            if (
+                election.status == ElectionStatus.DRAFT
+                and election.auto_open
+                and start
+                and start <= now
+                and end
+                and end > now
+            ):
+                opened, err = await self.open_election(
+                    UUID(str(election.id)), organization_id
+                )
+                if err:
+                    logger.warning(
+                        f"Auto-open skipped | election={election.id} reason={err}"
+                    )
+                else:
+                    actions += 1
+                    await self._audit(
+                        "election_auto_opened",
+                        {"election_id": str(election.id), "title": election.title},
+                    )
+                continue
+
+            if election.status != ElectionStatus.OPEN:
+                continue
+
+            if end and end <= now:
+                closed, err = await self.close_election(
+                    UUID(str(election.id)), organization_id
+                )
+                if err:
+                    logger.warning(
+                        f"Auto-close failed | election={election.id} reason={err}"
+                    )
+                else:
+                    actions += 1
+                    await self._audit(
+                        "election_auto_closed",
+                        {"election_id": str(election.id), "title": election.title},
+                    )
+                continue
+
+            if (
+                election.reminder_hours_before_close
+                and election.reminder_sent_at is None
+                and end
+                and now >= end - timedelta(hours=election.reminder_hours_before_close)
+            ):
+                try:
+                    reminded, _failed, _skipped, _details = (
+                        await self.remind_non_voters(
+                            UUID(str(election.id)), organization_id
+                        )
+                    )
+                    actions += 1
+                    logger.info(
+                        f"Auto-reminder sent | election={election.id} "
+                        f"reminded={reminded}"
+                    )
+                except ValueError as e:
+                    logger.warning(
+                        f"Auto-reminder skipped | election={election.id} reason={e}"
+                    )
+
+        return actions
+
     async def _check_and_create_runoff(
         self, election: Election, organization_id: UUID
     ) -> Optional[Election]:
@@ -3919,7 +4094,12 @@ Best regards,
         # "ballot sent" when they never received one.
         election.email_sent = True
         election.email_sent_at = datetime.now(timezone.utc)
-        election.email_recipients = sent_user_ids
+        # Merge rather than replace: a reminder re-send targets only the
+        # non-voters, and replacing would erase the original recipients'
+        # "ballot sent" record.
+        election.email_recipients = sorted(
+            set(election.email_recipients or []) | set(sent_user_ids)
+        )
 
         # Commit all voting tokens and election updates
         await self.db.commit()

@@ -210,6 +210,21 @@ class ElectionBase(BaseModel):
         description="Quorum value (percentage or count depending on quorum_type)",
     )
 
+    # Lifecycle automation
+    auto_open: bool = Field(
+        default=False,
+        description="Automatically open this election at its start date",
+    )
+    reminder_hours_before_close: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=720,
+        description=(
+            "Automatically remind non-voters this many hours before the "
+            "election closes (null = no automatic reminder)"
+        ),
+    )
+
     @field_validator("quorum_type")
     @classmethod
     def validate_quorum_type(cls, v: str) -> str:
@@ -269,6 +284,8 @@ class ElectionUpdate(BaseModel):
     max_runoff_rounds: Optional[int] = Field(None, ge=1, le=10)
     quorum_type: Optional[str] = None
     quorum_value: Optional[int] = Field(None, ge=1, le=100)
+    auto_open: Optional[bool] = None
+    reminder_hours_before_close: Optional[int] = Field(None, ge=1, le=720)
 
     @field_validator("quorum_type")
     @classmethod
@@ -324,6 +341,9 @@ class ElectionResponse(UTCResponseBase):
     max_runoff_rounds: int = 3
     quorum_type: str = "none"
     quorum_value: Optional[int] = None
+    auto_open: bool = False
+    reminder_hours_before_close: Optional[int] = None
+    reminder_sent_at: Optional[datetime] = None
     status: str
     created_by: Optional[UUID] = None
     created_at: datetime

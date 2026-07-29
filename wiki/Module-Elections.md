@@ -82,6 +82,32 @@ Beyond membership type, a member may also be restricted by:
 
 ---
 
+## Lifecycle Automation (2026-07-29)
+
+The `election_lifecycle` scheduled task (every 15 minutes) automates status
+transitions and reminders:
+
+- **Auto-close**: OPEN elections past `end_date` are closed automatically.
+  Votes are already rejected after `end_date`; closing is what finalizes
+  results, evaluates runoffs, and runs the anonymous-election IP purge and
+  salt destruction — so an overdue election left open was a privacy
+  liability. No opt-in.
+- **Auto-open**: DRAFT elections are opened at `start_date` only when the
+  creator enabled **Open Automatically at Start Time** (`auto_open`). The
+  real open path runs, so an invalid draft (e.g. no candidates) is skipped
+  and retried, never force-opened.
+- **Automatic reminder**: when `reminder_hours_before_close` is set, the
+  task sends exactly one reminder ballot email to members who haven't
+  voted once the window opens. Any reminder (manual or automatic) stamps
+  `reminder_sent_at`, which suppresses the automatic one.
+
+Reminders reuse the real ballot-send path, so each reminded member gets a
+fresh voting link. Earlier unused tokens stay valid deliberately: the vote
+dedup hash already guarantees at most one vote per member, and expiring the
+old token could disenfranchise a member whose reminder email bounces.
+Audit events: `election_auto_opened`, `election_auto_closed`,
+`election_reminder_sent`.
+
 ## API Endpoints
 
 ```
@@ -99,6 +125,7 @@ GET    /api/v1/elections/{id}/eligibility    # Check current user's eligibility
 GET    /api/v1/elections/{id}/results        # Get results (visibility-gated)
 GET    /api/v1/elections/{id}/stats          # Ballot counts / turnout (manage)
 GET    /api/v1/elections/{id}/non-voters     # Eligible voters who haven't voted (manage)
+POST   /api/v1/elections/{id}/remind-non-voters # Reminder ballot email (fresh link) to non-voters only (manage)
 POST   /api/v1/elections/{id}/send-ballot    # Email ballots with unique voting tokens
 POST   /api/v1/elections/{id}/send-test-ballot  # Send a test ballot to yourself (votes excluded from results)
 POST   /api/v1/elections/{id}/send-report    # Email election results report

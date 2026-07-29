@@ -83,6 +83,20 @@ class Election(Base):
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=False)
 
+    # Lifecycle automation (election_lifecycle scheduled task).
+    # auto_open: opt-in — a half-configured draft must never open itself, so
+    # the task only auto-opens drafts explicitly flagged by the creator.
+    # Auto-CLOSE needs no flag: every vote path already rejects votes after
+    # end_date, and closing runs the IP purge / salt destruction, so leaving
+    # an overdue election open is strictly worse than closing it.
+    auto_open = Column(Boolean, nullable=False, default=False, server_default="0")
+
+    # Auto-reminder to non-voters: NULL = disabled. When set, the lifecycle
+    # task sends ONE reminder once now >= end_date - reminder_hours_before_close
+    # and no reminder (manual or automatic) has been sent yet.
+    reminder_hours_before_close = Column(Integer, nullable=True)
+    reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
+
     # Status
     status = Column(
         SQLEnum(ElectionStatus, values_callable=lambda x: [e.value for e in x]),

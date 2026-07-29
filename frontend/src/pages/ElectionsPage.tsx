@@ -45,6 +45,8 @@ export const ElectionsPage: React.FC = () => {
     enable_runoffs: false,
     runoff_type: RunoffType.TOP_TWO,
     max_runoff_rounds: 3,
+    auto_open: false,
+    reminder_hours_before_close: undefined,
   });
   const [positionInput, setPositionInput] = useState('');
   const [showPositionDropdown, setShowPositionDropdown] = useState(false);
@@ -201,6 +203,8 @@ export const ElectionsPage: React.FC = () => {
         enable_runoffs: false,
         runoff_type: RunoffType.TOP_TWO,
         max_runoff_rounds: 3,
+        auto_open: false,
+        reminder_hours_before_close: undefined,
       });
       setPositionInput('');
       await fetchElections();
@@ -884,6 +888,48 @@ export const ElectionsPage: React.FC = () => {
                     />
                     <span className="ml-2 text-sm text-theme-text-primary">Show Results Immediately</span>
                   </label>
+
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="election-auto-open"
+                      checked={formData.auto_open ?? false}
+                      onChange={(e) =>
+                        setFormData({ ...formData, auto_open: e.target.checked })
+                      }
+                      className="form-checkbox"
+                    />
+                    <span className="ml-2 text-sm text-theme-text-primary">Open Automatically at Start Time</span>
+                  </label>
+
+                  <div>
+                    <label htmlFor="election-reminder-hours" className="block text-sm font-medium text-theme-text-primary">
+                      Auto-Remind Non-Voters
+                    </label>
+                    <select
+                      id="election-reminder-hours"
+                      value={formData.reminder_hours_before_close ?? ''}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          reminder_hours_before_close: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                    >
+                      <option value="">No automatic reminder</option>
+                      <option value="2">2 hours before close</option>
+                      <option value="6">6 hours before close</option>
+                      <option value="24">1 day before close</option>
+                      <option value="48">2 days before close</option>
+                      <option value="72">3 days before close</option>
+                    </select>
+                    <p className="mt-1 text-xs text-theme-text-muted">
+                      Members who haven&apos;t voted get one reminder email with a fresh ballot link.
+                    </p>
+                  </div>
                 </div>
               </div>
 

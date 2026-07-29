@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Elections: non-voter reminders + lifecycle automation (2026-07-29)
+
+**Added**
+
+- **Remind non-voters** (`POST /elections/{id}/remind-non-voters`): sends a
+  reminder ballot email — with a fresh voting link — to eligible voters who
+  have not yet cast a vote. The server recomputes the non-voter list at send
+  time; members who already voted are never contacted. Prior unused tokens
+  deliberately stay valid (the vote dedup hash guarantees one vote per
+  member regardless of how many live links they hold, while expiring the old
+  token could disenfranchise a member whose reminder bounces). The election
+  detail page's existing "Remind Non-Voters" modal now uses this endpoint
+  instead of the client-composed send-ballot call.
+- **Automatic pre-close reminder**: new per-election setting
+  `reminder_hours_before_close` (create form: "Auto-Remind Non-Voters").
+  The lifecycle task sends exactly one automatic reminder once the window
+  opens; `reminder_sent_at` stamps any reminder (manual included) so
+  members never get a second automatic nudge.
+- **`election_lifecycle` scheduled task** (every 15 minutes): auto-closes
+  OPEN elections past `end_date` — votes are already rejected after
+  end_date, and closing is what runs result finalization, runoff creation,
+  and the anonymous-election IP purge / salt destruction, so an overdue
+  election left open was a privacy liability — and auto-opens DRAFT
+  elections at `start_date` when the creator explicitly enabled the new
+  `auto_open` flag (the real open_election path, so candidate validation
+  still applies). Audited as `election_auto_opened` / `election_auto_closed`
+  / `election_reminder_sent`.
+- Migration `20260801_0004` (new single head): `elections.auto_open`,
+  `reminder_hours_before_close`, `reminder_sent_at`.
+
+**Fixed**
+
+- A ballot re-send no longer erases the original send's recipient record:
+  `email_recipients` now merges rather than replaces, so the UI keeps
+  showing earlier recipients as "ballot sent".
+
 ### Integration suites actually run — infrastructure + latent-bug fixes (2026-07-29)
 
 The first genuine CI executions of the DB-backed integration suites (never
