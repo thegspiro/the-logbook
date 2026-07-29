@@ -1313,23 +1313,38 @@ class ElectionService:
             else:
                 tampered.append(str(vote.id))
 
-        # Verify the sequential vote chain (ordered by voted_at)
+        # Verify the sequential vote chain by RECONSTRUCTING the order from
+        # the hashes themselves: from prev_chain, exactly one remaining vote
+        # can satisfy chain_hash == H(prev_chain, signature). voted_at cannot
+        # order the walk — it has second precision, so votes cast within the
+        # same second sort ambiguously and a time-ordered walk reports a
+        # false break.
         chain_broken = False
         chain_break_at = None
-        sorted_votes = sorted(
-            [v for v in all_votes if v.chain_hash],
-            key=lambda v: self._ensure_utc(v.voted_at),
-        )
+        remaining = {str(v.id): v for v in all_votes if v.chain_hash}
         prev_chain = "GENESIS"
-        for vote in sorted_votes:
-            expected_chain = self._compute_chain_hash(
-                prev_chain, vote.vote_signature or ""
+        while remaining:
+            next_vote = next(
+                (
+                    v
+                    for v in remaining.values()
+                    if v.chain_hash
+                    == self._compute_chain_hash(prev_chain, v.vote_signature or "")
+                ),
+                None,
             )
-            if vote.chain_hash != expected_chain:
+            if next_vote is None:
                 chain_broken = True
-                chain_break_at = str(vote.id)
+                # Earliest unlinked vote is the best available break marker.
+                chain_break_at = str(
+                    min(
+                        remaining.values(),
+                        key=lambda v: self._ensure_utc(v.voted_at),
+                    ).id
+                )
                 break
-            prev_chain = vote.chain_hash
+            prev_chain = next_vote.chain_hash
+            del remaining[str(next_vote.id)]
 
         integrity_status = "PASS"
         if tampered:
