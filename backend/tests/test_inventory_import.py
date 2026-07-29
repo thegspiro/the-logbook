@@ -81,6 +81,7 @@ async def setup_with_category(db_session: AsyncSession, setup_org_and_user):
             "name": "Portable Radios",
             "item_type": "electronics",
         },
+        created_by=uuid.UUID(user_id),
     )
     assert err is None
     return org_id, user_id, str(cat.id)

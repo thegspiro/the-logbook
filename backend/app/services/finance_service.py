@@ -549,11 +549,18 @@ class FinanceService:
         result = await self.db.execute(
             select(ApprovalStepRecord)
             .options(selectinload(ApprovalStepRecord.step))
+            .join(
+                ApprovalChainStep,
+                ApprovalChainStep.id == ApprovalStepRecord.step_id,
+            )
             .where(
                 ApprovalStepRecord.entity_type == entity_type,
                 ApprovalStepRecord.entity_id == entity_id,
             )
-            .order_by(ApprovalStepRecord.created_at)
+            # Chain position, not created_at: records for one entity are
+            # created in the same instant, so DATETIME ties would make the
+            # "current pending step" nondeterministic.
+            .order_by(ApprovalChainStep.step_order, ApprovalStepRecord.created_at)
         )
         return list(result.scalars().all())
 

@@ -94,10 +94,10 @@ class TestElectionSetup:
                 "victory_condition, voter_anonymity_salt, quorum_type, "
                 "created_by, email_sent, results_visible_immediately, "
                 "enable_runoffs, runoff_type, max_runoff_rounds, "
-                "is_runoff, runoff_round) "
+                "is_runoff, runoff_round, created_at, updated_at) "
                 "VALUES (:id, :org, :title, :etype, :positions, "
                 ":start, :end, :status, :anon, :write_in, :max_votes, "
-                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0)"
+                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0, NOW(), NOW())"
             ),
             {
                 "id": election_id,
@@ -127,8 +127,9 @@ class TestElectionSetup:
                 text(
                     "INSERT INTO candidates "
                     "(id, election_id, user_id, name, position, "
-                    "accepted, is_write_in, display_order) "
-                    "VALUES (:id, :eid, :uid, :name, :pos, :acc, :wi, :ord)"
+                    "accepted, is_write_in, display_order, nomination_date, created_at, updated_at) "
+                    "VALUES (:id, :eid, :uid, :name, :pos, :acc, :wi, :ord, "
+                    "NOW(), NOW(), NOW())"
                 ),
                 {
                     "id": cid,

@@ -1448,6 +1448,12 @@ class TestSwapRequests:
             uuid.UUID(user_id),
         )
 
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
         swap, err = await svc.create_swap_request(
             uuid.UUID(org_id),
             uuid.UUID(user_id),
@@ -1535,6 +1541,12 @@ class TestSwapRequests:
             },
             uuid.UUID(user_id),
         )
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
         swap, _ = await svc.create_swap_request(
             uuid.UUID(org_id),
             uuid.UUID(user_id),
@@ -1564,6 +1576,12 @@ class TestSwapRequests:
                 "shift_date": today,
                 "start_time": datetime(today.year, today.month, today.day, 7, 0),
             },
+            uuid.UUID(user_id),
+        )
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user_id, "position": "firefighter"},
             uuid.UUID(user_id),
         )
         swap, _ = await svc.create_swap_request(
@@ -1605,6 +1623,12 @@ class TestSwapRequests:
             },
             uuid.UUID(user_id),
         )
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
         swap, _ = await svc.create_swap_request(
             uuid.UUID(org_id),
             uuid.UUID(user_id),
@@ -1629,6 +1653,12 @@ class TestSwapRequests:
                 "shift_date": today,
                 "start_time": datetime(today.year, today.month, today.day, 7, 0),
             },
+            uuid.UUID(user_id),
+        )
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user_id, "position": "firefighter"},
             uuid.UUID(user_id),
         )
         swap, _ = await svc.create_swap_request(
@@ -1970,31 +2000,22 @@ class TestReporting:
         svc = SchedulingService(db_session)
 
         today = date.today()
+        # The report sums SCHEDULED hours (shift start->end per assignment),
+        # so the shift needs an end_time and the member needs an assignment.
         shift, _ = await svc.create_shift(
             uuid.UUID(org_id),
             {
                 "shift_date": today,
                 "start_time": datetime(today.year, today.month, today.day, 7, 0),
+                "end_time": datetime(today.year, today.month, today.day, 19, 0),
             },
             uuid.UUID(user_id),
         )
-
-        # Add attendance with duration
-        att, _ = await svc.add_attendance(
+        await svc.create_assignment(
+            uuid.UUID(org_id),
             uuid.UUID(shift.id),
-            uuid.UUID(org_id),
-            {"user_id": user2_id},
-        )
-        check_in = datetime(
-            today.year, today.month, today.day, 7, 0, tzinfo=timezone.utc
-        )
-        check_out = datetime(
-            today.year, today.month, today.day, 19, 0, tzinfo=timezone.utc
-        )
-        await svc.update_attendance(
-            uuid.UUID(att.id),
-            uuid.UUID(org_id),
-            {"checked_in_at": check_in, "checked_out_at": check_out},
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
         )
 
         report = await svc.get_member_hours_report(uuid.UUID(org_id), today, today)

@@ -947,6 +947,7 @@ class TestCategoryUpdate:
         cat, _ = await svc.create_category(
             organization_id=uuid.UUID(org_id),
             category_data={"name": "Old Name", "item_type": "equipment"},
+            created_by=uuid.UUID(user_id),
         )
 
         updated, err = await svc.update_category(
@@ -986,6 +987,7 @@ class TestCategoryUpdate:
                 "requires_serial_number": False,
                 "requires_maintenance": False,
             },
+            created_by=uuid.UUID(user_id),
         )
 
         updated, err = await svc.update_category(
@@ -1213,7 +1215,11 @@ class TestBarcodeLabels:
             created_by=uuid.UUID(user_id),
         )
 
-        # Should not raise - should use asset_tag as barcode value
+        # create_item auto-generates a barcode; clear it to simulate a
+        # legacy item so the label path must auto-populate one.
+        item.barcode = None
+        await db_session.flush()
+
         pdf_buf, auto_pop = await svc.generate_barcode_labels(
             item_ids=[uuid.UUID(item.id)],
             organization_id=uuid.UUID(org_id),

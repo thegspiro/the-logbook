@@ -94,6 +94,7 @@ class TestCategoryManagement:
                 "requires_serial_number": True,
                 "requires_maintenance": True,
             },
+            created_by=uuid.UUID(user_id),
         )
         assert err is None
         assert cat is not None
@@ -105,12 +106,13 @@ class TestCategoryManagement:
 
     @pytest.mark.asyncio
     async def test_get_category_by_id(self, db_session, setup_org_and_user):
-        org_id, _, _ = setup_org_and_user
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
         cat, _ = await svc.create_category(
             organization_id=uuid.UUID(org_id),
             category_data={"name": "Radios", "item_type": "electronics"},
+            created_by=uuid.UUID(user_id),
         )
         fetched = await svc.get_category_by_id(uuid.UUID(cat.id), uuid.UUID(org_id))
         assert fetched is not None
@@ -284,6 +286,7 @@ class TestCategoryRequirements:
                 "item_type": "ppe",
                 "requires_serial_number": True,
             },
+            created_by=uuid.UUID(user_id),
         )
 
         item, err = await svc.create_item(
@@ -313,6 +316,7 @@ class TestCategoryRequirements:
                 "item_type": "ppe",
                 "requires_serial_number": True,
             },
+            created_by=uuid.UUID(user_id),
         )
 
         item, err = await svc.create_item(
@@ -650,6 +654,7 @@ class TestMaintenance:
                 "condition_after": "good",
                 "performed_by": user_id,
             },
+            created_by=uuid.UUID(user_id),
         )
         assert err is None
 

@@ -19,6 +19,7 @@ pytestmark = [pytest.mark.integration]
 
 from app.models.facilities import Facility, FacilityStatus, FacilityType
 from app.models.location import Location
+from app.models.user import Organization, OrganizationType
 from app.services.onboarding import OnboardingService
 
 
@@ -71,6 +72,38 @@ def _org_data(
         "email": email,
         "county": county,
     }
+
+
+async def _make_second_org(db_session, service, slug: str) -> Organization:
+    """Build an additional organization directly.
+
+    Single-instance onboarding provisions exactly ONE organization (a second
+    create_organization call is rejected by design), so isolation tests build
+    the second org via the ORM and reuse the headquarters-facility helper for
+    parity with onboarding output.
+    """
+    data = _org_data(slug=slug)
+    org = Organization(
+        id=str(uuid.uuid4()),
+        name=data["name"],
+        slug=data["slug"],
+        organization_type=OrganizationType.FIRE_DEPARTMENT,
+        timezone=data["timezone"],
+        mailing_address_line1=data["mailing_address_line1"],
+        mailing_city=data["mailing_city"],
+        mailing_state=data["mailing_state"],
+        mailing_zip=data["mailing_zip"],
+        mailing_country=data["mailing_country"],
+        physical_address_same=data["physical_address_same"],
+        phone=data["phone"],
+        email=data["email"],
+        county=data["county"],
+    )
+    db_session.add(org)
+    await db_session.flush()
+    await service._create_headquarters_facility(org)
+    await db_session.flush()
+    return org
 
 
 # ===================================================================
@@ -450,7 +483,7 @@ class TestFacilityModuleUsability:
         service = OnboardingService(db_session)
 
         org1 = await service.create_organization(**_org_data(slug=_unique_slug("a")))
-        org2 = await service.create_organization(**_org_data(slug=_unique_slug("b")))
+        org2 = await _make_second_org(db_session, service, _unique_slug("b"))
 
         loc1 = (
             await db_session.execute(
@@ -504,7 +537,7 @@ class TestOrgIsolation:
         """Facilities from one org must not appear in another org's queries."""
         service = OnboardingService(db_session)
         org1 = await service.create_organization(**_org_data(slug=_unique_slug("iso1")))
-        org2 = await service.create_organization(**_org_data(slug=_unique_slug("iso2")))
+        org2 = await _make_second_org(db_session, service, _unique_slug("iso2"))
 
         fac1 = (
             (

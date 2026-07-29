@@ -87,10 +87,10 @@ class TestTokenBallotSetup:
                 "victory_condition, voter_anonymity_salt, quorum_type, "
                 "created_by, email_sent, results_visible_immediately, "
                 "enable_runoffs, runoff_type, max_runoff_rounds, "
-                "is_runoff, runoff_round) "
+                "is_runoff, runoff_round, created_at, updated_at) "
                 "VALUES (:id, :org, :title, :etype, :items, "
                 ":start, :end, :status, :anon, :write_in, :max_votes, "
-                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0)"
+                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0, NOW(), NOW())"
             ),
             {
                 "id": election_id,
@@ -344,10 +344,10 @@ class TestPositionlessTokenVote(TestTokenBallotSetup):
                 "victory_condition, voter_anonymity_salt, quorum_type, "
                 "created_by, email_sent, results_visible_immediately, "
                 "enable_runoffs, runoff_type, max_runoff_rounds, "
-                "is_runoff, runoff_round) "
+                "is_runoff, runoff_round, created_at, updated_at) "
                 "VALUES (:id, :org, :title, :etype, "
                 ":start, :end, :status, :anon, :write_in, :max_votes, "
-                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0)"
+                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0, NOW(), NOW())"
             ),
             {
                 "id": election_id,
@@ -370,8 +370,9 @@ class TestPositionlessTokenVote(TestTokenBallotSetup):
         await db_session.execute(
             text(
                 "INSERT INTO candidates "
-                "(id, election_id, name, accepted, is_write_in, display_order) "
-                "VALUES (:id, :eid, :name, 1, 0, 0)"
+                "(id, election_id, name, accepted, is_write_in, display_order, "
+                "nomination_date, created_at, updated_at) "
+                "VALUES (:id, :eid, :name, 1, 0, 0, NOW(), NOW(), NOW())"
             ),
             {"id": candidate_id, "eid": election_id, "name": "Yes"},
         )
@@ -523,10 +524,10 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
                 "voting_method, victory_condition, voter_anonymity_salt, "
                 "quorum_type, created_by, email_sent, results_visible_immediately, "
                 "enable_runoffs, runoff_type, max_runoff_rounds, "
-                "is_runoff, runoff_round) "
+                "is_runoff, runoff_round, created_at, updated_at) "
                 "VALUES (:id, :org, :title, :etype, :positions, :pos_elig, "
                 ":start, :end, :status, :anon, :write_in, :max_votes, "
-                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0)"
+                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0, NOW(), NOW())"
             ),
             {
                 "id": election_id,
@@ -560,8 +561,9 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
                 text(
                     "INSERT INTO candidates "
                     "(id, election_id, name, position, accepted, is_write_in, "
-                    "display_order) "
-                    "VALUES (:id, :eid, :name, :pos, :acc, :wi, :ord)"
+                    "display_order, nomination_date, created_at, updated_at) "
+                    "VALUES (:id, :eid, :name, :pos, :acc, :wi, :ord, "
+                    "NOW(), NOW(), NOW())"
                 ),
                 {
                     "id": cid,
@@ -807,10 +809,10 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
                 "victory_condition, voter_anonymity_salt, quorum_type, "
                 "created_by, email_sent, results_visible_immediately, "
                 "enable_runoffs, runoff_type, max_runoff_rounds, "
-                "is_runoff, runoff_round) "
+                "is_runoff, runoff_round, created_at, updated_at) "
                 "VALUES (:id, :org, :title, :etype, :items, "
                 ":start, :end, :status, :anon, :write_in, :max_votes, "
-                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0)"
+                ":method, :victory, :salt, :quorum, :creator, 0, 0, 0, 'top_two', 3, 0, 0, NOW(), NOW())"
             ),
             {
                 "id": election_id,
@@ -836,8 +838,9 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
                 text(
                     "INSERT INTO candidates "
                     "(id, election_id, name, position, accepted, is_write_in, "
-                    "display_order) "
-                    "VALUES (:id, :eid, :name, :pos, :acc, :wi, :ord)"
+                    "display_order, nomination_date, created_at, updated_at) "
+                    "VALUES (:id, :eid, :name, :pos, :acc, :wi, :ord, "
+                    "NOW(), NOW(), NOW())"
                 ),
                 {
                     "id": cid,

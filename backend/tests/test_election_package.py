@@ -100,10 +100,10 @@ class TestPackageSetup:
                 "victory_condition, voter_anonymity_salt, quorum_type, "
                 "created_by, email_sent, results_visible_immediately, "
                 "enable_runoffs, runoff_type, max_runoff_rounds, "
-                "is_runoff, runoff_round) "
+                "is_runoff, runoff_round, created_at, updated_at) "
                 "VALUES (:id, :org, :title, :etype, :positions, "
                 ":start, :end, :status, :anon, 0, 1, "
-                "'simple_majority', 'majority', :salt, 'none', :creator, 0, 0, 0, 'top_two', 3, 0, 0)"
+                "'simple_majority', 'majority', :salt, 'none', :creator, 0, 0, 0, 'top_two', 3, 0, 0, NOW(), NOW())"
             ),
             {
                 "id": election_id,
@@ -123,7 +123,8 @@ class TestPackageSetup:
             text(
                 "INSERT INTO candidates "
                 "(id, election_id, name, position, accepted, is_write_in, "
-                "display_order) VALUES (:id, :eid, 'Jane Doe', 'Chief', 1, 0, 0)"
+                "display_order, nomination_date, created_at, updated_at) "
+                "VALUES (:id, :eid, 'Jane Doe', 'Chief', 1, 0, 0, NOW(), NOW(), NOW())"
             ),
             {"id": candidate_id, "eid": election_id},
         )

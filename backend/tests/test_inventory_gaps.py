@@ -84,6 +84,7 @@ async def _make_pool_item(svc, org_id, user_id, quantity=10):
     cat, _ = await svc.create_category(
         organization_id=uuid.UUID(org_id),
         category_data={"name": "Polos", "item_type": "uniform"},
+        created_by=uuid.UUID(user_id),
     )
     item, err = await svc.create_item(
         organization_id=uuid.UUID(org_id),

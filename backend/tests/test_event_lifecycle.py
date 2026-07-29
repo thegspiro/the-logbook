@@ -164,14 +164,14 @@ class TestEventCRUD:
             event_type="business_meeting",
         )
         assert len(meetings) == 1
-        assert meetings[0].title == "Meeting"
+        assert meetings[0]["title"] == "Meeting"
 
         trainings = await svc.list_events(
             organization_id=uuid.UUID(org_id),
             event_type="training",
         )
         assert len(trainings) == 1
-        assert trainings[0].title == "Drill"
+        assert trainings[0]["title"] == "Drill"
 
     async def test_update_event(self, db_session, setup_org_and_users):
         org_id, user_id, _ = setup_org_and_users
@@ -234,7 +234,7 @@ class TestEventCRUD:
         assert deleted is True
 
         events = await svc.list_events(organization_id=uuid.UUID(org_id))
-        assert all(e.id != event.id for e in events)
+        assert all(e["id"] != event.id for e in events)
 
     async def test_duplicate_event(self, db_session, setup_org_and_users):
         org_id, user_id, _ = setup_org_and_users
@@ -564,9 +564,12 @@ class TestEventLifecycleFlow:
                 event_type="business_meeting",
                 is_draft=True,
                 requires_rsvp=True,
-                start_datetime=now - timedelta(minutes=5),
+                # start is 20 min out: the RSVP deadline can precede start
+                # while staying in the future, and the flexible check-in
+                # window (start - 30 min) is already open.
+                start_datetime=now + timedelta(minutes=20),
                 end_datetime=now + timedelta(hours=2),
-                rsvp_deadline=now + timedelta(hours=1),
+                rsvp_deadline=now + timedelta(minutes=10),
                 check_in_window_type="flexible",
             ),
             organization_id=uuid.UUID(org_id),
@@ -576,7 +579,7 @@ class TestEventLifecycleFlow:
 
         # Draft should not appear in default listing
         default_list = await svc.list_events(organization_id=uuid.UUID(org_id))
-        assert all(e.id != event.id for e in default_list)
+        assert all(e["id"] != event.id for e in default_list)
 
         # 2. Publish
         published = await svc.publish_event(
@@ -587,7 +590,7 @@ class TestEventLifecycleFlow:
 
         # Published event should appear in default listing
         published_list = await svc.list_events(organization_id=uuid.UUID(org_id))
-        assert any(e.id == event.id for e in published_list)
+        assert any(e["id"] == event.id for e in published_list)
 
         # 3. RSVP
         rsvp1, err = await svc.create_or_update_rsvp(
@@ -607,7 +610,7 @@ class TestEventLifecycleFlow:
         )
         assert err is None
 
-        # 4. Check-in (event window is open because start is in the past)
+        # 4. Check-in (flexible window opens 30 minutes before start)
         checked_in, err = await svc.check_in_attendee(
             event_id=uuid.UUID(event.id),
             user_id=uuid.UUID(user_id),

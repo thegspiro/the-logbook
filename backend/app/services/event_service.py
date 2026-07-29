@@ -1527,6 +1527,10 @@ class EventService:
         effective_end = event.actual_end_time or event.end_datetime
         if not effective_end:
             return 0, "Event has no end time"
+        # Datetimes read straight from MySQL are naive while ones set in this
+        # session are UTC-aware; normalize before any subtraction below.
+        if effective_end.tzinfo is None:
+            effective_end = effective_end.replace(tzinfo=dt_timezone.utc)
 
         # Get all RSVPs that are checked in but have no checkout and no duration set
         rsvp_result = await self.db.execute(
@@ -1556,6 +1560,8 @@ class EventService:
             check_in_time = rsvp.override_check_in_at or rsvp.checked_in_at
             if not check_in_time:
                 continue
+            if check_in_time.tzinfo is None:
+                check_in_time = check_in_time.replace(tzinfo=dt_timezone.utc)
 
             duration_minutes = (effective_end - check_in_time).total_seconds() / 60
             duration_minutes = max(0, int(duration_minutes))
@@ -1590,6 +1596,8 @@ class EventService:
             )
             if not check_in_time or not duration or duration <= 0:
                 continue
+            if check_in_time.tzinfo is None:
+                check_in_time = check_in_time.replace(tzinfo=dt_timezone.utc)
             check_out_time = rsvp.checked_out_at or effective_end
             try:
                 await admin_hours_service.credit_event_attendance(

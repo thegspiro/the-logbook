@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Integration suites actually run — infrastructure + latent-bug fixes (2026-07-29)
+
+The first genuine CI executions of the DB-backed integration suites (never
+run anywhere before) surfaced test-infrastructure defects, schema drift, and
+four latent application bugs. Migration `20260801_0002` (new single head)
+widens two ENUM columns the model enums had outgrown.
+
+**Test infrastructure**
+
+- `conftest.db_session` now wraps every test in a connection-level
+  transaction the session joins via `join_transaction_mode="create_savepoint"`
+  — service-level `commit()` releases a savepoint instead of committing, and
+  teardown always rolls back. The old fixture committed on clean exit and let
+  service commits leak state across tests.
+- Tests and async fixtures now share the session-scoped event loop
+  (`asyncio_default_test_loop_scope = session`; pytest-asyncio 0.25 → 1.4.0,
+  pytest 8.3.4 → 8.4.2) — fixtures previously ran on the session loop while
+  tests got per-function loops, so loop-bound aiomysql connections were used
+  cross-loop (RuntimeError / NotImplementedError / closed-transaction
+  cascades).
+- Removed `await` on already-resolved async-fixture values in ten test files
+  (188 "object tuple/dict can't be used in 'await' expression" errors).
+- Raw-SQL election fixtures now supply every NOT NULL column that only has a
+  Python-side default, plus explicit timestamps (the chain-built tables have
+  no DB-level defaults for them).
+- Numerous test-vs-service drift fixes: inventory `created_by` args,
+  shift-completion signatures, scheduling swap fixtures (requester must be
+  assigned to the offered shift), finance fixture that persists a real
+  org + admin, event `list_events` dict rows, single-org onboarding rule in
+  facilities isolation tests, real `program_enrollments` row for the
+  enrollment-update test.
+
+**Latent application bugs found by the new suites**
+
+- `OrganizationService._resolve_module_settings` filtered `OnboardingStatus`
+  by a nonexistent `organization_id` column — the fallback crashed with
+  `AttributeError` whenever it executed. It now matches the singleton row by
+  recorded `organization_name` (fail closed on mismatch).
+- `FinanceService.get_approval_records` ordered by `created_at` (1-second
+  resolution — always tied for records created together), making the
+  "current pending step" nondeterministic. Now ordered by the chain's
+  `step_order`.
+- `EventService.finalize_event_attendance` subtracted naive DB datetimes
+  from aware ones; both operands are now normalized to UTC.
+- `MembershipPipelineService.get_pipeline`/`get_prospect` returned stale
+  identity-map relationship collections within a session; they now use
+  `populate_existing` so advance/complete logic sees committed steps.
+- Migration `20260801_0002`: `event_rsvps.status` lacked `waitlisted` and
+  `inventory_notification_queue.action_type` lacked `retired` in chain-built
+  databases (model enums gained values no migration ever added) — waitlist
+  RSVPs and write-off notifications failed with MySQL error 1265.
+
 ### CI restored to green + elections deferred items closed (2026-07-29)
 
 CI on `main` had been red for at least five merges (Backend Lint, Backend

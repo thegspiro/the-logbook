@@ -172,7 +172,7 @@ class TestAcknowledgement:
         )
 
         acked = await svc.acknowledge_report(
-            report.id, trainee_id, trainee_comments="Looks good"
+            report.id, trainee_id, uuid.UUID(org_id), trainee_comments="Looks good"
         )
         assert acked is not None
         assert acked.trainee_acknowledged is True
@@ -195,7 +195,7 @@ class TestAcknowledgement:
         )
 
         # Officer tries to acknowledge (wrong user)
-        result = await svc.acknowledge_report(report.id, officer_id)
+        result = await svc.acknowledge_report(report.id, officer_id, uuid.UUID(org_id))
         assert result is None
 
 
@@ -481,13 +481,15 @@ class TestCrossOrgIsolation:
             review_status="draft",
         )
 
-        with pytest.raises(ValueError, match="organization"):
-            await svc.update_report(
-                report.id,
-                uuid.UUID(d["org_b"]),
-                d["officer_a"],
-                {"hours_on_shift": 24.0},
-            )
+        # get_report is org-scoped, so a wrong-org update fails closed
+        # by returning None rather than reaching the ValueError branch.
+        result = await svc.update_report(
+            report.id,
+            uuid.UUID(d["org_b"]),
+            d["officer_a"],
+            {"hours_on_shift": 24.0},
+        )
+        assert result is None
 
     async def test_update_report_wrong_officer(self, db_session, two_orgs):
         d = two_orgs
@@ -603,15 +605,31 @@ class TestDraftLifecycle:
         )
         assert report.enrollment_id is None
 
-        fake_enrollment = _uid()
+        # enrollment_id FKs program_enrollments — persist a real enrollment
+        from app.models.training import ProgramEnrollment, TrainingProgram
+
+        program = TrainingProgram(
+            id=_uid(), organization_id=org_id, name="Probationary Program"
+        )
+        db_session.add(program)
+        await db_session.flush()
+        enrollment = ProgramEnrollment(
+            id=_uid(),
+            organization_id=org_id,
+            user_id=trainee_id,
+            program_id=program.id,
+        )
+        db_session.add(enrollment)
+        await db_session.flush()
+
         updated = await svc.update_report(
             report.id,
             uuid.UUID(org_id),
             officer_id,
-            {"enrollment_id": fake_enrollment},
+            {"enrollment_id": enrollment.id},
         )
         assert updated is not None
-        assert updated.enrollment_id == fake_enrollment
+        assert updated.enrollment_id == enrollment.id
 
 
 # ── Update Whitelist Tests ──────────────────────────────────────────
@@ -836,6 +854,7 @@ class TestBatchCrewWorkflow:
             call_types=["medical"],
             officer_narrative="Routine shift",
             crew_member_ids=[d["crew_1"], d["crew_2"]],
+            trainee_evaluations=None,
         )
         assert result["created"] == 2
         assert result["skipped"] == 0
@@ -866,6 +885,7 @@ class TestBatchCrewWorkflow:
             call_types=None,
             officer_narrative=None,
             crew_member_ids=[d["crew_1"], d["crew_2"]],
+            trainee_evaluations=None,
         )
         assert result["created"] == 1
         assert result["skipped"] == 1
