@@ -438,6 +438,7 @@ async def cast_vote_with_token(
         position=vote_data.position,
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
+        vote_rank=vote_data.vote_rank,
     )
 
     if error:

@@ -737,3 +737,324 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
         )
         assert len(tokens) == 1
         assert tokens[0].eligible_positions == ["Chief", "President"]
+
+
+# ── Method-aware token voting (R-D5) ──────────────────────────────────
+
+
+class TestMethodAwareTokenVoting(TestTokenBallotSetup):
+    """Approval multi-select, ranked rankings, and single-vote parity on
+    the token paths."""
+
+    @pytest.fixture
+    async def setup_candidate_election(self, db_session: AsyncSession):
+        """Approval-method election with one candidate-selection ballot item
+        ("Board", 3 candidates)."""
+        org_id = _uid()
+        user_id = _uid()
+        election_id = _uid()
+        cand_ids = [_uid(), _uid(), _uid()]
+        salt = secrets.token_hex(32)
+        now = datetime.now(timezone.utc)
+
+        await db_session.execute(
+            text(
+                "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
+                "VALUES (:id, :name, :otype, :slug, :tz)"
+            ),
+            {
+                "id": org_id,
+                "name": "Method FD",
+                "otype": "fire_department",
+                "slug": f"mth-{org_id[:8]}",
+                "tz": "America/New_York",
+            },
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO users "
+                "(id, organization_id, username, first_name, last_name, "
+                "email, password_hash, status) "
+                "VALUES (:id, :org, :un, :fn, :ln, :em, :pw, 'active')"
+            ),
+            {
+                "id": user_id,
+                "org": org_id,
+                "un": "methodvoter",
+                "fn": "Mia",
+                "ln": "Method",
+                "em": "methodvoter@test.com",
+                "pw": "hashed",
+            },
+        )
+
+        ballot_items = (
+            '[{"id": "board", "type": "officer_election", "title": "Board Seats", '
+            '"eligible_voter_types": ["all"], "vote_type": "candidate_selection", '
+            '"position": "Board"}]'
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO elections "
+                "(id, organization_id, title, election_type, ballot_items, "
+                "start_date, end_date, status, anonymous_voting, "
+                "allow_write_ins, max_votes_per_position, voting_method, "
+                "victory_condition, voter_anonymity_salt, quorum_type, "
+                "created_by) "
+                "VALUES (:id, :org, :title, :etype, :items, "
+                ":start, :end, :status, :anon, :write_in, :max_votes, "
+                ":method, :victory, :salt, :quorum, :creator)"
+            ),
+            {
+                "id": election_id,
+                "org": org_id,
+                "title": "Board Election 2026",
+                "etype": "officer",
+                "items": ballot_items,
+                "start": now - timedelta(days=1),
+                "end": now + timedelta(days=1),
+                "status": "open",
+                "anon": True,
+                "write_in": False,
+                "max_votes": 1,
+                "method": "approval",
+                "victory": "most_votes",
+                "salt": salt,
+                "quorum": "none",
+                "creator": user_id,
+            },
+        )
+        for i, cid in enumerate(cand_ids):
+            await db_session.execute(
+                text(
+                    "INSERT INTO candidates "
+                    "(id, election_id, name, position, accepted, is_write_in, "
+                    "display_order) "
+                    "VALUES (:id, :eid, :name, :pos, :acc, :wi, :ord)"
+                ),
+                {
+                    "id": cid,
+                    "eid": election_id,
+                    "name": f"Board Candidate {i + 1}",
+                    "pos": "Board",
+                    "acc": True,
+                    "wi": False,
+                    "ord": i,
+                },
+            )
+        await db_session.flush()
+
+        return {
+            "org_id": org_id,
+            "user_id": user_id,
+            "election_id": election_id,
+            "cand_ids": cand_ids,
+            "salt": salt,
+        }
+
+    async def _set_method(self, db_session, election_id: str, method: str):
+        await db_session.execute(
+            text("UPDATE elections SET voting_method = :m WHERE id = :id"),
+            {"m": method, "id": election_id},
+        )
+        await db_session.flush()
+
+    async def test_bulk_approval_multi_select_creates_one_vote_per_candidate(
+        self, db_session: AsyncSession, setup_candidate_election
+    ):
+        data = await setup_candidate_election
+        _, raw = await self._issue_token(db_session, data)
+        svc = ElectionService(db_session)
+
+        result, err = await svc.submit_ballot_with_token(
+            token=raw,
+            votes=[{"ballot_item_id": "board", "candidate_ids": data["cand_ids"][:2]}],
+        )
+        assert err is None, f"Approval multi-select failed: {err}"
+        assert result["votes_cast"] == 2
+        assert len(result["receipt_hashes"]) == 2
+        assert len(set(result["receipt_hashes"])) == 2
+
+        from app.models.election import Vote
+
+        votes = (
+            (
+                await db_session.execute(
+                    select(Vote).where(Vote.election_id == data["election_id"])
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(votes) == 2
+        assert len({v.vote_dedup_hash for v in votes}) == 2
+
+    async def test_bulk_rankings_create_ranked_votes(
+        self, db_session: AsyncSession, setup_candidate_election
+    ):
+        data = await setup_candidate_election
+        await self._set_method(db_session, data["election_id"], "ranked_choice")
+        _, raw = await self._issue_token(db_session, data)
+        svc = ElectionService(db_session)
+
+        ordered = [data["cand_ids"][2], data["cand_ids"][0]]
+        result, err = await svc.submit_ballot_with_token(
+            token=raw,
+            votes=[{"ballot_item_id": "board", "rankings": ordered}],
+        )
+        assert err is None, f"Ranked submission failed: {err}"
+        assert result["votes_cast"] == 2
+
+        from app.models.election import Vote
+
+        votes = (
+            (
+                await db_session.execute(
+                    select(Vote)
+                    .where(Vote.election_id == data["election_id"])
+                    .order_by(Vote.vote_rank)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert [(str(v.candidate_id), v.vote_rank) for v in votes] == [
+            (ordered[0], 1),
+            (ordered[1], 2),
+        ]
+
+    async def test_bulk_rankings_rejected_for_non_ranked_method(
+        self, db_session: AsyncSession, setup_candidate_election
+    ):
+        data = await setup_candidate_election  # approval method
+        _, raw = await self._issue_token(db_session, data)
+        svc = ElectionService(db_session)
+
+        result, err = await svc.submit_ballot_with_token(
+            token=raw,
+            votes=[{"ballot_item_id": "board", "rankings": data["cand_ids"][:2]}],
+        )
+        assert result is None
+        assert "Ranked votes are not accepted" in err
+
+    async def test_bulk_multi_select_over_cap_rejected(
+        self, db_session: AsyncSession, setup_candidate_election
+    ):
+        data = await setup_candidate_election
+        # simple_majority with max 2 selections per position
+        await self._set_method(db_session, data["election_id"], "simple_majority")
+        await db_session.execute(
+            text("UPDATE elections SET max_votes_per_position = 2 WHERE id = :id"),
+            {"id": data["election_id"]},
+        )
+        await db_session.flush()
+        _, raw = await self._issue_token(db_session, data)
+        svc = ElectionService(db_session)
+
+        result, err = await svc.submit_ballot_with_token(
+            token=raw,
+            votes=[{"ballot_item_id": "board", "candidate_ids": data["cand_ids"]}],
+        )
+        assert result is None
+        assert "Too many selections" in err
+
+    async def test_single_token_endpoint_ranked_requires_rank(
+        self, db_session: AsyncSession, setup_candidate_election
+    ):
+        data = await setup_candidate_election
+        await self._set_method(db_session, data["election_id"], "ranked_choice")
+        _, raw = await self._issue_token(db_session, data)
+        svc = ElectionService(db_session)
+
+        vote, err = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_ids"][0]),
+            position="Board",
+        )
+        assert vote is None
+        assert err == "vote_rank is required for ranked-choice voting"
+
+    async def test_single_token_endpoint_ranked_flow(
+        self, db_session: AsyncSession, setup_candidate_election
+    ):
+        data = await setup_candidate_election
+        await self._set_method(db_session, data["election_id"], "ranked_choice")
+        _, raw = await self._issue_token(db_session, data)
+        svc = ElectionService(db_session)
+
+        v1, err1 = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_ids"][0]),
+            position="Board",
+            vote_rank=1,
+        )
+        assert err1 is None
+        assert v1.vote_rank == 1
+
+        # Same rank again → rejected
+        _, err2 = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_ids"][1]),
+            position="Board",
+            vote_rank=1,
+        )
+        assert "rank-1" in err2
+
+        # Same candidate at a new rank → rejected
+        _, err3 = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_ids"][0]),
+            position="Board",
+            vote_rank=2,
+        )
+        assert err3 == "You have already ranked this candidate"
+
+        # Different candidate at rank 2 → accepted
+        v4, err4 = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_ids"][1]),
+            position="Board",
+            vote_rank=2,
+        )
+        assert err4 is None
+        assert v4.vote_rank == 2
+
+    async def test_single_token_endpoint_approval_multiple_candidates(
+        self, db_session: AsyncSession, setup_candidate_election
+    ):
+        from app.models.election import VotingToken
+
+        data = await setup_candidate_election  # approval method
+        token_row, raw = await self._issue_token(db_session, data)
+        svc = ElectionService(db_session)
+
+        v1, err1 = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_ids"][0]),
+            position="Board",
+        )
+        assert err1 is None
+
+        # The token must remain usable for further approval votes
+        refreshed = (
+            await db_session.execute(
+                select(VotingToken).where(VotingToken.id == token_row.id)
+            )
+        ).scalar_one()
+        assert refreshed.used is False
+
+        # Same candidate again → rejected
+        _, err2 = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_ids"][0]),
+            position="Board",
+        )
+        assert err2 == "You have already voted for this candidate"
+
+        # A second candidate → accepted
+        _, err3 = await svc.cast_vote_with_token(
+            token=raw,
+            candidate_id=uuid.UUID(data["cand_ids"][1]),
+            position="Board",
+        )
+        assert err3 is None

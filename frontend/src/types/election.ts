@@ -108,6 +108,7 @@ export interface BallotElection {
   ballot_items?: BallotItem[];
   allow_write_ins: boolean;
   voting_method: VotingMethod;
+  max_votes_per_position: number;
 }
 
 export interface ElectionListItem {
@@ -470,7 +471,10 @@ export interface BallotTemplate {
 
 export interface BallotItemVote {
   ballot_item_id: string;
-  choice: string; // 'approve', 'deny', 'abstain', 'write_in', or a candidate UUID
+  // Exactly one selection form per item; none at all = abstain.
+  choice?: string | undefined; // 'approve', 'deny', 'abstain', 'write_in', or a candidate UUID
+  candidate_ids?: string[] | undefined; // multi-select (approval / multi-vote items)
+  rankings?: string[] | undefined; // ordered candidate ids, index 0 = rank 1 (ranked choice)
   write_in_name?: string | undefined;
 }
 

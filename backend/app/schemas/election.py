@@ -8,7 +8,14 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.schemas.base import UTCResponseBase
 
@@ -378,6 +385,7 @@ class BallotElectionResponse(UTCResponseBase):
     ballot_items: Optional[List[BallotItem]] = None
     allow_write_ins: bool = False
     voting_method: str = "simple_majority"
+    max_votes_per_position: int = 1
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -756,13 +764,62 @@ class BallotTemplatesResponse(BaseModel):
 
 
 class BallotItemVote(BaseModel):
-    """A single vote within a ballot submission"""
+    """A single vote within a ballot submission.
+
+    Exactly one selection form may be used per item:
+    - ``choice`` — the single-selection form (yes/no items, single-winner
+      candidate items, write-ins). Kept required-compatible for existing
+      clients.
+    - ``candidate_ids`` — multi-select for approval / multi-vote items.
+    - ``rankings`` — ordered candidate ids for ranked-choice items
+      (index 0 = rank 1).
+    Sending none of the three counts as an abstention.
+    """
 
     ballot_item_id: str = Field(..., description="ID of the ballot item being voted on")
-    choice: str = Field(
-        ..., description="'approve', 'deny', 'abstain', 'write_in', or a candidate UUID"
+    choice: Optional[str] = Field(
+        None,
+        description="'approve', 'deny', 'abstain', 'write_in', or a candidate UUID",
+    )
+    candidate_ids: Optional[List[str]] = Field(
+        None,
+        description="Multi-select candidate ids (approval / multi-vote items)",
+    )
+    rankings: Optional[List[str]] = Field(
+        None,
+        description="Ordered candidate ids, index 0 = rank 1 (ranked choice)",
     )
     write_in_name: Optional[str] = Field(None, description="Name for write-in votes")
+
+    @model_validator(mode="after")
+    def validate_selection(self) -> "BallotItemVote":
+        forms = [
+            self.choice is not None,
+            self.candidate_ids is not None,
+            self.rankings is not None,
+        ]
+        if sum(forms) > 1:
+            raise ValueError(
+                "Use only one of choice, candidate_ids, or rankings per item"
+            )
+        for label, ids in (
+            ("candidate_ids", self.candidate_ids),
+            ("rankings", self.rankings),
+        ):
+            if ids is None:
+                continue
+            if not ids:
+                raise ValueError(f"{label} must not be empty when provided")
+            if len(ids) > 50:
+                raise ValueError(f"{label} cannot exceed 50 entries")
+            if len(set(ids)) != len(ids):
+                raise ValueError(f"{label} contains duplicate candidates")
+            for cid in ids:
+                try:
+                    UUID(cid)
+                except (ValueError, TypeError):
+                    raise ValueError(f"{label} entries must be candidate UUIDs")
+        return self
 
 
 class BallotSubmission(BaseModel):

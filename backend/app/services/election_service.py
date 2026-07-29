@@ -4803,6 +4803,7 @@ Best regards,
         position: Optional[str],
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
+        vote_rank: Optional[int] = None,
     ) -> Tuple[Optional[Vote], Optional[str]]:
         """
         Cast a vote using a voting token
@@ -4814,6 +4815,12 @@ Best regards,
 
         if error:
             return None, error
+
+        # Validate vote_rank matches the voting method (parity with cast_vote)
+        if election.voting_method == "ranked_choice" and vote_rank is None:
+            return None, "vote_rank is required for ranked-choice voting"
+        if election.voting_method != "ranked_choice" and vote_rank is not None:
+            return None, "vote_rank is not applicable for this voting method"
 
         # Verify candidate exists and belongs to this election
         candidate_result = await self.db.execute(
@@ -4850,8 +4857,11 @@ Best regards,
                 else "You are not eligible to vote in this election"
             )
 
-        # Check if this token has already voted for this position.
-        # For a positionless vote, match only other positionless votes —
+        # Method-aware duplicate and limit checks — the token-path mirror of
+        # cast_vote's rules (R-D5): approval records one vote per approved
+        # candidate and ranked choice one per rank, so a blanket "already
+        # voted for this position" rule would reject every legitimate second
+        # vote. For a positionless vote, match only other positionless votes —
         # `Vote.position == None if position is None` would otherwise degrade
         # to a no-op filter and any prior vote (for any position) would block.
         # Match is_test so a manager's test ballot never consumes their real
@@ -4864,14 +4874,31 @@ Best regards,
             .where(Vote.deleted_at.is_(None))
             .where(Vote.position == position if position else Vote.position.is_(None))
         )
-        existing_votes = existing_votes_result.scalars().all()
+        position_votes = existing_votes_result.scalars().all()
 
-        if existing_votes:
-            return None, (
-                f"You have already voted for {position}"
-                if position
-                else "You have already voted"
-            )
+        if election.voting_method == "ranked_choice":
+            if any(v.vote_rank == vote_rank for v in position_votes):
+                return None, (
+                    f"You have already cast a rank-{vote_rank} vote"
+                    + (f" for {position}" if position else "")
+                )
+            if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
+                return None, "You have already ranked this candidate"
+        elif election.voting_method == "approval":
+            if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
+                return None, "You have already voted for this candidate"
+        else:
+            max_votes = election.max_votes_per_position or 1
+            if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
+                return None, "You have already voted for this candidate"
+            if len(position_votes) >= max_votes:
+                if position:
+                    if max_votes == 1:
+                        return None, f"You have already voted for {position}"
+                    return None, f"Maximum votes for {position} reached"
+                if max_votes == 1:
+                    return None, "You have already voted"
+                return None, "Maximum votes for this election reached"
 
         # Create the vote with security hashes. Test-ballot tokens produce
         # is_test votes (excluded from results) and use a namespaced dedup
@@ -4887,12 +4914,18 @@ Best regards,
             voter_id=None,  # Anonymous - not stored
             voter_hash=voting_token.voter_hash,
             position=position,
+            vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
             voted_at=datetime.now(timezone.utc),
             is_test=voting_token.is_test,
             vote_dedup_hash=self._compute_vote_dedup_hash(
-                election.id, dedup_voter, position
+                election.id,
+                dedup_voter,
+                position,
+                discriminator=self._dedup_discriminator(
+                    election, candidate_id, vote_rank
+                ),
             ),
         )
 
@@ -4922,21 +4955,31 @@ Best regards,
         # or if it's a single-position election. A position-restricted token
         # is complete once its *eligible* positions are covered — measuring
         # against election.positions would leave it forever un-used.
+        # Multi-vote methods (approval / ranked / max_votes>1) legitimately
+        # cast several votes through this endpoint, and "every slot filled"
+        # isn't knowable per-vote — there the bulk ballot endpoint remains
+        # the atomic used=True path, and get_ballot_by_token's used check
+        # stays the backstop against wholesale re-submission.
+        multi_vote_method = (
+            election.voting_method in ("ranked_choice", "approval")
+            or (election.max_votes_per_position or 1) > 1
+        )
         election_positions = (
             voting_token.eligible_positions
             if voting_token.eligible_positions is not None
             else (election.positions or [])
         )
-        if not election_positions:
-            # Single-position election — token used after first vote
-            voting_token.used = True
-            voting_token.used_at = datetime.now(timezone.utc)
-        else:
-            # Multi-position — check if all positions are now covered
-            remaining = set(election_positions) - set(positions_voted)
-            if not remaining:
+        if not multi_vote_method:
+            if not election_positions:
+                # Single-position election — token used after first vote
                 voting_token.used = True
                 voting_token.used_at = datetime.now(timezone.utc)
+            else:
+                # Multi-position — check if all positions are now covered
+                remaining = set(election_positions) - set(positions_voted)
+                if not remaining:
+                    voting_token.used = True
+                    voting_token.used_at = datetime.now(timezone.utc)
 
         # SECURITY: Database-level unique constraint on vote_dedup_hash
         # prevents double-voting even if race condition bypasses application checks
@@ -4992,10 +5035,14 @@ Best regards,
         """
         Submit an entire ballot atomically using a voting token.
 
-        Each vote in the list corresponds to a ballot item and contains:
-        - ballot_item_id: ID of the ballot item
-        - choice: 'approve', 'deny', 'abstain', 'write_in', or a candidate UUID
-        - write_in_name: Name for write-in votes (only when choice='write_in')
+        Each vote in the list corresponds to a ballot item and contains
+        exactly one selection form (none at all = abstain):
+        - choice: 'approve', 'deny', 'abstain', 'write_in', or a candidate
+          UUID (single-selection items; write_in_name required for write-ins)
+        - candidate_ids: multi-select candidate UUIDs for approval /
+          multi-vote items (R-D5)
+        - rankings: ordered candidate UUIDs for ranked-choice items,
+          index 0 = rank 1 (R-D5)
 
         Returns: (result_dict, error_message)
         """
@@ -5039,9 +5086,54 @@ Best regards,
         created_votes = []
         abstentions = 0
 
+        # Test-ballot tokens produce is_test votes and a namespaced dedup
+        # input so a test submission never blocks the same member's real
+        # ballot.
+        dedup_voter = (
+            f"test:{voting_token.voter_hash}"
+            if voting_token.is_test
+            else voting_token.voter_hash
+        )
+
+        def _create_token_vote(
+            cand_id, vote_position: str, rank: Optional[int], discriminator: str
+        ) -> Vote:
+            """Build/sign/chain one Vote row and append it to created_votes."""
+            new_vote = Vote(
+                election_id=election.id,
+                candidate_id=cand_id,
+                voter_id=None,
+                voter_hash=voting_token.voter_hash,
+                position=vote_position,
+                vote_rank=rank,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                voted_at=datetime.now(timezone.utc),
+                is_test=voting_token.is_test,
+                vote_dedup_hash=self._compute_vote_dedup_hash(
+                    election.id,
+                    dedup_voter,
+                    vote_position,
+                    discriminator=discriminator,
+                ),
+            )
+            new_vote.vote_signature = self._sign_vote(new_vote)
+            new_vote.chain_hash = self._compute_chain_hash(
+                election.last_chain_hash, new_vote.vote_signature
+            )
+            new_vote.receipt_hash = self._compute_receipt_hash(
+                str(new_vote.id), new_vote.vote_signature
+            )
+            election.last_chain_hash = new_vote.chain_hash
+            self.db.add(new_vote)
+            created_votes.append(new_vote)
+            return new_vote
+
         for vote_data in votes:
             ballot_item_id = vote_data.get("ballot_item_id")
-            choice = vote_data.get("choice", "abstain")
+            choice = vote_data.get("choice")
+            candidate_ids = vote_data.get("candidate_ids")
+            rankings = vote_data.get("rankings")
             write_in_name = vote_data.get("write_in_name")
 
             # Validate ballot item exists
@@ -5049,8 +5141,11 @@ Best regards,
             if not ballot_item:
                 continue
 
-            # Handle abstain — no vote recorded
-            if choice == "abstain":
+            # Handle abstain — no vote recorded. No selection at all counts
+            # as an abstention too (the schema allows omitting all forms).
+            if choice == "abstain" or (
+                choice is None and not candidate_ids and not rankings
+            ):
                 abstentions += 1
                 continue
 
@@ -5083,6 +5178,53 @@ Best regards,
                     None,
                     f"You have already voted on: {ballot_item.get('title', ballot_item_id)}",
                 )
+
+            # Items may override the election-level voting method; the
+            # multi-select / ranked payload forms are only accepted where the
+            # effective method calls for them (R-D5).
+            effective_method = (
+                ballot_item.get("voting_method") or election.voting_method
+            )
+            item_title = ballot_item.get("title", ballot_item_id)
+
+            if rankings is not None:
+                if effective_method != "ranked_choice":
+                    return (
+                        None,
+                        f"Ranked votes are not accepted for: {item_title}",
+                    )
+                for idx, cid in enumerate(rankings):
+                    ranked_candidate = candidate_map.get(cid)
+                    if not ranked_candidate or ranked_candidate.position != position:
+                        return (
+                            None,
+                            f"Invalid candidate selection for: {item_title}",
+                        )
+                    rank = idx + 1
+                    _create_token_vote(UUID(cid), position, rank, f"rank:{rank}")
+                continue
+
+            if candidate_ids is not None:
+                max_votes = election.max_votes_per_position or 1
+                if effective_method != "approval" and max_votes <= 1:
+                    return (
+                        None,
+                        f"Multiple selections are not accepted for: {item_title}",
+                    )
+                if effective_method != "approval" and len(candidate_ids) > max_votes:
+                    return (
+                        None,
+                        f"Too many selections for: {item_title} (max {max_votes})",
+                    )
+                for cid in candidate_ids:
+                    multi_candidate = candidate_map.get(cid)
+                    if not multi_candidate or multi_candidate.position != position:
+                        return (
+                            None,
+                            f"Invalid candidate selection for: {item_title}",
+                        )
+                    _create_token_vote(UUID(cid), position, None, f"cand:{cid}")
+                continue
 
             # Determine candidate_id based on choice
             candidate_id = None
@@ -5170,44 +5312,20 @@ Best regards,
             if write_in_name and choice == "write_in":
                 write_in_candidate.name = html.escape(write_in_name.strip())
 
-            # Create the vote with security hashes. Test-ballot tokens produce
-            # is_test votes and a namespaced dedup input so a test submission
-            # never blocks the same member's real ballot.
-            dedup_voter = (
-                f"test:{voting_token.voter_hash}"
-                if voting_token.is_test
-                else voting_token.voter_hash
-            )
-            vote = Vote(
-                election_id=election.id,
-                candidate_id=candidate_id,
-                voter_id=None,
-                voter_hash=voting_token.voter_hash,
-                position=position,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                voted_at=datetime.now(timezone.utc),
-                is_test=voting_token.is_test,
-                vote_dedup_hash=self._compute_vote_dedup_hash(
-                    election.id, dedup_voter, position
-                ),
-            )
-            vote.vote_signature = self._sign_vote(vote)
-            vote.chain_hash = self._compute_chain_hash(
-                election.last_chain_hash, vote.vote_signature
-            )
-            vote.receipt_hash = self._compute_receipt_hash(
-                str(vote.id), vote.vote_signature
-            )
-            election.last_chain_hash = vote.chain_hash
-            self.db.add(vote)
-            created_votes.append(vote)
+            # Single-selection path — discriminator stays "" so dedup hashes
+            # remain byte-identical with rows written before the multi-select
+            # forms existed (the per-position pre-check above is the dedup).
+            _create_token_vote(candidate_id, position, None, "")
 
         # Mark token as fully used
         voting_token.used = True
         voting_token.used_at = datetime.now(timezone.utc)
         voting_token.positions_voted = [
-            v.get("ballot_item_id") for v in votes if v.get("choice") != "abstain"
+            v.get("ballot_item_id")
+            for v in votes
+            if v.get("choice") not in (None, "abstain")
+            or v.get("candidate_ids")
+            or v.get("rankings")
         ]
 
         # Commit all votes atomically
