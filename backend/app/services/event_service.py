@@ -811,7 +811,12 @@ class EventService:
             if existing_rsvp:
                 capacity_query = capacity_query.where(EventRSVP.id != existing_rsvp.id)
 
-            going_count_result = await self.db.execute(capacity_query)
+            # no_autoflush: the new RSVP was just add()ed as "going", and a
+            # Query-invoked autoflush would insert it before the count runs —
+            # the row would count itself, waitlisting the Nth attendee
+            # instead of the (N+1)th.
+            with self.db.no_autoflush:
+                going_count_result = await self.db.execute(capacity_query)
             going_count = going_count_result.scalar() or 0
 
             if going_count >= event.max_attendees:

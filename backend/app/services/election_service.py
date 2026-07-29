@@ -1001,8 +1001,12 @@ class ElectionService:
         )
         voter_id_or_hash = voter_hash or str(user_id)
 
-        # Create the vote
+        # Create the vote. The id must exist BEFORE _sign_vote /
+        # _compute_receipt_hash run — signatures cover the id, and the ORM
+        # column default only fires at flush (signing id=None made every
+        # vote fail later verification).
         vote = Vote(
+            id=str(uuid4()),
             election_id=election_id,
             candidate_id=candidate_id,
             voter_id=user_id if not election.anonymous_voting else None,
@@ -1011,7 +1015,7 @@ class ElectionService:
             vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
-            voted_at=datetime.now(timezone.utc),
+            voted_at=datetime.now(timezone.utc).replace(microsecond=0),
             # MySQL-compatible dedup hash for DB-level double-vote prevention
             vote_dedup_hash=self._compute_vote_dedup_hash(
                 election_id,
@@ -1242,12 +1246,23 @@ class ElectionService:
         converting a proxy vote) will produce a different signature.
         """
         signing_key = self._get_vote_signing_key()
-        # Include vote_rank for ranked-choice integrity and proxy fields
+        # Include vote_rank for ranked-choice integrity and proxy fields.
+        # voted_at must be canonicalized to a round-trip-stable form: MySQL
+        # DATETIME has second precision and returns naive values, so the raw
+        # isoformat() of the aware, microsecond-bearing write-time datetime
+        # would never match after reload (every vote would read as tampered).
+        # Vote creation zeroes microseconds so second-precision UTC is exact.
+        voted_at = self._ensure_utc(vote.voted_at)
+        voted_at_canon = (
+            voted_at.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%S")
+            if voted_at
+            else None
+        )
         data = (
             f"{vote.id}:{vote.election_id}:{vote.candidate_id}"
             f":{vote.voter_hash or vote.voter_id}:{vote.position}"
             f":{vote.vote_rank}:{vote.is_proxy_vote}"
-            f":{vote.proxy_delegating_user_id}:{vote.voted_at.isoformat()}"
+            f":{vote.proxy_delegating_user_id}:{voted_at_canon}"
         )
         return hmac.new(
             key=signing_key.encode(),
@@ -1299,7 +1314,7 @@ class ElectionService:
         chain_break_at = None
         sorted_votes = sorted(
             [v for v in all_votes if v.chain_hash],
-            key=lambda v: v.voted_at,
+            key=lambda v: self._ensure_utc(v.voted_at),
         )
         prev_chain = "GENESIS"
         for vote in sorted_votes:
@@ -2238,7 +2253,7 @@ class ElectionService:
         runoff_end = runoff_start + timedelta(days=1)  # 1 day duration by default
 
         runoff_election = Election(
-            id=uuid4(),
+            id=str(uuid4()),
             organization_id=organization_id,
             created_by=election.created_by,
             status=ElectionStatus.DRAFT,
@@ -2280,7 +2295,7 @@ class ElectionService:
         # Create candidates for runoff
         for candidate in advancing_candidates:
             runoff_candidate = Candidate(
-                id=uuid4(),
+                id=str(uuid4()),
                 election_id=runoff_election.id,
                 user_id=candidate.user_id,
                 name=candidate.name,
@@ -3087,9 +3102,9 @@ Best regards,
         expires_at = min(end_for_expiry, max_expiry) if end_for_expiry else max_expiry
 
         voting_token = VotingToken(
-            id=uuid4(),
-            organization_id=organization_id,
-            election_id=election_id,
+            id=str(uuid4()),
+            organization_id=str(organization_id),
+            election_id=str(election_id),
             token=token,
             voter_hash=voter_hash,
             created_at=datetime.now(timezone.utc),
@@ -3419,8 +3434,10 @@ Best regards,
         )
         voter_id_or_hash = voter_hash or str(delegating_user_id)
 
-        # Create the vote as the delegating member, with proxy metadata
+        # Create the vote as the delegating member, with proxy metadata.
+        # Explicit id: signatures cover it and are computed pre-flush.
         vote = Vote(
+            id=str(uuid4()),
             election_id=election_id,
             candidate_id=candidate_id,
             voter_id=delegating_user_id if not election.anonymous_voting else None,
@@ -3429,7 +3446,7 @@ Best regards,
             vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
-            voted_at=datetime.now(timezone.utc),
+            voted_at=datetime.now(timezone.utc).replace(microsecond=0),
             is_proxy_vote=True,
             proxy_voter_id=str(proxy_user_id),
             proxy_authorization_id=proxy_authorization_id,
@@ -4911,6 +4928,8 @@ Best regards,
             else voting_token.voter_hash
         )
         vote = Vote(
+            # Explicit id: signatures cover it and are computed pre-flush.
+            id=str(uuid4()),
             election_id=election.id,
             candidate_id=candidate_id,
             voter_id=None,  # Anonymous - not stored
@@ -4919,7 +4938,7 @@ Best regards,
             vote_rank=vote_rank,
             ip_address=ip_address,
             user_agent=user_agent,
-            voted_at=datetime.now(timezone.utc),
+            voted_at=datetime.now(timezone.utc).replace(microsecond=0),
             is_test=voting_token.is_test,
             vote_dedup_hash=self._compute_vote_dedup_hash(
                 election.id,
@@ -5102,6 +5121,8 @@ Best regards,
         ) -> Vote:
             """Build/sign/chain one Vote row and append it to created_votes."""
             new_vote = Vote(
+                # Explicit id: signatures cover it, computed pre-flush.
+                id=str(uuid4()),
                 election_id=election.id,
                 candidate_id=cand_id,
                 voter_id=None,
@@ -5110,7 +5131,7 @@ Best regards,
                 vote_rank=rank,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                voted_at=datetime.now(timezone.utc),
+                voted_at=datetime.now(timezone.utc).replace(microsecond=0),
                 is_test=voting_token.is_test,
                 vote_dedup_hash=self._compute_vote_dedup_hash(
                     election.id,

@@ -681,7 +681,7 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
 
         refreshed = (
             await db_session.execute(
-                select(VotingToken).where(VotingToken.id == token_row.id)
+                select(VotingToken).where(VotingToken.token == token_row.token)
             )
         ).scalar_one()
         assert refreshed.used is True
@@ -1048,7 +1048,7 @@ class TestMethodAwareTokenVoting(TestTokenBallotSetup):
         # The token must remain usable for further approval votes
         refreshed = (
             await db_session.execute(
-                select(VotingToken).where(VotingToken.id == token_row.id)
+                select(VotingToken).where(VotingToken.token == token_row.token)
             )
         ).scalar_one()
         assert refreshed.used is False

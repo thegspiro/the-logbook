@@ -39,6 +39,32 @@ widens two ENUM columns the model enums had outgrown.
   facilities isolation tests, real `program_enrollments` row for the
   enrollment-update test.
 
+**Round 4 — election integrity was cryptographically broken (never detectable until now)**
+
+- `verify_vote_integrity` could never pass on real data, for two independent
+  reasons, both invisible to mocked unit tests: (1) vote signatures were
+  computed **before flush**, covering `id=None`, while verification recomputes
+  them with the real id; (2) signatures covered `voted_at.isoformat()` of an
+  aware, microsecond-bearing datetime that MySQL DATETIME stores at second
+  precision and returns naive. Votes now carry an explicit id from
+  construction, `voted_at` is second-precision UTC, and the signature
+  canonicalizes the timestamp. Signatures written before this change will
+  still fail verification — they always did.
+- The audit log's hash chain failed verification for roughly half of all
+  rows: the hash input zeroed microseconds but the stored DATETIME(0)
+  **rounds** them, so a row written at :12.7s verified against :13. The
+  stored timestamp is now second-precision from the start.
+- `event_rsvps` capacity check counted the RSVP being created (Query-invoked
+  autoflush), waitlisting the Nth attendee instead of the (N+1)th.
+- Migration `20260801_0003` (new single head) adds the
+  `DEFAULT CURRENT_TIMESTAMP` DDL the election models declare but the chain
+  never created — without it every service-created row (runoff elections,
+  runoff candidates, votes, tokens) failed with MySQL error 1364.
+- Normalized UUID-object binds against `String(36)` columns to strings
+  (`get_categories`, election token/runoff constructors) — the codebase
+  convention, and the empirical fix for by-org/by-id lookups returning
+  empty on the CI driver stack.
+
 **Latent application bugs found by the new suites**
 
 - `OrganizationService._resolve_module_settings` filtered `OnboardingStatus`

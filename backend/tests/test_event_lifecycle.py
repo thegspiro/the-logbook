@@ -164,14 +164,14 @@ class TestEventCRUD:
             event_type="business_meeting",
         )
         assert len(meetings) == 1
-        assert meetings[0]["title"] == "Meeting"
+        assert meetings[0]["event"].title == "Meeting"
 
         trainings = await svc.list_events(
             organization_id=uuid.UUID(org_id),
             event_type="training",
         )
         assert len(trainings) == 1
-        assert trainings[0]["title"] == "Drill"
+        assert trainings[0]["event"].title == "Drill"
 
     async def test_update_event(self, db_session, setup_org_and_users):
         org_id, user_id, _ = setup_org_and_users
@@ -234,7 +234,7 @@ class TestEventCRUD:
         assert deleted is True
 
         events = await svc.list_events(organization_id=uuid.UUID(org_id))
-        assert all(e["id"] != event.id for e in events)
+        assert all(e["event"].id != event.id for e in events)
 
     async def test_duplicate_event(self, db_session, setup_org_and_users):
         org_id, user_id, _ = setup_org_and_users
@@ -579,7 +579,7 @@ class TestEventLifecycleFlow:
 
         # Draft should not appear in default listing
         default_list = await svc.list_events(organization_id=uuid.UUID(org_id))
-        assert all(e["id"] != event.id for e in default_list)
+        assert all(e["event"].id != event.id for e in default_list)
 
         # 2. Publish
         published = await svc.publish_event(
@@ -590,7 +590,7 @@ class TestEventLifecycleFlow:
 
         # Published event should appear in default listing
         published_list = await svc.list_events(organization_id=uuid.UUID(org_id))
-        assert any(e["id"] == event.id for e in published_list)
+        assert any(e["event"].id == event.id for e in published_list)
 
         # 3. RSVP
         rsvp1, err = await svc.create_or_update_rsvp(
