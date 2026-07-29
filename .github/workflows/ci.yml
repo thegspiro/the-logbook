@@ -211,9 +211,14 @@ jobs:
           PYEOF
 
       - name: Run integration tests
+        # docker-marked tests build production images (minutes each — far
+        # past the 30s per-test timeout) and belong to a dedicated
+        # docker-capable pipeline, not the MySQL/Redis service job. Their
+        # 30s SIGALRM interrupts also wedge the shared session event loop,
+        # cascading setup timeouts into every DB-backed test after them.
         run: |
           pytest tests/ \
-            -m "integration" \
+            -m "integration and not docker and not slow" \
             -v --tb=short
 
   # ──────────────────────────────────────────────
