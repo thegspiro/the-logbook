@@ -348,6 +348,9 @@ class TestRollFreeze(EnhancementSetup):
             },
         )
         await db_session.flush()
+        # The raw UPDATE bypasses the ORM — expire the identity map so the
+        # service re-reads voter_overrides from the database.
+        db_session.expire_all()
 
         eligibility = await svc.check_voter_eligibility(
             uuid.UUID(newcomer), uuid.UUID(election_id), uuid.UUID(org_id)
