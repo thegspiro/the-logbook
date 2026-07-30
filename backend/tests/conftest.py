@@ -5,11 +5,19 @@ This module provides pytest fixtures and configuration for all tests.
 It sets up test database, async sessions, and common test data.
 """
 
+import os
 from collections.abc import AsyncGenerator
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import configure_mappers
+
+# PyJWT >= 2.13 rejects empty HMAC signing keys. Outside production the
+# app's Settings allow an unset SECRET_KEY (startup validation enforces it
+# in production), so give the test process a deterministic key BEFORE any
+# app import loads Settings. setdefault keeps a real environment-provided
+# key (e.g. in CI) authoritative.
+os.environ.setdefault("SECRET_KEY", "test-secret-key-" + "x" * 48)
 
 # Eagerly register EVERY model and resolve all mappers at import time, before any
 # test module is collected. String-based relationships (e.g.

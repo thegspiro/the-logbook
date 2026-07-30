@@ -70,13 +70,21 @@ jobs:
         run: bandit -r app/ -c pyproject.toml -ll
 
       - name: Run pip-audit (dependency vulnerabilities)
-        # Informational: the remaining findings need major upgrades outside a
-        # routine CI run (starlette is capped by the fastapi pin; aiosmtplib is
-        # a transitive of fastapi-mail; black/pytest fixes are major dev-tool
-        # bumps; setuptools/wheel belong to the runner image). Tracked in
-        # docs/KNOWN_LIMITATIONS.md — remove continue-on-error once resolved.
-        continue-on-error: true
-        run: pip install -r requirements.txt && pip-audit
+        # BLOCKING since the 2026-07-30 FastAPI/starlette upgrade pass.
+        # Audits the requirements set (-r), not the runner environment, so
+        # runner-image packages (pip/setuptools/wheel) don't fail the build.
+        # The explicit ignores are the documented deferrals from
+        # docs/KNOWN_LIMITATIONS.md: black 26 is a major that reformats the
+        # repo; pyopenssl is capped <24.3 upstream by pysaml2 with no
+        # released fix inside the cap. Remove an ignore when its entry
+        # clears.
+        run: |
+          pip install -r requirements.txt
+          pip-audit -r requirements.txt \
+            --ignore-vuln PYSEC-2026-2120 \
+            --ignore-vuln PYSEC-2026-2121 \
+            --ignore-vuln PYSEC-2026-2268 \
+            --ignore-vuln PYSEC-2026-2269
 
       - name: Upload Bandit report
         if: always()

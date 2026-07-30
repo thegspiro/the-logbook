@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dependencies: FastAPI/starlette upgrade pass (2026-07-30)
+
+**Changed**
+
+- **fastapi 0.129.0 → 0.141.1, starlette 0.52.1 → 1.3.1** (the 1.x line
+  carrying the security fixes pip-audit flagged; starlette is now pinned
+  explicitly for reproducibility).
+- **fastapi-mail 1.4.2 → 1.6.5** (lifts the `starlette<1` cap), pulling
+  **aiosmtplib → 5.1.2** (clears its advisory) and requiring
+  **cryptography → 49.0.0** and **email-validator → 2.3.0**.
+- **PyJWT 2.11.0 → 2.13.0** (six advisories). PyJWT 2.13 rejects empty
+  HMAC keys, so the test suite now sets a deterministic `SECRET_KEY` in
+  `conftest.py` (production already required one at startup).
+- **pydantic-settings → 2.14.2**, **pypdf → 6.14.2** (advisory fixes).
+- **schemathesis 3.38.5 → 4.24.3** (test dep; lifts its `starlette<1`
+  cap), which requires **pytest 8.4.2 → 9.0.3** (clearing pytest's own
+  advisory) plus **pytest-cov 7.1.0 / pytest-randomly 4.1.0 /
+  pytest-timeout 2.4.0** and **hypothesis 6.164.0**. Fixed a latent
+  no-op in the API contract tests the upgrade exposed: the health-check
+  regex pointed at `/api/v1/health` (the endpoint is `/health`), so
+  schemathesis 3.x silently generated zero tests for it.
+- **CI `pip-audit` is now blocking**: it audits the requirements set
+  (`-r requirements.txt`, so runner-image packages can't fail the build)
+  and passes clean with two documented deferrals — black 26 (major that
+  reformats the repo) and pyopenssl (capped `<24.3` upstream by
+  pysaml2). Tracked in `docs/KNOWN_LIMITATIONS.md`.
+
 ### Audit log: organization_id column (2026-07-30)
 
 **Added / Changed**
