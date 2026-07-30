@@ -59,6 +59,14 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
+      - name: Install system dependencies
+        # python-ldap builds from source and needs the LDAP/SASL headers;
+        # installing the requirements set for pip-audit fails without them
+        # (fatal error: lber.h). Same packages the test jobs install.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libldap2-dev libsasl2-dev libmagic1
+
       - name: Install security tools
         run: pip install bandit pip-audit
 
