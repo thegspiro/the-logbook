@@ -23,7 +23,11 @@ from app.models.audit import AuditLog, AuditLogCheckpoint
 # which is tamper-EVIDENT but not tamper-PROOF: anyone able to write audit rows
 # could recompute a fully valid chain. Version 2 keys the chain with HMAC-SHA256
 # so forging the chain requires the signing key, not just DB write access.
-_CURRENT_HASH_VERSION = 2
+# Version 3 additionally includes organization_id in the hash input, making
+# tenant attribution tamper-proof for new rows (v1/v2 rows predate the column
+# and verify without it — the backfilled column is scoping metadata there).
+_CURRENT_HASH_VERSION = 3
+_KEYED_MIN_VERSION = 2
 _LEGACY_HASH_VERSION = 1
 
 
@@ -79,8 +83,10 @@ class AuditLogger:
         Creates a deterministic hash from log entry data and the previous hash,
         forming a blockchain-inspired chain. ``version`` selects the algorithm:
 
-        - ``2`` (default): keyed HMAC-SHA256 — forging the chain requires the
-          signing key, not merely DB write access.
+        - ``3`` (default): keyed HMAC-SHA256 with organization_id in the
+          hash input — tenant attribution is tamper-proof.
+        - ``2``: keyed HMAC-SHA256 without organization_id (rows written
+          before the column existed).
         - ``1``: legacy unkeyed SHA-256, retained ONLY to verify entries written
           before the keyed upgrade. Never used for new entries.
         """
@@ -89,19 +95,22 @@ class AuditLogger:
         event_data = log_data.get("event_data", {})
         event_data_str = json.dumps(event_data, sort_keys=True, default=str)
 
-        data_string = "|".join(
-            [
-                str(log_data.get("timestamp", "")),
-                str(log_data.get("timestamp_nanos", "")),
-                str(log_data.get("event_type", "")),
-                str(log_data.get("user_id", "")),
-                str(log_data.get("ip_address", "")),
-                event_data_str,
-                previous_hash,
-            ]
-        )
+        fields = [
+            str(log_data.get("timestamp", "")),
+            str(log_data.get("timestamp_nanos", "")),
+            str(log_data.get("event_type", "")),
+            str(log_data.get("user_id", "")),
+            str(log_data.get("ip_address", "")),
+            event_data_str,
+            previous_hash,
+        ]
+        # v3 adds organization_id; older rows predate the column and their
+        # stored hashes must keep verifying byte-identically without it.
+        if version >= 3:
+            fields.insert(4, str(log_data.get("organization_id", "")))
+        data_string = "|".join(fields)
 
-        if version >= _CURRENT_HASH_VERSION:
+        if version >= _KEYED_MIN_VERSION:
             return hmac.new(
                 _get_audit_signing_key().encode(),
                 data_string.encode(),
@@ -127,6 +136,7 @@ class AuditLogger:
                 log.severity.value if hasattr(log.severity, "value") else log.severity
             ),
             "user_id": log.user_id,
+            "organization_id": getattr(log, "organization_id", None),
             "ip_address": log.ip_address,
             "event_data": log.event_data,
         }
@@ -144,6 +154,7 @@ class AuditLogger:
         ip_address: str | None = None,
         user_agent: str | None = None,
         geo_location: dict[str, Any] | None = None,
+        organization_id: str | None = None,
     ) -> AuditLog | None:
         """
         Create a new tamper-proof audit log entry
@@ -158,6 +169,20 @@ class AuditLogger:
             # Use a savepoint (nested transaction) so that audit log failures
             # don't roll back the caller's transaction
             async with db.begin_nested():
+                # Stamp the owning tenant. Callers may pass it explicitly;
+                # otherwise resolve it from the acting user so the vast
+                # majority of events are org-attributed without touching
+                # every callsite. Events with neither stay platform-level.
+                if organization_id is None and user_id is not None:
+                    from app.models.user import User
+
+                    org_result = await db.execute(
+                        select(User.organization_id).where(User.id == str(user_id))
+                    )
+                    organization_id = org_result.scalar_one_or_none()
+                if organization_id is not None:
+                    organization_id = str(organization_id)
+
                 # Get the last log entry to get previous hash
                 result = await db.execute(
                     select(AuditLog).order_by(AuditLog.id.desc()).limit(1)
@@ -182,6 +207,7 @@ class AuditLogger:
                         severity.value if hasattr(severity, "value") else severity
                     ),
                     "user_id": user_id,
+                    "organization_id": organization_id,
                     "ip_address": ip_address,
                     "event_data": event_data,
                 }
@@ -199,6 +225,7 @@ class AuditLogger:
                     event_category=event_category,
                     severity=severity,
                     user_id=user_id,
+                    organization_id=organization_id,
                     username=username,
                     session_id=session_id,
                     ip_address=ip_address,
@@ -379,7 +406,7 @@ class AuditLogger:
         for log in logs:
             row_version = log.hash_version or _LEGACY_HASH_VERSION
 
-            if row_version >= _CURRENT_HASH_VERSION:
+            if row_version >= _KEYED_MIN_VERSION:
                 # Keyed row: verify against its stored hash, never overwrite it.
                 log_data = self._build_hash_data(log)
                 expected = self.calculate_hash(log_data, previous_hash, row_version)

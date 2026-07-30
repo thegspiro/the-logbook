@@ -460,6 +460,10 @@ class TestColumnConstraints:
             # Pre-auth / IP-only alerts (e.g. login brute force) are
             # platform-level with no owning tenant — see SecurityAlertRecord.
             "security_alerts",
+            # Platform-level audit events (pre-auth, scheduled jobs with no
+            # acting user) have no owning tenant; org-attributed rows are
+            # stamped at write time and hash-bound from version 3 onward.
+            "audit_logs",
         }
         for table_name, table in _tables.items():
             if "organization_id" in table.columns:

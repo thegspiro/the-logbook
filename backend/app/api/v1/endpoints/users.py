@@ -1723,6 +1723,10 @@ async def get_member_audit_history(
     user_id_str = str(user_id)
     query = (
         select(AuditLog)
+        # Org filter (closes the deferred orgs-roles-users audit item):
+        # without it, matching event_data ids could surface another org's
+        # rows. Legacy rows were backfilled from user_id.
+        .where(AuditLog.organization_id == str(current_user.organization_id))
         .where(AuditLog.event_type.in_(member_event_types))
         .where(AuditLog.event_category == "user_management")
         .where(

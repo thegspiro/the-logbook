@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Audit log: organization_id column (2026-07-30)
+
+**Added / Changed**
+
+- **`audit_logs.organization_id`** (migration `20260801_0009`): audit rows
+  now carry their owning tenant. Stamped at write time — explicitly, or
+  auto-resolved from the acting user — and backfilled from `user_id` for
+  rows written before the column existed. Platform-level events (pre-auth
+  alerts, scheduled jobs with no acting user) stay NULL and are visible to
+  no organization.
+- **Hash chain version 3**: new rows include `organization_id` in the
+  keyed HMAC hash input, making tenant attribution tamper-proof. Versions
+  1/2 verify byte-identically without it, so the backfill never breaks
+  `verify_integrity`, and the existing no-downgrade guard prevents
+  stripping the org by rewriting a row as an older version.
+- **All audit read paths now filter the column directly** instead of
+  joining through the mutable `users` table or filtering `event_data` in
+  Python: the audit-log endpoints (list/stats/detail), the member
+  audit-history endpoint (closing the deferred ORU-9 users #6 item), the
+  compliance attestation history (closing the deferred officer #2 item),
+  and the security-monitoring failed-login stats. This also closes the
+  deferred SEC-9 robustness item and the cross-cutting audit-log
+  org-column dependency.
+
 ### Elections: enhancement batch (2026-07-29)
 
 **Added**

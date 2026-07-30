@@ -331,14 +331,18 @@ class ComplianceAttestationService:
     ) -> List[Dict[str, Any]]:
         """Retrieve past compliance attestations from audit log.
 
-        Since AuditLog does not have an organization_id column, we query by
-        event_type and filter by organization_id stored inside event_data.
+        Scoped by the audit log's organization_id column (stamped at write
+        time, backfilled from user_id for older rows). The event_data check
+        stays as a defensive belt for rows whose backfilled org (the
+        attesting user's CURRENT org) could differ from the org recorded in
+        the event itself.
         """
         result = await self.db.execute(
             select(AuditLog)
             .where(AuditLog.event_type == "compliance_attestation")
+            .where(AuditLog.organization_id == str(organization_id))
             .order_by(AuditLog.timestamp.desc())
-            .limit(limit * 5)  # over-fetch to allow org filtering in Python
+            .limit(limit * 2)
         )
         logs = result.scalars().all()
 

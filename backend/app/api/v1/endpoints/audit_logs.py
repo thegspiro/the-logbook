@@ -2,11 +2,11 @@
 Audit Logs API Endpoints
 
 Read-only access to the tamper-proof audit log for org admins
-(`audit.view`). Audit log rows are global (no organization_id column on
-`audit_logs`), so org-scoping is enforced by joining through `users` —
-admins only see entries authored by users in their own organization.
-System-level entries (no user_id, e.g., scheduled jobs) are excluded
-from the org-scoped view to prevent cross-org leakage.
+(`audit.view`). Rows are scoped by the `organization_id` column: stamped
+at write time (explicitly or resolved from the acting user) and
+backfilled from user_id for rows that predate the column. Platform-level
+entries (no org — pre-auth alerts, scheduled jobs with no acting user)
+are excluded from the org-scoped view to prevent cross-org leakage.
 """
 
 from datetime import datetime
@@ -59,13 +59,7 @@ async def list_audit_logs(
     Filters: event_type, event_category, severity, user_id, search,
     start_date, end_date. Pagination via skip/limit.
     """
-    org_user_ids = (
-        select(User.id)
-        .where(User.organization_id == str(current_user.organization_id))
-        .scalar_subquery()
-    )
-
-    filters: list[Any] = [AuditLog.user_id.in_(org_user_ids)]
+    filters: list[Any] = [AuditLog.organization_id == str(current_user.organization_id)]
     if event_type:
         filters.append(AuditLog.event_type == event_type)
     if event_category:
@@ -120,12 +114,7 @@ async def audit_log_stats(
     current_user: User = Depends(require_permission("audit.view")),
 ) -> dict[str, Any]:
     """High-level counts for an admin overview card."""
-    org_user_ids = (
-        select(User.id)
-        .where(User.organization_id == str(current_user.organization_id))
-        .scalar_subquery()
-    )
-    base_filter = AuditLog.user_id.in_(org_user_ids)
+    base_filter = AuditLog.organization_id == str(current_user.organization_id)
 
     total_result = await db.execute(
         select(func.count()).select_from(AuditLog).where(base_filter)
@@ -165,14 +154,12 @@ async def get_audit_log_entry(
     current_user: User = Depends(require_permission("audit.view")),
 ) -> dict[str, Any]:
     """Fetch a single audit log entry. Org-scoped."""
-    org_user_ids = (
-        select(User.id)
-        .where(User.organization_id == str(current_user.organization_id))
-        .scalar_subquery()
-    )
     result = await db.execute(
         select(AuditLog).where(
-            and_(AuditLog.id == log_id, AuditLog.user_id.in_(org_user_ids))
+            and_(
+                AuditLog.id == log_id,
+                AuditLog.organization_id == str(current_user.organization_id),
+            )
         )
     )
     entry = result.scalar_one_or_none()

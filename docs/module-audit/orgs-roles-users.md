@@ -143,10 +143,8 @@ is a product decision on who may see full PII/infra config.
   sub-key — closing the data-loss risk. (orgs #9)
 - **Deferred:** `member_status` transitions have no state machine (any-to-any by
   a `members.manage` holder) — a lifecycle-model/product decision, no permission
-  grant. (roles #5) The member audit-history query isn't org-filtered on the log
-  rows, but the target user is pre-verified in-org and `audit_logs` has no
-  `organization_id` column — blocked on the same deferred audit-log org-column as
-  SEC-9 (defense-in-depth only). (users #6)
+  grant. (roles #5) **✅ users #6 unblocked (resolved 2026-07-30: `audit_logs.organization_id` exists (migration `20260801_0009`, backfilled from user_id, hash-bound from version 3)):** the member
+  audit-history query now filters `AuditLog.organization_id` directly.
 **Status:** correctness/robustness items fixed; two items deferred (design /
 blocked on the audit-log org column).
 

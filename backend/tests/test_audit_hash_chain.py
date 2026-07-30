@@ -27,10 +27,29 @@ def test_default_version_is_keyed(monkeypatch):
     monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_SIGNING_KEY", "key-A")
     keyed = AuditLogger.calculate_hash(_LOG_DATA, _PREV)
     v1 = AuditLogger.calculate_hash(_LOG_DATA, _PREV, _LEGACY_HASH_VERSION)
-    assert _CURRENT_HASH_VERSION == 2
+    assert _CURRENT_HASH_VERSION == 3
     assert len(keyed) == 64
     # The default (keyed HMAC) hash must differ from the legacy unkeyed SHA-256.
     assert keyed != v1
+
+
+def test_v3_includes_organization_id(monkeypatch):
+    """v3 hashes bind the owning tenant; v2 must stay byte-identical for
+    rows written before the column existed (backfill never breaks them)."""
+    monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_SIGNING_KEY", "key-A")
+    with_org = AuditLogger.calculate_hash(
+        {**_LOG_DATA, "organization_id": "org-1"}, _PREV, 3
+    )
+    other_org = AuditLogger.calculate_hash(
+        {**_LOG_DATA, "organization_id": "org-2"}, _PREV, 3
+    )
+    assert with_org != other_org
+
+    v2_without = AuditLogger.calculate_hash(_LOG_DATA, _PREV, 2)
+    v2_with = AuditLogger.calculate_hash(
+        {**_LOG_DATA, "organization_id": "org-1"}, _PREV, 2
+    )
+    assert v2_without == v2_with
 
 
 def test_hash_depends_on_signing_key(monkeypatch):
