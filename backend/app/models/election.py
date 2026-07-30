@@ -133,6 +133,23 @@ class Election(Base):
     victory_percentage = Column(Integer, nullable=True)
     # For percentage threshold (e.g., 60% required)
 
+    # What happens when the top candidates tie under most_votes:
+    #   co_winners (legacy default) — all tied candidates declared winners
+    #   runoff — no winner declared; the runoff machinery (if enabled)
+    #            resolves it, and the tie is flagged in results
+    #   revote — no winner declared; the department re-votes at the meeting
+    #   chair_decides — no winner declared; the chair resolves per bylaws
+    tie_policy = Column(
+        String(20), nullable=False, default="co_winners", server_default="co_winners"
+    )
+
+    # Voter roll frozen when the election opens: list of user ids eligible
+    # at open time. NULL = legacy election (eligibility evaluated live).
+    # A mid-election membership change must not alter who may vote or the
+    # turnout denominator — "eligible" means eligible when voting opened.
+    # Secretary voter overrides granted during the meeting still add voters.
+    eligible_roster_snapshot = Column(JSON, nullable=True)
+
     # Runoff configuration
     enable_runoffs = Column(Boolean, nullable=False, default=False)
     # Whether to automatically create runoff elections if no winner
@@ -254,6 +271,12 @@ class Candidate(Base):
     )
     accepted = Column(Boolean, nullable=False, default=True)  # For member candidates
     is_write_in = Column(Boolean, nullable=False, default=False)
+
+    # Write-in consolidation: when spelling variants of the same person are
+    # merged, sources point at the canonical candidate and results count
+    # their votes under it. Votes are NEVER mutated — vote signatures embed
+    # candidate_id, so re-pointing votes would break integrity verification.
+    merged_into_candidate_id = Column(String(36), nullable=True)
 
     # Order for display
     display_order = Column(Integer, nullable=False, default=0)

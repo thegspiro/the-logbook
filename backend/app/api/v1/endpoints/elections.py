@@ -43,6 +43,7 @@ from app.schemas.election import (
     CandidateCreate,
     CandidateResponse,
     CandidateUpdate,
+    CloneElectionRequest,
     ElectionCreate,
     ElectionDelete,
     ElectionDeleteResponse,
@@ -63,6 +64,8 @@ from app.schemas.election import (
     ManualBallotBatchListResponse,
     ManualBallotsRequest,
     ManualBallotsResponse,
+    MergeWriteInsRequest,
+    MergeWriteInsResponse,
     NominationActionResponse,
     NominationCreate,
     NonVotersResponse,
@@ -1425,6 +1428,174 @@ async def void_manual_ballots(
         "voided": voided,
         "message": f"Voided {voided} paper ballot(s) from batch",
     }
+
+
+@router.post("/{election_id}/clone", response_model=ElectionResponse)
+async def clone_election(
+    election_id: UUID,
+    payload: CloneElectionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Create a fresh draft election from an existing election's setup —
+    positions, eligibility rules, voting method, quorum, and reminder
+    configuration, with new dates and a fresh anonymity salt. Votes,
+    tokens, attendees, and overrides are never copied.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    clone, error = await service.clone_election(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        created_by=str(current_user.id),
+        title=payload.title,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        nomination_deadline=payload.nomination_deadline,
+        include_candidates=payload.include_candidates,
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return await _build_election_response(db, clone)
+
+
+@router.post("/{election_id}/write-ins/merge", response_model=MergeWriteInsResponse)
+async def merge_write_ins(
+    election_id: UUID,
+    payload: MergeWriteInsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Consolidate write-in spelling variants under one candidate. Votes are
+    never mutated (signatures embed candidate_id) — results simply count
+    merged candidates' votes under the target. The merge is audited.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    merged, error = await service.merge_write_in_candidates(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        source_candidate_ids=[str(c) for c in payload.source_candidate_ids],
+        target_candidate_id=str(payload.target_candidate_id),
+        merged_by=str(current_user.id),
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    return {
+        "merged": merged,
+        "message": f"Merged {merged} write-in variant(s)",
+    }
+
+
+@router.get("/{election_id}/printable-ballot")
+async def download_printable_ballot(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Download the official blank paper ballot as a PDF, generated from the
+    election setup so the paper exactly matches the system.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    try:
+        buf, error, filename = await service.build_printable_ballot_pdf(
+            election_id, current_user.organization_id
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    if error or buf is None:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if error and "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(
+            status_code=status_code,
+            detail=error or "Failed to generate ballot PDF",
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="printable_ballot_downloaded",
+        event_category="elections",
+        severity="info",
+        event_data={"election_id": str(election_id)},
+        user_id=str(current_user.id),
+    )
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{election_id}/certified-results")
+async def download_certified_results(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Download the certified results package (PDF) for a closed election:
+    final tallies, turnout and quorum, paper-batch attestation trail,
+    integrity verification, and signature lines for certifying officers.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    try:
+        buf, error, filename = await service.build_certified_results_pdf(
+            election_id, current_user.organization_id
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    if error or buf is None:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if error and "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(
+            status_code=status_code,
+            detail=error or "Failed to generate certified results PDF",
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="certified_results_downloaded",
+        event_category="elections",
+        severity="info",
+        event_data={"election_id": str(election_id)},
+        user_id=str(current_user.id),
+    )
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{election_id}/rollback", response_model=ElectionRollbackResponse)

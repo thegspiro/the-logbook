@@ -18,12 +18,21 @@ interface ElectionResultsProps {
 }
 
 /** Renders a single candidate's result row with vote count, percentage, and progress bar. */
+const TIE_POLICY_LABELS: Record<string, string> = {
+  co_winners: 'All tied candidates would be declared winners.',
+  runoff: 'Resolution: a runoff round decides the seat.',
+  revote: 'Resolution: the department re-votes at the meeting.',
+  chair_decides: 'Resolution: the chair decides per the bylaws.',
+};
+
 const CandidateResultCard: React.FC<{ candidate: CandidateResult }> = ({ candidate }) => (
   <div
     className={`p-4 rounded-lg border-2 ${
       candidate.is_winner
         ? 'border-green-500 bg-green-500/10'
-        : 'border-theme-surface-border bg-theme-surface-secondary'
+        : candidate.is_tied
+          ? 'border-amber-500 bg-amber-500/10'
+          : 'border-theme-surface-border bg-theme-surface-secondary'
     }`}
     aria-label={`${candidate.candidate_name}: ${candidate.vote_count} votes, ${candidate.percentage}%${candidate.is_winner ? ', winner' : ''}`}
   >
@@ -49,6 +58,9 @@ const CandidateResultCard: React.FC<{ candidate: CandidateResult }> = ({ candida
           </div>
           {candidate.is_winner && (
             <div className="text-sm text-green-700 dark:text-green-400 font-medium">Winner</div>
+          )}
+          {candidate.is_tied && (
+            <div className="text-sm text-amber-700 dark:text-amber-400 font-medium">Tied</div>
           )}
         </div>
       </div>
@@ -223,6 +235,18 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
                   {positionResult.total_votes} {positionResult.total_votes === 1 ? 'vote' : 'votes'}
                 </span>
               </div>
+
+              {positionResult.is_tie && (
+                <div
+                  className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-md p-3"
+                  role="alert"
+                >
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    Unresolved tie for {positionResult.position} — no winner is
+                    declared. {TIE_POLICY_LABELS[results.tie_policy ?? 'co_winners']}
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-3">
                 {(positionResult.candidates || []).map((candidate) => (

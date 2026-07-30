@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Elections: enhancement batch (2026-07-29)
+
+**Added**
+
+- **Printable ballot PDF** (`GET /elections/{id}/printable-ballot`): the
+  official blank paper ballot generated from the election itself —
+  positions in order, accepted candidates in ballot order, write-in
+  lines when allowed, and method-specific instructions — so the paper
+  in the room exactly matches the system. "Print Blank Ballots" button
+  on the election page (draft/nominations/open).
+- **Election cloning** (`POST /elections/{id}/clone`): "run it again"
+  for recurring officer elections — copies positions, eligibility
+  rules, voting method, quorum, reminders, and tie policy with new
+  dates and a fresh anonymity salt; optionally copies accepted
+  candidates. Never copies votes, tokens, attendees, or overrides.
+- **Voter-roll freeze at open** (migration `20260801_0008`): opening an
+  election snapshots the eligible roster (`eligible_roster_snapshot`),
+  so a mid-election membership change can neither add nor remove
+  voters and the turnout denominator is fixed and defensible.
+  Secretary overrides granted during the meeting still admit voters;
+  elections opened before this change (NULL snapshot) keep the legacy
+  live evaluation.
+- **Certified results package** (`GET /elections/{id}/certified-results`,
+  closed elections): the formal PDF for the meeting minutes — final
+  tallies with winners/ties flagged, turnout and quorum, the
+  paper-batch attestation trail (including voided and never-attested
+  batches), the integrity-verification outcome, and signature lines
+  for the certifying officers.
+- **Live turnout dashboard**: a meeting-night panel (with fullscreen)
+  showing ballots received vs eligible and a quorum progress bar,
+  auto-refreshing every 15 s. Candidate tallies stay sealed until
+  close.
+- **Explicit tie handling** (`tie_policy`, migration `20260801_0008`):
+  per-election policy for a most_votes tie — `co_winners` (legacy
+  default: all tied candidates win), `runoff`, `revote`, or
+  `chair_decides`. With any non-legacy policy the tie is flagged in
+  results (`is_tie` / `is_tied`), no winner is declared, a warning
+  banner explains the resolution, and closing with an unresolved tie
+  writes an `election_tie_detected` audit event.
+- **Write-in consolidation** (`POST /elections/{id}/write-ins/merge`,
+  migration `20260801_0008`): merge write-in spelling variants ("Bob
+  Baker" / "bob baker") under one candidate before certifying results.
+  Alias-based — signed vote rows are never mutated (signatures embed
+  candidate_id); results count merged variants under the target, and
+  the merge is audited. Only write-ins can be merge sources.
+
 ### Elections: paper-ballot attestation (2026-07-29)
 
 **Added**
