@@ -2483,10 +2483,13 @@ class ElectionService:
         if expire_ids:
             from sqlalchemy import update as sa_update
 
+            # Floor to the second: MySQL DATETIME(0) ROUNDS fractional
+            # seconds, so expiring at now=:56.9 would store :57 and leave
+            # the token briefly valid — it must be expired immediately.
             await self.db.execute(
                 sa_update(VotingToken)
                 .where(VotingToken.id.in_(expire_ids))
-                .values(expires_at=now)
+                .values(expires_at=now.replace(microsecond=0))
             )
             expired_count = len(expire_ids)
 
