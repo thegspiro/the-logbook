@@ -291,9 +291,10 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 | `20260801_0004` | `20260801_0003` | `20260801_0004_add_election_lifecycle_fields.py` | Add election lifecycle-automation fields: `auto_open` (opt-in auto-open at start_date), `reminder_hours_before_close` (automatic non-voter reminder window), `reminder_sent_at` (once-only stamp) |
 | `20260801_0005` | `20260801_0004` | `20260801_0005_add_nominations_and_manual_ballots.py` | Nomination phase + paper ballots: `elections.status` ENUM gains `nominations`, `elections.nomination_deadline`, `votes.is_manual` + `votes.recorded_by` (officer-attributed paper-tally votes) |
 | `20260801_0006` | `20260801_0005` | `20260801_0006_add_manual_ballot_batch_id.py` | Add `votes.manual_batch_id` (indexed) — every paper-tally entry shares a batch id so a mis-keyed batch can be voided in one audited action |
-| `20260801_0007` | `20260801_0006` | `20260801_0007_add_manual_ballot_attestations.py` | Add `manual_ballot_batches` + `manual_ballot_attestations` — paper batches stay pending (excluded from results) until the org-required number of officers attest them — **current single head** |
+| `20260801_0007` | `20260801_0006` | `20260801_0007_add_manual_ballot_attestations.py` | Add `manual_ballot_batches` + `manual_ballot_attestations` — paper batches stay pending (excluded from results) until the org-required number of officers attest them |
+| `20260801_0008` | `20260801_0007` | `20260801_0008_add_tie_policy_roster_snapshot_merge.py` | Add `elections.tie_policy`, `elections.eligible_roster_snapshot` (voter roll frozen at open), and `candidates.merged_into_candidate_id` (write-in consolidation alias) — **current single head** |
 
-> **Single head as of 2026-07-29:** `20260801_0007` is the linear head of the
+> **Single head as of 2026-07-29:** `20260801_0008` is the linear head of the
 > chain, so `alembic upgrade head` is unambiguous.
 > `tests/test_alembic_migrations.py` validates the single-head DAG (it
 > understands merge migrations).

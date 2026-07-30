@@ -115,6 +115,32 @@ Attestation is only possible while voting is open — a batch still pending
 at close stays out of the certified results and the close writes a warning
 `election_manual_ballots_unattested_at_close` audit event.
 
+### Enhancement Batch (2026-07-29)
+
+- **Printable ballot PDF** — the in-room paper ballot is generated from
+  the election itself (positions, accepted candidates, write-in lines,
+  method instructions), closing the loop with paper entry + attestation.
+- **Election cloning** — "run it again" copies the setup (never votes,
+  tokens, attendees, overrides, or the salt — a fresh salt is generated)
+  with new dates; optionally copies accepted candidates.
+- **Voter-roll freeze** — opening an election snapshots the eligible
+  roster; mid-election membership changes can no longer change who may
+  vote or the turnout denominator. Secretary overrides still admit.
+  NULL snapshot (pre-feature elections) = legacy live evaluation.
+- **Certified results package** — closed elections offer a formal PDF
+  with tallies, turnout/quorum, the attestation trail, integrity
+  verification, and officer signature lines.
+- **Live turnout dashboard** — meeting-night panel (fullscreen-capable)
+  with ballots received vs eligible and quorum progress; auto-refreshes;
+  never shows candidate tallies before close.
+- **Tie policy** — per-election `tie_policy`: `co_winners` (legacy
+  default), `runoff`, `revote`, `chair_decides`. Non-legacy policies
+  declare no winner on a tie, flag it in results and the UI, and audit
+  `election_tie_detected` at close.
+- **Write-in consolidation** — spelling variants merge under one
+  candidate via an audited alias (`merged_into_candidate_id`); signed
+  vote rows are never mutated, so integrity verification still passes.
+
 ## Lifecycle Automation (2026-07-29)
 
 The `election_lifecycle` scheduled task (every 15 minutes) automates status
@@ -167,6 +193,10 @@ POST   /api/v1/elections/{id}/nominations/{cid}/accept   # Nominee accepts
 POST   /api/v1/elections/{id}/nominations/{cid}/decline  # Nominee declines (entry removed)
 POST   /api/v1/elections/{id}/manual-ballots # Record in-room paper-ballot tally (manage; plausibility-guarded)
 GET    /api/v1/elections/{id}/manual-ballots # List paper batches with attestation trail (manage)
+GET    /api/v1/elections/{id}/printable-ballot # Official blank paper ballot PDF (manage)
+GET    /api/v1/elections/{id}/certified-results # Certified results package PDF, closed only (manage)
+POST   /api/v1/elections/{id}/clone         # Fresh draft from this election's setup (manage)
+POST   /api/v1/elections/{id}/write-ins/merge # Consolidate write-in variants (manage)
 POST   /api/v1/elections/{id}/manual-ballots/{batch}/attest # Attest a batch's count (manage; not the recorder)
 POST   /api/v1/elections/{id}/manual-ballots/{batch}/void # Void a mis-keyed paper batch (manage)
 GET    /api/v1/elections/{id}/non-voters     # Eligible voters who haven't voted (manage)

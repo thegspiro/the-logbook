@@ -23,6 +23,7 @@ VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "superma
 VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
 VALID_RUNOFF_TYPES = {"top_two", "eliminate_lowest"}
 VALID_QUORUM_TYPES = {"none", "percentage", "count"}
+VALID_TIE_POLICIES = {"co_winners", "runoff", "revote", "chair_decides"}
 VALID_BALLOT_ITEM_TYPES = {"membership_approval", "officer_election", "general_vote"}
 VALID_VOTE_TYPES = {"approval", "candidate_selection"}
 
@@ -231,6 +232,19 @@ class ElectionBase(BaseModel):
             "time (null = close nominations manually)"
         ),
     )
+    tie_policy: str = Field(
+        default="co_winners",
+        description=(
+            "most_votes tie handling: co_winners (all tied declared "
+            "winners — legacy behavior), runoff, revote, or chair_decides "
+            "(the last three declare no winner and flag the tie)"
+        ),
+    )
+
+    @field_validator("tie_policy")
+    @classmethod
+    def validate_tie_policy(cls, v: str) -> str:
+        return _validate_choice(v, VALID_TIE_POLICIES, "tie policy")
 
     @field_validator("quorum_type")
     @classmethod
@@ -294,6 +308,12 @@ class ElectionUpdate(BaseModel):
     auto_open: Optional[bool] = None
     reminder_hours_before_close: Optional[int] = Field(None, ge=1, le=720)
     nomination_deadline: Optional[datetime] = None
+    tie_policy: Optional[str] = None
+
+    @field_validator("tie_policy")
+    @classmethod
+    def validate_tie_policy(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_choice(v, VALID_TIE_POLICIES, "tie policy")
 
     @field_validator("quorum_type")
     @classmethod
@@ -353,6 +373,7 @@ class ElectionResponse(UTCResponseBase):
     reminder_hours_before_close: Optional[int] = None
     reminder_sent_at: Optional[datetime] = None
     nomination_deadline: Optional[datetime] = None
+    tie_policy: str = "co_winners"
     status: str
     created_by: Optional[UUID] = None
     created_at: datetime
@@ -566,6 +587,47 @@ class VoidManualBallotsResponse(BaseModel):
     message: str
 
 
+class CloneElectionRequest(BaseModel):
+    """Create a fresh draft from an existing election's setup."""
+
+    title: str = Field(..., min_length=1, max_length=200)
+    start_date: datetime
+    end_date: datetime
+    nomination_deadline: Optional[datetime] = None
+    include_candidates: bool = Field(
+        default=False,
+        description="Also copy the source election's accepted candidates",
+    )
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "CloneElectionRequest":
+        if self.end_date <= self.start_date:
+            raise ValueError("end_date must be after start_date")
+        return self
+
+
+class MergeWriteInsRequest(BaseModel):
+    """Consolidate write-in spelling variants under one candidate."""
+
+    source_candidate_ids: List[UUID] = Field(..., min_length=1, max_length=20)
+    target_candidate_id: UUID
+
+    @model_validator(mode="after")
+    def validate_target_not_source(self) -> "MergeWriteInsRequest":
+        if self.target_candidate_id in self.source_candidate_ids:
+            raise ValueError("The target candidate cannot also be a source")
+        if len(set(self.source_candidate_ids)) != len(self.source_candidate_ids):
+            raise ValueError("Duplicate source candidate ids")
+        return self
+
+
+class MergeWriteInsResponse(BaseModel):
+    """Result of a write-in consolidation."""
+
+    merged: int
+    message: str
+
+
 class CandidateResponse(UTCResponseBase):
     """Schema for candidate response"""
 
@@ -579,6 +641,9 @@ class CandidateResponse(UTCResponseBase):
     display_order: int = 0
     nomination_date: datetime
     nominated_by: Optional[UUID] = None
+    # Set when this (write-in) candidate was consolidated into another;
+    # results count its votes under the target candidate.
+    merged_into_candidate_id: Optional[str] = None
     accepted: bool
     is_write_in: bool
     created_at: datetime
@@ -640,6 +705,10 @@ class CandidateResult(BaseModel):
     vote_count: int
     percentage: float
     is_winner: bool
+    # True when this candidate is part of an unresolved top-count tie
+    # (tie_policy other than co_winners): no winner is declared and the
+    # tie is resolved per the election's policy.
+    is_tied: bool = False
 
 
 class PositionResults(BaseModel):
@@ -648,6 +717,7 @@ class PositionResults(BaseModel):
     position: str
     total_votes: int
     candidates: List[CandidateResult]
+    is_tie: bool = False
 
 
 class ElectionResults(BaseModel):
@@ -663,6 +733,7 @@ class ElectionResults(BaseModel):
     overall_results: List[CandidateResult]
     quorum_met: bool = True
     quorum_detail: Optional[str] = None
+    tie_policy: Optional[str] = None
 
 
 class ElectionStats(BaseModel):

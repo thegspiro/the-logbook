@@ -47,6 +47,7 @@ export const ElectionsPage: React.FC = () => {
     max_runoff_rounds: 3,
     auto_open: false,
     reminder_hours_before_close: undefined,
+    tie_policy: 'co_winners',
   });
   const [positionInput, setPositionInput] = useState('');
   const [featureFlags, setFeatureFlags] = useState({
@@ -224,6 +225,7 @@ export const ElectionsPage: React.FC = () => {
         max_runoff_rounds: 3,
         auto_open: false,
         reminder_hours_before_close: undefined,
+        tie_policy: 'co_winners',
       });
       setPositionInput('');
       await fetchElections();
@@ -953,6 +955,31 @@ export const ElectionsPage: React.FC = () => {
                     </p>
                   </div>
                   )}
+
+                  <div>
+                    <label htmlFor="election-tie-policy" className="block text-sm font-medium text-theme-text-primary">
+                      If the Top Candidates Tie
+                    </label>
+                    <select
+                      id="election-tie-policy"
+                      value={formData.tie_policy ?? 'co_winners'}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          tie_policy: e.target.value as ElectionCreate['tie_policy'],
+                        })
+                      }
+                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                    >
+                      <option value="co_winners">Declare all tied candidates winners</option>
+                      <option value="runoff">Hold a runoff round</option>
+                      <option value="revote">Revote at the meeting</option>
+                      <option value="chair_decides">Chair decides per bylaws</option>
+                    </select>
+                    <p className="mt-1 text-xs text-theme-text-muted">
+                      With any option other than co-winners, a tie is flagged in the results with no winner declared.
+                    </p>
+                  </div>
                 </div>
               </div>
 

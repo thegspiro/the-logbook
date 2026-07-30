@@ -14,6 +14,7 @@ import secrets
 import tempfile
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
+from types import SimpleNamespace
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -814,6 +815,25 @@ class ElectionService:
             _has_override = any(
                 o.get("user_id") == str(user_id) for o in election.voter_overrides
             )
+
+        # ---- Voter roll frozen at open ----
+        # When a snapshot exists, eligibility means "on the roll when voting
+        # opened" — a mid-election membership change cannot add voters. A
+        # secretary override granted during the meeting still counts.
+        snapshot = getattr(election, "eligible_roster_snapshot", None)
+        if snapshot is not None and not _has_override:
+            if str(user_id) not in snapshot:
+                return VoterEligibility(
+                    is_eligible=False,
+                    has_voted=False,
+                    positions_voted=[],
+                    positions_remaining=[],
+                    reason=(
+                        "You are not on the voter roll that was frozen when "
+                        "this election opened. Contact the election "
+                        "administrator if you believe this is an error."
+                    ),
+                )
 
         # ---- Membership tier voting rules ----
         # Look up the member's tier in org settings and enforce voting_eligible
@@ -1738,6 +1758,17 @@ class ElectionService:
         attendance restrictions are not modeled here, since turnout is
         reported for the election as a whole.
         """
+        # Roll frozen at open: the snapshot is the denominator, plus any
+        # secretary overrides granted after the freeze.
+        snapshot = getattr(election, "eligible_roster_snapshot", None)
+        if snapshot is not None:
+            override_ids = {
+                o.get("user_id")
+                for o in (election.voter_overrides or [])
+                if o.get("user_id")
+            }
+            return len(set(snapshot) | override_ids)
+
         if election.eligible_voters:
             return len(election.eligible_voters)
 
@@ -1851,6 +1882,35 @@ class ElectionService:
         )
         candidates = candidates_result.scalars().all()
 
+        # Write-in consolidation: merged candidates disappear from the
+        # results list and their votes count under the merge target. Votes
+        # are remapped via lightweight copies — the ORM rows are never
+        # touched, because vote signatures embed candidate_id.
+        merge_map = {
+            c.id: c.merged_into_candidate_id
+            for c in candidates
+            if getattr(c, "merged_into_candidate_id", None)
+        }
+        if merge_map:
+            all_votes = [
+                (
+                    SimpleNamespace(
+                        id=v.id,
+                        candidate_id=merge_map[v.candidate_id],
+                        position=v.position,
+                        voter_hash=v.voter_hash,
+                        voter_id=v.voter_id,
+                        vote_rank=v.vote_rank,
+                        is_manual=v.is_manual,
+                        manual_batch_id=v.manual_batch_id,
+                    )
+                    if v.candidate_id in merge_map
+                    else v
+                )
+                for v in all_votes
+            ]
+            candidates = [c for c in candidates if c.id not in merge_map]
+
         # Count total eligible voters (excludes non-voting membership tiers)
         total_eligible = await self._count_eligible_voters(election, organization_id)
 
@@ -1881,6 +1941,7 @@ class ElectionService:
                         position=position,
                         total_votes=len(position_votes),
                         candidates=candidate_results,
+                        is_tie=any(c.is_tied for c in candidate_results),
                     )
                 )
 
@@ -1931,6 +1992,7 @@ class ElectionService:
             overall_results=overall_results,
             quorum_met=quorum_met,
             quorum_detail=quorum_detail,
+            tie_policy=getattr(election, "tie_policy", None) or "co_winners",
         )
 
     async def _calculate_candidate_results(
@@ -1999,8 +2061,16 @@ class ElectionService:
         if election.victory_condition == "most_votes":
             if results and results[0].vote_count > 0:
                 max_votes = results[0].vote_count
-                for result in results:
-                    if result.vote_count == max_votes:
+                tied_top = [r for r in results if r.vote_count == max_votes]
+                policy = getattr(election, "tie_policy", None) or "co_winners"
+                if len(tied_top) > 1 and policy != "co_winners":
+                    # Unresolved tie: no winner is declared here — the
+                    # tie_policy (runoff / revote / chair_decides) governs
+                    # resolution, and results flag the tie explicitly.
+                    for result in tied_top:
+                        result.is_tied = True
+                else:
+                    for result in tied_top:
                         result.is_winner = True
 
         elif election.victory_condition == "majority":
@@ -3344,6 +3414,330 @@ class ElectionService:
         )
         return len(votes), None
 
+    async def clone_election(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        created_by: str,
+        title: str,
+        start_date: datetime,
+        end_date: datetime,
+        nomination_deadline: Optional[datetime] = None,
+        include_candidates: bool = False,
+    ) -> Tuple[Optional[Election], Optional[str]]:
+        """Create a fresh DRAFT election from an existing election's setup.
+
+        Copies the configuration a recurring election needs (positions,
+        eligibility rules, voting method, quorum, reminders, tie policy) and
+        deliberately does NOT copy anything stateful: votes, tokens,
+        attendees, overrides, proxy authorizations, the anonymity salt
+        (generated fresh — salts are strictly per-election), reminder
+        timestamps, or meeting/event links. Candidates are copied only on
+        request (accepted ones, with fresh ids), since a new year usually
+        means new nominations.
+        """
+        source = await self.get_election(election_id, organization_id)
+        if not source:
+            return None, "Election not found"
+
+        clone = Election(
+            id=str(uuid4()),
+            organization_id=str(organization_id),
+            created_by=str(created_by),
+            status=ElectionStatus.DRAFT,
+            title=title,
+            description=source.description,
+            election_type=source.election_type,
+            positions=copy.deepcopy(source.positions),
+            position_eligibility=copy.deepcopy(source.position_eligibility),
+            start_date=start_date,
+            end_date=end_date,
+            nomination_deadline=nomination_deadline,
+            anonymous_voting=source.anonymous_voting,
+            allow_write_ins=source.allow_write_ins,
+            max_votes_per_position=source.max_votes_per_position,
+            results_visible_immediately=source.results_visible_immediately,
+            eligible_voters=copy.deepcopy(source.eligible_voters),
+            voting_method=source.voting_method,
+            victory_condition=source.victory_condition,
+            victory_threshold=source.victory_threshold,
+            victory_percentage=source.victory_percentage,
+            tie_policy=getattr(source, "tie_policy", None) or "co_winners",
+            enable_runoffs=source.enable_runoffs,
+            runoff_type=source.runoff_type,
+            max_runoff_rounds=source.max_runoff_rounds,
+            quorum_type=source.quorum_type,
+            quorum_value=source.quorum_value,
+            auto_open=source.auto_open,
+            reminder_hours_before_close=source.reminder_hours_before_close,
+            voter_anonymity_salt=secrets.token_hex(32),
+        )
+        self.db.add(clone)
+
+        copied_candidates = 0
+        if include_candidates:
+            cand_result = await self.db.execute(
+                select(Candidate)
+                .where(Candidate.election_id == str(election_id))
+                .where(Candidate.accepted == True)  # noqa: E712
+                .where(Candidate.merged_into_candidate_id.is_(None))
+                .order_by(Candidate.position, Candidate.display_order)
+            )
+            for cand in cand_result.scalars().all():
+                self.db.add(
+                    Candidate(
+                        id=str(uuid4()),
+                        election_id=clone.id,
+                        user_id=cand.user_id,
+                        name=cand.name,
+                        position=cand.position,
+                        statement=cand.statement,
+                        photo_url=cand.photo_url,
+                        accepted=True,
+                        is_write_in=cand.is_write_in,
+                        display_order=cand.display_order,
+                    )
+                )
+                copied_candidates += 1
+
+        await self.db.commit()
+        await self.db.refresh(clone)
+
+        logger.info(
+            f"Election cloned | source={election_id} clone={clone.id} "
+            f"candidates_copied={copied_candidates}"
+        )
+        await self._audit(
+            "election_cloned",
+            {
+                "source_election_id": str(election_id),
+                "clone_election_id": clone.id,
+                "title": title,
+                "candidates_copied": copied_candidates,
+            },
+            user_id=str(created_by),
+        )
+        return clone, None
+
+    async def merge_write_in_candidates(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        source_candidate_ids: List[str],
+        target_candidate_id: str,
+        merged_by: str,
+    ) -> Tuple[int, Optional[str]]:
+        """Consolidate write-in spelling variants under one candidate.
+
+        Alias-based: sources get ``merged_into_candidate_id`` set and
+        results count their votes under the target. Votes are NEVER
+        re-pointed — vote signatures embed candidate_id, so mutating them
+        would break integrity verification. Only write-in candidates can
+        be merge sources (real nominees are never silently folded away).
+        """
+        election = await self.get_election(election_id, organization_id)
+        if not election:
+            return 0, "Election not found"
+
+        wanted = set(source_candidate_ids) | {target_candidate_id}
+        cand_result = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.election_id == str(election_id))
+            .where(Candidate.id.in_(list(wanted)))
+        )
+        by_id = {c.id: c for c in cand_result.scalars().all()}
+        missing = wanted - set(by_id)
+        if missing:
+            return 0, "One or more candidates do not belong to this election"
+
+        target = by_id[target_candidate_id]
+        if target.merged_into_candidate_id:
+            return 0, "The target candidate has itself been merged"
+
+        sources = [by_id[cid] for cid in source_candidate_ids]
+        for cand in sources:
+            if not cand.is_write_in:
+                return 0, (
+                    f"{cand.name} is not a write-in — only write-in "
+                    f"variants can be merged"
+                )
+            if cand.merged_into_candidate_id:
+                return 0, f"{cand.name} has already been merged"
+
+        for cand in sources:
+            cand.merged_into_candidate_id = target.id
+        await self.db.commit()
+
+        merged_names = [c.name for c in sources]
+        logger.info(
+            f"Write-ins merged | election={election_id} "
+            f"sources={merged_names} target={target.name!r} by={merged_by}"
+        )
+        await self._audit(
+            "election_write_ins_merged",
+            {
+                "election_id": str(election_id),
+                "target_candidate_id": target.id,
+                "target_name": target.name,
+                "merged_candidate_ids": [c.id for c in sources],
+                "merged_names": merged_names,
+            },
+            user_id=str(merged_by),
+        )
+        return len(sources), None
+
+    async def build_printable_ballot_pdf(
+        self, election_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[BytesIO], Optional[str], str]:
+        """Render the official blank paper ballot for in-room voting.
+
+        Generated from the election itself so the paper exactly matches
+        the system: positions in order, accepted candidates in display
+        order, write-in lines when allowed, and method-specific
+        instructions. Pairs with paper-ballot entry + attestation.
+
+        Returns: (pdf_buffer, error, filename)
+        """
+        from app.utils.election_ballot_pdf import render_printable_ballot_pdf
+
+        election = await self.get_election(election_id, organization_id)
+        if not election:
+            return None, "Election not found", ""
+        if election.status in (ElectionStatus.CLOSED, ElectionStatus.CANCELLED):
+            return (
+                None,
+                "Printable ballots are only available before the election " "closes",
+                "",
+            )
+        if not election.positions:
+            return (
+                None,
+                "Printable ballots require a positional election",
+                "",
+            )
+
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+
+        candidates_result = await self.db.execute(
+            select(Candidate)
+            .where(Candidate.election_id == str(election_id))
+            .where(Candidate.accepted == True)  # noqa: E712
+            .where(Candidate.merged_into_candidate_id.is_(None))
+            .order_by(Candidate.position, Candidate.display_order)
+        )
+        candidates = list(candidates_result.scalars().all())
+        if not candidates:
+            return None, "The election has no accepted candidates yet", ""
+
+        positions = []
+        for position in election.positions:
+            positions.append(
+                {
+                    "name": position,
+                    "candidates": [
+                        c.name for c in candidates if c.position == position
+                    ],
+                }
+            )
+
+        data = {
+            "election": {
+                "title": election.title,
+                "voting_method": election.voting_method,
+                "max_votes_per_position": election.max_votes_per_position or 1,
+                "allow_write_ins": bool(election.allow_write_ins),
+            },
+            "positions": positions,
+        }
+        meta = {
+            "org_name": organization.name if organization else "",
+            "generated_at": await self._org_local_time(
+                organization, datetime.now(timezone.utc)
+            ),
+        }
+        buf = render_printable_ballot_pdf(data, meta)
+        safe_title = re.sub(r"[^A-Za-z0-9_-]+", "_", election.title)[:60]
+        return buf, None, f"ballot_{safe_title}.pdf"
+
+    async def build_certified_results_pdf(
+        self, election_id: UUID, organization_id: UUID
+    ) -> Tuple[Optional[BytesIO], Optional[str], str]:
+        """Render the certified results package for a CLOSED election.
+
+        The formal record for the meeting minutes: final tallies, turnout
+        and quorum, the paper-batch attestation trail (including voided
+        and unattested batches), and the integrity-verification outcome,
+        with signature lines for the certifying officers.
+
+        Returns: (pdf_buffer, error, filename)
+        """
+        from app.utils.certified_results_pdf import render_certified_results_pdf
+
+        election = await self.get_election(election_id, organization_id)
+        if not election:
+            return None, "Election not found", ""
+        if election.status != ElectionStatus.CLOSED:
+            return (
+                None,
+                "Certified results are only available after the election " "closes",
+                "",
+            )
+
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+
+        results = await self.get_election_results(
+            election_id, organization_id, _internal_bypass_visibility=True
+        )
+        if not results:
+            return None, "Results could not be computed", ""
+
+        stats = await self.get_election_stats(election_id, organization_id)
+        batches = await self.list_manual_ballot_batches(election_id, organization_id)
+        integrity = await self.verify_vote_integrity(election_id, organization_id)
+
+        data = {
+            "election": {
+                "title": election.title,
+                "closed_display": await self._org_local_time(
+                    organization, election.end_date
+                ),
+                "voting_method": election.voting_method,
+                "victory_condition": election.victory_condition,
+                "tie_policy": getattr(election, "tie_policy", None) or "co_winners",
+                "anonymous_voting": bool(election.anonymous_voting),
+            },
+            "results": results.model_dump(),
+            "stats": stats.model_dump() if stats else {},
+            "batches": [
+                {
+                    "batch_id": b["batch_id"],
+                    "status": b["status"],
+                    "total_ballots": b["total_ballots"],
+                    "recorded_by_name": b["recorded_by_name"],
+                    "attester_names": [
+                        a["name"] for a in b["attestations"] if a.get("name")
+                    ],
+                }
+                for b in batches
+            ],
+            "integrity": integrity,
+        }
+        meta = {
+            "org_name": organization.name if organization else "",
+            "generated_at": await self._org_local_time(
+                organization, datetime.now(timezone.utc)
+            ),
+        }
+        buf = render_certified_results_pdf(data, meta)
+        safe_title = re.sub(r"[^A-Za-z0-9_-]+", "_", election.title)[:60]
+        return buf, None, f"certified_results_{safe_title}.pdf"
+
     async def process_election_lifecycle(self, organization_id: UUID) -> int:
         """Run scheduled lifecycle transitions for one organization.
 
@@ -3723,6 +4117,40 @@ class ElectionService:
                 severity="warning",
             )
 
+        # Flag unresolved ties at close so the required resolution (per the
+        # election's tie_policy) is visible in the audit trail. Best-effort:
+        # a results-computation error must never block the close.
+        try:
+            tie_results = await self.get_election_results(
+                election_id, organization_id, _internal_bypass_visibility=True
+            )
+            tied_positions = [
+                p.position
+                for p in (tie_results.results_by_position if tie_results else [])
+                if p.is_tie
+            ]
+            if tied_positions:
+                policy = getattr(election, "tie_policy", None) or "co_winners"
+                logger.warning(
+                    f"Election closed with unresolved tie(s) | "
+                    f"election={election_id} positions={tied_positions} "
+                    f"policy={policy}"
+                )
+                await self._audit(
+                    "election_tie_detected",
+                    {
+                        "election_id": str(election_id),
+                        "positions": tied_positions,
+                        "tie_policy": policy,
+                    },
+                    severity="warning",
+                )
+        except Exception as e:
+            logger.error(
+                f"Tie detection at close failed (non-blocking) | "
+                f"election={election_id} error={e}"
+            )
+
         # Check if runoffs are enabled and if we should create one
         if (
             election.enable_runoffs
@@ -3894,6 +4322,25 @@ class ElectionService:
                 "before opening",
             )
 
+        # Freeze the voter roll: eligibility for this election now means
+        # "eligible when voting opened" — a membership change mid-election
+        # can no longer add or remove voters, and the turnout denominator
+        # is fixed and defensible. Secretary overrides still add voters.
+        # Best-effort: a roster failure leaves the snapshot NULL, which is
+        # the documented legacy behavior (live evaluation).
+        try:
+            roster = await self.get_eligibility_roster(election_id, organization_id)
+            election.eligible_roster_snapshot = [
+                m["user_id"]
+                for m in roster.get("roster", [])
+                if m.get("will_receive_ballot")
+            ]
+        except Exception as e:
+            logger.error(
+                f"Failed to freeze voter roll (non-blocking) | "
+                f"election={election_id} error={e}"
+            )
+
         # Opening the election is the declaration that voting starts now.
         # Every vote path rejects votes before start_date, and auto-created
         # runoffs default to a start one hour out — without this clamp, a
@@ -3924,6 +4371,11 @@ class ElectionService:
                 "candidate_count": candidate_count,
                 # True when a future start_date was clamped to the open time
                 "start_adjusted_to_open_time": start_adjusted,
+                "roster_frozen_count": (
+                    len(election.eligible_roster_snapshot)
+                    if election.eligible_roster_snapshot is not None
+                    else None
+                ),
             },
         )
 

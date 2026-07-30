@@ -453,6 +453,59 @@ export const electionService = {
   },
 
   /**
+   * Create a fresh draft election from an existing election's setup
+   * (positions, method, quorum, eligibility, reminders) with new dates.
+   */
+  async cloneElection(
+    electionId: string,
+    payload: {
+      title: string;
+      start_date: string;
+      end_date: string;
+      nomination_deadline?: string | undefined;
+      include_candidates?: boolean | undefined;
+    },
+  ): Promise<Election> {
+    const response = await api.post<Election>(`/elections/${electionId}/clone`, payload);
+    return response.data;
+  },
+
+  /**
+   * Consolidate write-in spelling variants under one candidate. Votes are
+   * never mutated — results count merged variants under the target.
+   */
+  async mergeWriteIns(
+    electionId: string,
+    payload: { source_candidate_ids: string[]; target_candidate_id: string },
+  ): Promise<{ merged: number; message: string }> {
+    const response = await api.post<{ merged: number; message: string }>(
+      `/elections/${electionId}/write-ins/merge`,
+      payload,
+    );
+    return response.data;
+  },
+
+  /**
+   * Download the official blank paper ballot (PDF) for in-room voting.
+   */
+  async downloadPrintableBallot(electionId: string): Promise<Blob> {
+    const response = await api.get<Blob>(`/elections/${electionId}/printable-ballot`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  /**
+   * Download the certified results package (PDF) for a closed election.
+   */
+  async downloadCertifiedResults(electionId: string): Promise<Blob> {
+    const response = await api.get<Blob>(`/elections/${electionId}/certified-results`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  /**
    * List paper-ballot batches with their attestation trail.
    */
   async getManualBallotBatches(

@@ -35,6 +35,9 @@ import RemindNonVotersModal from '../components/election-detail/RemindNonVotersM
 import NominationsPanel from '../components/election-detail/NominationsPanel';
 import RecordPaperBallotsModal from '../components/election-detail/RecordPaperBallotsModal';
 import PaperBallotBatchesPanel from '../components/election-detail/PaperBallotBatchesPanel';
+import LiveTurnoutPanel from '../components/election-detail/LiveTurnoutPanel';
+import CloneElectionModal from '../components/election-detail/CloneElectionModal';
+import MergeWriteInsModal from '../components/election-detail/MergeWriteInsModal';
 import DeleteElectionModal from '../components/election-detail/DeleteElectionModal';
 import ExtendElectionModal from '../components/election-detail/ExtendElectionModal';
 import EditDatesModal from '../components/election-detail/EditDatesModal';
@@ -119,6 +122,16 @@ export const ElectionDetailPage: React.FC = () => {
   const [paperCandidates, setPaperCandidates] = useState<Candidate[]>([]);
   const [paperBatches, setPaperBatches] = useState<ManualBallotBatch[]>([]);
   const [attestingBatchId, setAttestingBatchId] = useState<string | null>(null);
+
+  // Enhancement batch: turnout dashboard, clone, write-in merge
+  const [showTurnout, setShowTurnout] = useState(false);
+  const [showCloneModal, setShowCloneModal] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
+  const [cloneError, setCloneError] = useState<string | null>(null);
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [isMerging, setIsMerging] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
+  const [mergeCandidates, setMergeCandidates] = useState<Candidate[]>([]);
 
   // Meeting binding state
   const [showMeetingSelector, setShowMeetingSelector] = useState(false);
@@ -413,6 +426,97 @@ export const ElectionDetailPage: React.FC = () => {
       await fetchElection();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to void paper ballots'));
+    }
+  };
+
+  const handleClone = async (payload: {
+    title: string;
+    start_date: string;
+    end_date: string;
+    include_candidates: boolean;
+  }) => {
+    if (!electionId) return;
+    try {
+      setIsCloning(true);
+      setCloneError(null);
+      const clone = await electionService.cloneElection(electionId, {
+        title: payload.title,
+        start_date: localToUTC(payload.start_date, tz),
+        end_date: localToUTC(payload.end_date, tz),
+        include_candidates: payload.include_candidates,
+      });
+      setShowCloneModal(false);
+      toast.success('Draft election created');
+      navigate(`/elections/${clone.id}`);
+    } catch (err: unknown) {
+      setCloneError(getErrorMessage(err, 'Failed to clone election'));
+    } finally {
+      setIsCloning(false);
+    }
+  };
+
+  const handleShowMergeWriteIns = async () => {
+    if (!electionId) return;
+    try {
+      const candidatesData = await electionService.getCandidates(electionId);
+      setMergeCandidates(candidatesData);
+      setMergeError(null);
+      setShowMergeModal(true);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load candidates'));
+    }
+  };
+
+  const handleMergeWriteIns = async (sourceIds: string[], targetId: string) => {
+    if (!electionId) return;
+    try {
+      setIsMerging(true);
+      setMergeError(null);
+      const result = await electionService.mergeWriteIns(electionId, {
+        source_candidate_ids: sourceIds,
+        target_candidate_id: targetId,
+      });
+      setShowMergeModal(false);
+      toast.success(result.message);
+      await fetchElection();
+    } catch (err: unknown) {
+      setMergeError(getErrorMessage(err, 'Failed to merge write-ins'));
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
+  const downloadPdfBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPrintableBallot = async () => {
+    if (!electionId || !election) return;
+    try {
+      const blob = await electionService.downloadPrintableBallot(electionId);
+      downloadPdfBlob(blob, `ballot_${election.title.replace(/[^A-Za-z0-9_-]+/g, '_')}.pdf`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to generate the printable ballot'));
+    }
+  };
+
+  const handleDownloadCertifiedResults = async () => {
+    if (!electionId || !election) return;
+    try {
+      const blob = await electionService.downloadCertifiedResults(electionId);
+      downloadPdfBlob(
+        blob,
+        `certified_results_${election.title.replace(/[^A-Za-z0-9_-]+/g, '_')}.pdf`,
+      );
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to generate certified results'));
     }
   };
 
@@ -1130,6 +1234,12 @@ export const ElectionDetailPage: React.FC = () => {
 
                 {election.status === ElectionStatus.OPEN && (
                   <>
+                    <button
+                      onClick={() => setShowTurnout((s) => !s)}
+                      className="px-4 py-2 bg-sky-600 text-white rounded-md hover:bg-sky-700 text-sm"
+                    >
+                      {showTurnout ? 'Hide Live Turnout' : 'Live Turnout'}
+                    </button>
                     {featureFlags.paper_ballots_enabled && (
                       <button
                         onClick={() => { void handleShowPaperBallots(); }}
@@ -1163,6 +1273,44 @@ export const ElectionDetailPage: React.FC = () => {
                     Rollback
                   </button>
                 )}
+
+                {election.status !== ElectionStatus.CLOSED &&
+                  election.status !== ElectionStatus.CANCELLED &&
+                  (election.positions?.length ?? 0) > 0 && (
+                    <button
+                      onClick={() => { void handleDownloadPrintableBallot(); }}
+                      className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary rounded-md hover:bg-theme-surface-hover text-sm"
+                    >
+                      Print Blank Ballots
+                    </button>
+                  )}
+
+                {election.status === ElectionStatus.CLOSED && (
+                  <button
+                    onClick={() => { void handleDownloadCertifiedResults(); }}
+                    className="px-4 py-2 bg-emerald-700 text-white rounded-md hover:bg-emerald-800 text-sm"
+                  >
+                    Certified Results (PDF)
+                  </button>
+                )}
+
+                {election.allow_write_ins &&
+                  (election.status === ElectionStatus.OPEN ||
+                    election.status === ElectionStatus.CLOSED) && (
+                    <button
+                      onClick={() => { void handleShowMergeWriteIns(); }}
+                      className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary rounded-md hover:bg-theme-surface-hover text-sm"
+                    >
+                      Merge Write-Ins
+                    </button>
+                  )}
+
+                <button
+                  onClick={() => { setCloneError(null); setShowCloneModal(true); }}
+                  className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary rounded-md hover:bg-theme-surface-hover text-sm"
+                >
+                  Clone Election
+                </button>
 
               </div>
             </div>
@@ -1250,6 +1398,11 @@ export const ElectionDetailPage: React.FC = () => {
           election={election}
           onUpdate={setElection}
         />
+      )}
+
+      {/* Live turnout dashboard (secretary, meeting night) */}
+      {canManage && showTurnout && election.status === ElectionStatus.OPEN && electionId && (
+        <LiveTurnoutPanel electionId={electionId} election={election} />
       )}
 
       {/* Paper-ballot batches + attestation trail (secretary) */}
@@ -1744,6 +1897,26 @@ export const ElectionDetailPage: React.FC = () => {
           onSubmit={(payload) => { void handleSendBallotEmails(payload); }}
           onClose={() => { setShowSendEmailModal(false); setSendEmailError(null); }}
           timezone={tz}
+        />
+      )}
+
+      {showCloneModal && election && (
+        <CloneElectionModal
+          sourceTitle={election.title}
+          cloning={isCloning}
+          error={cloneError}
+          onSubmit={(payload) => { void handleClone(payload); }}
+          onClose={() => { setShowCloneModal(false); setCloneError(null); }}
+        />
+      )}
+
+      {showMergeModal && election && (
+        <MergeWriteInsModal
+          candidates={mergeCandidates}
+          merging={isMerging}
+          error={mergeError}
+          onSubmit={(sourceIds, targetId) => { void handleMergeWriteIns(sourceIds, targetId); }}
+          onClose={() => { setShowMergeModal(false); setMergeError(null); }}
         />
       )}
 

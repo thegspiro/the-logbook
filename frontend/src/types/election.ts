@@ -20,6 +20,8 @@ export type {
   QuorumType,
 };
 
+export type TiePolicy = 'co_winners' | 'runoff' | 'revote' | 'chair_decides';
+
 export interface BallotItem {
   id: string;
   type: string; // membership_approval, officer_election, general_vote
@@ -86,6 +88,7 @@ export interface Election {
   reminder_hours_before_close?: number;
   reminder_sent_at?: string;
   nomination_deadline?: string;
+  tie_policy?: TiePolicy;
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -162,6 +165,7 @@ export interface ElectionCreate {
   auto_open?: boolean | undefined;
   reminder_hours_before_close?: number | undefined;
   nomination_deadline?: string | undefined;
+  tie_policy?: TiePolicy | undefined;
 }
 
 export interface ElectionUpdate {
@@ -192,6 +196,7 @@ export interface ElectionUpdate {
   auto_open?: boolean;
   reminder_hours_before_close?: number;
   nomination_deadline?: string | undefined;
+  tie_policy?: TiePolicy | undefined;
 }
 
 export interface Candidate {
@@ -207,6 +212,8 @@ export interface Candidate {
   accepted: boolean;
   is_write_in: boolean;
   display_order: number;
+  // Set when this write-in was consolidated into another candidate
+  merged_into_candidate_id?: string | null;
   created_at: string;
   updated_at: string;
   vote_count?: number;
@@ -284,12 +291,16 @@ export interface CandidateResult {
   vote_count: number;
   percentage: number;
   is_winner: boolean;
+  // Part of an unresolved top-count tie (no winner declared; resolution
+  // per the election's tie_policy)
+  is_tied?: boolean;
 }
 
 export interface PositionResults {
   position: string;
   total_votes: number;
   candidates: CandidateResult[];
+  is_tie?: boolean;
 }
 
 export interface ElectionResults {
@@ -303,6 +314,7 @@ export interface ElectionResults {
   overall_results: CandidateResult[];
   quorum_met?: boolean;
   quorum_detail?: string | null;
+  tie_policy?: TiePolicy;
 }
 
 export interface TimelineEvent {
