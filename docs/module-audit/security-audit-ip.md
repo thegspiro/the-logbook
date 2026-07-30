@@ -185,15 +185,18 @@ allowlist recovery paths under fail-closed. **Status:** fixed.
   the `IPExceptionType.BLOCKLIST` enum value is documented as a reserved
   placeholder (kept to avoid a needless enum-column migration when the
   explicit-blocklist feature lands). (IP #5)
-- **Deferred (design, not a bug):** a dedicated `organization_id` column on
-  `audit_logs` would make org-scoping robust against author deletion/move
-  (currently resolves through the mutable `users` join — defense-in-depth, works
-  today). Cross-org allowlist bypass is documented-intentional (pre-auth edge
+- **✅ Resolved 2026-07-30:** `audit_logs.organization_id` exists (migration
+  `20260801_0009`): stamped at write time (explicit or auto-resolved from the
+  acting user), backfilled from `user_id` for pre-column rows, and included in
+  the hash chain from hash version 3 onward — org attribution on new rows is
+  tamper-proof, and every audit read path (audit-log endpoints, member
+  audit-history, compliance attestations, failed-login stats) now filters the
+  column directly instead of joining through the mutable `users` table.
+  Cross-org allowlist bypass is documented-intentional (pre-auth edge
   control); the `TRUSTED_PROXY_IPS`-empty startup warning already exists; admin
   country-block self-lockout is now operator-only after SEC-8's management gate.
   (AL #7, IP #3/#4)
-**Status:** actionable items fixed; the `audit_logs` org-column is a deferred
-robustness improvement.
+**Status:** actionable items fixed; the `audit_logs` org-column is done.
 
 ## Notes
 - Large-file caveat: `security_monitoring.py` (1,009 L), `ip_security_service.py`

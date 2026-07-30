@@ -64,6 +64,14 @@ class AuditLog(Base):
     username = Column(String(255))
     session_id = Column(String(36))
 
+    # Owning tenant. Nullable: platform-level events (pre-auth alerts,
+    # scheduled jobs with no acting user) have no org. Plain string, no FK —
+    # audit rows are append-only and deliberately loosely coupled. Stamped
+    # explicitly by callers or auto-resolved from user_id at write time;
+    # rows written before the column existed were backfilled from user_id.
+    # Included in the hash chain from hash_version 3 onward.
+    organization_id = Column(String(36), index=True)
+
     # Context
     ip_address = Column(String(45))  # Support IPv6
     user_agent = Column(Text)
@@ -76,8 +84,9 @@ class AuditLog(Base):
     previous_hash = Column(String(64), nullable=False)
     current_hash = Column(String(64), nullable=False, index=True)
     # Hash algorithm version: NULL/1 = legacy unkeyed SHA-256, 2 = keyed
-    # HMAC-SHA256. Stored per-row so pre-upgrade entries still verify under
-    # their original scheme while all new entries are forgery-resistant.
+    # HMAC-SHA256, 3 = keyed + organization_id in the hash input. Stored
+    # per-row so pre-upgrade entries still verify under their original
+    # scheme while all new entries are forgery-resistant.
     hash_version = Column(Integer, nullable=True)
 
     created_at = Column(

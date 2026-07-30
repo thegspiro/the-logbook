@@ -856,14 +856,14 @@ class SecurityMonitoringService:
         # Verify log integrity
         integrity_result = await self.verify_log_integrity(db)
 
-        # Failed-login stats from the audit log. AuditLog has no organization_id
-        # column, so scope to this org's users (mirrors the audit-log endpoints).
-        org_user_ids = select(User.id).where(User.organization_id == organization_id)
+        # Failed-login stats from the audit log, scoped by the audit log's
+        # organization_id column. Failed attempts against unknown usernames
+        # have no user and no org — platform-level, same as before.
         failed_logins_result = await db.execute(
             select(func.count(AuditLog.id))
             .where(AuditLog.event_type == AUDIT_EVENT_LOGIN_FAILED)
             .where(AuditLog.timestamp > hour_ago)
-            .where(AuditLog.user_id.in_(org_user_ids))
+            .where(AuditLog.organization_id == str(organization_id))
         )
         failed_logins_hour = failed_logins_result.scalar() or 0
 

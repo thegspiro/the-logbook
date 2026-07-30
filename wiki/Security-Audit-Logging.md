@@ -149,8 +149,12 @@ GET /api/v1/audit-logs/stats      # counts by severity and category
 GET /api/v1/audit-logs/{log_id}   # single entry
 ```
 
-Results are org-scoped by joining through users (only entries whose `user_id`
-belongs to the caller's organization); NULL-user system events are excluded.
+Results are org-scoped by the `organization_id` column on `audit_logs`
+*(2026-07-30)*: stamped at write time (explicitly, or auto-resolved from the
+acting user), backfilled from `user_id` for rows that predate the column, and
+included in the keyed hash chain from hash version 3 onward so org
+attribution on new rows is tamper-proof. Platform-level events (no acting
+user, no org) are visible to no organization.
 
 ### Via UI
 

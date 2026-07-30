@@ -122,9 +122,9 @@ possibly an `is_practice` carve-out), which changes the workflow.
   would close a compliance-data exfiltration path but breaks legitimate external
   recipients (e.g. a state compliance auditor), so it needs an owner decision.
   (config #5)
-- **Deferred / as-is:** attestation history over-fetches globally (no
-  `organization_id` on `AuditLog` — blocked on the same deferred audit-log
-  org-column as SEC-9; availability, not a leak) (officer #2);
+- **✅ Unblocked (officer #2, resolved 2026-07-30: `audit_logs.organization_id` exists (migration `20260801_0009`, backfilled from user_id, hash-bound from version 3)):**
+  attestation history now filters on the audit log's `organization_id`
+  column instead of over-fetching globally and filtering in Python;
   `records_with_certification` mislabel is ambiguous-intent, left as-is
   (officer #5); ISO-readiness `user_id` String match is latent (officer #6).
 **Status:** injection + input-validation fixed; monthly windowing (feature) and
