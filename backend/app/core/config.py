@@ -202,6 +202,14 @@ class Settings(BaseSettings):
 
     # Encryption - CRITICAL: Must be set via ENCRYPTION_KEY env var
     ENCRYPTION_KEY: str = ""
+    # Key rotation: comma-separated PREVIOUS values of ENCRYPTION_KEY.
+    # Decryption tries the current key first, then each legacy key, so data
+    # encrypted before a rotation stays readable while all new writes use
+    # the current key. Rotate by moving the old key here, setting a new
+    # ENCRYPTION_KEY, and running scripts/rotate_encryption_key.py to
+    # re-encrypt everything (then remove the drained legacy key). See
+    # docs/KEY_ROTATION.md.
+    ENCRYPTION_KEYS_LEGACY: str = ""
 
     # Installation-specific salt for key derivation
     # CRITICAL: Must be unique per installation, set via ENCRYPTION_SALT env var

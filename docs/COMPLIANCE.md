@@ -62,13 +62,17 @@ Tracked openly; see the assessment for the full roadmap.
 
 | Gap | Status |
 |---|---|
-| Data-subject rights (export, anonymization, consent, privacy policy) | Open — highest-priority feature gap (ISO 27701) |
-| Encryption key rotation (no key versioning / multi-key ring) | Open — one-off re-encryption tooling exists (`reencrypt_to_aesgcm.py`) but rotation is not routine |
-| Off-host audit-log shipping (SIEM/syslog) | Open — hash chain detects tampering but whole-table deletion needs an external copy |
+| Privacy policy / ToS pages | ✅ 2026-07-31 — /privacy and /terms with org-configurable text (`GET /api/public/v1/legal`) |
+| Per-user data export (portability / right of access) | ✅ 2026-07-31 — `GET /users/me/data-export`, Settings → Security → "Download my data" |
+| Member anonymization (right to erasure) | ✅ 2026-07-31 — `POST /users/{id}/anonymize` scrubs PII, keeps operational history; audit logs and election records deliberately untouched |
+| Encryption key rotation | ✅ 2026-07-31 — legacy-key decrypt ring (`ENCRYPTION_KEYS_LEGACY`) + `scripts/rotate_encryption_key.py`; runbook in [KEY_ROTATION.md](./KEY_ROTATION.md) |
+| Off-host audit-log shipping (SIEM) | ✅ 2026-07-31 — `audit_log_ship` task, HMAC-signed NDJSON to `AUDIT_SHIP_WEBHOOK_URL`, watermarked delivery |
+| Consent tracking (photo use, portal visibility) | Open (ISO 27701) |
+| Org-configurable retention schedules for business records | Open (ISO 27701 / ISO 15489) — statutory retention still lives in department SOPs |
 | react-router 6.x moderate advisories (open redirect, SSR hydration) | Accepted until the v6→v7 migration (breaking); not exploitable as deployed (no SSR; open redirect requires attacker-controlled link content) — revisit each release |
 | SAML / LDAP SSO | Not implemented (config placeholders exist; deps removed until real support lands) |
 | Backend type-checking (mypy) and coverage gates in CI | Open — frontend is gated, backend is not |
-| Accessibility automation beyond Modal component | Open — axe wiring exists, coverage is minimal |
+| Accessibility: keyboard-navigation audit of heavy surfaces, VPAT | Open — axe now covers the shared UX library + legal pages in CI; scheduling grid/form-builder keyboard audit remains |
 
 ## What the software cannot do for you
 

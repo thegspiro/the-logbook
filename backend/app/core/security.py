@@ -17,7 +17,8 @@ from typing import Any
 import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
-from cryptography.fernet import Fernet
+from cryptography.exceptions import InvalidTag
+from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -379,11 +380,12 @@ def get_encryption_salt() -> bytes:
     return salt.encode()
 
 
-def _derive_key_bytes() -> bytes:
+def _derive_key_bytes(key: str | None = None) -> bytes:
     """Derive the raw 32-byte data-encryption key from settings.
 
-    PBKDF2-HMAC-SHA256 over ENCRYPTION_KEY with the installation-specific salt.
-    Both the AES-256-GCM cipher (raw 32 bytes) and the legacy Fernet cipher
+    PBKDF2-HMAC-SHA256 over ENCRYPTION_KEY (or an explicit ``key``, used for
+    the legacy-key decrypt ring) with the installation-specific salt. Both
+    the AES-256-GCM cipher (raw 32 bytes) and the legacy Fernet cipher
     (base64 form) derive from this single function, so a value written under
     either scheme decrypts with the same configured key.
     """
@@ -393,7 +395,17 @@ def _derive_key_bytes() -> bytes:
         salt=get_encryption_salt(),
         iterations=100000,
     )
-    return kdf.derive(settings.ENCRYPTION_KEY.encode())
+    return kdf.derive((key or settings.ENCRYPTION_KEY).encode())
+
+
+def _get_legacy_keys() -> list[str]:
+    """Previous ENCRYPTION_KEY values still allowed for DECRYPTION only.
+
+    Set via ENCRYPTION_KEYS_LEGACY (comma-separated) during a key rotation;
+    new writes always use the current key. See docs/KEY_ROTATION.md.
+    """
+    raw = getattr(settings, "ENCRYPTION_KEYS_LEGACY", "") or ""
+    return [k.strip() for k in raw.split(",") if k.strip()]
 
 
 def get_encryption_key() -> bytes:
@@ -420,6 +432,12 @@ _GCM_PREFIX = "$gcm1$"
 _GCM_NONCE_BYTES = 12
 
 
+# Decrypt-ring cipher caches for legacy keys, keyed by the key string.
+# PBKDF2 at 100k iterations is deliberately slow — derive each key once.
+_legacy_aesgcms: dict[str, AESGCM] = {}
+_legacy_fernets: dict[str, Fernet] = {}
+
+
 def _get_cipher() -> Fernet:
     """Legacy Fernet cipher — used only to DECRYPT pre-migration ciphertext."""
     global _cipher
@@ -433,6 +451,32 @@ def _get_aesgcm() -> AESGCM:
     if _aesgcm is None:
         _aesgcm = AESGCM(_derive_key_bytes())
     return _aesgcm
+
+
+def _get_legacy_aesgcm(key: str) -> AESGCM:
+    if key not in _legacy_aesgcms:
+        _legacy_aesgcms[key] = AESGCM(_derive_key_bytes(key))
+    return _legacy_aesgcms[key]
+
+
+def _get_legacy_fernet(key: str) -> Fernet:
+    if key not in _legacy_fernets:
+        _legacy_fernets[key] = Fernet(base64.urlsafe_b64encode(_derive_key_bytes(key)))
+    return _legacy_fernets[key]
+
+
+def reset_encryption_ciphers() -> None:
+    """Drop all cached ciphers so the next use re-derives from settings.
+
+    Needed after ENCRYPTION_KEY / ENCRYPTION_KEYS_LEGACY change at runtime
+    (key-rotation tooling, tests) — the module-level caches would otherwise
+    keep encrypting under the old key.
+    """
+    global _cipher, _aesgcm
+    _cipher = None
+    _aesgcm = None
+    _legacy_aesgcms.clear()
+    _legacy_fernets.clear()
 
 
 def encrypt_data(data: str) -> str:
@@ -485,10 +529,58 @@ def decrypt_data(encrypted_data: str) -> str:
     if encrypted_data.startswith(_GCM_PREFIX):
         raw = base64.urlsafe_b64decode(encrypted_data[len(_GCM_PREFIX) :])
         nonce, ciphertext = raw[:_GCM_NONCE_BYTES], raw[_GCM_NONCE_BYTES:]
-        return _get_aesgcm().decrypt(nonce, ciphertext, None).decode()
+        try:
+            return _get_aesgcm().decrypt(nonce, ciphertext, None).decode()
+        except InvalidTag:
+            # Key-rotation ring: values written before a rotation decrypt
+            # under a legacy key. GCM authentication guarantees only the
+            # right key can succeed, so trying the ring never weakens the
+            # fail-closed contract — if no key verifies, re-raise.
+            for legacy_key in _get_legacy_keys():
+                try:
+                    return (
+                        _get_legacy_aesgcm(legacy_key)
+                        .decrypt(nonce, ciphertext, None)
+                        .decode()
+                    )
+                except InvalidTag:
+                    continue
+            raise
 
     # Legacy Fernet (AES-128-CBC + HMAC) ciphertext written before the migration.
-    return _get_cipher().decrypt(encrypted_data.encode()).decode()
+    try:
+        return _get_cipher().decrypt(encrypted_data.encode()).decode()
+    except InvalidToken:
+        for legacy_key in _get_legacy_keys():
+            try:
+                return (
+                    _get_legacy_fernet(legacy_key)
+                    .decrypt(encrypted_data.encode())
+                    .decode()
+                )
+            except InvalidToken:
+                continue
+        raise
+
+
+def decrypts_with_current_key(encrypted_data: str) -> bool:
+    """Whether a stored value decrypts under the CURRENT key alone.
+
+    False means the value depends on a legacy ring key (or doesn't decrypt
+    at all) — the rotation script uses this to find rows needing rewrite.
+    """
+    if not encrypted_data:
+        return True
+    try:
+        if encrypted_data.startswith(_GCM_PREFIX):
+            raw = base64.urlsafe_b64decode(encrypted_data[len(_GCM_PREFIX) :])
+            nonce, ciphertext = raw[:_GCM_NONCE_BYTES], raw[_GCM_NONCE_BYTES:]
+            _get_aesgcm().decrypt(nonce, ciphertext, None)
+        else:
+            _get_cipher().decrypt(encrypted_data.encode())
+        return True
+    except (InvalidTag, InvalidToken, ValueError):
+        return False
 
 
 # ============================================
