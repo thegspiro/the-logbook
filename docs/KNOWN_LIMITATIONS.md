@@ -22,7 +22,7 @@ here.
 
 | Item | Status | Detail |
 |------|--------|--------|
-| **CI `pip-audit` step is informational (non-blocking)** | Open (needs dedicated upgrade pass) | The 2026-07-29 CI restoration bumped every app-pinned dependency with a compatible fix (authlib 1.6.12, cryptography 48.0.1, msal 1.37.0, Pillow 12.3.0, pypdf 6.14.1, python-multipart 0.0.31, aiomysql 0.3.0, requests 2.33.0, click 8.3.3, python-dotenv 1.2.2). The remaining pip-audit findings can't be fixed by a pin bump: `starlette` is capped by the `fastapi==0.129` pin (fixes land in starlette 1.x → needs a FastAPI major upgrade), `aiosmtplib` is a transitive of `fastapi-mail`, `black`/`pytest` fixes are major dev-tool bumps (a Black major reformats the repo), and `setuptools`/`wheel` belong to the runner image. The CI step runs `continue-on-error: true` so the report stays visible without blocking; remove that flag after a dedicated FastAPI/starlette upgrade pass. |
+| **CI `pip-audit` step** | ✅ Blocking (2026-07-30) | The FastAPI/starlette upgrade pass moved the stack to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), fastapi-mail 1.6.5, aiosmtplib 5.1.2, PyJWT 2.13.0, cryptography 49.0.0, pydantic-settings 2.14.2, pypdf 6.14.2, email-validator 2.3.0, schemathesis 4.24.3, pytest 9.0.3 (+ pytest-cov 7 / randomly 4.1 / timeout 2.4, required by schemathesis 4.10+). `pip-audit -r requirements.txt` now runs **blocking** in CI with two documented ignores: black 26 (major that reformats the whole repo — PYSEC-2026-2120/2121) and pyopenssl (capped `<24.3` upstream by pysaml2 with no released fix inside the cap — PYSEC-2026-2268/2269). Remove an ignore when its blocker clears. |
 
 ## Configuration & Docs
 

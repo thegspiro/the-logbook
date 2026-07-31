@@ -53,7 +53,10 @@ class TestAPIContract:
             # Ensure no server errors
             assert response.status_code < 500
 
-        @schema.include(path_regex=r"^/api/v1/health").parametrize()
+        # NOTE: the LB health check lives at /health (root, not under
+        # /api/v1). The old pattern matched nothing — schemathesis 3.x
+        # silently generated zero tests; 4.x fails collection on it.
+        @schema.include(path_regex=r"^/health$").parametrize()
         def test_health_endpoints(self, case):
             """Health check endpoints should always respond."""
             response = case.call_and_validate()
