@@ -444,6 +444,29 @@ class AuditLogger:
 
         return count
 
+    def serialize_row(self, row: AuditLog) -> dict[str, Any]:
+        """Full serialization of an audit row, chain hashes included, for
+        export surfaces (retention archives, off-host shipping). Keeping one
+        serializer prevents drift between the two record formats."""
+        return {
+            "id": row.id,
+            "timestamp": self._normalize_timestamp(row.timestamp),
+            "timestamp_nanos": row.timestamp_nanos,
+            "event_type": row.event_type,
+            "event_category": row.event_category,
+            "severity": (
+                row.severity.value if hasattr(row.severity, "value") else row.severity
+            ),
+            "user_id": row.user_id,
+            "organization_id": getattr(row, "organization_id", None),
+            "ip_address": row.ip_address,
+            "user_agent": getattr(row, "user_agent", None),
+            "event_data": row.event_data,
+            "previous_hash": row.previous_hash,
+            "current_hash": row.current_hash,
+            "hash_version": row.hash_version,
+        }
+
     @staticmethod
     def compute_archive_attestation(
         first_log_id: int, last_log_id: int, last_log_hash: str
@@ -578,30 +601,7 @@ class AuditLogger:
         with gzip.open(archive_path, "wt", encoding="utf-8") as fh:
             for row in rows:
                 fh.write(
-                    json.dumps(
-                        {
-                            "id": row.id,
-                            "timestamp": self._normalize_timestamp(row.timestamp),
-                            "timestamp_nanos": row.timestamp_nanos,
-                            "event_type": row.event_type,
-                            "event_category": row.event_category,
-                            "severity": (
-                                row.severity.value
-                                if hasattr(row.severity, "value")
-                                else row.severity
-                            ),
-                            "user_id": row.user_id,
-                            "organization_id": getattr(row, "organization_id", None),
-                            "ip_address": row.ip_address,
-                            "user_agent": getattr(row, "user_agent", None),
-                            "event_data": row.event_data,
-                            "previous_hash": row.previous_hash,
-                            "current_hash": row.current_hash,
-                            "hash_version": row.hash_version,
-                        },
-                        sort_keys=True,
-                        default=str,
-                    )
+                    json.dumps(self.serialize_row(row), sort_keys=True, default=str)
                     + "\n"
                 )
 

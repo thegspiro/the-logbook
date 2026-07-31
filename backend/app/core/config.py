@@ -165,6 +165,11 @@ class Settings(BaseSettings):
     # audit rows. Include this directory in backups (see docs/BACKUP.md) —
     # after a purge it is the only copy of the oldest audit history.
     AUDIT_ARCHIVE_DIR: str = "./audit_archives"
+    # Off-host audit shipping: when set, a scheduled task POSTs new audit
+    # rows as HMAC-signed NDJSON batches to this collector URL (SIEM/log
+    # archive), giving the audit trail a copy outside the database host.
+    AUDIT_SHIP_WEBHOOK_URL: str | None = None
+    AUDIT_SHIP_BATCH_SIZE: int = 500
 
     # Account lockout after repeated failed sign-ins (brute-force protection).
     # Tunable so small, trusted deployments can run a gentler policy. (These

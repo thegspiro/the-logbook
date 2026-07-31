@@ -2800,6 +2800,20 @@ def _format_relative_time(event_time: datetime, now: datetime) -> str:
         return f"in {days} day{'s' if days != 1 else ''}"
 
 
+async def run_audit_log_ship(db: AsyncSession) -> Dict[str, Any]:
+    """Ship new audit rows to the configured off-host collector (SIEM).
+
+    No-op unless AUDIT_SHIP_WEBHOOK_URL is set. Watermark-based: only rows
+    the collector has not acknowledged are sent, and a failed delivery is
+    retried on the next run. See app/services/audit_ship_service.py.
+    """
+    from app.services.audit_ship_service import ship_new_audit_logs
+
+    result = await ship_new_audit_logs(db)
+    result["task"] = "audit_log_ship"
+    return result
+
+
 async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
     """
     Archive old audit logs for HIPAA compliance and long-term retention.
@@ -4442,6 +4456,7 @@ TASK_RUNNERS = {
     "end_of_shift_summary": run_end_of_shift_summary,
     "trainee_report_escalation": run_trainee_report_escalation,
     "audit_log_archival": run_audit_log_archival,
+    "audit_log_ship": run_audit_log_ship,
     "scheduled_emails": run_scheduled_emails,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
@@ -4509,6 +4524,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "enrollment_deadline_warnings": 604800,
     "nfpa_retirement_alerts": 604800,
     "audit_log_archival": 604800,
+    # Every 30 minutes — off-host audit shipping (no-op unless configured)
+    "audit_log_ship": 1800,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }

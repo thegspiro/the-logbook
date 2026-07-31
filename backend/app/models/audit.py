@@ -155,3 +155,29 @@ class AuditLogCheckpoint(Base):
 
     def __repr__(self):
         return f"<AuditLogCheckpoint(id={self.id}, logs={self.first_log_id}-{self.last_log_id})>"
+
+
+class AuditShipState(Base):
+    """
+    High-water mark for off-host audit-log shipping.
+
+    A single row (id=1) tracking the last AuditLog.id successfully delivered
+    to the configured external collector (AUDIT_SHIP_WEBHOOK_URL). The
+    watermark only advances after the collector acknowledges a batch, so a
+    failed delivery is retried on the next scheduled run.
+    """
+
+    __tablename__ = "audit_ship_state"
+
+    id = Column(Integer, primary_key=True)
+    last_shipped_id = Column(BigInteger, nullable=False, default=0)
+    last_shipped_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    def __repr__(self):
+        return f"<AuditShipState(last_shipped_id={self.last_shipped_id})>"
