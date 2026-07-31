@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { LayoutDashboard, PanelLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, AutoSaveNotification, ErrorAlert } from '../components';
@@ -24,7 +24,7 @@ const NavigationChoice: React.FC = () => {
   useEffect(() => {
     // Redirect if no department name set
     if (!departmentName) {
-      navigate('/onboarding/start');
+      void navigate('/onboarding/start');
     }
   }, [departmentName, navigate]);
 
@@ -63,7 +63,7 @@ const NavigationChoice: React.FC = () => {
 
       toast.success('Department information saved');
       // Navigate to email platform choice
-      navigate('/onboarding/email-platform');
+      void navigate('/onboarding/email-platform');
     } else if (error) {
       // Display the actual error message from the backend
       toast.error(error);

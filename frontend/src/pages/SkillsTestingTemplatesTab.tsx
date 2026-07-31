@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   ClipboardCheck,
   Plus,
@@ -157,7 +157,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
 
   const handleDuplicate = useCallback(async (id: string) => {
     const newTemplate = await duplicateTemplate(id);
-    navigate(`/training/skills-testing/templates/${newTemplate.id}/edit`);
+    void navigate(`/training/skills-testing/templates/${newTemplate.id}/edit`);
   }, [duplicateTemplate, navigate]);
 
   const handleDelete = useCallback(async (id: string) => {
@@ -223,7 +223,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
             <option value="archived">Archived</option>
           </select>
           <button
-            onClick={() => navigate('/training/skills-testing/templates/new')}
+            onClick={() => void navigate('/training/skills-testing/templates/new')}
             className="btn-primary flex font-medium gap-2 items-center"
           >
             <Plus className="w-4 h-4" />
@@ -242,7 +242,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
           <ClipboardCheck className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
           <p className="text-theme-text-muted">No templates found</p>
           <button
-            onClick={() => navigate('/training/skills-testing/templates/new')}
+            onClick={() => void navigate('/training/skills-testing/templates/new')}
             className="btn-primary mt-4 text-sm"
           >
             Create Your First Template
@@ -267,8 +267,8 @@ const SkillsTestingTemplatesTab: React.FC = () => {
                   <TemplateRow
                     key={template.id}
                     template={template}
-                    onEdit={() => navigate(`/training/skills-testing/templates/${template.id}/edit`)}
-                    onView={() => navigate(`/training/skills-testing/templates/${template.id}`)}
+                    onEdit={() => void navigate(`/training/skills-testing/templates/${template.id}/edit`)}
+                    onView={() => void navigate(`/training/skills-testing/templates/${template.id}`)}
                     onPublish={() => void handlePublish(template.id)}
                     onDuplicate={() => void handleDuplicate(template.id)}
                     onDelete={() => void handleDelete(template.id)}

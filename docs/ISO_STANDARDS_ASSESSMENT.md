@@ -243,6 +243,6 @@ Items 5–8 close the largest 27001/22301 control gaps. Items 11–14 are the
 privacy feature set — the one area where the product currently cannot support
 a deploying organization's obligations at all. The 2026-07-31 batch also
 fixed the frontend production-dependency advisories that were fixable without
-a breaking major (axios 1.19, react-router-dom 6.30.4, dompurify 3.4.12);
-the remaining react-router moderates need the v6→v7 migration, tracked in
-[COMPLIANCE.md](./COMPLIANCE.md).
+a breaking major (axios 1.19, dompurify 3.4.12), and the router was
+subsequently migrated to react-router 8.3.0 — the production dependency
+tree now audits clean (see [COMPLIANCE.md](./COMPLIANCE.md)).

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import { MapPin, Wifi, WifiOff } from 'lucide-react';
 import { useTimezone } from '../hooks/useTimezone';

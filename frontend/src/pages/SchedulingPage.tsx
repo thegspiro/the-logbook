@@ -26,7 +26,7 @@ import {
   Truck,
   ChevronDown,
 } from "lucide-react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuthStore } from "../stores/authStore";
 import { useTimezone } from "../hooks/useTimezone";
 import { useTheme } from "../contexts/ThemeContext";

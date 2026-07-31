@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router';
 import JsBarcode from 'jsbarcode';
 import { ArrowLeft, Printer, Loader2, AlertCircle, Settings2, Download, AlertTriangle, RotateCw, TestTube2 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';

@@ -342,9 +342,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Blocking at high/critical. Moderate advisories that only a breaking
-      # major upgrade can fix (e.g. react-router 6→7) don't fail the build;
-      # track those in docs/COMPLIANCE.md instead of silencing them here.
+      # Blocking at high/critical. If an advisory can only be fixed by a
+      # breaking major upgrade, track the accepted risk in docs/COMPLIANCE.md
+      # instead of silencing it here.
       - name: Run npm audit (fail on high/critical)
         run: npm audit --omit=dev --audit-level=high
 

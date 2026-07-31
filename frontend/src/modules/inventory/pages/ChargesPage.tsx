@@ -6,7 +6,7 @@
  */
 
 import React, { Suspense } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ArrowLeft, DollarSign, Loader2 } from 'lucide-react';
 
 const ChargeManagementPanel = React.lazy(() => import('../../../components/ChargeManagementPanel'));

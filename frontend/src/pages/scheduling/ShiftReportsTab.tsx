@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import {
   FileText, Plus, Loader2, Clock, Phone, ChevronDown,
   ChevronUp, Check, X, Search, User as UserIcon, AlertCircle,

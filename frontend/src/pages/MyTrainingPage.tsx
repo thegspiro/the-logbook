@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   GraduationCap,
   Clock,
@@ -431,7 +431,7 @@ const MyTrainingPage: React.FC = () => {
           </div>
           <div className="flex items-center space-x-3">
             <button
-              onClick={() => navigate('/training/submit')}
+              onClick={() => void navigate('/training/submit')}
               className="btn-primary flex font-medium items-center space-x-2 text-sm"
             >
               <Send className="w-4 h-4" />
@@ -740,7 +740,7 @@ const MyTrainingPage: React.FC = () => {
                     )}
                     <button
                       type="button"
-                      onClick={() => navigate(`/training/my-progress/${e.id}`)}
+                      onClick={() => void navigate(`/training/my-progress/${e.id}`)}
                       className="mt-3 text-xs text-red-700 dark:text-red-400 hover:underline"
                     >
                       View full progress →
@@ -876,7 +876,7 @@ const MyTrainingPage: React.FC = () => {
                 No detailed training records yet. Submit external training to get started.
               </p>
               <button
-                onClick={() => navigate('/training/submit')}
+                onClick={() => void navigate('/training/submit')}
                 className="btn-primary font-medium text-sm"
               >
                 Submit External Training

@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router';
 import { ArrowLeft, AlertTriangle, DollarSign, FileText } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';

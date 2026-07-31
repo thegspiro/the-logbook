@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router';
 import {
   Plug,
   Calendar,
@@ -319,10 +319,10 @@ const IntegrationsPage: React.FC = () => {
       toast.success('Salesforce connected successfully!');
       setShowConnectModal(null);
       void loadIntegrations();
-      navigate('/integrations', { replace: true });
+      void navigate('/integrations', { replace: true });
     } else if (sfError) {
       toast.error(`Salesforce connection failed: ${sfError.replace(/_/g, ' ')}`);
-      navigate('/integrations', { replace: true });
+      void navigate('/integrations', { replace: true });
     }
   }, [location.search, navigate, loadIntegrations]);
 

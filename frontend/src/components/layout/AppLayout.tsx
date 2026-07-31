@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Outlet } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router';
 import axios from 'axios';
 import { TopNavigation } from './TopNavigation';
 import { SideNavigation } from './SideNavigation';
@@ -110,7 +110,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const handleLogoutConfirm = async () => {
     await logout();
     sessionStorage.clear();
-    navigate('/login');
+    void navigate('/login');
   };
 
   const handleLogoutCancel = () => {

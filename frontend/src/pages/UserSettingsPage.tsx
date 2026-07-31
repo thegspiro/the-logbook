@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Contrast, Palette, AlertTriangle, Heart, Plus, Trash2, ShieldCheck, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService, userService } from '../services/api';

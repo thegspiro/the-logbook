@@ -130,7 +130,7 @@ export default defineConfig({
           if (id.includes('node_modules')) {
             // Check specific sub-framework chunks first (before the
             // broad 'react' match below catches them)
-            if (id.includes('react-router') || id.includes('@remix-run')) {
+            if (id.includes('react-router')) {
               return 'vendor-router';
             }
             if (id.includes('lucide-react')) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Users,
   UserPlus,
@@ -337,7 +337,7 @@ const Members: React.FC = () => {
             {/* Action Buttons */}
             <div className="flex items-center space-x-2 sm:space-x-3 w-full md:w-auto">
               <button
-                onClick={() => navigate('/members/import')}
+                onClick={() => void navigate('/members/import')}
                 className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex-1 md:flex-none"
               >
                 <Upload className="w-4 h-4" />
@@ -345,7 +345,7 @@ const Members: React.FC = () => {
                 <span className="sm:hidden">Import</span>
               </button>
               <button
-                onClick={() => navigate('/members/add')}
+                onClick={() => void navigate('/members/add')}
                 className="btn-info flex flex-1 items-center justify-center md:flex-none px-3 sm:px-4 space-x-2"
               >
                 <UserPlus className="w-4 h-4" />
@@ -382,8 +382,8 @@ const Members: React.FC = () => {
               actions={
                 !(searchQuery || filterStatus !== 'all')
                   ? [
-                      { label: 'Import CSV', onClick: () => navigate('/members/import'), icon: Upload, variant: 'secondary' },
-                      { label: 'Add Member', onClick: () => navigate('/members/add'), icon: UserPlus },
+                      { label: 'Import CSV', onClick: () => void navigate('/members/import'), icon: Upload, variant: 'secondary' },
+                      { label: 'Add Member', onClick: () => void navigate('/members/add'), icon: UserPlus },
                     ]
                   : undefined
               }
@@ -439,7 +439,7 @@ const Members: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-1 shrink-0">
                     <button
-                      onClick={() => navigate(`/members/${member.id}`)}
+                      onClick={() => void navigate(`/members/${member.id}`)}
                       className="p-2 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                       title="View/Edit Profile"
                     >
@@ -468,7 +468,7 @@ const Members: React.FC = () => {
               </span>
               <div className="flex items-center gap-2 ml-auto">
                 <button
-                  onClick={() => navigate(`/members/print-labels?ids=${[...selectedIds].join(',')}`)}
+                  onClick={() => void navigate(`/members/print-labels?ids=${[...selectedIds].join(',')}`)}
                   className="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-sm transition-colors inline-flex items-center gap-1"
                 >
                   <Printer className="w-3 h-3" />
@@ -610,7 +610,7 @@ const Members: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end space-x-2">
                           <button
-                            onClick={() => navigate(`/members/${member.id}`)}
+                            onClick={() => void navigate(`/members/${member.id}`)}
                             className="p-2 text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded-sm transition-colors"
                             title="View/Edit Profile"
                           >

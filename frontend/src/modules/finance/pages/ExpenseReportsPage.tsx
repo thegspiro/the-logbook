@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import { Plus, Receipt, AlertTriangle, Search, X } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
@@ -172,7 +172,7 @@ const ExpenseReportsPage: React.FC = () => {
               ? [
                   {
                     label: 'New Expense Report',
-                    onClick: () => navigate('/finance/expenses/new'),
+                    onClick: () => void navigate('/finance/expenses/new'),
                     icon: Plus,
                   },
                 ]
@@ -209,7 +209,7 @@ const ExpenseReportsPage: React.FC = () => {
                 {filteredReports.map((er) => (
                   <tr
                     key={er.id}
-                    onClick={() => navigate(`/finance/expenses/${er.id}`)}
+                    onClick={() => void navigate(`/finance/expenses/${er.id}`)}
                     className="cursor-pointer transition-colors hover:bg-theme-surface-hover"
                   >
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-red-600">

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Shield, CheckCircle, Info, Key, Mail, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
@@ -34,7 +34,7 @@ const AuthenticationChoice: React.FC = () => {
 
   useEffect(() => {
     if (!departmentName) {
-      navigate('/onboarding/start');
+      void navigate('/onboarding/start');
       return;
     }
 
@@ -168,7 +168,7 @@ const AuthenticationChoice: React.FC = () => {
       toast.success('Authentication platform saved');
 
       // Route to System Owner account creation
-      navigate('/onboarding/system-owner');
+      void navigate('/onboarding/system-owner');
     }
   };
 

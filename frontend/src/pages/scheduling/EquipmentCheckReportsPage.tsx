@@ -19,7 +19,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type {
   ComplianceReport,

@@ -6,7 +6,7 @@
  */
 
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   ClipboardCheck, Plus, Search, Loader2, X, CheckCircle2,
   XCircle, MinusCircle, Calendar, ArrowLeft, AlertTriangle, Pencil, RotateCcw,
@@ -39,7 +39,7 @@ export default function InspectionsListPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/facilities')} className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors" aria-label="Back to facilities">
+          <button onClick={() => void navigate('/facilities')} className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors" aria-label="Back to facilities">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>

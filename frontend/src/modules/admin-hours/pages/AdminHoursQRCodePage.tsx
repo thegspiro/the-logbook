@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import { adminHoursCategoryService } from '../services/api';
 import type { AdminHoursQRData } from '../types';

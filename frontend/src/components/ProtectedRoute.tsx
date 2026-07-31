@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Navigate, useLocation, Link } from 'react-router-dom';
+import { Navigate, useLocation, Link } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 
 interface ProtectedRouteProps {

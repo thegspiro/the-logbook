@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router';
 import { ArrowLeft, CheckCircle, Lock, Eye, EyeOff } from 'lucide-react';
 import { authService } from '../services/api';
 import { validatePasswordStrength } from '../utils/passwordValidation';
@@ -93,7 +93,7 @@ export const ResetPasswordPage: React.FC = () => {
       setSuccess(true);
       // Redirect to login after 3 seconds
       setTimeout(() => {
-        navigate('/login');
+        void navigate('/login');
       }, 3000);
     } catch (err: unknown) {
       setError(

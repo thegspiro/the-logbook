@@ -20,7 +20,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { useAuthStore } from '../../../stores/authStore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { meetingsService } from '../../../services/api';
 import type { MeetingRecord, MeetingsSummary } from '../../../services/api';
 import { minutesService } from '../services/api';
@@ -370,7 +370,7 @@ const MinutesPage: React.FC = () => {
                             try {
                               const minutes = await minutesService.createFromMeeting(meeting.id);
                               toast.success('Minutes created from meeting');
-                              navigate(`/minutes/${minutes.id}`);
+                              void navigate(`/minutes/${minutes.id}`);
                             } catch {
                               toast.error('Failed to create minutes from meeting');
                             }

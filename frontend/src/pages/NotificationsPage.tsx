@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   Bell,
   Inbox,
@@ -652,7 +652,7 @@ const NotificationsPage: React.FC = () => {
               Customize email templates for different notification types. Templates support dynamic placeholders for personalization.
             </p>
             <button
-              onClick={() => navigate('/communications/email-templates')}
+              onClick={() => void navigate('/communications/email-templates')}
               className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
             >
               <Mail className="w-4 h-4" />

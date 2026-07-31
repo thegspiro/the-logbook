@@ -36,7 +36,7 @@ import {
   Plus,
   ShieldAlert,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import {
   trainingProgramService,
   trainingModuleConfigService,
@@ -564,7 +564,7 @@ const Dashboard: React.FC = () => {
               <div className="flex flex-wrap gap-2 text-xs sm:text-sm" aria-label="At a glance">
                 {showShiftFirst && nextShift ? (
                   <button
-                    onClick={() => navigate("/scheduling")}
+                    onClick={() => void navigate("/scheduling")}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
                   >
                     <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
@@ -572,7 +572,7 @@ const Dashboard: React.FC = () => {
                   </button>
                 ) : nextEvent ? (
                   <button
-                    onClick={() => navigate(`/events/${nextEvent.id}`)}
+                    onClick={() => void navigate(`/events/${nextEvent.id}`)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
                   >
                     <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
@@ -588,7 +588,7 @@ const Dashboard: React.FC = () => {
                 )}
                 {urgentCerts.length > 0 && (
                   <button
-                    onClick={() => navigate("/training/my-training")}
+                    onClick={() => void navigate("/training/my-training")}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
                   >
                     <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
@@ -600,7 +600,7 @@ const Dashboard: React.FC = () => {
                 )}
                 {unreadCount > 0 && (
                   <button
-                    onClick={() => navigate("/notifications?tab=inbox")}
+                    onClick={() => void navigate("/notifications?tab=inbox")}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors"
                   >
                     <Bell className="w-3.5 h-3.5" aria-hidden="true" />
@@ -609,7 +609,7 @@ const Dashboard: React.FC = () => {
                 )}
                 {overdueActionItems > 0 && (
                   <button
-                    onClick={() => navigate("/action-items")}
+                    onClick={() => void navigate("/action-items")}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
                   >
                     <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
@@ -634,7 +634,7 @@ const Dashboard: React.FC = () => {
             : `${urgent.length} expiring within 60 days`;
           return (
             <button
-              onClick={() => navigate("/training/my-training")}
+              onClick={() => void navigate("/training/my-training")}
               className="w-full mb-6 sm:mb-8 bg-red-500/10 border-l-4 border-red-500 rounded-lg p-4 hover:bg-red-500/15 transition-colors text-left flex items-center gap-3 sm:gap-4"
               aria-label={`${urgent.length} of your certifications need attention`}
             >
@@ -656,7 +656,7 @@ const Dashboard: React.FC = () => {
 
         {/* Fat primary action: Log Training — most-used action, top placement */}
         <button
-          onClick={() => navigate("/training/submit")}
+          onClick={() => void navigate("/training/submit")}
           className="w-full mb-6 sm:mb-8 group bg-gradient-to-br from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 active:from-red-800 active:to-red-900 text-white rounded-xl shadow-md hover:shadow-lg transition-all p-5 sm:p-6 flex items-center gap-4 text-left focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
           aria-label="Log a training session"
         >
@@ -710,7 +710,7 @@ const Dashboard: React.FC = () => {
           setupProgress &&
           setupProgress.completed < setupProgress.total && (
             <button
-              onClick={() => navigate("/setup")}
+              onClick={() => void navigate("/setup")}
               className="w-full mb-6 sm:mb-8 bg-theme-surface border border-red-500/20 rounded-xl p-4 hover:border-red-500/40 transition-colors text-left group"
             >
               <div className="flex items-center gap-3 sm:gap-4">
@@ -814,7 +814,7 @@ const Dashboard: React.FC = () => {
                     : "All on track"
                 }
                 loading={loadingAdmin}
-                onClick={() => navigate("/action-items")}
+                onClick={() => void navigate("/action-items")}
                 ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ""}`}
               />
 
@@ -829,7 +829,7 @@ const Dashboard: React.FC = () => {
                     : "Last 30 days"
                 }
                 loading={loadingAdmin}
-                onClick={() => navigate("/admin-hours/manage")}
+                onClick={() => void navigate("/admin-hours/manage")}
                 ariaLabel={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ""}`}
               />
             </div>
@@ -869,7 +869,7 @@ const Dashboard: React.FC = () => {
             description="Standby hours"
             loading={loadingHours}
             valueColor="text-yellow-700 dark:text-yellow-400"
-            onClick={() => navigate("/scheduling?tab=my-shifts&view=past")}
+            onClick={() => void navigate("/scheduling?tab=my-shifts&view=past")}
             hoverClass="hover:border-yellow-500/40"
           />
 
@@ -881,7 +881,7 @@ const Dashboard: React.FC = () => {
             description="Admin hours"
             loading={loadingHours}
             valueColor="text-purple-700 dark:text-purple-400"
-            onClick={() => navigate("/admin-hours")}
+            onClick={() => void navigate("/admin-hours")}
             hoverClass="hover:border-purple-500/40"
           />
         </div>
@@ -1032,7 +1032,7 @@ const Dashboard: React.FC = () => {
                 ariaLabel: `${unreadCount} unread`,
                 color: "bg-red-500 text-white",
               } : undefined}
-              onViewAll={() => navigate("/notifications?tab=inbox")}
+              onViewAll={() => void navigate("/notifications?tab=inbox")}
               extraActions={
                 unreadCount > 0 ? (
                   <button
@@ -1068,9 +1068,9 @@ const Dashboard: React.FC = () => {
                     onClick={() => {
                       void markNotificationRead(notification.id);
                       if (notification.action_url && notification.action_url.startsWith('/'))
-                        navigate(notification.action_url);
+                        void navigate(notification.action_url);
                       else
-                        navigate("/notifications?tab=inbox");
+                        void navigate("/notifications?tab=inbox");
                     }}
                     className="w-full text-left p-2.5 sm:p-3 rounded-lg transition-colors bg-blue-500/10 border border-blue-500/20 text-theme-text-primary"
                   >
@@ -1112,7 +1112,7 @@ const Dashboard: React.FC = () => {
               iconColor="text-blue-700 dark:text-blue-400"
               title="My Upcoming Shifts"
               viewAllLabel="View Schedule"
-              onViewAll={() => navigate("/scheduling")}
+              onViewAll={() => void navigate("/scheduling")}
             />
 
             {loadingMyShifts ? (
@@ -1174,7 +1174,7 @@ const Dashboard: React.FC = () => {
             title="Open Shifts"
             viewAllLabel="View Schedule"
             viewAllColor="text-green-700 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
-            onViewAll={() => navigate("/scheduling")}
+            onViewAll={() => void navigate("/scheduling")}
           />
 
           {loadingOpenShifts ? (
@@ -1295,7 +1295,7 @@ const Dashboard: React.FC = () => {
             icon={Calendar}
             iconColor="text-purple-700 dark:text-purple-400"
             title="Upcoming Events"
-            onViewAll={() => navigate("/events")}
+            onViewAll={() => void navigate("/events")}
           />
 
           {loadingUpcomingEvents ? (
@@ -1316,7 +1316,7 @@ const Dashboard: React.FC = () => {
               {upcomingEvents.map((evt) => (
                 <button
                   key={evt.id}
-                  onClick={() => navigate(`/events/${evt.id}`)}
+                  onClick={() => void navigate(`/events/${evt.id}`)}
                   className="w-full p-3 bg-theme-surface-secondary rounded-lg hover:bg-theme-surface-hover transition-colors text-left"
                 >
                   <div className="flex items-center space-x-3 min-w-0">
@@ -1358,7 +1358,7 @@ const Dashboard: React.FC = () => {
               Recent Activity
             </h3>
             <button
-              onClick={() => navigate("/notifications?tab=inbox")}
+              onClick={() => void navigate("/notifications?tab=inbox")}
               className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 py-2 pl-2"
             >
               View All <ChevronRight className="w-3 h-3" />
@@ -1407,7 +1407,7 @@ const Dashboard: React.FC = () => {
               title="My ID Card"
               viewAllLabel="View"
               viewAllColor="text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-              onViewAll={() => navigate(`/members/${currentUser.id}/id-card`)}
+              onViewAll={() => void navigate(`/members/${currentUser.id}/id-card`)}
               className="flex items-center justify-between"
             />
             <p className="text-sm text-theme-text-muted mt-2">
@@ -1415,7 +1415,7 @@ const Dashboard: React.FC = () => {
               quick identification.
             </p>
             <button
-              onClick={() => navigate(`/members/${currentUser.id}/id-card`)}
+              onClick={() => void navigate(`/members/${currentUser.id}/id-card`)}
               className="btn-info mt-4 text-sm"
             >
               Open My ID Card
@@ -1431,7 +1431,7 @@ const Dashboard: React.FC = () => {
               iconColor="text-cyan-500"
               title="Meeting Minutes"
               viewAllColor="text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300"
-              onViewAll={() => navigate("/minutes")}
+              onViewAll={() => void navigate("/minutes")}
               className="flex items-center justify-between"
             />
             <p className="text-sm text-theme-text-muted mt-2">
@@ -1440,13 +1440,13 @@ const Dashboard: React.FC = () => {
             </p>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-4">
               <button
-                onClick={() => navigate("/minutes")}
+                onClick={() => void navigate("/minutes")}
                 className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded-lg transition-colors text-center"
               >
                 Record Minutes
               </button>
               <button
-                onClick={() => navigate("/minutes")}
+                onClick={() => void navigate("/minutes")}
                 className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary text-sm rounded-lg transition-colors text-center"
               >
                 Review Pending
@@ -1462,7 +1462,7 @@ const Dashboard: React.FC = () => {
               icon={GraduationCap}
               iconColor="text-red-500"
               title="My Training Progress"
-              onViewAll={() => navigate("/training/my-training")}
+              onViewAll={() => void navigate("/training/my-training")}
             />
 
             <div className="space-y-3">
@@ -1483,7 +1483,7 @@ const Dashboard: React.FC = () => {
                 return (
                   <button
                     key={enrollment.id}
-                    onClick={() => navigate(`/training/my-progress/${enrollment.id}`)}
+                    onClick={() => void navigate(`/training/my-progress/${enrollment.id}`)}
                     className="w-full bg-theme-surface-secondary rounded-lg p-4 hover:bg-theme-surface-hover cursor-pointer transition-colors text-left"
                     aria-label={`${enrollment.program?.name || "Program"}: ${Math.round(enrollment.progress_percentage)}% complete`}
                   >
@@ -1599,7 +1599,7 @@ const Dashboard: React.FC = () => {
             {enrollments.length > 3 && (
               <div className="mt-4 text-center">
                 <button
-                  onClick={() => navigate("/training/my-training")}
+                  onClick={() => void navigate("/training/my-training")}
                   className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm px-2 py-1"
                 >
                   View {enrollments.length - 3} more program
@@ -1619,7 +1619,7 @@ const Dashboard: React.FC = () => {
                 iconColor="text-emerald-500"
                 title={isInventoryAdmin ? "Equipment & Inventory" : "My Equipment"}
                 viewAllColor="text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300"
-                onViewAll={() => navigate("/inventory")}
+                onViewAll={() => void navigate("/inventory")}
               />
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -1689,14 +1689,14 @@ const Dashboard: React.FC = () => {
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mt-4">
                 <button
-                  onClick={() => navigate("/inventory/my-equipment")}
+                  onClick={() => void navigate("/inventory/my-equipment")}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-lg transition-colors text-center"
                 >
                   My Equipment
                 </button>
                 {isInventoryAdmin && (
                   <button
-                    onClick={() => navigate("/inventory/checkouts")}
+                    onClick={() => void navigate("/inventory/checkouts")}
                     className="px-4 py-2 border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary text-sm rounded-lg transition-colors text-center"
                   >
                     View Checkouts

@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -90,7 +90,7 @@ const CheckRequestFormPage: React.FC = () => {
       if (data.budgetId) payload.budgetId = data.budgetId;
       const created = await createCheckRequest(payload);
       toast.success('Check request created');
-      navigate(`/finance/check-requests/${created.id}`);
+      void navigate(`/finance/check-requests/${created.id}`);
     } catch {
       // Error handled by store
     }
@@ -110,7 +110,7 @@ const CheckRequestFormPage: React.FC = () => {
       <Breadcrumbs />
       <button
         type="button"
-        onClick={() => navigate('/finance/check-requests')}
+        onClick={() => void navigate('/finance/check-requests')}
         className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -186,7 +186,7 @@ const CheckRequestFormPage: React.FC = () => {
           <div className="flex justify-end gap-3 border-t border-theme-surface-border pt-4">
             <button
               type="button"
-              onClick={() => navigate('/finance/check-requests')}
+              onClick={() => void navigate('/finance/check-requests')}
               className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
             >
               Cancel

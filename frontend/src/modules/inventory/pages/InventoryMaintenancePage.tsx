@@ -4,7 +4,7 @@
  * and provides a modal to log new maintenance records.
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import {
   ArrowLeft, Wrench, RefreshCw, AlertTriangle, CheckCircle2, XCircle,
   Clock, Calendar, Loader2, ChevronRight,

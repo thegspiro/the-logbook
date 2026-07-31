@@ -7,7 +7,7 @@
  */
 
 import React, { Suspense } from 'react';
-import { Route, Navigate } from 'react-router-dom';
+import { Route, Navigate } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 

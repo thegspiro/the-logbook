@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useOnboardingStore } from '../store';
 
 /**
@@ -14,7 +14,7 @@ export const FileStorageConfigPlaceholder: React.FC = () => {
   // Auto-redirect after a brief moment to show the user what happened
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      navigate('/onboarding/authentication');
+      void navigate('/onboarding/authentication');
     }, 2000);
     return () => clearTimeout(timer);
   }, [navigate]);
@@ -51,7 +51,7 @@ export const SecurityCheckPlaceholder: React.FC = () => {
   // Auto-redirect to modules page since this isn't in the main flow
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      navigate('/onboarding/modules');
+      void navigate('/onboarding/modules');
     }, 1500);
     return () => clearTimeout(timer);
   }, [navigate]);

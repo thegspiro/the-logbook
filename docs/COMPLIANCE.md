@@ -69,7 +69,7 @@ Tracked openly; see the assessment for the full roadmap.
 | Off-host audit-log shipping (SIEM) | ✅ 2026-07-31 — `audit_log_ship` task, HMAC-signed NDJSON to `AUDIT_SHIP_WEBHOOK_URL`, watermarked delivery |
 | Consent tracking (photo use, portal visibility) | Open (ISO 27701) |
 | Org-configurable retention schedules for business records | Open (ISO 27701 / ISO 15489) — statutory retention still lives in department SOPs |
-| react-router 6.x moderate advisories (open redirect, SSR hydration) | Accepted until the v6→v7 migration (breaking); not exploitable as deployed (no SSR; open redirect requires attacker-controlled link content) — revisit each release |
+| react-router advisories | ✅ 2026-07-31 — migrated v6 → react-router 8.3.0 (core package); `npm audit --omit=dev` reports zero vulnerabilities |
 | SAML / LDAP SSO | Not implemented (config placeholders exist; deps removed until real support lands) |
 | Backend type-checking (mypy) and coverage gates in CI | Open — frontend is gated, backend is not |
 | Accessibility: keyboard-navigation audit of heavy surfaces, VPAT | Open — axe now covers the shared UX library + legal pages in CI; scheduling grid/form-builder keyboard audit remains |

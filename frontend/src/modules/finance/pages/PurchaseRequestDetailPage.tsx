@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router';
 import {
   ArrowLeft,
   AlertTriangle,
@@ -350,7 +350,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() =>
-                  navigate(`/finance/purchase-requests/${pr.id}/edit`)
+                  void navigate(`/finance/purchase-requests/${pr.id}/edit`)
                 }
                 className="inline-flex items-center gap-1.5 rounded-lg border border-theme-surface-border px-3 py-1.5 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
               >

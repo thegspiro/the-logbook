@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router';
 import { eventService } from '../services/api';
 import type { CheckInMonitoringStats } from '../types/event';
 import { getErrorMessage } from '../utils/errorHandling';

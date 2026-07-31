@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { ClipboardCheck, Search, FileText, Layers, CheckCircle2, XCircle, Clock, ChevronRight } from 'lucide-react';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { useAuthStore } from '../stores/authStore';
@@ -240,7 +240,7 @@ export const SkillsTestingPage: React.FC = () => {
                   <TemplateCard
                     key={template.id}
                     template={template}
-                    onClick={() => navigate(`/training/skills-testing/test/new?template=${template.id}`)}
+                    onClick={() => void navigate(`/training/skills-testing/test/new?template=${template.id}`)}
                   />
                 ))}
               </div>
@@ -273,7 +273,7 @@ export const SkillsTestingPage: React.FC = () => {
                   <TestHistoryCard
                     key={test.id}
                     test={test}
-                    onClick={() => navigate(`/training/skills-testing/test/${test.id}`)}
+                    onClick={() => void navigate(`/training/skills-testing/test/${test.id}`)}
                   />
                 ))}
               </div>

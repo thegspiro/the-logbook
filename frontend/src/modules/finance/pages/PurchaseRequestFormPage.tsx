@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -194,11 +194,11 @@ const PurchaseRequestFormPage: React.FC = () => {
       if (isEdit && id) {
         await purchaseRequestService.update(id, payload);
         toast.success('Purchase request updated');
-        navigate(`/finance/purchase-requests/${id}`);
+        void navigate(`/finance/purchase-requests/${id}`);
       } else {
         const created = await createPurchaseRequest(payload);
         toast.success('Purchase request created');
-        navigate(`/finance/purchase-requests/${created.id}`);
+        void navigate(`/finance/purchase-requests/${created.id}`);
       }
     } catch {
       // Error handled by store or caught above
@@ -210,7 +210,7 @@ const PurchaseRequestFormPage: React.FC = () => {
       <div className="space-y-6">
         <button
           type="button"
-          onClick={() => navigate('/finance/purchase-requests')}
+          onClick={() => void navigate('/finance/purchase-requests')}
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -227,7 +227,7 @@ const PurchaseRequestFormPage: React.FC = () => {
       {/* Back link */}
       <button
         type="button"
-        onClick={() => navigate('/finance/purchase-requests')}
+        onClick={() => void navigate('/finance/purchase-requests')}
         className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -363,7 +363,7 @@ const PurchaseRequestFormPage: React.FC = () => {
         <div className="mt-6 flex items-center justify-end gap-3 border-t border-theme-surface-border pt-6">
           <button
             type="button"
-            onClick={() => navigate('/finance/purchase-requests')}
+            onClick={() => void navigate('/finance/purchase-requests')}
             className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
           >
             Cancel

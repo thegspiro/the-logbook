@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
@@ -130,7 +130,7 @@ const MyProgramProgressPage: React.FC = () => {
       } catch {
         if (!cancelled) {
           toast.error('Unable to load your program progress');
-          navigate('/training');
+          void navigate('/training');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -150,7 +150,7 @@ const MyProgramProgressPage: React.FC = () => {
     try {
       await trainingProgramService.withdrawEnrollment(enrollmentId);
       toast.success('You have left this program');
-      navigate('/training');
+      void navigate('/training');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Unable to leave this program'));
       setLeaving(false);
@@ -176,7 +176,7 @@ const MyProgramProgressPage: React.FC = () => {
       <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-start gap-3 mb-6">
           <button
-            onClick={() => navigate('/training')}
+            onClick={() => void navigate('/training')}
             className="mt-1 p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover"
             aria-label="Back to my training"
           >

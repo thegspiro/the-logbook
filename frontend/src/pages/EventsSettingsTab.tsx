@@ -14,7 +14,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Settings,
   Loader2,
@@ -547,7 +547,7 @@ const EventsSettingsTab: React.FC = () => {
           <FormSection
             generatingForm={generatingForm}
             onGenerateForm={() => void handleGenerateForm()}
-            onNavigateToForms={() => navigate('/forms')}
+            onNavigateToForms={() => void navigate('/forms')}
             eventRequestForms={eventRequestForms}
             loadingForms={loadingForms}
           />

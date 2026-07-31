@@ -15,7 +15,7 @@
  */
 
 import React, { Suspense, useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,

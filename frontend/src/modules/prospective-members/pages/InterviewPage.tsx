@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router';
 import {
   ArrowLeft,
   User,
@@ -611,7 +611,7 @@ export const InterviewPage: React.FC = () => {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate('/prospective-members')}
+            onClick={() => void navigate('/prospective-members')}
             className="rounded-lg p-2 text-theme-text-secondary hover:bg-theme-bg-secondary"
           >
             <ArrowLeft className="h-5 w-5" />

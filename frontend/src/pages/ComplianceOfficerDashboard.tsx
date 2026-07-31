@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Shield,
   FileText,
@@ -75,7 +75,7 @@ const ComplianceOfficerDashboard: React.FC<ComplianceOfficerDashboardProps> = ({
       {/* Configure action — section selection is handled by the admin hub tabs */}
       <div className="flex justify-end mb-6">
         <button
-          onClick={() => navigate('/training/compliance-config')}
+          onClick={() => void navigate('/training/compliance-config')}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
           title="Compliance Requirements Configuration"
         >

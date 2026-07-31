@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Shield, Eye, EyeOff, CheckCircle, XCircle, Info, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { OnboardingHeader, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
@@ -33,7 +33,7 @@ const SystemOwnerCreation: React.FC = () => {
 
   useEffect(() => {
     if (!departmentName) {
-      navigate('/onboarding/start');
+      void navigate('/onboarding/start');
       return;
     }
   }, [navigate, departmentName]);
@@ -222,7 +222,7 @@ const SystemOwnerCreation: React.FC = () => {
         }
 
         // Continue to IT Team & Backup Access step
-        navigate('/onboarding/it-team');
+        void navigate('/onboarding/it-team');
 
         return response;
       },

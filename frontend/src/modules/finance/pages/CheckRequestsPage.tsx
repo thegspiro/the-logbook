@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Plus, FileCheck, AlertTriangle, Search, X } from 'lucide-react';
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
@@ -105,7 +105,7 @@ const CheckRequestsPage: React.FC = () => {
         </div>
         <button
           type="button"
-          onClick={() => navigate('/finance/check-requests/new')}
+          onClick={() => void navigate('/finance/check-requests/new')}
           className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
         >
           <Plus className="h-4 w-4" />
@@ -175,7 +175,7 @@ const CheckRequestsPage: React.FC = () => {
               ? [
                   {
                     label: 'New Check Request',
-                    onClick: () => navigate('/finance/check-requests/new'),
+                    onClick: () => void navigate('/finance/check-requests/new'),
                     icon: Plus,
                   },
                 ]
@@ -212,7 +212,7 @@ const CheckRequestsPage: React.FC = () => {
                 {filteredRequests.map((cr) => (
                   <tr
                     key={cr.id}
-                    onClick={() => navigate(`/finance/check-requests/${cr.id}`)}
+                    onClick={() => void navigate(`/finance/check-requests/${cr.id}`)}
                     className="cursor-pointer transition-colors hover:bg-theme-surface-hover"
                   >
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-red-600">

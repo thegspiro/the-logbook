@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Package,
   CheckCircle,
@@ -28,7 +28,7 @@ const ModuleOverview: React.FC = () => {
   // Guard: redirect to start if org setup hasn't been completed
   React.useEffect(() => {
     if (!departmentName) {
-      navigate('/onboarding/start');
+      void navigate('/onboarding/start');
     }
   }, [departmentName, navigate]);
 
@@ -51,7 +51,7 @@ const ModuleOverview: React.FC = () => {
     if (action === 'start' && module?.configRoute) {
       // Save current state and navigate to module config
       setModuleStatus(moduleId, 'enabled');
-      navigate(module.configRoute);
+      void navigate(module.configRoute);
     } else if (action === 'skip') {
       setModuleStatus(moduleId, 'skipped');
       toast.success(`${module?.name} marked as "Configure Later"`);
@@ -92,7 +92,7 @@ const ModuleOverview: React.FC = () => {
         const { useAuthStore } = await import('../../../stores/authStore');
         await useAuthStore.getState().loadUser();
 
-        navigate('/dashboard');
+        void navigate('/dashboard');
         return response;
       },
       {

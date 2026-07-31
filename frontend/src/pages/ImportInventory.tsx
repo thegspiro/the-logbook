@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Upload,
   Download,
@@ -179,7 +179,7 @@ const ImportInventory: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => navigate('/inventory')}
+              onClick={() => void navigate('/inventory')}
               className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm"
             >
               &larr; Back to Inventory
@@ -393,7 +393,7 @@ const ImportInventory: React.FC = () => {
                 <span>Import More</span>
               </button>
               <button
-                onClick={() => navigate('/inventory')}
+                onClick={() => void navigate('/inventory')}
                 className="flex items-center px-6 py-3 space-x-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
               >
                 <span>View Inventory</span>

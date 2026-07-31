@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ArrowLeft, Tag, Plus, Pencil, RefreshCw, Settings, Shield, Wrench, Hash, AlertTriangle } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryCategory, InventoryCategoryCreate } from '../types';

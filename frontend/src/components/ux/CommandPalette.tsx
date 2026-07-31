@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Search,
   Calendar,
@@ -136,7 +136,7 @@ export const CommandPalette: React.FC = () => {
   }, [selectedIndex]);
 
   const handleSelect = (item: CommandItem) => {
-    navigate(item.path);
+    void navigate(item.path);
     setIsOpen(false);
   };
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 
 /**
@@ -32,7 +32,7 @@ export const OAuthCallbackPage: React.FC = () => {
         // loadUser clears has_session on failure; fall through to the check.
       }
       if (useAuthStore.getState().isAuthenticated) {
-        navigate('/dashboard', { replace: true });
+        void navigate('/dashboard', { replace: true });
       } else {
         setFailed(true);
       }
@@ -53,7 +53,7 @@ export const OAuthCallbackPage: React.FC = () => {
               We couldn&apos;t finish signing you in with Google. Please try again.
             </p>
             <button
-              onClick={() => navigate('/login', { replace: true })}
+              onClick={() => void navigate('/login', { replace: true })}
               className="btn-primary"
             >
               Back to sign in

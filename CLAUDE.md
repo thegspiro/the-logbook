@@ -104,7 +104,7 @@ The Logbook is an open-source modular intranet platform for fire departments and
 - **Bundler:** Vite 7.3
 - **Framework:** React 19.2 (SPA, not Next.js or React Native)
 - **Language:** TypeScript 5.9 (strict mode — see below)
-- **Routing:** react-router-dom 6.30
+- **Routing:** react-router 8.3 (core package; react-router-dom was retired with v7)
 - **State management:** Zustand 5.0
 - **Forms:** react-hook-form 7.71 + Zod 4.3 validation
 - **Styling:** Tailwind CSS 4.2 (with `tailwind-merge`, dark mode via `class` strategy)

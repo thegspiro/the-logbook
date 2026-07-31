@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import {
   Plus,
   ClipboardList,
@@ -189,7 +189,7 @@ const PurchaseRequestsPage: React.FC = () => {
               ? [
                   {
                     label: 'New Request',
-                    onClick: () => navigate('/finance/purchase-requests/new'),
+                    onClick: () => void navigate('/finance/purchase-requests/new'),
                     icon: Plus,
                   },
                 ]
@@ -230,7 +230,7 @@ const PurchaseRequestsPage: React.FC = () => {
                   <tr
                     key={pr.id}
                     onClick={() =>
-                      navigate(`/finance/purchase-requests/${pr.id}`)
+                      void navigate(`/finance/purchase-requests/${pr.id}`)
                     }
                     className="cursor-pointer transition-colors hover:bg-theme-surface-hover"
                   >

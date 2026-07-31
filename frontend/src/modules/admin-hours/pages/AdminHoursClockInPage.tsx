@@ -7,7 +7,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router';
 import { adminHoursCategoryService, adminHoursClockService } from '../services/api';
 import type { AdminHoursQRData, AdminHoursActiveSession, AdminHoursClockOutResponse } from '../types';
 import { toAppError } from '../../../utils/errorHandling';

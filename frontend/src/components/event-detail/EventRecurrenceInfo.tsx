@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { formatShortDateTime } from '../../utils/dateFormatting';
 import type { EventListItem } from '../../types/event';

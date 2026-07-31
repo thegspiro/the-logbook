@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -226,7 +226,7 @@ const ExpenseReportFormPage: React.FC = () => {
 
       const created = await createExpenseReport(payload as Partial<ExpenseReport>);
       toast.success('Expense report created');
-      navigate(`/finance/expenses/${created.id}`);
+      void navigate(`/finance/expenses/${created.id}`);
     } catch {
       // Error handled by store
     }
@@ -237,7 +237,7 @@ const ExpenseReportFormPage: React.FC = () => {
       <div className="space-y-6">
         <button
           type="button"
-          onClick={() => navigate('/finance/expenses')}
+          onClick={() => void navigate('/finance/expenses')}
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -254,7 +254,7 @@ const ExpenseReportFormPage: React.FC = () => {
       {/* Back link */}
       <button
         type="button"
-        onClick={() => navigate('/finance/expenses')}
+        onClick={() => void navigate('/finance/expenses')}
         className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -443,7 +443,7 @@ const ExpenseReportFormPage: React.FC = () => {
         <div className="flex items-center justify-end gap-3">
           <button
             type="button"
-            onClick={() => navigate('/finance/expenses')}
+            onClick={() => void navigate('/finance/expenses')}
             className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
           >
             Cancel

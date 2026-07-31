@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { authService } from '../services/api';
 import axios from 'axios';
@@ -46,7 +46,7 @@ export const LoginPage: React.FC = () => {
   // If user is already authenticated, redirect to dashboard
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard', { replace: true });
+      void navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -59,7 +59,7 @@ export const LoginPage: React.FC = () => {
       try {
         const response = await axios.get<OnboardingStatus>('/api/v1/onboarding/status');
         if (!cancelled && response.data?.needs_onboarding) {
-          navigate('/onboarding', { replace: true });
+          void navigate('/onboarding', { replace: true });
           return;
         }
       } catch {
@@ -148,7 +148,7 @@ export const LoginPage: React.FC = () => {
     };
     setOAuthError(messages[code] || 'Sign-in with Google failed. Please try again.');
     // Strip the error param so a refresh doesn't re-show it.
-    navigate('/login', { replace: true });
+    void navigate('/login', { replace: true });
   }, [location.search, navigate]);
 
   const validateForm = (): boolean => {
@@ -191,7 +191,7 @@ export const LoginPage: React.FC = () => {
       const from = (typeof rawFrom === 'string' && rawFrom.startsWith('/') && !rawFrom.startsWith('//'))
         ? rawFrom
         : '/dashboard';
-      navigate(from, { replace: true });
+      void navigate(from, { replace: true });
     } catch (_err) {
       // Error is handled by the store and displayed via error state
     }
@@ -202,7 +202,7 @@ export const LoginPage: React.FC = () => {
     const from = (typeof rawFrom === 'string' && rawFrom.startsWith('/') && !rawFrom.startsWith('//'))
       ? rawFrom
       : '/dashboard';
-    navigate(from, { replace: true });
+    void navigate(from, { replace: true });
   };
 
   const handleMfaSubmit = async (e: React.FormEvent) => {

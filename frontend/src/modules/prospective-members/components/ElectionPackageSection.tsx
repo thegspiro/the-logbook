@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Vote, Loader2, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Applicant } from '../types';
@@ -334,7 +334,7 @@ const ElectionPackageSection: React.FC<ElectionPackageSectionProps> = ({
               {currentElectionPackage.election_id && currentElectionPackage.election_title && (
                 <button
                   type="button"
-                  onClick={() => navigate(`/elections/${currentElectionPackage.election_id}`)}
+                  onClick={() => void navigate(`/elections/${currentElectionPackage.election_id}`)}
                   className="mt-1.5 text-xs text-theme-primary hover:underline"
                 >
                   {currentElectionPackage.election_title}

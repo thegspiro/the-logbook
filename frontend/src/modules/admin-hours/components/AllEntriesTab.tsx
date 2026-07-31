@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import { adminHoursEntryService } from '../services/api';

@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { grantsService } from '../services/api';
@@ -228,11 +228,11 @@ export const GrantApplicationFormPage: React.FC = () => {
       if (isEditing && id) {
         await grantsService.updateApplication(id, payload);
         toast.success('Application updated successfully.');
-        navigate(`/grants/applications/${id}`);
+        void navigate(`/grants/applications/${id}`);
       } else {
         const created = await grantsService.createApplication(payload);
         toast.success('Application created successfully.');
-        navigate(`/grants/applications/${created.id}`);
+        void navigate(`/grants/applications/${created.id}`);
       }
     } catch {
       toast.error('Failed to save application.');
@@ -254,7 +254,7 @@ export const GrantApplicationFormPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
-          onClick={() => navigate('/grants/applications')}
+          onClick={() => void navigate('/grants/applications')}
           className="rounded-lg p-2 text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary transition-colors"
         >
           <ArrowLeft className="h-5 w-5" />
@@ -634,7 +634,7 @@ export const GrantApplicationFormPage: React.FC = () => {
         <div className="flex items-center justify-end gap-3">
           <button
             type="button"
-            onClick={() => navigate('/grants/applications')}
+            onClick={() => void navigate('/grants/applications')}
             className="inline-flex items-center gap-2 rounded-lg bg-theme-surface-hover px-6 py-2.5 text-sm font-medium text-theme-text-primary hover:bg-theme-surface transition-colors"
           >
             <X className="h-4 w-4" />

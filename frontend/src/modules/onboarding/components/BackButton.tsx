@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 
 interface BackButtonProps {
@@ -36,9 +36,9 @@ export const BackButton: React.FC<BackButtonProps> = ({
 
   const handleClick = () => {
     if (to) {
-      navigate(to);
+      void navigate(to);
     } else {
-      navigate(-1);
+      void navigate(-1);
     }
   };
 

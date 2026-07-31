@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router';
 import {
   LogIn,
   LogOut,
@@ -125,7 +125,7 @@ const ShiftCheckInPage: React.FC = () => {
             shift start time.
           </p>
           <button
-            onClick={() => navigate('/scheduling')}
+            onClick={() => void navigate('/scheduling')}
             className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors"
           >
             Go to Scheduling
@@ -148,7 +148,7 @@ const ShiftCheckInPage: React.FC = () => {
             access to this shift.
           </p>
           <button
-            onClick={() => navigate('/scheduling')}
+            onClick={() => void navigate('/scheduling')}
             className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors"
           >
             Go to Scheduling
@@ -250,7 +250,7 @@ const ShiftCheckInPage: React.FC = () => {
         )}
 
         <button
-          onClick={() => navigate('/scheduling')}
+          onClick={() => void navigate('/scheduling')}
           className="w-full text-center text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors py-2"
         >
           Go to Scheduling

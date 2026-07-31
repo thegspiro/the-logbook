@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { organizationService } from '../services/userServices';
 import {
@@ -167,7 +167,7 @@ const ShiftReportPage: React.FC = () => {
         {/* Header */}
         <div className="flex items-center space-x-4 mb-6">
           <button
-            onClick={() => navigate('/training/officer')}
+            onClick={() => void navigate('/training/officer')}
             className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -244,7 +244,7 @@ const ShiftReportPage: React.FC = () => {
                   Shift reports are now filed from the Shift Scheduling section. Select a shift, validate hours and calls for the entire crew, and evaluate trainees — all in one streamlined form.
                 </p>
                 <button
-                  onClick={() => navigate('/scheduling?tab=shift-reports&view=create')}
+                  onClick={() => void navigate('/scheduling?tab=shift-reports&view=create')}
                   className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium"
                 >
                   <Send className="w-4 h-4" />
@@ -257,7 +257,7 @@ const ShiftReportPage: React.FC = () => {
                   Log shift hours, calls, and evaluations for your crew members. Hours and calls will be credited to each selected member.
                 </p>
                 <button
-                  onClick={() => navigate('/training/log-shift')}
+                  onClick={() => void navigate('/training/log-shift')}
                   className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium"
                 >
                   <Send className="w-4 h-4" />

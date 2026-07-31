@@ -9,7 +9,7 @@ import {
   ArrowLeft, Plus, Pencil, Trash2, ChevronRight, ChevronDown,
   Package, Loader2, RefreshCw, MapPin, Box, Layers, Search, ExternalLink,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { inventoryService, locationsService } from '../../../services/api';
 import type { StorageAreaResponse, StorageAreaCreate, Location, InventoryItem } from '../types';
 import { STORAGE_TYPES, getStatusStyle, getConditionColor } from '../types';

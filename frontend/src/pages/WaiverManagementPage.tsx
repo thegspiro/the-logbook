@@ -14,8 +14,8 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { memberStatusService, userService } from '../services/api';
 import type { LeaveOfAbsenceResponse, TrainingWaiverResponse } from '../services/api';
 import type { User } from '../types/user';
