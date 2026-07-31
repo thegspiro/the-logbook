@@ -22,7 +22,7 @@ Welcome to the training documentation for The Logbook. These guides are designed
 | 11 | [Finance](./11-finance.md) | Fiscal years, budgets, purchase requests, expense reports, check requests, approval chains, dues & assessments, QuickBooks export |
 | 12 | [Grants & Fundraising](./12-grants-fundraising.md) | Grant opportunities, applications, budget tracking, compliance tasks, campaigns, donor CRM, donations, pledges, fundraising events |
 | 13 | [Medical Screening](./13-medical-screening.md) | Screening requirements, records, compliance dashboard, expiring screenings, prospect screening |
-| 14 | [Elections & Voting](./14-elections.md) | Ballot items, candidates, anonymous voting, proxy voting, runoff elections, vote integrity, forensics |
+| 14 | [Elections & Voting](./14-elections.md) | Ballot items, nominations, candidates, anonymous voting, paper ballots & attestation, proxy voting, reminders & lifecycle automation, runoff elections, tie policies, vote integrity, forensics, certified results |
 | 15 | [Prospective Members Pipeline](./15-prospective-members.md) | Pipeline stages, applicant tracking, document collection, interviews, election packages, member conversion |
 | 16 | [Integrations](./16-integrations.md) | Salesforce, calendar sync, Slack/Discord/Teams, weather alerts, ePCR import, NEMSIS/NFIRS export, webhooks |
 

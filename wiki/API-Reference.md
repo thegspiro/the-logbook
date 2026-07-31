@@ -245,6 +245,44 @@ GET    /api/v1/elections/{id}/package-pdf?variant=                      # Downlo
 POST   /api/v1/elections/{id}/send-package                              # Email package to an edited address list (BCC + PDF attachment)
 ```
 
+## Election Nominations, Paper Ballots & Meeting-Night Workflows *(2026-07-29)*
+
+Optional workflows are gated by per-org feature toggles in
+`org.settings.election_features` (enforced server-side). All require
+`elections.manage` unless noted. See [Module-Elections](Module-Elections) for
+the full endpoint table and workflow details.
+
+```
+# Nomination phase
+POST   /api/v1/elections/{id}/open-nominations                          # Draft -> nomination phase
+POST   /api/v1/elections/{id}/close-nominations                         # Nomination phase -> draft
+POST   /api/v1/elections/{id}/nominations                               # Nominate a member or yourself (any member)
+POST   /api/v1/elections/{id}/nominations/{cid}/accept                  # Nominee accepts (nominee only)
+POST   /api/v1/elections/{id}/nominations/{cid}/decline                 # Nominee declines (entry removed)
+
+# Paper ballots + officer attestation
+GET    /api/v1/elections/{id}/printable-ballot                          # Official blank paper ballot PDF
+POST   /api/v1/elections/{id}/manual-ballots                            # Record in-room tally (plausibility-guarded; allow_over_count override audited)
+GET    /api/v1/elections/{id}/manual-ballots                            # List paper batches with attestation trail
+POST   /api/v1/elections/{id}/manual-ballots/{batch}/attest             # Attest a batch's count (not the recorder; once per officer)
+POST   /api/v1/elections/{id}/manual-ballots/{batch}/void               # Void a mis-keyed batch (reason required)
+
+# Reminders & lifecycle
+GET    /api/v1/elections/{id}/non-voters                                # Eligible voters who haven't voted
+POST   /api/v1/elections/{id}/remind-non-voters                         # Reminder ballot email (fresh link; 1h cooldown)
+
+# Meeting-night tooling
+POST   /api/v1/elections/{id}/clone                                     # Fresh draft from this election's setup (new salt; votes/tokens never copied)
+POST   /api/v1/elections/{id}/write-ins/merge                           # Consolidate write-in variants (audited alias; vote rows untouched)
+GET    /api/v1/elections/{id}/certified-results                         # Certified results package PDF (closed elections only)
+
+# Public token-ballot endpoints (no auth, rate-limited; token travels in the
+# POST body — never a query string or path)
+POST   /api/v1/elections/ballot/lookup                                  # Load ballot + candidates in one call (eligibility-filtered minimal view)
+POST   /api/v1/elections/ballot/vote                                    # Cast one vote (method-aware)
+POST   /api/v1/elections/ballot/vote/bulk                               # Submit full ballot atomically (choice | candidate_ids | rankings per item)
+```
+
 ## Department Messages *(updated 2026-07-17)*
 
 Admin endpoints require `notifications.manage`. Inbox/read/acknowledge endpoints
@@ -273,11 +311,13 @@ Posting a message fans it out across in-app / email / SMS channels by priority
 
 ---
 
-## Audit Logs (Admin) *(2026-05-29)*
+## Audit Logs (Admin) *(updated 2026-07-30)*
 
 Read-only admin API for browsing the audit trail. Permission: `audit.view`.
-Results are org-scoped by joining through users (`AuditLog.user_id` IN the
-caller's organization users); NULL-user system events are excluded.
+Results are org-scoped on the `audit_logs.organization_id` column (stamped at
+write time and covered by hash-chain v3; previously derived by joining through
+the mutable users table). Platform-level rows with a NULL organization are
+never returned to org admins.
 
 ```
 GET    /api/v1/audit-logs                                # List (filters below; skip/limit)

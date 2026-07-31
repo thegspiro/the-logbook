@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation: secondary-doc sweep for the 2026-07-29 elections batch (2026-07-31)
+
+**Changed**
+
+- Brought the secondary documentation up to date with the merged elections
+  work (nomination phase, paper ballots + attestation, reminders/lifecycle
+  automation, feature toggles, printable ballot, clone, voter-roll freeze,
+  certified results, live turnout, tie policies, write-in merge) and the
+  audit-log `organization_id` column:
+  - `docs/training/14-elections.md` — seven new sections + expanded
+    settings/troubleshooting tables
+  - `docs/youtube-scripts/12-elections-deep-dive.md` — new Chapters 14–16
+    and Shorts 12l–12q; `07-secretary-administrative-guide.md` overview
+    updated
+  - `wiki/API-Reference.md` — new elections endpoint section; audit-log
+    org-scoping description updated to the `organization_id` column
+  - `wiki/Database-Schema.md` — elections/candidates/votes rows updated;
+    `manual_ballot_batches` + `manual_ballot_attestations` added;
+    `audit_logs` row documents `organization_id` and hash-chain v3
+  - `BALLOT_FORENSICS_GUIDE.md` — paper-ballot and write-in-merge
+    forensics, new audit event reference rows
+  - `docs/training/README.md` lesson index; `CLAUDE.md` FastAPI version
+
 ### Dependencies: FastAPI/starlette upgrade pass (2026-07-30)
 
 **Changed**

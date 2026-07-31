@@ -22,7 +22,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 
 | Table | Description |
 |-------|-------------|
-| `audit_logs` | Tamper-proof audit trail with SHA-256 hash chain |
+| `audit_logs` | Tamper-proof audit trail with keyed (HMAC) hash chain. `organization_id` (nullable — platform-level events have no tenant; indexed, no FK, backfilled from `user_id`; migration `20260801_0009`) scopes every read path directly; hash-chain **v3** includes it in the signed input, so tenant attribution on new rows is tamper-evident *(updated 2026-07-30)* |
 | `notification_rules` | Notification rule definitions with trigger, category, channel, and config *(2026-03-23)* |
 | `notification_logs` | In-app and email notification records with action_url, expiry, and `metadata` JSON column for structured context (shift_id, shift_date, checklist_count, etc.) *(updated 2026-03-26)* |
 | `department_messages` | Internal department messages with targeting (roles by id, statuses, or member ids), priority, `is_persistent`, `requires_acknowledgment`, `expires_at`, `deleted_at` (soft delete), and `scheduled_at` (deferred publish) *(updated 2026-07-17)* |
@@ -117,10 +117,12 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 
 | Table | Description |
 |-------|-------------|
-| `elections` | Election definitions: voting period, method, victory condition, runoff/quorum config, per-election anonymity salt (destroyed at close), rollback history |
-| `candidates` | Election candidates (member-linked or write-in) |
-| `votes` | Vote records: HMAC signature, sequential chain hash, unique dedup hash, voter receipt hash, `is_test` flag, soft-delete audit fields. Anonymous votes store only a salted `voter_hash`, never `voter_id` |
+| `elections` | Election definitions: voting period, method, victory condition, runoff/quorum config, per-election anonymity salt (destroyed at close), rollback history. Status ENUM includes the `nominations` phase (`nomination_deadline` auto-closes it); lifecycle automation fields `auto_open`, `reminder_hours_before_close`, `reminder_sent_at` (migration `20260801_0004`/`0005`); `tie_policy` (`co_winners` \| `runoff` \| `revote` \| `chair_decides`) and `eligible_roster_snapshot` (voter roll frozen at open; NULL = legacy live evaluation) via migration `20260801_0008` *(2026-07-29)* |
+| `candidates` | Election candidates (member-linked or write-in). Pending third-party nominations are stored as `accepted=False` rows until the nominee accepts; `merged_into_candidate_id` aliases a write-in variant to its consolidation target without mutating signed vote rows (migration `20260801_0008`) *(2026-07-29)* |
+| `votes` | Vote records: HMAC signature, sequential chain hash, unique dedup hash, voter receipt hash, `is_test` flag, soft-delete audit fields. Anonymous votes store only a salted `voter_hash`, never `voter_id`. Paper-tally votes carry `is_manual` + `recorded_by` + `manual_batch_id` (no voter identity or dedup hash; signature covers `is_manual`, so a paper vote can't be re-labeled electronic) — migrations `20260801_0005`/`0006` *(2026-07-29)* |
 | `voting_tokens` | Per-voter email ballot tokens, stored as **SHA-256 hashes** (raw token lives only in the emailed link's URL fragment; migration `20260731_0001`): expiry, usage/access tracking, `is_test` flag, and the voter's eligibility snapshotted at issue time — eligible ballot items (`eligible_item_ids`, migration `20260730_0001`) and eligible positions (`eligible_positions`, migration `20260801_0001`) *(2026-07-29)* |
+| `manual_ballot_batches` | One row per recorded paper-ballot tally: recorder, status (`pending` \| `confirmed` \| `voided`), notes, and the attestation requirement **snapshotted at record time** (later setting changes never re-judge old batches). Pending batches' votes are excluded from results/stats. Migration `20260801_0007` *(2026-07-29)* |
+| `manual_ballot_attestations` | Officer attestations of a paper batch; unique `(batch_id, attested_by)` — each officer counts once, and the recorder can never attest their own batch. Migration `20260801_0007` *(2026-07-29)* |
 | `prospect_election_packages` | Auto-generated from prospective member pipeline |
 
 ### Meeting Minutes & Documents
