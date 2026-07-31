@@ -50,6 +50,8 @@ Related documents:
 | CSV formula-injection defense | `backend/app/utils/csv_export.py` (`SafeCsvWriter`) | ISO 27001 A.8.26 |
 | Upload hardening (content sniffing, EXIF strip, size caps), SSRF guards | `image_validator.py`, `url_validator.py`, `SECURITY_IMAGE_UPLOADS.md` | ISO 27001 A.8.26 |
 | SAST + dependency scanning in CI (Bandit, pip-audit, npm audit at high) | `.github/workflows/ci.yml` | ISO 27001 A.8.8 |
+| Cross-ecosystem vulnerability sweep + SBOM (Trivy, Syft SPDX artifact) | `.github/workflows/supply-chain.yml` | ISO 27001 A.8.8 |
+| Consent records (current state + tamper-evident change ledger) | `backend/app/models/consent.py`, `consent_service.py`, audit `consent_updated` events | ISO 27701 |
 | Secret scanning (full-history, weekly + per-PR) | `.github/workflows/secret-scan.yml`, `.gitleaks.toml` | ISO 27001 A.8.8/A.5.17 |
 | Automated dependency updates | `.github/dependabot.yml` | ISO 27001 A.8.8 |
 | Vulnerability disclosure channel (RFC 9116) | `backend/app/api/public/security_txt.py`, `SECURITY.md` | ISO/IEC 29147 |
@@ -67,11 +69,12 @@ Tracked openly; see the assessment for the full roadmap.
 | Member anonymization (right to erasure) | ✅ 2026-07-31 — `POST /users/{id}/anonymize` scrubs PII, keeps operational history; audit logs and election records deliberately untouched |
 | Encryption key rotation | ✅ 2026-07-31 — legacy-key decrypt ring (`ENCRYPTION_KEYS_LEGACY`) + `scripts/rotate_encryption_key.py`; runbook in [KEY_ROTATION.md](./KEY_ROTATION.md) |
 | Off-host audit-log shipping (SIEM) | ✅ 2026-07-31 — `audit_log_ship` task, HMAC-signed NDJSON to `AUDIT_SHIP_WEBHOOK_URL`, watermarked delivery |
-| Consent tracking (photo use, portal visibility) | Open (ISO 27701) |
+| Consent tracking (photo use, roster listing, SMS) | ✅ 2026-07-31 — `user_consents` current-state table + `consent_updated` audit ledger; self-service at `/users/me/consents`, Settings → Security → Privacy Choices. Never-asked fails closed |
 | Org-configurable retention schedules for business records | Open (ISO 27701 / ISO 15489) — statutory retention still lives in department SOPs |
 | react-router advisories | ✅ 2026-07-31 — migrated v6 → react-router 8.3.0 (core package); `npm audit --omit=dev` reports zero vulnerabilities |
 | SAML / LDAP SSO | Not implemented (config placeholders exist; deps removed until real support lands) |
-| Backend type-checking (mypy) and coverage gates in CI | Open — frontend is gated, backend is not |
+| Backend coverage gates in CI | ✅ 2026-07-31 — pytest-cov ratchet floors (unit 46%, integration 44%); frontend ratchet raised to 53/40/44/51 |
+| Backend type-checking (mypy) | Open — measured 2026-07-31: 4,927 errors in 180 of 277 files (`python -m mypy app/`), dominated by arg-type (2,215) and assignment (1,170) from untyped SQLAlchemy column usage. Needs a dedicated typing campaign; a blocking gate today is not honest |
 | Accessibility: keyboard-navigation audit of heavy surfaces, VPAT | Open — axe now covers the shared UX library + legal pages in CI; scheduling grid/form-builder keyboard audit remains |
 
 ## What the software cannot do for you

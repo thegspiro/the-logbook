@@ -1896,3 +1896,66 @@ async def anonymize_member(
     )
     await db.commit()
     return summary
+
+
+@router.get("/me/consents")
+async def get_my_consents(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    The calling member's optional-processing consents (photo use, public
+    roster listing, SMS notifications). granted=null means never asked —
+    consumers treat that exactly like a refusal.
+    """
+    from app.services.consent_service import ConsentService
+
+    return await ConsentService(db).list_for_user(current_user)
+
+
+@router.put("/me/consents/{consent_type}")
+async def set_my_consent(
+    consent_type: str,
+    request: Request,
+    granted: bool = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Record the calling member's consent choice. Self-scoped by construction;
+    every change is written to the tamper-evident audit log, which serves
+    as the immutable consent ledger.
+    """
+    from app.models.consent import ConsentType
+    from app.services.consent_service import ConsentService
+
+    try:
+        parsed_type = ConsentType(consent_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown consent type: {consent_type}",
+        )
+
+    row = await ConsentService(db).set_consent(current_user, parsed_type, granted)
+
+    await log_audit_event(
+        db=db,
+        event_type="consent_updated",
+        event_category="security",
+        severity="info",
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+        event_data={"consent_type": parsed_type.value, "granted": granted},
+    )
+    await db.commit()
+
+    return {
+        "consent_type": (
+            row.consent_type.value
+            if hasattr(row.consent_type, "value")
+            else row.consent_type
+        ),
+        "granted": row.granted,
+    }

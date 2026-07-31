@@ -222,7 +222,7 @@ coverage-ratchet approach.
 |---|------|-------------|--------|------|--------|
 | 1 | Remove unused `pysaml2`/`python-ldap` deps (or implement SAML/LDAP) | 27001 A.8.8 | S | Code | ✅ 2026-07-31 (removed; docs corrected) |
 | 2 | `security.txt` endpoint + advisory lifecycle & breach-clock doc | 29147/30111 | S | Code + doc | ✅ 2026-07-31 (`/.well-known/security.txt`, config-driven) |
-| 3 | Dependabot config; make `npm audit` blocking; add gitleaks + Trivy + SBOM | 27001 A.8.8 | S | CI | ✅ 2026-07-31 (Dependabot, `npm audit` blocking at high, gitleaks workflow; Trivy/SBOM still open) |
+| 3 | Dependabot config; make `npm audit` blocking; add gitleaks + Trivy + SBOM | 27001 A.8.8 | S | CI | ✅ 2026-07-31 (all parts — Trivy vuln sweep + Syft SBOM in supply-chain.yml) |
 | 4 | Privacy-policy + ToS pages (org-configurable content) | 27701 | S–M | Code | ✅ 2026-07-31 |
 | 5 | Audit-log archival job enforcing `HIPAA_AUDIT_RETENTION_DAYS` | 27001, 15489 | M | Code | ✅ 2026-07-31 (export-and-purge with attested chain hand-off) |
 | 6 | Off-host audit-log shipping (JSONL/syslog/webhook) | 27001 | M | Code | ✅ 2026-07-31 (HMAC-signed NDJSON webhook, watermarked) |
@@ -233,8 +233,8 @@ coverage-ratchet approach.
 | 11 | Per-user data export endpoint | 27701 | M | Code | ✅ 2026-07-31 |
 | 12 | Member anonymization workflow (generalize elections pattern) | 27701 | M–L | Code | ✅ 2026-07-31 |
 | 13 | Org-configurable retention schedules + enforcement job | 27701, 15489 | L | Code | Open |
-| 14 | Consent tracking model + UI | 27701 | M | Code | Open |
-| 15 | Backend mypy + coverage gates; enforce frontend coverage in CI | 25010 | M | CI | Open |
+| 14 | Consent tracking model + UI | 27701 | M | Code | ✅ 2026-07-31 |
+| 15 | Backend mypy + coverage gates; enforce frontend coverage in CI | 25010 | M | CI | ◐ 2026-07-31 — coverage ratchets landed (backend 46/44, frontend raised); mypy needs a typing campaign first (4,927 errors measured, see COMPLIANCE.md) |
 | 16 | Policy set / Statement of Applicability skeleton from SECURITY.md | 27001 | M | Doc | Open |
 
 Effort: S = under a day, M = days, L = a week-plus.

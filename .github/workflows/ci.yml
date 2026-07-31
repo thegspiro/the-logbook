@@ -119,10 +119,14 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run unit tests (no DB required)
+        # Coverage floor is a RATCHET set ~2 points under measured coverage
+        # (48% on 2026-07-31) — it blocks regressions, not an aspiration.
+        # Raise it as coverage grows; never lower it.
         run: |
           pytest tests/ \
             -m "not integration and not slow and not docker" \
-            -v --tb=short
+            -v --tb=short \
+            --cov=app --cov-fail-under=46
 
   backend-test-integration:
     name: Backend Integration Tests
@@ -271,10 +275,12 @@ jobs:
         # docker-capable pipeline, not the MySQL/Redis service job. Their
         # 30s SIGALRM interrupts also wedge the shared session event loop,
         # cascading setup timeouts into every DB-backed test after them.
+        # Coverage ratchet: measured 46% on 2026-07-31, floor 2 under.
         run: |
           pytest tests/ \
             -m "integration and not docker and not slow" \
-            -v --tb=short
+            -v --tb=short \
+            --cov=app --cov-fail-under=44
 
   # ──────────────────────────────────────────────
   # Frontend

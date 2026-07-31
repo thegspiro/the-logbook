@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_hours import AdminHoursEntry
 from app.models.audit import AuditLog
+from app.models.consent import UserConsent
 from app.models.event import EventRSVP
 from app.models.finance import MemberDues
 from app.models.inventory import (
@@ -87,6 +88,7 @@ _EXPORT_SECTIONS: list[tuple[str, type, str]] = [
     ("equipment_checkouts", CheckOutRecord, "user_id"),
     ("equipment_issuances", ItemIssuance, "user_id"),
     ("departure_clearances", DepartureClearance, "user_id"),
+    ("consents", UserConsent, "user_id"),
 ]
 
 # Shift completion reports are evaluations ABOUT the trainee — subject-access

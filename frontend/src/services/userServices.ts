@@ -196,6 +196,23 @@ export const userService = {
   },
 
   /**
+   * The caller's optional-processing consents. granted === null means the
+   * member was never asked — the backend treats that as "no consent".
+   */
+  async getMyConsents(): Promise<import('../types/user').ConsentItem[]> {
+    const response = await api.get<import('../types/user').ConsentItem[]>(
+      '/users/me/consents'
+    );
+    return response.data;
+  },
+
+  async setMyConsent(consentType: string, granted: boolean): Promise<void> {
+    await api.put(
+      `/users/me/consents/${consentType}?granted=${granted ? 'true' : 'false'}`
+    );
+  },
+
+  /**
    * Delete a user (soft or hard delete)
    */
   async deleteUserWithMode(userId: string, hard: boolean = false): Promise<void> {

@@ -1,0 +1,58 @@
+# Supply-chain security (ISO/IEC 27001 A.8.8): dependency vulnerability
+# sweep across every ecosystem lockfile, plus SBOM generation so deploying
+# departments can answer "what exactly is in this release?"
+#
+# Scope note: scanners are limited to `vuln` — secrets are covered by the
+# dedicated gitleaks workflow, and IaC misconfig scanning is deliberately
+# not enabled until its findings have been triaged (a blocking scanner
+# nobody has baselined just turns CI red and gets ignored).
+name: Supply Chain
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly sweep (Mondays 06:30 UTC) so new advisories against unchanged
+    # code still surface between PRs
+    - cron: "30 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trivy-vulns:
+    name: Trivy dependency scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan lockfiles for HIGH/CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@0.29.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          # Only fail on advisories that have a released fix — unfixable
+          # findings are tracked by the weekly schedule, not blocking PRs.
+          ignore-unfixed: true
+          exit-code: "1"
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate SPDX SBOM (Syft)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          artifact-name: the-logbook-sbom.spdx.json
+          upload-artifact: true

@@ -220,6 +220,7 @@ from app.models.ip_security import (
     IPExceptionAuditLog,
     IPExceptionType,
 )
+from app.models.consent import ConsentType, UserConsent
 from app.models.location import Location
 from app.models.medical_screening import (
     ScreeningRecord,
@@ -631,4 +632,7 @@ __all__ = [
     "ComplianceThresholdType",
     "ReportFrequency",
     "ReportStatus",
+    # Consent models
+    "ConsentType",
+    "UserConsent",
 ]
