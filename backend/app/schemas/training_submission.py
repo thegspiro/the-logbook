@@ -9,7 +9,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
@@ -48,8 +48,7 @@ class SelfReportConfigResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SelfReportConfigUpdate(BaseModel):
@@ -178,8 +177,7 @@ class TrainingSubmissionResponse(UTCResponseBase):
     submitted_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SubmissionReviewRequest(BaseModel):

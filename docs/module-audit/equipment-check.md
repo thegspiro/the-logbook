@@ -76,14 +76,22 @@ the report is created, raising "Trainee not found in this organization"
 otherwise. The `shift_id`-present path already tied the trainee via
 attendance/assignment. **Status:** fixed.
 
-### EC-7 — LOW — Detail/read endpoints bypass `equipment_check.view`
+### EC-7 — LOW — Detail/read endpoints bypass `equipment_check.view` — ✅ FIXED (2026-07-31)
 `get_check`, `get_shift_checks`, `get_item_history`, `get_last_check_results`,
-`get_shift_checklists` use `get_current_user` (not `require_permission("equipment_check.view")`),
-while the list endpoints require it. All are org-scoped (not cross-tenant), so
-this is an internal permission inconsistency — a member without the view
-permission can still read completed checks/failure notes.
-**Status:** flagged — tightening read permissions is a behavior change that could
-break legitimate member access; needs a deliberate decision, not auto-applied.
+`get_shift_checklists` used `get_current_user` (not `require_permission("equipment_check.view")`),
+while the list endpoints required it. All are org-scoped (not cross-tenant), so
+this was an internal permission inconsistency — a member without the view
+permission could still read completed checks/failure notes.
+**Resolution:** the five read endpoints now require
+`equipment_check.view OR equipment_check.submit`, and the default member
+position gained `equipment_check.submit` (migration `20260801_0010` backfills
+existing orgs' member positions). Members keep the check-performing flow —
+which these reads serve — while the permission system actually gates it (an
+org can now revoke by editing the member position). `view` stays
+leadership-only because it also opens the compliance/failure report endpoints.
+The self-scoped `my-checklists` endpoints and the submit endpoints keep bare
+authentication (unchanged member behavior; a submit-permission gate on writes
+would be a separate deliberate decision).
 
 ### EC-8 — LOW — Endpoint-level unscoped by-id reads (changelog metadata only)
 `delete_compartment`, `delete_item`, `add_item`, `update_item` read the target

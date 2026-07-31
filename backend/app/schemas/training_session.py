@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
@@ -207,8 +207,7 @@ class TrainingSessionResponse(UTCResponseBase):
     updated_at: datetime
     created_by: Optional[UUID]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AttendeeApprovalData(UTCResponseBase):
@@ -265,5 +264,4 @@ class TrainingApprovalResponse(UTCResponseBase):
 
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -10,7 +10,16 @@ import enum
 
 from sqlalchemy import JSON, Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Index, Integer, Numeric, String, Text, func
+from sqlalchemy import (
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -517,7 +526,7 @@ class PurchaseRequest(Base):
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    request_number = Column(String(20), nullable=False, unique=True)
+    request_number = Column(String(20), nullable=False)
     fiscal_year_id = Column(
         String(36),
         ForeignKey("fiscal_years.id", ondelete="CASCADE"),
@@ -592,6 +601,12 @@ class PurchaseRequest(Base):
     facility = relationship("Facility", foreign_keys=[facility_id])
 
     __table_args__ = (
+        # Numbers are generated per org (PR-YYYY-NNNN), so uniqueness must be
+        # per org too — a global unique made two orgs' first request of a year
+        # collide. The constraint also backs the retry-on-conflict allocator.
+        UniqueConstraint(
+            "organization_id", "request_number", name="uq_purchase_requests_org_number"
+        ),
         Index("ix_purchase_requests_org_id", "organization_id"),
         Index(
             "ix_purchase_requests_org_status",
@@ -622,7 +637,7 @@ class ExpenseReport(Base):
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    report_number = Column(String(20), nullable=False, unique=True)
+    report_number = Column(String(20), nullable=False)
     submitted_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     fiscal_year_id = Column(
         String(36),
@@ -672,6 +687,10 @@ class ExpenseReport(Base):
     )
 
     __table_args__ = (
+        # Per-org uniqueness — see PurchaseRequest.__table_args__.
+        UniqueConstraint(
+            "organization_id", "report_number", name="uq_expense_reports_org_number"
+        ),
         Index("ix_expense_reports_org_id", "organization_id"),
         Index(
             "ix_expense_reports_org_status",
@@ -732,7 +751,7 @@ class CheckRequest(Base):
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    request_number = Column(String(20), nullable=False, unique=True)
+    request_number = Column(String(20), nullable=False)
     requested_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     fiscal_year_id = Column(
         String(36),
@@ -785,6 +804,10 @@ class CheckRequest(Base):
     approver = relationship("User", foreign_keys=[approved_by])
 
     __table_args__ = (
+        # Per-org uniqueness — see PurchaseRequest.__table_args__.
+        UniqueConstraint(
+            "organization_id", "request_number", name="uq_check_requests_org_number"
+        ),
         Index("ix_check_requests_org_id", "organization_id"),
         Index(
             "ix_check_requests_org_status",

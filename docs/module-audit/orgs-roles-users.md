@@ -141,9 +141,15 @@ is a product decision on who may see full PII/infra config.
   nested sections key-by-key (`_deep_merge_settings`) instead of a shallow
   `{**a, **b}` that replaced a whole section when a partial PATCH touched one
   sub-key — closing the data-loss risk. (orgs #9)
-- **Deferred:** `member_status` transitions have no state machine (any-to-any by
-  a `members.manage` holder) — a lifecycle-model/product decision, no permission
-  grant. (roles #5) **✅ users #6 unblocked (resolved 2026-07-30: `audit_logs.organization_id` exists (migration `20260801_0009`, backfilled from user_id, hash-bound from version 3)):** the member
+- **✅ Fixed (2026-07-31, was deferred):** `member_status` transitions now go
+  through a lifecycle state machine (`ALLOWED_STATUS_TRANSITIONS` in
+  `endpoints/member_status.py`) instead of any-to-any: membership states
+  interchange, suspension must resolve to reinstatement or termination (never
+  straight to leave/retirement), retired/dropped members have explicit
+  reinstatement paths, and ARCHIVED is isolated on both sides (the dedicated
+  /archive and /reactivate endpoints remain the only doors). Blocked
+  transitions return 400 with the allowed list. Unit-tested in
+  `tests/test_member_status_transitions.py`. (roles #5) **✅ users #6 unblocked (resolved 2026-07-30: `audit_logs.organization_id` exists (migration `20260801_0009`, backfilled from user_id, hash-bound from version 3)):** the member
   audit-history query now filters `AuditLog.organization_id` directly.
 **Status:** correctness/robustness items fixed; two items deferred (design /
 blocked on the audit-log org column).

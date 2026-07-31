@@ -14,7 +14,8 @@ from decimal import Decimal
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import func, or_, select
+from sqlalchemy import Integer, cast, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -969,9 +970,16 @@ class FinanceService:
     # ========================================
 
     async def _generate_request_number(
-        self, org_id: str, prefix: str, fiscal_year_id: str
+        self, org_id: str, prefix: str, fiscal_year_id: str, offset: int = 0
     ) -> str:
-        """Generate auto-incrementing request number like PR-2026-0001"""
+        """Generate auto-incrementing request number like PR-2026-0001.
+
+        Uses MAX of the numeric suffix (not count()+1, which repeats numbers
+        after a deletion). ``offset`` lets the retry allocator step past a
+        number a concurrent transaction just took — REPEATABLE READ means a
+        re-run of this query cannot see that row, so retrying without an
+        offset would regenerate the same colliding number.
+        """
         fy = await self.get_fiscal_year(fiscal_year_id, org_id)
         year = ""
         if fy and fy.start_date:
@@ -988,21 +996,63 @@ class FinanceService:
         if not model:
             raise ValueError(f"Unknown prefix: {prefix}")
 
+        number_col = (
+            model.request_number
+            if hasattr(model, "request_number")
+            else model.report_number
+        )
         like_pattern = f"{prefix}-{year}-%"
         result = await self.db.execute(
-            select(func.count())
-            .select_from(model)
-            .where(
+            select(
+                func.max(cast(func.substring_index(number_col, "-", -1), Integer))
+            ).where(
                 model.organization_id == org_id,
-                (
-                    model.request_number.like(like_pattern)
-                    if hasattr(model, "request_number")
-                    else model.report_number.like(like_pattern)
-                ),
+                number_col.like(like_pattern),
             )
         )
-        count = result.scalar() or 0
-        return f"{prefix}-{year}-{(count + 1):04d}"
+        highest = result.scalar() or 0
+        return f"{prefix}-{year}-{(highest + 1 + offset):04d}"
+
+    _NUMBER_ALLOC_ATTEMPTS = 5
+
+    async def _flush_with_unique_number(
+        self, obj, number_attr: str, org_id: str, prefix: str, fiscal_year_id: str
+    ) -> None:
+        """Assign a request/report number and flush, retrying on collision.
+
+        The per-org unique constraint (uq_*_org_number) is the arbiter; each
+        retry regenerates with a +1 offset inside a SAVEPOINT so a collision
+        never poisons the caller's outer transaction.
+        """
+        for attempt in range(self._NUMBER_ALLOC_ATTEMPTS):
+            setattr(
+                obj,
+                number_attr,
+                await self._generate_request_number(
+                    org_id, prefix, fiscal_year_id, offset=attempt
+                ),
+            )
+            nested = await self.db.begin_nested()
+            try:
+                self.db.add(obj)
+                await self.db.flush()
+                await nested.commit()
+                return
+            except IntegrityError as e:
+                await nested.rollback()
+                # Only a number collision is retryable; FK or other
+                # constraint violations must surface to the caller.
+                if "org_number" not in str(e.orig):
+                    raise
+                logger.warning(
+                    "Request number collision on {} (attempt {}), retrying",
+                    getattr(obj, number_attr),
+                    attempt + 1,
+                )
+        raise ValueError(
+            "Could not allocate a unique request number after "
+            f"{self._NUMBER_ALLOC_ATTEMPTS} attempts; please retry"
+        )
 
     async def list_purchase_requests(
         self,
@@ -1035,19 +1085,16 @@ class FinanceService:
     ) -> PurchaseRequest:
         await self._validate_finance_fks(org_id, kwargs)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
-        request_number = await self._generate_request_number(
-            org_id, "PR", fiscal_year_id
-        )
         pr = PurchaseRequest(
             organization_id=org_id,
             requested_by=requested_by,
-            request_number=request_number,
             **kwargs,
         )
-        self.db.add(pr)
-        await self.db.flush()
+        await self._flush_with_unique_number(
+            pr, "request_number", org_id, "PR", fiscal_year_id
+        )
         await self.db.refresh(pr, ["created_at", "updated_at"])
-        logger.info("Created purchase request {}", request_number)
+        logger.info("Created purchase request {}", pr.request_number)
         return pr
 
     async def update_purchase_request(
@@ -1238,17 +1285,14 @@ class FinanceService:
         for item_data in line_items or []:
             await self._validate_finance_fks(org_id, item_data)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
-        report_number = await self._generate_request_number(
-            org_id, "ER", fiscal_year_id
-        )
         er = ExpenseReport(
             organization_id=org_id,
             submitted_by=submitted_by,
-            report_number=report_number,
             **kwargs,
         )
-        self.db.add(er)
-        await self.db.flush()
+        await self._flush_with_unique_number(
+            er, "report_number", org_id, "ER", fiscal_year_id
+        )
 
         total = Decimal("0")
         if line_items:
@@ -1404,17 +1448,14 @@ class FinanceService:
     ) -> CheckRequest:
         await self._validate_finance_fks(org_id, kwargs)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
-        request_number = await self._generate_request_number(
-            org_id, "CK", fiscal_year_id
-        )
         cr = CheckRequest(
             organization_id=org_id,
             requested_by=requested_by,
-            request_number=request_number,
             **kwargs,
         )
-        self.db.add(cr)
-        await self.db.flush()
+        await self._flush_with_unique_number(
+            cr, "request_number", org_id, "CK", fiscal_year_id
+        )
         await self.db.refresh(cr, ["created_at", "updated_at"])
         return cr
 

@@ -124,9 +124,7 @@ These variables are baked into the frontend at build time via Vite.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `VITE_API_URL` | API base URL | `/api/v1` |
-| `VITE_WS_URL` | WebSocket URL | `ws://localhost:3001` |
 | `VITE_ENV` | Frontend environment | `production` |
-| `VITE_ENABLE_PWA` | Enable PWA features | `true` |
 | `VITE_ENABLE_ANALYTICS` | Enable analytics | `false` |
 
 > **Critical:** Vite replaces `import.meta.env.VITE_*` at build time. Changing these after build has no effect — you must rebuild the frontend.

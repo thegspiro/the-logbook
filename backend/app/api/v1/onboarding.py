@@ -14,7 +14,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from loguru import logger
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    ValidationInfo,
+    field_validator,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,8 +65,7 @@ class OnboardingStatusResponse(BaseModel):
     steps_completed: dict
     organization_name: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SecurityCheckResponse(BaseModel):
@@ -83,14 +89,16 @@ class SystemOwnerCreate(BaseModel):
     last_name: str = Field(..., min_length=1, max_length=100)
     membership_number: str | None = Field(None, max_length=50)
 
-    @validator("password_confirm")
-    def passwords_match(cls, v, values):
-        if "password" in values and v != values["password"]:
+    @field_validator("password_confirm")
+    @classmethod
+    def passwords_match(cls, v: str, info: ValidationInfo) -> str:
+        if "password" in info.data and v != info.data["password"]:
             raise ValueError("Passwords do not match")
         return v
 
-    @validator("username")
-    def validate_username(cls, v):
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
         if not re.match(r"^[a-zA-Z0-9_-]+$", v):
             raise ValueError(
                 "Username can only contain letters, numbers, hyphens, and underscores"
@@ -109,8 +117,7 @@ class UserResponse(BaseModel):
     membership_number: str | None
     status: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SystemOwnerResponse(BaseModel):
@@ -130,8 +137,7 @@ class SystemOwnerResponse(BaseModel):
     status: str
     authenticated: bool = True
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ModulesConfig(BaseModel):
@@ -196,8 +202,7 @@ class ChecklistItemResponse(BaseModel):
     documentation_link: str | None
     estimated_time_minutes: int | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EmailTestRequest(BaseModel):
@@ -208,8 +213,9 @@ class EmailTestRequest(BaseModel):
     )
     config: dict[str, Any] = Field(..., description="Email configuration")
 
-    @validator("platform")
-    def validate_platform(cls, v):
+    @field_validator("platform")
+    @classmethod
+    def validate_platform(cls, v: str) -> str:
         valid_platforms = ["gmail", "microsoft", "selfhosted", "cloudflare", "other"]
         if v not in valid_platforms:
             raise ValueError(f'Platform must be one of: {", ".join(valid_platforms)}')
@@ -244,8 +250,9 @@ class DepartmentInfoRequest(BaseModel):
         ..., description="Navigation layout: 'top' or 'left'"
     )
 
-    @validator("navigation_layout")
-    def validate_layout(cls, v):
+    @field_validator("navigation_layout")
+    @classmethod
+    def validate_layout(cls, v: str) -> str:
         if v not in ["top", "left"]:
             raise ValueError('Navigation layout must be "top" or "left"')
         return v

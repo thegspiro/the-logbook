@@ -220,7 +220,6 @@ VITE_ENV=production
 VITE_SESSION_KEY=change-this-to-a-random-32-character-string
 
 # Feature Flags
-VITE_ENABLE_PWA=true
 VITE_ENABLE_ANALYTICS=false
 EOF
 ```

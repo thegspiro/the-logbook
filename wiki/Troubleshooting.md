@@ -477,7 +477,6 @@ cat > .env << 'EOF'
 VITE_API_URL=http://YOUR-IP:7881
 
 # WebSocket Configuration
-VITE_WS_URL=ws://YOUR-IP:7881
 
 # Environment
 VITE_ENV=production
@@ -486,7 +485,6 @@ VITE_ENV=production
 VITE_SESSION_KEY=change-this-to-a-random-32-character-string
 
 # Feature Flags
-VITE_ENABLE_PWA=true
 VITE_ENABLE_ANALYTICS=false
 EOF
 ```

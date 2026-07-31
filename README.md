@@ -171,9 +171,9 @@ cd the-logbook
 cp .env.example .env
 
 # Generate secrets (copy output to .env)
-openssl rand -hex 32  # SECRET_KEY
-openssl rand -hex 32  # ENCRYPTION_KEY
-openssl rand -hex 16  # ENCRYPTION_SALT
+openssl rand -hex 32  # SECRET_KEY (64 hex chars)
+openssl rand -hex 32  # ENCRYPTION_KEY (64 hex chars)
+openssl rand -hex 16  # ENCRYPTION_SALT (32 hex chars)
 
 docker compose up -d
 ```

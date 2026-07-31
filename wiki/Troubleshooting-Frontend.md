@@ -20,7 +20,6 @@ Missing or incorrect `VITE_API_URL` in `frontend/.env`. Vite bakes environment v
 ```bash
 VITE_API_URL=/api/v1
 VITE_ENV=production
-VITE_ENABLE_PWA=true
 ```
 
 2. Rebuild frontend:

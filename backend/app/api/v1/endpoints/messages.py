@@ -8,7 +8,7 @@ communications. Visible on member dashboards.
 from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
@@ -83,8 +83,7 @@ class MessageResponse(BaseModel):
     created_at: str | None = None
     updated_at: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class InboxMessage(BaseModel):
