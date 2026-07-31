@@ -192,6 +192,12 @@ SCHEDULE = {
         "recommended_time": "Sunday 02:00",
         "cron": "0 2 * * 0",
     },
+    "audit_log_ship": {
+        "description": "Ship new audit log entries to the off-host collector configured via AUDIT_SHIP_WEBHOOK_URL (HMAC-signed NDJSON batches). No-op when not configured.",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
+    },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
         "frequency": "every 1 minute",

@@ -1839,3 +1839,60 @@ async def export_my_data(
         content=export,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/{user_id}/anonymize", status_code=status.HTTP_200_OK)
+async def anonymize_member(
+    user_id: str,
+    request: Request,
+    current_user: User = Depends(require_permission("members.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Irreversibly scrub a departed member's PII while retaining their
+    operational history (training, attendance, property custody) linked to
+    an anonymized shell record. Refused for active members and for self.
+
+    See member_anonymization_service for exactly what is scrubbed, kept,
+    and why audit logs / election records are never rewritten.
+    """
+    if str(current_user.id) == str(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot anonymize your own account",
+        )
+
+    from app.services.member_anonymization_service import (
+        MemberAnonymizationService,
+    )
+
+    service = MemberAnonymizationService(db)
+    user = await service.get_user_for_anonymization(
+        user_id, str(current_user.organization_id)
+    )
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    try:
+        summary = await service.anonymize_member(user)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    # Deliberately no name/email in the event payload: audit rows are
+    # immutable, so identity written here would survive the anonymization.
+    await log_audit_event(
+        db=db,
+        event_type="user_anonymized",
+        event_category="security",
+        severity="warning",
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+        event_data={"anonymized_user_id": str(user_id)},
+    )
+    await db.commit()
+    return summary

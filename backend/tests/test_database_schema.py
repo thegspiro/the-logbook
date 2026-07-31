@@ -907,6 +907,7 @@ class TestSchemaCrossReferences:
             "onboarding_checklist",  # System-wide checklist
             "onboarding_sessions",  # Temporary session storage
             "security_alerts",  # Append-only, references user by string ID
+            "audit_ship_state",  # Singleton watermark for off-host shipping
         }
 
         # Build a set of tables that are referenced by FKs

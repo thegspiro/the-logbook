@@ -29,6 +29,12 @@ def upgrade() -> None:
         ),
         sa.Column("last_shipped_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+        ),
+        sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
             nullable=False,
