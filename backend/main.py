@@ -28,6 +28,7 @@ from app.api.public.finance_approvals import router as finance_approvals_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.portal import router as public_portal_router
+from app.api.public.legal import router as public_legal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
 from app.api.public.security_txt import router as security_txt_router
 from app.api.v1.api import api_router
@@ -2088,6 +2089,10 @@ app.include_router(integrations_webhook_router, prefix="/api")
 # Include public finance approval endpoints (external approvers act via an
 # emailed token link — /api/public/v1/finance/approvals/{token})
 app.include_router(finance_approvals_router, prefix="/api")
+
+# Public legal text (privacy policy / terms) for the anonymous /privacy and
+# /terms pages — /api/public/v1/legal
+app.include_router(public_legal_router, prefix="/api")
 
 # RFC 9116 vulnerability-disclosure pointer. Mounted at the root (no /api
 # prefix) because the spec fixes the path at /.well-known/security.txt;

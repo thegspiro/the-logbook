@@ -6,7 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import { clearLegacySensitiveData } from './modules/onboarding/utils/storage';
 
 // Dynamic import retry/reload for stale chunks after deployments
-import { clearChunkReloadFlag } from './utils/lazyWithRetry';
+import { clearChunkReloadFlag, lazyWithRetry } from './utils/lazyWithRetry';
 
 // Error Boundary
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -77,6 +77,9 @@ import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { FinanceApprovalPage } from './pages/FinanceApprovalPage';
+
+// Public legal pages (privacy policy / terms of service)
+const LegalPage = lazyWithRetry(() => import('./pages/legal/LegalPage'));
 
 /**
  * Main Application Component
@@ -178,6 +181,10 @@ function App() {
                 {/* Password Reset Pages */}
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+                {/* Legal pages (public) */}
+                <Route path="/privacy" element={<LegalPage />} />
+                <Route path="/terms" element={<LegalPage />} />
                 {/* Public external-approver page (token-authenticated) */}
                 <Route
                   path="/finance/approvals/:token"

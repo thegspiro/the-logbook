@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { authService } from '../services/api';
 import axios from 'axios';
@@ -535,7 +535,17 @@ export const LoginPage: React.FC = () => {
         <p className="text-theme-text-muted text-sm">
           &copy; {new Date().getFullYear()} {branding.name || 'Your Organization'}. All rights reserved.
         </p>
-        <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
+        <p className="text-theme-text-muted text-xs mt-1">
+          Powered by The Logbook
+          <span className="mx-2">&middot;</span>
+          <Link to="/privacy" className="hover:underline">
+            Privacy
+          </Link>
+          <span className="mx-2">&middot;</span>
+          <Link to="/terms" className="hover:underline">
+            Terms
+          </Link>
+        </p>
       </footer>
     </main>
   );
