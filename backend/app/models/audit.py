@@ -136,6 +136,17 @@ class AuditLogCheckpoint(Base):
     # Verification results
     verified_at = Column(DateTime(timezone=True))
 
+    # Retention archival. Set when this checkpoint's covered rows were
+    # exported and purged by the retention job (see
+    # AuditLogger.archive_expired_logs). last_log_hash is the chain hash of
+    # the final purged row — the surviving chain head anchors to it instead
+    # of the genesis hash. archive_attestation is a keyed HMAC over the
+    # archived range, so a DB-only attacker cannot fabricate a "sanctioned"
+    # head deletion: without the signing key the attestation won't verify.
+    archived_at = Column(DateTime(timezone=True), nullable=True)
+    last_log_hash = Column(String(64), nullable=True)
+    archive_attestation = Column(String(64), nullable=True)
+
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

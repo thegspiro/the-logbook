@@ -2808,7 +2808,10 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
     1. Identifies audit log entries older than 90 days without a checkpoint
     2. Creates integrity checkpoints covering those entries
     3. Verifies the hash chain integrity of the archived range
-    4. Logs the archival operation itself
+    4. Enforces HIPAA_AUDIT_RETENTION_DAYS: exports rows past retention to
+       a gzipped JSONL archive (AUDIT_ARCHIVE_DIR) and purges them, with a
+       keyed attestation so the surviving chain still verifies
+    5. Logs the archival operation itself
 
     Designed to run weekly so that all audit data eventually gets
     checkpointed, enabling confident long-term integrity verification.
@@ -2897,6 +2900,23 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
                 ]
             )
 
+        # Enforce HIPAA_AUDIT_RETENTION_DAYS: export-and-purge rows past
+        # retention. Checkpoint-aligned, integrity-gated, and attested so
+        # the surviving chain still verifies (see archive_expired_logs).
+        from app.core.config import settings
+
+        retention = await audit_logger.archive_expired_logs(
+            db,
+            retention_days=settings.HIPAA_AUDIT_RETENTION_DAYS,
+            archive_dir=settings.AUDIT_ARCHIVE_DIR,
+        )
+        results["purged_entries"] = retention["purged_entries"]
+        results["archive_file"] = retention["archive_file"]
+        if retention["skipped_reason"] == (
+            "integrity verification failed - refusing to purge"
+        ):
+            results["errors"].append(retention["skipped_reason"])
+
         # Log the archival operation
         await log_audit_event(
             db=db,
@@ -2907,6 +2927,13 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
                 "checkpoints_created": results["checkpoints_created"],
                 "entries_checkpointed": results["entries_checkpointed"],
                 "integrity_verified": results["integrity_verified"],
+                "purged_entries": retention["purged_entries"],
+                "purge_range": (
+                    f"{retention['purge_start_id']}-{retention['purge_end_id']}"
+                    if retention["purged_entries"]
+                    else None
+                ),
+                "archive_file": retention["archive_file"],
                 "errors_count": len(results["errors"]),
             },
         )
