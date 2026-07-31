@@ -31,6 +31,29 @@ Schedule it (02:00 daily shown; align frequency with your RPO, below):
 0 2 * * * /path/to/the-logbook/scripts/backup.sh
 ```
 
+## Automated: the backup sidecar (production compose)
+
+Production deployments don't need the host cron: `docker-compose.prod.yml`
+includes a `backup` service (`scripts/backup-sidecar.sh`) that runs nightly
+at `BACKUP_TIME` (default 02:00 UTC), writing restore-compatible archives of
+the database, uploads, and audit archives to the `backups` volume, pruning
+after `BACKUP_RETENTION_DAYS`.
+
+**It also drills itself:** every `VERIFY_EVERY_N_BACKUPS` runs (default 7),
+`scripts/verify_backup.sh` loads the fresh dump into a throwaway schema on
+the MySQL server, asserts the core tables and full schema came back, and
+drops it. A failed drill screams in the service logs on every subsequent
+nightly run until fixed — watch `docker compose logs backup`.
+
+The `backups` volume is still on the same host. **Sync it offsite** (S3,
+rsync target, NAS) — that step, plus offline key custody, is what makes it
+a recovery plan. You can also run a drill by hand against any archive:
+
+```bash
+docker compose exec backup bash /scripts/verify_backup.sh \
+  /backups/logbook_backup_YYYYmmdd_HHMMSS.tar.gz
+```
+
 ## ⚠️ Secrets are NOT in the backup — store them separately
 
 The backup deliberately excludes the real `.env` (only a values-stripped

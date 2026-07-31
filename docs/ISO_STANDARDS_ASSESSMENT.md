@@ -227,7 +227,7 @@ coverage-ratchet approach.
 | 5 | Audit-log archival job enforcing `HIPAA_AUDIT_RETENTION_DAYS` | 27001, 15489 | M | Code | ✅ 2026-07-31 (export-and-purge with attested chain hand-off) |
 | 6 | Off-host audit-log shipping (JSONL/syslog/webhook) | 27001 | M | Code | ✅ 2026-07-31 (HMAC-signed NDJSON webhook, watermarked) |
 | 7 | Fix broken `docs/BACKUP.md` / `docs/COMPLIANCE.md` links by writing them; DR runbook with RTO/RPO | 22301 | M | Doc | ✅ 2026-07-31 |
-| 8 | Compose-integrated backup sidecar + automated restore verification | 22301 | M | Code | Open |
+| 8 | Compose-integrated backup sidecar + automated restore verification | 22301 | M | Code | ✅ 2026-07-31 (nightly sidecar + throwaway-schema restore drills; audit archives now on a persistent volume) |
 | 9 | Expand axe specs beyond Modal + a11y gate in CI | 40500/WCAG | M | CI + tests | ✅ 2026-07-31 (UX library + legal pages; keyboard audit still open) |
 | 10 | Encryption key versioning + rotation command | 27001 | M | Code | ✅ 2026-07-31 (legacy-key ring + rotate_encryption_key.py + KEY_ROTATION.md) |
 | 11 | Per-user data export endpoint | 27701 | M | Code | ✅ 2026-07-31 |
