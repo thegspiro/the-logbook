@@ -87,7 +87,9 @@ Deploying departments own the management-system side of every framework:
   your SOPs.
 - **ISO 27001:** policies, risk assessment, Statement of Applicability,
   internal audits, management review. The control inventory above is your
-  evidence index, not your ISMS.
+  evidence index, not your ISMS. Pre-filled skeletons for the policy set
+  and SoA live in [policies/](./policies/) — replace the
+  `[DEPARTMENT: ...]` placeholders and adopt them formally.
 - **Key custody:** offline storage of `ENCRYPTION_KEY`/`ENCRYPTION_SALT` and
   friends — see [BACKUP.md](./BACKUP.md).
 - **Records retention schedules:** statutory retention for fire-service

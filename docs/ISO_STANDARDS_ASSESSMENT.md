@@ -235,7 +235,7 @@ coverage-ratchet approach.
 | 13 | Org-configurable retention schedules + enforcement job | 27701, 15489 | L | Code | ✅ 2026-07-31 (log-class records; documents/minutes deliberately manual) |
 | 14 | Consent tracking model + UI | 27701 | M | Code | ✅ 2026-07-31 |
 | 15 | Backend mypy + coverage gates; enforce frontend coverage in CI | 25010 | M | CI | ◐ 2026-07-31 — coverage ratchets landed (backend 46/44, frontend raised); mypy needs a typing campaign first (4,927 errors measured, see COMPLIANCE.md) |
-| 16 | Policy set / Statement of Applicability skeleton from SECURITY.md | 27001 | M | Doc | Open |
+| 16 | Policy set / Statement of Applicability skeleton from SECURITY.md | 27001 | M | Doc | ✅ 2026-07-31 (docs/policies/ — 5 policies + SoA skeleton with [DEPARTMENT:] placeholders) |
 
 Effort: S = under a day, M = days, L = a week-plus.
 
