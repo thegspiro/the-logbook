@@ -218,28 +218,31 @@ coverage-ratchet approach.
 
 ## Prioritized roadmap
 
-| # | Item | Standard(s) | Effort | Type |
-|---|------|-------------|--------|------|
-| 1 | Remove unused `pysaml2`/`python-ldap` deps (or implement SAML/LDAP) | 27001 A.8.8 | S | Code |
-| 2 | `security.txt` endpoint + advisory lifecycle & breach-clock doc | 29147/30111 | S | Code + doc |
-| 3 | Dependabot config; make `npm audit` blocking; add gitleaks + Trivy + SBOM | 27001 A.8.8 | S | CI |
-| 4 | Privacy-policy + ToS pages (org-configurable content) | 27701 | S–M | Code |
-| 5 | Audit-log archival job enforcing `HIPAA_AUDIT_RETENTION_DAYS` | 27001, 15489 | M | Code |
-| 6 | Off-host audit-log shipping (JSONL/syslog/webhook) | 27001 | M | Code |
-| 7 | Fix broken `docs/BACKUP.md` / `docs/COMPLIANCE.md` links by writing them; DR runbook with RTO/RPO | 22301 | M | Doc |
-| 8 | Compose-integrated backup sidecar + automated restore verification | 22301 | M | Code |
-| 9 | Expand axe specs beyond Modal + a11y gate in CI | 40500/WCAG | M | CI + tests |
-| 10 | Encryption key versioning + rotation command | 27001 | M | Code |
-| 11 | Per-user data export endpoint | 27701 | M | Code |
-| 12 | Member anonymization workflow (generalize elections pattern) | 27701 | M–L | Code |
-| 13 | Org-configurable retention schedules + enforcement job | 27701, 15489 | L | Code |
-| 14 | Consent tracking model + UI | 27701 | M | Code |
-| 15 | Backend mypy + coverage gates; enforce frontend coverage in CI | 25010 | M | CI |
-| 16 | Policy set / Statement of Applicability skeleton from SECURITY.md | 27001 | M | Doc |
+| # | Item | Standard(s) | Effort | Type | Status |
+|---|------|-------------|--------|------|--------|
+| 1 | Remove unused `pysaml2`/`python-ldap` deps (or implement SAML/LDAP) | 27001 A.8.8 | S | Code | ✅ 2026-07-31 (removed; docs corrected) |
+| 2 | `security.txt` endpoint + advisory lifecycle & breach-clock doc | 29147/30111 | S | Code + doc | ✅ 2026-07-31 (`/.well-known/security.txt`, config-driven) |
+| 3 | Dependabot config; make `npm audit` blocking; add gitleaks + Trivy + SBOM | 27001 A.8.8 | S | CI | ✅ 2026-07-31 (Dependabot, `npm audit` blocking at high, gitleaks workflow; Trivy/SBOM still open) |
+| 4 | Privacy-policy + ToS pages (org-configurable content) | 27701 | S–M | Code | Open |
+| 5 | Audit-log archival job enforcing `HIPAA_AUDIT_RETENTION_DAYS` | 27001, 15489 | M | Code | ✅ 2026-07-31 (export-and-purge with attested chain hand-off) |
+| 6 | Off-host audit-log shipping (JSONL/syslog/webhook) | 27001 | M | Code | Open |
+| 7 | Fix broken `docs/BACKUP.md` / `docs/COMPLIANCE.md` links by writing them; DR runbook with RTO/RPO | 22301 | M | Doc | ✅ 2026-07-31 |
+| 8 | Compose-integrated backup sidecar + automated restore verification | 22301 | M | Code | Open |
+| 9 | Expand axe specs beyond Modal + a11y gate in CI | 40500/WCAG | M | CI + tests | Open |
+| 10 | Encryption key versioning + rotation command | 27001 | M | Code | Open |
+| 11 | Per-user data export endpoint | 27701 | M | Code | Open |
+| 12 | Member anonymization workflow (generalize elections pattern) | 27701 | M–L | Code | Open |
+| 13 | Org-configurable retention schedules + enforcement job | 27701, 15489 | L | Code | Open |
+| 14 | Consent tracking model + UI | 27701 | M | Code | Open |
+| 15 | Backend mypy + coverage gates; enforce frontend coverage in CI | 25010 | M | CI | Open |
+| 16 | Policy set / Statement of Applicability skeleton from SECURITY.md | 27001 | M | Doc | Open |
 
 Effort: S = under a day, M = days, L = a week-plus.
 
-Items 1–4 are quick wins (1 and 3 are near-trivial). Items 5–8 close the
-largest 27001/22301 control gaps. Items 11–14 are the privacy feature set —
-the one area where the product currently cannot support a deploying
-organization's obligations at all.
+Items 5–8 close the largest 27001/22301 control gaps. Items 11–14 are the
+privacy feature set — the one area where the product currently cannot support
+a deploying organization's obligations at all. The 2026-07-31 batch also
+fixed the frontend production-dependency advisories that were fixable without
+a breaking major (axios 1.19, react-router-dom 6.30.4, dompurify 3.4.12);
+the remaining react-router moderates need the v6→v7 migration, tracked in
+[COMPLIANCE.md](./COMPLIANCE.md).
