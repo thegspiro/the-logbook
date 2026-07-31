@@ -19,7 +19,6 @@ BACKEND_PORT=7881
 
 # In frontend/.env file
 VITE_API_URL=http://YOUR-UNRAID-IP:7881
-VITE_WS_URL=ws://YOUR-UNRAID-IP:7881
 ```
 
 **Why these ports?**
@@ -44,7 +43,6 @@ BACKEND_PORT=3001
 
 # In frontend/.env file
 VITE_API_URL=http://localhost:3001
-VITE_WS_URL=ws://localhost:3001
 ```
 
 **Why these ports?**
@@ -65,7 +63,6 @@ VITE_WS_URL=ws://localhost:3001
 ```env
 # In frontend/.env file
 VITE_API_URL=http://localhost:3001
-VITE_WS_URL=ws://localhost:3001
 ```
 
 **Why these ports?**

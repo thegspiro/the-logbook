@@ -28,9 +28,9 @@ here.
 
 | Item | Status | Detail |
 |------|--------|--------|
-| **`SECRET_KEY` guidance mismatch** | Open decision | README suggests `openssl rand -hex 32` (32 chars) while the documented recommendation is 64 chars (config hard-min is 32). Align the guidance to one number. |
-| **`.env.example` defaults to `ENVIRONMENT=production`** | Open decision | In production, config makes `SECURITY_ENFORCE_HTTPS=True` and a non-empty `REDIS_PASSWORD` startup-blocking, neither of which is in the quick-start example — so a by-the-book quick start is blocked at startup. Decide whether the example should default to `development`. |
-| **`VITE_WS_URL` / `VITE_ENABLE_PWA` documented but unused** | Open decision | Declared in `vite-env.d.ts` and the env docs but never read in `frontend/src`. Confirm whether they're planned/tooling-only before removing from docs. |
+| **`SECRET_KEY` guidance mismatch** | ✅ Resolved (2026-07-31) | Not a mismatch: `openssl rand -hex 32` outputs **64 hex characters** (32 bytes), which meets the 64-char recommendation (config hard-min is 32 chars). README annotated with the output length to prevent the same misreading. |
+| **`.env.example` defaults to `ENVIRONMENT=production`** | ✅ Resolved | `.env.example` and `.env.example.full` both ship `ENVIRONMENT=development` (and docker-compose defaults to development), so the by-the-book quick start is not blocked. |
+| **`VITE_WS_URL` / `VITE_ENABLE_PWA` documented but unused** | ✅ Resolved (2026-07-31) | Removed from `vite-env.d.ts`, `frontend/.env.example`, `frontend/setup.sh`, and all docs/wiki pages — never read anywhere (not even `vite.config.ts`), same rationale as the `MODULE_*_ENABLED` removal. Reintroduce alongside the feature if websockets/PWA flags ever land. |
 
 ## Training Module
 

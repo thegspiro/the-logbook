@@ -1631,6 +1631,11 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             COMPLIANCE_VIEW.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_SWAP.name,
+            # Members perform shift/apparatus checks, and the check-flow
+            # read endpoints are gated view-OR-submit (EC-7) — submit is the
+            # baseline "do checks" grant; view stays leadership-only because
+            # it also opens the compliance/failure reports.
+            EQUIPMENT_CHECK_SUBMIT.name,
             INVENTORY_VIEW.name,
             MEETINGS_VIEW.name,
             ELECTIONS_VIEW.name,

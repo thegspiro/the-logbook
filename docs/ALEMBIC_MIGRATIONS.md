@@ -293,9 +293,11 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 | `20260801_0006` | `20260801_0005` | `20260801_0006_add_manual_ballot_batch_id.py` | Add `votes.manual_batch_id` (indexed) — every paper-tally entry shares a batch id so a mis-keyed batch can be voided in one audited action |
 | `20260801_0007` | `20260801_0006` | `20260801_0007_add_manual_ballot_attestations.py` | Add `manual_ballot_batches` + `manual_ballot_attestations` — paper batches stay pending (excluded from results) until the org-required number of officers attest them |
 | `20260801_0008` | `20260801_0007` | `20260801_0008_add_tie_policy_roster_snapshot_merge.py` | Add `elections.tie_policy`, `elections.eligible_roster_snapshot` (voter roll frozen at open), and `candidates.merged_into_candidate_id` (write-in consolidation alias) |
-| `20260801_0009` | `20260801_0008` | `20260801_0009_add_audit_log_organization_id.py` | Add `audit_logs.organization_id` (indexed, backfilled from `user_id`) — org-scoped audit reads; hash chain v3 binds the org on new rows — **current single head** |
+| `20260801_0009` | `20260801_0008` | `20260801_0009_add_audit_log_organization_id.py` | Add `audit_logs.organization_id` (indexed, backfilled from `user_id`) — org-scoped audit reads; hash chain v3 binds the org on new rows |
+| `20260801_0010` | `20260801_0009` | `20260801_0010_grant_equipment_check_submit_to_members.py` | Data migration: append `equipment_check.submit` to existing system member positions (EC-7 gated the check-flow reads view-OR-submit; new orgs get it from `DEFAULT_POSITIONS`) |
+| `20260801_0011` | `20260801_0010` | `20260801_0011_per_org_finance_request_numbers.py` | Replace the global unique on `purchase_requests.request_number` / `expense_reports.report_number` / `check_requests.request_number` with per-org composite uniques (`uq_*_org_number`) — introspection-defensive because these tables are create_all-materialized — **current single head** |
 
-> **Single head as of 2026-07-30:** `20260801_0009` is the linear head of the
+> **Single head as of 2026-07-31:** `20260801_0011` is the linear head of the
 > chain, so `alembic upgrade head` is unambiguous.
 > `tests/test_alembic_migrations.py` validates the single-head DAG (it
 > understands merge migrations).

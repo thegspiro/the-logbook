@@ -65,9 +65,6 @@ if [ ! -f .env ]; then
 # API Configuration
 VITE_API_URL=http://localhost:3001
 
-# WebSocket Configuration
-VITE_WS_URL=ws://localhost:3001
-
 # Environment
 VITE_ENV=development
 
@@ -75,7 +72,6 @@ VITE_ENV=development
 VITE_SESSION_KEY=change-this-to-a-random-32-character-string-in-production
 
 # Feature Flags
-VITE_ENABLE_PWA=true
 VITE_ENABLE_ANALYTICS=false
 EOF
         echo "✅ Basic .env file created"

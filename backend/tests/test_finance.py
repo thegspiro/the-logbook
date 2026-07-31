@@ -1031,3 +1031,196 @@ class TestDashboardService:
         assert "pending_purchase_requests" in dashboard
         assert "dues_collection_rate" in dashboard
         assert dashboard["pending_approvals_count"] == 0
+
+
+# ============================================
+# Request Number Allocation Tests
+# ============================================
+
+
+class TestRequestNumberAllocation:
+    """Per-org number uniqueness + the retry-on-conflict allocator
+    (migration 20260801_0011 replaced the global unique with a per-org
+    composite, and the generator became MAX-based with savepoint retries)."""
+
+    async def _make_second_org(self, db_session: AsyncSession):
+        org_id = str(uuid.uuid4())
+        user_id = str(uuid.uuid4())
+        await db_session.execute(
+            text(
+                "INSERT INTO organizations (id, name, organization_type, slug, "
+                "timezone) VALUES (:id, :name, 'fire_department', :slug, 'UTC')"
+            ),
+            {
+                "id": org_id,
+                "name": "Second Finance Dept",
+                "slug": f"fin2-{org_id[:8]}",
+            },
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO users (id, organization_id, username, first_name, "
+                "last_name, email, password_hash, status) VALUES (:id, :org, :un, "
+                "'Fin', 'Two', :em, 'hashed', 'active')"
+            ),
+            {
+                "id": user_id,
+                "org": org_id,
+                "un": f"fin2-{user_id[:8]}",
+                "em": f"fin2-{user_id[:8]}@test.com",
+            },
+        )
+        await db_session.flush()
+        return org_id, user_id
+
+    async def _fiscal_year(self, service, org_id, user_id):
+        return await service.create_fiscal_year(
+            org_id=org_id,
+            created_by=user_id,
+            name="FY2026",
+            start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
+        )
+
+    async def test_two_orgs_share_the_same_first_number(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """Numbering is per org: org B's first PR of the year must get
+        PR-2026-0001 even though org A already has it (the old global
+        unique made this insert fail)."""
+        service = FinanceService(db_session)
+        org_a, user_a = sample_org_data["id"], sample_org_data["admin_id"]
+        org_b, user_b = await self._make_second_org(db_session)
+
+        fy_a = await self._fiscal_year(service, org_a, user_a)
+        fy_b = await self._fiscal_year(service, org_b, user_b)
+
+        pr_a = await service.create_purchase_request(
+            org_id=org_a,
+            requested_by=user_a,
+            fiscal_year_id=fy_a.id,
+            title="A",
+            estimated_amount=100.00,
+        )
+        pr_b = await service.create_purchase_request(
+            org_id=org_b,
+            requested_by=user_b,
+            fiscal_year_id=fy_b.id,
+            title="B",
+            estimated_amount=100.00,
+        )
+
+        assert pr_a.request_number == "PR-2026-0001"
+        assert pr_b.request_number == "PR-2026-0001"
+
+    async def test_deleted_numbers_are_never_reissued(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """MAX-based generation: after 0001 is deleted, the next number is
+        0003 — count()+1 would have re-issued 0002 and collided."""
+        service = FinanceService(db_session)
+        org_id, user_id = sample_org_data["id"], sample_org_data["admin_id"]
+        fy = await self._fiscal_year(service, org_id, user_id)
+
+        pr1 = await service.create_purchase_request(
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            title="One",
+            estimated_amount=100.00,
+        )
+        await service.create_purchase_request(
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            title="Two",
+            estimated_amount=100.00,
+        )
+        await db_session.execute(
+            text("DELETE FROM purchase_requests WHERE id = :id"), {"id": pr1.id}
+        )
+
+        pr3 = await service.create_purchase_request(
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            title="Three",
+            estimated_amount=100.00,
+        )
+        assert pr3.request_number == "PR-2026-0003"
+
+    async def test_collision_retries_inside_a_savepoint(
+        self, db_session: AsyncSession, sample_org_data, monkeypatch
+    ):
+        """A number collision (as a concurrent transaction would cause) is
+        retried with an offset and never poisons the outer transaction."""
+        service = FinanceService(db_session)
+        org_id, user_id = sample_org_data["id"], sample_org_data["admin_id"]
+        fy = await self._fiscal_year(service, org_id, user_id)
+
+        pr1 = await service.create_purchase_request(
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            title="First",
+            estimated_amount=100.00,
+        )
+
+        original = FinanceService._generate_request_number
+        offsets = []
+
+        async def collide_once(self, org_id, prefix, fiscal_year_id, offset=0):
+            offsets.append(offset)
+            if offset == 0:
+                return pr1.request_number  # simulate a concurrent taker
+            return await original(self, org_id, prefix, fiscal_year_id, offset)
+
+        monkeypatch.setattr(FinanceService, "_generate_request_number", collide_once)
+
+        pr2 = await service.create_purchase_request(
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            title="Second",
+            estimated_amount=100.00,
+        )
+
+        assert offsets == [0, 1]
+        assert pr2.request_number != pr1.request_number
+        # The outer transaction survived the rolled-back savepoint: both
+        # rows are still queryable.
+        both = await service.list_purchase_requests(org_id)
+        assert {p.id for p in both} == {pr1.id, pr2.id}
+
+    async def test_expense_and_check_numbers_are_per_org_too(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        service = FinanceService(db_session)
+        org_a, user_a = sample_org_data["id"], sample_org_data["admin_id"]
+        org_b, user_b = await self._make_second_org(db_session)
+        fy_a = await self._fiscal_year(service, org_a, user_a)
+        fy_b = await self._fiscal_year(service, org_b, user_b)
+
+        er_a = await service.create_expense_report(
+            org_id=org_a, submitted_by=user_a, fiscal_year_id=fy_a.id, title="A"
+        )
+        er_b = await service.create_expense_report(
+            org_id=org_b, submitted_by=user_b, fiscal_year_id=fy_b.id, title="B"
+        )
+        assert er_a.report_number == er_b.report_number == "ER-2026-0001"
+
+        cr_a = await service.create_check_request(
+            org_id=org_a,
+            requested_by=user_a,
+            fiscal_year_id=fy_a.id,
+            payee_name="Vendor",
+            amount=10.00,
+        )
+        cr_b = await service.create_check_request(
+            org_id=org_b,
+            requested_by=user_b,
+            fiscal_year_id=fy_b.id,
+            payee_name="Vendor",
+            amount=10.00,
+        )
+        assert cr_a.request_number == cr_b.request_number == "CK-2026-0001"
