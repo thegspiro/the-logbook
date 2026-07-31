@@ -232,7 +232,7 @@ coverage-ratchet approach.
 | 10 | Encryption key versioning + rotation command | 27001 | M | Code | ✅ 2026-07-31 (legacy-key ring + rotate_encryption_key.py + KEY_ROTATION.md) |
 | 11 | Per-user data export endpoint | 27701 | M | Code | ✅ 2026-07-31 |
 | 12 | Member anonymization workflow (generalize elections pattern) | 27701 | M–L | Code | ✅ 2026-07-31 |
-| 13 | Org-configurable retention schedules + enforcement job | 27701, 15489 | L | Code | Open |
+| 13 | Org-configurable retention schedules + enforcement job | 27701, 15489 | L | Code | ✅ 2026-07-31 (log-class records; documents/minutes deliberately manual) |
 | 14 | Consent tracking model + UI | 27701 | M | Code | ✅ 2026-07-31 |
 | 15 | Backend mypy + coverage gates; enforce frontend coverage in CI | 25010 | M | CI | ◐ 2026-07-31 — coverage ratchets landed (backend 46/44, frontend raised); mypy needs a typing campaign first (4,927 errors measured, see COMPLIANCE.md) |
 | 16 | Policy set / Statement of Applicability skeleton from SECURITY.md | 27001 | M | Doc | Open |

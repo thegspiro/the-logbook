@@ -198,6 +198,12 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "retention_enforcement": {
+        "description": "Apply org-configured records-retention schedules (message history, notification logs, form submissions) plus platform-level blocked-attempt telemetry. Classes and floors defined in retention_service.py.",
+        "frequency": "daily",
+        "recommended_time": "03:30",
+        "cron": "30 3 * * *",
+    },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
         "frequency": "every 1 minute",
@@ -3147,66 +3153,40 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
     return {"sent": sent, "failed": failed, "total_processed": len(pending)}
 
 
+async def run_retention_enforcement(db: AsyncSession) -> Dict[str, Any]:
+    """Apply org-configured retention schedules to business records.
+
+    Record classes, defaults, and floors live in
+    app/services/retention_service.py; departments override per class via
+    the organization retention-policy API. Message-history cleanup is one
+    of the covered classes (default 90 days, preserving the original
+    hardcoded behavior).
+    """
+    from app.services.retention_service import RetentionService
+
+    result = await RetentionService(db).enforce()
+    await db.commit()
+    result["task"] = "retention_enforcement"
+    return result
+
+
 async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
     """
-    Delete message history records older than 90 days.
+    Legacy alias for message-history retention (kept for existing crontabs).
 
-    Prevents unbounded growth of the message_history table. Runs daily at 03:00.
-    Deletes in batches to avoid long-running transactions.
+    Originally deleted at a hardcoded 90 days; now delegates to the
+    retention service so per-org configuration is honored. The general
+    retention_enforcement task covers this class too — running both is
+    idempotent.
     """
-    from datetime import timedelta, timezone
+    from app.services.retention_service import RetentionService
 
-    from sqlalchemy import delete, func
-
-    from app.models.email_template import MessageHistory
-
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=90)
-
-    # Count before deleting (for reporting)
-    count_result = await db.execute(
-        select(func.count())
-        .select_from(MessageHistory)
-        .where(MessageHistory.sent_at < cutoff)
-    )
-    total_expired = count_result.scalar() or 0
-
-    if total_expired == 0:
-        logger.info("Message history cleanup: no expired records to delete")
-        return {
-            "task": "message_history_cleanup",
-            "deleted": 0,
-            "cutoff_date": cutoff.isoformat(),
-        }
-
-    # Delete in batches of 1000 to avoid locking the table for too long
-    deleted = 0
-    batch_size = 1000
-    while True:
-        # Find IDs to delete in this batch
-        batch_ids_result = await db.execute(
-            select(MessageHistory.id)
-            .where(MessageHistory.sent_at < cutoff)
-            .limit(batch_size)
-        )
-        batch_ids = [row[0] for row in batch_ids_result.all()]
-        if not batch_ids:
-            break
-
-        await db.execute(delete(MessageHistory).where(MessageHistory.id.in_(batch_ids)))
-        await db.commit()
-        deleted += len(batch_ids)
-
-        if len(batch_ids) < batch_size:
-            break
-
-    logger.info(
-        f"Message history cleanup: deleted {deleted} records older than {cutoff.date()}"
-    )
+    result = await RetentionService(db).enforce(only_class="message_history")
+    await db.commit()
     return {
         "task": "message_history_cleanup",
-        "deleted": deleted,
-        "cutoff_date": cutoff.isoformat(),
+        "deleted": sum(result["deleted"].values()),
+        "orgs_processed": result["orgs_processed"],
     }
 
 
@@ -4463,6 +4443,7 @@ TASK_RUNNERS = {
     "trainee_report_escalation": run_trainee_report_escalation,
     "audit_log_archival": run_audit_log_archival,
     "audit_log_ship": run_audit_log_ship,
+    "retention_enforcement": run_retention_enforcement,
     "scheduled_emails": run_scheduled_emails,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
@@ -4532,6 +4513,8 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "audit_log_archival": 604800,
     # Every 30 minutes — off-host audit shipping (no-op unless configured)
     "audit_log_ship": 1800,
+    # Daily — org-configured records retention
+    "retention_enforcement": 86400,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }

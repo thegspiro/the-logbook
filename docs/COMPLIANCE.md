@@ -70,7 +70,7 @@ Tracked openly; see the assessment for the full roadmap.
 | Encryption key rotation | ✅ 2026-07-31 — legacy-key decrypt ring (`ENCRYPTION_KEYS_LEGACY`) + `scripts/rotate_encryption_key.py`; runbook in [KEY_ROTATION.md](./KEY_ROTATION.md) |
 | Off-host audit-log shipping (SIEM) | ✅ 2026-07-31 — `audit_log_ship` task, HMAC-signed NDJSON to `AUDIT_SHIP_WEBHOOK_URL`, watermarked delivery |
 | Consent tracking (photo use, roster listing, SMS) | ✅ 2026-07-31 — `user_consents` current-state table + `consent_updated` audit ledger; self-service at `/users/me/consents`, Settings → Security → Privacy Choices. Never-asked fails closed |
-| Org-configurable retention schedules for business records | Open (ISO 27701 / ISO 15489) — statutory retention still lives in department SOPs |
+| Org-configurable retention schedules | ✅ 2026-07-31 — per-org schedules with defaults and safety floors (message history, notification logs, form submissions; platform-level blocked-attempt telemetry), enforced daily; admin API `GET/PUT /organizations/retention-policy`, audited. Documents and minutes are deliberately excluded from auto-deletion — destroying official records stays a human decision per the department's SOPs |
 | react-router advisories | ✅ 2026-07-31 — migrated v6 → react-router 8.3.0 (core package); `npm audit --omit=dev` reports zero vulnerabilities |
 | SAML / LDAP SSO | Not implemented (config placeholders exist; deps removed until real support lands) |
 | Backend coverage gates in CI | ✅ 2026-07-31 — pytest-cov ratchet floors (unit 46%, integration 44%); frontend ratchet raised to 53/40/44/51 |

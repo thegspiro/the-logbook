@@ -170,6 +170,11 @@ class Settings(BaseSettings):
     # archive), giving the audit trail a copy outside the database host.
     AUDIT_SHIP_WEBHOOK_URL: str | None = None
     AUDIT_SHIP_BATCH_SIZE: int = 500
+    # Platform-level retention for blocked-access-attempt telemetry (IP +
+    # user-agent rows with no org column). Days; 0 disables the purge.
+    # Org-scoped record classes are configured per organization instead —
+    # see app/services/retention_service.py.
+    RETENTION_BLOCKED_ATTEMPTS_DAYS: int = 365
 
     # Account lockout after repeated failed sign-ins (brute-force protection).
     # Tunable so small, trusted deployments can run a gentler policy. (These
