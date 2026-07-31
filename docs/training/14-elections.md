@@ -9,20 +9,27 @@ The Elections module manages department elections, officer nominations, anonymou
 1. [Elections Overview](#elections-overview)
 2. [Creating an Election](#creating-an-election)
 3. [Configuring Ballot Items](#configuring-ballot-items)
-4. [Nominating Candidates](#nominating-candidates)
-5. [Voter Eligibility & Overrides](#voter-eligibility--overrides)
-6. [The Pre-Meeting Package](#the-pre-meeting-package)
-7. [Opening an Election](#opening-an-election)
-8. [Casting Votes](#casting-votes)
-9. [Proxy Voting](#proxy-voting)
-10. [Monitoring & Results](#monitoring--results)
-11. [Runoff Elections](#runoff-elections)
-12. [Vote Integrity & Forensics](#vote-integrity--forensics)
-13. [Election Settings](#election-settings)
-14. [Meeting Attendance Integration](#meeting-attendance-integration)
-15. [Prospective Member Election Packages](#prospective-member-election-packages)
-16. [Realistic Example: Annual Officer Election](#realistic-example-annual-officer-election)
-17. [Troubleshooting](#troubleshooting)
+4. [The Nomination Phase](#the-nomination-phase)
+5. [Nominating Candidates](#nominating-candidates)
+6. [Voter Eligibility & Overrides](#voter-eligibility--overrides)
+7. [The Pre-Meeting Package](#the-pre-meeting-package)
+8. [Opening an Election](#opening-an-election)
+9. [Reminders & Lifecycle Automation](#reminders--lifecycle-automation)
+10. [Casting Votes](#casting-votes)
+11. [Paper Ballots & Attestation](#paper-ballots--attestation)
+12. [Proxy Voting](#proxy-voting)
+13. [Monitoring & Results](#monitoring--results)
+14. [Tie Handling](#tie-handling)
+15. [Write-In Consolidation](#write-in-consolidation)
+16. [Runoff Elections](#runoff-elections)
+17. [Vote Integrity & Forensics](#vote-integrity--forensics)
+18. [The Certified Results Package](#the-certified-results-package)
+19. [Election Settings](#election-settings)
+20. [Cloning an Election](#cloning-an-election)
+21. [Meeting Attendance Integration](#meeting-attendance-integration)
+22. [Prospective Member Election Packages](#prospective-member-election-packages)
+23. [Realistic Example: Annual Officer Election](#realistic-example-annual-officer-election)
+24. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -108,6 +115,43 @@ After creating an election, add ballot items — the individual questions or pos
 > **[SCREENSHOT NEEDED]:** _Screenshot of the ballot item configuration showing a position field ("Fire Chief"), a list of nominated candidates, the write-in toggle, and Add/Remove candidate buttons._
 
 > **Hint:** Use **ballot item templates** (`GET /elections/templates/ballot-items`) for common configurations like officer positions or membership approval votes.
+
+---
+
+## The Nomination Phase
+
+> Requires the **Nominations** feature toggle (on by default) in Election
+> Settings → Features.
+
+Instead of the secretary entering every candidate by hand, a positional
+election can run a formal **nomination phase** where the membership proposes
+candidates:
+
+1. On a **draft** election with positions, click **Open Nominations** — the
+   election enters the `nominations` status
+2. Optionally set a **nomination deadline**; when it passes, the phase closes
+   automatically (the election returns to draft for ballot finalization)
+3. While nominations are open, **any member** can:
+   - **Nominate themselves** for a position (accepted immediately)
+   - **Nominate another member**, with an optional supporting statement — the
+     nominee is emailed and must **accept** before they appear on the ballot;
+     declining removes the entry (the audit log keeps the record)
+4. Click **Close Nominations** (or let the deadline do it) — the election
+   returns to Draft, where you finalize the ballot and open voting as usual
+
+Safeguards:
+
+- Nominee must be an active member of your organization; duplicates rejected
+- A nominator may have at most **10 pending third-party nominations**
+  outstanding per election (anti-spam)
+- Opening the phase emails an announcement to all active members (BCC);
+  email failures never block the phase change
+- Only candidates who **accepted** reach the ballot — `open_election` still
+  validates this
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Nominations tab showing the
+> nominate form (position selector, member picker, statement box) and a list
+> of nominations with Accepted / Pending badges and Accept/Decline buttons._
 
 ---
 
@@ -261,6 +305,58 @@ When you click **Send Ballots**, the system:
 | Member with zero eligible ballot items | Skipped during send (no empty ballot); reason shown in the send summary |
 | Election opened without ballot items or candidates | Cannot open — at least one accepted candidate or one ballot item is required |
 
+### Voter-Roll Freeze
+
+Opening an election **snapshots the eligible voter roster**. From that moment,
+mid-election membership changes (status flips, tier edits) can no longer change
+who may vote or the turnout denominator — the roll is fixed, like a printed
+sign-in sheet. Secretary **overrides still admit** members after open (that's
+their purpose). Elections opened before this feature (no snapshot) evaluate
+eligibility live, as before.
+
+### Printable Ballot PDF
+
+Running a paper vote in the room? **Download Printable Ballot**
+(`GET /elections/{id}/printable-ballot`) generates the official blank paper
+ballot straight from the election setup: positions in ballot order, accepted
+candidates, write-in lines where allowed, and method-specific voter
+instructions. Print it, hand it out, then enter the tallies via
+[Paper Ballots & Attestation](#paper-ballots--attestation).
+
+---
+
+## Reminders & Lifecycle Automation
+
+> Reminders require the **Reminders** feature toggle; scheduled opening
+> requires the **Auto-Open** toggle (both on by default).
+
+The `election_lifecycle` background task runs every 15 minutes and automates
+the routine timing work:
+
+| Automation | Trigger | Opt-in? |
+|------------|---------|---------|
+| **Auto-close** | An open election passes its end date | No — always on. Closing runs result finalization, runoff evaluation, and the anonymous-election privacy purge, so an overdue election is never left open |
+| **Auto-open** | A draft election with **Open Automatically at Start Time** enabled reaches its start date | Yes (`auto_open` on the election) |
+| **Nomination auto-close** | The nomination deadline passes | Automatic when a deadline is set |
+| **Automatic reminder** | The configured **Auto-Remind Non-Voters** window before close opens | Yes (`reminder_hours_before_close`) |
+
+### Reminding Non-Voters Manually
+
+From the election detail page, **Remind Non-Voters** sends a reminder ballot
+email — with a fresh voting link — to eligible voters who have **not** voted.
+The list is recomputed server-side at send time, so members who already voted
+are never contacted.
+
+- **One-hour cooldown** per election (manual or automatic) — a double-click
+  can't spam the membership
+- Each reminded member's **older unused links are expired only once the new
+  email is confirmed handed to the mail server** — a bounce leaves the old
+  link working, so nobody is stranded with zero live ballots
+- Exactly **one automatic reminder** is ever sent; any manual reminder
+  suppresses it (both stamp `reminder_sent_at`)
+- Double-vote prevention is unaffected: no matter how many live links a
+  member holds, the vote dedup rules allow only one ballot
+
 ---
 
 ## Casting Votes
@@ -297,6 +393,75 @@ For elections with multiple ballot items, votes can be submitted atomically usin
 | Write-in candidate name matches existing candidate | Recorded as separate write-in entry |
 | Ranked choice with incomplete ranking | Only ranked candidates counted; unranked treated as not preferred |
 | One vote in a bulk submission fails | The entire submission is rolled back — no partial ballots |
+
+---
+
+## Paper Ballots & Attestation
+
+> Requires the **Paper Ballots** feature toggle (on by default).
+
+For in-room votes counted by hand, officers enter the paper tally directly —
+and a configurable number of *other* officers must confirm the counts before
+they count toward results.
+
+### Recording a Paper Tally
+
+**Required Permission:** `elections.manage`
+
+1. Print ballots with **Download Printable Ballot**, run the room vote, and
+   count the papers
+2. On the open election, click **Record Paper Ballots**
+3. Enter the per-candidate counts (and optional notes — e.g., "counted by
+   Lt. Reyes and FF Park, 2 spoiled ballots discarded")
+4. Submit — one vote row is stored per paper ballot, flagged as manual and
+   attributed to you as the recording officer
+
+Manual votes carry no voter identity and no dedup hash — the recording
+officer's attested count is the source of truth — but they **are** signed and
+chained exactly like electronic votes, so the integrity check covers the full
+mixed ballot box. The vote signature also covers the manual flag, so a stored
+paper vote can't be silently re-labeled as electronic (or vice versa).
+
+**Plausibility guard:** a batch that would push a position past *eligible
+voters × allowed votes* is rejected with the numbers spelled out. If the count
+really is correct (e.g., overrides admitted extra voters), an explicit
+**Allow over-count** override records it anyway — audited at warning severity.
+
+### Officer Attestation
+
+By default, **2 officers other than the recorder** (configurable 0–3 in
+Election Settings → Features) must attest each batch before its votes count:
+
+1. A recorded batch starts **Pending** — its votes are stored, signed, and
+   chained immediately, but excluded from results and statistics
+2. Officers with `elections.manage` open the **Paper Batches** panel and click
+   **Attest** after checking the entered counts against the physical tally
+3. The recorder can never attest their own batch, and each officer counts
+   once (enforced at the database level)
+4. When the requirement is met, the batch flips to **Confirmed** and its
+   ballots count
+
+Each batch snapshots the requirement at record time, so changing the setting
+later never silently confirms or un-confirms old batches. A disputed batch is
+**voided** with a reason (soft delete — the record remains). Attestation is
+only possible while voting is open: a batch still pending at close stays out
+of the certified results, and the close writes a warning
+`election_manual_ballots_unattested_at_close` audit event.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Paper Batches panel showing a
+> Pending batch (1 of 2 attestations, with the attesting officer's name) and a
+> Confirmed batch, each with Attest/Void buttons._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Typo: 40 votes entered for a 4-vote race | Rejected by the plausibility guard; over-count checkbox appears only after the guard fires |
+| Recorder clicks Attest on their own batch | Rejected — attestation requires a *different* officer |
+| Setting changed from 2 to 0 after batches recorded | Existing pending batches still require their snapshotted 2 attestations |
+| Election closed with a batch still pending | Batch excluded from certified results; warning audit event written |
+| Mis-keyed batch already attested | Void the batch (reason required) and re-record |
+| Attestation requirement set to 0 | Batches confirm immediately on recording (not recommended) |
 
 ---
 
@@ -360,11 +525,60 @@ If results are hidden until close:
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the election results page showing a position ("Fire Chief") with candidate vote counts in a bar chart, the winner highlighted in green, and turnout statistics (e.g., "38 of 42 eligible voters — 90.5% turnout")._
 
+### Live Turnout Dashboard
+
+On meeting night, open the **Live Turnout** panel on an open election — a
+fullscreen-capable display designed to project in the room:
+
+- Ballots received vs. eligible voters, with quorum progress when configured
+- Auto-refreshes on its own — no reloading between agenda items
+- **Never shows candidate tallies** before close — participation only, so
+  projecting it can't influence the vote
+
 ### Non-Voters Report
 
 Navigate to the **Non-Voters** section to see eligible voters who did not participate. Use this for:
-- Follow-up reminders (if election is still open)
+- Follow-up reminders (if election is still open) — or use **Remind
+  Non-Voters** to email them a fresh ballot link directly (see
+  [Reminders & Lifecycle Automation](#reminders--lifecycle-automation))
 - Turnout analysis (after close)
+
+---
+
+## Tie Handling
+
+Each election has a **tie policy** that controls what happens when candidates
+tie under the victory condition:
+
+| Policy | On a tie |
+|--------|----------|
+| **Co-winners** (legacy default) | All tied candidates are flagged as winners |
+| **Runoff** | No winner declared; the tie is flagged for a runoff round |
+| **Revote** | No winner declared; the position is flagged for a fresh vote |
+| **Chair decides** | No winner declared; the presiding officer breaks the tie per your bylaws |
+
+For every policy except co-winners, the results clearly flag the tie, no
+winner is declared for the position, and an `election_tie_detected` audit
+event is written at close. Set the policy on the election form to match what
+your bylaws prescribe *before* opening — deciding a tie-breaking rule after
+seeing the tally is exactly the argument this feature prevents.
+
+---
+
+## Write-In Consolidation
+
+Write-in votes arrive with whatever spelling the voter typed — "J. Smith",
+"John Smith", and "Jon Smith" tally as three candidates. After voting (and
+before certifying), consolidate them:
+
+1. On the election detail page, open **Merge Write-Ins**
+2. Select the variant entries and the candidate they should count under
+3. Confirm — results now tally all variants under the target candidate
+
+The merge is **alias-based**: signed vote rows are never modified (each vote's
+signature covers its original candidate), so the integrity check still passes.
+The merge itself is audited, and results simply re-map the merged candidates
+at tally time.
 
 ---
 
@@ -428,6 +642,26 @@ Access the **Forensics** tab on the election detail page for:
 
 ---
 
+## The Certified Results Package
+
+**Required Permission:** `elections.manage`
+
+Once an election is **closed**, download the **Certified Results package**
+(`GET /elections/{id}/certified-results`) — a formal PDF built for the minutes
+book and for anyone who asks "prove it":
+
+- Final tallies per position with winners (or flagged ties, per the tie policy)
+- Turnout and quorum figures against the frozen voter roll
+- The **paper-batch attestation trail** — every batch with its recorder,
+  attesting officers, and status
+- The **integrity verification result** run at generation time
+- Officer **signature lines** for wet-ink certification
+
+File the signed copy with the meeting minutes; the PDF plus the forensics
+report is your complete dispute-defense package.
+
+---
+
 ## Election Settings
 
 **Required Permission:** `elections.manage`
@@ -445,7 +679,44 @@ Navigate to **Elections > Settings** to configure organization-wide defaults:
 | Proxy Voting Enabled | Off | Whether proxy voting is available |
 | Max Proxies Per Person | 1 | How many members one person can represent |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Election Settings page showing toggle switches for each setting and the default voting method dropdown._
+### Feature Toggles
+
+The **Features** section lets each department turn the optional workflows on
+or off (all on by default; enforced server-side, not just hidden in the UI):
+
+| Toggle | Default | Controls |
+|--------|---------|----------|
+| Nominations | On | The nomination phase and member nominations |
+| Paper Ballots | On | Officer paper-tally entry |
+| Reminders | On | Manual **and** automatic non-voter reminders |
+| Auto-Open | On | Scheduled opening of flagged draft elections |
+| Paper-Ballot Attestations Required | 2 | Officers (besides the recorder) who must confirm each paper batch (0–3) |
+
+Deliberately **not** toggleable: automatic closing at the end date and the
+nomination-deadline auto-close. Closing finalizes results and runs the
+anonymous-election privacy purge — a privacy guarantee, not a convenience —
+and an in-flight nomination phase must always be closeable.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Election Settings page showing toggle switches for each setting, the default voting method dropdown, and the Features section with its toggles and attestation-count selector._
+
+---
+
+## Cloning an Election
+
+**Required Permission:** `elections.manage`
+
+Annual elections rarely change shape. **Clone** creates a fresh draft from an
+existing election's configuration:
+
+1. On any election, click **Clone**
+2. Set the new title and dates
+3. Optionally copy the accepted candidates (useful for a re-run; skip it for
+   next year's election where nominations start over)
+4. The clone is created in **Draft** — review, then run it like any election
+
+What is **never** copied: votes, voting tokens, attendees, voter overrides,
+and the anonymity salt (a fresh salt is generated — clones can never be
+correlated with the original's voter hashes).
 
 ---
 
@@ -560,6 +831,16 @@ Sarah generates the election report and emails it to the department.
 | Vote count doesn't match attendance | Check for proxy votes (counted separately). Check for voter overrides (members not on attendance list). |
 | Forensics shows integrity warning | Run full forensics report. Contact system administrator if vote signatures are invalid. |
 | Runoff not auto-created | Verify **Enable Runoffs** is on in election settings. Check that the victory condition was set correctly. |
+| Paper batch recorded but results don't change | The batch is likely **Pending** attestation — check the Paper Batches panel. It needs the configured number of other officers to attest before its votes count. |
+| "Attest" button missing or rejected | The recorder cannot attest their own batch, each officer attests once, and attestation only works while voting is open. |
+| Paper tally rejected as implausible | The count exceeds eligible voters × allowed votes for the position. Re-check the count; if it's genuinely correct (e.g., overrides admitted extra voters), tick **Allow over-count** — the override is audited. |
+| Nominate button missing | Check the **Nominations** feature toggle in Election Settings, and that the election is in the nomination phase (managers open it from a draft election). |
+| Member nominated but not on the ballot | Third-party nominees must **accept** the nomination first. Check the Nominations tab for pending entries; the nominee was emailed an accept/decline link. |
+| Reminder button greyed out / "sent recently" | Reminders have a one-hour cooldown per election. Wait, or verify the **Reminders** feature toggle is on. |
+| Election didn't open at its start time | Auto-open is opt-in: **Open Automatically at Start Time** must be enabled on the election and the **Auto-Open** feature toggle must be on. Invalid drafts (e.g., no accepted candidates) are skipped and retried — check the election for validation problems. |
+| Member became active mid-election but can't vote | The voter roll is frozen at open. Grant a secretary override to admit them — that's the sanctioned path onto a frozen roll. |
+| Tie shown with no winner declared | Working as configured: any tie policy other than co-winners flags the tie for your bylaws process (runoff, revote, or chair decision) instead of declaring winners. |
+| Write-in variants splitting the vote count | Use **Merge Write-Ins** to consolidate spelling variants under one candidate before certifying. The merge is audited and never edits vote rows. |
 
 ---
 

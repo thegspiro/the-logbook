@@ -337,6 +337,13 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 > ready to email out or file with the minutes. Full walkthrough in the
 > elections deep-dive (Script 12, Short 12k)."
 
+> "Three more meeting-night duties that now run through the system: open a
+> **nomination phase** so members propose candidates themselves; record
+> in-room **paper ballots** — you enter the tally, and other officers attest
+> the count before it counts; and after close, download the **Certified
+> Results package** to sign and file with the minutes. All covered in
+> Script 12, Chapters 14–16."
+
 ### COMMUNICATIONS (15:00 – 15:30)
 
 **[SCREEN: Navigate to Communications module]**

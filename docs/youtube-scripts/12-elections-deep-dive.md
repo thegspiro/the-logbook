@@ -1,11 +1,11 @@
 # Script 12: Creating, Running & Auditing Elections — The Complete Guide
 
 **Video Type:** Feature Deep Dive (Long-Form)
-**Estimated Length:** 38–42 minutes
+**Estimated Length:** 50–55 minutes (Chapters 14–16 added 2026-07-29)
 **Target Audience:** Secretaries, Presidents, Fire Chiefs, election administrators — anyone who runs a department vote
 **Roles Covered:** secretary, president, fire_chief (any role holding `elections.manage`)
-**Chapters:** 13 (each designed as a standalone clip)
-**Companion Content:** Edge-Case Shorts Pack 12a–12k (scripts included at the end of this file)
+**Chapters:** 16 (each designed as a standalone clip; 14–16 cover the 2026-07 meeting-night features and can be recorded as a standalone follow-up video)
+**Companion Content:** Edge-Case Shorts Pack 12a–12q (scripts included at the end of this file)
 
 > **Relationship to other scripts:** This supersedes the elections chapters in
 > Script 4 (Chief, Ch. 5) and Script 7 (Secretary, Ch. 6) as the canonical
@@ -598,6 +598,188 @@ position. Then attempt a rollback on the closed election — show the refusal.]*
 
 ---
 
+## CHAPTER 14: Nominations — Let the Membership Build the Ballot (38:30 – 43:00)
+
+*(Added 2026-07-29. Chapters 14–16 can also be produced as a standalone
+"Meeting-Night Elections" follow-up video.)*
+
+**[SCREEN: A draft positional election — the Open Nominations button]**
+
+> "So far, the secretary typed in every candidate. But most bylaws say the
+> *membership* nominates. That's now a first-class phase: on a draft election
+> with positions, open nominations. The election enters the nomination phase —
+> before voting, before the ballot is final — and every active member gets an
+> announcement email."
+
+**[SCREEN: A member's view — the Nominations tab: position selector, member
+picker, statement box]**
+
+> "Any member can nominate. Nominate *yourself* and you're on the pending
+> ballot immediately. Nominate *someone else* and here's the important part:
+> they get an email — 'you've been nominated for Captain, accept or decline' —
+> and they only reach the ballot after they accept. Nobody gets drafted onto a
+> ballot they never agreed to. Declining removes the entry; the audit log
+> keeps the record."
+
+**[SCREEN: Nominations list — Accepted badges, a Pending entry, an
+accept/decline flow on the nominee's screen]**
+
+> "Guardrails: nominees must be active members of your department, duplicates
+> are rejected, and one member can have at most ten pending third-party
+> nominations outstanding per election — nomination-spamming the entire
+> roster isn't a thing."
+
+**[SCREEN: Set a nomination deadline; then Close Nominations]**
+
+> "Close the phase manually, or set a nomination deadline and the system
+> closes it for you — the election returns to draft, you finalize the ballot
+> from the accepted nominees, and open voting as usual. And if your
+> department doesn't work this way? One toggle in Election Settings turns
+> the whole feature off."
+
+**[CALLOUT: "Nominated ≠ on the ballot — the nominee must accept"]**
+
+---
+
+## CHAPTER 15: Paper Ballots, Attestation & the Printable Ballot (43:00 – 49:00)
+
+**[SCREEN: The Download Printable Ballot button; the generated PDF]**
+
+> "Some departments — some votes — still want paper in the room. Fine: the
+> system meets you there. Download Printable Ballot generates the official
+> blank ballot straight from the election setup: positions in ballot order,
+> accepted candidates, write-in lines, and instructions matched to your
+> voting method. Print, distribute, vote, count."
+
+### RECORDING THE TALLY (44:00 – 45:30)
+
+**[SCREEN: Record Paper Ballots modal — per-candidate counts, notes field]**
+
+> "Now get the count into the system. Record Paper Ballots takes the
+> per-candidate tallies and stores one vote row per paper ballot — flagged as
+> manual, attributed to the recording officer. These votes carry no voter
+> identity — the officers' count is the source of truth — but they're signed
+> and chained exactly like electronic votes. The integrity check covers the
+> whole mixed ballot box, and a paper vote can't be quietly re-labeled as
+> electronic later. Electronic and paper totals also show separately in the
+> stats, so the mix is always transparent."
+
+**[SCREEN: Enter an absurd count — the plausibility guard fires]**
+
+> "Typo protection: a count that exceeds what's mathematically possible —
+> eligible voters times allowed votes — is rejected with the numbers spelled
+> out. Genuinely correct anyway? An explicit over-count override records it,
+> and that override lands in the audit log at warning severity."
+
+### ATTESTATION — FOUR-EYES FOR PAPER COUNTS (45:30 – 48:00)
+
+**[SCREEN: The Paper Batches panel — a batch in Pending status, "1 of 2
+attestations"]**
+
+> "Here's the piece that makes paper defensible: attestation. By default, a
+> recorded batch starts *pending* — stored, signed, chained, but **excluded
+> from results** — until two officers *other than the recorder* attest that
+> the entered numbers match the physical count. The recorder can never attest
+> their own batch, each officer counts once — the database enforces both —
+> and your department picks the requirement: zero to three, in Election
+> Settings."
+
+**[SCREEN: A second officer clicks Attest; the batch flips to Confirmed;
+results update]**
+
+> "Requirement met, batch confirms, ballots count. Mis-keyed batch? Void it
+> with a reason and re-record — same soft-delete honesty as everything else.
+> Two details worth knowing: each batch snapshots the requirement at record
+> time, so changing the setting later never silently confirms old batches.
+> And attestation only works while voting is open — a batch still pending at
+> close stays out of the certified results, with a warning event in the
+> audit log. No unverified paper ever slides into a certified total."
+
+**[CALLOUT: "Secretary records. Two officers confirm. Then it counts."]**
+
+### THE LIVE TURNOUT BOARD (48:00 – 49:00)
+
+**[SCREEN: The Live Turnout panel, fullscreen on a projector mockup —
+ballots received vs eligible, quorum progress bar climbing]**
+
+> "While all this is happening, put the Live Turnout panel on the projector:
+> ballots received against the frozen eligible roll, quorum progress,
+> auto-refreshing. It never shows candidate tallies before close — the room
+> sees participation, never a scoreboard that could swing votes."
+
+---
+
+## CHAPTER 16: Set-and-Forget — Automation, Ties, Write-Ins & Certification (49:00 – 55:00)
+
+### LIFECYCLE AUTOMATION (49:00 – 50:30)
+
+**[SCREEN: The election form — Open Automatically at Start Time toggle,
+Auto-Remind Non-Voters window select]**
+
+> "A background task sweeps every fifteen minutes and does the timing work.
+> Auto-close is always on: an open election past its end date closes itself —
+> because closing is what finalizes results, evaluates runoffs, and destroys
+> the anonymity salt. An overdue election left open is a privacy problem, so
+> the system won't leave one. Auto-*open* is opt-in per election: flag a
+> draft and it opens itself at start time — through the real open path, so
+> an invalid draft is skipped and retried, never force-opened."
+
+### REMINDERS THAT DON'T DOUBLE-SEND (50:30 – 51:30)
+
+**[SCREEN: Remind Non-Voters — the confirmation; then the auto-reminder
+window setting]**
+
+> "Remind Non-Voters emails a fresh ballot link to eligible members who
+> haven't voted — the list is recomputed at send time, so nobody who voted
+> gets nagged. There's a one-hour cooldown, an old member's previous link is
+> only expired once the new email is confirmed handed off — a bounce never
+> strands anyone with zero working links — and you can schedule exactly one
+> automatic reminder before close. Manual or automatic, the system sends at
+> most one; a fresh link per reminder, one vote per member, always."
+
+### TIES & WRITE-INS (51:30 – 53:00)
+
+**[SCREEN: The tie_policy selector on the election form; then a closed
+election showing a flagged tie, no winner declared]**
+
+> "Decide your tie rule *before* the vote: co-winners — the legacy default —
+> or runoff, revote, or chair-decides. Under anything but co-winners, a tie
+> declares no winner: it's flagged in the results, audited, and handed to
+> your bylaws process. Arguing about the tie-break rule *after* seeing the
+> tally is exactly the meeting this prevents."
+
+**[SCREEN: Merge Write-Ins modal — "J. Smith", "John Smith" merged into one
+candidate; results re-tally]**
+
+> "And write-ins: three spellings of the same name tally as three candidates
+> until you merge them. The merge is an audited *alias* — the signed vote
+> rows are never touched, so the integrity check still passes — and results
+> count every variant under the real candidate."
+
+### CLONE & CERTIFY (53:00 – 55:00)
+
+**[SCREEN: Clone Election modal — new dates, copy-candidates checkbox]**
+
+> "Next year? Clone. The configuration copies; votes, tokens, attendees,
+> overrides, and the salt never do — a fresh salt means the clone can't be
+> correlated with the original's voter hashes."
+
+**[SCREEN: A closed election — Download Certified Results; page through the
+PDF: tallies, turnout/quorum, attestation trail, integrity result,
+signature lines]**
+
+> "And the finale: the Certified Results package, available once the
+> election closes. Final tallies with winners or flagged ties, turnout and
+> quorum against the frozen roll, the full paper-batch attestation trail,
+> the integrity verification run at generation time — and signature lines
+> for wet-ink certification. Sign it, file it with the minutes, and the
+> next 'are we sure about that count?' is answered with a document instead
+> of a debate."
+
+**[CALLOUT: "Close → verify → certify → sign → file with the minutes"]**
+
+---
+
 ## Clip Extraction Guide
 
 | Clip | Timecode | Standalone Title |
@@ -613,11 +795,14 @@ position. Then attempt a rollback on the closed election — show the refusal.]*
 | Closing & Results | 26:30–30:00 | "Closing an Election & Publishing Results" |
 | Runoffs | 30:00–32:00 | "Automatic Runoff Elections" |
 | The Audit Layer | 32:00–38:00 | "Auditing a Department Election (Integrity & Forensics)" |
+| Nominations | 38:30–43:00 | "Member Nominations: Open Phase to Final Ballot" |
+| Paper Ballots & Attestation | 43:00–49:00 | "Paper Ballots With a Digital Audit Trail" |
+| Automation, Ties & Certification | 49:00–55:00 | "Election Autopilot, Tie Policies & Certified Results" |
 
 ---
 ---
 
-# Edge-Case Shorts Pack (12a – 12j)
+# Edge-Case Shorts Pack (12a – 12q)
 
 **Format:** 60–120 seconds each, vertical (1080×1920), standalone — no series
 context required. Each answers one real support question. Record against the
@@ -949,12 +1134,158 @@ timeline chart]**
 
 ---
 
+## SHORT 12l: "Why Isn't My Paper Batch Counting?" — Attestation
+
+**Length:** 75 seconds
+**Audience:** Election admins
+
+**[SCREEN: A recorded paper batch in Pending status — results unchanged]**
+
+> "You entered the paper tally, and the results didn't move. That's not a
+> bug — that's the four-eyes rule."
+
+**[SCREEN: The Paper Batches panel — "1 of 2 attestations"]**
+
+> "A paper batch starts *pending* until enough officers — two by default,
+> and never the person who recorded it — attest that the entered numbers
+> match the physical count. Pending votes are stored, signed, and chained;
+> they just don't count yet."
+
+**[SCREEN: A second officer clicks Attest; batch flips to Confirmed]**
+
+> "Get your attesting officers to the batch panel, they click Attest, the
+> batch confirms, the results update. Mis-keyed? Void with a reason and
+> re-record. And do it before close — a batch still pending when the
+> election closes stays out of the certified results, permanently."
+
+**[CALLOUT: "Pending batch = needs officer attestations. Attest before close."]**
+
+---
+
+## SHORT 12m: Nominated? You Have to Accept
+
+**Length:** 60 seconds
+**Audience:** All members
+
+**[SCREEN: Phone — the "You've been nominated" email]**
+
+> "A member nominated you for office. You're not on the ballot yet — and
+> that's on purpose."
+
+**[SCREEN: The accept / decline choice]**
+
+> "Third-party nominations wait for *you*: accept, and you're on the ballot
+> when nominations close. Decline, and the entry is removed — no hard
+> feelings, and the audit log keeps the paperwork. Nominate yourself and
+> you've accepted implicitly."
+
+> "Check the deadline in the email — unanswered nominations never reach the
+> ballot."
+
+**[CALLOUT: "No one gets drafted onto a ballot — accept or it doesn't count"]**
+
+---
+
+## SHORT 12n: The Election That Runs Itself
+
+**Length:** 75 seconds
+**Audience:** Election admins
+
+**[SCREEN: Election form — auto-open toggle + reminder window select]**
+
+> "Three timers, zero calendar reminders. One: flag a draft to open itself
+> at start time — through the real open path, so a broken draft is skipped,
+> never force-opened. Two: set a reminder window and every non-voter gets a
+> fresh ballot link, once, before close — the system recomputes who hasn't
+> voted at send time, and it never double-sends."
+
+**[SCREEN: An overdue open election closing itself; audit entries appear]**
+
+> "Three — and this one's not optional: an election past its end date closes
+> itself. Closing is what finalizes results, evaluates runoffs, and destroys
+> the anonymity salt, so leaving one open overnight isn't a convenience,
+> it's a privacy hole. Every automatic action lands in the audit log."
+
+**[CALLOUT: "Auto-open: opt-in. Auto-remind: opt-in. Auto-close: always."]**
+
+---
+
+## SHORT 12o: Ties — Decide the Rule Before the Vote
+
+**Length:** 60 seconds
+**Audience:** Leadership, bylaw committees
+
+**[SCREEN: The tie-policy selector on the election form]**
+
+> "Two candidates at nineteen votes each. What happens next should be in
+> your bylaws — not decided at 9 PM by whoever argues loudest."
+
+**[SCREEN: Results showing a flagged tie, no winner declared]**
+
+> "Set the tie policy when you create the election: co-winners, runoff,
+> revote, or chair-decides. Anything but co-winners means a tie declares
+> *no* winner — it's flagged in the results, logged in the audit trail, and
+> routed to the process you chose in advance."
+
+**[CALLOUT: "Pick the tie-break rule before anyone sees a tally"]**
+
+---
+
+## SHORT 12p: Three Spellings, One Candidate — Merging Write-Ins
+
+**Length:** 60 seconds
+**Audience:** Election admins
+
+**[SCREEN: Results with "J. Smith", "John Smith", "Jon Smith" as separate
+write-in rows]**
+
+> "Your write-in favorite got fifteen votes — split across three spellings.
+> Don't certify that."
+
+**[SCREEN: Merge Write-Ins — select variants, pick the target, confirm]**
+
+> "Merge Write-Ins consolidates the variants under one candidate. And here's
+> why auditors love it: the merge is an *alias*. The signed vote rows are
+> never edited — the integrity check still passes — results just re-count
+> every variant under the real name. The merge itself is audit-logged."
+
+**[CALLOUT: "Merge is an audited alias — signed votes are never touched"]**
+
+---
+
+## SHORT 12q: The Certified Results Package
+
+**Length:** 75 seconds
+**Audience:** Secretaries, leadership
+
+**[SCREEN: A closed election — Download Certified Results; page through the
+PDF]**
+
+> "The election's closed. Now make it official. One download builds the
+> certification package: final tallies with winners — or flagged ties —
+> turnout and quorum against the frozen voter roll, every paper batch with
+> its recorder and attesting officers, and an integrity verification run
+> the moment the PDF was generated."
+
+**[SCREEN: The officer signature lines at the end of the PDF]**
+
+> "Last page: signature lines. Sign it at the meeting, file it with the
+> minutes. Next time someone asks 'are we sure about that count?' — you
+> hand them a document, not an argument."
+
+**[CALLOUT: "Tallies + attestations + integrity check + signatures = done"]**
+
+---
+
 ## Production Notes (Shorts Pack)
 
-- Record all ten against the **same demo election** used for Script 12 —
+- Record all shorts against the **same demo election** used for Script 12 —
   reuse captures where timecodes overlap.
 - 12a, 12c, and 12h resolve the three highest-frequency support questions —
-  prioritize these if producing incrementally.
-- 12d and 12j are evergreen and member/leadership-facing — good candidates
-  for department onboarding playlists.
+  prioritize these if producing incrementally. Expect 12l (pending paper
+  batches) to join that tier once departments adopt paper-ballot entry.
+- 12d, 12j, 12m, and 12o are evergreen and member/leadership-facing — good
+  candidates for department onboarding playlists.
+- 12l–12q (added 2026-07-29) pair with Chapters 14–16 and share their demo
+  captures — record them in the same session.
 - Each short's `[CALLOUT]` doubles as its YouTube thumbnail text.

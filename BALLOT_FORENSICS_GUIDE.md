@@ -1,6 +1,6 @@
 # Ballot Forensics Guide
 
-**Last Updated:** 2026-07-28
+**Last Updated:** 2026-07-30
 **Audience:** Election administrators, system auditors, organization leadership
 
 ---
@@ -21,6 +21,8 @@ This guide explains how to investigate a disputed election using The Logbook's b
 | **Election Results** | `GET /elections/{id}/results` | Candidate vote counts |
 | **Soft-Delete Vote** | `DELETE /elections/{id}/votes/{vote_id}` | Remove vote with reason |
 | **Receipt Verification** | `GET /elections/{id}/verify-receipt?receipt=` | Confirm a voter's receipt maps to a recorded vote |
+| **Paper Batches** | `GET /elections/{id}/manual-ballots` | Paper-tally batches with recorder, status, and attestation trail |
+| **Certified Results** | `GET /elections/{id}/certified-results` | Formal results PDF: tallies, quorum, attestation trail, integrity result, signature lines (closed elections) |
 
 All endpoints require `elections.manage` permission, except receipt verification,
 which is public (rate-limited) so voters can check their own receipts.
@@ -69,6 +71,30 @@ In the forensics report, look at the `vote_integrity` section:
 `HMAC-SHA256(vote_id:election_id:candidate_id:voter_hash:position:vote_rank:is_proxy_vote:proxy_delegating_user_id:voted_at, VOTE_SIGNING_KEY)`.
 If any of these fields is changed in the database — including a rank change on a
 ranked-choice vote or converting a proxy vote — the signature won't match.
+
+**Paper (manual) ballots (since 2026-07-29):** in-room paper tallies are stored
+as one vote row per paper ballot, flagged `is_manual`, attributed to the
+recording officer (`recorded_by`), and grouped by `manual_batch_id`. Manual
+votes carry **no voter identity and no dedup hash** — the officers' attested
+count is the source of truth — but they are signed and chained exactly like
+electronic votes, and the signature covers the `is_manual` flag, so a stored
+paper vote cannot be silently re-labeled as electronic (or vice versa). The
+integrity check therefore covers the full mixed ballot box. When auditing a
+mixed election, also pull `GET /elections/{id}/manual-ballots`: each batch shows
+its recorder, status (`pending` / `confirmed` / `voided`), and the officers who
+attested it. Only **confirmed** batches count toward results — a batch still
+pending at close is excluded from the certified totals and flagged by a
+warning `election_manual_ballots_unattested_at_close` audit event. The
+requirement (default 2 attesting officers, never the recorder) is snapshotted
+per batch at record time. Stats report `manual_votes` / `electronic_votes`
+separately, so the mix is always visible when reconciling counts.
+
+**Write-in consolidation (since 2026-07-29):** merged write-in variants are
+aliased via `candidates.merged_into_candidate_id` — vote rows are **never
+edited** (their signatures cover the original candidate), and results re-map
+variants to the target at tally time. When reconciling raw vote rows against
+displayed results, resolve the alias first; the merge itself appears in the
+audit trail as `election_write_ins_merged`.
 
 ### Step 3: Review Anomaly Detection
 
@@ -140,6 +166,15 @@ The `audit_log.entries` array shows a chronological history:
 | `ballot_emails_sent` | info | Ballot notification emails distributed |
 | `forensics_report_generated` | info | Someone pulled this report |
 | `runoff_election_created` | info | Automatic runoff triggered |
+| `election_auto_opened` / `election_auto_closed` | info | Lifecycle task opened/closed the election on schedule |
+| `election_reminder_sent` | info | Non-voter reminder ballots sent (manual or automatic) |
+| `election_manual_ballots_recorded` | info/warning | Paper tally recorded (warning when the over-count override was used) |
+| `election_manual_ballots_attested` | info | An officer attested a paper batch |
+| `election_manual_ballots_voided` | warning | A paper batch was voided (check reason) |
+| `election_manual_ballots_unattested_at_close` | warning | Election closed with a batch still pending — its votes are excluded |
+| `election_tie_detected` | info | A tie was flagged under a non-co-winners tie policy |
+| `election_write_ins_merged` | info | Write-in variants consolidated (alias only; vote rows untouched) |
+| `election_cloned` | info | A fresh draft was cloned from this election |
 
 ### Step 6: Check for Deleted Votes
 
@@ -389,3 +424,17 @@ All election events are logged to the tamper-proof `audit_logs` table with `even
 | `forensics_report_generated` | Forensics report pulled | Election ID |
 | `pre_meeting_package_sent` | Pre-meeting package emailed | Election ID, recipient count, roster variant |
 | `pre_meeting_package_downloaded` | Package PDF downloaded | Election ID, variant |
+| `nominations_opened` / `nominations_closed` / `nominations_auto_closed` | Nomination phase transitions | Election ID (deadline for auto-close) |
+| `candidate_nominated` | A member nominated (self or third-party) | Election ID, position, nominee, nominator |
+| `nomination_accepted` / `nomination_declined` | Nominee responded | Election ID, candidate ID (declines keep the record here after the entry is removed) |
+| `election_auto_opened` / `election_auto_closed` | Lifecycle task transition | Election ID |
+| `election_reminder_sent` | Non-voter reminder ballots sent | Election ID, recipient count |
+| `election_manual_ballots_recorded` | Paper tally recorded | Election ID, batch ID, vote count (warning severity when over-count override used) |
+| `election_manual_ballots_attested` | Officer attested a paper batch | Election ID, batch ID, attesting officer |
+| `election_manual_ballots_voided` | Paper batch voided | Election ID, batch ID, reason |
+| `election_manual_ballots_unattested_at_close` | Close with a pending batch | Election ID, batch ID (votes excluded from results) |
+| `election_tie_detected` | Tie under a non-co-winners policy | Election ID, position, tied candidates |
+| `election_write_ins_merged` | Write-in variants consolidated | Election ID, merged candidate IDs, target |
+| `election_cloned` | Draft cloned from an election | Source and new election IDs |
+| `printable_ballot_downloaded` | Blank paper ballot PDF generated | Election ID |
+| `certified_results_downloaded` | Certified results package generated | Election ID |
