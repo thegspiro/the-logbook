@@ -1,0 +1,29 @@
+# Gitleaks configuration for the Secret Scan workflow.
+#
+# Extends the default ruleset; the allowlists below cover the deliberate
+# placeholder credentials in documentation and test fixtures (triaged
+# 2026-07-31: all 122 historical findings were doc examples like YOUR_TOKEN /
+# your-api-key or test fixtures). Application code (backend/app, frontend/src
+# outside tests, infrastructure) is NOT allowlisted — a real secret committed
+# there still fails the scan.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documentation examples and test fixtures"
+paths = [
+  '''docs/.*''',
+  '''wiki/.*''',
+  '''backend/SECURITY_GUIDE\.md''',
+  '''backend/tests/.*''',
+  '''frontend/src/.*\.test\.(ts|tsx)''',
+  '''frontend/src/test/.*''',
+]
+regexes = [
+  # Placeholder tokens used in curl examples and READMEs
+  '''YOUR_TOKEN''',
+  '''your-api-key''',
+  # AWS's own documentation example secret key
+  '''wJalrXUtnFEMI/K7MDENG''',
+]

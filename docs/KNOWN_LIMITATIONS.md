@@ -22,7 +22,7 @@ here.
 
 | Item | Status | Detail |
 |------|--------|--------|
-| **CI `pip-audit` step** | ✅ Blocking (2026-07-30) | The FastAPI/starlette upgrade pass moved the stack to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), fastapi-mail 1.6.5, aiosmtplib 5.1.2, PyJWT 2.13.0, cryptography 49.0.0, pydantic-settings 2.14.2, pypdf 6.14.2, email-validator 2.3.0, schemathesis 4.24.3, pytest 9.0.3 (+ pytest-cov 7 / randomly 4.1 / timeout 2.4, required by schemathesis 4.10+). `pip-audit -r requirements.txt` now runs **blocking** in CI with two documented ignores: black 26 (major that reformats the whole repo — PYSEC-2026-2120/2121) and pyopenssl (capped `<24.3` upstream by pysaml2 with no released fix inside the cap — PYSEC-2026-2268/2269). Remove an ignore when its blocker clears. |
+| **CI `pip-audit` step** | ✅ Blocking (2026-07-30) | The FastAPI/starlette upgrade pass moved the stack to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), fastapi-mail 1.6.5, aiosmtplib 5.1.2, PyJWT 2.13.0, cryptography 49.0.0, pydantic-settings 2.14.2, pypdf 6.14.2, email-validator 2.3.0, schemathesis 4.24.3, pytest 9.0.3 (+ pytest-cov 7 / randomly 4.1 / timeout 2.4, required by schemathesis 4.10+). `pip-audit -r requirements.txt` now runs **blocking** in CI with one documented ignore: black 26 (major that reformats the whole repo — PYSEC-2026-2120/2121). Remove the ignore when its blocker clears. (The former pyopenssl ignores — PYSEC-2026-2268/2269, forced by pysaml2's `<24.3` cap — were dropped 2026-07-31 along with the unused pysaml2/python-ldap dependencies.) |
 
 ## Configuration & Docs
 

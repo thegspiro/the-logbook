@@ -376,14 +376,12 @@ Automated monitoring for:
      (Settings → Authentication), enforced server-side in `get_current_user`
    - Secret and recovery codes encrypted at rest
 
-3. **OAuth 2.0 / SSO**
+3. **OAuth 2.0 / SSO (OIDC)**
    - Microsoft Azure AD
    - Google Workspace
-   - SAML support
-
-4. **LDAP / Active Directory**
-   - Enterprise directory integration
-   - Synchronized user accounts
+   - SAML and LDAP/Active Directory are **not currently implemented**
+     (planned; the `LDAP_*` settings in `.env.example.full` are inert
+     placeholders until then)
 
 ### Session Management
 

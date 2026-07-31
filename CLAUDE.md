@@ -121,7 +121,7 @@ The Logbook is an open-source modular intranet platform for fire departments and
 - **Database:** MySQL 8.0
 - **Migrations:** Alembic
 - **Cache / sessions:** Redis 7
-- **Auth:** PyJWT + bcrypt + Argon2 + TOTP (pyotp) + OAuth (authlib) + LDAP + SAML
+- **Auth:** PyJWT + bcrypt + Argon2 + TOTP (pyotp) + OAuth/OIDC via authlib (Google, Microsoft Azure AD); SAML/LDAP not implemented
 - **Task queue:** Celery
 - **Payments:** Stripe
 - **Email:** fastapi-mail + Jinja2 templates
@@ -710,7 +710,7 @@ python3 -c "import secrets; print(secrets.token_hex(16))"        # ENCRYPTION_SA
 
 ### Optional Services
 
-Enable with `*_ENABLED=true`: `EMAIL_ENABLED`, `TWILIO_ENABLED`, `SENTRY_ENABLED`, `AZURE_AD_ENABLED`, `GOOGLE_OAUTH_ENABLED`, `LDAP_ENABLED`. Each requires additional config vars — see `.env.example.full`.
+Enable with `*_ENABLED=true`: `EMAIL_ENABLED`, `TWILIO_ENABLED`, `SENTRY_ENABLED`, `AZURE_AD_ENABLED`, `GOOGLE_OAUTH_ENABLED`. Each requires additional config vars — see `.env.example.full`. (`LDAP_ENABLED` exists in config but gates nothing — LDAP is not implemented.)
 
 ### Module Enablement
 

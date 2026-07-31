@@ -60,12 +60,9 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install system dependencies
-        # python-ldap builds from source and needs the LDAP/SASL headers;
-        # installing the requirements set for pip-audit fails without them
-        # (fatal error: lber.h). Same packages the test jobs install.
         run: |
           sudo apt-get update
-          sudo apt-get install -y libldap2-dev libsasl2-dev libmagic1
+          sudo apt-get install -y libmagic1
 
       - name: Install security tools
         run: pip install bandit pip-audit
@@ -83,16 +80,13 @@ jobs:
         # runner-image packages (pip/setuptools/wheel) don't fail the build.
         # The explicit ignores are the documented deferrals from
         # docs/KNOWN_LIMITATIONS.md: black 26 is a major that reformats the
-        # repo; pyopenssl is capped <24.3 upstream by pysaml2 with no
-        # released fix inside the cap. Remove an ignore when its entry
-        # clears.
+        # repo. Remove an ignore when its entry clears. (The pyopenssl
+        # ignores went away with the unused pysaml2 dependency.)
         run: |
           pip install -r requirements.txt
           pip-audit -r requirements.txt \
             --ignore-vuln PYSEC-2026-2120 \
-            --ignore-vuln PYSEC-2026-2121 \
-            --ignore-vuln PYSEC-2026-2268 \
-            --ignore-vuln PYSEC-2026-2269
+            --ignore-vuln PYSEC-2026-2121
 
       - name: Upload Bandit report
         if: always()
@@ -119,7 +113,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libldap2-dev libsasl2-dev libmagic1
+          sudo apt-get install -y libmagic1
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt
@@ -189,7 +183,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libldap2-dev libsasl2-dev libmagic1
+          sudo apt-get install -y libmagic1
 
       - name: Install Python dependencies
         run: pip install -r requirements.txt
@@ -298,7 +292,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -322,7 +316,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -343,13 +337,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run npm audit
-        run: npm audit --omit=dev || true
+      # Blocking at high/critical. Moderate advisories that only a breaking
+      # major upgrade can fix (e.g. react-router 6→7) don't fail the build;
+      # track those in docs/COMPLIANCE.md instead of silencing them here.
+      - name: Run npm audit (fail on high/critical)
+        run: npm audit --omit=dev --audit-level=high
 
   frontend-build:
     name: Frontend Build
@@ -365,7 +362,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci

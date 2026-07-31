@@ -13,7 +13,7 @@ An open-source, modular intranet platform designed for fire departments, emergen
 - **Flexible Configuration** — Customize workflows, rules, and policies to match your organization
 - **Tamper-Proof Logging** — Cryptographic audit trails with integrity verification
 - **Multi-Tenancy Ready** — Host multiple organizations on a single installation
-- **Integration Framework** — Connect with Microsoft 365, Google Workspace, LDAP, and more
+- **Integration Framework** — Connect with Microsoft 365, Google Workspace, and more
 - **Role-Based Access Control** — Granular permissions with 16 system roles
 - **Mobile Responsive** — Progressive Web App (PWA) support
 - **Public Kiosk Displays** — Tablet-friendly pages for room QR code check-in, no login required
@@ -23,7 +23,7 @@ An open-source, modular intranet platform designed for fire departments, emergen
 
 | Module | Description |
 |--------|-------------|
-| **User Management & Authentication** | Member profiles, roles, permissions, OAuth 2.0 / SAML / LDAP, MFA |
+| **User Management & Authentication** | Member profiles, roles, permissions, OAuth 2.0 SSO (Google, Microsoft), MFA |
 | **Document Management** | 7 system folders (SOPs, Policies, Forms, Reports, Training Materials, Meeting Minutes, General), custom folders, grid/list views, document viewer |
 | **Communication Tools** | Announcements, messaging, notifications |
 | **Calendar & Scheduling** | Week/month views, shift templates (day, night, morning), staffing requirements, optional platoon rotations (A/B/C) with leave-aware staffing and hold-over roster |
@@ -178,7 +178,7 @@ openssl rand -hex 16  # ENCRYPTION_SALT
 docker compose up -d
 ```
 
-> **Which `.env` file?** `.env.example` is the quick-start config (~30 variables) — fill in your secrets and go. If you need cloud storage (S3, Azure, GCS), OAuth/SSO (Google, Microsoft, LDAP), SMS (Twilio), HIPAA tuning, or advanced security settings, copy `.env.example.full` instead. See [Choosing Your Configuration File](#choosing-your-configuration-file) below for details.
+> **Which `.env` file?** `.env.example` is the quick-start config (~30 variables) — fill in your secrets and go. If you need cloud storage (S3, Azure, GCS), OAuth/SSO (Google, Microsoft), SMS (Twilio), HIPAA tuning, or advanced security settings, copy `.env.example.full` instead. See [Choosing Your Configuration File](#choosing-your-configuration-file) below for details.
 </details>
 
 <details>
@@ -295,7 +295,7 @@ cp .env.example .env
 
 **Use `.env.example.full`** if you need any of the following:
 - Cloud file storage (AWS S3, Azure Blob, Google Cloud Storage)
-- OAuth / SSO providers (Microsoft Azure AD, Google OAuth, LDAP/Active Directory)
+- OAuth / SSO providers (Microsoft Azure AD, Google OAuth)
 - SMS notifications (Twilio)
 - Fine-grained HIPAA controls (session timeout, password age, audit retention)
 - Advanced security (IP whitelisting, geofencing, account lockout tuning, cookie settings)
@@ -387,7 +387,7 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 | **Cache** | Redis 7+ |
 | **Search** | Elasticsearch (optional) |
 | **File Storage** | Local, S3, Azure Blob, Google Cloud Storage |
-| **Authentication** | OAuth 2.0, SAML, LDAP, TOTP-based MFA |
+| **Authentication** | OAuth 2.0 (Google, Microsoft), TOTP-based MFA |
 
 ## Security & Compliance
 
