@@ -161,6 +161,10 @@ class Settings(BaseSettings):
         90  # Max days before password must be changed
     )
     HIPAA_AUDIT_RETENTION_DAYS: int = 2555  # 7-year audit log retention (§164.312(b))
+    # Where the weekly retention job writes gzipped JSONL exports of purged
+    # audit rows. Include this directory in backups (see docs/BACKUP.md) —
+    # after a purge it is the only copy of the oldest audit history.
+    AUDIT_ARCHIVE_DIR: str = "./audit_archives"
 
     # Account lockout after repeated failed sign-ins (brute-force protection).
     # Tunable so small, trusted deployments can run a gentler policy. (These
@@ -666,7 +670,19 @@ class Settings(BaseSettings):
             if d.strip()
         }
 
-    # LDAP
+    # ============================================
+    # Vulnerability Disclosure (RFC 9116 security.txt)
+    # ============================================
+    # Contact served at /.well-known/security.txt for vulnerability reports.
+    # Set to your department's security email (bare addresses get a mailto:
+    # prefix added) or a reporting URL. Unset, it falls back to the upstream
+    # project's GitHub security-advisory intake.
+    SECURITY_TXT_CONTACT: str | None = None
+    SECURITY_TXT_POLICY_URL: str = (
+        "https://github.com/thegspiro/the-logbook/blob/main/SECURITY.md"
+    )
+
+    # LDAP (not implemented — inert placeholders for a future integration)
     LDAP_ENABLED: bool = False
     LDAP_SERVER: str | None = None
     LDAP_BIND_DN: str | None = None
