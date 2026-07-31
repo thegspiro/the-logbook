@@ -18,6 +18,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import JSONResponse
 from loguru import logger
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1798,3 +1799,43 @@ async def get_member_audit_history(
         )
 
     return entries
+
+
+@router.get("/me/data-export")
+async def export_my_data(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Download everything the system stores about the calling member
+    (data portability / subject access). Self-scoped by construction —
+    there is no way to export another member's data through this route.
+
+    Rate limited hard: assembling the export touches every module's tables.
+    """
+    await check_rate_limit(
+        request, max_requests=3, window_seconds=3600, scope="data_export"
+    )
+
+    from app.services.data_export_service import DataExportService
+
+    export = await DataExportService(db).export_user_data(current_user)
+
+    await log_audit_event(
+        db=db,
+        event_type="user_data_export",
+        event_category="security",
+        severity="info",
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+        event_data={"sections": len(export)},
+    )
+    await db.commit()
+
+    filename = "logbook-personal-data-export.json"
+    return JSONResponse(
+        content=export,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

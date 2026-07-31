@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Contrast, Palette, AlertTriangle, Heart, Plus, Trash2, ShieldCheck } from 'lucide-react';
+import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Contrast, Palette, AlertTriangle, Heart, Plus, Trash2, ShieldCheck, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService, userService } from '../services/api';
 import { MfaSettingsCard } from '../components/settings/MfaSettingsCard';
@@ -40,6 +40,7 @@ export const UserSettingsPage: React.FC = () => {
   const [_profile, setProfile] = useState<UserWithRoles | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [downloadingData, setDownloadingData] = useState(false);
   const [profileForm, setProfileForm] = useState<UserProfileUpdate>({});
 
   // Password change state
@@ -205,6 +206,28 @@ export const UserSettingsPage: React.FC = () => {
       );
     } finally {
       setSavingPreferences(false);
+    }
+  };
+
+  const handleDownloadMyData = async () => {
+    setDownloadingData(true);
+    try {
+      const blob = await userService.downloadMyData();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'logbook-personal-data-export.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Your data export has been downloaded');
+    } catch (err: unknown) {
+      toast.error(
+        getErrorMessage(err, 'Could not prepare your data export. Try again later.')
+      );
+    } finally {
+      setDownloadingData(false);
     }
   };
 
@@ -709,6 +732,24 @@ export const UserSettingsPage: React.FC = () => {
                 Add a second step at sign-in using an authenticator app.
               </p>
               <MfaSettingsCard onChange={() => { void useAuthStore.getState().loadUser(); }} />
+            </div>
+
+            <div className="border-t border-theme-surface-border pt-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Your Data</h2>
+              <p className="text-sm text-theme-text-secondary mb-4">
+                Download a copy of everything the department stores about you —
+                profile, training history, attendance, and related records — as a
+                JSON file.
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleDownloadMyData()}
+                disabled={downloadingData}
+                className="btn-primary inline-flex items-center gap-2 rounded-md text-sm font-medium disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" aria-hidden="true" />
+                {downloadingData ? 'Preparing export…' : 'Download my data'}
+              </button>
             </div>
           </div>
         )}

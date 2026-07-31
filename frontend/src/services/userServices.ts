@@ -185,6 +185,17 @@ export const userService = {
   },
 
   /**
+   * Download the caller's full personal-data export (data portability).
+   * Self-scoped server-side; rate limited to a few requests per hour.
+   */
+  async downloadMyData(): Promise<Blob> {
+    const response = await api.get<Blob>('/users/me/data-export', {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  /**
    * Delete a user (soft or hard delete)
    */
   async deleteUserWithMode(userId: string, hard: boolean = false): Promise<void> {
