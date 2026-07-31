@@ -1096,10 +1096,18 @@ class TestRequestNumberAllocation:
         fy_b = await self._fiscal_year(service, org_b, user_b)
 
         pr_a = await service.create_purchase_request(
-            org_id=org_a, requested_by=user_a, fiscal_year_id=fy_a.id, title="A"
+            org_id=org_a,
+            requested_by=user_a,
+            fiscal_year_id=fy_a.id,
+            title="A",
+            estimated_amount=100.00,
         )
         pr_b = await service.create_purchase_request(
-            org_id=org_b, requested_by=user_b, fiscal_year_id=fy_b.id, title="B"
+            org_id=org_b,
+            requested_by=user_b,
+            fiscal_year_id=fy_b.id,
+            title="B",
+            estimated_amount=100.00,
         )
 
         assert pr_a.request_number == "PR-2026-0001"
@@ -1115,17 +1123,29 @@ class TestRequestNumberAllocation:
         fy = await self._fiscal_year(service, org_id, user_id)
 
         pr1 = await service.create_purchase_request(
-            org_id=org_id, requested_by=user_id, fiscal_year_id=fy.id, title="One"
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            title="One",
+            estimated_amount=100.00,
         )
         await service.create_purchase_request(
-            org_id=org_id, requested_by=user_id, fiscal_year_id=fy.id, title="Two"
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            title="Two",
+            estimated_amount=100.00,
         )
         await db_session.execute(
             text("DELETE FROM purchase_requests WHERE id = :id"), {"id": pr1.id}
         )
 
         pr3 = await service.create_purchase_request(
-            org_id=org_id, requested_by=user_id, fiscal_year_id=fy.id, title="Three"
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            title="Three",
+            estimated_amount=100.00,
         )
         assert pr3.request_number == "PR-2026-0003"
 
@@ -1139,7 +1159,11 @@ class TestRequestNumberAllocation:
         fy = await self._fiscal_year(service, org_id, user_id)
 
         pr1 = await service.create_purchase_request(
-            org_id=org_id, requested_by=user_id, fiscal_year_id=fy.id, title="First"
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            title="First",
+            estimated_amount=100.00,
         )
 
         original = FinanceService._generate_request_number
@@ -1154,7 +1178,11 @@ class TestRequestNumberAllocation:
         monkeypatch.setattr(FinanceService, "_generate_request_number", collide_once)
 
         pr2 = await service.create_purchase_request(
-            org_id=org_id, requested_by=user_id, fiscal_year_id=fy.id, title="Second"
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            title="Second",
+            estimated_amount=100.00,
         )
 
         assert offsets == [0, 1]
