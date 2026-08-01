@@ -23,6 +23,7 @@ from app.models.admin_hours import (
 )
 from app.models.event import Event
 from app.models.user import Organization, User
+from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
 
 # A single manual admin-hours entry cannot span more than a day — bounds the
@@ -729,6 +730,18 @@ class AdminHoursService:
         entry = result.scalar_one_or_none()
         if not entry:
             raise ValueError("Pending entry not found")
+
+        # SEC (AH-4): admin hours are credited service time, and officers hold
+        # the approval permission for the same pool they log into. Approving
+        # your own entry is the entire control. Rejection stays open — an
+        # officer withdrawing their own claim is not a conflict.
+        if action == "approve":
+            assert_different_person(
+                approver_id,
+                entry.user_id,
+                action="approve",
+                record="administrative hours entry",
+            )
 
         now = datetime.now(timezone.utc)
 

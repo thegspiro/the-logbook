@@ -24,6 +24,7 @@ from app.models.finance import (
     FiscalYearStatus,
     PurchaseRequestStatus,
 )
+from app.models.user import User
 from app.services.finance_service import FinanceService
 
 
@@ -620,6 +621,22 @@ class TestApprovalChainService:
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
         user_id = sample_org_data.get("admin_id", "test-user-id")
+        # Separation of duties: the requester cannot approve their own PR, so
+        # this test needs a second person to walk the chains. The subject here
+        # is encumbrance accounting, not who signs. acted_by is a real foreign
+        # key, so the approver has to be a real row.
+        approver = User(
+            id=str(uuid.uuid4()),
+            organization_id=org_id,
+            username="finance-officer",
+            email="finance-officer@example.com",
+            first_name="Fin",
+            last_name="Officer",
+            password_hash="x",
+        )
+        db_session.add(approver)
+        await db_session.flush()
+        approver_id = approver.id
 
         fy = await service.create_fiscal_year(
             org_id=org_id,
@@ -669,7 +686,7 @@ class TestApprovalChainService:
             5000.00,
             user_id,
         )
-        await service.approve_step(a_records[0].id, user_id, org_id=org_id)
+        await service.approve_step(a_records[0].id, approver_id, org_id=org_id)
 
         budget_after_a = await service.get_budget(budget.id, org_id)
         assert float(budget_after_a.amount_encumbered) == 5000.00
@@ -714,7 +731,7 @@ class TestApprovalChainService:
             3000.00,
             user_id,
         )
-        await service.approve_step(b_records[0].id, user_id, org_id=org_id)
+        await service.approve_step(b_records[0].id, approver_id, org_id=org_id)
         await service.deny_step(b_records[1].id, user_id, "Not needed", org_id=org_id)
 
         # PR-A's $5000 encumbrance must be untouched by PR-B's denial.

@@ -30,6 +30,10 @@ from app.schemas.skills_testing import (
     SkillTestResponse,
     SkillTestUpdate,
 )
+from app.services.separation_of_duties import (
+    SeparationOfDutiesError,
+    assert_different_person,
+)
 from app.services.skills_testing_service import (
     apply_test_pass_to_pipeline,
     calculate_test_result,
@@ -662,6 +666,23 @@ async def create_test(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found"
         )
+
+    # SEC (CS-8): the examiner is always the caller and the candidate comes
+    # from the request body, so without this an instructor could examine
+    # themselves and record a pass — which then satisfies the linked program
+    # requirement and counts toward certification. Practice attempts are
+    # exempt: they are not logged, not credited, and self-drilling is the
+    # point of them.
+    if not test_data.is_practice:
+        try:
+            assert_different_person(
+                current_user.id,
+                str(test_data.candidate_id),
+                action="examine",
+                record="skills test",
+            )
+        except SeparationOfDutiesError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     # Hybrid link: an explicit per-test requirement overrides the template's
     # default; otherwise the test inherits the template's requirement.
