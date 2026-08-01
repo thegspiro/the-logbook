@@ -283,6 +283,49 @@ jobs:
             --cov=app --cov-fail-under=44
 
   # ──────────────────────────────────────────────
+  # Containers
+  # ──────────────────────────────────────────────
+  docker-build:
+    name: Docker Image Build & Container Tests
+    runs-on: ubuntu-latest
+    needs: [backend-lint, frontend-lint]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # Without this the job is a false green: every test in the suite skips
+      # itself when no daemon is reachable, and 19 skips report as success.
+      - name: Verify Docker daemon is reachable
+        run: docker info > /dev/null
+
+      # The `docker`-marked suite builds the production backend and frontend
+      # images and asserts the containers come up healthy, plus validates the
+      # compose files. Nothing in CI built a container image before this job,
+      # so a Dockerfile that no longer built would only have been discovered
+      # at deploy time. The tests skip themselves when no Docker daemon is
+      # present; ubuntu-latest always has one.
+      #
+      # --timeout overrides the 30s default in pytest.ini: an image build
+      # runs for minutes, and the 30s SIGALRM would kill it mid-build.
+      - name: Run container integration tests
+        run: |
+          pytest tests/test_docker_integration.py \
+            -m docker \
+            -v --tb=short \
+            --timeout=1800
+
+  # ──────────────────────────────────────────────
   # Frontend
   # ──────────────────────────────────────────────
   frontend-lint:
@@ -375,3 +418,44 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  frontend-e2e:
+    name: Frontend E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [frontend-lint]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Only chromium: the specs stub every /api/v1 call through
+      # page.route(), so they need the Vite dev server and nothing else, and
+      # a single engine covers the behaviour under test. The config's other
+      # projects (firefox, webkit, and the two mobile viewports) are for
+      # local cross-browser runs — the mobile ones deliberately fail the
+      # navigation specs, whose destinations sit behind a hamburger menu at
+      # that width.
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # playwright.config.ts starts `npm run dev` itself via webServer.
+      - name: Run E2E tests
+        run: npx playwright test --project=chromium
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7

@@ -34,6 +34,7 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import ROLE_MEMBER
 from app.core.database import database_manager, get_db
+from app.core.permissions import get_rank_default_permissions
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
@@ -49,6 +50,11 @@ from app.schemas.user import (
     UserProfileResponse,
     UserUpdate,
     UserWithRolesResponse,
+)
+from app.services.admin_continuity_service import (
+    LastAdministratorError,
+    assert_not_last_administrator,
+    assert_positions_retain_administrator,
 )
 from app.services.organization_service import OrganizationService
 from app.services.security_monitoring import report_privilege_escalation_attempt
@@ -585,6 +591,25 @@ async def assign_user_roles(
         current_user, list(roles), db, get_client_ip(request)
     )
 
+    # The escalation ceiling above only guards *raising* permissions. This call
+    # replaces the user's entire position set — including with an empty list —
+    # so it is also the cheapest way to strip the last administrator.
+    resulting_permissions: set[str] = set()
+    for role in roles:
+        resulting_permissions.update(role.permissions or [])
+    if user.rank:
+        resulting_permissions.update(get_rank_default_permissions(user.rank))
+    try:
+        await assert_positions_retain_administrator(
+            db,
+            str(current_user.organization_id),
+            user_id,
+            resulting_permissions,
+            action="remove administrator positions from",
+        )
+    except LastAdministratorError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
     # Remove all existing role assignments
     await db.execute(delete(user_roles).where(user_roles.c.user_id == str(user_id)))
 
@@ -777,6 +802,23 @@ async def remove_role_from_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User does not have this role"
         )
+
+    resulting_permissions: set[str] = set()
+    for role in user.roles:
+        if str(role.id) != str(role_id):
+            resulting_permissions.update(role.permissions or [])
+    if user.rank:
+        resulting_permissions.update(get_rank_default_permissions(user.rank))
+    try:
+        await assert_positions_retain_administrator(
+            db,
+            str(current_user.organization_id),
+            user_id,
+            resulting_permissions,
+            action="remove the last administrator position from",
+        )
+    except LastAdministratorError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     role_removed_name = role_to_remove.name
     user.roles.remove(role_to_remove)
@@ -1166,6 +1208,18 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+
+    # The self-delete check above stops an admin removing themselves, but not
+    # one admin removing the other and only remaining one.
+    try:
+        await assert_not_last_administrator(
+            db,
+            str(current_user.organization_id),
+            user_id,
+            action="delete",
+        )
+    except LastAdministratorError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     # Capture values before delete/commit
     deleted_username = user.username
@@ -1862,9 +1916,7 @@ async def anonymize_member(
             detail="You cannot anonymize your own account",
         )
 
-    from app.services.member_anonymization_service import (
-        MemberAnonymizationService,
-    )
+    from app.services.member_anonymization_service import MemberAnonymizationService
 
     service = MemberAnonymizationService(db)
     user = await service.get_user_for_anonymization(
