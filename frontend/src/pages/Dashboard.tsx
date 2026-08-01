@@ -1062,44 +1062,52 @@ const Dashboard: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-2">
+                {/*
+                  The row and its Dismiss control are siblings, not nested
+                  buttons. A <button> inside a <button> is invalid HTML: the
+                  browser closes the outer element early, so the inner control
+                  escapes the row and assistive technology is handed a broken
+                  tree.
+                */}
                 {notifications.map((notification) => (
-                  <button
+                  <div
                     key={notification.id}
-                    onClick={() => {
-                      void markNotificationRead(notification.id);
-                      if (notification.action_url && notification.action_url.startsWith('/'))
-                        void navigate(notification.action_url);
-                      else
-                        void navigate("/notifications?tab=inbox");
-                    }}
-                    className="w-full text-left p-2.5 sm:p-3 rounded-lg transition-colors bg-blue-500/10 border border-blue-500/20 text-theme-text-primary"
+                    className="flex items-start justify-between gap-2 p-2.5 sm:p-3 rounded-lg transition-colors bg-blue-500/10 border border-blue-500/20 text-theme-text-primary"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {notification.subject || "Notification"}
-                        </p>
-                        <p className="text-xs text-theme-text-muted mt-0.5 truncate">
-                          {notification.message || ""}
-                        </p>
-                      </div>
-                      <div className="flex items-center shrink-0">
-                        <span
-                          className="text-[11px] sm:text-xs text-theme-text-muted whitespace-nowrap"
-                          title={formatDate(notification.sent_at, tz)}
-                        >
-                          {formatRelativeTime(notification.sent_at)}
-                        </span>
-                        <button
-                          onClick={(e) => dismissNotification(e, notification.id)}
-                          className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
-                          title="Dismiss"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
+                    <button
+                      onClick={() => {
+                        void markNotificationRead(notification.id);
+                        if (notification.action_url && notification.action_url.startsWith('/'))
+                          void navigate(notification.action_url);
+                        else
+                          void navigate("/notifications?tab=inbox");
+                      }}
+                      className="flex-1 min-w-0 text-left focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded"
+                    >
+                      <p className="text-sm font-medium truncate">
+                        {notification.subject || "Notification"}
+                      </p>
+                      <p className="text-xs text-theme-text-muted mt-0.5 truncate">
+                        {notification.message || ""}
+                      </p>
+                    </button>
+                    <div className="flex items-center shrink-0">
+                      <span
+                        className="text-[11px] sm:text-xs text-theme-text-muted whitespace-nowrap"
+                        title={formatDate(notification.sent_at, tz)}
+                      >
+                        {formatRelativeTime(notification.sent_at)}
+                      </span>
+                      <button
+                        onClick={(e) => dismissNotification(e, notification.id)}
+                        className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                        title="Dismiss"
+                        aria-label={`Dismiss notification: ${notification.subject || "Notification"}`}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -1468,8 +1476,12 @@ const Dashboard: React.FC = () => {
             <div className="space-y-3">
               {enrollments.slice(0, 3).map((enrollment) => {
                 const progress = progressDetails.get(enrollment.id);
+                // Guard the array itself, not just `progress`: an enrollment
+                // whose progress payload omits requirement_progress would
+                // otherwise throw inside render and take the entire dashboard
+                // down to the ErrorBoundary.
                 const nextSteps = progress?.requirement_progress
-                  .filter(
+                  ?.filter(
                     (rp) =>
                       rp.status === "not_started" ||
                       rp.status === "in_progress",
