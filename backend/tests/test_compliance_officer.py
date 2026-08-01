@@ -128,108 +128,38 @@ class TestISOCategories:
 # ============================================
 
 
-class TestEstimateISOClass:
-    """Test the _estimate_iso_class static method."""
+class TestEstimateTrainingPoints:
+    """Test the _estimate_training_points static method.
 
-    def test_class_1_at_95(self):
-        assert ISOReadinessService._estimate_iso_class(95.0) == 1
+    Replaces the former TestEstimateISOClass. The old method mapped a
+    training-hours percentage onto a Public Protection Classification, which
+    was unsound — training is FSRS Section 580 (9 of ~105.5 points) while
+    Water Supply (40) and Emergency Communications (10) are not tracked here
+    at all. See test_iso_readiness_framing.py for the regression guard.
+    """
 
-    def test_class_1_at_100(self):
-        assert ISOReadinessService._estimate_iso_class(100.0) == 1
+    def test_full_compliance_earns_the_full_training_share(self):
+        assert ISOReadinessService._estimate_training_points(100.0) == 9.0
 
-    def test_class_1_at_99(self):
-        assert ISOReadinessService._estimate_iso_class(99.9) == 1
+    def test_zero_compliance_earns_nothing(self):
+        assert ISOReadinessService._estimate_training_points(0.0) == 0.0
 
-    def test_class_2_at_90(self):
-        assert ISOReadinessService._estimate_iso_class(90.0) == 2
+    def test_proportional_in_between(self):
+        assert ISOReadinessService._estimate_training_points(50.0) == 4.5
+        assert ISOReadinessService._estimate_training_points(80.0) == 7.2
+        assert ISOReadinessService._estimate_training_points(95.0) == 8.55
 
-    def test_class_2_at_94(self):
-        assert ISOReadinessService._estimate_iso_class(94.9) == 2
-
-    def test_class_3_at_80(self):
-        assert ISOReadinessService._estimate_iso_class(80.0) == 3
-
-    def test_class_3_at_89(self):
-        assert ISOReadinessService._estimate_iso_class(89.9) == 3
-
-    def test_class_4_at_70(self):
-        assert ISOReadinessService._estimate_iso_class(70.0) == 4
-
-    def test_class_5_at_60(self):
-        assert ISOReadinessService._estimate_iso_class(60.0) == 5
-
-    def test_class_6_at_50(self):
-        assert ISOReadinessService._estimate_iso_class(50.0) == 6
-
-    def test_class_7_at_40(self):
-        assert ISOReadinessService._estimate_iso_class(40.0) == 7
-
-    def test_class_8_at_30(self):
-        assert ISOReadinessService._estimate_iso_class(30.0) == 8
-
-    def test_class_9_at_20(self):
-        assert ISOReadinessService._estimate_iso_class(20.0) == 9
-
-    def test_class_10_below_20(self):
-        assert ISOReadinessService._estimate_iso_class(19.9) == 10
-
-    def test_class_10_at_zero(self):
-        assert ISOReadinessService._estimate_iso_class(0.0) == 10
-
-    def test_class_10_at_negative(self):
-        assert ISOReadinessService._estimate_iso_class(-5.0) == 10
-
-    def test_boundary_values(self):
-        """Test all boundary values to ensure correct classification."""
-        boundaries = [
-            (95, 1),
-            (90, 2),
-            (80, 3),
-            (70, 4),
-            (60, 5),
-            (50, 6),
-            (40, 7),
-            (30, 8),
-            (20, 9),
-            (19.9, 10),
+    def test_monotonic_non_decreasing(self):
+        values = [
+            ISOReadinessService._estimate_training_points(pct)
+            for pct in range(0, 101, 5)
         ]
-        for pct, expected_class in boundaries:
-            result = ISOReadinessService._estimate_iso_class(pct)
-            assert (
-                result == expected_class
-            ), f"Expected class {expected_class} for {pct}%, got {result}"
+        assert values == sorted(values)
 
-    def test_just_below_boundaries(self):
-        """Test values just below each boundary threshold."""
-        below_boundaries = [
-            (94.9, 2),
-            (89.9, 3),
-            (79.9, 4),
-            (69.9, 5),
-            (59.9, 6),
-            (49.9, 7),
-            (39.9, 8),
-            (29.9, 9),
-            (19.9, 10),
-        ]
-        for pct, expected_class in below_boundaries:
-            result = ISOReadinessService._estimate_iso_class(pct)
-            assert (
-                result == expected_class
-            ), f"Expected class {expected_class} for {pct}%, got {result}"
-
-    def test_class_monotonic(self):
-        """Higher readiness should give equal or better (lower) class."""
-        prev_class = 10
-        for pct in range(0, 101, 5):
-            cls = ISOReadinessService._estimate_iso_class(pct)
-            assert cls <= prev_class, f"Class {cls} at {pct}% should be <= {prev_class}"
-            prev_class = cls
-
-
-# ============================================
-# ISOReadinessService.get_iso_readiness Tests
-# ============================================
+    def test_never_exceeds_the_section_580_ceiling(self):
+        # Even a nonsensical input must not imply credit beyond training.
+        assert ISOReadinessService._estimate_training_points(100.0) <= 9.0
+        assert ISOReadinessService._estimate_training_points(0.0) >= 0.0
 
 
 class TestGetISOReadiness:
@@ -247,7 +177,10 @@ class TestGetISOReadiness:
         assert result["year"] == 2025
         assert result["categories"] == []
         assert result["overall_readiness_pct"] == 0.0
-        assert result["iso_class_estimate"] == 10
+        assert result["training_points_estimate"] == 0.0
+        assert result["training_points_possible"] == 9.0
+        # No PPC class is reported — see test_iso_readiness_framing.py
+        assert "iso_class_estimate" not in result
 
     async def test_default_year_is_current(self):
         mock_db = AsyncMock()

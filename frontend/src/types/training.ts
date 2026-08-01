@@ -2113,7 +2113,16 @@ export interface ISOReadiness {
   year: number;
   categories: ISOCategory[];
   overall_readiness_pct: number;
-  iso_class_estimate: number;
+  /**
+   * Estimated FSRS *training* credit earned (Section 580), out of
+   * training_points_possible. Deliberately NOT a Public Protection
+   * Classification — training is under 9% of the FSRS schedule and the
+   * platform holds none of the water-supply or communications data that
+   * dominate a real PPC.
+   */
+  training_points_estimate: number;
+  training_points_possible: number;
+  scope_note: string;
   total_members: number;
 }
 
@@ -2203,7 +2212,6 @@ export interface AnnualComplianceReport {
     total_certifications_active: number;
     total_certifications_expired: number;
     iso_readiness_pct: number;
-    iso_class_estimate: number;
   };
   admin_hours_summary: {
     total_approved_hours: number;

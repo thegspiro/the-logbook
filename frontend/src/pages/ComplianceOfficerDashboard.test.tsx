@@ -38,7 +38,9 @@ const mockAnnualReport = {
     total_training_hours: 1200,
     total_admin_hours: 350,
     total_contributed_hours: 1550,
-    iso_class_estimate: 3,
+    training_points_estimate: 6.3,
+    training_points_possible: 9.0,
+    scope_note: 'Measures training only — not a PPC.',
     total_certifications_active: 45,
     total_certifications_expired: 2,
     iso_readiness_pct: 82,
@@ -93,7 +95,6 @@ describe('ComplianceOfficerDashboard', () => {
     mockGetISOReadiness.mockResolvedValue({
       year: 2026,
       overall_readiness_pct: 78,
-      iso_class_estimate: 4,
       categories: [],
     });
     mockGetRecordCompleteness.mockResolvedValue({
