@@ -437,6 +437,43 @@ async def check_contact_info_enabled(
     }
 
 
+def _redact_contact_fields(
+    user: User, visibility: dict[str, bool], is_admin: bool
+) -> UserWithRolesResponse:
+    """Blank out contact details the caller is not entitled to see.
+
+    Builds the response from the ORM object then clears fields, rather than
+    filtering at query time, so a future column added to the schema is visible
+    by default and has to be considered here — the reverse (an allow-list that
+    silently drops new fields) hides bugs instead of surfacing them.
+
+    Members-managers keep everything: they are the people who maintain these
+    records, and the visibility setting exists to control what the *roster*
+    shows the general membership.
+    """
+    payload = UserWithRolesResponse.model_validate(user)
+    if is_admin:
+        return payload
+
+    if not visibility.get("show_email", False):
+        payload.email = None
+    if not visibility.get("show_phone", False):
+        payload.phone = None
+    if not visibility.get("show_mobile", False):
+        payload.mobile = None
+
+    # Never surfaced by the roster endpoint at any visibility setting, so the
+    # setting has no "show" flag for them — they are admin-only by definition.
+    payload.personal_email = None
+    payload.address_street = None
+    payload.address_city = None
+    payload.address_state = None
+    payload.address_zip = None
+    payload.address_country = None
+
+    return payload
+
+
 @router.get("/with-roles", response_model=list[UserWithRolesResponse])
 async def list_users_with_roles(
     db: AsyncSession = Depends(get_db),
@@ -448,8 +485,37 @@ async def list_users_with_roles(
     This endpoint is for the Members admin page.
     Requires `users.view` or `members.manage` permission.
 
+    Contact information is redacted the same way `GET /users` redacts it —
+    see the note in the implementation.
+
     **Authentication required**
     """
+    is_admin = _has_permission(
+        "members.manage", _collect_user_permissions(current_user)
+    )
+
+    visibility: dict[str, bool] = {}
+    if not is_admin:
+        org_service = OrganizationService(db)
+        try:
+            org_settings = await org_service.get_organization_settings(
+                current_user.organization_id
+            )
+            contact = org_settings.contact_info_visibility
+            if contact.enabled:
+                visibility = {
+                    "show_email": contact.show_email,
+                    "show_phone": contact.show_phone,
+                    "show_mobile": contact.show_mobile,
+                }
+        except Exception as e:
+            # Fail closed: an unreadable settings row must hide contact
+            # details, not reveal them.
+            logger.warning(
+                f"Failed to load contact visibility settings, redacting contact "
+                f"info on /users/with-roles: {e}"
+            )
+
     result = await db.execute(
         select(User)
         .where(User.organization_id == str(current_user.organization_id))
@@ -459,7 +525,14 @@ async def list_users_with_roles(
     )
     users = result.scalars().all()
 
-    return users
+    # SEC (ORU-8): this endpoint returned every field on the model, while
+    # `GET /users` filtered contact details against the organization's
+    # contact_info_visibility setting. Both are reachable with plain
+    # `users.view`, so a member who was refused an email address on the roster
+    # could read it — plus home address and personal email, which the roster
+    # never exposes at all — by requesting this URL instead. Redact here too,
+    # or the setting is advisory.
+    return [_redact_contact_fields(user, visibility, is_admin) for user in users]
 
 
 @router.get("/{user_id}/roles", response_model=UserRoleResponse)

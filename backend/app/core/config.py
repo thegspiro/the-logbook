@@ -250,6 +250,18 @@ class Settings(BaseSettings):
     # issues are detected (missing secrets, etc.).  Production and staging
     # ALWAYS block regardless of this flag.  Set to False for local dev only.
     SECURITY_BLOCK_INSECURE_DEFAULTS: bool = False
+    # SEC: Break-glass for the "TLS enabled but certificate unverified" check.
+    #
+    # Turning on DB_SSL/REDIS_SSL without a CA gives an encrypted channel whose
+    # peer is never authenticated (CERT_NONE) — an active man-in-the-middle
+    # reads and rewrites PHI in transit while the deployment looks encrypted.
+    # That is more dangerous than honest plaintext on a private network,
+    # because it is indistinguishable from a correct configuration, so it
+    # blocks startup in production/staging rather than warning.
+    #
+    # Set True only for a deployment that terminates TLS on a trusted, isolated
+    # path and accepts the risk; it is logged loudly on every boot.
+    SECURITY_ALLOW_UNVERIFIED_TLS: bool = False
     # SEC: Break-glass gate for the audit-chain rehash tool. Rehash rewrites the
     # single, cross-organization audit hash chain, so it must not be reachable by
     # an ordinary org admin who merely holds `audit.export`. It stays disabled
@@ -320,6 +332,16 @@ class Settings(BaseSettings):
 
         # --- Additional production/staging checks ---
         if self.ENVIRONMENT in ("production", "staging"):
+            if self.SECURITY_ALLOW_UNVERIFIED_TLS:
+                # An accepted risk still has to be visible every boot, or it
+                # outlives the person who accepted it.
+                warnings.append(
+                    "WARNING: SECURITY_ALLOW_UNVERIFIED_TLS is enabled — TLS peer "
+                    "certificates are not verified, so encrypted connections are "
+                    "not protected against an active man-in-the-middle. This is an "
+                    "explicitly accepted risk; clear the flag once a CA is configured."
+                )
+
             if not self.REDIS_PASSWORD:
                 warnings.append("CRITICAL: REDIS_PASSWORD must be set in production")
 
@@ -329,11 +351,17 @@ class Settings(BaseSettings):
                     "database traffic and prevent man-in-the-middle attacks"
                 )
             elif not self.DB_SSL_CA:
+                # CRITICAL, not WARNING: this configuration *looks* secure and
+                # is not. Waivable via SECURITY_ALLOW_UNVERIFIED_TLS.
+                severity = (
+                    "WARNING" if self.SECURITY_ALLOW_UNVERIFIED_TLS else "CRITICAL"
+                )
                 warnings.append(
-                    "WARNING: DB_SSL is enabled but DB_SSL_CA is not set — the "
+                    f"{severity}: DB_SSL is enabled but DB_SSL_CA is not set — the "
                     "connection is encrypted but the server certificate is NOT "
                     "verified (CERT_NONE), so it is not protected against an "
-                    "active man-in-the-middle. Set DB_SSL_CA to the CA certificate."
+                    "active man-in-the-middle. Set DB_SSL_CA to the CA certificate, "
+                    "or set SECURITY_ALLOW_UNVERIFIED_TLS=true to accept the risk."
                 )
 
             if not self.REDIS_SSL:
@@ -342,11 +370,15 @@ class Settings(BaseSettings):
                     "Redis traffic and prevent man-in-the-middle attacks"
                 )
             elif not self.REDIS_SSL_CA:
+                severity = (
+                    "WARNING" if self.SECURITY_ALLOW_UNVERIFIED_TLS else "CRITICAL"
+                )
                 warnings.append(
-                    "WARNING: REDIS_SSL is enabled but REDIS_SSL_CA is not set — "
+                    f"{severity}: REDIS_SSL is enabled but REDIS_SSL_CA is not set — "
                     "the connection is encrypted but the server certificate is NOT "
-                    "verified (CERT_NONE). Set REDIS_SSL_CA to the CA certificate "
-                    "for man-in-the-middle protection."
+                    "verified (CERT_NONE). Redis holds sessions and cached PHI. Set "
+                    "REDIS_SSL_CA to the CA certificate, or set "
+                    "SECURITY_ALLOW_UNVERIFIED_TLS=true to accept the risk."
                 )
 
             if self.DEBUG:

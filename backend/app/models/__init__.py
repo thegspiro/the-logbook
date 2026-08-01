@@ -49,6 +49,7 @@ from app.models.compliance_config import (
     ReportFrequency,
     ReportStatus,
 )
+from app.models.consent import ConsentType, UserConsent
 from app.models.document import (
     SYSTEM_FOLDERS,
     Document,
@@ -220,7 +221,6 @@ from app.models.ip_security import (
     IPExceptionAuditLog,
     IPExceptionType,
 )
-from app.models.consent import ConsentType, UserConsent
 from app.models.location import Location
 from app.models.medical_screening import (
     ScreeningRecord,

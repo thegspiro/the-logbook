@@ -380,7 +380,27 @@ def get_encryption_salt() -> bytes:
     return salt.encode()
 
 
-def _derive_key_bytes(key: str | None = None) -> bytes:
+# PBKDF2 work factors.
+#
+# The iteration count is part of the ciphertext's identity: change it and the
+# derived key changes, so every existing value becomes undecryptable. Both
+# counts are therefore permanent — V2 for new writes, V1 retained forever to
+# read anything written before the bump. The `$gcm1$` / `$gcm2$` markers on
+# each value say which one produced it.
+#
+# Honest scope: PBKDF2 iterations defend a *low-entropy* input against brute
+# force. A properly generated ENCRYPTION_KEY (64 hex chars) has 256 bits of
+# entropy and is not brute-forceable at any iteration count. This raise is
+# defense in depth for installations that set a weak key, or that fall back to
+# deriving the salt from SECRET_KEY — plus it puts the KDF on OWASP's current
+# recommendation, which auditors do check.
+_KDF_ITERATIONS_V1 = 100_000
+_KDF_ITERATIONS_V2 = 600_000
+
+
+def _derive_key_bytes(
+    key: str | None = None, iterations: int = _KDF_ITERATIONS_V2
+) -> bytes:
     """Derive the raw 32-byte data-encryption key from settings.
 
     PBKDF2-HMAC-SHA256 over ENCRYPTION_KEY (or an explicit ``key``, used for
@@ -388,12 +408,15 @@ def _derive_key_bytes(key: str | None = None) -> bytes:
     the AES-256-GCM cipher (raw 32 bytes) and the legacy Fernet cipher
     (base64 form) derive from this single function, so a value written under
     either scheme decrypts with the same configured key.
+
+    ``iterations`` selects the work factor. Callers reading old ciphertext
+    must pass ``_KDF_ITERATIONS_V1``; new writes take the default.
     """
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=get_encryption_salt(),
-        iterations=100000,
+        iterations=iterations,
     )
     return kdf.derive((key or settings.ENCRYPTION_KEY).encode())
 
@@ -416,26 +439,45 @@ def get_encryption_key() -> bytes:
     Returns:
         url-safe base64 of the 32-byte derived key (Fernet key format)
     """
-    return base64.urlsafe_b64encode(_derive_key_bytes())
+    # Pinned to V1: every Fernet value predates the iteration bump, so the
+    # only key that can read them is the one that wrote them.
+    return base64.urlsafe_b64encode(_derive_key_bytes(iterations=_KDF_ITERATIONS_V1))
 
 
 # Lazy-initialized ciphers. Avoids crashing at import time if ENCRYPTION_KEY is
 # not yet configured (e.g. during testing or initial setup).
 _cipher: Fernet | None = None
-_aesgcm: AESGCM | None = None
 
-# Version marker prepended to AES-256-GCM ciphertext. The `$` characters are not
-# valid url-safe base64, so a marked value can never collide with a legacy Fernet
-# token (which is base64 and starts with `gAAAAA`).
-_GCM_PREFIX = "$gcm1$"
+# Version markers prepended to AES-256-GCM ciphertext. The `$` characters are
+# not valid url-safe base64, so a marked value can never collide with a legacy
+# Fernet token (which is base64 and starts with `gAAAAA`).
+#
+# gcm1 = AES-256-GCM, key derived at 100k PBKDF2 iterations (read-only)
+# gcm2 = AES-256-GCM, key derived at 600k PBKDF2 iterations (current)
+_GCM_PREFIX_V1 = "$gcm1$"
+_GCM_PREFIX_V2 = "$gcm2$"
+# What new writes use.
+_GCM_PREFIX = _GCM_PREFIX_V2
+
+# Marker → the KDF work factor that produced that value's key.
+_GCM_PREFIX_ITERATIONS = {
+    _GCM_PREFIX_V1: _KDF_ITERATIONS_V1,
+    _GCM_PREFIX_V2: _KDF_ITERATIONS_V2,
+}
 # GCM nonce length: 96 bits is the NIST-recommended size for a random nonce.
 _GCM_NONCE_BYTES = 12
 
 
-# Decrypt-ring cipher caches for legacy keys, keyed by the key string.
-# PBKDF2 at 100k iterations is deliberately slow — derive each key once.
-_legacy_aesgcms: dict[str, AESGCM] = {}
+# Decrypt-ring cipher caches, keyed by (key string, KDF work factor). The work
+# factor is part of the cache key because the same ENCRYPTION_KEY derives two
+# different AES keys at V1 and V2 — caching on the key string alone would
+# return the wrong cipher for whichever version was requested second.
+# PBKDF2 at these iteration counts is deliberately slow: derive each once.
+_legacy_aesgcms: dict[tuple[str, int], AESGCM] = {}
 _legacy_fernets: dict[str, Fernet] = {}
+# Current-key GCM ciphers by work factor, so reading a `$gcm1$` value under the
+# *current* key does not re-derive on every call.
+_aesgcms_by_iterations: dict[int, AESGCM] = {}
 
 
 def _get_cipher() -> Fernet:
@@ -446,22 +488,32 @@ def _get_cipher() -> Fernet:
     return _cipher
 
 
-def _get_aesgcm() -> AESGCM:
-    global _aesgcm
-    if _aesgcm is None:
-        _aesgcm = AESGCM(_derive_key_bytes())
-    return _aesgcm
+def _get_aesgcm(iterations: int = _KDF_ITERATIONS_V2) -> AESGCM:
+    """Current-key GCM cipher at the given KDF work factor."""
+    if iterations not in _aesgcms_by_iterations:
+        _aesgcms_by_iterations[iterations] = AESGCM(
+            _derive_key_bytes(iterations=iterations)
+        )
+    return _aesgcms_by_iterations[iterations]
 
 
-def _get_legacy_aesgcm(key: str) -> AESGCM:
-    if key not in _legacy_aesgcms:
-        _legacy_aesgcms[key] = AESGCM(_derive_key_bytes(key))
-    return _legacy_aesgcms[key]
+def _get_legacy_aesgcm(key: str, iterations: int = _KDF_ITERATIONS_V2) -> AESGCM:
+    cache_key = (key, iterations)
+    if cache_key not in _legacy_aesgcms:
+        _legacy_aesgcms[cache_key] = AESGCM(
+            _derive_key_bytes(key, iterations=iterations)
+        )
+    return _legacy_aesgcms[cache_key]
 
 
 def _get_legacy_fernet(key: str) -> Fernet:
+    # Fernet values all predate the iteration bump — pin to V1.
     if key not in _legacy_fernets:
-        _legacy_fernets[key] = Fernet(base64.urlsafe_b64encode(_derive_key_bytes(key)))
+        _legacy_fernets[key] = Fernet(
+            base64.urlsafe_b64encode(
+                _derive_key_bytes(key, iterations=_KDF_ITERATIONS_V1)
+            )
+        )
     return _legacy_fernets[key]
 
 
@@ -472,9 +524,9 @@ def reset_encryption_ciphers() -> None:
     (key-rotation tooling, tests) — the module-level caches would otherwise
     keep encrypting under the old key.
     """
-    global _cipher, _aesgcm
+    global _cipher
     _cipher = None
-    _aesgcm = None
+    _aesgcms_by_iterations.clear()
     _legacy_aesgcms.clear()
     _legacy_fernets.clear()
 
@@ -526,11 +578,15 @@ def decrypt_data(encrypted_data: str) -> str:
     if not encrypted_data:
         return ""
 
-    if encrypted_data.startswith(_GCM_PREFIX):
-        raw = base64.urlsafe_b64decode(encrypted_data[len(_GCM_PREFIX) :])
+    for prefix, iterations in _GCM_PREFIX_ITERATIONS.items():
+        if not encrypted_data.startswith(prefix):
+            continue
+        # The marker, not the current default, decides the work factor: a
+        # `$gcm1$` value is only readable with a key derived at V1.
+        raw = base64.urlsafe_b64decode(encrypted_data[len(prefix) :])
         nonce, ciphertext = raw[:_GCM_NONCE_BYTES], raw[_GCM_NONCE_BYTES:]
         try:
-            return _get_aesgcm().decrypt(nonce, ciphertext, None).decode()
+            return _get_aesgcm(iterations).decrypt(nonce, ciphertext, None).decode()
         except InvalidTag:
             # Key-rotation ring: values written before a rotation decrypt
             # under a legacy key. GCM authentication guarantees only the
@@ -539,7 +595,7 @@ def decrypt_data(encrypted_data: str) -> str:
             for legacy_key in _get_legacy_keys():
                 try:
                     return (
-                        _get_legacy_aesgcm(legacy_key)
+                        _get_legacy_aesgcm(legacy_key, iterations)
                         .decrypt(nonce, ciphertext, None)
                         .decode()
                     )
@@ -564,18 +620,26 @@ def decrypt_data(encrypted_data: str) -> str:
 
 
 def decrypts_with_current_key(encrypted_data: str) -> bool:
-    """Whether a stored value decrypts under the CURRENT key alone.
+    """Whether a stored value is written under the CURRENT key and scheme.
 
-    False means the value depends on a legacy ring key (or doesn't decrypt
-    at all) — the rotation script uses this to find rows needing rewrite.
+    False means the value depends on a legacy ring key, uses a superseded
+    scheme, or doesn't decrypt at all — the rotation script uses this to find
+    rows needing rewrite.
+
+    A `$gcm1$` value reports False even though the current key *can* read it:
+    its key was derived at the old work factor, so rewriting it is what moves
+    the row onto the current KDF. That gives the iteration bump a migration
+    path through the tooling that already exists.
     """
     if not encrypted_data:
         return True
     try:
-        if encrypted_data.startswith(_GCM_PREFIX):
-            raw = base64.urlsafe_b64decode(encrypted_data[len(_GCM_PREFIX) :])
+        if encrypted_data.startswith(_GCM_PREFIX_V2):
+            raw = base64.urlsafe_b64decode(encrypted_data[len(_GCM_PREFIX_V2) :])
             nonce, ciphertext = raw[:_GCM_NONCE_BYTES], raw[_GCM_NONCE_BYTES:]
             _get_aesgcm().decrypt(nonce, ciphertext, None)
+        elif encrypted_data.startswith(_GCM_PREFIX_V1):
+            return False
         else:
             _get_cipher().decrypt(encrypted_data.encode())
         return True

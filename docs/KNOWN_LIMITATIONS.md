@@ -27,6 +27,18 @@ which is a deliberate decision rather than a mechanical repair. **The
 resolved** — adding it today would make CI red on `main` for defects that
 predate it.
 
+Reproduce with a migrated database running:
+
+```bash
+cd backend && RUN_API_CONTRACT_TESTS=1 pytest tests/test_api_contract.py -v --timeout=300
+```
+
+The env gate exists because the module has to build its schema at import
+time (schemathesis generates the test functions from decorators), and pytest
+imports every test module during collection — so without the gate an
+ordinary `pytest tests/` would boot a server, run migrations and hold
+database connections on every run.
+
 | Item | Status | Detail |
 |------|--------|--------|
 | **Custom 422 body contradicts the declared schema** | Open (MED) | `main.py`'s `RequestValidationError` handler returns `{"detail": [{"field", "message"}]}`, but FastAPI still advertises its stock `ValidationError` (`loc`/`msg`/`type` all required) for every 422 in the schema. Affects the whole API, not just public routes; the frontend's `toAppError()` was written against the *real* shape. Fix by declaring the custom model and overriding the generated responses. Fails 3 endpoints outright. |

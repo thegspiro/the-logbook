@@ -5,7 +5,7 @@ Schemathesis auto-generates test cases from the FastAPI OpenAPI schema
 to find responses that don't match declared schemas, unhandled edge
 cases, and server errors.
 
-Run with: pytest tests/test_api_contract.py -v --timeout=300
+Run with: RUN_API_CONTRACT_TESTS=1 pytest tests/test_api_contract.py -v --timeout=300
 
 These tests are marked 'slow' since they generate many requests.
 
@@ -28,6 +28,7 @@ the responses a deployed instance returns, not what an in-process harness
 synthesises.
 """
 
+import os
 import socket
 import threading
 import time
@@ -108,19 +109,39 @@ def _start_server() -> str:
     )
 
 
-# The schema has to exist at import time — schemathesis's pytest integration
-# generates the test functions from decorators. Anything that goes wrong here
-# skips the module rather than failing collection for every other suite.
-try:
-    BASE_URL = _start_server()
-    schema = schemathesis.openapi.from_url(f"{BASE_URL}/openapi.json")
-    SCHEMA_AVAILABLE = True
-    SKIP_REASON = ""
-except Exception as exc:  # pragma: no cover - environment-dependent
+# Opt-in, because the work below happens at IMPORT time and pytest imports
+# every test module during collection — including when `-m "not slow"`
+# deselects everything in here. Starting a server unconditionally therefore
+# booted the app, ran migrations and held database connections during every
+# ordinary test run, which broke hundreds of unrelated DB-backed tests.
+#
+# The schema must be built at import: schemathesis's pytest integration
+# generates the test functions from `@schema.parametrize()` decorators, so
+# there is no later hook to defer to. An env gate is the honest way to keep
+# that cost out of runs that did not ask for it.
+_ENABLED = os.environ.get("RUN_API_CONTRACT_TESTS") == "1"
+
+if not _ENABLED:
     BASE_URL = ""
     schema = None
     SCHEMA_AVAILABLE = False
-    SKIP_REASON = f"Contract-test server unavailable: {exc}"
+    SKIP_REASON = (
+        "Set RUN_API_CONTRACT_TESTS=1 to run the API contract suite "
+        "(it starts a server and needs a migrated database)"
+    )
+else:
+    # Anything that goes wrong here skips the module rather than failing
+    # collection for every other suite.
+    try:
+        BASE_URL = _start_server()
+        schema = schemathesis.openapi.from_url(f"{BASE_URL}/openapi.json")
+        SCHEMA_AVAILABLE = True
+        SKIP_REASON = ""
+    except Exception as exc:  # pragma: no cover - environment-dependent
+        BASE_URL = ""
+        schema = None
+        SCHEMA_AVAILABLE = False
+        SKIP_REASON = f"Contract-test server unavailable: {exc}"
 
 
 @pytest.mark.skipif(not SCHEMA_AVAILABLE, reason=SKIP_REASON or "server unavailable")

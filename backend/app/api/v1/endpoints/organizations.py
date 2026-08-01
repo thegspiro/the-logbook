@@ -10,10 +10,15 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    _collect_user_permissions,
+    _has_permission,
+    get_current_user,
+    require_permission,
+)
 from app.core.audit import log_audit_event
-from app.core.security_middleware import get_client_ip
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import Role, User
 from app.schemas.organization import (
@@ -59,6 +64,13 @@ async def get_organization_settings(
     # SEC: Redact secrets (OAuth client secrets, SMTP passwords, etc.)
     # before returning to the client to prevent credential exfiltration.
     redacted = response.redacted()
+
+    # SEC (ORU-8): this endpoint is open to every authenticated member, so
+    # also strip the infrastructure identifiers those secrets authenticate to
+    # (mail host, S3 bucket/endpoint, SSO issuer, OAuth tenant/client IDs)
+    # unless the caller actually administers settings.
+    if not _has_permission("settings.manage", _collect_user_permissions(current_user)):
+        redacted = redacted.without_infrastructure()
 
     # Return as dict so FastAPI's response_model validation preserves
     # extra fields (e.g. station_mode).  Pydantic V2 drops __pydantic_extra__
@@ -1080,7 +1092,8 @@ async def set_retention_policy(
     try:
         result = await RetentionService(db).set_policy(org, record_class, days)
     except ValueError as e:
-        from fastapi import HTTPException, status as http_status
+        from fastapi import HTTPException
+        from fastapi import status as http_status
 
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
