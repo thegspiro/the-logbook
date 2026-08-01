@@ -83,7 +83,6 @@ BACKEND_PORT=3001
 Create `frontend/.env`:
 ```bash
 VITE_API_URL=/api/v1
-VITE_ENV=production
 ```
 
 > **Important:** Vite bakes environment variables at build time. After changing these, rebuild the frontend.

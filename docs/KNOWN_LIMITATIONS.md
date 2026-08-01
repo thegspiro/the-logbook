@@ -64,19 +64,48 @@ database connections on every run.
 |------|--------|--------|
 | **`SECRET_KEY` guidance mismatch** | Open decision | README suggests `openssl rand -hex 32` (32 chars) while the documented recommendation is 64 chars (config hard-min is 32). Align the guidance to one number. |
 | **`.env.example` defaults to `ENVIRONMENT=production`** | Open decision | In production, config makes `SECURITY_ENFORCE_HTTPS=True` and a non-empty `REDIS_PASSWORD` startup-blocking, neither of which is in the quick-start example — so a by-the-book quick start is blocked at startup. Decide whether the example should default to `development`. |
-| **`VITE_WS_URL` / `VITE_ENABLE_PWA` documented but unused** | Open decision | Declared in `vite-env.d.ts` and the env docs but never read in `frontend/src`. Confirm whether they're planned/tooling-only before removing from docs. |
 
 ## Training Module
 
 | Item | Status | Detail |
 |------|--------|--------|
-| **Per-user training endpoints not in `UNCACHEABLE_PREFIXES`** | Open decision (PHI) | `/training/compliance-summary/{id}`, `/requirements/progress/{id}`, `/category-hours/{id}`, and org-wide `/compliance-matrix` / `/expiring-certifications` are cacheable by the SWR client cache. Decide which are PHI-sensitive enough to exclude (see the HIPAA cache rules in CLAUDE.md). |
 | **`BIANNUAL` requirement frequency has no date window** | Verify | `training_compliance.py` sums lifetime totals for hours/shift/call requirements on a `BIANNUAL` cadence instead of a 2-year window. Confirm `BIANNUAL` is only used with expiry-bearing certs; otherwise add a 2-year window. |
 | **`enrolled_count` is a placeholder** | Open (small feature) | `TrainingProgramsPage` shows a hardcoded "0 enrolled" — there is no `enrolled_count` on the program response yet. Wiring it is a small backend + schema addition (the per-program enrollments endpoint `GET /training/programs/programs/{id}/enrollments` now exists to source it). |
 | **No knowledge-test engine (officer-entered scores only)** | Open (feature) | `knowledge_test` requirements are satisfied by an officer entering a pass/fail or score % on the requirement (pass/fail derived from `passing_score`, `max_attempts` enforced, attempts recorded). There is no online test-taking flow — question bank, delivery, or auto-grading. That is a deliberate future project; the current support is the lightweight groundwork. |
 | **Skills-test completion does not enforce requirement `max_attempts`** | Open (small) | A passing `SkillTest` marks its linked pipeline requirement complete, but the Skills Testing flow doesn't block creating/completing further tests once the linked requirement's `max_attempts` is reached (only the officer-entered knowledge-test scoring path enforces the cap). |
 
 ## Scheduling Module
+
+### "Shifts" and "hours" mean different things on different endpoints
+
+Four endpoints report a shift count and three report member hours, from three
+different tables. The numbers are each correct for their own question, but two
+of them ship under the *same field name* with incompatible meanings, so a
+member comparing their dashboard against a report sees a discrepancy that
+looks like a bug.
+
+Counts:
+
+| Call site | Field | Counts |
+|-----------|-------|--------|
+| `reports_service.py:654` | `shifts_completed` | `ShiftCompletionReport` rows, per member |
+| `training_module_config.py:412` | `shift_stats.total_shifts` | `ShiftCompletionReport` rows, per member — same meaning as above, different name |
+| `scheduling_service.py:1567` | `total_shifts` | `Shift` rows, org-wide — **scheduled shifts, not completed ones** |
+| `scheduling_service.py:3672` | `total_shifts_assigned` | `ShiftAssignment` rows, per member |
+
+Hours:
+
+| Call site | Field | Measures |
+|-----------|-------|----------|
+| `scheduling_service.py:3753` `get_member_hours_report` | `total_hours` | **Scheduled**: summed `Shift.end_time - Shift.start_time` over the member's assignments. A shift assigned but never worked still counts. |
+| `reports_service.py:695` | `shift_hours` | **Actual**: summed `ShiftCompletionReport.hours_on_shift`. Exists only where a completion report was filed. |
+
+Left open rather than fixed: the clash is in response field *names*, which the
+frontend destructures, so renaming is a breaking change and a product decision
+(which figure should "hours" mean by default?) rather than a mechanical
+repair. The likely fix is to name them for what they measure —
+`scheduled_hours` / `reported_hours`, and `shifts_scheduled` /
+`shifts_completed` — and surface both where a member compares them.
 
 | Item | Status | Detail |
 |------|--------|--------|

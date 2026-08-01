@@ -7,6 +7,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security & correctness follow-up (2026-08-01)
+
+**Fixed**
+
+- **Offline queues shared one database at two versions.** `offlineQueue.ts`
+  opened `logbook-offline` at version 1 while `shiftReportOfflineQueue.ts`
+  opened the same database at version 2. IndexedDB rejects an open below the
+  stored version, so the first queued shift report permanently broke
+  equipment-check queueing on that browser profile. Name, version and upgrade
+  path now live in one shared module.
+- **A blocked IndexedDB open never settled.** `open()` fires `blocked` — and
+  neither `success` nor `error` — when another tab holds the database during
+  an upgrade, so the promise hung forever. Logout awaits the shared-device
+  purge, so this could strand a member signed in on a station computer. Opens
+  now reject on `blocked` and on timeout, close a handle that arrives late,
+  and set `onversionchange` so an open tab stops blocking other tabs.
+- **Queued shift reports were never purged at logout** — the densest PII of
+  any offline store (crew rosters, trainee evaluations, narratives).
+- **The dashboard could white-screen.** `progress?.requirement_progress
+  .filter()` guarded the object but not the array, so an enrollment whose
+  progress payload omitted the key threw during render and the ErrorBoundary
+  replaced the whole page.
+- **Notification rows nested a `<button>` inside a `<button>`**, which is
+  invalid HTML — the browser closes the outer element early and assistive
+  technology receives a broken tree.
+- **`/training/category-hours/` was cacheable** by the client SWR cache
+  despite being per-member training data; added to `UNCACHEABLE_PREFIXES`.
+- **Four documented frontend env vars did nothing.** `VITE_WS_URL`,
+  `VITE_ENV`, `VITE_ENABLE_PWA` and `VITE_ENABLE_ANALYTICS` were declared and
+  documented but read by no code. Two were actively misleading: the inventory
+  socket derives its URL from the page origin (which is what makes it work
+  behind a reverse proxy), and the PWA plugin is registered unconditionally,
+  so setting `VITE_ENABLE_PWA=false` still shipped the service worker whose
+  `NetworkOnly` rule for `/api/` is part of the HIPAA caching posture.
+  Removed from the type declaration and from every doc that listed them.
+
+**Security**
+
+- **Administrator lockout guard (ORU-7).** Nothing counted how many
+  administrators an organization had left, so a sole administrator could lock
+  out a whole department in one request — `PATCH` their own status to
+  `inactive` and authentication rejects them on the next call. Recovery
+  required direct database access. Guarded on role assignment and removal,
+  member delete, status change, archive, and position edit/delete.
+- **Separation of duties on approvals** (ISO/IEC 27001 A.5.3). A treasurer
+  could raise a check request and approve it; an instructor could examine
+  themselves and record a pass that satisfied a certification requirement; an
+  officer could approve their own administrative hours. Approval now requires
+  a second person on all three. Practice skills tests stay self-serve, and
+  rejection is never blocked — withdrawing your own request is not a conflict.
+- **Unverified TLS fails closed.** `DB_SSL`/`REDIS_SSL` without a CA gives an
+  encrypted channel whose peer is never authenticated, which is worse than
+  honest plaintext because it is indistinguishable from a correct setup. Now
+  blocks startup in production/staging; `SECURITY_ALLOW_UNVERIFIED_TLS` waives
+  it and logs the acceptance on every boot.
+- **PBKDF2 raised to 600,000 iterations** for the data-encryption key, with
+  100k retained so existing ciphertext stays readable. New values carry a
+  `$gcm2$` marker; the existing key-rotation tooling rewrites `$gcm1$` values
+  onto the new factor.
+- **Two endpoints over-shared (ORU-8).** `GET /users/with-roles` returned
+  every column on the user model while `GET /users` filtered contact details
+  against the organization's visibility setting — both need only `users.view`,
+  so the setting was bypassable by choosing the other URL. And
+  `GET /organization/settings`, open to every authenticated member, redacted
+  credentials but not the infrastructure they authenticate to (mail host, S3
+  bucket and endpoint, SharePoint site, SSO issuer, OAuth tenant and client
+  IDs). Both now redact for callers without the relevant admin permission.
+
+**Testing & CI**
+
+- **Playwright E2E and container tests now run in CI.** Neither had ever run.
+  Repairing the E2E suite is what surfaced the two dashboard defects above;
+  the container job is the first thing in CI to build a production image.
+- **API contract tests unblocked.** They could never finish — schemathesis's
+  ASGI transport re-ran the app's whole lifespan per generated case, blocking
+  forever without a database. Now ~20 seconds. The findings (published OpenAPI
+  disagreeing with actual responses) are recorded in
+  `docs/KNOWN_LIMITATIONS.md`; the CI job stays unwired until they are
+  resolved.
+
 ### Compliance: ISO standards alignment — privacy, records, and operations (2026-07-31)
 
 A gap assessment against the ISO/IEC standards relevant to the platform

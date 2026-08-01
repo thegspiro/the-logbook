@@ -47,6 +47,7 @@ const UNCACHEABLE_PREFIXES = [
   '/training/reports/user/',  // individual training reports
   '/training/compliance-summary/', // per-member compliance status
   '/training/requirements/progress/', // per-member requirement progress
+  '/training/category-hours/', // per-member hours by category (GET /category-hours/{user_id})
   '/training/competency/',    // per-member competency evaluations
   '/training/recertification/tasks/', // per-member renewal tasks
   '/training/module-config/my-training', // current user's full training record

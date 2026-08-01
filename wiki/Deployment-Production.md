@@ -127,7 +127,6 @@ ALLOWED_ORIGINS=["https://your-domain.com"]
 
 # Frontend build
 VITE_API_URL=/api/v1
-VITE_ENV=production
 ```
 
 ---
