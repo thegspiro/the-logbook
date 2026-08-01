@@ -4,7 +4,7 @@
 **Estimated Length:** 30–40 minutes
 **Target Audience:** IT Managers, System Owners, technically responsible personnel
 **Role:** IT Manager (wildcard `*` permission — full system access)
-**Chapters:** 10 (each designed as a standalone clip)
+**Chapters:** 11 (each designed as a standalone clip)
 
 ---
 
@@ -32,7 +32,8 @@ IP Security, Platform Analytics.]**
 > management. Security settings — two-factor authentication, IP restrictions,
 > session policies. Module configuration and feature flags. Integrations with
 > external services. Monitoring, analytics, and error tracking. Backup and
-> maintenance routines. And common admin tasks you'll do regularly."
+> maintenance routines. Privacy, records retention, and member data rights. And
+> common admin tasks you'll do regularly."
 
 > "Even if you're not the 'IT person,' if you've been handed the System Owner
 > account, this is your video. Let's dive in."
@@ -582,25 +583,164 @@ docker compose exec mysql mysqldump -u root -p intranet_db > backup_$(date +%Y%m
 > "**File Storage:** Uploaded documents, member photos, logos, and attachments
 > are stored in the uploads volume. Back this up alongside the database."
 
-> "For automated backups, you can set the `BACKUP_ENABLED` environment variable
-> and configure the backup schedule, retention period, and storage location in
-> your `.env` file."
+> "**Audit archives:** One more, and it's easy to miss. When old audit entries
+> pass the seven-year retention period, they're exported to archive files and
+> removed from the database. Those archives are the *only* copy of your oldest
+> audit history — back up that directory too."
 
-**[SCREEN: Show the backup-related environment variables]**
+> "Now, the good news: if you're running the production compose file, you don't
+> have to wire any of this up yourself. There's a backup service built in."
 
-> "The minimum viable backup strategy: a daily database dump to an external
-> drive or cloud storage, with at least 30 days of retention. For HIPAA
-> compliance, ensure backups are encrypted and access-controlled."
+**[SCREEN: Show the `backup` service in docker-compose.prod.yml]**
 
-**[CALLOUT: "HIPAA: Backups must be encrypted and access-controlled"]**
+> "Every night it snapshots the database, the uploads, and the audit archives
+> into a backups volume, and prunes anything older than your retention setting.
+> Three environment variables control it: `BACKUP_TIME`, which is the run time
+> in UTC; `BACKUP_RETENTION_DAYS`; and `VERIFY_EVERY_N_BACKUPS`."
+
+**[SCREEN: Show BACKUP_TIME, BACKUP_RETENTION_DAYS, VERIFY_EVERY_N_BACKUPS]**
+
+> "That third one is my favorite feature in the whole platform, and I want to
+> explain why it matters."
+
+**[CALLOUT: "A backup you've never restored is a hope, not a plan"]**
+
+> "Every seventh backup, the service takes the dump it just made, loads it into
+> a scratch database, checks that the tables actually came back, and throws the
+> scratch database away. It proves the backup restores. If that check ever
+> fails, it screams in the logs every single night until somebody fixes it."
+
+> "I have seen departments discover their backups were empty at the exact
+> moment they needed them. This is the thing that prevents that."
+
+**[SCREEN: `docker compose logs backup` showing a passing verification]**
+
+> "You can also run a drill by hand against any archive:"
+
+```bash
+docker compose exec backup bash /scripts/verify_backup.sh \
+  /backups/logbook_backup_20260731_020000.tar.gz
+```
+
+> "Two things the service can't do for you. First, that backups volume is on
+> the same machine — sync it somewhere else. S3, a NAS, another building. A
+> backup that dies with the host is not a backup."
+
+**[CALLOUT: "Sync backups OFFSITE — same host is not a backup"]**
+
+> "Second, and this one bites people: your encryption keys are deliberately
+> *not* in the backup, so a leaked archive doesn't leak your credentials. But
+> that means a database backup without its `ENCRYPTION_KEY` and
+> `ENCRYPTION_SALT` cannot decrypt the encrypted fields. Store those offline,
+> in two places, and keep retired keys with the backups from their era."
+
+**[CALLOUT: "No keys = no decryption. Store them offline, separately."]**
+
+> "For HIPAA, ensure backups are encrypted and access-controlled — and write
+> your recovery objectives down. How much data can you afford to lose, and how
+> long can you be down? The docs walk through setting both."
 
 **[TRANSITION: Common tasks]**
 
 ---
 
-## CHAPTER 10: Common Admin Tasks Quick Reference (33:00 – 36:00)
+## CHAPTER 10: Privacy, Retention & Member Data Rights (33:00 – 37:00)
 
-### QUICK REFERENCE (33:00 – 36:00)
+### RECORDS RETENTION (33:00 – 34:30)
+
+**[SCREEN: Settings → Organization → Retention]**
+
+> "Here's a question most departments have never had a good answer to: how long
+> do you actually keep things? Not policy-on-paper — how long does the *system*
+> keep them?"
+
+> "Now you set that. Each class of record has its own retention: message
+> history, notification logs, form submissions. Message history defaults to
+> ninety days. The other two default to keeping everything forever, so nothing
+> disappears until you deliberately opt in."
+
+**[SCREEN: Show the retention table with the three record classes]**
+
+> "Every class has a minimum you can't go below. That's not the platform being
+> bossy — it's a guard against typing three when you meant thirty and erasing
+> last month. The floor is enforced when you save it *and* again when the job
+> runs, so even a value edited straight into the database gets clamped."
+
+**[CALLOUT: "Floors prevent a typo from erasing recent records"]**
+
+> "One deliberate omission, and I want to be clear about it: **documents and
+> meeting minutes are never automatically deleted.** Those are official
+> records. Destroying them is a decision a person makes under your department's
+> records schedule — not something a timer does at three in the morning."
+
+**[CALLOUT: "Documents & minutes: never auto-deleted, by design"]**
+
+### MEMBER DATA RIGHTS (34:30 – 36:00)
+
+**[SCREEN: A member's Settings → Security page showing Privacy Choices and Your Data]**
+
+> "Two things your members can now do without asking you."
+
+> "First, **privacy choices**. Photo use, appearing on the public roster, and
+> text-message notifications. None of these are required for membership, and
+> here's the part that matters legally: if a member has never answered, the
+> system treats it as a no. Silence is never consent. Text messaging especially
+> — US telephone rules require express opt-in, and this is where you get it."
+
+**[SCREEN: Show the three consent checkboxes, one labeled "(not answered)"]**
+
+> "Every change lands in the audit log, so you have a permanent record of who
+> agreed to what and when. That log can't be edited, which is exactly what
+> makes it useful as a consent record."
+
+> "Second, **Download my data**. A member clicks one button and gets everything
+> the system holds about them as a file — profile, training, attendance, dues,
+> medical screening, all of it. No password hashes, no two-factor secrets, and
+> no ability to point it at anyone else's record."
+
+**[CALLOUT: "Members export their own data — you don't assemble it"]**
+
+> "When someone asks 'what do you have on me,' that used to be your afternoon.
+> Now it's their thirty seconds."
+
+### ANONYMIZING A DEPARTED MEMBER (36:00 – 37:00)
+
+**[SCREEN: An archived member's record showing the Anonymize action]**
+
+> "Last one, and it's the one to understand before you use it. When a member
+> leaves, you still need their history — training completions, attendance
+> percentages, what gear they had. You do *not* need their home address, date of
+> birth, and medical details forever."
+
+> "**Anonymize** splits those apart. It scrubs the identity — name, contacts,
+> address, birthdate, photo, emergency contacts, medical findings, even the
+> original application with its interview notes and uploaded ID. It keeps the
+> operational record: certifications, hours, attendance, property custody, and
+> the *fact* that a medical clearance existed and when it expired."
+
+**[CALLOUT: "Identity removed. History kept."]**
+
+> "Two things it never touches: the audit log, because it's cryptographically
+> chained and rewriting it would break integrity verification — the
+> anonymization event itself records only an internal ID, never the name. And
+> election records, because ballot signatures have to stay intact."
+
+> "It's irreversible, it only works on members who've already been dropped or
+> archived, and you can't run it on yourself. Do it *after* departure clearance
+> is finished and after whatever waiting period your retention policy sets."
+
+**[CALLOUT: "Irreversible — run after clearance, per your retention policy"]**
+
+> "And tell people on their way out to download their data first. It saves a
+> phone call six months later."
+
+**[TRANSITION: Common tasks]**
+
+---
+
+## CHAPTER 11: Common Admin Tasks Quick Reference (37:00 – 40:00)
+
+### QUICK REFERENCE (37:00 – 40:00)
 
 > "Let me wrap up with a quick-reference of the most common tasks you'll perform
 > as IT Manager."
@@ -659,4 +799,7 @@ docker compose exec mysql mysqldump -u root -p intranet_db > backup_$(date +%Y%m
 | Email Configuration | 23:00–24:00 | "Setting Up Email Notifications" |
 | Updating The Logbook | 29:30–31:00 | "How to Update The Logbook (Docker)" |
 | Backup Strategy | 31:00–33:00 | "Backing Up Your Logbook Data" |
-| Admin Quick Reference | 33:00–36:00 | "IT Manager Quick Reference Guide" |
+| Records Retention | 33:00–34:30 | "How Long Does The Logbook Keep Your Records?" |
+| Member Data Rights | 34:30–36:00 | "Privacy Choices & Data Export for Members" |
+| Anonymizing a Departed Member | 36:00–37:00 | "Removing a Former Member's Personal Data" |
+| Admin Quick Reference | 37:00–40:00 | "IT Manager Quick Reference Guide" |

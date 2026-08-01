@@ -26,7 +26,8 @@ The Logbook includes security features designed with HIPAA (Health Insurance Por
 | Log retention | 7-year retention (2555 days), exceeds 6-year HIPAA minimum |
 | Periodic verification | Daily integrity checkpoints |
 | Export capability | JSON export for compliance reporting |
-
+| Retention of audit records | 7 years, **enforced** — expired entries are exported to signed archives before purge, with an attested chain hand-off *(2026-07-31)* |
+| Protection against log destruction | Optional off-host shipping of every entry to an external collector/SIEM as HMAC-signed batches *(2026-07-31)* |
 ### Integrity (§ 164.312(c))
 
 | HIPAA Requirement | Feature |
@@ -134,6 +135,19 @@ If The Logbook is hosted by a third party (cloud provider), ensure you have a si
 - Any third-party integrations that access PHI
 
 For self-hosted deployments (Unraid, on-premises), the BAA requirement applies to any external services you integrate.
+
+---
+
+## Individual Rights (Privacy Rule) *(2026-07-31)*
+
+| Right | Implementation |
+|-------|----------------|
+| Right of access | Members download a complete personal-data export, including their medical screening records, from Settings → Security |
+| Accounting of disclosures | Access to PHI is recorded in the tamper-evident audit log |
+| Minimum necessary | Medical screening carries dedicated permissions; holding a general admin role does not imply medical access |
+| Consent for optional processing | Photo use, public roster listing, and SMS notifications are consent-gated, with an immutable consent ledger in the audit log |
+
+Full detail: [Privacy & Data Rights](Security-Privacy).
 
 ---
 

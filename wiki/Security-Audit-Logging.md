@@ -22,6 +22,8 @@ Every significant action in the system is recorded in the audit log with:
 | Category | Actions |
 |----------|---------|
 | **Authentication** | Login, logout, failed login, password change, MFA setup |
+| **Privacy** | Personal-data export (`user_data_export`), member anonymization (`user_anonymized` — records the user id only, never the name), consent changes (`consent_updated`) *(2026-07-31)* |
+| **Records Retention** | Retention-policy changes (`retention_policy_updated`), audit archival and purge (`audit_log_archival`) *(2026-07-31)* |
 | **User Management** | Create, update, delete, status change, role assignment |
 | **Training** | Record creation, approval, rejection, waiver creation |
 | **Elections** | Election create/update/delete, open/close/rollback, votes cast (auth, token, bulk, proxy), blocked double-vote attempts, ballot emails sent, voter overrides, proxy authorizations, vote soft-deletes, integrity checks, forensics report access, pre-meeting package sends/downloads |
@@ -112,9 +114,52 @@ hash chain, so redacting it does not affect integrity verification.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Retention period | 2555 days (7 years) | Exceeds HIPAA 6-year minimum |
+| Retention period | 2555 days (7 years) | `HIPAA_AUDIT_RETENTION_DAYS`; exceeds HIPAA 6-year minimum |
 | Checkpoint interval | Daily | Automatic integrity verification |
 | Export format | JSON | For compliance reporting |
+| Archive directory | `./audit_archives` | `AUDIT_ARCHIVE_DIR` — where purged rows are exported *(2026-07-31)* |
+
+### Retention Enforcement *(2026-07-31)*
+
+The retention period is now **applied**, not merely declared. The weekly
+`audit_log_archival` task exports rows past retention to gzipped JSONL
+archives and then deletes them from the table.
+
+Deleting the oldest rows is exactly what the chain's head-anchor check exists
+to catch, so the purge is designed not to look like tampering:
+
+- **Checkpoint-aligned** — only whole checkpoint-covered ranges are purged, so
+  the retained checkpoint Merkle roots still prove the exported archive.
+- **Integrity-gated** — the range is verified immediately before export; a
+  chain that fails verification is never purged.
+- **Attested** — the boundary checkpoint records the last purged row's chain
+  hash plus a keyed HMAC attestation. The surviving chain head verifies
+  against that boundary instead of the genesis hash. An attacker with database
+  access can delete rows and set the columns, but cannot mint a valid
+  attestation without the audit signing key, so unsanctioned head deletion and
+  forged attestations both still fail verification.
+
+> ⚠️ **Back up `AUDIT_ARCHIVE_DIR`.** After a purge, those archives are the
+> only copy of the oldest audit history. The production backup sidecar
+> includes them automatically.
+
+### Off-Host Shipping *(2026-07-31)*
+
+The hash chain makes tampering *detectable*, but it cannot survive an attacker
+deleting the whole table. Set `AUDIT_SHIP_WEBHOOK_URL` and the
+`audit_log_ship` task (every 30 minutes) POSTs new entries to your collector
+or SIEM as NDJSON batches:
+
+- Each request carries `X-Logbook-Signature: sha256=<hex>` — an HMAC of the
+  exact body, keyed with the audit signing key — so the collector can
+  authenticate the sender, plus `X-Logbook-First-Id` / `X-Logbook-Last-Id`.
+- A durable high-water mark (`audit_ship_state`) advances **only** after the
+  collector answers 2xx, per batch. A failed delivery is retried on the next
+  run; acknowledged rows are never re-shipped.
+- Batches are bounded per run, so first enablement on an old install drains
+  gradually instead of blocking the scheduler.
+
+Unset, the task is a no-op.
 
 ---
 

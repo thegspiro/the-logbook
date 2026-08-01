@@ -478,11 +478,20 @@ openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 ### Automated Backups
 
 ```bash
-# Enable in .env
-BACKUP_ENABLED=true
-BACKUP_SCHEDULE=0 2 * * *  # Daily at 2 AM
-BACKUP_RETENTION_DAYS=30
+# Backups run via the `backup` service in docker-compose.prod.yml
+# (or scripts/backup.sh from cron). There is no on/off env flag —
+# enable them by running the production compose profile.
+BACKUP_TIME=02:00            # Daily run time, UTC HH:MM
+BACKUP_RETENTION_DAYS=30     # Prune archives older than this
+VERIFY_EVERY_N_BACKUPS=7     # Automated restore-drill cadence; 0 disables
 ```
+
+Every seventh backup, the sidecar loads the fresh dump into a throwaway schema
+and verifies the schema restored — a failed drill fails loudly every night
+until it is fixed. Sync the `backups` volume offsite, and store
+`ENCRYPTION_KEY`/`ENCRYPTION_SALT` separately: a backup without its era's keys
+cannot decrypt encrypted fields. See [docs/BACKUP.md](../docs/BACKUP.md).
+*(2026-07-31)*
 
 ### Manual Backup
 
@@ -555,7 +564,7 @@ docker compose -f docker-compose.yml -f docker-compose.arm.yml up -d
 Two templates ship with the project:
 
 - **`.env.example`** — Quick-start config (~30 variables). Covers security keys, database, Redis, CORS, ports, timezone, basic module toggles, email, and backups. This is sufficient for most single-server deployments and defaults to `ENVIRONMENT=production`.
-- **`.env.example.full`** — Complete reference (~100+ variables). Includes everything in the quick-start file plus cloud file storage (AWS S3, Azure Blob, Google Cloud Storage), OAuth/SSO (Azure AD, Google OAuth, LDAP), SMS via Twilio, fine-grained HIPAA controls (session timeout, password age/history, audit retention), advanced security (IP whitelisting, geofencing, account lockout, cookie settings), compliance toggles (GDPR, CCPA, Section 508), feature flags, infrastructure ports (Nginx, Elasticsearch, MinIO, MailHog), and development tools (database seeding, profiling, mock email/SMS). Defaults to `ENVIRONMENT=development`.
+- **`.env.example.full`** — Complete reference (~100+ variables). Includes everything in the quick-start file plus cloud file storage (AWS S3, Azure Blob, Google Cloud Storage), OAuth/SSO (Azure AD, Google OAuth), SMS via Twilio, fine-grained HIPAA controls (session timeout, password age/history, audit retention), advanced security (IP whitelisting, geofencing, account lockout, cookie settings), compliance toggles (GDPR, CCPA, Section 508), feature flags, infrastructure ports (Nginx, Elasticsearch, MinIO, MailHog), and development tools (database seeding, profiling, mock email/SMS). Defaults to `ENVIRONMENT=development`.
 
 **Recommendation:** Start with `.env.example`. If you later need cloud storage, SSO, or advanced security tuning, add the relevant variables from `.env.example.full` — they are fully compatible.
 

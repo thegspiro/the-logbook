@@ -373,8 +373,8 @@ These require breaking changes and are scheduled for next major release:
 ## Getting Help
 
 ### Documentation
-- [Unraid Installation Guide](./unraid/UNRAID-INSTALLATION.md)
-- [Onboarding Flow Documentation](./docs/ONBOARDING_FLOW.md)
+- [Unraid Installation Guide](../unraid/UNRAID-INSTALLATION.md)
+- [Onboarding Flow Documentation](../docs/ONBOARDING_FLOW.md)
 - [Main README](./README.md)
 
 ### Support Channels

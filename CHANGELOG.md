@@ -7,6 +7,171 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Compliance: ISO standards alignment — privacy, records, and operations (2026-07-31)
+
+A gap assessment against the ISO/IEC standards relevant to the platform
+(`docs/ISO_STANDARDS_ASSESSMENT.md`) and the implementation of its full
+roadmap. Departments can now demonstrate data-subject rights, records
+retention, and continuity practices that previously had no software support.
+
+**Added**
+
+- **Privacy pages** — public `/privacy` and `/terms` with substantive
+  fire-service defaults (PHI, emergency contacts, retention, member rights,
+  essential-cookies-only). Departments override the wording via organization
+  settings (`legal.privacy_policy` / `legal.terms_of_service`), served by an
+  anonymous, rate-limited `GET /api/public/v1/legal`. Custom text renders as
+  plain paragraphs, never HTML; multi-org installs get defaults only.
+- **Personal data export** (ISO/IEC 27701 portability, HIPAA right of
+  access) — `GET /users/me/data-export` returns everything the system holds
+  about the calling member as JSON: profile and emergency contacts, training
+  and certifications, shift/event/meeting attendance, admin hours, leaves,
+  medical screening, skill tests, dues, equipment custody, consents, and
+  evaluations about them. Self-scoped, audited, rate-limited (3/hour);
+  credentials, MFA secrets, and tokens are never exported. Audit history is
+  summarized rather than dumped. UI: Settings → Security → "Download my data".
+- **Member anonymization** (right to erasure) — `POST /users/{id}/anonymize`
+  for departed members: scrubs names, contacts, address, DOB, photo,
+  emergency contacts, credentials, MFA material and tokens; deletes sessions,
+  password history, and body-measurement rows; scrubs medical-screening
+  content (keeping status/dates as compliance proof), free-text reasons on
+  leaves/waivers/time-off, RSVP dietary and accessibility notes, and the
+  applicant-era prospect record (a full second copy of the member's PII).
+  Audit logs and election records are deliberately untouched — rewriting them
+  would be tampering. `users.anonymized_at` records the event.
+- **Consent tracking** (ISO/IEC 27701) — `user_consents` holds current state
+  per (member, type) for photo use, public roster listing, and SMS
+  notifications (TCPA express consent); every change is written to the
+  tamper-evident audit log as `consent_updated`, which is the immutable
+  consent ledger. `GET/PUT /users/me/consents`; UI: Settings → Security →
+  Privacy Choices. Never-asked fails closed — it is never treated as consent.
+- **Records retention schedules** (ISO 15489) — per-organization retention
+  per record class with safe defaults and minimum floors (message history,
+  notification logs, form submissions; platform-level blocked-access
+  telemetry via `RETENTION_BLOCKED_ATTEMPTS_DAYS`), enforced by a daily
+  `retention_enforcement` task. Admin API `GET/PUT
+  /organizations/retention-policy`, audited. Documents and meeting minutes
+  are deliberately excluded from auto-deletion: destroying official records
+  stays a human decision under the department's own schedule.
+- **Audit-log retention enforcement** — `HIPAA_AUDIT_RETENTION_DAYS` (7
+  years) was declared but never applied. The weekly job now exports expired
+  rows to gzipped JSONL archives (`AUDIT_ARCHIVE_DIR`) before purging them.
+  Purges are checkpoint-aligned, refuse to run on a chain that fails
+  verification, and record a keyed HMAC attestation of the boundary so the
+  surviving chain still verifies while unsanctioned head deletions and forged
+  attestations still fail.
+- **Off-host audit-log shipping** — new `audit_log_ship` task (every 30
+  minutes, no-op unless configured) POSTs new audit rows to
+  `AUDIT_SHIP_WEBHOOK_URL` as HMAC-signed NDJSON batches. The hash chain
+  detects tampering; only an off-host copy survives table deletion. A durable
+  watermark (`audit_ship_state`) advances only on acknowledgment.
+- **Encryption key rotation** — decryption now tries the current
+  `ENCRYPTION_KEY` then each key in `ENCRYPTION_KEYS_LEGACY`, so a rotation
+  is safe at every step while new writes use the current key.
+  `scripts/rotate_encryption_key.py` drains a rotation (dry-run by default);
+  runbook in `docs/KEY_ROTATION.md`.
+- **Vulnerability disclosure endpoint** — RFC 9116
+  `/.well-known/security.txt`, configuration-driven via
+  `SECURITY_TXT_CONTACT` / `SECURITY_TXT_POLICY_URL` (ISO/IEC 29147).
+- **Backup sidecar with restore drills** (ISO 22301) — production compose
+  gains a `backup` service: nightly database + uploads + audit-archive
+  snapshots to a `backups` volume, retention pruning, and an automated
+  restore-verification drill every `VERIFY_EVERY_N_BACKUPS` runs that loads
+  the dump into a throwaway schema and asserts the schema came back
+  (`scripts/verify_backup.sh`). A failed drill keeps failing loudly nightly.
+- **CI supply-chain hardening** — `.github/dependabot.yml` (pip, npm,
+  actions, docker); `npm audit` now blocking at high severity; new
+  `secret-scan.yml` (gitleaks, full history, weekly + per-PR, with a
+  `.gitleaks.toml` allowlist covering the 122 triaged doc/test placeholders);
+  new `supply-chain.yml` (Trivy HIGH/CRITICAL dependency sweep + Syft SPDX
+  SBOM artifact).
+- **Coverage gates** — backend `pytest-cov` ratchet floors (unit 46%,
+  integration 44%) alongside the existing frontend ratchet, which was raised
+  to 53% lines / 40% functions / 44% branches / 51% statements.
+- **Accessibility test coverage** — axe checks expanded from a single
+  component to the shared UX library (ConfirmDialog, EmptyState, Pagination,
+  Breadcrumbs, Collapsible, ProgressSteps, Tooltip, Skeletons) and the public
+  legal pages.
+- **Documentation** — `docs/COMPLIANCE.md` (compliance hub: framework
+  overview, technical-control inventory as an audit evidence index, honest
+  gaps table), `docs/BACKUP.md`, `docs/KEY_ROTATION.md`,
+  `docs/ISO_STANDARDS_ASSESSMENT.md`, and `docs/policies/` (ISO 27001 policy
+  set + Statement of Applicability skeletons with `[DEPARTMENT: ...]`
+  placeholders).
+
+**Changed**
+
+- **react-router 6.30 → 8.3** across ~230 files. `react-router-dom` was
+  retired upstream at v7 (an unpatched re-export shim), so the app now
+  depends on the core `react-router` package; imports changed, the API did
+  not. Clears the v6 open-redirect/SSR-hydration advisories *and* the v7
+  RSC-mode CSRF advisory. React bumped 19.2.4 → 19.2.8 for react-router 8's
+  peer range (root `overrides` moved with it to keep a single React copy).
+  `navigate()` returns a Promise from v7 onward, so ~280 fire-and-forget
+  call sites now use the repo's explicit `void` convention.
+  `npm audit --omit=dev` reports **zero vulnerabilities**.
+- **Removed `pysaml2` and `python-ldap`** — declared but never imported, so
+  pure CVE surface. Docs claiming SAML/LDAP SSO corrected (OIDC via
+  Google/Microsoft is what exists); the `LDAP_*` settings are marked inert
+  placeholders. Drops the LDAP build dependencies from CI and the two
+  pyopenssl `pip-audit` ignores that only existed because of pysaml2's cap.
+- Frontend production advisories fixed in-range: axios → 1.19.0,
+  dompurify → 3.4.12.
+- Audit retention archives moved to a persistent named volume — they were
+  written inside the backend container filesystem and would have been
+  destroyed on rebuild, despite being the only copy of purged audit history.
+- `docs/DEPLOYMENT.md` links repaired: `BACKUP.md` (referenced 3×) and
+  `COMPLIANCE.md` were linked but had never been written; `API.md`,
+  `MONITORING.md`, and a docs-relative `SECURITY.md` also pointed nowhere.
+
+**Fixed**
+
+- **`member_leaves_of_absence.end_date` was `NOT NULL` in the schema** while
+  the model documents `NULL` as "permanent leave" — recording a permanent
+  leave failed with IntegrityError 1048 on any real database
+  (migration `20260801_0013`).
+- The hardcoded 90-day `message_history_cleanup` task would have silently
+  overridden any organization's configured retention; it now delegates to the
+  retention service (default still 90 days, so behavior is unchanged for
+  departments that never configure it).
+- npm caching in CI pointed at `frontend/package-lock.json`, which does not
+  exist in this workspace layout (the lockfile is at the repo root).
+
+**Documentation**
+
+- Secondary-doc sweep for this batch: `CHANGELOG.md`, the wiki (new
+  **Security-Privacy** page plus updates to Overview, Audit Logging,
+  Encryption, HIPAA, API Reference, Database Schema, Environment,
+  Deployment-Production/Docker/Guide, Installation, Technology Stack, Home and
+  sidebar), a new training lesson **17 — Privacy & Your Data** with
+  cross-references from lessons 00 and 08, and YouTube scripts (a new privacy
+  chapter in script 03, member privacy/data-export coverage in script 06, and
+  Shorts 8K/8L).
+- **Corrected documentation that described features which do not exist:**
+  - The wiki documented **SAML 2.0 and LDAP/Active Directory sign-in with
+    configuration steps**. Neither is implemented; the pages now say so and
+    point at the OAuth/OIDC support that is real.
+  - `BACKUP_ENABLED` / `BACKUP_SCHEDULE` / `BACKUP_LOCATION` were documented
+    across six files (env examples, wiki, Unraid guides, a YouTube script) but
+    **no code has ever read them** — operators following those instructions
+    would have had no backups at all. Replaced with the variables the backup
+    sidecar actually uses (`BACKUP_TIME`, `BACKUP_RETENTION_DAYS`,
+    `VERIFY_EVERY_N_BACKUPS`).
+  - `React Router 6.x` in the tech stack (now 8.3).
+- Repaired broken documentation links, including pre-existing ones outside this
+  batch: `FAQ.md`, `SCALING.md`, `MULTI-REGION.md`, `ELECTION_SECURITY_AUDIT.md`,
+  `ONBOARDING_REVIEW.md`, `ASYNC_SQLALCHEMY_REVIEW.md`, `MEMBER_ID_CARD.md`,
+  two wrong relative paths in the Unraid wiki page, and two wiki links pointing
+  at pages that were never created.
+
+**Migrations**
+
+`20260801_0010` (audit checkpoint archival columns), `20260801_0011`
+(`audit_ship_state`), `20260801_0012` (`users.anonymized_at`),
+`20260801_0013` (leave `end_date` nullable fix), `20260801_0014`
+(`user_consents`).
+
+
 ### Documentation: secondary-doc sweep for the 2026-07-29 elections batch (2026-07-31)
 
 **Changed**

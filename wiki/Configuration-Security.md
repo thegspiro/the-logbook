@@ -54,8 +54,8 @@ The Logbook supports multiple authentication methods:
 |--------|-------------|---------------|
 | **Local** | Username/password with Argon2id hashing | Default, always available |
 | **OAuth (Google / Microsoft)** | "Sign in with Google" and "Sign in with Microsoft" (Azure AD, single-tenant); link-existing-only, domain-restricted *(2026-05-29)* | `GOOGLE_*` / `AZURE_AD_*` env vars |
-| **SAML** | Enterprise SSO integration | SAML metadata configuration |
-| **LDAP** | Active Directory / LDAP authentication | Server URL, bind DN, search base |
+| ~~**SAML**~~ | **Not implemented.** Previously documented in error | — |
+| ~~**LDAP / Active Directory**~~ | **Not implemented.** The `LDAP_*` settings exist in config but gate nothing *(clarified 2026-07-31)* | — |
 | **TOTP MFA** | Time-based one-time passwords (Google Authenticator, etc.) | Per-user opt-in or admin-enforced |
 
 ---

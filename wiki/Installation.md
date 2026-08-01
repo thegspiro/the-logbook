@@ -154,7 +154,7 @@ docker-compose logs -f
 Two templates are provided:
 
 - **`.env.example`** — Quick-start config (~30 variables). Covers security keys, database, Redis, CORS, ports, basic modules, and email. Sufficient for most deployments. Defaults to `production`.
-- **`.env.example.full`** — Complete reference (~100+ variables). Adds cloud storage (S3, Azure, GCS), OAuth/SSO (Azure AD, Google, LDAP), SMS (Twilio), HIPAA fine-tuning, IP whitelisting, geofencing, feature flags, and development tools. Defaults to `development`.
+- **`.env.example.full`** — Complete reference (~100+ variables). Adds cloud storage (S3, Azure, GCS), OAuth/SSO (Azure AD, Google), SMS (Twilio), HIPAA fine-tuning, IP whitelisting, geofencing, feature flags, and development tools. Defaults to `development`.
 
 Start with `.env.example` unless you know you need advanced settings. You can add variables from `.env.example.full` at any time — they are fully compatible.
 
@@ -469,11 +469,20 @@ to set in `.env`.
 ### 3. Set Up Backups
 
 ```bash
-# Configure automated backups
-BACKUP_ENABLED=true
-BACKUP_SCHEDULE=0 2 * * *  # Daily at 2 AM
-BACKUP_RETENTION_DAYS=30
+# Backups run via the `backup` service in docker-compose.prod.yml
+# (or scripts/backup.sh from cron). There is no on/off env flag —
+# enable them by running the production compose profile.
+BACKUP_TIME=02:00            # Daily run time, UTC HH:MM
+BACKUP_RETENTION_DAYS=30     # Prune archives older than this
+VERIFY_EVERY_N_BACKUPS=7     # Automated restore-drill cadence; 0 disables
 ```
+
+Every seventh backup, the sidecar loads the fresh dump into a throwaway schema
+and verifies the schema restored — a failed drill fails loudly every night
+until it is fixed. Sync the `backups` volume offsite, and store
+`ENCRYPTION_KEY`/`ENCRYPTION_SALT` separately: a backup without its era's keys
+cannot decrypt encrypted fields. See [docs/BACKUP.md](../docs/BACKUP.md).
+*(2026-07-31)*
 
 Manual backup:
 ```bash

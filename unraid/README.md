@@ -156,7 +156,7 @@ ENCRYPTION_KEY=generate_with_openssl
 REDIS_HOST=192.168.1.10
 EMAIL_ENABLED=true
 SMTP_HOST=smtp.gmail.com
-BACKUP_ENABLED=true
+BACKUP_TIME=02:00
 ```
 
 > Modules are enabled per organization in-app (Organization/Admin Settings >

@@ -229,15 +229,25 @@ server {
 
 ### Automated Backups
 
-Enabled by default. Runs daily at 2 AM. Stored in `/mnt/user/backups/the-logbook/`.
+Runs daily at 02:00 UTC via the `backup` service in
+`docker-compose.prod.yml`, stored in the `backups` volume (map it to
+`/mnt/user/backups/the-logbook/` in your Unraid template). There is no on/off
+env flag — backups run whenever that service is up.
 
 Configure in `.env`:
 
 ```bash
-BACKUP_ENABLED=true
-BACKUP_SCHEDULE=0 2 * * *
-BACKUP_RETENTION_DAYS=30
+BACKUP_TIME=02:00            # Daily run time, UTC HH:MM
+BACKUP_RETENTION_DAYS=30     # Prune archives older than this
+VERIFY_EVERY_N_BACKUPS=7     # Automated restore-drill cadence; 0 disables
 ```
+
+Every seventh backup runs an automated restore drill: the fresh dump is loaded
+into a throwaway schema, verified, and dropped. Check `docker compose logs
+backup` — a failed drill repeats loudly every night until fixed. Remember to
+sync the backups share off the array, and keep
+`ENCRYPTION_KEY`/`ENCRYPTION_SALT` somewhere separate: a backup without its
+era's keys cannot decrypt encrypted fields. *(2026-07-31)*
 
 ### Manual Backup
 

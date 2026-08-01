@@ -65,7 +65,7 @@ docker-compose up -d
 - **[Communications](Module-Communications)** - Department messages with acknowledgment tracking, email/SMS escalation, and scheduled send
 - **[Scheduling](Module-Scheduling)** - Shift scheduling, signup, swaps, templates, pattern presets & reports
 - **[Admin Hours](Module-Admin-Hours)** - Administrative hours tracking with QR code clock-in/clock-out, bulk approve, CSV export
-- **[Member ID Card](../docs/MEMBER_ID_CARD.md)** - Digital member identification with QR code, barcode, and print support
+- **[Member ID Card](../docs/TROUBLESHOOTING.md#member-id-card-issues)** - Digital member identification with QR code, barcode, and print support
 - **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
 - **[Inventory](Module-Inventory)** - Equipment tracking, assignments, pool items, thermal labels
 - **[Compliance](Module-Compliance)** - Compliance tracking
@@ -73,9 +73,11 @@ docker-compose up -d
 
 ### 🔐 Security
 - **[Security Overview](Security-Overview)** - Security policy and compliance
-- **[Authentication](Security-Authentication)** - OAuth, SAML, LDAP, MFA
+- **[Authentication](Security-Authentication)** - Local, OAuth/OIDC, MFA
 - **[Encryption](Security-Encryption)** - AES-256-GCM encryption
 - **[Audit Logging](Security-Audit-Logging)** - Tamper-proof audit trails
+- **[Privacy & Data Rights](Security-Privacy)** - Data export, anonymization, consent, retention
+- **[Compliance Hub](../docs/COMPLIANCE.md)** - Framework alignment and control inventory
 - **[HIPAA Security Features](Security-HIPAA)** - Security features aligned with HIPAA requirements
 
 ### 🛠️ Troubleshooting
@@ -101,7 +103,7 @@ docker-compose up -d
 - ✅ **Multi-Tenancy** - Host multiple organizations
 - ✅ **Role-Based Access Control** - Granular permissions
 - ✅ **Progressive Web App** - Mobile responsive PWA
-- ✅ **Integration Ready** - Microsoft 365, Google Workspace, LDAP
+- ✅ **Integration Ready** - Microsoft 365, Google Workspace, Salesforce
 - ✅ **Zero Configuration** - One-command installation for Unraid
 
 ---
@@ -114,13 +116,32 @@ docker-compose up -d
 | **Frontend** | React 19, TypeScript 5.9, Vite 7.3 |
 | **Database** | MySQL 8.0+ (MariaDB 10.11+ for ARM) |
 | **Cache** | Redis 7+ |
-| **Authentication** | OAuth 2.0, SAML, LDAP, TOTP MFA |
+| **Authentication** | OAuth 2.0 / OIDC (Google, Microsoft), TOTP MFA |
 | **Encryption** | AES-256-GCM, Argon2id |
 | **Container** | Docker, Docker Compose |
 
 ---
 
 ## 📊 Latest Updates
+
+### July 2026 — ISO Compliance: Privacy, Retention & Operations
+
+- **Member privacy rights** — self-service personal-data export, consent
+  tracking (photo use, roster listing, SMS), and an anonymization workflow that
+  scrubs a departed member's PII while retaining operational history
+- **Public privacy notice and terms** at `/privacy` and `/terms`, with
+  department-configurable wording
+- **Records retention schedules** per department, with safety floors and daily
+  enforcement; documents and minutes are never auto-deleted
+- **Audit retention enforced** — expired entries are exported to signed
+  archives before purge, with an attested chain hand-off; optional off-host
+  shipping to a SIEM
+- **Encryption key rotation** with no downtime via a legacy-key ring
+- **Backup sidecar** with automated restore-verification drills
+- **Supply-chain scanning** — Dependabot, blocking dependency audits, secret
+  scanning, SPDX SBOM; RFC 9116 `security.txt`
+- **Corrected**: SAML and LDAP were documented but never implemented; those
+  pages now say so plainly
 
 ### July 2026 — Security Audit Remediation & Encryption Upgrade
 

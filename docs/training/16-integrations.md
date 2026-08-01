@@ -504,4 +504,4 @@ The next week, Steve checks the integrations dashboard:
 
 ---
 
-**Previous:** [Prospective Members Pipeline](./15-prospective-members.md)
+**Previous:** [Prospective Members Pipeline](./15-prospective-members.md) | **Next:** [Privacy & Your Data](./17-privacy-data-rights.md)

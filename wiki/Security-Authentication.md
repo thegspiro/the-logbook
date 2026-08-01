@@ -134,33 +134,19 @@ recoverable failures:
 
 ---
 
-## SAML (Enterprise SSO)
+## SAML and LDAP — Not Implemented *(clarified 2026-07-31)*
 
-SAML 2.0 integration for enterprise Single Sign-On.
+Earlier revisions of this page described SAML 2.0 and LDAP/Active Directory
+sign-in with configuration steps. **Neither is implemented.** The
+`pysaml2` and `python-ldap` dependencies were declared but never imported by
+any application code, and were removed on 2026-07-31 to shrink the
+vulnerability surface. The `LDAP_*` settings still present in
+`.env.example.full` are inert placeholders that gate nothing.
 
-### Configuration
-
-1. Navigate to **Settings > Authentication > SAML**
-2. Upload your Identity Provider (IdP) metadata XML
-3. Configure attribute mapping (email, first name, last name)
-4. Test the SAML flow
-
----
-
-## LDAP / Active Directory
-
-Authenticate against your organization's LDAP or Active Directory server.
-
-### Configuration
-
-```bash
-LDAP_ENABLED=true
-LDAP_SERVER_URL=ldap://your-ad-server:389
-LDAP_BIND_DN=cn=admin,dc=example,dc=com
-LDAP_BIND_PASSWORD=your-bind-password
-LDAP_SEARCH_BASE=ou=users,dc=example,dc=com
-LDAP_USER_FILTER=(sAMAccountName={username})
-```
+Federated sign-in today means **OAuth 2.0 / OIDC via Google Workspace or
+Microsoft Azure AD** (documented above). If your department needs SAML or
+LDAP, please open an issue — the placeholders exist because it is a plausible
+future addition, not because it half-works today.
 
 ---
 

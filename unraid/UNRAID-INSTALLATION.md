@@ -278,10 +278,11 @@ SMTP_USER=your-email@gmail.com
 SMTP_PASSWORD=your-app-password
 SMTP_FROM_EMAIL=noreply@yourdomain.com
 
-# Backups
-BACKUP_ENABLED=true
-BACKUP_SCHEDULE=0 2 * * *      # Daily at 2 AM
-BACKUP_RETENTION_DAYS=30
+# Backups (run by the `backup` service in docker-compose.prod.yml;
+# there is no on/off env flag — they run whenever that service is up)
+BACKUP_TIME=02:00              # Daily run time, UTC HH:MM
+BACKUP_RETENTION_DAYS=30       # Prune archives older than this
+VERIFY_EVERY_N_BACKUPS=7       # Automated restore-drill cadence; 0 disables
 
 # Modules are enabled per organization inside the app (Organization/Admin
 # Settings > Modules); there are no MODULE_*_ENABLED environment variables.
@@ -660,7 +661,14 @@ server {
 
 ### Automated Backups
 
-Backups run automatically based on `BACKUP_SCHEDULE` (default: 2 AM daily).
+Backups run automatically at `BACKUP_TIME` (default: 02:00 UTC daily).
+
+Every `VERIFY_EVERY_N_BACKUPS` runs (default 7), the service performs an
+automated **restore drill** — it loads the fresh dump into a throwaway schema,
+confirms the tables restored, and drops it. Check `docker compose logs backup`;
+a failed drill repeats loudly every night until resolved. Sync the backup share
+off the array, and store `ENCRYPTION_KEY`/`ENCRYPTION_SALT` separately — a
+backup without its era's keys cannot decrypt encrypted fields. *(2026-07-31)*
 
 **Backup Location:**
 ```

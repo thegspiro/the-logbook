@@ -35,7 +35,7 @@
 - [Public Programs](Public-Programs)
 - [Scheduling](Module-Scheduling)
 - [Admin Hours](Module-Admin-Hours)
-- [Member ID Card](../docs/MEMBER_ID_CARD.md)
+- [Member ID Card](../docs/TROUBLESHOOTING.md#member-id-card-issues)
 - [Apparatus](Module-Apparatus)
 - [Inventory](Module-Inventory)
 - [Grants & Fundraising](Module-Grants-Fundraising)
@@ -54,7 +54,11 @@
 - [Authentication](Security-Authentication)
 - [Encryption](Security-Encryption)
 - [Audit Logging](Security-Audit-Logging)
+- [Privacy & Data Rights](Security-Privacy)
 - [HIPAA Security Features](Security-HIPAA)
+- [Compliance Hub](../docs/COMPLIANCE.md)
+- [Backup & Disaster Recovery](../docs/BACKUP.md)
+- [Key Rotation](../docs/KEY_ROTATION.md)
 
 ### 🛠️ Troubleshooting
 - [Common Issues](Troubleshooting)

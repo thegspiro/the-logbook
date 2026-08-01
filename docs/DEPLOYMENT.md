@@ -564,7 +564,7 @@ sudo nginx -t
 
 ### Getting Help
 
-- 📖 Read the [FAQ](./FAQ.md)
+- 📖 Read the [Troubleshooting Guide](./TROUBLESHOOTING.md)
 - 🐛 Report issues on [GitHub Issues](https://github.com/your-org/the-logbook/issues)
 - 💬 Join our [Community Forum](https://community.yourorg.com)
 - 📧 Email support: support@yourorg.com
@@ -575,11 +575,11 @@ sudo nginx -t
 
 ### Load Balancing
 
-For high-traffic deployments, see [SCALING.md](./SCALING.md)
+For high-traffic deployments, see the scaling notes in the [production deployment wiki page](../wiki/Deployment-Production.md).
 
 ### Multi-Region Deployment
 
-For global deployments, see [MULTI-REGION.md](./MULTI-REGION.md)
+Multi-region deployment is not documented — the platform targets a single-site department deployment. Open an issue if you need guidance.
 
 ### Custom Integrations
 

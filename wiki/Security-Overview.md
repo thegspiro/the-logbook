@@ -157,6 +157,11 @@ schema migration (e.g. DB/Redis TLS enforcement in production, a dedicated
 ✅ **Rate Limiting**: Protection against brute force attacks
 ✅ **Input Sanitization**: XSS and injection attack prevention
 ✅ **Security Headers**: CSP, HSTS, X-Frame-Options, etc.
+✅ **Member Privacy Rights**: personal-data export, consent tracking, and anonymization of departed members *(2026-07-31)*
+✅ **Records Retention**: per-department schedules with safety floors, enforced daily *(2026-07-31)*
+✅ **Key Rotation**: encryption keys rotate with no downtime via a legacy-key ring *(2026-07-31)*
+✅ **Vulnerability Disclosure**: RFC 9116 `/.well-known/security.txt` *(2026-07-31)*
+✅ **Supply-Chain Scanning**: Dependabot, blocking dependency audits, secret scanning, SPDX SBOM *(2026-07-31)*
 ✅ **Intrusion Detection**: Real-time anomaly and threat detection
 ✅ **Data Exfiltration Monitoring**: Detection of unauthorized data transfers
 ✅ **Session Hijacking Detection**: IP/session correlation monitoring
@@ -744,9 +749,18 @@ logs without detection.
 ### Log Retention
 
 - **Minimum**: 7 years (exceeds HIPAA 6-year minimum)
+- **Enforced**, not merely configured *(2026-07-31)* — a weekly job exports
+  expired rows to signed gzipped JSONL archives (`AUDIT_ARCHIVE_DIR`) and then
+  purges them. Purges are checkpoint-aligned, refuse to run against a chain
+  that fails verification, and record a keyed attestation of the boundary so
+  the surviving chain still verifies while unsanctioned deletions still fail.
+- **Off-host copy** *(2026-07-31)* — set `AUDIT_SHIP_WEBHOOK_URL` to stream new
+  entries to a SIEM as HMAC-signed NDJSON. The hash chain detects tampering;
+  only an off-host copy survives deletion of the table itself.
 - **Format**: Immutable, tamper-evident
 - **Storage**: Encrypted at rest
-- **Backup**: Included in disaster recovery
+- **Backup**: Included in disaster recovery — **include `AUDIT_ARCHIVE_DIR`;
+  after a purge it is the only copy of the oldest audit history**
 - **Access**: Restricted to authorized personnel
 
 ### Log Monitoring
@@ -777,14 +791,12 @@ Automated monitoring for:
    - Login challenge before session issuance for MFA-enabled accounts
    - Self-enrollment; admins can require MFA org-wide (server-enforced)
 
-3. **OAuth 2.0 / SSO**
+3. **OAuth 2.0 / SSO (OIDC)**
    - Microsoft Azure AD
    - Google Workspace
-   - SAML support
-
-4. **LDAP / Active Directory**
-   - Enterprise directory integration
-   - Synchronized user accounts
+   - SAML and LDAP/Active Directory are **not implemented** *(clarified
+     2026-07-31 — the unused `pysaml2`/`python-ldap` dependencies were
+     removed; the `LDAP_*` settings are inert placeholders)*
 
 ### Session Management
 

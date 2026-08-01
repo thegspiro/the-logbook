@@ -36,6 +36,27 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 ### 🔒 Security Documentation
 
+**[COMPLIANCE.md](./COMPLIANCE.md)** — **start here for compliance questions.**
+The framework overview (HIPAA, ISO/IEC 27001, 27701, 22301, 29147, WCAG,
+NFPA), a technical-control inventory that acts as an audit evidence index
+(control → where it lives in code → which clause it satisfies), an honest
+known-gaps table, and what deploying departments must do themselves.
+
+**[ISO_STANDARDS_ASSESSMENT.md](./ISO_STANDARDS_ASSESSMENT.md)** — the
+standard-by-standard gap analysis and prioritized roadmap behind that hub.
+Also explains the two meanings of "ISO" in this codebase (the fire-service
+Insurance Services Office grading vs. ISO/IEC standards).
+
+**[KEY_ROTATION.md](./KEY_ROTATION.md)** — rotating `ENCRYPTION_KEY` with no
+downtime or data loss, via the legacy-key ring and drain script.
+
+**[BACKUP.md](./BACKUP.md)** — what backups cover, why keys must be stored
+separately, restore drills, RTO/RPO, and the disaster-recovery runbook.
+
+**[policies/](./policies/)** — ISO 27001 policy set and Statement of
+Applicability skeletons, pre-filled with what the platform enforces and
+marked `[DEPARTMENT: ...]` wherever a department decision is required.
+
 5. **[SECURITY_IMAGE_UPLOADS.md](../SECURITY_IMAGE_UPLOADS.md)**
    - Comprehensive image upload security measures
    - Attack vectors addressed (XSS, file spoofing, DoS, privacy leaks)
@@ -49,7 +70,7 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
    - Automated validation and testing procedures
    - Prevents critical enum case mismatch bugs
 
-7. **[ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md)**
+7. **[module-audit/elections.md](./module-audit/elections.md)**
    - Comprehensive election/voting system security review (rating: 9.0/10)
    - Double-voting vulnerability analysis and database constraint fixes
    - Anonymous voting implementation review (HMAC-SHA256)
@@ -234,13 +255,13 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
 
 ### 🛠️ Development & Operations
 
-10. **[ONBOARDING_REVIEW.md](../ONBOARDING_REVIEW.md)**
+10. **[ONBOARDING_FLOW.md](./ONBOARDING_FLOW.md)**
     - Analysis of startup delays and optimization recommendations
     - Docker Compose configuration improvements
     - Database connection retry strategy
     - Migration performance optimization
 
-11. **[ASYNC_SQLALCHEMY_REVIEW.md](../ASYNC_SQLALCHEMY_REVIEW.md)**
+11. **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)**
     - Full codebase audit of 32 flush() calls for greenlet errors
     - 87.5% safe, 4 low-risk patterns identified, 0 critical issues
     - Recommendations for async SQLAlchemy best practices
@@ -390,13 +411,13 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Document management / folders | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#documents-module) |
 | Department messages / announcements | [COMMUNICATIONS_MODULE.md](./COMMUNICATIONS_MODULE.md) |
 | Public API (forms, events) | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) |
-| Election security | [ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md) |
+| Election security | [module-audit/elections.md](./module-audit/elections.md), [BALLOT_FORENSICS_GUIDE.md](../BALLOT_FORENSICS_GUIDE.md) |
 | Events / recurring events / RSVP | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#events-module-issues) |
 | Public outreach requests | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#public-outreach-request-pipeline-issues) |
 | Public programs how-to | [wiki/Public-Programs.md](../wiki/Public-Programs.md) |
 | TypeScript build errors | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#typescript-build-issues) |
 | TypeScript safeguards / `as any` | [TYPESCRIPT_SAFEGUARDS.md](./TYPESCRIPT_SAFEGUARDS.md) |
-| Async SQLAlchemy issues | [ASYNC_SQLALCHEMY_REVIEW.md](../ASYNC_SQLALCHEMY_REVIEW.md) |
+| Async SQLAlchemy issues | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md), [backend/](./backend/) |
 | Security questions | [SECURITY_IMAGE_UPLOADS.md](../SECURITY_IMAGE_UPLOADS.md) |
 | Multi-factor authentication (MFA / TOTP) | [MFA.md](./MFA.md) |
 | Shift scheduling / platoon rotations | [SCHEDULING_MODULE.md](./SCHEDULING_MODULE.md) |
@@ -425,7 +446,7 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 
 **Technical** (Architecture & security):
 - SECURITY_IMAGE_UPLOADS.md - Security implementation
-- ONBOARDING_REVIEW.md - Performance optimization
+- ONBOARDING_FLOW.md - Onboarding flow reference
 
 ---
 
