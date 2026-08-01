@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mockClearAllDrafts = vi.fn();
 const mockClearAllQueuedChecks = vi.fn();
+const mockClearAllQueuedReports = vi.fn();
 const mockClearAllGenericQueued = vi.fn();
 
 vi.mock('./shiftReportDrafts', () => ({
@@ -9,6 +10,9 @@ vi.mock('./shiftReportDrafts', () => ({
 }));
 vi.mock('./offlineQueue', () => ({
   clearAllQueuedChecks: () => mockClearAllQueuedChecks() as Promise<number>,
+}));
+vi.mock('./shiftReportOfflineQueue', () => ({
+  clearAllQueuedReports: () => mockClearAllQueuedReports() as Promise<number>,
 }));
 vi.mock('./genericOfflineQueue', () => ({
   clearAllGenericQueued: () => mockClearAllGenericQueued() as Promise<number>,
@@ -21,6 +25,7 @@ describe('purgeLocalMemberData', () => {
     vi.clearAllMocks();
     mockClearAllDrafts.mockReturnValue(0);
     mockClearAllQueuedChecks.mockResolvedValue(0);
+    mockClearAllQueuedReports.mockResolvedValue(0);
     mockClearAllGenericQueued.mockResolvedValue(0);
   });
 
@@ -32,22 +37,25 @@ describe('purgeLocalMemberData', () => {
     // Pitfall #13 note in CLAUDE.md — this is the narrow case it allows).
     expect(mockClearAllDrafts).toHaveBeenCalledWith();
     expect(mockClearAllQueuedChecks).toHaveBeenCalledWith();
+    expect(mockClearAllQueuedReports).toHaveBeenCalledWith();
     expect(mockClearAllGenericQueued).toHaveBeenCalledWith();
   });
 
   it('reports how much unsent work was discarded', async () => {
     mockClearAllDrafts.mockReturnValue(3);
     mockClearAllQueuedChecks.mockResolvedValue(2);
+    mockClearAllQueuedReports.mockResolvedValue(5);
     mockClearAllGenericQueued.mockResolvedValue(1);
 
     const result = await purgeLocalMemberData();
 
     expect(result.drafts).toBe(3);
     expect(result.queuedChecks).toBe(2);
+    expect(result.queuedReports).toBe(5);
     expect(result.queuedGeneric).toBe(1);
     // Drafts are local-only work-in-progress; only the queues held items
     // that were meant to reach the server.
-    expect(result.unsyncedDiscarded).toBe(3);
+    expect(result.unsyncedDiscarded).toBe(8);
   });
 
   it('still clears the other stores when one throws', async () => {
@@ -59,6 +67,7 @@ describe('purgeLocalMemberData', () => {
     const result = await purgeLocalMemberData();
 
     expect(mockClearAllQueuedChecks).toHaveBeenCalledWith();
+    expect(mockClearAllQueuedReports).toHaveBeenCalledWith();
     expect(mockClearAllGenericQueued).toHaveBeenCalledWith();
     expect(result.drafts).toBe(0);
     expect(result.queuedChecks).toBe(4);
@@ -69,14 +78,38 @@ describe('purgeLocalMemberData', () => {
       throw new Error('boom');
     });
     mockClearAllQueuedChecks.mockRejectedValue(new Error('idb gone'));
+    mockClearAllQueuedReports.mockRejectedValue(new Error('idb gone'));
     mockClearAllGenericQueued.mockRejectedValue(new Error('idb gone'));
 
     await expect(purgeLocalMemberData()).resolves.toEqual({
       drafts: 0,
       queuedChecks: 0,
+      queuedReports: 0,
       queuedGeneric: 0,
       unsyncedDiscarded: 0,
     });
+  });
+
+  it('still settles when a store never resolves, and clears the rest', async () => {
+    // A blocked IndexedDB upgrade leaves its promise pending forever. Logout
+    // awaits this purge, so an unbounded wait would strand a member signed in
+    // on a shared terminal — the exact risk the purge exists to remove.
+    vi.useFakeTimers();
+    try {
+      mockClearAllQueuedChecks.mockReturnValue(new Promise(() => {}));
+      mockClearAllGenericQueued.mockResolvedValue(2);
+
+      const pending = purgeLocalMemberData();
+      await vi.advanceTimersByTimeAsync(10_000);
+      const result = await pending;
+
+      expect(result.queuedChecks).toBe(0);
+      // The stuck store must not prevent the others from being cleared.
+      expect(mockClearAllGenericQueued).toHaveBeenCalledWith();
+      expect(result.queuedGeneric).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

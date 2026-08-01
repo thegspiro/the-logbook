@@ -6,11 +6,11 @@
  * not to the signed-in member, so anything left behind at logout is readable
  * by the next person to sit down.
  *
- * Two stores hold member PII beyond the session:
+ * These stores hold member PII beyond the session:
  *   - shift-report drafts (localStorage): crew names, trainee evaluations,
  *     narrative remarks
  *   - the offline queues (IndexedDB): unsent equipment checks *including photo
- *     blobs*, training submissions, and event RSVPs
+ *     blobs*, submitted shift reports, training submissions, and event RSVPs
  *
  * Neither was cleared by logout, which cleared only the session flag, the
  * temporary access token, and the in-memory API cache.
@@ -23,6 +23,7 @@
 
 import { clearAllDrafts } from './shiftReportDrafts';
 import { clearAllQueuedChecks } from './offlineQueue';
+import { clearAllQueuedReports } from './shiftReportOfflineQueue';
 import { clearAllGenericQueued } from './genericOfflineQueue';
 
 export interface PurgeResult {
@@ -30,6 +31,8 @@ export interface PurgeResult {
   drafts: number;
   /** Unsent equipment checks discarded from IndexedDB. */
   queuedChecks: number;
+  /** Unsent shift reports discarded from IndexedDB. */
+  queuedReports: number;
   /** Unsent training submissions / event RSVPs discarded. */
   queuedGeneric: number;
   /** Unsent items that were lost (i.e. never made it to the server). */
@@ -37,16 +40,42 @@ export interface PurgeResult {
 }
 
 /**
+ * Hard ceiling on how long any single store may take to clear.
+ *
+ * IndexedDB requests have no native timeout and can legitimately never
+ * settle — a blocked upgrade, a transaction the browser never completes.
+ * `openIndexedDb` already bounds the open, but this bounds everything after
+ * it too, so no IndexedDB pathology can stall logout.
+ */
+const STORE_PURGE_TIMEOUT_MS = 3_000;
+
+/** Resolve to `fallback` if `promise` has not settled in time. */
+async function bounded<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), STORE_PURGE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/**
  * Clear every device-local store that can hold member PII.
  *
- * Never throws: a purge failure must not be able to block or break logout —
- * a member stuck signed in on a shared terminal is strictly worse than a
- * failed cleanup.
+ * Never throws and always settles: a purge failure must not be able to block
+ * or break logout — a member stuck signed in on a shared terminal is strictly
+ * worse than a failed cleanup.
  */
 export async function purgeLocalMemberData(): Promise<PurgeResult> {
   const result: PurgeResult = {
     drafts: 0,
     queuedChecks: 0,
+    queuedReports: 0,
     queuedGeneric: 0,
     unsyncedDiscarded: 0,
   };
@@ -58,17 +87,24 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
   }
 
   try {
-    result.queuedChecks = await clearAllQueuedChecks();
+    result.queuedChecks = await bounded(clearAllQueuedChecks(), 0);
   } catch {
     // IndexedDB may be unavailable; keep going.
   }
 
   try {
-    result.queuedGeneric = await clearAllGenericQueued();
+    result.queuedReports = await bounded(clearAllQueuedReports(), 0);
   } catch {
     // As above.
   }
 
-  result.unsyncedDiscarded = result.queuedChecks + result.queuedGeneric;
+  try {
+    result.queuedGeneric = await bounded(clearAllGenericQueued(), 0);
+  } catch {
+    // As above.
+  }
+
+  result.unsyncedDiscarded =
+    result.queuedChecks + result.queuedReports + result.queuedGeneric;
   return result;
 }
