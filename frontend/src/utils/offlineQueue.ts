@@ -160,3 +160,30 @@ export async function pendingCount(): Promise<number> {
     req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
 }
+
+/**
+ * Discard every queued equipment check on this device.
+ *
+ * SEC (FE-7): queued checks carry member PII and photo blobs in IndexedDB,
+ * which is shared across every user of the browser profile. On a shared
+ * station computer the next member must not inherit the previous member's
+ * unsent submissions. Returns the number discarded so the caller can report
+ * the loss instead of destroying work silently.
+ */
+export async function clearAllQueuedChecks(): Promise<number> {
+  const db = await openDB();
+  const count = await new Promise<number>((resolve) => {
+    const store = txStore(db, 'readonly');
+    const req = store.count();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(0);
+  });
+  await new Promise<void>((resolve) => {
+    const store = txStore(db, 'readwrite');
+    const req = store.clear();
+    req.onsuccess = () => resolve();
+    // Never let a purge failure block logout.
+    req.onerror = () => resolve();
+  });
+  return count;
+}

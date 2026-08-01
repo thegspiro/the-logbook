@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { authService } from '../services/api';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 // OAuth configuration - these would be loaded from organization settings
 interface OAuthConfig {
@@ -22,7 +23,7 @@ interface OnboardingStatus {
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, completeMfaLogin, cancelMfa, mfaRequired, isLoading, isAuthenticated, error, clearError, lockedUntil } = useAuthStore();
+  const { login, completeMfaLogin, cancelMfa, mfaRequired, isLoading, isAuthenticated, error, clearError, lockedUntil, lastLogoutPurge, clearLogoutPurgeNotice } = useAuthStore();
 
   const [formData, setFormData] = useState({
     username: '',
@@ -42,6 +43,23 @@ export const LoginPage: React.FC = () => {
   // configured. An unconfigured install has no accounts to sign into, so the
   // user belongs in the onboarding wizard, not here.
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+
+  // Logout purges device-local drafts and offline queues on shared station
+  // computers (see purgeLocalMemberData). Tell the member once if that
+  // discarded unsent work — losing it silently would be worse than the
+  // privacy risk we're mitigating.
+  useEffect(() => {
+    if (lastLogoutPurge && lastLogoutPurge.unsyncedDiscarded > 0) {
+      const n = lastLogoutPurge.unsyncedDiscarded;
+      toast(
+        `${n} unsent ${n === 1 ? 'item was' : 'items were'} cleared from this ` +
+          `device at sign-out to protect your privacy on a shared computer. ` +
+          `Re-enter ${n === 1 ? 'it' : 'them'} after signing back in.`,
+        { duration: 8000, icon: '🔒' }
+      );
+      clearLogoutPurgeNotice();
+    }
+  }, [lastLogoutPurge, clearLogoutPurgeNotice]);
 
   // If user is already authenticated, redirect to dashboard
   useEffect(() => {

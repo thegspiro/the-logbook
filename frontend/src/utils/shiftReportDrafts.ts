@@ -71,3 +71,37 @@ export function deleteDraft(shiftId: string): void {
     // silent fail
   }
 }
+
+/**
+ * Remove every saved draft on this device.
+ *
+ * SEC (FE-6): drafts hold member PII — crew names, trainee evaluations,
+ * narrative remarks — in localStorage, which is shared by every user of the
+ * browser profile. Station computers are shared by whoever is on duty, so
+ * drafts must not outlive the session that created them. Called from the
+ * logout purge; returns how many were discarded so the UI can say so rather
+ * than destroying work silently.
+ */
+export function clearAllDrafts(): number {
+  try {
+    const index: string[] = JSON.parse(
+      localStorage.getItem(DRAFT_INDEX_KEY) || '[]',
+    ) as string[];
+    index.forEach(shiftId => localStorage.removeItem(getDraftKey(shiftId)));
+    localStorage.removeItem(DRAFT_INDEX_KEY);
+
+    // Belt and braces: the index can drift from reality if a write failed
+    // part-way, so sweep any orphaned draft keys too.
+    let orphans = 0;
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(DRAFT_KEY_PREFIX)) {
+        localStorage.removeItem(key);
+        orphans += 1;
+      }
+    }
+    return index.length + orphans;
+  } catch {
+    return 0;
+  }
+}
