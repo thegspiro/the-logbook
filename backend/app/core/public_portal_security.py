@@ -15,6 +15,7 @@ from loguru import logger
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.public_portal import PublicPortalAccessLog, PublicPortalAPIKey
 
@@ -460,6 +461,11 @@ async def validate_ip_rate_limit(request: Request):
     Raises:
         HTTPException: If IP rate limit is exceeded
     """
+    # See the note on check_rate_limit: honours the previously-dead
+    # RATE_LIMIT_ENABLED switch, which production/staging refuse to disable.
+    if not settings.RATE_LIMIT_ENABLED:
+        return
+
     ip_address = request.client.host if request.client else "unknown"
 
     is_allowed, current_count, limit = await check_ip_rate_limit(ip_address)

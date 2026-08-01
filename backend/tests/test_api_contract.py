@@ -66,6 +66,16 @@ def _start_server() -> str:
     Startup is paid once for the module rather than once per generated case,
     and where migrations are already at head it is a no-op check.
     """
+    # Rate limiting off for this server only. Schemathesis fires hundreds of
+    # requests per endpoint, so the 100/minute IP limiter trips almost
+    # immediately and every subsequent reply is a 429 — which the fuzzer reads
+    # as "valid input rejected" and "invalid input accepted" alike, masking the
+    # schema conformance this suite exists to check. Rate-limit behaviour has
+    # its own tests. Production and staging refuse to start with this off.
+    from app.core.config import settings as app_settings
+
+    app_settings.RATE_LIMIT_ENABLED = False
+
     import uvicorn
 
     from main import app

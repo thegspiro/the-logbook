@@ -22,13 +22,14 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.middleware.cors import CORSMiddleware as _StarletteCORSMiddleware
 
+from app.api.public import responses as public_responses
 from app.api.public.calendar import router as public_calendar_router
 from app.api.public.display import router as public_display_router
 from app.api.public.finance_approvals import router as finance_approvals_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
-from app.api.public.portal import router as public_portal_router
 from app.api.public.legal import router as public_legal_router
+from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
 from app.api.public.security_txt import router as security_txt_router
 from app.api.v1.api import api_router
@@ -1819,6 +1820,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Custom validation error handler — returns user-friendly messages
 # without leaking internal schema/field details.
 from fastapi.exceptions import RequestValidationError
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse as _JSONResponse
 
 
@@ -1869,6 +1871,78 @@ async def _validation_error_handler(request: Request, exc: RequestValidationErro
         status_code=422,
         content={"detail": errors},
     )
+
+
+# ============================================
+# OpenAPI schema corrections
+# ============================================
+
+
+def _custom_openapi() -> dict:
+    """Make the published schema describe what the app actually returns.
+
+    FastAPI generates every 422 against its own ``ValidationError`` model
+    (``loc``/``msg``/``type``, all required), but the handler above replaces
+    that body with ``{"detail": [{"field", "message"}]}``. The published
+    contract therefore described a shape no endpoint has ever returned —
+    anyone generating a client from /openapi.json got the wrong type for the
+    single most common error response, and the frontend's ``toAppError()`` was
+    written against the real shape rather than the documented one.
+
+    Rewriting the two component schemas fixes it for every route at once,
+    which is the only tractable option: the alternative is a per-route
+    ``responses=`` override on several hundred endpoints.
+    """
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    components = schema.setdefault("components", {}).setdefault("schemas", {})
+
+    # The per-field entry the handler emits.
+    components["ValidationError"] = {
+        "title": "ValidationError",
+        "type": "object",
+        "required": ["field", "message"],
+        "properties": {
+            "field": {
+                "title": "Field",
+                "type": "string",
+                "description": (
+                    "Dotted path to the offending field, or 'request' when the "
+                    "error is not attributable to one."
+                ),
+            },
+            "message": {
+                "title": "Message",
+                "type": "string",
+                "description": "Human-readable description of the constraint violated.",
+            },
+        },
+    }
+    components["HTTPValidationError"] = {
+        "title": "HTTPValidationError",
+        "type": "object",
+        "properties": {
+            "detail": {
+                "title": "Detail",
+                "type": "array",
+                "items": {"$ref": "#/components/schemas/ValidationError"},
+            }
+        },
+    }
+
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+
+app.openapi = _custom_openapi  # type: ignore[method-assign]
 
 
 # ============================================
@@ -2068,31 +2142,49 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 app.include_router(api_router, prefix="/api/v1")
 
 # Include public portal API (no /api/v1 prefix - uses /api/public/v1)
-app.include_router(public_portal_router, prefix="/api")
+app.include_router(
+    public_portal_router, prefix="/api", responses=public_responses.PORTAL
+)
 
 # Include public forms API (no auth required - uses /api/public/v1/forms)
-app.include_router(public_forms_router, prefix="/api")
+app.include_router(
+    public_forms_router,
+    prefix="/api",
+    responses={**public_responses.TOKEN_ADDRESSED, **public_responses.BAD_REQUEST},
+)
 
 # Include public display API (no auth required - uses /api/public/v1/display)
-app.include_router(public_display_router, prefix="/api")
+app.include_router(
+    public_display_router, prefix="/api", responses=public_responses.TOKEN_ADDRESSED
+)
 
 # Include public calendar ICS feed (no auth — token-protected per-user feed at
 # /api/public/v1/calendar/{token}.ics)
-app.include_router(public_calendar_router, prefix="/api")
+app.include_router(
+    public_calendar_router, prefix="/api", responses=public_responses.TOKEN_ADDRESSED
+)
 
-app.include_router(sf_webhook_router, prefix="/api")
+app.include_router(sf_webhook_router, prefix="/api", responses=public_responses.WEBHOOK)
 
 # Include Documenso & Cal.com inbound webhooks
 # (no auth — uses /api/public/v1/webhooks/{documenso,calcom})
-app.include_router(integrations_webhook_router, prefix="/api")
+app.include_router(
+    integrations_webhook_router, prefix="/api", responses=public_responses.WEBHOOK
+)
 
 # Include public finance approval endpoints (external approvers act via an
 # emailed token link — /api/public/v1/finance/approvals/{token})
-app.include_router(finance_approvals_router, prefix="/api")
+app.include_router(
+    finance_approvals_router,
+    prefix="/api",
+    responses={**public_responses.TOKEN_ADDRESSED, **public_responses.BAD_REQUEST},
+)
 
 # Public legal text (privacy policy / terms) for the anonymous /privacy and
 # /terms pages — /api/public/v1/legal
-app.include_router(public_legal_router, prefix="/api")
+app.include_router(
+    public_legal_router, prefix="/api", responses=public_responses.RATE_LIMITED
+)
 
 # RFC 9116 vulnerability-disclosure pointer. Mounted at the root (no /api
 # prefix) because the spec fixes the path at /.well-known/security.txt;

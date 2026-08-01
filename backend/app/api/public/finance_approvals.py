@@ -12,7 +12,7 @@ enforce token validity, single-use (status must be PENDING), and expiry.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,6 +44,18 @@ class ApprovalDetailResponse(BaseModel):
 class ApprovalActionResponse(BaseModel):
     status: str
     message: str
+
+
+# Declared, not just enforced: the published schema described `token` as any
+# string, so a generated client (and the contract fuzzer) treated "0" as a
+# legal request and the resulting rejection as a protocol violation. The
+# bounds mirror _load_record below — emailed approval tokens are 20-255 chars.
+APPROVAL_TOKEN = Path(
+    ...,
+    min_length=20,
+    max_length=255,
+    description="Single-use approval token from the notification email.",
+)
 
 
 async def _rate_limit(request: Request) -> None:
@@ -83,7 +95,7 @@ async def _load_record(db: AsyncSession, token: str) -> ApprovalStepRecord:
     dependencies=[Depends(_rate_limit)],
 )
 async def get_approval_detail(
-    token: str,
+    token: str = APPROVAL_TOKEN,
     db: AsyncSession = Depends(get_db),
 ):
     """Return the minimal detail an external approver needs to decide."""
@@ -109,11 +121,18 @@ async def get_approval_detail(
     dependencies=[Depends(_rate_limit)],
 )
 async def approve_via_token(
-    token: str,
     body: ApprovalActionRequest,
+    token: str = APPROVAL_TOKEN,
     db: AsyncSession = Depends(get_db),
 ):
     """Approve the step this token belongs to."""
+    # Resolve first so an unknown token answers 404, matching GET /{token}.
+    # Without this the same condition returned 404 on the detail route and 400
+    # here, because the service raises ValueError for "no such token" and for
+    # genuine state errors alike. State errors (already acted on, expired)
+    # remain 400 below — those are bad requests against a token that exists.
+    await _load_record(db, token)
+
     service = FinanceService(db)
     try:
         record = await service.approve_by_token(token, body.notes or None)
@@ -133,11 +152,18 @@ async def approve_via_token(
     dependencies=[Depends(_rate_limit)],
 )
 async def deny_via_token(
-    token: str,
     body: ApprovalActionRequest,
+    token: str = APPROVAL_TOKEN,
     db: AsyncSession = Depends(get_db),
 ):
     """Deny the step this token belongs to."""
+    # Resolve first so an unknown token answers 404, matching GET /{token}.
+    # Without this the same condition returned 404 on the detail route and 400
+    # here, because the service raises ValueError for "no such token" and for
+    # genuine state errors alike. State errors (already acted on, expired)
+    # remain 400 below — those are bad requests against a token that exists.
+    await _load_record(db, token)
+
     service = FinanceService(db)
     try:
         record = await service.deny_by_token(token, body.notes or None)

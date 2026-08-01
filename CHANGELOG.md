@@ -80,12 +80,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Playwright E2E and container tests now run in CI.** Neither had ever run.
   Repairing the E2E suite is what surfaced the two dashboard defects above;
   the container job is the first thing in CI to build a production image.
-- **API contract tests unblocked.** They could never finish — schemathesis's
-  ASGI transport re-ran the app's whole lifespan per generated case, blocking
-  forever without a database. Now ~20 seconds. The findings (published OpenAPI
-  disagreeing with actual responses) are recorded in
-  `docs/KNOWN_LIMITATIONS.md`; the CI job stays unwired until they are
-  resolved.
+- **API contract tests unblocked, then made to pass, and wired into CI.**
+  They could never finish — schemathesis's ASGI transport re-ran the app's
+  whole lifespan per generated case, blocking forever without a database. Now
+  ~55 seconds, 17/17 green, running as `backend-test-contract`.
+
+**Fixed — API contract**
+
+The unblocked suite immediately showed the published OpenAPI disagreeing with
+what the app returns. Anyone generating a client from `/openapi.json` got the
+wrong types.
+
+- **Every 422 was documented wrong.** `main.py`'s validation handler returns
+  `{"detail": [{"field", "message"}]}`, but FastAPI advertised its own
+  `loc`/`msg`/`type` model — a shape no endpoint has ever returned. The app
+  now overrides the two component schemas, correcting the single most common
+  error response across the whole API at once.
+- **Public routes declared only 200/422** while returning 401 for a missing
+  API key, 404 for an unknown token/slug/code, 400 for a malformed one, and
+  429 when rate limited. Declared per router at `include_router`, so a new
+  route in an existing public router inherits the right set.
+- **Token path params were unconstrained strings** despite the handlers
+  enforcing length bounds, so a generated client had no way to know what a
+  usable token looks like. The bounds are now in the schema.
+- **An unknown finance-approval token returned 404 on `GET` but 400 on
+  `POST`** — the same condition, two answers. Both are 404 now; genuine state
+  errors (already acted on, expired) stay 400.
+- **`RATE_LIMIT_ENABLED` was read by nothing.** It existed in config and was
+  documented, but every limiter ignored it, so an operator who set it false
+  got rate limiting anyway and no warning. It now works, and production and
+  staging refuse to start with it disabled.
+
+`/organization/info` and `/organization/stats` turned out **not** to be a bug:
+they sit under `/api/public/` but are API-key authenticated, so their 401 is
+correct — it was simply undeclared.
 
 ### Compliance: ISO standards alignment — privacy, records, and operations (2026-07-31)
 

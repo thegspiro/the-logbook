@@ -332,6 +332,17 @@ class Settings(BaseSettings):
 
         # --- Additional production/staging checks ---
         if self.ENVIRONMENT in ("production", "staging"):
+            if not self.RATE_LIMIT_ENABLED:
+                # The switch exists for fuzzing and load tests, where the
+                # limiter masks the behaviour under test. Turning it off on a
+                # real deployment removes the brute-force and scraping
+                # protection from every public and auth route at once.
+                warnings.append(
+                    "CRITICAL: RATE_LIMIT_ENABLED must be True in production — "
+                    "disabling it removes brute-force and abuse protection from "
+                    "every authentication and public endpoint"
+                )
+
             if self.SECURITY_ALLOW_UNVERIFIED_TLS:
                 # An accepted risk still has to be visible every boot, or it
                 # outlives the person who accepted it.

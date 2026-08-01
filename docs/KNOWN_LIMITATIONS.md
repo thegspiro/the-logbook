@@ -11,40 +11,6 @@ here.
 > reasonable person could choose either way; "Accepted" means we've decided to
 > live with it for now.
 
-## Public API Contract (found 2026-08-01 by the schemathesis suite)
-
-The API contract tests (`backend/tests/test_api_contract.py`) could never
-finish before 2026-08-01 — schemathesis's ASGI transport re-ran the whole
-application lifespan for every generated case, so a single endpoint blocked
-past ten minutes and the module sat excluded from CI. With that fixed the
-suite runs in ~20 seconds, and it immediately found that the **published
-OpenAPI for the public API does not match what the endpoints actually
-return**. Anyone generating a client from `/openapi.json` gets wrong types.
-
-These are open because correcting them changes the published API surface,
-which is a deliberate decision rather than a mechanical repair. **The
-`backend-test-contract` CI job is intentionally not wired up until they are
-resolved** — adding it today would make CI red on `main` for defects that
-predate it.
-
-Reproduce with a migrated database running:
-
-```bash
-cd backend && RUN_API_CONTRACT_TESTS=1 pytest tests/test_api_contract.py -v --timeout=300
-```
-
-The env gate exists because the module has to build its schema at import
-time (schemathesis generates the test functions from decorators), and pytest
-imports every test module during collection — so without the gate an
-ordinary `pytest tests/` would boot a server, run migrations and hold
-database connections on every run.
-
-| Item | Status | Detail |
-|------|--------|--------|
-| **Custom 422 body contradicts the declared schema** | Open (MED) | `main.py`'s `RequestValidationError` handler returns `{"detail": [{"field", "message"}]}`, but FastAPI still advertises its stock `ValidationError` (`loc`/`msg`/`type` all required) for every 422 in the schema. Affects the whole API, not just public routes; the frontend's `toAppError()` was written against the *real* shape. Fix by declaring the custom model and overriding the generated responses. Fails 3 endpoints outright. |
-| **401/404/400 responses undocumented** | Open (LOW) | 11 public endpoints declare only `200` (and `422`) yet return 404 for an unknown token/slug/code (`/display/{display_code}`, `/forms/{slug}`, `/calendar/{token}.ics`, `/finance/approvals/{token}`, and the three `/webhooks/*/{integration_id}` routes), 400 (`/application-status/{token}`), or 401 (`/organization/info`, `/organization/stats`, `/events/public`). Add the missing entries to each route's `responses=`. |
-| **Two `/api/public/` routes answer 401** | Verify (MED) | `/organization/info` and `/organization/stats` sit under the public prefix but return 401 unauthenticated. Confirm whether they are genuinely public (and the 401 is a bug) or mis-filed under `/api/public/`. |
-
 ## Authentication & Security
 
 | Item | Status | Detail |
@@ -106,6 +72,10 @@ frontend destructures, so renaming is a breaking change and a product decision
 repair. The likely fix is to name them for what they measure —
 `scheduled_hours` / `reported_hours`, and `shifts_scheduled` /
 `shifts_completed` — and surface both where a member compares them.
+
+The two rows below cover the related-but-separate question of which source a
+*compliance requirement* counts from; the tables above are about what the
+reporting endpoints return.
 
 | Item | Status | Detail |
 |------|--------|--------|

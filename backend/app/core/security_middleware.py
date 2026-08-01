@@ -20,6 +20,8 @@ from fastapi import Depends, HTTPException, Request, status
 from starlette.requests import HTTPConnection
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.core.config import settings
+
 # ============================================
 # Rate Limiting
 # ============================================
@@ -163,6 +165,11 @@ async def public_rate_limit(
 
     Returns ``(is_limited, reason)`` to match ``RateLimiter.is_rate_limited``.
     """
+    # See check_rate_limit: honours RATE_LIMIT_ENABLED, which production and
+    # staging refuse to start with disabled.
+    if not settings.RATE_LIMIT_ENABLED:
+        return False, None
+
     from app.core.cache import cache_manager
     from app.core.security import is_rate_limited as redis_rate_limited
 
@@ -548,6 +555,15 @@ async def check_rate_limit(
     Usage:
         @router.post("/endpoint", dependencies=[Depends(check_rate_limit)])
     """
+    # SEC: RATE_LIMIT_ENABLED existed in config but was read by nothing, so an
+    # operator who set it False got rate limiting anyway and no warning. It now
+    # does what it says. Production and staging refuse to start with it off
+    # (see validate_security_config), so the switch cannot weaken a real
+    # deployment — it exists for fuzzing and load tests, where the limiter
+    # otherwise masks the behaviour under test.
+    if not settings.RATE_LIMIT_ENABLED:
+        return
+
     # Use the proxy-aware client IP so that, behind a reverse proxy (nginx,
     # Docker, load balancer), each real client gets its own bucket. Keying on
     # request.client.host would collapse every client to the proxy's IP —
