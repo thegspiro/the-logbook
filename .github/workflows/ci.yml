@@ -30,10 +30,12 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install linting tools
-        # Pinned to the versions in backend/requirements.txt — an unpinned
-        # `black` here once resolved to a newer major whose formatting
-        # disagrees with the repo-wide pinned format.
-        run: pip install 'flake8==7.2.0' 'black==25.1.0' 'isort==5.13.2'
+        # Must stay in lockstep with the Code Quality block in
+        # backend/requirements.txt. These drifted once (flake8 7.2.0 /
+        # isort 5.13.2 here vs 7.3.0 / 8.0.1 there), so CI was green against a
+        # toolchain no developer actually ran — isort 5 and 8 disagree on how
+        # to wrap a from-import that a sibling `as` alias has split in two.
+        run: pip install 'flake8==7.3.0' 'black==25.1.0' 'isort==8.0.1' 'flake8-pytest-style==2.2.0'
 
       - name: Run flake8
         run: flake8 app/

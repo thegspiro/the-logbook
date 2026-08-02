@@ -25,3 +25,8 @@ per-file-ignores =
     # seed_test_users.py keeps a hand-aligned data table (inside a `# fmt: off`
     # block) for readability; ignore the column-alignment spacing codes for it.
     seed_test_users.py:E241,E231
+    # PT028 (flake8-pytest-style) fires on any function named test_*. These are
+    # FastAPI "test connection" route handlers, not pytest tests, and their
+    # Depends() defaults are required by the framework.
+    external_training.py:PT028
+    integrations.py:PT028

@@ -47,7 +47,9 @@ from app.schemas.training import (
     SyncResponse,
 )
 from app.schemas.training import SyncStatus as SyncStatusEnum
-from app.schemas.training import TestConnectionResponse
+from app.schemas.training import (
+    TestConnectionResponse,
+)
 from app.services.external_training_service import ExternalTrainingSyncService
 from app.utils.url_validator import validate_integration_url
 
