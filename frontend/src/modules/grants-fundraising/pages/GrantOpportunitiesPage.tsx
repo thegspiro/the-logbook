@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import {
   Search,
   Plus,
@@ -202,7 +202,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={() => navigate('/grants/opportunities/new')}
+          onClick={() => void navigate('/grants/opportunities/new')}
           className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
         >
           <Plus className="h-4 w-4" />

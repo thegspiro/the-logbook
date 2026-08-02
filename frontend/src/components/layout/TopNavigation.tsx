@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { LogOut, Menu, X, Sun, Moon, Monitor, Contrast, ChevronDown, Bell, UserCog, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -230,7 +230,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       e.preventDefault();
     }
     if (path !== '#') {
-      navigate(path);
+      void navigate(path);
       setMobileMenuOpen(false);
       setOpenDropdown(null);
     }

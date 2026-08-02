@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   ArrowLeft,
   Plus,
@@ -333,7 +333,7 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <button
-          onClick={() => navigate('/prospective-members')}
+          onClick={() => void navigate('/prospective-members')}
           className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
           aria-label="Back to prospective members"
         >

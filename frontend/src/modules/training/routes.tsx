@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { Route, Navigate } from 'react-router-dom';
+import { Route, Navigate } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { useAuthStore } from '../../stores/authStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';

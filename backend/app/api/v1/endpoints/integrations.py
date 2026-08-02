@@ -65,9 +65,15 @@ INTEGRATION_CATALOG = [
     {
         "integration_type": "csv-import",
         "name": "CSV Import/Export",
-        "description": "Import and export data in CSV format for reporting and migration.",
+        "description": (
+            "Import and export data in CSV format for reporting and "
+            "migration. Not yet usable as a configured integration — there "
+            "is no generic import/export route here. Individual modules do "
+            "ship their own working CSV exports (members, admin hours, "
+            "finance, compliance reports) from their own pages."
+        ),
         "category": "Data",
-        "status": "available",
+        "status": "coming_soon",
     },
     {
         "integration_type": "ical",
@@ -93,9 +99,15 @@ INTEGRATION_CATALOG = [
     {
         "integration_type": "nfirs-export",
         "name": "NFIRS Export",
-        "description": "Export incident data in NFIRS 5.0 format for state fire marshal reporting.",
+        "description": (
+            "Export incident data in NFIRS 5.0 format for state fire marshal "
+            "reporting. Not yet usable: The Logbook has no incident/run "
+            "record to export from, and no export route is wired up. The "
+            "field mapping exists in nfirs_service.py awaiting an incident "
+            "module."
+        ),
         "category": "Reporting",
-        "status": "available",
+        "status": "coming_soon",
     },
     {
         "integration_type": "generic-webhook",
@@ -107,17 +119,27 @@ INTEGRATION_CATALOG = [
     {
         "integration_type": "epcr-import",
         "name": "Generic ePCR Import",
-        "description": "Import run data from any ePCR vendor (ImageTrend, ESO, Zoll, etc.) via CSV or NEMSIS XML file export. The universal starting point for EMS data integration.",
+        "description": (
+            "Import run data from any ePCR vendor (ImageTrend, ESO, Zoll, "
+            "etc.) via CSV or NEMSIS XML file export. Not yet usable: the "
+            "NEMSIS parser exists but there is no upload route and no "
+            "incident record to import into."
+        ),
         "category": "EMS",
-        "status": "available",
+        "status": "coming_soon",
         "contains_phi": True,
     },
     {
         "integration_type": "nemsis-export",
         "name": "NEMSIS Response Module Export",
-        "description": "Export dispatch and response data in NEMSIS 3.5 format for state EMS reporting. Exports timestamps, disposition, and crew data — clinical data requires your ePCR vendor.",
+        "description": (
+            "Export dispatch and response data in NEMSIS 3.5 format for state "
+            "EMS reporting. Not yet usable: there is no response record to "
+            "export from and no export route is wired up. The field mapping "
+            "exists in nemsis_service.py awaiting an incident module."
+        ),
         "category": "EMS",
-        "status": "available",
+        "status": "coming_soon",
         "contains_phi": True,
     },
     {

@@ -5,7 +5,7 @@
  */
 
 import React, { Suspense } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ArrowLeft, CornerDownLeft, Loader2 } from 'lucide-react';
 
 const ReturnRequestsPanel = React.lazy(() => import('../../../components/ReturnRequestsPanel'));

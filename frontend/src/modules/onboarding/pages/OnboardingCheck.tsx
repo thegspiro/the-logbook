@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Database, Server, Shield, Wrench, Clock, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '../services/api-client';
 import { HealthStatus, ConnectionStatus } from '../../../constants/enums';
@@ -358,9 +358,9 @@ const OnboardingCheck: React.FC = () => {
       const status = response.data as { needs_onboarding?: boolean } | undefined;
 
       if (status?.needs_onboarding) {
-        navigate('/onboarding/start');
+        void navigate('/onboarding/start');
       } else {
-        navigate('/login');
+        void navigate('/login');
       }
     } catch (err) {
       console.error('Error checking onboarding status:', err);

@@ -16,6 +16,8 @@ import { markLoginComplete, clearTempAccessToken } from '../services/apiClient';
 import type { CurrentUser, LoginCredentials, RegisterData } from '../types/auth';
 import { toAppError, getErrorMessage } from '../utils/errorHandling';
 import { clearCache } from '../utils/apiCache';
+import { purgeLocalMemberData } from '../utils/purgeLocalMemberData';
+import type { PurgeResult } from '../utils/purgeLocalMemberData';
 
 /** Number of failed attempts before client-side lockout kicks in. */
 const LOGIN_LOCKOUT_THRESHOLD = 5;
@@ -114,6 +116,14 @@ interface AuthState {
   mfaRequired: boolean;
   mfaToken: string | null;
 
+  /**
+   * Set when logout discarded unsent offline work (see
+   * purgeLocalMemberData). The login page surfaces it once so the member
+   * learns their queued items were dropped rather than silently losing
+   * them. Null when the last logout discarded nothing.
+   */
+  lastLogoutPurge: PurgeResult | null;
+
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
   completeMfaLogin: (code?: string, recoveryCode?: string) => Promise<void>;
@@ -122,6 +132,7 @@ interface AuthState {
   logout: () => Promise<void>;
   loadUser: () => Promise<void>;
   clearError: () => void;
+  clearLogoutPurgeNotice: () => void;
   checkPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;
   hasPosition: (position: string) => boolean;
@@ -138,6 +149,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   lockedUntil: initialLockout.lockedUntil,
   mfaRequired: false,
   mfaToken: null,
+  lastLogoutPurge: null,
 
   login: async (credentials: LoginCredentials) => {
     // Client-side lockout check (defense-in-depth; backend enforces the real limit)
@@ -329,6 +341,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
+      // SEC (FE-6/FE-7): shift-report drafts (localStorage) and the offline
+      // queues (IndexedDB, including photo blobs) are scoped to the browser
+      // profile, not the member — on a shared station computer they would
+      // otherwise be readable by whoever signs in next. Awaited so the purge
+      // completes before the session is torn down, and non-throwing by
+      // construction so it can never strand a member signed in.
+      const purge = await purgeLocalMemberData();
+      if (purge.unsyncedDiscarded > 0) {
+        set({ lastLogoutPurge: purge });
+      }
       set({
         user: null,
         isAuthenticated: false,
@@ -398,6 +420,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   clearError: () => {
     set({ error: null });
   },
+
+  clearLogoutPurgeNotice: () => set({ lastLogoutPurge: null }),
 
   checkPermission: (permission: string) => {
     const { user } = get();

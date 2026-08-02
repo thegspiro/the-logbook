@@ -139,10 +139,10 @@ describe('schedulingStore', () => {
   describe('loadSummary', () => {
     it('should load scheduling summary', async () => {
       const summary = {
-        total_shifts: 10,
-        shifts_this_week: 3,
-        shifts_this_month: 12,
-        total_hours_this_month: 144,
+        shifts_scheduled: 10,
+        shifts_scheduled_this_week: 3,
+        shifts_scheduled_this_month: 12,
+        hours_worked_this_month: 144,
       };
       mockGetSummary.mockResolvedValue(summary);
 
@@ -164,7 +164,7 @@ describe('schedulingStore', () => {
 
     it('should clear error on successful reload', async () => {
       useSchedulingStore.setState({ summaryError: 'previous error' });
-      const summary = { total_shifts: 5, shifts_this_week: 2, shifts_this_month: 8, total_hours_this_month: 96 };
+      const summary = { shifts_scheduled: 5, shifts_scheduled_this_week: 2, shifts_scheduled_this_month: 8, hours_worked_this_month: 96 };
       mockGetSummary.mockResolvedValue(summary);
 
       await useSchedulingStore.getState().loadSummary();

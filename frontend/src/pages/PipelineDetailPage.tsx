@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
@@ -921,7 +921,7 @@ const PipelineDetailPage: React.FC = () => {
       setExpandedPhases(new Set(phasesData.map((p: ProgramPhase) => p.id)));
     } catch (_error) {
       toast.error('Failed to load program');
-      navigate('/training/programs');
+      void navigate('/training/programs');
     } finally {
       setLoading(false);
     }
@@ -952,7 +952,7 @@ const PipelineDetailPage: React.FC = () => {
     try {
       const newProgram = await trainingProgramService.duplicateProgram(programId, `${program.name} (Copy)`);
       toast.success('Pipeline duplicated successfully');
-      navigate(`/training/programs/${newProgram.id}`);
+      void navigate(`/training/programs/${newProgram.id}`);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
@@ -1083,7 +1083,7 @@ const PipelineDetailPage: React.FC = () => {
         if (programId) await trainingProgramService.deleteProgram(programId);
         toast.success('Pipeline deleted');
       },
-      after: () => navigate('/training/programs'),
+      after: () => void navigate('/training/programs'),
     });
   };
 
@@ -1136,7 +1136,7 @@ const PipelineDetailPage: React.FC = () => {
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-start space-x-4">
             <button
-              onClick={() => navigate('/training/programs')}
+              onClick={() => void navigate('/training/programs')}
               className="mt-1 p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover"
               aria-label="Back to programs"
             >

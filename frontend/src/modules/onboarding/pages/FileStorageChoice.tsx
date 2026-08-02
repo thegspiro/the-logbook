@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { HardDrive, Cloud, Database, FolderOpen, CheckCircle, Info, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
@@ -34,7 +34,7 @@ const FileStorageChoice: React.FC = () => {
 
   useEffect(() => {
     if (!departmentName) {
-      navigate('/onboarding/start');
+      void navigate('/onboarding/start');
       return;
     }
 
@@ -175,9 +175,9 @@ const FileStorageChoice: React.FC = () => {
 
       // Route based on selection
       if (fileStoragePlatform === 'other') {
-        navigate('/onboarding/authentication');
+        void navigate('/onboarding/authentication');
       } else {
-        navigate('/onboarding/file-storage-config');
+        void navigate('/onboarding/file-storage-config');
       }
     }
   };

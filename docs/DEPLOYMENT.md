@@ -564,7 +564,7 @@ sudo nginx -t
 
 ### Getting Help
 
-- 📖 Read the [FAQ](./FAQ.md)
+- 📖 Read the [Troubleshooting Guide](./TROUBLESHOOTING.md)
 - 🐛 Report issues on [GitHub Issues](https://github.com/your-org/the-logbook/issues)
 - 💬 Join our [Community Forum](https://community.yourorg.com)
 - 📧 Email support: support@yourorg.com
@@ -575,15 +575,15 @@ sudo nginx -t
 
 ### Load Balancing
 
-For high-traffic deployments, see [SCALING.md](./SCALING.md)
+For high-traffic deployments, see the scaling notes in the [production deployment wiki page](../wiki/Deployment-Production.md).
 
 ### Multi-Region Deployment
 
-For global deployments, see [MULTI-REGION.md](./MULTI-REGION.md)
+Multi-region deployment is not documented — the platform targets a single-site department deployment. Open an issue if you need guidance.
 
 ### Custom Integrations
 
-For API and webhook integrations, see [API.md](./API.md)
+For API and webhook integrations, see [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md)
 
 ### Compliance
 
@@ -595,8 +595,8 @@ For HIPAA, GDPR, and other compliance requirements, see [COMPLIANCE.md](./COMPLI
 
 - [ ] Complete [Security Checklist](#security-checklist)
 - [ ] Configure [Backups](./BACKUP.md)
-- [ ] Set up [Monitoring](./MONITORING.md)
-- [ ] Review [Security Best Practices](./SECURITY.md)
+- [ ] Set up error monitoring (Sentry — `SENTRY_ENABLED` in `.env.example.full`) and an external uptime check
+- [ ] Review [Security Best Practices](../SECURITY.md) and [Compliance](./COMPLIANCE.md)
 - [ ] Train your team on platform usage
 
 **Need help?** Don't hesitate to reach out to support!

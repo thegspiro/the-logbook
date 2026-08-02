@@ -15,7 +15,7 @@
  */
 
 import React, { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router";
 import {
   userService,
   organizationService,
@@ -582,7 +582,7 @@ export const MemberProfilePage: React.FC = () => {
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => navigate('/members')}
+            onClick={() => void navigate('/members')}
             className="text-sm text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1"
           >
             &larr; Back to Members

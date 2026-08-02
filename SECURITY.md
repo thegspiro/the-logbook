@@ -13,9 +13,12 @@ The Logbook is designed with security as a core principle, implementing industry
 5. [Data Encryption](#data-encryption)
 6. [Audit Logging](#audit-logging)
 7. [Authentication & Authorization](#authentication--authorization)
-8. [Vulnerability Reporting](#vulnerability-reporting)
-9. [Security Best Practices](#security-best-practices)
-10. [Incident Response](#incident-response)
+8. [Privacy & Data Subject Rights](#privacy--data-subject-rights)
+9. [Records Retention](#records-retention)
+10. [Supply Chain Security](#supply-chain-security)
+11. [Vulnerability Reporting](#vulnerability-reporting)
+12. [Security Best Practices](#security-best-practices)
+13. [Incident Response](#incident-response)
 
 ---
 
@@ -376,14 +379,12 @@ Automated monitoring for:
      (Settings → Authentication), enforced server-side in `get_current_user`
    - Secret and recovery codes encrypted at rest
 
-3. **OAuth 2.0 / SSO**
+3. **OAuth 2.0 / SSO (OIDC)**
    - Microsoft Azure AD
    - Google Workspace
-   - SAML support
-
-4. **LDAP / Active Directory**
-   - Enterprise directory integration
-   - Synchronized user accounts
+   - SAML and LDAP/Active Directory are **not currently implemented**
+     (planned; the `LDAP_*` settings in `.env.example.full` are inert
+     placeholders until then)
 
 ### Session Management
 
@@ -551,7 +552,102 @@ All API endpoints follow a strict policy of **never exposing internal details** 
 
 ---
 
+## Privacy & Data Subject Rights
+
+Aligned with ISO/IEC 27701 and the HIPAA right of access. See
+[docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the full control inventory.
+
+### Personal data export (portability)
+
+Members download everything the system holds about them from
+**Settings → Security → Your Data** (`GET /users/me/data-export`): profile and
+emergency contacts, training and certifications, attendance, admin hours,
+leaves, medical screening records, skill tests, dues, equipment custody,
+consents, and evaluations written about them. The export is self-scoped by
+construction — there is no route to another member's data — rate limited to
+3/hour, and audited. Credentials, MFA secrets, and unguessable tokens are
+never exported; audit history is summarized rather than dumped.
+
+### Anonymization (right to erasure)
+
+`POST /users/{id}/anonymize` (requires `members.manage`, refused for active
+members and for self) irreversibly scrubs a departed member's identity while
+preserving the operational history a department must keep:
+
+| Scrubbed | Retained |
+|----------|----------|
+| Names, username, email (replaced with per-member tokens), phone, address, date of birth, photo, emergency contacts | Training completions, certifications, attendance counts, service hours |
+| Credentials, MFA secrets, OAuth linkage, calendar/reset tokens; sessions and password history deleted | Property custody and departure clearance records |
+| Medical screening content (results, notes, provider) | Screening status and dates, as compliance proof |
+| Free-text reasons on leaves, waivers, time-off, meeting waivers; RSVP dietary/accessibility notes | Leave types and date ranges (compliance denominators) |
+| Body measurements; the applicant-era prospect record, its interview notes and uploaded documents | Dues and financial records |
+
+**Never touched:** audit logs (append-only and hash-chained — rewriting them
+is tampering; the anonymization event itself records only the user id, never
+the name) and election records (ballot integrity signatures).
+
+### Consent
+
+Optional processing is consent-gated: photo use, public roster listing, and
+SMS notifications (TCPA requires express consent for text messaging). Members
+manage these at **Settings → Security → Privacy Choices**. Current state lives
+in `user_consents`; every change is written to the tamper-evident audit log as
+`consent_updated`, which serves as the immutable consent ledger. **A member who
+was never asked is treated exactly like one who refused** — consumers of a
+consent must fail closed.
+
+---
+
+## Records Retention
+
+Retention is configurable per organization rather than hardcoded, because
+statutory retention for fire-service records varies by state (ISO 15489).
+
+- **Business records** — each managed record class (message history,
+  notification logs, form submissions) has a safe default and a **minimum
+  floor** that a typo cannot go below; the floor is re-applied at enforcement
+  time so settings edited outside the API cannot bypass it. Configured via
+  `GET/PUT /organizations/retention-policy` (audited), enforced daily.
+- **Documents and meeting minutes are deliberately excluded** from automatic
+  deletion. Destroying official records on a timer is a department decision
+  belonging in its own retention schedule, executed by a human.
+- **Audit records** — retained 7 years (`HIPAA_AUDIT_RETENTION_DAYS`).
+  Expired rows are exported to signed archives before purging; the purge is
+  checkpoint-aligned, refuses to run on a chain that fails verification, and
+  records a keyed attestation so the surviving chain still verifies while
+  unsanctioned deletions still fail. **Include `AUDIT_ARCHIVE_DIR` in your
+  backups — after a purge it is the only copy of the oldest audit history.**
+- **Platform telemetry** — blocked-access attempts (IP + user agent) age out
+  per `RETENTION_BLOCKED_ATTEMPTS_DAYS` (default 365).
+
+---
+
+## Supply Chain Security
+
+Continuous, and blocking where a fix exists (ISO/IEC 27001 A.8.8):
+
+| Control | Tool | Behavior |
+|---------|------|----------|
+| Python SAST | Bandit | Reported in CI, artifact uploaded |
+| Python dependencies | pip-audit | **Blocking**; documented deferrals only |
+| Frontend dependencies | npm audit | **Blocking at high severity** |
+| Cross-ecosystem sweep | Trivy | **Blocking** on HIGH/CRITICAL with a fix available; weekly schedule |
+| Secret scanning | gitleaks | Full history, weekly + per-PR |
+| Dependency updates | Dependabot | Weekly PRs (pip, npm, actions, docker) |
+| Bill of materials | Syft | SPDX SBOM published as a CI artifact each run |
+
+---
+
 ## Vulnerability Reporting
+
+### Discovering our contact (RFC 9116)
+
+Every deployment serves a machine-readable disclosure pointer at
+`/.well-known/security.txt`, listing the department's security contact, this
+policy, and an expiry date. Departments set their own contact with
+`SECURITY_TXT_CONTACT` (an email address or a reporting URL); unset, it points
+researchers at the upstream project's GitHub security-advisory intake. This
+follows ISO/IEC 29147 (vulnerability disclosure).
 
 ### Responsible Disclosure
 
@@ -559,7 +655,8 @@ We take security seriously. If you discover a security vulnerability:
 
 1. **DO NOT** open a public GitHub issue
 2. **DO NOT** discuss publicly before fix is deployed
-3. Email security reports to: security@yourfiredept.org
+3. Email security reports to the address in `/.well-known/security.txt`
+   (default upstream: a GitHub security advisory)
 4. Provide detailed information:
    - Description of vulnerability
    - Steps to reproduce

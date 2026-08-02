@@ -84,7 +84,7 @@ const mockTrainingData = {
       days_until_due: 302,
     },
   ],
-  hours_summary: { total_records: 15, total_hours: 120, completed_courses: 12 },
+  hours_summary: { total_records: 15, total_hours: 120, hours_this_month: 8, completed_courses: 12 },
   requirements_summary: { total_requirements: 5, met_requirements: 3, avg_compliance: 72 },
   certifications: [
     {
@@ -110,7 +110,7 @@ const mockTrainingData = {
   ],
   enrollments: [],
   shift_reports: [],
-  shift_stats: { total_shifts: 0, total_hours: 0, total_calls: 0, avg_rating: null },
+  shift_stats: { shifts_completed: 0, hours_reported: 0, total_calls: 0, avg_rating: null },
   submissions: [],
 };
 

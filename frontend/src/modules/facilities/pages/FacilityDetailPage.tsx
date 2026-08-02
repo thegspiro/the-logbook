@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router';
 import {
   Building2,
   ArrowLeft,
@@ -81,7 +81,7 @@ export default function FacilityDetailPage() {
     try {
       await archiveFacility(facility.id);
       toast.success(`${facility.name} archived`);
-      navigate('/facilities');
+      void navigate('/facilities');
     } catch {
       toast.error('Failed to archive facility');
     }
@@ -112,7 +112,7 @@ export default function FacilityDetailPage() {
         <Building2 className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
         <p className="text-theme-text-muted mb-4">Facility not found</p>
         <button
-          onClick={() => navigate('/facilities')}
+          onClick={() => void navigate('/facilities')}
           className="btn-primary inline-flex gap-2 items-center"
         >
           <ArrowLeft className="w-4 h-4" /> Back to Facilities
@@ -132,7 +132,7 @@ export default function FacilityDetailPage() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/facilities')}
+            onClick={() => void navigate('/facilities')}
             className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
             aria-label="Back to facilities"
           >

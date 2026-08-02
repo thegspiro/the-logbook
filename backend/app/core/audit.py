@@ -5,15 +5,17 @@ Implements blockchain-inspired hash chain for immutable audit logs
 with cryptographic integrity verification.
 """
 
+import gzip
 import hashlib
 import hmac
 import json
+import os
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -357,16 +359,21 @@ class AuditLogger:
                 # row's previous_hash (pointing at a now-deleted row) is never
                 # checked. Only enforce when verifying from the chain start
                 # (start_id is None); a windowed check legitimately starts mid-
-                # chain.
-                if log.previous_hash != "0" * 64:
+                # chain. A head that links to an attested retention-archival
+                # boundary (see archive_expired_logs) is the one sanctioned
+                # alternative to genesis.
+                if log.previous_hash != "0" * 64 and not (
+                    await self._is_archived_boundary(db, log.id, log.previous_hash)
+                ):
                     results["verified"] = False
                     results["errors"].append(
                         {
                             "log_id": log.id,
                             "error": (
                                 "Chain head missing - first entry does not link "
-                                "to the genesis hash (entries may have been "
-                                "removed from the start of the chain)"
+                                "to the genesis hash or an attested archival "
+                                "boundary (entries may have been removed from "
+                                "the start of the chain)"
                             ),
                             "expected_previous": "0" * 64,
                             "actual_previous": log.previous_hash,
@@ -436,6 +443,188 @@ class AuditLogger:
             logger.info(f"Rehashed {count} legacy audit log entries to fix hash chain")
 
         return count
+
+    def serialize_row(self, row: AuditLog) -> dict[str, Any]:
+        """Full serialization of an audit row, chain hashes included, for
+        export surfaces (retention archives, off-host shipping). Keeping one
+        serializer prevents drift between the two record formats."""
+        return {
+            "id": row.id,
+            "timestamp": self._normalize_timestamp(row.timestamp),
+            "timestamp_nanos": row.timestamp_nanos,
+            "event_type": row.event_type,
+            "event_category": row.event_category,
+            "severity": (
+                row.severity.value if hasattr(row.severity, "value") else row.severity
+            ),
+            "user_id": row.user_id,
+            "organization_id": getattr(row, "organization_id", None),
+            "ip_address": row.ip_address,
+            "user_agent": getattr(row, "user_agent", None),
+            "event_data": row.event_data,
+            "previous_hash": row.previous_hash,
+            "current_hash": row.current_hash,
+            "hash_version": row.hash_version,
+        }
+
+    @staticmethod
+    def compute_archive_attestation(
+        first_log_id: int, last_log_id: int, last_log_hash: str
+    ) -> str:
+        """Keyed HMAC attesting that a checkpoint range was legitimately
+        archived by the retention job. Kept out of the checkpoint's own
+        unkeyed checkpoint_hash on purpose: DB write access must not be
+        enough to sanction a head deletion."""
+        data = f"audit-archive|{first_log_id}|{last_log_id}|{last_log_hash}"
+        return hmac.new(
+            _get_audit_signing_key().encode(), data.encode(), hashlib.sha256
+        ).hexdigest()
+
+    async def _is_archived_boundary(
+        self, db: AsyncSession, head_id: int, previous_hash: str
+    ) -> bool:
+        """Whether the current chain head legitimately follows an archived
+        (exported-and-purged) range: some checkpoint below the head must
+        record this exact boundary hash with a valid keyed attestation."""
+        result = await db.execute(
+            select(AuditLogCheckpoint)
+            .where(AuditLogCheckpoint.archived_at.isnot(None))
+            .where(AuditLogCheckpoint.last_log_hash == previous_hash)
+            .where(AuditLogCheckpoint.last_log_id < head_id)
+        )
+        for cp in result.scalars().all():
+            expected = self.compute_archive_attestation(
+                cp.first_log_id, cp.last_log_id, cp.last_log_hash
+            )
+            if cp.archive_attestation and hmac.compare_digest(
+                cp.archive_attestation, expected
+            ):
+                return True
+        return False
+
+    async def archive_expired_logs(
+        self,
+        db: AsyncSession,
+        retention_days: int,
+        archive_dir: str,
+    ) -> dict[str, Any]:
+        """
+        Enforce the audit retention period: export rows older than
+        ``retention_days`` to a gzipped JSONL archive, then purge them.
+
+        Safety properties:
+        - Only checkpoint-covered ranges are purged, and only whole
+          checkpoint ranges — their Merkle roots stay in the DB as an index
+          to the exported archive, so old entries remain provable offline.
+        - The range must pass integrity verification immediately before
+          export; a chain that doesn't verify is never purged.
+        - The boundary checkpoint records the last purged row's chain hash
+          plus a keyed attestation, so verification of the surviving chain
+          still passes — and unsanctioned deletions still fail.
+        """
+        results: dict[str, Any] = {
+            "purged_entries": 0,
+            "archive_file": None,
+            "purge_start_id": None,
+            "purge_end_id": None,
+            "skipped_reason": None,
+        }
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+
+        head_result = await db.execute(select(AuditLog).order_by(AuditLog.id).limit(1))
+        head = head_result.scalar_one_or_none()
+        if head is None:
+            results["skipped_reason"] = "no audit rows"
+            return results
+
+        # Walk contiguous checkpoints from the head; a range qualifies only
+        # if its newest covered row is already past retention.
+        cp_result = await db.execute(
+            select(AuditLogCheckpoint)
+            .where(AuditLogCheckpoint.last_log_id >= head.id)
+            .order_by(AuditLogCheckpoint.first_log_id)
+        )
+        purge_end: int | None = None
+        boundary_cp: AuditLogCheckpoint | None = None
+        expected_next = head.id
+        for cp in cp_result.scalars().all():
+            if cp.first_log_id > expected_next:
+                break  # gap in checkpoint coverage — nothing beyond is safe
+            newest_ts = (
+                await db.execute(
+                    select(func.max(AuditLog.timestamp))
+                    .where(AuditLog.id >= cp.first_log_id)
+                    .where(AuditLog.id <= cp.last_log_id)
+                )
+            ).scalar()
+            if newest_ts is not None:
+                if newest_ts.tzinfo is None:
+                    newest_ts = newest_ts.replace(tzinfo=UTC)
+                if newest_ts >= cutoff:
+                    break
+                purge_end = cp.last_log_id
+                boundary_cp = cp
+            expected_next = max(expected_next, cp.last_log_id + 1)
+
+        if purge_end is None or boundary_cp is None:
+            results["skipped_reason"] = "no checkpoint-covered rows past retention"
+            return results
+
+        integrity = await self.verify_integrity(db, end_id=purge_end)
+        if not integrity["verified"]:
+            results["skipped_reason"] = (
+                "integrity verification failed - refusing to purge"
+            )
+            logger.error(
+                f"Audit retention purge aborted: range {head.id}-{purge_end} "
+                "failed integrity verification"
+            )
+            return results
+
+        rows = (
+            (
+                await db.execute(
+                    select(AuditLog)
+                    .where(AuditLog.id <= purge_end)
+                    .order_by(AuditLog.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        last_row = rows[-1]
+
+        os.makedirs(archive_dir, exist_ok=True)
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        filename = f"audit_archive_{rows[0].id:012d}-{purge_end:012d}_{stamp}.jsonl.gz"
+        archive_path = os.path.join(archive_dir, filename)
+        with gzip.open(archive_path, "wt", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(
+                    json.dumps(self.serialize_row(row), sort_keys=True, default=str)
+                    + "\n"
+                )
+
+        boundary_cp.archived_at = datetime.now(UTC)
+        boundary_cp.last_log_hash = last_row.current_hash
+        boundary_cp.archive_attestation = self.compute_archive_attestation(
+            boundary_cp.first_log_id,
+            boundary_cp.last_log_id,
+            last_row.current_hash,
+        )
+
+        await db.execute(delete(AuditLog).where(AuditLog.id <= purge_end))
+        await db.flush()
+
+        results["purged_entries"] = len(rows)
+        results["archive_file"] = archive_path
+        results["purge_start_id"] = rows[0].id
+        results["purge_end_id"] = purge_end
+        logger.info(
+            f"Audit retention: exported and purged {len(rows)} entries "
+            f"({rows[0].id}-{purge_end}) to {archive_path}"
+        )
+        return results
 
     async def create_checkpoint(
         self,

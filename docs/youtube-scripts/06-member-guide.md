@@ -1,7 +1,7 @@
 # Script 6: The Member Experience — Your Day-to-Day Guide
 
 **Video Type:** Role-Based Guide (Medium-Form)
-**Estimated Length:** 15–20 minutes
+**Estimated Length:** 18–22 minutes
 **Target Audience:** All members — Firefighters, Engineers, Lieutenants, anyone using the platform daily
 **Roles Covered:** firefighter, engineer, lieutenant, member (baseline)
 **Chapters:** 7 (each designed as a standalone clip)
@@ -374,7 +374,7 @@ Copy button, and Reset link]**
 
 ---
 
-## CHAPTER 7: Your Profile & Personal Settings (18:00 – 20:00)
+## CHAPTER 7: Your Profile & Personal Settings (18:00 – 21:30)
 
 ### USER SETTINGS (18:00 – 19:00)
 
@@ -398,7 +398,53 @@ Copy button, and Reset link]**
 > "Dark mode is nice for using The Logbook during night shifts or in low-light
 > environments."
 
-### YOUR MEMBER PROFILE (19:00 – 19:30)
+### YOUR PRIVACY CHOICES & YOUR DATA (19:00 – 20:00)
+
+**[SCREEN: Settings → Security, scrolled to the Privacy Choices section]**
+
+> "Still on the Security tab, scroll down. This part is yours, and I don't want
+> you to miss it."
+
+> "**Privacy Choices.** Three things the department can only do if you say yes.
+> Using your photo in publications and on social media. Listing your name and
+> rank on the public website roster. And sending you text-message
+> notifications."
+
+**[SCREEN: Show the three checkboxes; one displays "(not answered)"]**
+
+> "None of these are required to be a member. Check them, uncheck them, change
+> your mind next year — it's up to you, and every change is dated."
+
+**[CALLOUT: "Not answered = no. Silence is never consent."]**
+
+> "See that one marked 'not answered'? That's not a bug. If you've never made a
+> choice, the department treats it as a no. Your silence doesn't count as
+> permission. So if you're wondering why you never get department texts —
+> that's why, and this is where you fix it."
+
+**[SCREEN: Scroll to the "Your Data" section and click "Download my data"]**
+
+> "Below that: **Download my data**. One click, and you get a file containing
+> everything the system holds about you. Your profile, your whole training
+> history, every shift and event you attended, your hours, your dues, your
+> equipment, your medical screening records — all of it."
+
+**[SCREEN: The file downloads; briefly show the JSON opened in a text editor]**
+
+> "This is genuinely useful, not just a compliance checkbox. Applying to
+> another department? Your complete training history, in a file, in seconds.
+> Leaving and want a copy of your own record? Take it with you."
+
+**[CALLOUT: "Your training history, in one file, in one click"]**
+
+> "It only ever gives you *your* data — there's no way to point it at someone
+> else — and it leaves out things like your password and your two-factor
+> secret, which nobody should have a copy of."
+
+> "One tip: if you're ever leaving the department, download this *before* your
+> account is closed. It's much easier than asking for it afterward."
+
+### YOUR MEMBER PROFILE (20:00 – 20:30)
 
 **[SCREEN: Navigate to your own Member Profile (MemberProfilePage)]**
 
@@ -407,7 +453,7 @@ Copy button, and Reset link]**
 > your profile photo is uploaded — it appears on your ID card and in the
 > directory."
 
-### MOBILE ACCESS (19:30 – 20:00)
+### MOBILE ACCESS (20:30 – 21:00)
 
 > "The Logbook is a Progressive Web App — which means it works on your phone's
 > browser just like a native app. On most phones, you can 'Add to Home Screen'
@@ -422,7 +468,7 @@ Show the app opening full-screen like a native app.]**
 
 **[CALLOUT: "Add to Home Screen = full app experience on your phone"]**
 
-### WRAP-UP (20:00 – 20:30)
+### WRAP-UP (21:00 – 21:30)
 
 > "That's everything you need as a member. RSVP to events, check your training,
 > view the schedule, swap shifts, vote in elections, and access documents — all
@@ -447,4 +493,5 @@ Show the app opening full-screen like a native app.]**
 | Requesting a Shift Swap | 13:15–14:30 | "How to Request a Shift Swap" |
 | Voting in an Election | 16:00–17:00 | "How to Vote in a Department Election" |
 | Setting Up Dark Mode | 18:00–19:00 | "Customizing Your Logbook (Dark Mode & More)" |
-| Adding to Home Screen | 19:30–20:00 | "Add The Logbook to Your Phone's Home Screen" |
+| Privacy Choices & Your Data | 19:00–20:00 | "Your Privacy Choices — and Downloading Your Data" |
+| Adding to Home Screen | 20:30–21:00 | "Add The Logbook to Your Phone's Home Screen" |

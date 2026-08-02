@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   ArrowLeft,
   ArrowRight,
@@ -277,7 +277,7 @@ export const ApplicantActionPanels: React.FC<ApplicantActionPanelsProps> = ({
             <button
               onClick={() => {
                 onClose();
-                navigate(`/prospective-members/${applicant.id}/interview`);
+                void navigate(`/prospective-members/${applicant.id}/interview`);
               }}
               className="flex items-center gap-1.5 px-3 py-2 text-sm text-blue-500 border border-blue-500/30 rounded-lg hover:bg-blue-500/10 transition-colors"
               title="Open interview view"

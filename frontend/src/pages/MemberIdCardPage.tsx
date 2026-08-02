@@ -14,7 +14,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link } from "react-router";
 import { QRCodeSVG } from "qrcode.react";
 import JsBarcode from "jsbarcode";
 import { CreditCard, Printer, ArrowLeft } from "lucide-react";

@@ -124,8 +124,6 @@ These variables are baked into the frontend at build time via Vite.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `VITE_API_URL` | API base URL | `/api/v1` |
-| `VITE_ENV` | Frontend environment | `production` |
-| `VITE_ENABLE_ANALYTICS` | Enable analytics | `false` |
 
 > **Critical:** Vite replaces `import.meta.env.VITE_*` at build time. Changing these after build has no effect — you must rebuild the frontend.
 
@@ -149,6 +147,17 @@ organization's settings (`enabled_modules`), configured inside the app
 | `MAX_LOGIN_ATTEMPTS` | Attempts before lockout | `5` |
 | `LOCKOUT_DURATION_MINUTES` | Lockout duration | `30` |
 | `PASSWORD_MIN_LENGTH` | Minimum password length | `12` |
+| `ENCRYPTION_KEYS_LEGACY` | Comma-separated **previous** `ENCRYPTION_KEY` values, kept readable during a key rotation. See [docs/KEY_ROTATION.md](../docs/KEY_ROTATION.md) *(2026-07-31)* | `""` |
+| `SECURITY_TXT_CONTACT` | Security contact published at `/.well-known/security.txt` — an email address (a `mailto:` prefix is added) or a reporting URL. Unset falls back to the project's GitHub advisory intake *(2026-07-31)* | `""` |
+| `SECURITY_TXT_POLICY_URL` | Policy URL advertised in `security.txt` *(2026-07-31)* | Project `SECURITY.md` |
+| `HIPAA_AUDIT_RETENTION_DAYS` | Audit-log retention; **enforced** by the weekly archival job | `2555` (7 years) |
+| `AUDIT_ARCHIVE_DIR` | Where purged audit rows are exported as gzipped JSONL. **Back this directory up** — after a purge it is the only copy of the oldest audit history *(2026-07-31)* | `./audit_archives` |
+| `AUDIT_SHIP_WEBHOOK_URL` | Collector/SIEM endpoint for off-host audit shipping (HMAC-signed NDJSON). Unset disables shipping *(2026-07-31)* | — |
+| `AUDIT_SHIP_BATCH_SIZE` | Rows per shipping batch *(2026-07-31)* | `500` |
+| `RETENTION_BLOCKED_ATTEMPTS_DAYS` | Platform-level retention for blocked-access telemetry (IP + user agent); `0` disables. Org-scoped record classes are configured per organization instead *(2026-07-31)* | `365` |
+| `BACKUP_TIME` | Backup sidecar run time, UTC `HH:MM` *(2026-07-31)* | `02:00` |
+| `BACKUP_RETENTION_DAYS` | Days of backup archives to keep *(2026-07-31)* | `30` |
+| `VERIFY_EVERY_N_BACKUPS` | Automated restore-drill cadence; `0` disables *(2026-07-31)* | `7` |
 | `JWT_ACCESS_TOKEN_EXPIRE` | Access token lifetime (hours) | `8` |
 | `JWT_REFRESH_TOKEN_EXPIRE` | Refresh token lifetime (days) | `7` |
 | `RATE_LIMIT_PER_MINUTE` | API rate limit | `60` |

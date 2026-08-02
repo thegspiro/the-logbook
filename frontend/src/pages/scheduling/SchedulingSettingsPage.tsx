@@ -6,7 +6,7 @@
  */
 
 import React from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router";
 import { ArrowLeft, Settings, Loader2 } from "lucide-react";
 import { ShiftSettingsPanel } from "../../modules/scheduling/components/ShiftSettingsPanel";
 import type { SettingsTab } from "../../modules/scheduling/components/ShiftSettingsPanel";

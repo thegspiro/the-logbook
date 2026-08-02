@@ -7,6 +7,320 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security & correctness follow-up (2026-08-01)
+
+**Fixed**
+
+- **Offline queues shared one database at two versions.** `offlineQueue.ts`
+  opened `logbook-offline` at version 1 while `shiftReportOfflineQueue.ts`
+  opened the same database at version 2. IndexedDB rejects an open below the
+  stored version, so the first queued shift report permanently broke
+  equipment-check queueing on that browser profile. Name, version and upgrade
+  path now live in one shared module.
+- **A blocked IndexedDB open never settled.** `open()` fires `blocked` — and
+  neither `success` nor `error` — when another tab holds the database during
+  an upgrade, so the promise hung forever. Logout awaits the shared-device
+  purge, so this could strand a member signed in on a station computer. Opens
+  now reject on `blocked` and on timeout, close a handle that arrives late,
+  and set `onversionchange` so an open tab stops blocking other tabs.
+- **Queued shift reports were never purged at logout** — the densest PII of
+  any offline store (crew rosters, trainee evaluations, narratives).
+- **The dashboard could white-screen.** `progress?.requirement_progress
+  .filter()` guarded the object but not the array, so an enrollment whose
+  progress payload omitted the key threw during render and the ErrorBoundary
+  replaced the whole page.
+- **Notification rows nested a `<button>` inside a `<button>`**, which is
+  invalid HTML — the browser closes the outer element early and assistive
+  technology receives a broken tree.
+- **`/training/category-hours/` was cacheable** by the client SWR cache
+  despite being per-member training data; added to `UNCACHEABLE_PREFIXES`.
+- **Four documented frontend env vars did nothing.** `VITE_WS_URL`,
+  `VITE_ENV`, `VITE_ENABLE_PWA` and `VITE_ENABLE_ANALYTICS` were declared and
+  documented but read by no code. Two were actively misleading: the inventory
+  socket derives its URL from the page origin (which is what makes it work
+  behind a reverse proxy), and the PWA plugin is registered unconditionally,
+  so setting `VITE_ENABLE_PWA=false` still shipped the service worker whose
+  `NetworkOnly` rule for `/api/` is part of the HIPAA caching posture.
+  Removed from the type declaration and from every doc that listed them.
+
+**Security**
+
+- **Administrator lockout guard (ORU-7).** Nothing counted how many
+  administrators an organization had left, so a sole administrator could lock
+  out a whole department in one request — `PATCH` their own status to
+  `inactive` and authentication rejects them on the next call. Recovery
+  required direct database access. Guarded on role assignment and removal,
+  member delete, status change, archive, and position edit/delete.
+- **Separation of duties on approvals** (ISO/IEC 27001 A.5.3). A treasurer
+  could raise a check request and approve it; an instructor could examine
+  themselves and record a pass that satisfied a certification requirement; an
+  officer could approve their own administrative hours. Approval now requires
+  a second person on all three. Practice skills tests stay self-serve, and
+  rejection is never blocked — withdrawing your own request is not a conflict.
+- **Unverified TLS fails closed.** `DB_SSL`/`REDIS_SSL` without a CA gives an
+  encrypted channel whose peer is never authenticated, which is worse than
+  honest plaintext because it is indistinguishable from a correct setup. Now
+  blocks startup in production/staging; `SECURITY_ALLOW_UNVERIFIED_TLS` waives
+  it and logs the acceptance on every boot.
+- **PBKDF2 raised to 600,000 iterations** for the data-encryption key, with
+  100k retained so existing ciphertext stays readable. New values carry a
+  `$gcm2$` marker; the existing key-rotation tooling rewrites `$gcm1$` values
+  onto the new factor.
+- **Two endpoints over-shared (ORU-8).** `GET /users/with-roles` returned
+  every column on the user model while `GET /users` filtered contact details
+  against the organization's visibility setting — both need only `users.view`,
+  so the setting was bypassable by choosing the other URL. And
+  `GET /organization/settings`, open to every authenticated member, redacted
+  credentials but not the infrastructure they authenticate to (mail host, S3
+  bucket and endpoint, SharePoint site, SSO issuer, OAuth tenant and client
+  IDs). Both now redact for callers without the relevant admin permission.
+
+**Changed — scheduling response fields say which measure they are**
+
+Shift counts and hours came from three tables, and two shipped under the
+*same field name* with incompatible meanings — `GET /scheduling/summary`
+returned three counts of *scheduled* shifts beside a sum of *worked*
+attendance minutes, all named as though they were the same kind of number. A
+member comparing that screen against a completion report saw a discrepancy
+that looked like a bug.
+
+**Breaking (API response fields):**
+
+| Endpoint | Was | Now |
+|----------|-----|-----|
+| `GET /scheduling/summary` | `total_shifts`, `shifts_this_week`, `shifts_this_month` | `shifts_scheduled`, `shifts_scheduled_this_week`, `shifts_scheduled_this_month` |
+| `GET /scheduling/summary` | `total_hours_this_month` | `hours_worked_this_month` |
+| `GET /scheduling/reports/member-hours` | `shift_count`, `total_minutes`, `total_hours` | `shifts_attended`, `worked_minutes`, `worked_hours`, plus `shifts_scheduled`, `scheduled_minutes`, `scheduled_hours` |
+| `GET /training/module-config/my-training` | `shift_stats.total_shifts`, `.total_hours` | `.shifts_completed`, `.hours_reported` |
+
+**Member hours now come from attendance.** An assignment is a plan, not a
+measurement — a shift can run short or long, or be assigned and never worked —
+so the member-hours report is sourced from `ShiftAttendance` check-in/check-out
+rather than assignment durations. Anything that credits or pays a member uses
+the measured figure. The scheduled totals stay alongside with a Difference
+column so plan-vs-actual is visible rather than something a reader has to know
+to ask about, and a member who worked a shift they were never rostered for now
+appears in the report (the two aggregates are merged on member, not joined).
+
+**Fixed — the dashboard's "Total Hours" summed incompatible periods.** The card
+is labelled "This month", but only standby hours were month-scoped: training
+and administrative hours were *lifetime* totals, so the headline figure added
+two all-time numbers to one monthly one and meant nothing. All three are now
+month-to-date (in the organization's timezone, not UTC), and every card says
+what it counts — "Completed courses, this month", "Shifts worked, this month",
+"Clocked in, this month", and "This month: training + standby + admin" on the
+total. `GET /training/module-config/my-training` gained
+`hours_summary.hours_this_month` for this; its `total_hours` stays lifetime,
+which is the right reading for "my training record".
+
+**Testing & CI**
+
+- **Playwright E2E and container tests now run in CI.** Neither had ever run.
+  Repairing the E2E suite is what surfaced the two dashboard defects above;
+  the container job is the first thing in CI to build a production image. The
+  container job supplies the six secrets `docker-compose.yml` declares with
+  `${VAR:?}` required-variable syntax — without them `docker compose config`
+  exits non-zero on a checkout with no `.env`, which would have failed the job
+  on its first run.
+- **API contract tests unblocked, then made to pass, and wired into CI.**
+  They could never finish — schemathesis's ASGI transport re-ran the app's
+  whole lifespan per generated case, blocking forever without a database. Now
+  ~55 seconds, 17/17 green, running as `backend-test-contract`.
+
+**Fixed — API contract**
+
+The unblocked suite immediately showed the published OpenAPI disagreeing with
+what the app returns. Anyone generating a client from `/openapi.json` got the
+wrong types.
+
+- **Every 422 was documented wrong.** `main.py`'s validation handler returns
+  `{"detail": [{"field", "message"}]}`, but FastAPI advertised its own
+  `loc`/`msg`/`type` model — a shape no endpoint has ever returned. The app
+  now overrides the two component schemas, correcting the single most common
+  error response across the whole API at once.
+- **Public routes declared only 200/422** while returning 401 for a missing
+  API key, 404 for an unknown token/slug/code, 400 for a malformed one, and
+  429 when rate limited. Declared per router at `include_router`, so a new
+  route in an existing public router inherits the right set.
+- **Token path params were unconstrained strings** despite the handlers
+  enforcing length bounds, so a generated client had no way to know what a
+  usable token looks like. The bounds are now in the schema.
+- **An unknown finance-approval token returned 404 on `GET` but 400 on
+  `POST`** — the same condition, two answers. Both are 404 now; genuine state
+  errors (already acted on, expired) stay 400.
+- **`RATE_LIMIT_ENABLED` was read by nothing.** It existed in config and was
+  documented, but every limiter ignored it, so an operator who set it false
+  got rate limiting anyway and no warning. It now works, and production and
+  staging refuse to start with it disabled.
+
+`/organization/info` and `/organization/stats` turned out **not** to be a bug:
+they sit under `/api/public/` but are API-key authenticated, so their 401 is
+correct — it was simply undeclared.
+
+### Compliance: ISO standards alignment — privacy, records, and operations (2026-07-31)
+
+A gap assessment against the ISO/IEC standards relevant to the platform
+(`docs/ISO_STANDARDS_ASSESSMENT.md`) and the implementation of its full
+roadmap. Departments can now demonstrate data-subject rights, records
+retention, and continuity practices that previously had no software support.
+
+**Added**
+
+- **Privacy pages** — public `/privacy` and `/terms` with substantive
+  fire-service defaults (PHI, emergency contacts, retention, member rights,
+  essential-cookies-only). Departments override the wording via organization
+  settings (`legal.privacy_policy` / `legal.terms_of_service`), served by an
+  anonymous, rate-limited `GET /api/public/v1/legal`. Custom text renders as
+  plain paragraphs, never HTML; multi-org installs get defaults only.
+- **Personal data export** (ISO/IEC 27701 portability, HIPAA right of
+  access) — `GET /users/me/data-export` returns everything the system holds
+  about the calling member as JSON: profile and emergency contacts, training
+  and certifications, shift/event/meeting attendance, admin hours, leaves,
+  medical screening, skill tests, dues, equipment custody, consents, and
+  evaluations about them. Self-scoped, audited, rate-limited (3/hour);
+  credentials, MFA secrets, and tokens are never exported. Audit history is
+  summarized rather than dumped. UI: Settings → Security → "Download my data".
+- **Member anonymization** (right to erasure) — `POST /users/{id}/anonymize`
+  for departed members: scrubs names, contacts, address, DOB, photo,
+  emergency contacts, credentials, MFA material and tokens; deletes sessions,
+  password history, and body-measurement rows; scrubs medical-screening
+  content (keeping status/dates as compliance proof), free-text reasons on
+  leaves/waivers/time-off, RSVP dietary and accessibility notes, and the
+  applicant-era prospect record (a full second copy of the member's PII).
+  Audit logs and election records are deliberately untouched — rewriting them
+  would be tampering. `users.anonymized_at` records the event.
+- **Consent tracking** (ISO/IEC 27701) — `user_consents` holds current state
+  per (member, type) for photo use, public roster listing, and SMS
+  notifications (TCPA express consent); every change is written to the
+  tamper-evident audit log as `consent_updated`, which is the immutable
+  consent ledger. `GET/PUT /users/me/consents`; UI: Settings → Security →
+  Privacy Choices. Never-asked fails closed — it is never treated as consent.
+- **Records retention schedules** (ISO 15489) — per-organization retention
+  per record class with safe defaults and minimum floors (message history,
+  notification logs, form submissions; platform-level blocked-access
+  telemetry via `RETENTION_BLOCKED_ATTEMPTS_DAYS`), enforced by a daily
+  `retention_enforcement` task. Admin API `GET/PUT
+  /organizations/retention-policy`, audited. Documents and meeting minutes
+  are deliberately excluded from auto-deletion: destroying official records
+  stays a human decision under the department's own schedule.
+- **Audit-log retention enforcement** — `HIPAA_AUDIT_RETENTION_DAYS` (7
+  years) was declared but never applied. The weekly job now exports expired
+  rows to gzipped JSONL archives (`AUDIT_ARCHIVE_DIR`) before purging them.
+  Purges are checkpoint-aligned, refuse to run on a chain that fails
+  verification, and record a keyed HMAC attestation of the boundary so the
+  surviving chain still verifies while unsanctioned head deletions and forged
+  attestations still fail.
+- **Off-host audit-log shipping** — new `audit_log_ship` task (every 30
+  minutes, no-op unless configured) POSTs new audit rows to
+  `AUDIT_SHIP_WEBHOOK_URL` as HMAC-signed NDJSON batches. The hash chain
+  detects tampering; only an off-host copy survives table deletion. A durable
+  watermark (`audit_ship_state`) advances only on acknowledgment.
+- **Encryption key rotation** — decryption now tries the current
+  `ENCRYPTION_KEY` then each key in `ENCRYPTION_KEYS_LEGACY`, so a rotation
+  is safe at every step while new writes use the current key.
+  `scripts/rotate_encryption_key.py` drains a rotation (dry-run by default);
+  runbook in `docs/KEY_ROTATION.md`.
+- **Vulnerability disclosure endpoint** — RFC 9116
+  `/.well-known/security.txt`, configuration-driven via
+  `SECURITY_TXT_CONTACT` / `SECURITY_TXT_POLICY_URL` (ISO/IEC 29147).
+- **Backup sidecar with restore drills** (ISO 22301) — production compose
+  gains a `backup` service: nightly database + uploads + audit-archive
+  snapshots to a `backups` volume, retention pruning, and an automated
+  restore-verification drill every `VERIFY_EVERY_N_BACKUPS` runs that loads
+  the dump into a throwaway schema and asserts the schema came back
+  (`scripts/verify_backup.sh`). A failed drill keeps failing loudly nightly.
+- **CI supply-chain hardening** — `.github/dependabot.yml` (pip, npm,
+  actions, docker); `npm audit` now blocking at high severity; new
+  `secret-scan.yml` (gitleaks, full history, weekly + per-PR, with a
+  `.gitleaks.toml` allowlist covering the 122 triaged doc/test placeholders);
+  new `supply-chain.yml` (Trivy HIGH/CRITICAL dependency sweep + Syft SPDX
+  SBOM artifact).
+- **Coverage gates** — backend `pytest-cov` ratchet floors (unit 46%,
+  integration 44%) alongside the existing frontend ratchet, which was raised
+  to 53% lines / 40% functions / 44% branches / 51% statements.
+- **Accessibility test coverage** — axe checks expanded from a single
+  component to the shared UX library (ConfirmDialog, EmptyState, Pagination,
+  Breadcrumbs, Collapsible, ProgressSteps, Tooltip, Skeletons) and the public
+  legal pages.
+- **Documentation** — `docs/COMPLIANCE.md` (compliance hub: framework
+  overview, technical-control inventory as an audit evidence index, honest
+  gaps table), `docs/BACKUP.md`, `docs/KEY_ROTATION.md`,
+  `docs/ISO_STANDARDS_ASSESSMENT.md`, and `docs/policies/` (ISO 27001 policy
+  set + Statement of Applicability skeletons with `[DEPARTMENT: ...]`
+  placeholders).
+
+**Changed**
+
+- **react-router 6.30 → 8.3** across ~230 files. `react-router-dom` was
+  retired upstream at v7 (an unpatched re-export shim), so the app now
+  depends on the core `react-router` package; imports changed, the API did
+  not. Clears the v6 open-redirect/SSR-hydration advisories *and* the v7
+  RSC-mode CSRF advisory. React bumped 19.2.4 → 19.2.8 for react-router 8's
+  peer range (root `overrides` moved with it to keep a single React copy).
+  `navigate()` returns a Promise from v7 onward, so ~280 fire-and-forget
+  call sites now use the repo's explicit `void` convention.
+  `npm audit --omit=dev` reports **zero vulnerabilities**.
+- **Removed `pysaml2` and `python-ldap`** — declared but never imported, so
+  pure CVE surface. Docs claiming SAML/LDAP SSO corrected (OIDC via
+  Google/Microsoft is what exists); the `LDAP_*` settings are marked inert
+  placeholders. Drops the LDAP build dependencies from CI and the two
+  pyopenssl `pip-audit` ignores that only existed because of pysaml2's cap.
+- Frontend production advisories fixed in-range: axios → 1.19.0,
+  dompurify → 3.4.12.
+- Audit retention archives moved to a persistent named volume — they were
+  written inside the backend container filesystem and would have been
+  destroyed on rebuild, despite being the only copy of purged audit history.
+- `docs/DEPLOYMENT.md` links repaired: `BACKUP.md` (referenced 3×) and
+  `COMPLIANCE.md` were linked but had never been written; `API.md`,
+  `MONITORING.md`, and a docs-relative `SECURITY.md` also pointed nowhere.
+
+**Fixed**
+
+- **`member_leaves_of_absence.end_date` was `NOT NULL` in the schema** while
+  the model documents `NULL` as "permanent leave" — recording a permanent
+  leave failed with IntegrityError 1048 on any real database
+  (migration `20260801_0013`).
+- The hardcoded 90-day `message_history_cleanup` task would have silently
+  overridden any organization's configured retention; it now delegates to the
+  retention service (default still 90 days, so behavior is unchanged for
+  departments that never configure it).
+- npm caching in CI pointed at `frontend/package-lock.json`, which does not
+  exist in this workspace layout (the lockfile is at the repo root).
+
+**Documentation**
+
+- Secondary-doc sweep for this batch: `CHANGELOG.md`, the wiki (new
+  **Security-Privacy** page plus updates to Overview, Audit Logging,
+  Encryption, HIPAA, API Reference, Database Schema, Environment,
+  Deployment-Production/Docker/Guide, Installation, Technology Stack, Home and
+  sidebar), a new training lesson **17 — Privacy & Your Data** with
+  cross-references from lessons 00 and 08, and YouTube scripts (a new privacy
+  chapter in script 03, member privacy/data-export coverage in script 06, and
+  Shorts 8K/8L).
+- **Corrected documentation that described features which do not exist:**
+  - The wiki documented **SAML 2.0 and LDAP/Active Directory sign-in with
+    configuration steps**. Neither is implemented; the pages now say so and
+    point at the OAuth/OIDC support that is real.
+  - `BACKUP_ENABLED` / `BACKUP_SCHEDULE` / `BACKUP_LOCATION` were documented
+    across six files (env examples, wiki, Unraid guides, a YouTube script) but
+    **no code has ever read them** — operators following those instructions
+    would have had no backups at all. Replaced with the variables the backup
+    sidecar actually uses (`BACKUP_TIME`, `BACKUP_RETENTION_DAYS`,
+    `VERIFY_EVERY_N_BACKUPS`).
+  - `React Router 6.x` in the tech stack (now 8.3).
+- Repaired broken documentation links, including pre-existing ones outside this
+  batch: `FAQ.md`, `SCALING.md`, `MULTI-REGION.md`, `ELECTION_SECURITY_AUDIT.md`,
+  `ONBOARDING_REVIEW.md`, `ASYNC_SQLALCHEMY_REVIEW.md`, `MEMBER_ID_CARD.md`,
+  two wrong relative paths in the Unraid wiki page, and two wiki links pointing
+  at pages that were never created.
+
+**Migrations**
+
+`20260801_0010` (audit checkpoint archival columns), `20260801_0011`
+(`audit_ship_state`), `20260801_0012` (`users.anonymized_at`),
+`20260801_0013` (leave `end_date` nullable fix), `20260801_0014`
+(`user_consents`).
+
 ### Cleanup batch: deferred audit items, Pydantic v2 style, config docs (2026-07-31)
 
 **Fixed**

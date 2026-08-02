@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   CheckCircle2,
   Clock,
@@ -161,9 +161,9 @@ const ActionItemsPage: React.FC = () => {
               className="card-secondary cursor-pointer hover:bg-theme-surface-hover p-4 transition-colors"
               onClick={() => {
                 if (item.source === 'meeting') {
-                  navigate(`/minutes`);
+                  void navigate(`/minutes`);
                 } else {
-                  navigate(`/minutes/${item.source_id}`);
+                  void navigate(`/minutes/${item.source_id}`);
                 }
               }}
             >

@@ -42,8 +42,6 @@ qrcode==8.0
 
 # OAuth & SSO
 authlib==1.6.12
-python-ldap==3.4.5
-pysaml2==7.5.4
 
 # ============================================
 # Encryption & Security

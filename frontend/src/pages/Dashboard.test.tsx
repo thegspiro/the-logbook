@@ -15,8 +15,8 @@ vi.mock('react-hot-toast', () => ({
 
 // Mock navigate
 const mockNavigate = vi.fn();
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
+vi.mock('react-router', async () => {
+  const actual = await vi.importActual('react-router');
   return {
     ...actual,
     useNavigate: () => mockNavigate,
@@ -51,7 +51,7 @@ vi.mock('../services/api', () => ({
     getMyEnrollments: vi.fn().mockResolvedValue({ items: [] }),
   },
   trainingModuleConfigService: {
-    getMyTraining: vi.fn().mockResolvedValue({ hours_summary: { total_hours: 0 } }),
+    getMyTraining: vi.fn().mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 } }),
   },
   organizationService: {
     getSetupChecklist: vi.fn().mockResolvedValue({ completed_count: 0, total_count: 0 }),

@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { eventService, meetingsService } from '../services/api';
@@ -362,7 +362,7 @@ export const EventDetailPage: React.FC = () => {
       setSubmitting(true);
       const newEvent = await eventService.duplicateEvent(eventId);
       toast.success('Event duplicated successfully');
-      navigate(`/events/${newEvent.id}/edit`);
+      void navigate(`/events/${newEvent.id}/edit`);
     } catch (err) {
       toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to duplicate event');
     } finally {
@@ -387,7 +387,7 @@ export const EventDetailPage: React.FC = () => {
         await eventService.deleteEvent(eventId);
         toast.success('Event deleted successfully');
       }
-      navigate('/events');
+      void navigate('/events');
     } catch (err) {
       toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to delete event');
     } finally {
@@ -502,7 +502,7 @@ export const EventDetailPage: React.FC = () => {
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error || 'Event not found'}</p>
           <button
-            onClick={() => navigate('/events')}
+            onClick={() => void navigate('/events')}
             className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 underline"
           >
             Back to Events
@@ -675,7 +675,7 @@ export const EventDetailPage: React.FC = () => {
                 </span>
               )}
               <button
-                onClick={() => navigate(`/events/${eventId}/qr-code`)}
+                onClick={() => void navigate(`/events/${eventId}/qr-code`)}
                 className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-xs text-sm font-medium text-blue-700 dark:text-blue-400 bg-theme-surface hover:bg-blue-500/20"
               >
                 <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -693,7 +693,7 @@ export const EventDetailPage: React.FC = () => {
               {canManage && (
                 <>
                   <button
-                    onClick={() => navigate(`/events/${eventId}/edit`)}
+                    onClick={() => void navigate(`/events/${eventId}/edit`)}
                     className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-xs text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover"
                   >
                     <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -793,7 +793,7 @@ export const EventDetailPage: React.FC = () => {
                             </button>
                           )}
                           <button
-                            onClick={() => { setShowActionsMenu(false); navigate(`/events/${eventId}/monitoring`); }}
+                            onClick={() => { setShowActionsMenu(false); void navigate(`/events/${eventId}/monitoring`); }}
                             className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
                           >
                             Monitoring Dashboard
@@ -806,7 +806,7 @@ export const EventDetailPage: React.FC = () => {
                                 try {
                                   await meetingsService.createFromEvent(eventId);
                                   toast.success('Meeting created from event');
-                                  navigate(`/minutes`);
+                                  void navigate(`/minutes`);
                                 } catch (err) {
                                   const axiosErr = err as AxiosError<{ detail?: string }>;
                                   toast.error(axiosErr.response?.data?.detail || 'Failed to create meeting');

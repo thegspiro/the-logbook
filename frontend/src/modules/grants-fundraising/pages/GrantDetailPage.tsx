@@ -8,7 +8,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
@@ -435,7 +435,7 @@ export const GrantDetailPage: React.FC = () => {
           </p>
           <button
             type="button"
-            onClick={() => navigate('/grants/applications')}
+            onClick={() => void navigate('/grants/applications')}
             className="rounded-lg bg-red-600 px-6 py-3 text-sm font-medium text-white hover:bg-red-700"
           >
             Back to Applications
@@ -484,7 +484,7 @@ export const GrantDetailPage: React.FC = () => {
           {/* Back link */}
           <button
             type="button"
-            onClick={() => navigate('/grants/applications')}
+            onClick={() => void navigate('/grants/applications')}
             className="mb-4 inline-flex items-center gap-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -517,7 +517,7 @@ export const GrantDetailPage: React.FC = () => {
             <button
               type="button"
               onClick={() =>
-                navigate(`/grants/applications/${application.id}/edit`)
+                void navigate(`/grants/applications/${application.id}/edit`)
               }
               className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
             >

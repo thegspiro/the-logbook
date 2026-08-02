@@ -717,14 +717,16 @@ class TestPositionEligibilityTokens(TestTokenBallotSetup):
             "app.services.email_service.EmailService.send_batch",
             new=AsyncMock(side_effect=lambda batch: [True] * len(batch)),
         ):
-            sent, failed, skipped, skipped_details, _sent_ids = await svc.send_ballot_emails(
-                election_id=uuid.UUID(data["election_id"]),
-                organization_id=uuid.UUID(data["org_id"]),
-                recipient_user_ids=[
-                    uuid.UUID(data["user_id"]),
-                    uuid.UUID(data["admin_id"]),
-                ],
-                base_ballot_url="https://fd.example/ballot",
+            sent, failed, skipped, skipped_details, _sent_ids = (
+                await svc.send_ballot_emails(
+                    election_id=uuid.UUID(data["election_id"]),
+                    organization_id=uuid.UUID(data["org_id"]),
+                    recipient_user_ids=[
+                        uuid.UUID(data["user_id"]),
+                        uuid.UUID(data["admin_id"]),
+                    ],
+                    base_ballot_url="https://fd.example/ballot",
+                )
             )
 
         assert sent == 1, f"expected 1 sent, got {sent} (skipped: {skipped_details})"

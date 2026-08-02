@@ -57,14 +57,35 @@ ENCRYPTION_SALT=<32-character hex string>  # openssl rand -hex 16
 
 > **Email credentials at rest:** All email platform secrets — `smtp_password`, `google_client_secret`, `google_app_password`, `microsoft_client_secret`, and `cloudflare_api_token` — are AES-256-GCM encrypted before being stored in the organization settings JSON column. They are prefixed with `enc:` to prevent double-encryption and are redacted to `••••••••` in all API responses.
 
-### Key Rotation
+### Key Rotation *(2026-07-31)*
 
-To rotate encryption keys:
+Rotation uses a **legacy-key ring**: decryption tries the current
+`ENCRYPTION_KEY` first, then each key listed in `ENCRYPTION_KEYS_LEGACY`
+(comma-separated). Encryption always uses the current key. Because AES-GCM
+authenticates every value, only the correct key can decrypt — trying several
+never weakens the fail-closed guarantee. That makes every intermediate state
+of a rotation safe: nothing breaks the moment you deploy the new key.
 
-1. Generate new `ENCRYPTION_KEY` and `ENCRYPTION_SALT`
-2. Run the key rotation script (decrypts with old key, re-encrypts with new)
-3. Update `.env` with new values
-4. Restart the backend
+1. Back up the database **and** your current `.env` secrets first.
+2. Move the old key into `ENCRYPTION_KEYS_LEGACY`, set the new
+   `ENCRYPTION_KEY`, and restart. Do **not** change `ENCRYPTION_SALT` — it is
+   installation-scoped, not key-scoped, and changing it invalidates every key
+   in the ring.
+3. Drain the rotation (dry-run by default):
+   ```bash
+   docker exec -it intranet-backend python scripts/rotate_encryption_key.py
+   docker exec -it intranet-backend python scripts/rotate_encryption_key.py --commit
+   ```
+4. When a `--commit` run reports zero rotated and zero unreadable values,
+   remove the drained key from `ENCRYPTION_KEYS_LEGACY` and restart.
+
+> ⚠️ **A database backup without its era's `ENCRYPTION_KEY`/`ENCRYPTION_SALT`
+> cannot decrypt sensitive fields.** Keep retired keys archived alongside the
+> backups they match. Full runbook: [`docs/KEY_ROTATION.md`](../docs/KEY_ROTATION.md).
+
+> `SECRET_KEY` (JWT signing) is different — rotating it signs everyone out by
+> design. `AUDIT_LOG_SIGNING_KEY` must not be casually rotated: historical
+> audit rows verify under the key that wrote them.
 
 ---
 

@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Building2,
   Plus,
@@ -62,7 +62,7 @@ export default function FacilitiesDashboard() {
   }, [error]);
 
   const handleFacilityClick = (facility: Facility) => {
-    navigate(`/facilities/${facility.id}`);
+    void navigate(`/facilities/${facility.id}`);
   };
 
   const stats = dashboardStats;
@@ -80,7 +80,7 @@ export default function FacilitiesDashboard() {
         <div className="flex items-center gap-2">
           {facilities.length > 0 && (
             <button
-              onClick={() => navigate(`/facilities/print-labels?ids=${facilities.map(f => f.id).join(',')}`)}
+              onClick={() => void navigate(`/facilities/print-labels?ids=${facilities.map(f => f.id).join(',')}`)}
               className="flex gap-2 items-center py-2.5 px-3 border border-theme-surface-border rounded-lg text-sm text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
             >
               <Printer className="w-4 h-4" />
@@ -126,7 +126,7 @@ export default function FacilitiesDashboard() {
               value={stats?.overdueMaintenanceCount ?? 0}
               subtext={stats?.overdueMaintenanceCount ? 'Action required' : 'All caught up'}
               color={stats?.overdueMaintenanceCount ? 'red' : 'emerald'}
-              onClick={() => navigate('/facilities/maintenance?status=overdue')}
+              onClick={() => void navigate('/facilities/maintenance?status=overdue')}
             />
             <SummaryCard
               icon={ClipboardCheck}
@@ -134,7 +134,7 @@ export default function FacilitiesDashboard() {
               value={stats?.upcomingInspections.length ?? 0}
               subtext="Next 30 days"
               color="amber"
-              onClick={() => navigate('/facilities/inspections')}
+              onClick={() => void navigate('/facilities/inspections')}
             />
           </div>
 
@@ -148,7 +148,7 @@ export default function FacilitiesDashboard() {
                   <h2 className="text-sm font-semibold text-theme-text-primary">Overdue Maintenance</h2>
                 </div>
                 <button
-                  onClick={() => navigate('/facilities/maintenance?status=overdue')}
+                  onClick={() => void navigate('/facilities/maintenance?status=overdue')}
                   className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 transition-colors"
                 >
                   View all <ArrowRight className="w-3 h-3" />
@@ -199,7 +199,7 @@ export default function FacilitiesDashboard() {
                   <h2 className="text-sm font-semibold text-theme-text-primary">Upcoming Inspections</h2>
                 </div>
                 <button
-                  onClick={() => navigate('/facilities/inspections')}
+                  onClick={() => void navigate('/facilities/inspections')}
                   className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 transition-colors"
                 >
                   View all <ArrowRight className="w-3 h-3" />
@@ -322,7 +322,7 @@ export default function FacilitiesDashboard() {
           onClose={() => setShowCreateModal(false)}
           onCreated={(facility) => {
             setShowCreateModal(false);
-            navigate(`/facilities/${facility.id}`);
+            void navigate(`/facilities/${facility.id}`);
           }}
         />
       )}

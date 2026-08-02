@@ -10,7 +10,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import { Printer, AlertTriangle } from 'lucide-react';
 

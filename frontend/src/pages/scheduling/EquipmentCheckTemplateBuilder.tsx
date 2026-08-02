@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router';
 import {
   Plus,
   Trash2,
@@ -1415,7 +1415,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         setIsDirty(false);
         toast.success('Template created');
         // Navigate to edit mode so subsequent saves work as updates
-        navigate(`/scheduling/equipment-check-templates/${created.id}`, { replace: true });
+        void navigate(`/scheduling/equipment-check-templates/${created.id}`, { replace: true });
         return;
       }
 
@@ -1504,7 +1504,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const cloned = await schedulingService.cloneEquipmentCheckTemplate(templateId, '');
       setIsDirty(false);
       toast.success('Template cloned');
-      navigate(`/scheduling/equipment-check-templates/${cloned.id}`, { replace: true });
+      void navigate(`/scheduling/equipment-check-templates/${cloned.id}`, { replace: true });
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to clone template'));
     } finally {
@@ -3056,7 +3056,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             type="button"
             onClick={() => {
               if (isDirty && !window.confirm('You have unsaved changes. Leave anyway?')) return;
-              navigate(-1);
+              void navigate(-1);
             }}
             className="p-2 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors flex-shrink-0"
             title="Go back"

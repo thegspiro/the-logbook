@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { electionService, eventService, meetingsService } from '../services/api';
 import type { MeetingRecord } from '../services/api';
@@ -447,7 +447,7 @@ export const ElectionDetailPage: React.FC = () => {
       });
       setShowCloneModal(false);
       toast.success('Draft election created');
-      navigate(`/elections/${clone.id}`);
+      void navigate(`/elections/${clone.id}`);
     } catch (err: unknown) {
       setCloneError(getErrorMessage(err, 'Failed to clone election'));
     } finally {
@@ -735,7 +735,7 @@ export const ElectionDetailPage: React.FC = () => {
 
       setShowDeleteModal(false);
       toast.success(response.message);
-      navigate('/elections');
+      void navigate('/elections');
     } catch (err: unknown) {
       setDeleteError(getErrorMessage(err, 'Failed to delete election'));
     } finally {

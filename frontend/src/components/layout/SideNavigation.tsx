@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router";
 import {
   Home,
   Users,
@@ -555,7 +555,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       return;
     }
     if (path !== "#") {
-      navigate(path);
+      void navigate(path);
       setMobileMenuOpen(false);
     }
   };

@@ -1205,7 +1205,7 @@ Fully built frontend pages for: Events, Inventory, Training, Documents, Scheduli
 - **Double-Voting Prevention**: 4 partial unique indexes on votes table prevent duplicate votes at the database level
 - **Results Timing**: Requires `status=CLOSED` AND `end_date` passed before revealing vote counts
 - **IntegrityError Handling**: `cast_vote()` returns user-friendly error instead of 500
-- **Security Audit**: Full review documented in [ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md) (rating: 7.1/10)
+- **Security Audit**: Full review documented in [ELECTION_SECURITY_AUDIT.md](./module-audit/elections.md) (rating: 7.1/10)
 
 ---
 

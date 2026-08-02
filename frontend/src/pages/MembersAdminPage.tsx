@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import { userService, roleService, locationsService } from '../services/api';
 import type { Location } from '../services/api';
 import type { UserWithRoles, Role } from '../types/role';
@@ -555,7 +555,7 @@ export const MembersAdminPage: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end gap-3">
                       <button
-                        onClick={() => navigate(`/members/admin/edit/${user.id}`)}
+                        onClick={() => void navigate(`/members/admin/edit/${user.id}`)}
                         className="text-green-700 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
                       >
                         Edit

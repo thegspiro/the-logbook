@@ -17,10 +17,10 @@ services.
 
 | # | Title | Target Audience | Est. Length |
 |---|-------|----------------|-------------|
-| 3 | IT Manager / System Admin — Complete Platform Guide | IT managers, system owners | 30–40 min |
+| 3 | IT Manager / System Admin — Complete Platform Guide | IT managers, system owners | 35–40 min |
 | 4 | Fire Chief & Department Leadership Guide | Chiefs, Deputy Chiefs, Presidents | 25–30 min |
 | 5 | Training Officer — Managing Certifications & Programs | Training officers, compliance officers | 20–25 min |
-| 6 | The Member Experience — Your Day-to-Day Guide | All members, firefighters, engineers | 15–20 min |
+| 6 | The Member Experience — Your Day-to-Day Guide | All members, firefighters, engineers | 18–22 min |
 | 7 | Secretary & Administrative Officer Guide | Secretaries, treasurers, admin staff | 20–25 min |
 
 ### Feature Deep Dives (Medium/Short-Form, focused on one subsystem)
@@ -38,9 +38,9 @@ services.
 
 > Script 12 is the canonical elections deep-dive — it supersedes the elections
 > chapters in Scripts 4 and 7 and ships with its own **edge-case shorts pack
-> (12a–12j)** covering eligibility debugging, test ballots, early-close
+> (12a–12k)** covering eligibility debugging, test ballots, early-close
 > results, receipts, proxies, runoffs, quorum, the rollback rule, dispute
-> forensics, and voting-method selection.
+> forensics, voting-method selection, and the pre-meeting package.
 
 ### Quick Tips / Shorts (1–3 minutes, extracted from role guides or standalone)
 
@@ -54,6 +54,10 @@ services.
 | 8f | Adding a New Member to the System | Script 3/7 |
 | 8g | Setting Up Two-Factor Authentication | Script 3 |
 | 8h | Viewing the Scheduling Dashboard | Script 5/7 |
+| 8i | Put Your Shifts in Your Phone Calendar | Script 6 |
+| 8j | Require End-of-Shift Checks Before Finalizing | Script 5 |
+| 8k | Download Everything The Logbook Knows About You | Script 6 |
+| 8l | Why You're Not Getting Department Texts | Script 6 |
 | 12a | "Why Can't This Member Vote?" — Eligibility Debugging | Script 12 |
 | 12b | Test Ballots — Practice Without Polluting the Results | Script 12 |
 | 12c | Closed Early? Here's Why Results Are Hidden | Script 12 |

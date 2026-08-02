@@ -13,7 +13,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router';
 import { userService } from '../services/api';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
@@ -178,7 +178,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
           <button
-            onClick={() => navigate(`/members/admin/edit/${userId}`)}
+            onClick={() => void navigate(`/members/admin/edit/${userId}`)}
             className="mt-4 text-sm text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
           >
             &larr; Back to Member Edit
@@ -194,7 +194,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => navigate(`/members/admin/edit/${userId}`)}
+            onClick={() => void navigate(`/members/admin/edit/${userId}`)}
             className="text-sm text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center gap-1"
           >
             &larr; Back to Edit Member

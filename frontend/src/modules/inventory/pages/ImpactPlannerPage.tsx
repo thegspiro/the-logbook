@@ -7,7 +7,7 @@
  * how many to buy, in which sizes, and who to contact for the exchange.
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import {
   ArrowLeft, Target, RefreshCw, Users, ShoppingCart, CheckCircle2,
   Ruler, Download, Loader2, Search, Truck, FileText, PackageCheck,

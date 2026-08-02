@@ -1319,4 +1319,87 @@ Click any row to expand it and see the full **event metadata** — a JSON view o
 
 ---
 
+## Privacy, Retention & Data Rights (2026-07-31)
+
+> **Required Permission:** `settings.manage` for retention, `members.manage`
+> for anonymization
+
+Three administrative capabilities were added for data-protection compliance.
+This section is the summary; the full walkthrough — including the member-facing
+side — is in [Privacy & Your Data](./17-privacy-data-rights.md).
+
+### Records Retention Schedules
+
+**Settings → Organization → Retention** configures how long each class of
+record is kept. Statutory retention for fire-service records varies by state,
+so the schedule is yours to set rather than fixed by the platform.
+
+| Record class | Default | Minimum you can set |
+|--------------|---------|--------------------|
+| Message history (email/SMS delivery records) | 90 days | 30 days |
+| Notification logs | Keep forever | 30 days |
+| Form submissions (may hold applicant PII) | Keep forever | 90 days |
+
+A daily job applies the schedule. Every change is written to the audit log.
+
+> **Note:** **Documents and meeting minutes are never auto-deleted.** They are
+> official records; disposing of them is a human decision under your own
+> records schedule, not something a timer should do.
+
+> **Hint:** The minimums are a guard against typos. Entering `3` when you meant
+> `30` is rejected outright — and even a value written directly into the
+> database is clamped when the job runs.
+
+### Anonymizing a Departed Member
+
+Once a member has been dropped or archived and their departure clearance is
+complete, **Anonymize** scrubs their personal information while keeping the
+operational history the department needs.
+
+Removed: name, contact details, address, date of birth, photo, emergency
+contacts, credentials, body measurements, medical screening content, free-text
+reasons on leaves and waivers, and the original application record with its
+interview notes and uploaded documents.
+
+Kept: training completions and certifications, attendance and service hours,
+property custody and clearance records, dues, and medical screening *status
+and dates* so past compliance remains provable.
+
+Never touched: the audit log (append-only and cryptographically chained) and
+election records (ballot integrity).
+
+> **Note:** Anonymization is **irreversible** and is refused for active
+> members and for your own account. Encourage departing members to download
+> their own data export before their account goes away.
+
+### Audit Log Retention
+
+The seven-year audit retention period is now **enforced**, not merely
+configured. A weekly job exports entries past retention to compressed archives
+and then removes them from the database.
+
+> **Note:** Back up the audit archive directory. After a purge those files are
+> the only copy of your oldest audit history. The production backup service
+> includes them automatically.
+
+Departments running a SIEM can also stream audit entries off the server as
+they are written — the cryptographic chain proves tampering, but only an
+off-site copy survives wholesale deletion. See
+[Scheduled Tasks](#scheduled-tasks) for the jobs involved
+(`retention_enforcement`, `audit_log_archival`, `audit_log_ship`).
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Retention set below a class minimum | Rejected with a 400 and the minimum stated |
+| Retention left unset | The class default applies; "keep forever" classes delete nothing |
+| Anonymizing an active member | Refused — change status to dropped or archived first |
+| Anonymizing twice | Refused; the operation runs once and cannot be undone |
+| Anonymizing a member in another organization | Returns "not found" — every by-id lookup is org-scoped |
+| Two members anonymized in the same department | Each receives a distinct placeholder identity, so the unique email/username constraints still hold |
+| Backup restored from before an anonymization | The old PII returns with it. Re-run anonymization after restoring, and account for this in your retention policy |
+
+---
+
 **Previous:** [Documents & Forms](./07-documents-forms.md) | **Next:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)

@@ -28,7 +28,7 @@ import {
   Info,
   Archive,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { PipelineKanban } from '../components/PipelineKanban';
@@ -323,7 +323,7 @@ export const ProspectiveMembersPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/prospective-members/settings')}
+            onClick={() => void navigate('/prospective-members/settings')}
             className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors"
           >
             <Settings className="w-4 h-4" />
@@ -629,7 +629,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 Create a pipeline to start managing prospective members.
               </p>
               <button
-                onClick={() => navigate('/prospective-members/settings')}
+                onClick={() => void navigate('/prospective-members/settings')}
                 className="btn-primary px-6"
               >
                 Configure Pipeline
@@ -651,7 +651,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   </label>
                   <div className="flex items-center gap-2 ml-auto">
                     <button
-                      onClick={() => navigate(`/prospective-members/print-labels?ids=${[...selectedApplicants].join(',')}`)}
+                      onClick={() => void navigate(`/prospective-members/print-labels?ids=${[...selectedApplicants].join(',')}`)}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg transition-colors"
                     >
                       <Printer className="w-3.5 h-3.5" />

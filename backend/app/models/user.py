@@ -389,6 +389,10 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     deleted_at = Column(DateTime(timezone=True))
+    # Set when this member's PII was scrubbed by the anonymization workflow
+    # (member_anonymization_service). NULL = not anonymized. Operational
+    # history rows stay linked to the anonymized shell record.
+    anonymized_at = Column(DateTime(timezone=True))
 
     # Relationships
     organization = relationship("Organization", back_populates="users")

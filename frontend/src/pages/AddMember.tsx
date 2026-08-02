@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   UserPlus,
   Save,
@@ -224,7 +224,7 @@ const AddMember: React.FC = () => {
       await userService.createMember(memberPayload);
 
       toast.success('Member added successfully!');
-      navigate('/members');
+      void navigate('/members');
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error, 'Failed to add member. Please try again.');
       toast.error(errorMessage);
@@ -241,10 +241,10 @@ const AddMember: React.FC = () => {
   const handleCancel = () => {
     if (Object.values(formData).some((val) => val !== '' && val !== 'active' && val !== 'phone')) {
       if (confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
-        navigate('/members');
+        void navigate('/members');
       }
     } else {
-      navigate('/members');
+      void navigate('/members');
     }
   };
 

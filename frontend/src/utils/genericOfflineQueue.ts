@@ -12,6 +12,7 @@
  * (`useOfflineSyncEngine`) drains the queue when connectivity returns.
  */
 import type { AxiosInstance } from 'axios';
+import { openIndexedDb } from './offlineDb';
 
 export type GenericQueueKind = 'training-submission' | 'event-rsvp';
 
@@ -32,17 +33,14 @@ const DB_VERSION = 1;
 const STORE = 'pendingMutations';
 const MAX_RETRIES = 5;
 
+// This queue owns its own database (`logbook-offline-generic`), separate from
+// the shared `logbook-offline` one, but uses the same guarded open helper so a
+// blocked upgrade rejects instead of hanging the caller. See offlineDb.ts.
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: 'id' });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
+  return openIndexedDb(DB_NAME, DB_VERSION, (db) => {
+    if (!db.objectStoreNames.contains(STORE)) {
+      db.createObjectStore(STORE, { keyPath: 'id' });
+    }
   });
 }
 
@@ -147,3 +145,24 @@ export async function flushOne(item: GenericQueuedItem, axios: AxiosInstance): P
 }
 
 export const GENERIC_QUEUE_MAX_RETRIES = MAX_RETRIES;
+
+/**
+ * Discard every queued generic item (training submissions, event RSVPs).
+ *
+ * SEC (FE-7): see clearAllQueuedChecks in offlineQueue.ts — same shared-device
+ * reasoning. Returns the number discarded.
+ */
+export async function clearAllGenericQueued(): Promise<number> {
+  const db = await openDB();
+  const count = await new Promise<number>((resolve) => {
+    const req = txStore(db, 'readonly').count();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(0);
+  });
+  await new Promise<void>((resolve) => {
+    const req = txStore(db, 'readwrite').clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => resolve();
+  });
+  return count;
+}

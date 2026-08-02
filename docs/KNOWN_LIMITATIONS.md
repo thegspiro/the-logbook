@@ -22,7 +22,7 @@ here.
 
 | Item | Status | Detail |
 |------|--------|--------|
-| **CI `pip-audit` step** | ✅ Blocking (2026-07-30) | The FastAPI/starlette upgrade pass moved the stack to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), fastapi-mail 1.6.5, aiosmtplib 5.1.2, PyJWT 2.13.0, cryptography 49.0.0, pydantic-settings 2.14.2, pypdf 6.14.2, email-validator 2.3.0, schemathesis 4.24.3, pytest 9.0.3 (+ pytest-cov 7 / randomly 4.1 / timeout 2.4, required by schemathesis 4.10+). `pip-audit -r requirements.txt` now runs **blocking** in CI with two documented ignores: black 26 (major that reformats the whole repo — PYSEC-2026-2120/2121) and pyopenssl (capped `<24.3` upstream by pysaml2 with no released fix inside the cap — PYSEC-2026-2268/2269). Remove an ignore when its blocker clears. |
+| **CI `pip-audit` step** | ✅ Blocking (2026-07-30) | The FastAPI/starlette upgrade pass moved the stack to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), fastapi-mail 1.6.5, aiosmtplib 5.1.2, PyJWT 2.13.0, cryptography 49.0.0, pydantic-settings 2.14.2, pypdf 6.14.2, email-validator 2.3.0, schemathesis 4.24.3, pytest 9.0.3 (+ pytest-cov 7 / randomly 4.1 / timeout 2.4, required by schemathesis 4.10+). `pip-audit -r requirements.txt` now runs **blocking** in CI with one documented ignore: black 26 (major that reformats the whole repo — PYSEC-2026-2120/2121). Remove the ignore when its blocker clears. (The former pyopenssl ignores — PYSEC-2026-2268/2269, forced by pysaml2's `<24.3` cap — were dropped 2026-07-31 along with the unused pysaml2/python-ldap dependencies.) |
 
 ## Configuration & Docs
 
@@ -30,13 +30,12 @@ here.
 |------|--------|--------|
 | **`SECRET_KEY` guidance mismatch** | ✅ Resolved (2026-07-31) | Not a mismatch: `openssl rand -hex 32` outputs **64 hex characters** (32 bytes), which meets the 64-char recommendation (config hard-min is 32 chars). README annotated with the output length to prevent the same misreading. |
 | **`.env.example` defaults to `ENVIRONMENT=production`** | ✅ Resolved | `.env.example` and `.env.example.full` both ship `ENVIRONMENT=development` (and docker-compose defaults to development), so the by-the-book quick start is not blocked. |
-| **`VITE_WS_URL` / `VITE_ENABLE_PWA` documented but unused** | ✅ Resolved (2026-07-31) | Removed from `vite-env.d.ts`, `frontend/.env.example`, `frontend/setup.sh`, and all docs/wiki pages — never read anywhere (not even `vite.config.ts`), same rationale as the `MODULE_*_ENABLED` removal. Reintroduce alongside the feature if websockets/PWA flags ever land. |
+| **Frontend env vars documented but unused** | ✅ Resolved (2026-08-01) | `VITE_WS_URL`, `VITE_ENABLE_PWA`, `VITE_ENV` and `VITE_ENABLE_ANALYTICS` are all read by nothing — not by `frontend/src`, not by `vite.config.ts`. Removed from `vite-env.d.ts`, `frontend/.env.example`, `frontend/setup.sh` and every docs/wiki page. Two were actively misleading: the inventory socket derives its URL from the page origin (which is what makes it work behind a reverse proxy), and the PWA plugin is registered unconditionally, so `VITE_ENABLE_PWA=false` still shipped the service worker whose `NetworkOnly` rule for `/api/` is part of the HIPAA caching posture. Reintroduce one only alongside code that reads it. |
 
 ## Training Module
 
 | Item | Status | Detail |
 |------|--------|--------|
-| **Per-user training endpoints not in `UNCACHEABLE_PREFIXES`** | Open decision (PHI) | `/training/compliance-summary/{id}`, `/requirements/progress/{id}`, `/category-hours/{id}`, and org-wide `/compliance-matrix` / `/expiring-certifications` are cacheable by the SWR client cache. Decide which are PHI-sensitive enough to exclude (see the HIPAA cache rules in CLAUDE.md). |
 | **`BIANNUAL` requirement frequency has no date window** | Verify | `training_compliance.py` sums lifetime totals for hours/shift/call requirements on a `BIANNUAL` cadence instead of a 2-year window. Confirm `BIANNUAL` is only used with expiry-bearing certs; otherwise add a 2-year window. |
 | **`enrolled_count` is a placeholder** | Open (small feature) | `TrainingProgramsPage` shows a hardcoded "0 enrolled" — there is no `enrolled_count` on the program response yet. Wiring it is a small backend + schema addition (the per-program enrollments endpoint `GET /training/programs/programs/{id}/enrollments` now exists to source it). |
 | **No knowledge-test engine (officer-entered scores only)** | Open (feature) | `knowledge_test` requirements are satisfied by an officer entering a pass/fail or score % on the requirement (pass/fail derived from `passing_score`, `max_attempts` enforced, attempts recorded). There is no online test-taking flow — question bank, delivery, or auto-grading. That is a deliberate future project; the current support is the lightweight groundwork. |
@@ -44,12 +43,32 @@ here.
 
 ## Scheduling Module
 
+### Naming: scheduled vs. worked (resolved 2026-08-01)
+
+Shift counts and hours came from three different tables, and two of them
+shipped under the *same field name* with incompatible meanings, so a member
+comparing screens saw a discrepancy that looked like a bug. The response
+fields now say which measure they are:
+
+| Endpoint | Was | Now | Measures |
+|----------|-----|-----|----------|
+| `GET /scheduling/summary` | `total_shifts`, `shifts_this_week`, `shifts_this_month` | `shifts_scheduled`, `shifts_scheduled_this_week`, `shifts_scheduled_this_month` | Scheduled `Shift` rows |
+| `GET /scheduling/summary` | `total_hours_this_month` | `hours_worked_this_month` | Actual `ShiftAttendance` minutes |
+| `GET /scheduling/reports/member-hours` | `shift_count`, `total_minutes`, `total_hours` | `shifts_attended`, `worked_minutes`, `worked_hours` (+ `shifts_scheduled`, `scheduled_minutes`, `scheduled_hours`) | Attendance check-in/check-out, with the scheduled plan alongside |
+| `GET /training/module-config/my-training` | `shift_stats.total_shifts`, `.total_hours` | `.shifts_completed`, `.hours_reported` | `ShiftCompletionReport` rows |
+
+The member-hours report was then **re-sourced from attendance** (2026-08-01):
+an assignment is a plan, not a measurement — a shift can run short or long,
+or be assigned and never worked — so anything that credits or pays a member
+now uses the measured figure. Scheduled totals ride alongside with a
+Difference column, so plan-vs-actual is visible rather than something a
+reader has to know to ask about.
+
 | Item | Status | Detail |
 |------|--------|--------|
 | **`ManualShiftReportPage` local-date pattern** | Open (small fix) | Uses `toISOString().split('T')[0]` for "today", which is UTC-shifted near midnight; should use `getTodayLocalDate(tz)`. Tracked here because it lives in a module outside the current review scope. |
 | **Platoon presets cover 3-platoon rotations** | Accepted | Multi-platoon generation offsets are validated for the common 3-platoon presets (24/48, Kelly, 48/96). Departments running non-standard platoon counts should verify the generated tiling. See [SCHEDULING_MODULE.md → Platoon Rotations](./SCHEDULING_MODULE.md#platoon-rotations-added-2026-06-19). |
 | **"Shifts completed" has three sources of truth** | Open (needs product decision) | A `RequirementType.SHIFTS` requirement is counted from `TrainingRecord`s in `training_service._evaluate_requirement`/`check_requirement_progress`, but from actual `ShiftAttendance` in `scheduling_service.get_shift_compliance` — and the pipeline also credits progress via the `RequirementProgress` ledger. The same requirement can therefore show different numbers on different screens. Reconciling changes established compliance numbers, so it needs an owner decision on the authoritative source before it's unified onto one shared helper. Deferred during the 2026-07-16 lifecycle review. |
-| **Member-hours report uses scheduled, not actual, hours** | Open (needs product decision) | `get_member_hours_report` sums scheduled assignment durations (`start_time`→`end_time`), not actual `ShiftAttendance` duration, so it can diverge from hours actually worked/credited. Confirm intended semantics before changing (report title vs. data source). |
 | **No formal "active/in-progress" shift state** | Accepted | `ShiftStatus` is `scheduled`/`cancelled` only; a shift's "activeness" is implied by `start_time`/`end_time` vs. now, and `is_finalized` marks closed. The live readiness panel (2026-07-16) covers most of the operational need without a dedicated state. |
 
 ## Multi-Tenant Isolation & Module Audit (2026-07-25)

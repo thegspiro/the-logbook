@@ -18,6 +18,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import JSONResponse
 from loguru import logger
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,6 +34,7 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import ROLE_MEMBER
 from app.core.database import database_manager, get_db
+from app.core.permissions import get_rank_default_permissions
 from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
@@ -48,6 +50,11 @@ from app.schemas.user import (
     UserProfileResponse,
     UserUpdate,
     UserWithRolesResponse,
+)
+from app.services.admin_continuity_service import (
+    LastAdministratorError,
+    assert_not_last_administrator,
+    assert_positions_retain_administrator,
 )
 from app.services.organization_service import OrganizationService
 from app.services.security_monitoring import report_privilege_escalation_attempt
@@ -430,6 +437,43 @@ async def check_contact_info_enabled(
     }
 
 
+def _redact_contact_fields(
+    user: User, visibility: dict[str, bool], is_admin: bool
+) -> UserWithRolesResponse:
+    """Blank out contact details the caller is not entitled to see.
+
+    Builds the response from the ORM object then clears fields, rather than
+    filtering at query time, so a future column added to the schema is visible
+    by default and has to be considered here — the reverse (an allow-list that
+    silently drops new fields) hides bugs instead of surfacing them.
+
+    Members-managers keep everything: they are the people who maintain these
+    records, and the visibility setting exists to control what the *roster*
+    shows the general membership.
+    """
+    payload = UserWithRolesResponse.model_validate(user)
+    if is_admin:
+        return payload
+
+    if not visibility.get("show_email", False):
+        payload.email = None
+    if not visibility.get("show_phone", False):
+        payload.phone = None
+    if not visibility.get("show_mobile", False):
+        payload.mobile = None
+
+    # Never surfaced by the roster endpoint at any visibility setting, so the
+    # setting has no "show" flag for them — they are admin-only by definition.
+    payload.personal_email = None
+    payload.address_street = None
+    payload.address_city = None
+    payload.address_state = None
+    payload.address_zip = None
+    payload.address_country = None
+
+    return payload
+
+
 @router.get("/with-roles", response_model=list[UserWithRolesResponse])
 async def list_users_with_roles(
     db: AsyncSession = Depends(get_db),
@@ -441,8 +485,37 @@ async def list_users_with_roles(
     This endpoint is for the Members admin page.
     Requires `users.view` or `members.manage` permission.
 
+    Contact information is redacted the same way `GET /users` redacts it —
+    see the note in the implementation.
+
     **Authentication required**
     """
+    is_admin = _has_permission(
+        "members.manage", _collect_user_permissions(current_user)
+    )
+
+    visibility: dict[str, bool] = {}
+    if not is_admin:
+        org_service = OrganizationService(db)
+        try:
+            org_settings = await org_service.get_organization_settings(
+                current_user.organization_id
+            )
+            contact = org_settings.contact_info_visibility
+            if contact.enabled:
+                visibility = {
+                    "show_email": contact.show_email,
+                    "show_phone": contact.show_phone,
+                    "show_mobile": contact.show_mobile,
+                }
+        except Exception as e:
+            # Fail closed: an unreadable settings row must hide contact
+            # details, not reveal them.
+            logger.warning(
+                f"Failed to load contact visibility settings, redacting contact "
+                f"info on /users/with-roles: {e}"
+            )
+
     result = await db.execute(
         select(User)
         .where(User.organization_id == str(current_user.organization_id))
@@ -452,7 +525,14 @@ async def list_users_with_roles(
     )
     users = result.scalars().all()
 
-    return users
+    # SEC (ORU-8): this endpoint returned every field on the model, while
+    # `GET /users` filtered contact details against the organization's
+    # contact_info_visibility setting. Both are reachable with plain
+    # `users.view`, so a member who was refused an email address on the roster
+    # could read it — plus home address and personal email, which the roster
+    # never exposes at all — by requesting this URL instead. Redact here too,
+    # or the setting is advisory.
+    return [_redact_contact_fields(user, visibility, is_admin) for user in users]
 
 
 @router.get("/{user_id}/roles", response_model=UserRoleResponse)
@@ -583,6 +663,25 @@ async def assign_user_roles(
     await _enforce_role_grant_ceiling(
         current_user, list(roles), db, get_client_ip(request)
     )
+
+    # The escalation ceiling above only guards *raising* permissions. This call
+    # replaces the user's entire position set — including with an empty list —
+    # so it is also the cheapest way to strip the last administrator.
+    resulting_permissions: set[str] = set()
+    for role in roles:
+        resulting_permissions.update(role.permissions or [])
+    if user.rank:
+        resulting_permissions.update(get_rank_default_permissions(user.rank))
+    try:
+        await assert_positions_retain_administrator(
+            db,
+            str(current_user.organization_id),
+            user_id,
+            resulting_permissions,
+            action="remove administrator positions from",
+        )
+    except LastAdministratorError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     # Remove all existing role assignments
     await db.execute(delete(user_roles).where(user_roles.c.user_id == str(user_id)))
@@ -776,6 +875,23 @@ async def remove_role_from_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User does not have this role"
         )
+
+    resulting_permissions: set[str] = set()
+    for role in user.roles:
+        if str(role.id) != str(role_id):
+            resulting_permissions.update(role.permissions or [])
+    if user.rank:
+        resulting_permissions.update(get_rank_default_permissions(user.rank))
+    try:
+        await assert_positions_retain_administrator(
+            db,
+            str(current_user.organization_id),
+            user_id,
+            resulting_permissions,
+            action="remove the last administrator position from",
+        )
+    except LastAdministratorError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     role_removed_name = role_to_remove.name
     user.roles.remove(role_to_remove)
@@ -1165,6 +1281,18 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+
+    # The self-delete check above stops an admin removing themselves, but not
+    # one admin removing the other and only remaining one.
+    try:
+        await assert_not_last_administrator(
+            db,
+            str(current_user.organization_id),
+            user_id,
+            action="delete",
+        )
+    except LastAdministratorError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     # Capture values before delete/commit
     deleted_username = user.username
@@ -1798,3 +1926,161 @@ async def get_member_audit_history(
         )
 
     return entries
+
+
+@router.get("/me/data-export")
+async def export_my_data(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Download everything the system stores about the calling member
+    (data portability / subject access). Self-scoped by construction —
+    there is no way to export another member's data through this route.
+
+    Rate limited hard: assembling the export touches every module's tables.
+    """
+    await check_rate_limit(
+        request, max_requests=3, window_seconds=3600, scope="data_export"
+    )
+
+    from app.services.data_export_service import DataExportService
+
+    export = await DataExportService(db).export_user_data(current_user)
+
+    await log_audit_event(
+        db=db,
+        event_type="user_data_export",
+        event_category="security",
+        severity="info",
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+        event_data={"sections": len(export)},
+    )
+    await db.commit()
+
+    filename = "logbook-personal-data-export.json"
+    return JSONResponse(
+        content=export,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/{user_id}/anonymize", status_code=status.HTTP_200_OK)
+async def anonymize_member(
+    user_id: str,
+    request: Request,
+    current_user: User = Depends(require_permission("members.manage")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Irreversibly scrub a departed member's PII while retaining their
+    operational history (training, attendance, property custody) linked to
+    an anonymized shell record. Refused for active members and for self.
+
+    See member_anonymization_service for exactly what is scrubbed, kept,
+    and why audit logs / election records are never rewritten.
+    """
+    if str(current_user.id) == str(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot anonymize your own account",
+        )
+
+    from app.services.member_anonymization_service import MemberAnonymizationService
+
+    service = MemberAnonymizationService(db)
+    user = await service.get_user_for_anonymization(
+        user_id, str(current_user.organization_id)
+    )
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    try:
+        summary = await service.anonymize_member(user)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    # Deliberately no name/email in the event payload: audit rows are
+    # immutable, so identity written here would survive the anonymization.
+    await log_audit_event(
+        db=db,
+        event_type="user_anonymized",
+        event_category="security",
+        severity="warning",
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+        event_data={"anonymized_user_id": str(user_id)},
+    )
+    await db.commit()
+    return summary
+
+
+@router.get("/me/consents")
+async def get_my_consents(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    The calling member's optional-processing consents (photo use, public
+    roster listing, SMS notifications). granted=null means never asked —
+    consumers treat that exactly like a refusal.
+    """
+    from app.services.consent_service import ConsentService
+
+    return await ConsentService(db).list_for_user(current_user)
+
+
+@router.put("/me/consents/{consent_type}")
+async def set_my_consent(
+    consent_type: str,
+    request: Request,
+    granted: bool = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Record the calling member's consent choice. Self-scoped by construction;
+    every change is written to the tamper-evident audit log, which serves
+    as the immutable consent ledger.
+    """
+    from app.models.consent import ConsentType
+    from app.services.consent_service import ConsentService
+
+    try:
+        parsed_type = ConsentType(consent_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown consent type: {consent_type}",
+        )
+
+    row = await ConsentService(db).set_consent(current_user, parsed_type, granted)
+
+    await log_audit_event(
+        db=db,
+        event_type="consent_updated",
+        event_category="security",
+        severity="info",
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+        event_data={"consent_type": parsed_type.value, "granted": granted},
+    )
+    await db.commit()
+
+    return {
+        "consent_type": (
+            row.consent_type.value
+            if hasattr(row.consent_type, "value")
+            else row.consent_type
+        ),
+        "granted": row.granted,
+    }

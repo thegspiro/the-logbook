@@ -1,7 +1,7 @@
 /** PoolItemsPage — View for pool-tracked (quantity-based) inventory items. */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import {
   ArrowLeft, Package, Plus, Search, RefreshCw, AlertTriangle,
   Users, ArrowDownToLine, Loader2, X, ChevronDown, ChevronUp,

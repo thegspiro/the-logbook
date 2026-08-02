@@ -49,6 +49,7 @@ from app.models.compliance_config import (
     ReportFrequency,
     ReportStatus,
 )
+from app.models.consent import ConsentType, UserConsent
 from app.models.document import (
     SYSTEM_FOLDERS,
     Document,
@@ -631,4 +632,7 @@ __all__ = [
     "ComplianceThresholdType",
     "ReportFrequency",
     "ReportStatus",
+    # Consent models
+    "ConsentType",
+    "UserConsent",
 ]

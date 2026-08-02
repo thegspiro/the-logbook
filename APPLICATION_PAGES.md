@@ -16,6 +16,8 @@ Complete reference of all pages in the application, organized by module.
 | `/f/:slug` | Public Form | Public form submission (token-based) |
 | `/ballot` | Ballot Voting | Public ballot voting (token-based) |
 | `/display/:code` | Location Kiosk Display | QR code display for tablets in rooms (display-code-based) |
+| `/privacy` | Privacy Policy | Public privacy notice; department-configurable text |
+| `/terms` | Terms of Service | Public terms of use; department-configurable text |
 
 ---
 
@@ -451,6 +453,17 @@ The Scheduling Settings page uses a tabbed sub-navigation:
 | `/admin/analytics` | Analytics Dashboard | `analytics.view` |
 | `/admin/audit-log` | `AuditLogPage` | `audit.view` |
 | `/admin/public-portal` | Public Portal Admin | `settings.manage` |
+| `/account` | User Account Settings | Any authenticated user |
+
+> **Organization Settings** includes the **records-retention schedule**
+> (`GET/PUT /organizations/retention-policy`) — per-record-class retention
+> with safe defaults and minimum floors, enforced daily. Documents and
+> meeting minutes are deliberately excluded from automatic deletion.
+
+> **User Account Settings → Security** carries each member's privacy
+> controls: **Privacy Choices** (photo use, public roster listing, SMS
+> notifications — never-asked is treated as "no") and **Your Data**
+> (download a full personal-data export as JSON).
 
 ---
 

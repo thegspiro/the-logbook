@@ -7,7 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
@@ -119,7 +119,7 @@ export const ElectionsSettingsPage: React.FC = () => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/elections')}
+            onClick={() => void navigate('/elections')}
             className="p-2 rounded-md hover:bg-theme-surface-secondary text-theme-text-muted"
             aria-label="Back to elections"
           >

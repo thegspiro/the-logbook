@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   ArrowUp,
@@ -402,7 +402,7 @@ export const MinutesDetailPage: React.FC = () => {
     try {
       await minutesService.deleteMinutes(minutesId);
       toast.success('Minutes deleted');
-      navigate('/minutes');
+      void navigate('/minutes');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to delete'));
     }

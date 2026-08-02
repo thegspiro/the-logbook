@@ -8,7 +8,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Users, Loader2, ShieldAlert } from 'lucide-react';
 import {

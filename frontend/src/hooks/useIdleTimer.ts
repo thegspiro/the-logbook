@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
 import { clearCache } from '../utils/apiCache';
@@ -45,7 +45,7 @@ export function useIdleTimer() {
     // Actual auth tokens live in httpOnly cookies (cleared by logout API call above).
     localStorage.removeItem('has_session');
     sessionStorage.clear();
-    navigateRef.current('/login', { state: { reason: 'timeout' }, replace: true });
+    void navigateRef.current('/login', { state: { reason: 'timeout' }, replace: true });
   }, []);
 
   const resetTimers = useCallback(() => {

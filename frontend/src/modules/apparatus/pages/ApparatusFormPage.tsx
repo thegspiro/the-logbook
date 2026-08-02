@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import {
   Truck,
   Save,
@@ -94,7 +94,7 @@ export const ApparatusFormPage: React.FC = () => {
   useEffect(() => {
     // Check authentication via session flag (tokens are in httpOnly cookies)
     if (!localStorage.getItem('has_session')) {
-      navigate('/login');
+      void navigate('/login');
       return;
     }
 
@@ -239,7 +239,7 @@ export const ApparatusFormPage: React.FC = () => {
         toast.success('Apparatus created successfully');
       }
 
-      navigate('/apparatus');
+      void navigate('/apparatus');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save apparatus'));
     } finally {
@@ -268,7 +268,7 @@ export const ApparatusFormPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => navigate('/apparatus')}
+                onClick={() => void navigate('/apparatus')}
                 className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover transition-colors"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -849,7 +849,7 @@ export const ApparatusFormPage: React.FC = () => {
           <div className="flex items-center justify-end space-x-4">
             <button
               type="button"
-              onClick={() => navigate('/apparatus')}
+              onClick={() => void navigate('/apparatus')}
               className="px-6 py-3 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
             >
               Cancel

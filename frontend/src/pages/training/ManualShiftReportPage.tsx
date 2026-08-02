@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   FileText, Loader2, Search, User as UserIcon,
   X, Save, ChevronDown, ChevronUp, AlertCircle,
@@ -233,7 +233,7 @@ export const ManualShiftReportPage: React.FC = () => {
         ? `Saved ${result.created} draft${result.created !== 1 ? 's' : ''}`
         : `Submitted ${result.created} report${result.created !== 1 ? 's' : ''}`;
       toast.success(msg);
-      navigate('/training/admin?page=records&tab=shift-reports');
+      void navigate('/training/admin?page=records&tab=shift-reports');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to submit reports'));
     } finally {
@@ -255,7 +255,7 @@ export const ManualShiftReportPage: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => void navigate(-1)}
           className="px-3 py-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors"
         >
           Cancel

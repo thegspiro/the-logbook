@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 interface ShortcutConfig {
   /** Key (e.g., 'n', 's', '?') */
@@ -60,12 +60,12 @@ export function useNavigationShortcuts(): void {
   const navigate = useNavigate();
 
   useKeyboardShortcuts([
-    { key: 'g', handler: () => navigate('/dashboard'), description: 'Go to Dashboard' },
-    { key: 'e', handler: () => navigate('/events'), description: 'Go to Events' },
-    { key: 'm', handler: () => navigate('/members'), description: 'Go to Members' },
-    { key: 't', handler: () => navigate('/training/my-training'), description: 'Go to Training' },
-    { key: 'i', handler: () => navigate('/inventory'), description: 'Go to Inventory' },
-    { key: 'n', handler: () => navigate('/notifications'), description: 'Go to Notifications' },
+    { key: 'g', handler: () => void navigate('/dashboard'), description: 'Go to Dashboard' },
+    { key: 'e', handler: () => void navigate('/events'), description: 'Go to Events' },
+    { key: 'm', handler: () => void navigate('/members'), description: 'Go to Members' },
+    { key: 't', handler: () => void navigate('/training/my-training'), description: 'Go to Training' },
+    { key: 'i', handler: () => void navigate('/inventory'), description: 'Go to Inventory' },
+    { key: 'n', handler: () => void navigate('/notifications'), description: 'Go to Notifications' },
     { key: '?', shiftKey: true, handler: () => {
       // Could open a shortcuts help modal in the future
     }, description: 'Show keyboard shortcuts' },

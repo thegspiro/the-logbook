@@ -27,6 +27,7 @@ pytestmark = [pytest.mark.integration]
 from app.models.training import (
     AssignmentStatus,
     PatternType,
+    ShiftAttendance,
     ShiftStatus,
     SwapRequestStatus,
     TimeOffStatus,
@@ -523,9 +524,12 @@ class TestCalendarHelpers:
         )
 
         summary = await svc.get_summary(uuid.UUID(org_id))
-        assert summary["total_shifts"] >= 1
-        assert summary["shifts_this_week"] >= 0
-        assert summary["shifts_this_month"] >= 1
+        # Names carry the measure: these count scheduled shifts, while
+        # hours_worked_this_month sums actual attendance.
+        assert summary["shifts_scheduled"] >= 1
+        assert summary["shifts_scheduled_this_week"] >= 0
+        assert summary["shifts_scheduled_this_month"] >= 1
+        assert "hours_worked_this_month" in summary
 
 
 # ── Template Tests ───────────────────────────────────────────────────
@@ -2000,8 +2004,10 @@ class TestReporting:
         svc = SchedulingService(db_session)
 
         today = date.today()
-        # The report sums SCHEDULED hours (shift start->end per assignment),
-        # so the shift needs an end_time and the member needs an assignment.
+        # The report's headline figure is WORKED hours, measured from
+        # attendance; scheduled hours ride alongside for comparison. The shift
+        # therefore needs an end_time (for the scheduled figure) and the member
+        # needs both an assignment and an attendance row.
         shift, _ = await svc.create_shift(
             uuid.UUID(org_id),
             {
@@ -2018,11 +2024,67 @@ class TestReporting:
             uuid.UUID(user_id),
         )
 
+        # Worked 10 hours of the 12 scheduled — the case the report exists to
+        # make visible: a shift can run short or long, or not be worked at all.
+        db_session.add(
+            ShiftAttendance(
+                id=str(uuid.uuid4()),
+                shift_id=shift.id,
+                user_id=user2_id,
+                duration_minutes=600,
+            )
+        )
+        await db_session.flush()
+
         report = await svc.get_member_hours_report(uuid.UUID(org_id), today, today)
         assert len(report) >= 1
         member_entry = next((r for r in report if r["user_id"] == user2_id), None)
         assert member_entry is not None
-        assert member_entry["total_hours"] == 12.0
+        assert member_entry["worked_hours"] == 10.0
+        assert member_entry["shifts_attended"] == 1
+        # Scheduled stays available so the difference is visible.
+        assert member_entry["scheduled_hours"] == 12.0
+        assert member_entry["shifts_scheduled"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_member_hours_report_includes_unassigned_attendance(
+        self, db_session, setup_org_and_users
+    ):
+        """Someone who worked a shift they were never rostered for still counts.
+
+        The two aggregates are merged on user rather than joined, so hours are
+        never lost because the paperwork did not match what happened.
+        """
+        org_id, user_id, user2_id = setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+                "end_time": datetime(today.year, today.month, today.day, 19, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        db_session.add(
+            ShiftAttendance(
+                id=str(uuid.uuid4()),
+                shift_id=shift.id,
+                user_id=user2_id,
+                duration_minutes=180,
+            )
+        )
+        await db_session.flush()
+
+        report = await svc.get_member_hours_report(uuid.UUID(org_id), today, today)
+        entry = next((r for r in report if r["user_id"] == user2_id), None)
+
+        assert entry is not None
+        assert entry["worked_hours"] == 3.0
+        assert entry["shifts_scheduled"] == 0
+        assert entry["scheduled_hours"] == 0.0
 
     @pytest.mark.asyncio
     async def test_coverage_report(self, db_session, setup_org_and_users):

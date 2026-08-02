@@ -19,7 +19,6 @@ Missing or incorrect `VITE_API_URL` in `frontend/.env`. Vite bakes environment v
 1. Create/update `frontend/.env`:
 ```bash
 VITE_API_URL=/api/v1
-VITE_ENV=production
 ```
 
 2. Rebuild frontend:

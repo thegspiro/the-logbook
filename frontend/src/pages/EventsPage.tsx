@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { Calendar, List, Plus, Download, Upload, Search, Repeat, SlidersHorizontal, User, Check, X, Users, CheckSquare, Square, XCircle, Copy, FileText, Bookmark, BookmarkPlus, Trash2, AlertCircle, BarChart3, Zap } from 'lucide-react';
 import { eventService } from '../services/api';
@@ -368,7 +368,7 @@ export const EventsPage: React.FC = () => {
     try {
       const newEvent = await eventService.duplicateEvent(eventId);
       toast.success('Event duplicated successfully');
-      navigate(`/events/${newEvent.id}`);
+      void navigate(`/events/${newEvent.id}`);
     } catch {
       toast.error('Failed to duplicate event');
     }
@@ -606,7 +606,7 @@ export const EventsPage: React.FC = () => {
                           key={template.id}
                           onClick={() => {
                             setShowQuickCreate(false);
-                            navigate(`/events/admin?tab=create&template=${template.id}`);
+                            void navigate(`/events/admin?tab=create&template=${template.id}`);
                           }}
                           className="w-full text-left px-3 py-2 text-sm text-theme-text-primary rounded-md hover:bg-theme-surface-hover transition-colors"
                         >

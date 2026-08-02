@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router';
 import {
   ArrowLeft, Printer, Pencil, User, MapPin, Calendar, Package,
   Clock, Wrench, Shield, AlertTriangle, ChevronRight, Loader2,

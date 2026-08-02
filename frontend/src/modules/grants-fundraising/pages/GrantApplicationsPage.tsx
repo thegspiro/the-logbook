@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import {
   Plus,
   Search,
@@ -111,7 +111,7 @@ const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone }) =>
   return (
     <button
       type="button"
-      onClick={() => navigate(`/grants/applications/${application.id}`)}
+      onClick={() => void navigate(`/grants/applications/${application.id}`)}
       className="w-full rounded-lg border border-theme-surface-border bg-theme-surface p-3 text-left shadow-sm transition-shadow hover:shadow-md"
     >
       <p className="text-sm font-medium text-theme-text-primary line-clamp-2">
@@ -611,7 +611,7 @@ export const GrantApplicationsPage: React.FC = () => {
                     <tr
                       key={app.id}
                       onClick={() =>
-                        navigate(`/grants/applications/${app.id}`)
+                        void navigate(`/grants/applications/${app.id}`)
                       }
                       className="cursor-pointer transition-colors hover:bg-theme-surface-hover"
                     >

@@ -6,7 +6,7 @@
  */
 
 import React, { Suspense } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { ArrowLeft, BarChart3, Loader2 } from "lucide-react";
 import { lazyWithRetry } from "../../utils/lazyWithRetry";
 

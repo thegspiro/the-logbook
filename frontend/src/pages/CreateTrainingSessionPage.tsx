@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Calendar,
   GraduationCap,
@@ -202,9 +202,9 @@ const CreateTrainingSessionPage: React.FC = () => {
         // Navigate to the first event in the series
         const firstSession = sessions[0];
         if (firstSession?.event_id) {
-          navigate(`/events/${firstSession.event_id}`);
+          void navigate(`/events/${firstSession.event_id}`);
         } else {
-          navigate('/training/admin');
+          void navigate('/training/admin');
         }
       } else {
         // Create single training session
@@ -212,9 +212,9 @@ const CreateTrainingSessionPage: React.FC = () => {
         toast.success('Training session created successfully!');
 
         if (response.event_id) {
-          navigate(`/events/${response.event_id}`);
+          void navigate(`/events/${response.event_id}`);
         } else {
-          navigate('/training/officer');
+          void navigate('/training/officer');
         }
       }
     } catch (err: unknown) {
@@ -236,7 +236,7 @@ const CreateTrainingSessionPage: React.FC = () => {
         {/* Header */}
         <div className="mb-8">
           <button
-            onClick={() => navigate('/training/officer')}
+            onClick={() => void navigate('/training/officer')}
             className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />

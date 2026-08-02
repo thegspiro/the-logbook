@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Mail, Check, AlertCircle, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../services/api-client';
@@ -61,7 +61,7 @@ const EmailConfiguration: React.FC = () => {
   useEffect(() => {
     // Redirect if missing data or they chose to skip
     if (!departmentName || !emailPlatform || emailPlatform === 'other') {
-      navigate('/onboarding/start');
+      void navigate('/onboarding/start');
       return;
     }
 
@@ -242,13 +242,13 @@ const EmailConfiguration: React.FC = () => {
       toast.success('Email configuration saved securely');
 
       // Navigate to next step (file storage selection)
-      navigate('/onboarding/file-storage');
+      void navigate('/onboarding/file-storage');
     }
   };
 
   const handleSkip = () => {
     toast.success('Email configuration skipped. You can set this up later.');
-    navigate('/onboarding/file-storage');
+    void navigate('/onboarding/file-storage');
   };
 
   const currentYear = new Date().getFullYear();

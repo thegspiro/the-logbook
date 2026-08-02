@@ -494,4 +494,4 @@ POST   /api/v1/elections/{id}/import-attendees   # Import event attendees into b
 
 ---
 
-**See also:** [Prospective Members](Module-Prospective-Members) | [Role System](Role-System)
+**See also:** [Prospective Members](../docs/PROSPECTIVE_MEMBERS_MODULE.md) | [Role System](Role-System)

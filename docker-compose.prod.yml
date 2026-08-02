@@ -35,13 +35,56 @@ services:
       # Encrypt DB/Redis traffic (set to false only if the network is trusted).
       DB_SSL: "true"
       REDIS_SSL: "true"
+      # Retention exports of purged audit rows go to a persistent volume
+      # (backed up by the backup sidecar).
+      AUDIT_ARCHIVE_DIR: /app/audit_archives
     # Production runs the app WITHOUT --reload (no live code execution surface).
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001"]
     # Do NOT bind-mount the source tree in production — use the built image.
     volumes:
       - uploads:/app/uploads
+      - audit_archives:/app/audit_archives
     # Do NOT publish the backend port to the host in production; it sits behind
     # the reverse proxy on the internal Docker network. The `!reset` tag clears
     # the base file's port publish (requires Docker Compose v2.24+); on older
     # Compose, delete the backend `ports:` block from docker-compose.yml instead.
     ports: !reset []
+
+  # Nightly database + uploads + audit-archive backups with automated
+  # restore-verification drills (scripts/backup-sidecar.sh). Archives land
+  # in the local `backups` volume — sync that volume OFFSITE (S3/rsync/...);
+  # a backup that dies with the host is not a backup. See docs/BACKUP.md.
+  backup:
+    image: mysql:8.0
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    entrypoint: ["bash", "/scripts/backup-sidecar.sh"]
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-intranet_db}
+      DB_USER: ${DB_USER:-intranet_user}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      # Restore drills load the dump into a throwaway schema, which needs
+      # CREATE/DROP DATABASE — hence root, scoped to this internal network.
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set in .env}
+      BACKUP_TIME: ${BACKUP_TIME:-02:00}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      VERIFY_EVERY_N_BACKUPS: ${VERIFY_EVERY_N_BACKUPS:-7}
+    volumes:
+      - ./scripts:/scripts:ro
+      - backups:/backups
+      - uploads:/uploads:ro
+      - audit_archives:/audit_archives:ro
+    networks:
+      - intranet-network
+
+volumes:
+  backups:
+    driver: local
+  # Audit retention archives must survive container rebuilds — they are the
+  # only copy of purged audit history (see docs/BACKUP.md).
+  audit_archives:
+    driver: local

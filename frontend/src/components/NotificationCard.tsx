@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useId } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Pin,
   PinOff,
@@ -229,7 +229,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
 
   const handleNavigate = (url: string) => {
     if (url.startsWith('/')) {
-      navigate(url);
+      void navigate(url);
     }
   };
 

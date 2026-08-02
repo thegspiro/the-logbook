@@ -3,7 +3,7 @@
  * Expandable cards with bidirectional links to member profiles and item details.
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import {
   ArrowLeft, Users, RefreshCw, Search, ChevronDown, ChevronUp,
   Package, AlertTriangle, User, Loader2, ArrowUpDown,

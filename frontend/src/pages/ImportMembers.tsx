@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Upload,
   Download,
@@ -362,7 +362,7 @@ const ImportMembers: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => navigate('/members')}
+              onClick={() => void navigate('/members')}
               className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm"
             >
               ← Back to Members
@@ -543,7 +543,7 @@ const ImportMembers: React.FC = () => {
 
             <div className="flex items-center justify-center space-x-3">
               <button
-                onClick={() => navigate('/members')}
+                onClick={() => void navigate('/members')}
                 className="btn-info flex items-center px-6 py-3 space-x-2"
               >
                 <span>View Members</span>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { authService } from '../services/api';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 // OAuth configuration - these would be loaded from organization settings
 interface OAuthConfig {
@@ -22,7 +23,7 @@ interface OnboardingStatus {
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, completeMfaLogin, cancelMfa, mfaRequired, isLoading, isAuthenticated, error, clearError, lockedUntil } = useAuthStore();
+  const { login, completeMfaLogin, cancelMfa, mfaRequired, isLoading, isAuthenticated, error, clearError, lockedUntil, lastLogoutPurge, clearLogoutPurgeNotice } = useAuthStore();
 
   const [formData, setFormData] = useState({
     username: '',
@@ -43,10 +44,27 @@ export const LoginPage: React.FC = () => {
   // user belongs in the onboarding wizard, not here.
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
+  // Logout purges device-local drafts and offline queues on shared station
+  // computers (see purgeLocalMemberData). Tell the member once if that
+  // discarded unsent work — losing it silently would be worse than the
+  // privacy risk we're mitigating.
+  useEffect(() => {
+    if (lastLogoutPurge && lastLogoutPurge.unsyncedDiscarded > 0) {
+      const n = lastLogoutPurge.unsyncedDiscarded;
+      toast(
+        `${n} unsent ${n === 1 ? 'item was' : 'items were'} cleared from this ` +
+          `device at sign-out to protect your privacy on a shared computer. ` +
+          `Re-enter ${n === 1 ? 'it' : 'them'} after signing back in.`,
+        { duration: 8000, icon: '🔒' }
+      );
+      clearLogoutPurgeNotice();
+    }
+  }, [lastLogoutPurge, clearLogoutPurgeNotice]);
+
   // If user is already authenticated, redirect to dashboard
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard', { replace: true });
+      void navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -59,7 +77,7 @@ export const LoginPage: React.FC = () => {
       try {
         const response = await axios.get<OnboardingStatus>('/api/v1/onboarding/status');
         if (!cancelled && response.data?.needs_onboarding) {
-          navigate('/onboarding', { replace: true });
+          void navigate('/onboarding', { replace: true });
           return;
         }
       } catch {
@@ -148,7 +166,7 @@ export const LoginPage: React.FC = () => {
     };
     setOAuthError(messages[code] || 'Sign-in with Google failed. Please try again.');
     // Strip the error param so a refresh doesn't re-show it.
-    navigate('/login', { replace: true });
+    void navigate('/login', { replace: true });
   }, [location.search, navigate]);
 
   const validateForm = (): boolean => {
@@ -191,7 +209,7 @@ export const LoginPage: React.FC = () => {
       const from = (typeof rawFrom === 'string' && rawFrom.startsWith('/') && !rawFrom.startsWith('//'))
         ? rawFrom
         : '/dashboard';
-      navigate(from, { replace: true });
+      void navigate(from, { replace: true });
     } catch (_err) {
       // Error is handled by the store and displayed via error state
     }
@@ -202,7 +220,7 @@ export const LoginPage: React.FC = () => {
     const from = (typeof rawFrom === 'string' && rawFrom.startsWith('/') && !rawFrom.startsWith('//'))
       ? rawFrom
       : '/dashboard';
-    navigate(from, { replace: true });
+    void navigate(from, { replace: true });
   };
 
   const handleMfaSubmit = async (e: React.FormEvent) => {
@@ -535,7 +553,17 @@ export const LoginPage: React.FC = () => {
         <p className="text-theme-text-muted text-sm">
           &copy; {new Date().getFullYear()} {branding.name || 'Your Organization'}. All rights reserved.
         </p>
-        <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
+        <p className="text-theme-text-muted text-xs mt-1">
+          Powered by The Logbook
+          <span className="mx-2">&middot;</span>
+          <Link to="/privacy" className="hover:underline">
+            Privacy
+          </Link>
+          <span className="mx-2">&middot;</span>
+          <Link to="/terms" className="hover:underline">
+            Terms
+          </Link>
+        </p>
       </footer>
     </main>
   );

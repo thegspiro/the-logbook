@@ -127,12 +127,36 @@ ALLOWED_ORIGINS=["https://your-domain.com"]
 
 # Frontend build
 VITE_API_URL=/api/v1
-VITE_ENV=production
 ```
 
 ---
 
 ## Backup Strategy
+
+### Backup Sidecar (Recommended) *(2026-07-31)*
+
+`docker-compose.prod.yml` includes a `backup` service that removes the need
+for host cron entirely. It runs nightly at `BACKUP_TIME` (default 02:00 UTC),
+writing the database, uploads, and audit archives to the `backups` volume as a
+checksummed archive, then pruning past `BACKUP_RETENTION_DAYS`.
+
+**It also drills itself.** Every `VERIFY_EVERY_N_BACKUPS` runs (default 7),
+`scripts/verify_backup.sh` loads the fresh dump into a throwaway schema,
+asserts the core tables and full schema came back, and drops it. A failed
+drill keeps failing loudly on every subsequent nightly run until someone fixes
+it — watch `docker compose logs backup`.
+
+```bash
+# Run a drill by hand against any archive
+docker compose exec backup bash /scripts/verify_backup.sh \
+  /backups/logbook_backup_YYYYmmdd_HHMMSS.tar.gz
+```
+
+> ⚠️ **The `backups` volume lives on the same host.** Sync it offsite (S3,
+> rsync target, NAS) — a backup that dies with the host is not a backup. Store
+> `ENCRYPTION_KEY` / `ENCRYPTION_SALT` offline as well: **a database backup
+> without its era's keys cannot decrypt sensitive fields.** Full guidance:
+> [docs/BACKUP.md](../docs/BACKUP.md).
 
 ### Automated Daily Backups
 

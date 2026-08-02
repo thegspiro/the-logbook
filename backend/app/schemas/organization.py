@@ -235,6 +235,22 @@ class EmailServiceSettings(BaseModel):
             }
         )
 
+    def without_infrastructure(self) -> "EmailServiceSettings":
+        """Drop identifiers that describe the deployment, not the department."""
+        return self.model_copy(
+            update=dict.fromkeys(
+                (
+                    "smtp_host",
+                    "smtp_user",
+                    "google_client_id",
+                    "microsoft_tenant_id",
+                    "microsoft_client_id",
+                    "cloudflare_account_id",
+                ),
+                None,
+            )
+        )
+
 
 class FileStorageSettings(BaseModel):
     """Settings for organization file storage configuration"""
@@ -287,6 +303,26 @@ class FileStorageSettings(BaseModel):
                 "onedrive_client_secret": _redact(self.onedrive_client_secret),
                 "s3_secret_access_key": _redact(self.s3_secret_access_key),
             }
+        )
+
+    def without_infrastructure(self) -> "FileStorageSettings":
+        """Drop identifiers that describe the deployment, not the department."""
+        return self.model_copy(
+            update=dict.fromkeys(
+                (
+                    "google_drive_client_id",
+                    "google_drive_folder_id",
+                    "onedrive_tenant_id",
+                    "onedrive_client_id",
+                    "sharepoint_site_url",
+                    "s3_access_key_id",
+                    "s3_bucket_name",
+                    "s3_region",
+                    "s3_endpoint_url",
+                    "local_storage_path",
+                ),
+                None,
+            )
         )
 
 
@@ -626,6 +662,25 @@ class AuthSettings(BaseModel):
             }
         )
 
+    def without_infrastructure(self) -> "AuthSettings":
+        """Drop identifiers that describe the deployment, not the department.
+
+        `provider` stays: the login page needs to know which SSO button to
+        show, and it names a product, not an endpoint.
+        """
+        return self.model_copy(
+            update=dict.fromkeys(
+                (
+                    "google_client_id",
+                    "microsoft_tenant_id",
+                    "microsoft_client_id",
+                    "authentik_url",
+                    "authentik_client_id",
+                ),
+                None,
+            )
+        )
+
 
 class ModuleSettings(BaseModel):
     """Settings for module enablement across the organization.
@@ -874,6 +929,31 @@ class OrganizationSettingsResponse(BaseModel):
                 "email_service": self.email_service.redacted(),
                 "file_storage": self.file_storage.redacted(),
                 "auth": self.auth.redacted(),
+            }
+        )
+
+    def without_infrastructure(self) -> "OrganizationSettingsResponse":
+        """Return a copy with deployment identifiers removed.
+
+        SEC (ORU-8): `GET /organization/settings` is reachable by any
+        authenticated member — the page needs branding, module enablement and
+        contact-visibility flags. `redacted()` strips the credentials, but it
+        left the identifiers those credentials authenticate *to*: mail server
+        hostname and username, S3 bucket, region and endpoint, SharePoint site
+        URL, the SSO issuer URL, and every OAuth tenant/client ID. Together
+        those map the department's infrastructure for anyone who can log in,
+        including a member who left last week and a compromised volunteer
+        account. Callers holding `settings.manage` still get the full object,
+        because they are the ones who configure it.
+
+        The response keeps its shape — fields are nulled, not dropped — so the
+        settings UI renders "not configured" instead of breaking.
+        """
+        return self.model_copy(
+            update={
+                "email_service": self.email_service.without_infrastructure(),
+                "file_storage": self.file_storage.without_infrastructure(),
+                "auth": self.auth.without_infrastructure(),
             }
         )
 

@@ -13,7 +13,7 @@
  */
 
 import React, { useRef, useState, useCallback } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link } from "react-router";
 import {
   ScanLine,
   ArrowLeft,
@@ -63,7 +63,7 @@ export const MemberScanPage: React.FC = () => {
         }
 
         if (isMemberIdPayload(parsed)) {
-          navigate(`/members/${parsed.id}`);
+          void navigate(`/members/${parsed.id}`);
           return;
         }
 
@@ -76,7 +76,7 @@ export const MemberScanPage: React.FC = () => {
         );
 
         if (match) {
-          navigate(`/members/${match.id}`);
+          void navigate(`/members/${match.id}`);
         } else {
           setError(`No member found for "${decoded}"`);
           handledRef.current = false;

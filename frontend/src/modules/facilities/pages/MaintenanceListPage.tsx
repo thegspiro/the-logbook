@@ -6,7 +6,7 @@
  */
 
 import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   Wrench, Plus, Search, Loader2, X, CheckCircle2, Clock,
   AlertTriangle, Calendar, DollarSign, ArrowLeft, RotateCcw,
@@ -44,7 +44,7 @@ export default function MaintenanceListPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/facilities')} className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors" aria-label="Back to facilities">
+          <button onClick={() => void navigate('/facilities')} className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors" aria-label="Back to facilities">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>

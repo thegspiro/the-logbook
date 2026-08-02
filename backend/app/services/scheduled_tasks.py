@@ -192,6 +192,18 @@ SCHEDULE = {
         "recommended_time": "Sunday 02:00",
         "cron": "0 2 * * 0",
     },
+    "audit_log_ship": {
+        "description": "Ship new audit log entries to the off-host collector configured via AUDIT_SHIP_WEBHOOK_URL (HMAC-signed NDJSON batches). No-op when not configured.",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
+    },
+    "retention_enforcement": {
+        "description": "Apply org-configured records-retention schedules (message history, notification logs, form submissions) plus platform-level blocked-attempt telemetry. Classes and floors defined in retention_service.py.",
+        "frequency": "daily",
+        "recommended_time": "03:30",
+        "cron": "30 3 * * *",
+    },
     "scheduled_emails": {
         "description": "Process pending scheduled emails that are due to be sent",
         "frequency": "every 1 minute",
@@ -2800,6 +2812,20 @@ def _format_relative_time(event_time: datetime, now: datetime) -> str:
         return f"in {days} day{'s' if days != 1 else ''}"
 
 
+async def run_audit_log_ship(db: AsyncSession) -> Dict[str, Any]:
+    """Ship new audit rows to the configured off-host collector (SIEM).
+
+    No-op unless AUDIT_SHIP_WEBHOOK_URL is set. Watermark-based: only rows
+    the collector has not acknowledged are sent, and a failed delivery is
+    retried on the next run. See app/services/audit_ship_service.py.
+    """
+    from app.services.audit_ship_service import ship_new_audit_logs
+
+    result = await ship_new_audit_logs(db)
+    result["task"] = "audit_log_ship"
+    return result
+
+
 async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
     """
     Archive old audit logs for HIPAA compliance and long-term retention.
@@ -2808,7 +2834,10 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
     1. Identifies audit log entries older than 90 days without a checkpoint
     2. Creates integrity checkpoints covering those entries
     3. Verifies the hash chain integrity of the archived range
-    4. Logs the archival operation itself
+    4. Enforces HIPAA_AUDIT_RETENTION_DAYS: exports rows past retention to
+       a gzipped JSONL archive (AUDIT_ARCHIVE_DIR) and purges them, with a
+       keyed attestation so the surviving chain still verifies
+    5. Logs the archival operation itself
 
     Designed to run weekly so that all audit data eventually gets
     checkpointed, enabling confident long-term integrity verification.
@@ -2897,6 +2926,23 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
                 ]
             )
 
+        # Enforce HIPAA_AUDIT_RETENTION_DAYS: export-and-purge rows past
+        # retention. Checkpoint-aligned, integrity-gated, and attested so
+        # the surviving chain still verifies (see archive_expired_logs).
+        from app.core.config import settings
+
+        retention = await audit_logger.archive_expired_logs(
+            db,
+            retention_days=settings.HIPAA_AUDIT_RETENTION_DAYS,
+            archive_dir=settings.AUDIT_ARCHIVE_DIR,
+        )
+        results["purged_entries"] = retention["purged_entries"]
+        results["archive_file"] = retention["archive_file"]
+        if retention["skipped_reason"] == (
+            "integrity verification failed - refusing to purge"
+        ):
+            results["errors"].append(retention["skipped_reason"])
+
         # Log the archival operation
         await log_audit_event(
             db=db,
@@ -2907,6 +2953,13 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
                 "checkpoints_created": results["checkpoints_created"],
                 "entries_checkpointed": results["entries_checkpointed"],
                 "integrity_verified": results["integrity_verified"],
+                "purged_entries": retention["purged_entries"],
+                "purge_range": (
+                    f"{retention['purge_start_id']}-{retention['purge_end_id']}"
+                    if retention["purged_entries"]
+                    else None
+                ),
+                "archive_file": retention["archive_file"],
                 "errors_count": len(results["errors"]),
             },
         )
@@ -3100,66 +3153,40 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
     return {"sent": sent, "failed": failed, "total_processed": len(pending)}
 
 
+async def run_retention_enforcement(db: AsyncSession) -> Dict[str, Any]:
+    """Apply org-configured retention schedules to business records.
+
+    Record classes, defaults, and floors live in
+    app/services/retention_service.py; departments override per class via
+    the organization retention-policy API. Message-history cleanup is one
+    of the covered classes (default 90 days, preserving the original
+    hardcoded behavior).
+    """
+    from app.services.retention_service import RetentionService
+
+    result = await RetentionService(db).enforce()
+    await db.commit()
+    result["task"] = "retention_enforcement"
+    return result
+
+
 async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
     """
-    Delete message history records older than 90 days.
+    Legacy alias for message-history retention (kept for existing crontabs).
 
-    Prevents unbounded growth of the message_history table. Runs daily at 03:00.
-    Deletes in batches to avoid long-running transactions.
+    Originally deleted at a hardcoded 90 days; now delegates to the
+    retention service so per-org configuration is honored. The general
+    retention_enforcement task covers this class too — running both is
+    idempotent.
     """
-    from datetime import timedelta, timezone
+    from app.services.retention_service import RetentionService
 
-    from sqlalchemy import delete, func
-
-    from app.models.email_template import MessageHistory
-
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=90)
-
-    # Count before deleting (for reporting)
-    count_result = await db.execute(
-        select(func.count())
-        .select_from(MessageHistory)
-        .where(MessageHistory.sent_at < cutoff)
-    )
-    total_expired = count_result.scalar() or 0
-
-    if total_expired == 0:
-        logger.info("Message history cleanup: no expired records to delete")
-        return {
-            "task": "message_history_cleanup",
-            "deleted": 0,
-            "cutoff_date": cutoff.isoformat(),
-        }
-
-    # Delete in batches of 1000 to avoid locking the table for too long
-    deleted = 0
-    batch_size = 1000
-    while True:
-        # Find IDs to delete in this batch
-        batch_ids_result = await db.execute(
-            select(MessageHistory.id)
-            .where(MessageHistory.sent_at < cutoff)
-            .limit(batch_size)
-        )
-        batch_ids = [row[0] for row in batch_ids_result.all()]
-        if not batch_ids:
-            break
-
-        await db.execute(delete(MessageHistory).where(MessageHistory.id.in_(batch_ids)))
-        await db.commit()
-        deleted += len(batch_ids)
-
-        if len(batch_ids) < batch_size:
-            break
-
-    logger.info(
-        f"Message history cleanup: deleted {deleted} records older than {cutoff.date()}"
-    )
+    result = await RetentionService(db).enforce(only_class="message_history")
+    await db.commit()
     return {
         "task": "message_history_cleanup",
-        "deleted": deleted,
-        "cutoff_date": cutoff.isoformat(),
+        "deleted": sum(result["deleted"].values()),
+        "orgs_processed": result["orgs_processed"],
     }
 
 
@@ -4415,6 +4442,8 @@ TASK_RUNNERS = {
     "end_of_shift_summary": run_end_of_shift_summary,
     "trainee_report_escalation": run_trainee_report_escalation,
     "audit_log_archival": run_audit_log_archival,
+    "audit_log_ship": run_audit_log_ship,
+    "retention_enforcement": run_retention_enforcement,
     "scheduled_emails": run_scheduled_emails,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
@@ -4482,6 +4511,10 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "enrollment_deadline_warnings": 604800,
     "nfpa_retirement_alerts": 604800,
     "audit_log_archival": 604800,
+    # Every 30 minutes — off-host audit shipping (no-op unless configured)
+    "audit_log_ship": 1800,
+    # Daily — org-configured records retention
+    "retention_enforcement": 86400,
     # Monthly (approx — 30 days)
     "membership_tier_advance": 2592000,
 }

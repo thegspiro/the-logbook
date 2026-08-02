@@ -83,7 +83,6 @@ BACKEND_PORT=3001
 Create `frontend/.env`:
 ```bash
 VITE_API_URL=/api/v1
-VITE_ENV=production
 ```
 
 > **Important:** Vite bakes environment variables at build time. After changing these, rebuild the frontend.
@@ -151,6 +150,12 @@ docker-compose exec backend alembic upgrade head
 ```bash
 docker exec logbook-db mysqldump -u logbook_user -p the_logbook > backup.sql
 ```
+
+For production, prefer the **backup sidecar** in `docker-compose.prod.yml` —
+nightly database + uploads + audit-archive snapshots with retention pruning and
+automated restore-verification drills. See
+[Production Deployment → Backup Strategy](Deployment-Production#backup-strategy)
+and [docs/BACKUP.md](../docs/BACKUP.md). *(2026-07-31)*
 
 ---
 

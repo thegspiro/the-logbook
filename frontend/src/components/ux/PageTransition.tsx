@@ -6,7 +6,7 @@
  */
 
 import React, { ReactNode, useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 interface PageTransitionProps {
   children: ReactNode;

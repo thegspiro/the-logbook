@@ -3,7 +3,7 @@
  * vendor tracking, and cost management.
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, RefreshCw, Search, Plus, Package, Truck,

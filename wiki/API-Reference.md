@@ -50,7 +50,8 @@ Response:
 | Prefix | Module | Description |
 |--------|--------|-------------|
 | `/api/v1/auth` | Authentication | Login, logout, refresh, password reset, MFA |
-| `/api/v1/users` | Members | User CRUD, profiles, leaves, rank validation |
+| `/api/v1/users` | Members | User CRUD, profiles, leaves, rank validation, personal-data export, consents, anonymization |
+| `/api/v1/organizations` | Organization | Org settings, modules, retention policy, template export |
 | `/api/v1/onboarding` | Onboarding | Organization setup wizard |
 | `/api/v1/settings` | Settings | Organization and module configuration |
 | `/api/v1/notifications` | Notifications | Notification rules, logs, user inbox, and department messages |
@@ -443,6 +444,64 @@ POST   /api/v1/training/skills-testing/tests/{id}/complete             # Complet
   (percentage, completion, rollup, and phase-advancement all run). A **fail**,
   a **practice** test, or a test with no `requirement_id` does nothing to the
   pipeline.
+
+---
+
+## Privacy, Consent & Retention *(2026-07-31)*
+
+Data-subject rights and records retention. See
+[Privacy & Data Rights](Security-Privacy) for behavior and guarantees.
+
+```
+# Member self-service (authenticated; always scoped to the caller)
+GET    /api/v1/users/me/data-export                      # Full personal-data export (JSON download; 3/hour)
+GET    /api/v1/users/me/consents                         # Consent state per type (granted=null means never asked)
+PUT    /api/v1/users/me/consents/{consent_type}?granted= # Record a consent choice (audited)
+
+# Administrative (members.manage)
+POST   /api/v1/users/{user_id}/anonymize                 # Irreversibly scrub a DEPARTED member's PII
+
+# Records retention (settings.manage)
+GET    /api/v1/organizations/retention-policy            # Effective schedule per record class
+PUT    /api/v1/organizations/retention-policy/{class}?days=  # Set retention; omit days for keep-forever
+```
+
+Consent types: `photo_use`, `public_roster_listing`, `sms_notifications`.
+Retention record classes: `message_history`, `notification_logs`,
+`form_submissions` — each has a minimum floor, and `PUT` returns 400 below it.
+
+`POST /anonymize` returns 400 for an active member, for an already-anonymized
+member, or for your own account, and 404 for a member outside your
+organization. Audit logs and election records are never modified.
+
+---
+
+## Public Legal Text *(2026-07-31)*
+
+Unauthenticated, rate-limited (30/min per IP). Backs the public `/privacy` and
+`/terms` pages.
+
+```
+GET    /api/public/v1/legal                              # { organizationName, privacyPolicy, termsOfService }
+```
+
+Returns the single organization's configured text
+(`settings.legal.privacy_policy` / `legal.terms_of_service`); `null` values
+mean the frontend renders its built-in defaults. On a multi-organization
+install all fields are `null` — with no org context, no tenant's text is served.
+
+---
+
+## Vulnerability Disclosure *(2026-07-31)*
+
+Served at the site root (not under `/api`), per RFC 9116.
+
+```
+GET    /.well-known/security.txt                         # Contact, policy, expiry (text/plain)
+```
+
+Configured with `SECURITY_TXT_CONTACT` and `SECURITY_TXT_POLICY_URL`. The
+`Expires` field is regenerated per request so the file never goes stale.
 
 ---
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   GraduationCap,
   Users,
@@ -276,7 +276,7 @@ const TrainingOfficerDashboard: React.FC = () => {
 
             {/* Quick Actions */}
             <button
-              onClick={() => navigate('/training/sessions/new')}
+              onClick={() => void navigate('/training/sessions/new')}
               className="btn-success flex font-medium items-center space-x-2"
             >
               <Plus className="w-5 h-5" />
@@ -340,7 +340,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             label="Total Members"
             value={stats.totalMembers.toString()}
             color="blue"
-            onClick={() => navigate('/members')}
+            onClick={() => void navigate('/members')}
           />
           <StatCard
             icon={CheckCircle}
@@ -348,7 +348,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             value={stats.compliantMembers.toString()}
             subtitle={`${stats.compliancePercentage}%`}
             color="green"
-            onClick={() => navigate('/training/requirements')}
+            onClick={() => void navigate('/training/requirements')}
           />
           <StatCard
             icon={AlertTriangle}
@@ -356,7 +356,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             value={stats.expiringCount.toString()}
             subtitle="Expiring Soon"
             color="yellow"
-            onClick={() => navigate('/training/requirements')}
+            onClick={() => void navigate('/training/requirements')}
           />
           <StatCard
             icon={Award}
@@ -373,63 +373,63 @@ const TrainingOfficerDashboard: React.FC = () => {
             icon={FileText}
             title="Training Requirements"
             description="Manage department, state, and national training requirements"
-            onClick={() => navigate('/training/requirements')}
+            onClick={() => void navigate('/training/requirements')}
             color="red"
           />
           <NavigationCard
             icon={Users}
             title="Member Progress"
             description="Track individual member training progress and compliance"
-            onClick={() => navigate('/members')}
+            onClick={() => void navigate('/members')}
             color="blue"
           />
           <NavigationCard
             icon={Calendar}
             title="Training Sessions"
             description="Schedule and manage upcoming training sessions"
-            onClick={() => navigate('/training/sessions/new')}
+            onClick={() => void navigate('/training/sessions/new')}
             color="green"
           />
           <NavigationCard
             icon={GraduationCap}
             title="Courses & Certifications"
             description="Manage available courses and certification programs"
-            onClick={() => navigate('/training/courses')}
+            onClick={() => void navigate('/training/courses')}
             color="purple"
           />
           <NavigationCard
             icon={TrendingUp}
             title="Reports & Analytics"
             description="Generate compliance reports and training analytics"
-            onClick={() => navigate('/reports')}
+            onClick={() => void navigate('/reports')}
             color="orange"
           />
           <NavigationCard
             icon={ClipboardList}
             title="Shift Reports"
             description="File and review shift completion reports for trainees"
-            onClick={() => navigate('/training/shift-reports')}
+            onClick={() => void navigate('/training/shift-reports')}
             color="orange"
           />
           <NavigationCard
             icon={ClipboardCheck}
             title="Review Submissions"
             description={pendingSubmissionCount > 0 ? `${pendingSubmissionCount} pending submissions to review` : 'Review member self-reported training'}
-            onClick={() => navigate('/training/submissions')}
+            onClick={() => void navigate('/training/submissions')}
             color="yellow"
           />
           <NavigationCard
             icon={FileText}
             title="Submit Training"
             description="Submit external training for yourself"
-            onClick={() => navigate('/training/submit')}
+            onClick={() => void navigate('/training/submit')}
             color="cyan"
           />
           <NavigationCard
             icon={Settings}
             title="External Integrations"
             description="Connect to Vector Solutions and other training platforms"
-            onClick={() => navigate('/training/integrations')}
+            onClick={() => void navigate('/training/integrations')}
             color="cyan"
           />
         </div>
@@ -445,7 +445,7 @@ const TrainingOfficerDashboard: React.FC = () => {
             <div className="card">
               <UpcomingExpirationsWidget
                 expirations={expiringCertifications.slice(0, 5)}
-                onViewMember={(memberId) => navigate(`/members/${memberId}/training`)}
+                onViewMember={(memberId) => void navigate(`/members/${memberId}/training`)}
               />
             </div>
           )}

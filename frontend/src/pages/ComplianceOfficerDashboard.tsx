@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Shield,
   FileText,
@@ -75,7 +75,7 @@ const ComplianceOfficerDashboard: React.FC<ComplianceOfficerDashboardProps> = ({
       {/* Configure action — section selection is handled by the admin hub tabs */}
       <div className="flex justify-end mb-6">
         <button
-          onClick={() => navigate('/training/compliance-config')}
+          onClick={() => void navigate('/training/compliance-config')}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
           title="Compliance Requirements Configuration"
         >
@@ -210,9 +210,9 @@ const AnnualReportSection: React.FC = () => {
           icon={Award}
         />
         <SummaryCard
-          label="ISO Class Estimate"
-          value={`Class ${summary.iso_class_estimate}`}
-          color={summary.iso_class_estimate <= 3 ? 'green' : summary.iso_class_estimate <= 6 ? 'yellow' : 'red'}
+          label="ISO Training Readiness"
+          value={`${summary.iso_readiness_pct}%`}
+          color={summary.iso_readiness_pct >= 80 ? 'green' : summary.iso_readiness_pct >= 50 ? 'yellow' : 'red'}
           icon={BarChart3}
         />
       </div>
@@ -439,6 +439,9 @@ const ISOReadinessSection: React.FC = () => {
         <p className="text-sm text-theme-text-muted mt-1">
           Training hours measured against Insurance Services Office (ISO) Fire Suppression Rating Schedule requirements
         </p>
+        <div className="alert-warning mt-3 text-sm">
+          <strong>This is not a PPC rating.</strong> {data.scope_note}
+        </div>
       </div>
 
       {/* Overall Score */}
@@ -448,9 +451,24 @@ const ISOReadinessSection: React.FC = () => {
           <p className="text-4xl font-bold text-theme-text-primary">{data.overall_readiness_pct}%</p>
         </div>
         <div className="text-right">
-          <p className="text-sm text-theme-text-muted">Estimated ISO Class</p>
-          <p className={`text-4xl font-bold ${data.iso_class_estimate <= 3 ? 'text-green-500' : data.iso_class_estimate <= 6 ? 'text-yellow-500' : 'text-red-500'}`}>
-            {data.iso_class_estimate}
+          <p className="text-sm text-theme-text-muted">Est. FSRS training credit</p>
+          <p
+            className={`text-4xl font-bold ${
+              data.overall_readiness_pct >= 80
+                ? 'text-green-500'
+                : data.overall_readiness_pct >= 50
+                  ? 'text-yellow-500'
+                  : 'text-red-500'
+            }`}
+          >
+            {data.training_points_estimate}
+            <span className="text-xl font-normal text-theme-text-muted">
+              {' '}
+              / {data.training_points_possible} pts
+            </span>
+          </p>
+          <p className="text-xs text-theme-text-muted mt-1">
+            Section 580 only — of ~105.5 FSRS points total
           </p>
         </div>
       </div>

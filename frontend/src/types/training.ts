@@ -1544,7 +1544,14 @@ export interface MyTrainingSummary {
     expiration_date: string | null;
     instructor?: string;
   }>;
-  hours_summary?: { total_records: number; total_hours: number; completed_courses: number };
+  hours_summary?: {
+    total_records: number;
+    /** Lifetime training hours — this endpoint is "my training record". */
+    total_hours: number;
+    /** Month-to-date, for summaries that add training to other hour types. */
+    hours_this_month: number;
+    completed_courses: number;
+  };
   requirements_summary?: { total_requirements: number; met_requirements: number; avg_compliance: number | null };
   certifications?: Array<{
     id: string;
@@ -1586,9 +1593,14 @@ export interface MyTrainingSummary {
     officer_narrative?: string;
     skills_observed?: unknown[];
   }>;
+  /**
+   * Counted from completion reports: shifts actually worked and hours
+   * actually reported — not the scheduled figures the scheduling module
+   * reports under similar names.
+   */
   shift_stats?: {
-    total_shifts: number;
-    total_hours: number;
+    shifts_completed: number;
+    hours_reported: number;
     total_calls: number;
     avg_rating: number | null;
   };
@@ -2113,7 +2125,16 @@ export interface ISOReadiness {
   year: number;
   categories: ISOCategory[];
   overall_readiness_pct: number;
-  iso_class_estimate: number;
+  /**
+   * Estimated FSRS *training* credit earned (Section 580), out of
+   * training_points_possible. Deliberately NOT a Public Protection
+   * Classification — training is under 9% of the FSRS schedule and the
+   * platform holds none of the water-supply or communications data that
+   * dominate a real PPC.
+   */
+  training_points_estimate: number;
+  training_points_possible: number;
+  scope_note: string;
   total_members: number;
 }
 
@@ -2203,7 +2224,6 @@ export interface AnnualComplianceReport {
     total_certifications_active: number;
     total_certifications_expired: number;
     iso_readiness_pct: number;
-    iso_class_estimate: number;
   };
   admin_hours_summary: {
     total_approved_hours: number;

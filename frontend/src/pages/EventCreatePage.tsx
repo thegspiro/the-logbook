@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router';
 import { Calendar, ArrowLeft, FileText } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventCreate, EventTemplate, RecurringEventCreate } from '../types/event';
@@ -88,7 +88,7 @@ export const EventCreatePage: React.FC = () => {
     setError(null);
     try {
       const event = await eventService.createEvent(data);
-      navigate(`/events/${event.id}`);
+      void navigate(`/events/${event.id}`);
     } catch (err: unknown) {
       const apiError = err as { response?: { data?: { detail?: string } } };
       setError(apiError.response?.data?.detail || 'Failed to create event. Please try again.');
@@ -104,7 +104,7 @@ export const EventCreatePage: React.FC = () => {
       const events = await eventService.createRecurringEvent(data);
       const count = events.length;
       toast.success(`Created ${count} recurring event${count !== 1 ? 's' : ''}`);
-      navigate('/events');
+      void navigate('/events');
     } catch (err: unknown) {
       const apiError = err as { response?: { data?: { detail?: string } } };
       setError(apiError.response?.data?.detail || 'Failed to create recurring events. Please try again.');
@@ -127,7 +127,7 @@ export const EventCreatePage: React.FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/events');
+    void navigate('/events');
   };
 
   return (

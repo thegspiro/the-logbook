@@ -25,7 +25,7 @@ Complete technology reference for The Logbook.
 | **TypeScript** | 5.9 | Type-safe JavaScript |
 | **Vite** | 7.3 | Build tool and dev server |
 | **Tailwind CSS** | 3.x | Utility-first CSS framework |
-| **React Router** | 6.x | Client-side routing |
+| **React Router** | 8.3 | Client-side routing (core `react-router` package; `react-router-dom` was retired upstream at v7) |
 | **Vitest** | 3.2 | Unit/integration testing |
 | **React Hot Toast** | — | Toast notifications |
 | **Lucide React** | 0.575+ | Icon library |

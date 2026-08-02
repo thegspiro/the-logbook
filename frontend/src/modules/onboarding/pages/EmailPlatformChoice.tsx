@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Mail, Server, Cloud, Info } from 'lucide-react';
 import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
@@ -40,7 +40,7 @@ const EmailPlatformChoice: React.FC = () => {
   useEffect(() => {
     // Redirect to start if no department name
     if (!departmentName) {
-      navigate('/onboarding/start');
+      void navigate('/onboarding/start');
     }
   }, [departmentName, navigate]);
 
@@ -118,10 +118,10 @@ const EmailPlatformChoice: React.FC = () => {
     // Navigate to next step based on selection
     if (emailPlatform === 'other') {
       // Skip email configuration, go to file storage selection
-      navigate('/onboarding/file-storage');
+      void navigate('/onboarding/file-storage');
     } else {
       // Go to email configuration page
-      navigate('/onboarding/email-config');
+      void navigate('/onboarding/email-config');
     }
   };
 

@@ -45,7 +45,7 @@ Navigate to **Settings > Modules** to enable or disable modules at any time. Cha
 | **[Events](Module-Events)** | Event management, QR check-in, reminders | — |
 | **[Elections](Module-Elections)** | Ranked-choice voting, ballot forensics | — |
 | **[Inventory](Module-Inventory)** | Equipment tracking, assignments, pool items, labels | — |
-| **[Facilities](Module-Facilities)** | Building management, maintenance, inspections | — |
+| **[Facilities](../docs/training/06-apparatus-facilities.md)** | Building management, maintenance, inspections | — |
 | **[Apparatus](Module-Apparatus)** | Vehicle management, crew positions, maintenance | — |
 | **Forms** | Custom form builder with public forms and QR codes | — |
 | **Meeting Minutes** | Meeting minutes with templates and publish workflow | — |

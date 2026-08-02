@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Building2,
   Upload,
@@ -674,7 +674,7 @@ const OrganizationSetup: React.FC = () => {
       toast.success('Organization created successfully!');
 
       // Navigate to next step (navigation choice)
-      navigate('/onboarding/navigation-choice');
+      void navigate('/onboarding/navigation-choice');
     } catch (err: unknown) {
       console.error('Failed to save organization:', err);
       // Show the actual error message from the backend (includes validation details)

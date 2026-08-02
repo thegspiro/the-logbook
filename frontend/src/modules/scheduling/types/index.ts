@@ -253,9 +253,21 @@ export interface MemberHoursReportEntry {
   email: string;
   first_name: string;
   last_name: string;
-  shift_count: number;
-  total_minutes: number;
-  total_hours: number;
+  /**
+   * Worked: measured from attendance check-in/check-out. This is the
+   * authoritative figure — anything that credits or pays a member uses it.
+   */
+  shifts_attended: number;
+  worked_minutes: number;
+  worked_hours: number;
+  /**
+   * Scheduled: assignment durations, i.e. the plan. Shown alongside so the
+   * difference from what was actually worked is visible rather than being
+   * something a reader has to know to ask about.
+   */
+  shifts_scheduled: number;
+  scheduled_minutes: number;
+  scheduled_hours: number;
 }
 
 export interface MemberHoursReport {

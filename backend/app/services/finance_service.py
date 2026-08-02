@@ -45,6 +45,7 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.models.user import User
+from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
 
 
@@ -602,6 +603,18 @@ class FinanceService:
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step is not pending approval")
 
+        # SEC (FIN-4): holding finance.approve says nothing about *whose*
+        # request this is. Without this, a treasurer could raise a check
+        # request and walk it through its own approval chain — the one control
+        # every set of department bylaws puts on disbursements. Denial is left
+        # unguarded: withdrawing your own request is not a conflict.
+        assert_different_person(
+            approver_id,
+            await self._entity_creator_id(record.entity_type, record.entity_id),
+            action="approve",
+            record=record.entity_type.value.replace("_", " "),
+        )
+
         now = datetime.now(timezone.utc)
         record.status = ApprovalStepStatus.APPROVED
         record.acted_by = approver_id
@@ -821,6 +834,40 @@ class FinanceService:
             if record.status == ApprovalStepStatus.PENDING:
                 return False
         return True
+
+    async def _entity_creator_id(
+        self, entity_type: ApprovalEntityType, entity_id: str
+    ) -> Optional[str]:
+        """Who raised the request an approval step belongs to.
+
+        Returns None for an entity that no longer exists; the caller treats a
+        missing id as "cannot prove a conflict" rather than blocking.
+        """
+        # The three models name the requester differently — `requested_by` on
+        # purchases and checks, `submitted_by` on expense reports — so the
+        # column is part of the mapping, not assumed.
+        mapping = {
+            ApprovalEntityType.PURCHASE_REQUEST: (
+                PurchaseRequest,
+                PurchaseRequest.requested_by,
+            ),
+            ApprovalEntityType.EXPENSE_REPORT: (
+                ExpenseReport,
+                ExpenseReport.submitted_by,
+            ),
+            ApprovalEntityType.CHECK_REQUEST: (
+                CheckRequest,
+                CheckRequest.requested_by,
+            ),
+        }.get(entity_type)
+        if mapping is None:
+            return None
+
+        model, requester_column = mapping
+        result = await self.db.execute(
+            select(requester_column).where(model.id == entity_id)
+        )
+        return result.scalar_one_or_none()
 
     async def _finalize_approval(
         self,

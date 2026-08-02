@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ArrowLeft, ClipboardList, RefreshCw, Check, XCircle, Loader2, Filter, PackageCheck } from 'lucide-react';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { inventoryService } from '../../../services/api';

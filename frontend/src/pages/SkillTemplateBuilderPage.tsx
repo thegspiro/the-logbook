@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router';
 import {
   ArrowLeft,
   Plus,
@@ -499,7 +499,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       } else {
         const created = await createTemplate(payload);
         toast.success('Template created');
-        navigate(`/training/skills-testing/templates/${created.id}/edit`, { replace: true });
+        void navigate(`/training/skills-testing/templates/${created.id}/edit`, { replace: true });
       }
     } catch {
       toast.error('Failed to save template');
@@ -522,7 +522,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         await updateTemplate(id, payload);
         await publishTemplate(id);
         toast.success('Template published');
-        navigate('/training/admin?page=skills-testing&tab=templates');
+        void navigate('/training/admin?page=skills-testing&tab=templates');
       } catch {
         toast.error('Failed to publish template');
       }
@@ -765,7 +765,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         {/* Bottom Save Bar */}
         <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border action-bar-safe -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 flex justify-end gap-2">
           <button
-            onClick={() => navigate('/training/admin?page=skills-testing&tab=templates')}
+            onClick={() => void navigate('/training/admin?page=skills-testing&tab=templates')}
             className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
           >
             Cancel

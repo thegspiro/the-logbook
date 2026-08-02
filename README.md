@@ -13,7 +13,7 @@ An open-source, modular intranet platform designed for fire departments, emergen
 - **Flexible Configuration** — Customize workflows, rules, and policies to match your organization
 - **Tamper-Proof Logging** — Cryptographic audit trails with integrity verification
 - **Multi-Tenancy Ready** — Host multiple organizations on a single installation
-- **Integration Framework** — Connect with Microsoft 365, Google Workspace, LDAP, and more
+- **Integration Framework** — Connect with Microsoft 365, Google Workspace, and more
 - **Role-Based Access Control** — Granular permissions with 16 system roles
 - **Mobile Responsive** — Progressive Web App (PWA) support
 - **Public Kiosk Displays** — Tablet-friendly pages for room QR code check-in, no login required
@@ -23,7 +23,7 @@ An open-source, modular intranet platform designed for fire departments, emergen
 
 | Module | Description |
 |--------|-------------|
-| **User Management & Authentication** | Member profiles, roles, permissions, OAuth 2.0 / SAML / LDAP, MFA |
+| **User Management & Authentication** | Member profiles, roles, permissions, OAuth 2.0 SSO (Google, Microsoft), MFA |
 | **Document Management** | 7 system folders (SOPs, Policies, Forms, Reports, Training Materials, Meeting Minutes, General), custom folders, grid/list views, document viewer |
 | **Communication Tools** | Announcements, messaging, notifications |
 | **Calendar & Scheduling** | Week/month views, shift templates (day, night, morning), staffing requirements, optional platoon rotations (A/B/C) with leave-aware staffing and hold-over roster |
@@ -178,7 +178,7 @@ openssl rand -hex 16  # ENCRYPTION_SALT (32 hex chars)
 docker compose up -d
 ```
 
-> **Which `.env` file?** `.env.example` is the quick-start config (~30 variables) — fill in your secrets and go. If you need cloud storage (S3, Azure, GCS), OAuth/SSO (Google, Microsoft, LDAP), SMS (Twilio), HIPAA tuning, or advanced security settings, copy `.env.example.full` instead. See [Choosing Your Configuration File](#choosing-your-configuration-file) below for details.
+> **Which `.env` file?** `.env.example` is the quick-start config (~30 variables) — fill in your secrets and go. If you need cloud storage (S3, Azure, GCS), OAuth/SSO (Google, Microsoft), SMS (Twilio), HIPAA tuning, or advanced security settings, copy `.env.example.full` instead. See [Choosing Your Configuration File](#choosing-your-configuration-file) below for details.
 </details>
 
 <details>
@@ -295,7 +295,7 @@ cp .env.example .env
 
 **Use `.env.example.full`** if you need any of the following:
 - Cloud file storage (AWS S3, Azure Blob, Google Cloud Storage)
-- OAuth / SSO providers (Microsoft Azure AD, Google OAuth, LDAP/Active Directory)
+- OAuth / SSO providers (Microsoft Azure AD, Google OAuth)
 - SMS notifications (Twilio)
 - Fine-grained HIPAA controls (session timeout, password age, audit retention)
 - Advanced security (IP whitelisting, geofencing, account lockout tuning, cookie settings)
@@ -374,6 +374,9 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 
 ### Security & Troubleshooting
 - [Security Guide](SECURITY.md) — Security policy and compliance
+- [Compliance Hub](docs/COMPLIANCE.md) — Framework alignment, control inventory, known gaps
+- [Backup & Disaster Recovery](docs/BACKUP.md) — Backups, restore drills, RTO/RPO
+- [Key Rotation](docs/KEY_ROTATION.md) — Rotating encryption keys safely
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) — All modules including locations, kiosk, and training
 - [Deployment Troubleshooting](docs/troubleshooting/README.md) — Docker and deployment issues
 
@@ -387,22 +390,30 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 | **Cache** | Redis 7+ |
 | **Search** | Elasticsearch (optional) |
 | **File Storage** | Local, S3, Azure Blob, Google Cloud Storage |
-| **Authentication** | OAuth 2.0, SAML, LDAP, TOTP-based MFA |
+| **Authentication** | OAuth 2.0 (Google, Microsoft), TOTP-based MFA |
 
 ## Security & Compliance
 
 - **Password Security** — Argon2id hashing (OWASP recommended)
 - **Encryption** — AES-256 at rest for sensitive data, TLS 1.3 in transit
 - **Multi-Factor Authentication** — TOTP-based 2FA
-- **Tamper-Proof Audit Logs** — Blockchain-inspired hash chain with 7-year retention
+- **Tamper-Proof Audit Logs** — Blockchain-inspired hash chain with enforced 7-year retention (signed archives before purge) and optional off-host shipping to a SIEM
 - **Session Security** — JWT with automatic timeout
 - **Rate Limiting** — Brute force protection (5 attempts = 30 min lockout)
 - **Input Sanitization** — XSS and SQL injection prevention
 - **HIPAA-Oriented Security** — PHI encryption, audit retention, access controls (external audit required for compliance certification)
 - **Section 508 Accessible** — WCAG 2.1 Level AA compliance
 - **Public Endpoints** — Kiosk displays and public forms use non-guessable codes; no sensitive data exposed
+- **Member Privacy Rights** — self-service personal-data export, consent tracking (photo use, roster listing, SMS), and an anonymization workflow that scrubs a departed member's PII while retaining operational history
+- **Records Retention** — per-department retention schedules with safety floors, enforced daily; official records (documents, minutes) are never auto-deleted
+- **Key Rotation** — encryption keys rotate with no downtime via a legacy-key ring and a drain script
+- **Supply Chain** — Dependabot, blocking dependency audits (pip-audit, npm audit, Trivy), secret scanning, and an SPDX SBOM per CI run
+- **Vulnerability Disclosure** — RFC 9116 `/.well-known/security.txt` on every deployment
 
-See [SECURITY.md](SECURITY.md) for comprehensive security documentation.
+See [SECURITY.md](SECURITY.md) for comprehensive security documentation and
+[docs/COMPLIANCE.md](docs/COMPLIANCE.md) for the compliance hub — framework
+alignment (HIPAA, ISO/IEC 27001/27701/22301, WCAG, NFPA), a control inventory
+usable as audit evidence, and honestly-tracked gaps.
 
 **Important**: While this software provides security features, organizations are responsible for proper configuration, staff training, and ongoing compliance with applicable regulations.
 

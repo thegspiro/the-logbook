@@ -8,6 +8,7 @@
  */
 
 import type { BatchShiftReportCreate } from '@/types/training';
+import { openOfflineDb, STORE_PENDING_SHIFT_REPORTS } from './offlineDb';
 
 export interface QueuedShiftReport {
   id: string;
@@ -16,29 +17,12 @@ export interface QueuedShiftReport {
   retries: number;
 }
 
-const DB_NAME = 'logbook-offline';
-const DB_VERSION = 2;
-const STORE_CHECKS = 'pendingChecks';
-const STORE_REPORTS = 'pendingShiftReports';
+// Shares the `logbook-offline` database with the equipment-check queue; the
+// name, version and upgrade path live in offlineDb.ts so the two modules can
+// never disagree about the version (which previously broke check queueing).
+const STORE_REPORTS = STORE_PENDING_SHIFT_REPORTS;
 
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_CHECKS)) {
-        db.createObjectStore(STORE_CHECKS, { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains(STORE_REPORTS)) {
-        db.createObjectStore(STORE_REPORTS, { keyPath: 'id' });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('Failed to open database'));
-  });
-}
+const openDB = openOfflineDb;
 
 export async function enqueueShiftReport(
   payload: BatchShiftReportCreate,
@@ -96,6 +80,34 @@ export async function markReportRetry(id: string): Promise<void> {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error ?? new Error('Failed to mark report retry'));
   });
+}
+
+/**
+ * Discard every queued shift report on this device.
+ *
+ * SEC (FE-7): queued reports carry the densest PII of any offline store —
+ * crew rosters, trainee evaluations and free-text narratives — and IndexedDB
+ * is scoped to the browser profile, not the signed-in member. On a shared
+ * station computer the next member must not inherit them. Returns the number
+ * discarded so the caller can report the loss rather than destroy work
+ * silently.
+ */
+export async function clearAllQueuedReports(): Promise<number> {
+  const db = await openDB();
+  const count = await new Promise<number>((resolve) => {
+    const tx = db.transaction(STORE_REPORTS, 'readonly');
+    const request = tx.objectStore(STORE_REPORTS).count();
+    request.onsuccess = () => resolve(request.result);
+    // Never let a purge failure block logout.
+    request.onerror = () => resolve(0);
+  });
+  await new Promise<void>((resolve) => {
+    const tx = db.transaction(STORE_REPORTS, 'readwrite');
+    tx.objectStore(STORE_REPORTS).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => resolve();
+  });
+  return count;
 }
 
 export async function pendingReportCount(): Promise<number> {

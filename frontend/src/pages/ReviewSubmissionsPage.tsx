@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
@@ -1019,7 +1019,7 @@ const ReviewSubmissionsPage: React.FC = () => {
         {/* Header */}
         <div className="flex items-center space-x-4 mb-6">
           <button
-            onClick={() => navigate('/training/officer')}
+            onClick={() => void navigate('/training/officer')}
             className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface"
           >
             <ArrowLeft className="w-5 h-5" />

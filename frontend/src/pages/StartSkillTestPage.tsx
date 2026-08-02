@@ -7,7 +7,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router';
 import {
   ArrowLeft,
   ClipboardCheck,
@@ -122,7 +122,7 @@ export const StartSkillTestPage: React.FC = () => {
         is_practice: isPractice,
       });
       toast.success(isPractice ? 'Practice session started' : 'Test session started');
-      navigate(`/training/skills-testing/test/${test.id}/active`);
+      void navigate(`/training/skills-testing/test/${test.id}/active`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to start test'));
     } finally {

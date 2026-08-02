@@ -479,13 +479,11 @@ VITE_API_URL=http://YOUR-IP:7881
 # WebSocket Configuration
 
 # Environment
-VITE_ENV=production
 
 # Security - Change in production!
 VITE_SESSION_KEY=change-this-to-a-random-32-character-string
 
 # Feature Flags
-VITE_ENABLE_ANALYTICS=false
 EOF
 ```
 

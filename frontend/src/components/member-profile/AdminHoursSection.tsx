@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import type { AdminHoursSummary } from "../../modules/admin-hours/types";
 import type { AdminHoursComplianceItem } from "../../modules/admin-hours/types";
 

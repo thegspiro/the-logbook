@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Plus,
   Search,
@@ -154,7 +154,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             <option value="cancelled">Cancelled</option>
           </select>
           <button
-            onClick={() => navigate('/training/skills-testing/test/new')}
+            onClick={() => void navigate('/training/skills-testing/test/new')}
             className="btn-primary flex font-medium gap-2 items-center"
           >
             <Plus className="w-4 h-4" />
@@ -180,7 +180,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             }
             actions={
               templates.length > 0
-                ? [{ label: 'Start a new test', onClick: () => navigate('/training/skills-testing/test/new') }]
+                ? [{ label: 'Start a new test', onClick: () => void navigate('/training/skills-testing/test/new') }]
                 : undefined
             }
           />
@@ -191,7 +191,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             <TestCard
               key={test.id}
               test={test}
-              onClick={() => navigate(`/training/skills-testing/test/${test.id}`)}
+              onClick={() => void navigate(`/training/skills-testing/test/${test.id}`)}
               onDelete={() => void handleDelete(test)}
             />
           ))}

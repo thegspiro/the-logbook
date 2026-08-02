@@ -10,7 +10,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 
 | Table | Description |
 |-------|-------------|
-| `users` | Member profiles (name, email, rank, station, membership_number, status). `oauth_provider` (String(50), nullable) and `oauth_subject` (String(255), nullable, indexed `ix_users_oauth_subject`) bind an external IdP identity for OAuth sign-in *(2026-05-29)* |
+| `users` | Member profiles (name, email, rank, station, membership_number, status). `anonymized_at` (DateTime, nullable) records when a departed member's PII was scrubbed by the anonymization workflow *(2026-07-31)*. `oauth_provider` (String(50), nullable) and `oauth_subject` (String(255), nullable, indexed `ix_users_oauth_subject`) bind an external IdP identity for OAuth sign-in *(2026-05-29)* |
 | `roles` | System roles and custom positions |
 | `user_roles` | Many-to-many: user ↔ role mapping |
 | `permissions` | Granular permission definitions |
@@ -28,6 +28,8 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `department_messages` | Internal department messages with targeting (roles by id, statuses, or member ids), priority, `is_persistent`, `requires_acknowledgment`, `expires_at`, `deleted_at` (soft delete), and `scheduled_at` (deferred publish) *(updated 2026-07-17)* |
 | `department_message_reads` | Per-user read/acknowledged tracking for department messages (preserved on soft delete as compliance evidence) *(updated 2026-07-17)* |
 | `security_alerts` | Intrusion detection and security event alerts. `organization_id` scopes each alert to its owning department (nullable for platform-level pre-auth/IP-only alerts); an org admin only sees/acknowledges/resolves their own org's alerts *(updated 2026-07)* |
+| `audit_ship_state` | Single-row high-water mark for off-host audit shipping — `last_shipped_id` advances only when the collector acknowledges a batch *(2026-07-31)* |
+| `user_consents` | Current consent state per (member, type): `photo_use`, `public_roster_listing`, `sms_notifications`. Unique on (user_id, consent_type); the change history lives in `audit_logs` as `consent_updated` events *(2026-07-31)* |
 
 ---
 
@@ -230,6 +232,32 @@ The `organizations.settings` JSON column stores email platform configuration und
 | `microsoft_client_secret` | string (encrypted) | microsoft | Azure AD Client Secret |
 | `cloudflare_account_id` | string | cloudflare | Cloudflare Account ID (32-char hex) |
 | `cloudflare_api_token` | string (encrypted) | cloudflare | Cloudflare API token with email sending permission |
+
+---
+
+## Recent Schema Changes (2026-07-31)
+
+### New Tables
+
+| Table | Migration | Description |
+|-------|-----------|-------------|
+| `audit_ship_state` | `20260801_0011` | Off-host audit-shipping watermark (`last_shipped_id`, `last_shipped_at`) |
+| `user_consents` | `20260801_0014` | Per-member consent state; unique index `idx_user_consent_unique` on (`user_id`, `consent_type`) |
+
+### New Columns
+
+| Table | Column | Type | Migration | Description |
+|-------|--------|------|-----------|-------------|
+| `audit_log_checkpoints` | `archived_at` | DateTime(timezone), nullable | `20260801_0010` | Set when this checkpoint's rows were exported and purged by retention |
+| `audit_log_checkpoints` | `last_log_hash` | String(64), nullable | `20260801_0010` | Chain hash of the final purged row; the surviving chain head anchors to it |
+| `audit_log_checkpoints` | `archive_attestation` | String(64), nullable | `20260801_0010` | Keyed HMAC over the archived range — a DB-only attacker cannot forge a "sanctioned" head deletion |
+| `users` | `anonymized_at` | DateTime(timezone), nullable | `20260801_0012` | When the member's PII was scrubbed; NULL = not anonymized |
+
+### Column Modifications
+
+| Table | Column | Change | Migration | Description |
+|-------|--------|--------|-----------|-------------|
+| `member_leaves_of_absence` | `end_date` | `NOT NULL` → nullable | `20260801_0013` | **Bug fix.** The model documents `NULL` as "permanent leave", but the original migration created the column `NOT NULL`, so recording a permanent leave failed with IntegrityError 1048 on any real database |
 
 ---
 

@@ -50,7 +50,6 @@ VITE_BACKEND_URL=http://localhost:3001  # Only for Vite dev server proxy
 
 # Production (build-time only)
 VITE_API_URL=/api/v1
-VITE_ENV=production
 ```
 
 > **Critical:** Vite replaces `import.meta.env.VITE_*` at build time. These cannot be changed after building.

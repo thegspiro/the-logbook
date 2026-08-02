@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Truck,
   Plus,
@@ -60,7 +60,7 @@ export const ApparatusListPage: React.FC = () => {
   useEffect(() => {
     // Check authentication via session flag (tokens are in httpOnly cookies)
     if (!localStorage.getItem('has_session')) {
-      navigate('/login');
+      void navigate('/login');
       return;
     }
 
@@ -118,7 +118,7 @@ export const ApparatusListPage: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => void navigate('/dashboard')}
               className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm shrink-0"
             >
               <span className="hidden sm:inline">← Back to Dashboard</span>
@@ -212,7 +212,7 @@ export const ApparatusListPage: React.FC = () => {
 
             {/* Add Button */}
             <button
-              onClick={() => navigate('/apparatus/new')}
+              onClick={() => void navigate('/apparatus/new')}
               className="btn-primary flex items-center space-x-2"
             >
               <Plus className="w-4 h-4" />
@@ -307,7 +307,7 @@ export const ApparatusListPage: React.FC = () => {
             </p>
             {!searchQuery && !filterType && !filterStatus && (
               <button
-                onClick={() => navigate('/apparatus/new')}
+                onClick={() => void navigate('/apparatus/new')}
                 className="btn-primary flex items-center mx-auto px-6 py-3 space-x-2"
               >
                 <Plus className="w-5 h-5" />
@@ -426,28 +426,28 @@ export const ApparatusListPage: React.FC = () => {
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right">
                             <div className="flex items-center justify-end space-x-1 sm:space-x-2">
                               <button
-                                onClick={() => navigate(`/apparatus/print-labels?ids=${apparatus.id}`)}
+                                onClick={() => void navigate(`/apparatus/print-labels?ids=${apparatus.id}`)}
                                 className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-sm transition-colors"
                                 title="Print label"
                               >
                                 <Printer className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => navigate(`/apparatus/${apparatus.id}`)}
+                                onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
                                 className="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded-sm transition-colors"
                                 title="View Details"
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => navigate(`/apparatus/${apparatus.id}/edit`)}
+                                onClick={() => void navigate(`/apparatus/${apparatus.id}/edit`)}
                                 className="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-500/10 rounded-sm transition-colors"
                                 title="Edit"
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => navigate(`/apparatus/${apparatus.id}`)}
+                                onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
                                 className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded-sm transition-colors"
                                 title="View Details"
                               >
@@ -455,7 +455,7 @@ export const ApparatusListPage: React.FC = () => {
                               </button>
                               {!apparatus.isArchived && (
                                 <button
-                                  onClick={() => navigate(`/apparatus/${apparatus.id}`)}
+                                  onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
                                   className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-theme-text-muted hover:text-theme-text-secondary hover:bg-theme-surface-secondary rounded-sm transition-colors"
                                   title="Archive"
                                 >

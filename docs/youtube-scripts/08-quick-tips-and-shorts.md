@@ -373,6 +373,66 @@ Finalize is blocked]**
 
 ---
 
+## SHORT 8K: Download Everything The Logbook Knows About You
+
+**Length:** 50 seconds
+**Extracted From:** Script 6, Chapter 7
+
+---
+
+**[SCREEN: The Logbook dashboard]**
+
+> "Want a copy of your entire department record? One click."
+
+**[SCREEN: Click your name → Settings → Security tab]**
+
+> "Settings. Security tab. Scroll to 'Your Data.'"
+
+**[SCREEN: Click "Download my data"; a file downloads]**
+
+> "Click Download my data."
+
+**[SCREEN: The JSON file open, scrolling through training records and attendance]**
+
+> "That file has everything — your profile, every certification, every shift
+> and event you attended, your hours, your equipment, your screening records."
+
+**[CALLOUT: "Applying somewhere else? Your whole training history, in one file."]**
+
+> "Only ever your data. Never anyone else's. Grab it before you ever leave the
+> department."
+
+---
+
+## SHORT 8L: Why You're Not Getting Department Texts
+
+**Length:** 45 seconds
+**Extracted From:** Script 6, Chapter 7
+
+---
+
+**[SCREEN: A phone with no notifications]**
+
+> "Everyone else got the text and you didn't? Here's the fix."
+
+**[SCREEN: Settings → Security → Privacy Choices, showing "(not answered)"]**
+
+> "Settings, Security, Privacy Choices. See 'not answered'? That counts as no."
+
+**[CALLOUT: "Not answered = no. Silence is never consent."]**
+
+> "Text messaging needs your explicit yes — that's the law, not the software
+> being difficult. Same for using your photo publicly, and for listing you on
+> the public roster."
+
+**[SCREEN: Check the "Text message notifications" box; a toast confirms it saved]**
+
+> "Check the box. Done. You're on the list."
+
+> "None of these are required to be a member. Turn them on or off any time."
+
+---
+
 ## Production Notes for Shorts
 
 ### Format Guidelines

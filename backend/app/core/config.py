@@ -161,6 +161,20 @@ class Settings(BaseSettings):
         90  # Max days before password must be changed
     )
     HIPAA_AUDIT_RETENTION_DAYS: int = 2555  # 7-year audit log retention (§164.312(b))
+    # Where the weekly retention job writes gzipped JSONL exports of purged
+    # audit rows. Include this directory in backups (see docs/BACKUP.md) —
+    # after a purge it is the only copy of the oldest audit history.
+    AUDIT_ARCHIVE_DIR: str = "./audit_archives"
+    # Off-host audit shipping: when set, a scheduled task POSTs new audit
+    # rows as HMAC-signed NDJSON batches to this collector URL (SIEM/log
+    # archive), giving the audit trail a copy outside the database host.
+    AUDIT_SHIP_WEBHOOK_URL: str | None = None
+    AUDIT_SHIP_BATCH_SIZE: int = 500
+    # Platform-level retention for blocked-access-attempt telemetry (IP +
+    # user-agent rows with no org column). Days; 0 disables the purge.
+    # Org-scoped record classes are configured per organization instead —
+    # see app/services/retention_service.py.
+    RETENTION_BLOCKED_ATTEMPTS_DAYS: int = 365
 
     # Account lockout after repeated failed sign-ins (brute-force protection).
     # Tunable so small, trusted deployments can run a gentler policy. (These
@@ -193,6 +207,14 @@ class Settings(BaseSettings):
 
     # Encryption - CRITICAL: Must be set via ENCRYPTION_KEY env var
     ENCRYPTION_KEY: str = ""
+    # Key rotation: comma-separated PREVIOUS values of ENCRYPTION_KEY.
+    # Decryption tries the current key first, then each legacy key, so data
+    # encrypted before a rotation stays readable while all new writes use
+    # the current key. Rotate by moving the old key here, setting a new
+    # ENCRYPTION_KEY, and running scripts/rotate_encryption_key.py to
+    # re-encrypt everything (then remove the drained legacy key). See
+    # docs/KEY_ROTATION.md.
+    ENCRYPTION_KEYS_LEGACY: str = ""
 
     # Installation-specific salt for key derivation
     # CRITICAL: Must be unique per installation, set via ENCRYPTION_SALT env var
@@ -228,6 +250,18 @@ class Settings(BaseSettings):
     # issues are detected (missing secrets, etc.).  Production and staging
     # ALWAYS block regardless of this flag.  Set to False for local dev only.
     SECURITY_BLOCK_INSECURE_DEFAULTS: bool = False
+    # SEC: Break-glass for the "TLS enabled but certificate unverified" check.
+    #
+    # Turning on DB_SSL/REDIS_SSL without a CA gives an encrypted channel whose
+    # peer is never authenticated (CERT_NONE) — an active man-in-the-middle
+    # reads and rewrites PHI in transit while the deployment looks encrypted.
+    # That is more dangerous than honest plaintext on a private network,
+    # because it is indistinguishable from a correct configuration, so it
+    # blocks startup in production/staging rather than warning.
+    #
+    # Set True only for a deployment that terminates TLS on a trusted, isolated
+    # path and accepts the risk; it is logged loudly on every boot.
+    SECURITY_ALLOW_UNVERIFIED_TLS: bool = False
     # SEC: Break-glass gate for the audit-chain rehash tool. Rehash rewrites the
     # single, cross-organization audit hash chain, so it must not be reachable by
     # an ordinary org admin who merely holds `audit.export`. It stays disabled
@@ -298,6 +332,27 @@ class Settings(BaseSettings):
 
         # --- Additional production/staging checks ---
         if self.ENVIRONMENT in ("production", "staging"):
+            if not self.RATE_LIMIT_ENABLED:
+                # The switch exists for fuzzing and load tests, where the
+                # limiter masks the behaviour under test. Turning it off on a
+                # real deployment removes the brute-force and scraping
+                # protection from every public and auth route at once.
+                warnings.append(
+                    "CRITICAL: RATE_LIMIT_ENABLED must be True in production — "
+                    "disabling it removes brute-force and abuse protection from "
+                    "every authentication and public endpoint"
+                )
+
+            if self.SECURITY_ALLOW_UNVERIFIED_TLS:
+                # An accepted risk still has to be visible every boot, or it
+                # outlives the person who accepted it.
+                warnings.append(
+                    "WARNING: SECURITY_ALLOW_UNVERIFIED_TLS is enabled — TLS peer "
+                    "certificates are not verified, so encrypted connections are "
+                    "not protected against an active man-in-the-middle. This is an "
+                    "explicitly accepted risk; clear the flag once a CA is configured."
+                )
+
             if not self.REDIS_PASSWORD:
                 warnings.append("CRITICAL: REDIS_PASSWORD must be set in production")
 
@@ -307,11 +362,17 @@ class Settings(BaseSettings):
                     "database traffic and prevent man-in-the-middle attacks"
                 )
             elif not self.DB_SSL_CA:
+                # CRITICAL, not WARNING: this configuration *looks* secure and
+                # is not. Waivable via SECURITY_ALLOW_UNVERIFIED_TLS.
+                severity = (
+                    "WARNING" if self.SECURITY_ALLOW_UNVERIFIED_TLS else "CRITICAL"
+                )
                 warnings.append(
-                    "WARNING: DB_SSL is enabled but DB_SSL_CA is not set — the "
+                    f"{severity}: DB_SSL is enabled but DB_SSL_CA is not set — the "
                     "connection is encrypted but the server certificate is NOT "
                     "verified (CERT_NONE), so it is not protected against an "
-                    "active man-in-the-middle. Set DB_SSL_CA to the CA certificate."
+                    "active man-in-the-middle. Set DB_SSL_CA to the CA certificate, "
+                    "or set SECURITY_ALLOW_UNVERIFIED_TLS=true to accept the risk."
                 )
 
             if not self.REDIS_SSL:
@@ -320,11 +381,15 @@ class Settings(BaseSettings):
                     "Redis traffic and prevent man-in-the-middle attacks"
                 )
             elif not self.REDIS_SSL_CA:
+                severity = (
+                    "WARNING" if self.SECURITY_ALLOW_UNVERIFIED_TLS else "CRITICAL"
+                )
                 warnings.append(
-                    "WARNING: REDIS_SSL is enabled but REDIS_SSL_CA is not set — "
+                    f"{severity}: REDIS_SSL is enabled but REDIS_SSL_CA is not set — "
                     "the connection is encrypted but the server certificate is NOT "
-                    "verified (CERT_NONE). Set REDIS_SSL_CA to the CA certificate "
-                    "for man-in-the-middle protection."
+                    "verified (CERT_NONE). Redis holds sessions and cached PHI. Set "
+                    "REDIS_SSL_CA to the CA certificate, or set "
+                    "SECURITY_ALLOW_UNVERIFIED_TLS=true to accept the risk."
                 )
 
             if self.DEBUG:
@@ -666,7 +731,19 @@ class Settings(BaseSettings):
             if d.strip()
         }
 
-    # LDAP
+    # ============================================
+    # Vulnerability Disclosure (RFC 9116 security.txt)
+    # ============================================
+    # Contact served at /.well-known/security.txt for vulnerability reports.
+    # Set to your department's security email (bare addresses get a mailto:
+    # prefix added) or a reporting URL. Unset, it falls back to the upstream
+    # project's GitHub security-advisory intake.
+    SECURITY_TXT_CONTACT: str | None = None
+    SECURITY_TXT_POLICY_URL: str = (
+        "https://github.com/thegspiro/the-logbook/blob/main/SECURITY.md"
+    )
+
+    # LDAP (not implemented — inert placeholders for a future integration)
     LDAP_ENABLED: bool = False
     LDAP_SERVER: str | None = None
     LDAP_BIND_DN: str | None = None

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Users, Shield, Plus, Trash2, AlertCircle, Phone, Mail, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
@@ -43,7 +43,7 @@ const ITTeamBackupAccess: React.FC = () => {
 
   useEffect(() => {
     if (!departmentName) {
-      navigate('/onboarding/start');
+      void navigate('/onboarding/start');
       return;
     }
 
@@ -191,7 +191,7 @@ const ITTeamBackupAccess: React.FC = () => {
         }
 
         toast.success('IT team and backup access information saved securely');
-        navigate('/onboarding/positions');
+        void navigate('/onboarding/positions');
         return response;
       },
       {

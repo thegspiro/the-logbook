@@ -10,6 +10,7 @@
 import type {
   ShiftEquipmentCheckCreate,
 } from '@/modules/scheduling/types/equipmentCheck';
+import { openOfflineDb, STORE_PENDING_CHECKS } from './offlineDb';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,25 +37,11 @@ export type SyncStatus = 'idle' | 'syncing' | 'error';
 // IndexedDB helpers
 // ---------------------------------------------------------------------------
 
-const DB_NAME = 'logbook-offline';
-const DB_VERSION = 1;
-const STORE_CHECKS = 'pendingChecks';
+// The database name, version and upgrade path are shared with the shift-report
+// queue — see offlineDb.ts for why they must not be redeclared here.
+const STORE_CHECKS = STORE_PENDING_CHECKS;
 
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_CHECKS)) {
-        db.createObjectStore(STORE_CHECKS, { keyPath: 'id' });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'));
-  });
-}
+const openDB = openOfflineDb;
 
 function txStore(
   db: IDBDatabase,
@@ -159,4 +146,31 @@ export async function pendingCount(): Promise<number> {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error('IndexedDB request failed'));
   });
+}
+
+/**
+ * Discard every queued equipment check on this device.
+ *
+ * SEC (FE-7): queued checks carry member PII and photo blobs in IndexedDB,
+ * which is shared across every user of the browser profile. On a shared
+ * station computer the next member must not inherit the previous member's
+ * unsent submissions. Returns the number discarded so the caller can report
+ * the loss instead of destroying work silently.
+ */
+export async function clearAllQueuedChecks(): Promise<number> {
+  const db = await openDB();
+  const count = await new Promise<number>((resolve) => {
+    const store = txStore(db, 'readonly');
+    const req = store.count();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(0);
+  });
+  await new Promise<void>((resolve) => {
+    const store = txStore(db, 'readwrite');
+    const req = store.clear();
+    req.onsuccess = () => resolve();
+    // Never let a purge failure block logout.
+    req.onerror = () => resolve();
+  });
+  return count;
 }

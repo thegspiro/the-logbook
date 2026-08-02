@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import type { EventListItem } from '../types/event';
 import { getEventTypeLabel, getEventTypeBadgeColor } from '../utils/eventHelpers';

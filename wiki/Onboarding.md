@@ -135,7 +135,7 @@ After completing onboarding, a checklist is automatically created with critical 
 **Medium Priority:**
 - ✅ Review and customize user roles
 - ✅ Configure additional modules
-- ✅ Set up integrations (Microsoft 365, Google Workspace, LDAP)
+- ✅ Set up integrations (Microsoft 365, Google Workspace)
 
 ## API Endpoints
 

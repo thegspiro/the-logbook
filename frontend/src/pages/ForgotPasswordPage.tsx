@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ArrowLeft, Mail, CheckCircle } from 'lucide-react';
 import { authService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';

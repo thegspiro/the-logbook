@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Plus, Pencil, Trash2, QrCode, Clock, AlertTriangle, Download } from 'lucide-react';
 import { useAdminHoursStore } from '../store/adminHoursStore';
 import { adminHoursEntryService, adminHoursSeedService } from '../services/api';

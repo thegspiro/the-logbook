@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 /** Minimum time between two consecutive version checks (60 seconds). */
 const MIN_CHECK_INTERVAL_MS = 60_000;

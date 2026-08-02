@@ -6,7 +6,7 @@
  * can quickly see what's in stock vs what's checked out / in maintenance / etc.
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft, RefreshCw, Search, ChevronUp, ChevronDown, Printer, Download,
@@ -348,7 +348,7 @@ const InventoryItemsPage: React.FC = () => {
   });
 
   /* ---- bulk ops ---- */
-  const printLabels = () => navigate(`/inventory/print-labels?ids=${Array.from(selIds).join(',')}`);
+  const printLabels = () => void navigate(`/inventory/print-labels?ids=${Array.from(selIds).join(',')}`);
 
   const bulkRetire = async () => {
     if (!confirm(`Retire ${selIds.size} item(s)? This cannot be undone.`)) return;

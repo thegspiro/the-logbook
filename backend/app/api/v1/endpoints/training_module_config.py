@@ -6,7 +6,7 @@ PUT  /config          - Training officers can update the visibility settings
 GET  /my-training     - Member's aggregated training data (respects visibility config)
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -169,9 +169,30 @@ async def get_my_training_summary(
         )
     )
     row = hours_result.one()
+
+    # Month-to-date alongside the lifetime figure. The dashboard's hours
+    # summary is labelled "This month" and adds training to standby and
+    # administrative hours; without this it had only the lifetime total to
+    # use, so the headline number summed a lifetime figure with two monthly
+    # ones and meant nothing. `total_hours` stays lifetime — that is the right
+    # reading for "my training record", which is what this endpoint is.
+    month_start = datetime.now(timezone.utc).replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+    month_result = await db.execute(
+        select(
+            func.coalesce(func.sum(TrainingRecord.hours_completed), 0),
+        ).where(
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.user_id == user_id,
+            TrainingRecord.status == TrainingStatus.COMPLETED,
+            TrainingRecord.completion_date >= month_start.date(),
+        )
+    )
     result["hours_summary"] = {
         "total_records": row[0],
         "total_hours": float(row[1]),
+        "hours_this_month": float(month_result.scalar() or 0),
         "completed_courses": row[0],
     }
 
@@ -408,9 +429,12 @@ async def get_my_training_summary(
             )
         )
         srow = stats_result.one()
+        # Counted from ShiftCompletionReport, so these are shifts actually
+        # worked and hours actually reported — not the scheduled figures the
+        # scheduling module reports under similar names.
         result["shift_stats"] = {
-            "total_shifts": srow[0],
-            "total_hours": float(srow[1]),
+            "shifts_completed": srow[0],
+            "hours_reported": float(srow[1]),
             "total_calls": int(srow[2]),
             "avg_rating": round(float(srow[3]), 1) if srow[3] else None,
         }

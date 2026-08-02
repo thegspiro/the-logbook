@@ -2,7 +2,7 @@
  * Medical Screening Module Routes
  */
 
-import { Route } from 'react-router-dom';
+import { Route } from 'react-router';
 import { MedicalScreeningPage } from './pages/MedicalScreeningPage';
 
 export function getMedicalScreeningRoutes() {

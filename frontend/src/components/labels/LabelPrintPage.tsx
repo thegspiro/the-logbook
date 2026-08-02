@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import JsBarcode from 'jsbarcode';
 import {
   AlertCircle, ArrowLeft, Download, Loader2, Printer, RotateCw, Settings2, TestTube2,

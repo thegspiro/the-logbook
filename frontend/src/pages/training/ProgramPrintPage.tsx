@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { trainingProgramService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';

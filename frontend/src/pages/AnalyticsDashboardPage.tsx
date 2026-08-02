@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { analyticsService, type QRCodeMetrics } from '../services/analytics';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatTime } from '../utils/dateFormatting';

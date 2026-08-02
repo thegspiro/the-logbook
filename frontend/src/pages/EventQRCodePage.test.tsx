@@ -16,10 +16,10 @@ vi.mock('../services/api', () => ({
 // Track the useParams return value so we can override it per test
 let mockParamsValue: Record<string, string | undefined> = { id: '1' };
 
-// Mock react-router-dom
+// Mock react-router
 const mockNavigate = vi.fn();
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
+vi.mock('react-router', async () => {
+  const actual = await vi.importActual('react-router');
   return {
     ...actual,
     useNavigate: () => mockNavigate,

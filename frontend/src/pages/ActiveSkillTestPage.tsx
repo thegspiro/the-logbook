@@ -14,7 +14,7 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import {
   ChevronLeft,
   ChevronRight,
@@ -980,7 +980,7 @@ export const ActiveSkillTestPage: React.FC = () => {
       // Then finalize
       const completed = await completeTest(currentTest.id);
       toast.success(`Test submitted: ${completed.result.toUpperCase()}`);
-      navigate(`/training/skills-testing/test/${currentTest.id}`);
+      void navigate(`/training/skills-testing/test/${currentTest.id}`);
     } catch {
       toast.error('Failed to submit test');
     } finally {
@@ -1027,7 +1027,7 @@ export const ActiveSkillTestPage: React.FC = () => {
       await completeTest(currentTest.id);
 
       // Navigate to the completed view within this same page
-      navigate(`/training/skills-testing/test/${currentTest.id}`);
+      void navigate(`/training/skills-testing/test/${currentTest.id}`);
     } catch {
       toast.error('Failed to calculate results');
     } finally {
@@ -1057,7 +1057,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     try {
       await discardPracticeTest(currentTest.id);
       toast.success('Practice attempt discarded');
-      navigate('/training/skills-testing');
+      void navigate('/training/skills-testing');
     } catch {
       toast.error('Failed to discard practice test');
     } finally {
@@ -1075,7 +1075,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         is_practice: true,
       });
       toast.success('New practice session started');
-      navigate(`/training/skills-testing/test/${newTest.id}/active`);
+      void navigate(`/training/skills-testing/test/${newTest.id}/active`);
     } catch {
       toast.error('Failed to start new practice');
     }
@@ -1108,7 +1108,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         <div className="sticky top-0 z-10 bg-theme-surface-modal border-b border-theme-surface-border px-4 py-3">
           <div className="flex items-center justify-between">
             <button
-              onClick={() => navigate(currentTest.is_practice ? '/training/skills-testing' : '/training/admin?page=skills-testing&tab=tests')}
+              onClick={() => void navigate(currentTest.is_practice ? '/training/skills-testing' : '/training/admin?page=skills-testing&tab=tests')}
               className="flex items-center gap-1 p-2 rounded-lg hover:bg-theme-surface-hover transition-colors text-sm"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -1254,7 +1254,7 @@ export const ActiveSkillTestPage: React.FC = () => {
             </div>
           ) : (
             <button
-              onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
+              onClick={() => void navigate('/training/admin?page=skills-testing&tab=tests')}
               className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors"
             >
               Back to Tests
@@ -1383,7 +1383,7 @@ export const ActiveSkillTestPage: React.FC = () => {
       <div className="sticky top-0 z-10 bg-theme-surface-modal border-b border-theme-surface-border px-4 py-3">
         <div className="flex items-center justify-between mb-2">
           <button
-            onClick={() => navigate('/training/admin?page=skills-testing&tab=tests')}
+            onClick={() => void navigate('/training/admin?page=skills-testing&tab=tests')}
             className="p-2 rounded-lg hover:bg-theme-surface-hover transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />

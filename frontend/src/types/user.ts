@@ -255,6 +255,13 @@ export interface MemberStatusChangeResponse {
   email_sent?: boolean;
 }
 
+export interface ConsentItem {
+  consent_type: string;
+  /** null = never asked; the backend treats that as "no consent" */
+  granted: boolean | null;
+  updated_at: string | null;
+}
+
 export interface DeletionImpact {
   user_id: string;
   full_name?: string;

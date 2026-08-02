@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   CheckCircle2,
   Circle,
@@ -160,7 +160,7 @@ const DepartmentSetupPage: React.FC = () => {
         </p>
         <div className="space-y-3">
           {essentialItems.map(item => (
-            <SetupCard key={item.key} item={item} onNavigate={(path) => navigate(path)} />
+            <SetupCard key={item.key} item={item} onNavigate={(path) => void navigate(path)} />
           ))}
         </div>
       </div>
@@ -174,7 +174,7 @@ const DepartmentSetupPage: React.FC = () => {
           </p>
           <div className="space-y-3">
             {moduleItems.map(item => (
-              <SetupCard key={item.key} item={item} onNavigate={(path) => navigate(path)} />
+              <SetupCard key={item.key} item={item} onNavigate={(path) => void navigate(path)} />
             ))}
           </div>
         </div>

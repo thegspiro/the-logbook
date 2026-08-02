@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import DOMPurify from 'dompurify';
 import { publicFormsService } from '../services/api';
 import type { PublicFormDef, PublicFormField } from '../services/api';

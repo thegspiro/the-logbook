@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   AlertCircle,
@@ -1142,7 +1142,7 @@ const CreatePipelinePage: React.FC = () => {
       const program = await trainingProgramService.buildProgram(payload);
 
       toast.success('Training pipeline created successfully!');
-      navigate(`/training/programs/${program.id}`);
+      void navigate(`/training/programs/${program.id}`);
     } catch (err: unknown) {
       const errorMessage =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
@@ -1160,7 +1160,7 @@ const CreatePipelinePage: React.FC = () => {
         {/* Header */}
         <div className="flex items-center space-x-4 mb-8">
           <button
-            onClick={() => navigate('/training/programs')}
+            onClick={() => void navigate('/training/programs')}
             className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface"
             aria-label="Back to programs"
           >

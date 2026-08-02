@@ -22,8 +22,8 @@ vi.mock('../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }
 vi.mock('../utils/dateFormatting', () => ({ formatDate: (d: string) => d || 'N/A' }));
 
 const mockNavigate = vi.fn();
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
+vi.mock('react-router', async () => {
+  const actual = await vi.importActual('react-router');
   return {
     ...actual,
     useNavigate: () => mockNavigate,

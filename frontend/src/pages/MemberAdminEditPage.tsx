@@ -14,7 +14,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router';
 import { userService, locationsService } from '../services/api';
 import type { Location } from '../services/api';
 import type { UserWithRoles } from '../types/role';
@@ -260,7 +260,7 @@ export const MemberAdminEditPage: React.FC = () => {
   };
 
   const handleCancel = () => {
-    navigate('/members/admin');
+    void navigate('/members/admin');
   };
 
   if (loading) {

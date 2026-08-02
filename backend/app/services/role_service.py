@@ -12,15 +12,21 @@ from uuid import uuid4
 from loguru import logger
 from sqlalchemy import delete, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
 from app.core.permissions import (
     DEFAULT_ROLES,
     get_all_permissions,
+    get_rank_default_permissions,
     permission_matches,
     permission_matches_any,
 )
 from app.models.user import Role, User, user_roles
+from app.services.admin_continuity_service import (
+    assert_positions_retain_administrator,
+    assert_role_change_retains_administrator,
+)
 
 
 def slugify(name: str) -> str:
@@ -263,6 +269,16 @@ class RoleManagementService:
                 invalid = set(permissions) - valid_permissions
                 if invalid:
                     raise ValueError(f"Invalid permissions: {', '.join(invalid)}")
+                # A position's permissions are shared by every holder, so
+                # emptying the one that carries members.manage locks the whole
+                # organization out at once.
+                await assert_role_change_retains_administrator(
+                    db,
+                    organization_id,
+                    role_id,
+                    permissions,
+                    action=f"remove these permissions from '{role.name}'",
+                )
                 changes["permissions"] = {
                     "old_count": len(role.permissions or []),
                     "new_count": len(permissions),
@@ -281,6 +297,13 @@ class RoleManagementService:
                 invalid = set(permissions) - valid_permissions
                 if invalid:
                     raise ValueError(f"Invalid permissions: {', '.join(invalid)}")
+                await assert_role_change_retains_administrator(
+                    db,
+                    organization_id,
+                    role_id,
+                    permissions,
+                    action=f"remove these permissions from '{role.name}'",
+                )
                 changes["permissions"] = {
                     "old_count": len(role.permissions or []),
                     "new_count": len(permissions),
@@ -353,6 +376,14 @@ class RoleManagementService:
             .where(user_roles.c.position_id == str(role_id))
         )
         affected_users = count_result.scalar() or 0
+
+        await assert_role_change_retains_administrator(
+            db,
+            organization_id,
+            role_id,
+            None,
+            action=f"delete the position '{role_name}'",
+        )
 
         # Delete role (cascade will remove user_roles entries)
         await db.delete(role)
@@ -591,6 +622,37 @@ class RoleManagementService:
         new_role_ids = set(role_ids)
         to_add = new_role_ids - current_role_ids
         to_remove = current_role_ids - new_role_ids
+
+        # Guard the *resulting* set, once, rather than each removal in the
+        # loop below: swapping one administrator position for another passes
+        # through an intermediate state with neither, which a per-removal
+        # check would reject even though the end state is fine.
+        if to_remove:
+            user_result = await db.execute(
+                select(User)
+                .options(selectinload(User.positions))
+                .where(User.id == user_id)
+            )
+            user = user_result.scalar_one_or_none()
+            if user is not None:
+                resulting_permissions: set = set()
+                if role_ids:
+                    roles_result = await db.execute(
+                        select(Role).where(Role.id.in_([str(r) for r in role_ids]))
+                    )
+                    for role in roles_result.scalars().all():
+                        resulting_permissions.update(role.permissions or [])
+                if user.rank:
+                    resulting_permissions.update(
+                        get_rank_default_permissions(user.rank)
+                    )
+                await assert_positions_retain_administrator(
+                    db,
+                    str(user.organization_id),
+                    user_id,
+                    resulting_permissions,
+                    action="remove administrator positions from",
+                )
 
         # Remove old roles
         for role_id in to_remove:

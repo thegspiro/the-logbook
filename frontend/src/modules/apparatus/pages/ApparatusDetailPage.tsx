@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
   Truck,
   Wrench,
@@ -151,7 +151,7 @@ export const ApparatusDetailPage: React.FC = () => {
           <h2 className="text-theme-text-primary text-xl font-bold mb-2">Apparatus Not Found</h2>
           <p className="text-theme-text-muted mb-6">The apparatus you&#39;re looking for doesn&#39;t exist.</p>
           <button
-            onClick={() => navigate('/apparatus')}
+            onClick={() => void navigate('/apparatus')}
             className="btn-primary px-6 py-3"
           >
             Back to Fleet

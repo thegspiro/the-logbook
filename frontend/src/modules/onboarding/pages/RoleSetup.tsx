@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Users,
   Shield,
@@ -566,7 +566,7 @@ const PositionSetup: React.FC = () => {
   // Guard: redirect to start if org setup hasn't been completed
   useEffect(() => {
     if (!departmentName) {
-      navigate('/onboarding/start');
+      void navigate('/onboarding/start');
     }
   }, [departmentName, navigate]);
 
@@ -677,7 +677,7 @@ const PositionSetup: React.FC = () => {
     // Verify organization was created first
     if (!departmentName) {
       toast.error('Please complete organization setup first');
-      navigate('/onboarding/start');
+      void navigate('/onboarding/start');
       return;
     }
 
@@ -705,7 +705,7 @@ const PositionSetup: React.FC = () => {
       toast.success(
         `Positions configured successfully! Created: ${response.data?.created?.length || 0}, Updated: ${response.data?.updated?.length || 0}`
       );
-      navigate('/onboarding/modules');
+      void navigate('/onboarding/modules');
     } catch (error: unknown) {
       // Show specific error message from backend
       const errorMessage = getErrorMessage(error, 'Failed to save position configuration. Please try again.');

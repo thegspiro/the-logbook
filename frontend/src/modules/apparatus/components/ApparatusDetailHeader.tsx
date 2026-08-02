@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { ArrowLeft, Edit, Archive, AlertTriangle } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import type { Apparatus, ApparatusStatus } from '../types';
@@ -32,7 +32,7 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => navigate('/apparatus')}
+              onClick={() => void navigate('/apparatus')}
               className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -64,7 +64,7 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
           </div>
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => navigate(`/apparatus/${id}/edit`)}
+              onClick={() => void navigate(`/apparatus/${id}/edit`)}
               className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
             >
               <Edit className="w-4 h-4" />
@@ -72,7 +72,7 @@ export const ApparatusDetailHeader: React.FC<ApparatusDetailHeaderProps> = ({
             </button>
             {!isArchived && (
               <button
-                onClick={() => navigate(`/apparatus/${id}/archive`)}
+                onClick={() => void navigate(`/apparatus/${id}/archive`)}
                 className="flex items-center space-x-2 px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg transition-colors"
               >
                 <Archive className="w-4 h-4" />

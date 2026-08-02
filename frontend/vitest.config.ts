@@ -20,14 +20,14 @@ export default defineConfig({
         'dist/',
       ],
       // Ratchet floor: set ~2 points under measured coverage (2026-07-29:
-      // 54.65% lines / 41.26% funcs / 52.6% stmts / 45.18% branches) so the
+      // 54.98% lines / 41.67% funcs / 52.93% stmts / 45.71% branches on 2026-07-31) so the
       // gate blocks real regressions instead of failing every build against
       // an aspirational 80%. Raise these as coverage grows.
       thresholds: {
-        lines: 52,
-        functions: 39,
-        branches: 43,
-        statements: 50,
+        lines: 53,
+        functions: 40,
+        branches: 44,
+        statements: 51,
       },
     },
     include: ['src/**/*.{test,spec}.{ts,tsx}'],

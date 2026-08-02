@@ -11,7 +11,7 @@ import {
   Loader2, ChevronDown, AlertTriangle,
   Bell, LogIn,
 } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord, ShiftAttendanceRecord } from '../../modules/scheduling/services/api';

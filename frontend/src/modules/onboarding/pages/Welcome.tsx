@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { ThemeToggle } from '../components';
 
 const Welcome: React.FC = () => {
@@ -11,7 +11,7 @@ const Welcome: React.FC = () => {
   useEffect(() => {
     // If the user is already authenticated, go straight to the dashboard
     if (localStorage.getItem('has_session')) {
-      navigate('/dashboard', { replace: true });
+      void navigate('/dashboard', { replace: true });
       return;
     }
 
@@ -25,7 +25,7 @@ const Welcome: React.FC = () => {
           const data: unknown = await response.json();
           if (data && typeof data === 'object' && 'name' in data && data.name) {
             // Organization exists → onboarding is done → go to login
-            navigate('/login', { replace: true });
+            void navigate('/login', { replace: true });
             return;
           }
         }
@@ -120,7 +120,7 @@ const Welcome: React.FC = () => {
           {/* Call to action */}
           <div className="mt-12">
             <button
-              onClick={() => navigate('/onboarding')}
+              onClick={() => void navigate('/onboarding')}
               className="px-8 py-4 bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white text-lg font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
             >
               Get Started

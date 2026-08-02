@@ -23,6 +23,10 @@ from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.core.database import database_manager, get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import Organization, User, UserStatus
+from app.services.admin_continuity_service import (
+    LastAdministratorError,
+    assert_not_last_administrator,
+)
 
 router = APIRouter()
 
@@ -323,6 +327,22 @@ async def change_member_status(
     # Enforce the lifecycle state machine
     assert_transition_allowed(UserStatus(previous_status), new_status)
 
+    # Every status other than ACTIVE fails the is_active check that
+    # authentication requires, so this endpoint is the cheapest single-request
+    # path to locking an organization out of its own admin tools. Checked after
+    # the transition rules: if the change is not a legal one at all, saying so
+    # is more useful than explaining who would be left holding the keys.
+    if new_status != UserStatus.ACTIVE:
+        try:
+            await assert_not_last_administrator(
+                db,
+                str(current_user.organization_id),
+                member.id,
+                action=f"set to {new_status.value}",
+            )
+        except LastAdministratorError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
     # Update the status and record when it changed
     member.status = new_status
     member.status_changed_at = datetime.now(timezone.utc)
@@ -621,6 +641,16 @@ async def archive_member(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Only dropped members can be archived. Current status: {member.status.value}",
         )
+
+    try:
+        await assert_not_last_administrator(
+            db,
+            str(current_user.organization_id),
+            member.id,
+            action="archive",
+        )
+    except LastAdministratorError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     previous_status = member.status.value
     now = datetime.now(timezone.utc)

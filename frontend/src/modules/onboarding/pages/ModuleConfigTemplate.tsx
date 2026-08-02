@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Eye, Edit3, Shield, Users, CheckCircle, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getModuleById } from '../config';
@@ -27,9 +27,9 @@ const ModuleConfigTemplate: React.FC = () => {
   // Guard: redirect if org setup hasn't been completed or module ID is invalid
   useEffect(() => {
     if (!departmentName) {
-      navigate('/onboarding/start');
+      void navigate('/onboarding/start');
     } else if (!config) {
-      navigate('/onboarding/modules');
+      void navigate('/onboarding/modules');
     }
   }, [departmentName, config, navigate]);
 
@@ -82,11 +82,11 @@ const ModuleConfigTemplate: React.FC = () => {
     setModulePermissionConfig(normalizedModuleId, managePositions);
     toast.success(`${moduleName} permissions configured!`);
     setSaving(false);
-    navigate('/onboarding/modules');
+    void navigate('/onboarding/modules');
   };
 
   const handleSkip = () => {
-    navigate('/onboarding/modules');
+    void navigate('/onboarding/modules');
   };
 
   return (

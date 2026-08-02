@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import { eventService } from '../services/api';
 import type { QRCheckInData } from '../types/event';

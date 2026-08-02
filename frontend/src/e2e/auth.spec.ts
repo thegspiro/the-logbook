@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+import { gotoDashboard } from './helpers';
+
 /**
  * Authentication E2E Tests
  *
@@ -186,147 +188,20 @@ test.describe('Authentication', () => {
 
   test.describe('Logout', () => {
     test('should return to login page after logout', async ({ page }) => {
-      // Set session flag for authenticated state (httpOnly cookie auth)
-      await page.goto('/login');
-      await page.evaluate(() => {
-        localStorage.setItem('has_session', '1');
-      });
+      await gotoDashboard(page);
 
-      // Mock the current user endpoint
-      await page.route('**/api/v1/auth/me', (route) => {
-        void route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            id: 'test-user-id',
-            username: 'testuser',
-            email: 'testuser@example.com',
-            first_name: 'Test',
-            last_name: 'User',
-            is_active: true,
-            permissions: [],
-            roles: [],
-            positions: [],
-          }),
-        });
-      });
+      // The navigation's logout control opens a confirmation dialog rather
+      // than signing out immediately.
+      await page.getByRole('button', { name: /^logout$/i }).first().click();
 
-      // Mock non-critical API endpoints to prevent errors
-      await page.route('**/api/v1/auth/branding', (route) => {
-        void route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ name: 'Test Department', logo: null }),
-        });
-      });
+      // Scope the confirmation to the dialog. Unscoped, "Logout" also matches
+      // the navigation button that opened it, and the resulting strict-mode
+      // error is easy to swallow — leaving the dialog open and the member
+      // still signed in while the test reports only a URL timeout.
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toBeVisible({ timeout: 5000 });
+      await dialog.getByRole('button', { name: /^logout$/i }).click();
 
-      await page.route('**/api/v1/auth/oauth-config', (route) => {
-        void route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ googleEnabled: false, microsoftEnabled: false }),
-        });
-      });
-
-      await page.route('**/api/v1/organization/enabled-modules', (route) => {
-        void route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ enabled_modules: [] }),
-        });
-      });
-
-      // Mock dashboard data endpoints to prevent errors
-      await page.route('**/api/v1/dashboard/**', (route) => {
-        void route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({}),
-        });
-      });
-
-      await page.route('**/api/v1/notifications/**', (route) => {
-        void route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ logs: [] }),
-        });
-      });
-
-      await page.route('**/api/v1/scheduling/**', (route) => {
-        void route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ shifts: [] }),
-        });
-      });
-
-      await page.route('**/api/v1/training/**', (route) => {
-        void route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([]),
-        });
-      });
-
-      await page.route('**/api/v1/messages/**', (route) => {
-        void route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([]),
-        });
-      });
-
-      await page.route('**/api/v1/inventory/**', (route) => {
-        void route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({}),
-        });
-      });
-
-      // Mock the logout endpoint
-      await page.route('**/api/v1/auth/logout', (route) => {
-        void route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ message: 'Logged out' }),
-        });
-      });
-
-      // Navigate to the dashboard
-      await page.goto('/dashboard');
-      await page.waitForURL(/\/dashboard/, { timeout: 10000 });
-
-      // Find and click the logout button in the navigation
-      // The side navigation has a logout button/icon
-      const logoutButton = page.locator('button').filter({ hasText: /log\s*out|sign\s*out/i });
-
-      if (await logoutButton.isVisible()) {
-        await logoutButton.click();
-
-        // If a confirmation modal appears, confirm the logout
-        const confirmButton = page.locator('button').filter({ hasText: /confirm|yes|log\s*out|sign\s*out/i });
-        if (await confirmButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-          await confirmButton.click();
-        }
-      } else {
-        // On mobile or collapsed nav, the logout might be behind a menu
-        // Try opening the mobile menu first
-        const menuButton = page.locator('button').filter({ has: page.locator('[class*="Menu"], [aria-label*="menu"]') }).first();
-        if (await menuButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-          await menuButton.click();
-          const mobileLogout = page.locator('button').filter({ hasText: /log\s*out|sign\s*out/i }).first();
-          await mobileLogout.click();
-
-          const confirmButton = page.locator('button').filter({ hasText: /confirm|yes|log\s*out|sign\s*out/i });
-          if (await confirmButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await confirmButton.click();
-          }
-        }
-      }
-
-      // After logout, should be back at the login page
       await expect(page).toHaveURL(/\/login/, { timeout: 10000 });
     });
   });

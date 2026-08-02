@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router';
 import { Calendar, ArrowLeft, Info } from 'lucide-react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
@@ -72,7 +72,7 @@ export const EventEditPage: React.FC = () => {
         await eventService.updateEvent(eventId, data);
         toast.success('Event updated successfully');
       }
-      navigate(`/events/${eventId}`);
+      void navigate(`/events/${eventId}`);
     } catch (err: unknown) {
       const apiError = err as { response?: { data?: { detail?: string } } };
       setError(apiError.response?.data?.detail || 'Failed to update event. Please try again.');
@@ -82,7 +82,7 @@ export const EventEditPage: React.FC = () => {
   };
 
   const handleCancel = () => {
-    navigate(`/events/${eventId}`);
+    void navigate(`/events/${eventId}`);
   };
 
   if (loading) {
@@ -95,7 +95,7 @@ export const EventEditPage: React.FC = () => {
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
-            onClick={() => navigate('/events')}
+            onClick={() => void navigate('/events')}
             className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline"
           >
             Back to Events

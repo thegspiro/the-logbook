@@ -186,10 +186,19 @@ From here you can:
 - Update your **email** and **phone number**
 - Set your **notification preferences** (email, urgent text messages, event reminders, training alerts)
 - Change your **password**
+- Set up **two-factor authentication**
+- Make your **privacy choices** — photo use, public roster listing, and SMS notifications *(2026-07-31)*
+- **Download your data** — a complete export of everything the system stores about you *(2026-07-31)*
 - View your **assigned roles and permissions**
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Account Settings page showing the profile section, notification preferences toggles, and the change password section]_
+
+> **Privacy note:** Privacy choices and the data export live on the
+> **Security** tab. Nothing under Privacy Choices is required for membership,
+> and a choice you have never answered is treated as a "no" — the department
+> never reads your silence as permission. Full detail:
+> [Privacy & Your Data](./17-privacy-data-rights.md).
 
 ---
 

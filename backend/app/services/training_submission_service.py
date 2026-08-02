@@ -26,6 +26,7 @@ from app.models.training import (
     TrainingSubmission,
 )
 from app.models.user import User
+from app.services.separation_of_duties import assert_different_person
 
 
 class TrainingSubmissionService:
@@ -284,10 +285,12 @@ class TrainingSubmissionService:
         # self-reported training. A second officer must sign it off, so an
         # officer can't grant themselves hours/credit unchecked. (Rejecting or
         # requesting revision on one's own submission is harmless and allowed.)
-        if action == "approve" and str(submission.submitted_by) == str(reviewer_id):
-            raise ValueError(
-                "You cannot approve your own training submission — "
-                "another training officer must review it"
+        if action == "approve":
+            assert_different_person(
+                reviewer_id,
+                submission.submitted_by,
+                action="approve",
+                record="training submission",
             )
 
         if action == "approve":

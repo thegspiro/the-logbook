@@ -6,8 +6,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Contrast, Palette, AlertTriangle, Heart, Plus, Trash2, ShieldCheck } from 'lucide-react';
+import { useLocation } from 'react-router';
+import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Contrast, Palette, AlertTriangle, Heart, Plus, Trash2, ShieldCheck, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService, userService } from '../services/api';
 import { MfaSettingsCard } from '../components/settings/MfaSettingsCard';
@@ -15,7 +15,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTheme } from '../contexts/ThemeContext';
 import { validatePasswordStrength } from '../utils/passwordValidation';
 import type { PasswordChangeData } from '../types/auth';
-import type { UserProfileUpdate, EmergencyContact } from '../types/user';
+import type { UserProfileUpdate, EmergencyContact, ConsentItem } from '../types/user';
 import type { UserWithRoles } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useRanks } from '../hooks/useRanks';
@@ -40,6 +40,9 @@ export const UserSettingsPage: React.FC = () => {
   const [_profile, setProfile] = useState<UserWithRoles | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [downloadingData, setDownloadingData] = useState(false);
+  const [consents, setConsents] = useState<ConsentItem[]>([]);
+  const [savingConsent, setSavingConsent] = useState<string | null>(null);
   const [profileForm, setProfileForm] = useState<UserProfileUpdate>({});
 
   // Password change state
@@ -205,6 +208,72 @@ export const UserSettingsPage: React.FC = () => {
       );
     } finally {
       setSavingPreferences(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'security') return;
+    userService
+      .getMyConsents()
+      .then(setConsents)
+      .catch(() => {
+        // Section renders empty on failure; toggling still surfaces errors.
+      });
+  }, [activeTab]);
+
+  const CONSENT_LABELS: Record<string, { title: string; description: string }> = {
+    photo_use: {
+      title: 'Photo use',
+      description:
+        'Allow the department to use your photo in publications, social media, and other public material.',
+    },
+    public_roster_listing: {
+      title: 'Public roster listing',
+      description: 'Show your name and rank on the public website roster.',
+    },
+    sms_notifications: {
+      title: 'Text message notifications',
+      description:
+        'Receive department notifications by SMS at your mobile number.',
+    },
+  };
+
+  const handleConsentToggle = async (consentType: string, granted: boolean) => {
+    setSavingConsent(consentType);
+    try {
+      await userService.setMyConsent(consentType, granted);
+      setConsents((prev) =>
+        prev.map((c) =>
+          c.consent_type === consentType ? { ...c, granted } : c
+        )
+      );
+      toast.success('Privacy choice saved');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not save your choice'));
+    } finally {
+      setSavingConsent(null);
+    }
+  };
+
+  const handleDownloadMyData = async () => {
+    setDownloadingData(true);
+    try {
+      const blob = await userService.downloadMyData();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'logbook-personal-data-export.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Your data export has been downloaded');
+    } catch (err: unknown) {
+      toast.error(
+        getErrorMessage(err, 'Could not prepare your data export. Try again later.')
+      );
+    } finally {
+      setDownloadingData(false);
     }
   };
 
@@ -709,6 +778,70 @@ export const UserSettingsPage: React.FC = () => {
                 Add a second step at sign-in using an authenticator app.
               </p>
               <MfaSettingsCard onChange={() => { void useAuthStore.getState().loadUser(); }} />
+            </div>
+
+            <div className="border-t border-theme-surface-border pt-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Privacy Choices</h2>
+              <p className="text-sm text-theme-text-secondary mb-4">
+                These are optional — nothing here is required for membership. If
+                you have never answered, the department treats it as a no.
+              </p>
+              <div className="space-y-4">
+                {consents.map((consent) => {
+                  const label = CONSENT_LABELS[consent.consent_type];
+                  if (!label) return null;
+                  return (
+                    <label
+                      key={consent.consent_type}
+                      className="flex items-start gap-3 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={consent.granted === true}
+                        disabled={savingConsent === consent.consent_type}
+                        onChange={(e) =>
+                          void handleConsentToggle(
+                            consent.consent_type,
+                            e.target.checked
+                          )
+                        }
+                        className="mt-1 h-4 w-4"
+                      />
+                      <span>
+                        <span className="block text-sm font-medium text-theme-text-primary">
+                          {label.title}
+                          {consent.granted === null && (
+                            <span className="ml-2 text-xs font-normal text-theme-text-muted">
+                              (not answered)
+                            </span>
+                          )}
+                        </span>
+                        <span className="block text-sm text-theme-text-secondary">
+                          {label.description}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border-t border-theme-surface-border pt-6">
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Your Data</h2>
+              <p className="text-sm text-theme-text-secondary mb-4">
+                Download a copy of everything the department stores about you —
+                profile, training history, attendance, and related records — as a
+                JSON file.
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleDownloadMyData()}
+                disabled={downloadingData}
+                className="btn-primary inline-flex items-center gap-2 rounded-md text-sm font-medium disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" aria-hidden="true" />
+                {downloadingData ? 'Preparing export…' : 'Download my data'}
+              </button>
             </div>
           </div>
         )}

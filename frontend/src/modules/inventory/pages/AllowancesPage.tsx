@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { ArrowLeft, SlidersHorizontal, RefreshCw, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { roleService } from '../../../services/userServices';

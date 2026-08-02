@@ -103,6 +103,22 @@ ISO_CATEGORIES = [
 ]
 
 
+# FSRS Section 580 (Training) is worth 9 points of the ~105.5-point Fire
+# Suppression Rating Schedule. Everything else — Water Supply (40), Emergency
+# Communications (10), company personnel and deployment (~25), pump testing —
+# is outside this platform's data.
+_FSRS_TRAINING_POINTS = 9.0
+
+_FSRS_SCOPE_NOTE = (
+    "Measures training only — FSRS Section 580, worth 9 of ~105.5 points. "
+    "This is NOT a Public Protection Classification. A PPC also grades water "
+    "supply (40 points), emergency communications (10 points), staffing and "
+    "deployment, and pump testing, none of which The Logbook tracks. Use this "
+    "to see whether training hours are on pace; contact your ISO field "
+    "representative for an actual classification."
+)
+
+
 class ISOReadinessService:
     """Tracks department training hours against ISO/FSRS categories."""
 
@@ -141,7 +157,9 @@ class ISOReadinessService:
                 "year": year,
                 "categories": [],
                 "overall_readiness_pct": 0.0,
-                "iso_class_estimate": 10,
+                "training_points_estimate": 0.0,
+                "training_points_possible": _FSRS_TRAINING_POINTS,
+                "scope_note": _FSRS_SCOPE_NOTE,
             }
 
         member_ids = {str(m.id) for m in members}
@@ -206,42 +224,39 @@ class ISOReadinessService:
             else 0.0
         )
 
-        # ISO class estimate based on overall readiness
-        iso_class = self._estimate_iso_class(overall_pct)
+        # Estimated share of the FSRS *training* credit earned. NOT a PPC
+        # class — see _estimate_training_points for why that distinction
+        # matters.
+        training_points = self._estimate_training_points(overall_pct)
 
         return {
             "year": year,
             "categories": categories_result,
             "overall_readiness_pct": overall_pct,
-            "iso_class_estimate": iso_class,
+            "training_points_estimate": training_points,
+            "training_points_possible": _FSRS_TRAINING_POINTS,
+            "scope_note": _FSRS_SCOPE_NOTE,
         }
 
     @staticmethod
-    def _estimate_iso_class(readiness_pct: float) -> int:
-        """Estimate ISO Public Protection Classification (1-10) from readiness %.
+    def _estimate_training_points(readiness_pct: float) -> float:
+        """Estimate FSRS training credit earned, out of 9.0 points.
 
-        >95% = Class 1, >90% = Class 2, >80% = Class 3, >70% = Class 4, etc.
+        SAFETY-CRITICAL FRAMING: this deliberately does NOT return a Public
+        Protection Classification. Training (FSRS Section 580) is worth 9 of
+        the ~105.5 FSRS points — under 9% of the schedule. Water Supply alone
+        is 40 points, Emergency Communications 10, and company personnel /
+        deployment another 25, none of which this platform holds any data for.
+
+        A previous version mapped this readiness percentage straight onto a
+        PPC class (>=95% => "Class 1"). That was unsound and actively
+        misleading: a department with excellent training records and poor
+        water supply would have been shown Class 1 while genuinely rating
+        Class 6+. PPC drives fire-insurance rates for every property in the
+        district, so an optimistic estimate is not a harmless approximation.
+        Report only the slice we can actually measure.
         """
-        if readiness_pct >= 95:
-            return 1
-        elif readiness_pct >= 90:
-            return 2
-        elif readiness_pct >= 80:
-            return 3
-        elif readiness_pct >= 70:
-            return 4
-        elif readiness_pct >= 60:
-            return 5
-        elif readiness_pct >= 50:
-            return 6
-        elif readiness_pct >= 40:
-            return 7
-        elif readiness_pct >= 30:
-            return 8
-        elif readiness_pct >= 20:
-            return 9
-        else:
-            return 10
+        return round(_FSRS_TRAINING_POINTS * (readiness_pct / 100.0), 2)
 
 
 class ComplianceAttestationService:

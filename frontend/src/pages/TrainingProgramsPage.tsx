@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import {
   GraduationCap,
@@ -117,7 +117,7 @@ const TrainingProgramsPage: React.FC = () => {
     try {
       const program = await trainingProgramService.instantiateSampleTemplate(template.key);
       toast.success(`Added "${program.name}" to your templates`);
-      navigate(`/training/programs/${program.id}`);
+      void navigate(`/training/programs/${program.id}`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to add template'));
     } finally {
@@ -168,7 +168,7 @@ const TrainingProgramsPage: React.FC = () => {
                 <span>Import</span>
               </button>
               <button
-                onClick={() => navigate('/training/programs/new')}
+                onClick={() => void navigate('/training/programs/new')}
                 className="btn-primary flex items-center space-x-2"
               >
                 <Plus className="w-5 h-5" aria-hidden="true" />
@@ -313,7 +313,7 @@ const TrainingProgramsPage: React.FC = () => {
                     </p>
                     {!searchTerm && activeTab === 'programs' && (
                       <button
-                        onClick={() => navigate('/training/programs/new')}
+                        onClick={() => void navigate('/training/programs/new')}
                         className="btn-primary mt-4"
                       >
                         Create Your First Pipeline
@@ -325,8 +325,8 @@ const TrainingProgramsPage: React.FC = () => {
                     <div
                       key={program.id}
                       className="bg-theme-surface-secondary rounded-lg p-6 hover:bg-theme-surface-hover cursor-pointer transition-colors"
-                      onClick={() => navigate(`/training/programs/${program.id}`)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/training/programs/${program.id}`); } }}
+                      onClick={() => void navigate(`/training/programs/${program.id}`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void navigate(`/training/programs/${program.id}`); } }}
                       tabIndex={0}
                       role="link"
                       aria-label={`${program.name}${program.target_position ? ` - ${program.target_position}` : ''} - ${program.structure_type}`}
