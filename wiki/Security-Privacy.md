@@ -168,6 +168,35 @@ task.
 
 ---
 
+## Need-to-Know Enforcement *(2026-08-01)*
+
+Two endpoints returned more than the caller was entitled to. Both are fixed;
+both are worth knowing about because they shaped what "visibility settings"
+actually meant.
+
+**The contact-visibility setting was bypassable.** `GET /users` filtered
+contact details against the organization's setting, but `GET /users/with-roles`
+— the admin members page — returned every column on the member record. Both
+require only `users.view`, so a member refused an email address on one screen
+could read it on the other, along with home address and personal email, which
+the roster never exposes at any setting. Both endpoints now redact
+identically, and address plus personal email are restricted to members who
+manage the roster. The redaction also fails closed: if the settings row cannot
+be read, contact details are hidden rather than shown.
+
+**Organization settings leaked infrastructure.** `GET /organization/settings`
+is open to every authenticated member — the page needs branding, module
+enablement and visibility flags. It redacted credentials, but not the
+identifiers those credentials authenticate *to*: mail server hostname and
+username, S3 bucket, region and endpoint, SharePoint site URL, the SSO issuer
+URL, and every OAuth tenant and client ID. Together those map a department's
+infrastructure for anyone who can log in — including a member who left last
+week, or a compromised volunteer account. Callers without `settings.manage`
+now get those fields blanked; the response keeps its shape, so the settings
+page renders "not configured" rather than breaking.
+
+---
+
 ## What Departments Still Own
 
 The software implements controls; it cannot adopt policy on your behalf:

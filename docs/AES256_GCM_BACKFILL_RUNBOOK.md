@@ -10,9 +10,15 @@
 
 ## 1. Background — why this is safe
 
-As of the AES-256-GCM migration, `encrypt_data()` writes **AES-256-GCM**
-(version-marked `$gcm1$`) and `decrypt_data()` transparently reads **both** the
-new GCM format **and** the legacy Fernet (AES-128-CBC + HMAC) format. The
+As of the AES-256-GCM migration, `encrypt_data()` writes **AES-256-GCM** and
+`decrypt_data()` transparently reads **both** the GCM format **and** the legacy
+Fernet (AES-128-CBC + HMAC) format.
+
+> **Version markers (updated 2026-08-01).** New writes are `$gcm2$`, whose key
+> is derived at 600,000 PBKDF2 iterations. `$gcm1$` values — same cipher, key
+> derived at the previous 100,000 — stay readable forever: the iteration count
+> is part of a value's identity, so both counts are permanent. Anywhere this
+> runbook says `$gcm1$`, read it as "either GCM marker". The
 application is therefore fully correct **without ever running this script** —
 existing Fernet ciphertext stays readable indefinitely.
 
@@ -116,7 +122,7 @@ Would re-encrypt 0 value(s) to AES-256-GCM.
 
 ## 6. Rollback & safety
 
-- **Interrupted run:** safe. The script is idempotent (skips `$gcm1$` values), so
+- **Interrupted run:** safe. The script is idempotent (skips values that already carry a GCM marker), so
   re-running `--commit` resumes where it left off.
 - **Something looks wrong after a commit:** restore from the pre-run backup. There
   is no in-place "downgrade to Fernet" — the forward path is the backup.
@@ -155,6 +161,6 @@ docker exec -it intranet-backend python scripts/reencrypt_to_aesgcm.py
 docker exec -it intranet-backend python scripts/reencrypt_to_aesgcm.py --commit
 ```
 
-- Marker for AES-256-GCM values: `$gcm1$` prefix.
+- Markers for AES-256-GCM values: `$gcm2$` (current, 600k PBKDF2 iterations) and `$gcm1$` (100k, read-only).
 - Related: `backend/app/core/security.py` (`encrypt_data`/`decrypt_data`),
   `docs/KNOWN_LIMITATIONS.md` (crypto row), `CHANGELOG.md`.

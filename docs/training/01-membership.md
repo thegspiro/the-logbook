@@ -369,6 +369,17 @@ Officers can change a member's status from their profile page or the Members Adm
 > **Screenshot placeholder:**
 > _[Screenshot of the status change dialog showing the status dropdown (with options like Active, Inactive, Suspended, Dropped), the reason text field, and the property return options for drop statuses]_
 
+> **The last administrator cannot be removed** *(2026-08-01)*. If the member
+> you are changing is the only remaining active person who can manage members,
+> the system refuses the change and asks you to grant that permission to
+> somebody else first.
+>
+> This applies to status changes, archiving, deletion, and removing the
+> position that carries the permission. It matters because every status other
+> than Active fails the sign-in check — so setting the only administrator to
+> Inactive locks the whole department out of its own member tools on the very
+> next request, and getting back in needs someone with database access.
+
 ### Property Return Process
 
 When a member is dropped, the system automatically:

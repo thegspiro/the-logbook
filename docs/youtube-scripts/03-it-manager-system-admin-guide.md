@@ -513,7 +513,7 @@ thresholds]**
 
 ## CHAPTER 9: Maintenance & Operations (28:00 – 33:00)
 
-### REGULAR MAINTENANCE TASKS (28:00 – 29:30)
+### REGULAR MAINTENANCE TASKS (28:00 – 29:00)
 
 > "Let's talk about what you should be doing regularly as the IT Manager."
 
@@ -531,6 +531,33 @@ thresholds]**
 > requires it. Audit the position/permission assignments — has anyone left the
 > department who still has an active account? Are there any position changes
 > that haven't been reflected?"
+
+**[CALLOUT: "Keep two administrators"]**
+
+> "While you're auditing permissions, check that **at least two active people**
+> can manage members. The app won't let you remove the last one — it refuses
+> the change rather than locking the department out — but you don't want to
+> discover that on the day your only admin retires."
+
+### WHEN THE APP REFUSES TO START (29:00 – 29:30)
+
+**[SCREEN: Show a startup log with a CRITICAL security line]**
+
+> "In production, a few misconfigurations stop the app booting instead of
+> letting it run in a weakened state. Two you might hit:"
+
+> "**Database or Redis TLS without a CA.** If you turn on `DB_SSL` or
+> `REDIS_SSL` but don't point at a CA certificate, the connection is encrypted
+> but nobody's identity is checked — which looks secure and isn't. Set
+> `DB_SSL_CA` / `REDIS_SSL_CA`. If you genuinely accept the risk on an
+> isolated network, `SECURITY_ALLOW_UNVERIFIED_TLS=true` gets you booting, and
+> it's logged every single time you start so nobody forgets."
+
+> "**Rate limiting turned off.** `RATE_LIMIT_ENABLED=false` is for load
+> testing, not production — it strips brute-force protection off every login
+> and public endpoint. Production refuses to start with it disabled."
+
+**[CALLOUT: "The app failing to start IS the safety feature"]**
 
 ### UPDATING THE LOGBOOK (29:30 – 31:00)
 

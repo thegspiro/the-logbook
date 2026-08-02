@@ -157,6 +157,47 @@ wrong types.
 they sit under `/api/public/` but are API-key authenticated, so their 401 is
 correct — it was simply undeclared.
 
+**Documentation**
+
+The wiki, training guides, video scripts, module docs, runbooks and
+`.env.example.full` were brought in line with the changes above — the renamed
+scheduling fields and where hours come from, the approval second-person rule,
+the last-administrator guard, contact-detail redaction, the TLS and
+rate-limiting startup guards, the PBKDF2 work-factor bump, and the new CI
+jobs. Several of the corrections were documentation *defects* rather than
+catch-up:
+
+- **`PUBLIC_API_DOCUMENTATION.md` documented an error shape the API has never
+  returned** — `{error, message, details}`, where every endpoint returns
+  `{"detail": "..."}` (an array of `{field, message}` for 422). Anyone who
+  wrote error handling from that page had it wrong from the start.
+- **`SECURITY.md` still described the pre-cookie auth model**, stating that
+  tokens are "stored as `access_token` in localStorage with separate
+  `refresh_token`" — the exact thing the current design exists to avoid.
+  Tokens have been httpOnly-cookie-only since the auth rework; only a
+  `has_session` flag is in localStorage. A security policy document that
+  misstates the security model is worse than one that says nothing.
+- **`CONTRIBUTING.md` (and its wiki mirror) documented a module system that
+  does not exist** — a `modules/my-module/{controllers,validators,config}`
+  tree with a `module.config.ts` manifest. There is no plugin loader and no
+  manifest: a module is a `frontend/src/modules/<name>/` directory, backend
+  endpoints registered in `api/v1/api.py`, and entries in the two module
+  registries, with availability decided per organization at runtime. Rewritten
+  to describe the real thing.
+- **The mobile guide contradicted itself** — it stated "the app does not queue
+  actions for later" a few sections above a walkthrough of exactly that
+  queueing behaviour.
+- **Four dangling links** pointed at files that have never existed
+  (`CODE_OF_CONDUCT.md`, `FILE_STRUCTURE.md`, `docs/development/creating-modules.md`,
+  `ELECTION_SECURITY_AUDIT.md`) and one anchor had drifted when its heading
+  gained a date suffix. Every relative link and anchor across `docs/`, `wiki/`
+  and the root Markdown files now resolves.
+
+`docs/COMPLIANCE.md` and the Statement of Applicability gained control-inventory
+rows for segregation of duties, administrator continuity, need-to-know
+redaction, TLS verification enforcement, and the contract/E2E/container CI
+jobs, each linked to its evidence.
+
 ### Compliance: ISO standards alignment — privacy, records, and operations (2026-07-31)
 
 A gap assessment against the ISO/IEC standards relevant to the platform

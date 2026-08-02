@@ -512,12 +512,13 @@ The election system uses database-level constraints to prevent double-voting:
 
 ### Authentication & Token Security
 
-- **Token Storage**: Auth tokens stored as `access_token` in localStorage with separate `refresh_token`
+- **Token Storage**: Auth tokens live in **httpOnly cookies** set by the backend and are never readable by JavaScript. Only a non-sensitive `has_session` flag is kept in localStorage, to decide whether a page refresh should attempt to restore the session. CSRF is handled by double-submit (`csrf_token` cookie echoed as an `X-CSRF-Token` header on state-changing requests)
 - **Concurrent Refresh Protection**: Multiple simultaneous 401 responses share a single token refresh promise — prevents replay detection from invalidating the session
 - **Account Lockout**: Failed login counter persists correctly via explicit database commit (not rolled back by HTTPException)
 - **Session Revocation**: Logout properly invalidates the server-side session record
 
-For a comprehensive security review, see [ELECTION_SECURITY_AUDIT.md](ELECTION_SECURITY_AUDIT.md).
+For a comprehensive security review of this module, see
+[`docs/module-audit/elections.md`](docs/module-audit/elections.md).
 
 ---
 

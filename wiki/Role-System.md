@@ -215,6 +215,13 @@ async def admin_route(
 4. **Document Custom Roles**: Add clear descriptions to custom roles
 5. **Regular Audits**: Periodically review role assignments
 6. **Principle of Least Privilege**: Give users only the permissions they need
+7. **Keep a Second Administrator**: The system refuses any change that would
+   leave the organization with no active member holding `members.manage` —
+   status changes, archiving, deletion, position removal, and editing a
+   position's permission list are all guarded. Recovering from that state
+   needs direct database access, because every restore path is itself behind
+   that permission. Departments should keep at least two people holding it so
+   the guard never has to fire. *(2026-08-01)*
 
 ## Extending the System
 

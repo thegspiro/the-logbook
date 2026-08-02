@@ -15,7 +15,7 @@ First off, thank you for considering contributing to the Intranet Platform! It's
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+This project and everyone participating in it is governed by our [Code of Conduct](../CONTRIBUTING.md#code-of-conduct). By participating, you are expected to uphold this code.
 
 ## How Can I Contribute?
 
@@ -84,7 +84,7 @@ npm run dev
 
 ### Project Structure
 
-See [FILE_STRUCTURE.md](FILE_STRUCTURE.md) for detailed information about the project organization.
+See [ARCHITECTURE.md](../ARCHITECTURE.md) for detailed information about the project organization.
 
 ## Pull Request Process
 
@@ -169,42 +169,60 @@ npm run format
 
 ## Creating Modules
 
-Modules extend the platform's functionality. Each module should:
+Modules are feature areas, not plugins. There is no runtime plugin loader and
+no per-module manifest file — a module is a frontend directory, a set of
+backend endpoints, and two registry entries that make it visible and
+toggleable per organization.
 
-1. **Follow the standard structure**:
-```
-modules/my-module/
-├── models/
-├── services/
-├── controllers/
-├── routes/
-├── validators/
-├── config/
-│   └── module.config.ts
-└── index.ts
-```
+1. **Frontend directory** — `frontend/src/modules/<module>/`:
 
-2. **Include configuration schema**:
-```typescript
-// config/module.config.ts
-export const moduleConfig = {
-  name: 'my-module',
-  version: '1.0.0',
-  description: 'Module description',
-  dependencies: [],
-  enabled: false,
-  settings: {
-    // Default settings
-  }
-};
+```
+frontend/src/modules/my-module/
+├── index.ts          # barrel export (routes, store, services, types)
+├── routes.tsx        # getMyModuleRoutes() → Fragment of <Route> elements
+├── pages/
+├── components/
+├── services/api.ts   # module API client
+├── store/            # Zustand store
+└── types/
 ```
 
-3. **Be self-contained**: Minimal dependencies on other modules
-4. **Be configurable**: Expose settings through module config
-5. **Include tests**: Unit and integration tests
-6. **Document**: Include README.md in module directory
+Only `index.ts` and `routes.tsx` are required; the rest appear as the module
+grows. Export the route factory from `index.ts` and call it in `App.tsx`.
+Build the module's API client with the shared `createApiClient()`
+(`frontend/src/utils/createApiClient.ts`) rather than a bare `axios.create()`
+— it carries the cookie and CSRF configuration that authenticated requests
+need.
 
-See [docs/development/creating-modules.md](docs/development/creating-modules.md) for details.
+2. **Backend** — endpoints in `backend/app/api/v1/endpoints/<module>.py`,
+   registered in `backend/app/api/v1/api.py`:
+
+```python
+api_router.include_router(
+    scheduling.router, prefix="/scheduling", tags=["scheduling"]
+)
+```
+
+Business logic belongs in `backend/app/services/<module>_service.py`, ORM
+models in `models/`, Pydantic schemas in `schemas/`. Guard each route with
+`Depends(require_permission("my_module.view"))` and org-scope every query.
+
+3. **Register the module** in both registries:
+   - `frontend/src/types/modules.ts` (`AVAILABLE_MODULES`) — id, category
+     (`core` / `recommended` / `optional`), icon, route, feature list. The
+     category decides whether the module is on by default and whether an
+     organization may disable it.
+   - `frontend/src/modules/onboarding/config/moduleRegistry.ts` — the single
+     source for onboarding, the module overview, and position setup.
+
+   Availability is decided **per organization at runtime** (`enabled_modules`
+   in organization settings), which the navigation reads. There are no
+   deployment-level module environment flags.
+
+4. **Include tests**: co-located `*.test.tsx` on the frontend, `backend/tests/`
+   on the backend.
+5. **Document**: a `wiki/Module-<Name>.md` page, plus a guide in
+   `docs/training/` if the module is member-facing.
 
 ## Testing
 
@@ -223,12 +241,18 @@ npm run test:frontend
 # Watch mode
 npm run test:watch
 
-# E2E tests
+# E2E tests (Playwright). CI runs these on chromium only — the config's
+# mobile projects deliberately fail the navigation specs, whose destinations
+# sit behind a hamburger menu at that width.
 npm run test:e2e
 
 # Coverage
 npm test -- --coverage
 ```
+
+Both the Playwright suite and the container tests now run in CI (they existed
+but had never been wired up). If you add a spec, assume it will run on every
+pull request.
 
 ### Writing Tests
 

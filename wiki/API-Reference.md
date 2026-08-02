@@ -517,17 +517,31 @@ Configured with `SECURITY_TXT_CONTACT` and `SECURITY_TXT_POLICY_URL`. The
 ```
 
 ### Validation Error (422)
+
 ```json
 {
   "detail": [
     {
-      "loc": ["body", "field_name"],
-      "msg": "field required",
-      "type": "value_error.missing"
+      "field": "start_date",
+      "message": "This field is required."
     }
   ]
 }
 ```
+
+`detail` is always an **array**, never a string — code that renders errors has
+to handle both this and the string form used by 4xx responses below.
+
+`field` is a dotted path to the offending field (`address.zip`), or the
+literal `request` when the error is not attributable to one. `message` is a
+short human-readable sentence, already safe to show a user.
+
+> **This replaced FastAPI's stock `loc`/`msg`/`type` shape.** The application
+> has always returned the `field`/`message` form, but the published OpenAPI
+> advertised FastAPI's default — so a client generated from `/openapi.json`
+> had the wrong type for the most common error response in the API. The schema
+> was corrected on 2026-08-01 and an automated contract suite now checks that
+> the two stay in agreement.
 
 ### Permission Error (403)
 ```json

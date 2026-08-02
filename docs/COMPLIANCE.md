@@ -47,6 +47,15 @@ Related documents:
 | TLS 1.2/1.3-only, HSTS, strict CSP, security headers | `infrastructure/nginx/nginx.conf`, `SecurityHeadersMiddleware` | ISO 27001 A.8.24/A.8.26 |
 | Rate limiting, IP blocking, geo blocking, anomaly monitoring | `backend/app/core/security_middleware.py`, `geoip.py`, ip-security module | ISO 27001 A.8.16 |
 | Multi-tenant isolation (org-scoped queries, FK validation) | Enforced convention (CLAUDE.md Pitfall #14) + `docs/module-audit/` verification | ISO 27001 A.8.3, ISO 27017 |
+| Segregation of duties (an approver may not approve their own request) | `backend/app/services/separation_of_duties.py`, enforced in `finance_service.approve_step()` | ISO 27001 A.5.3 |
+| Administrator continuity (the last administrator cannot be demoted, deactivated or deleted) | `backend/app/services/admin_continuity_service.py` | ISO 27001 A.5.15/A.5.16, ISO 22301 |
+| Need-to-know redaction of member contact details in roster responses | `_redact_contact_fields()` in `backend/app/api/v1/endpoints/users.py` | ISO 27001 A.5.12/A.8.12, ISO 27701 |
+| Deployment identifiers withheld from non-privileged org responses | `without_infrastructure()` in `backend/app/schemas/organization.py` | ISO 27001 A.8.12 |
+| Outbound TLS certificate verification enforced at startup (opt-out fails closed in prod/staging) | `SECURITY_ALLOW_UNVERIFIED_TLS` guard in `backend/app/core/config.py` | ISO 27001 A.8.24 |
+| Encryption work-factor versioning (PBKDF2 600k for new values, legacy values still readable) | `_GCM_PREFIX_ITERATIONS` in `backend/app/core/security.py`, [AES256_GCM_BACKFILL_RUNBOOK.md](./AES256_GCM_BACKFILL_RUNBOOK.md) | ISO 27001 A.8.24 |
+| Rate limiting cannot be silently disabled in production | `RATE_LIMIT_ENABLED` startup guard in `backend/app/core/config.py` | ISO 27001 A.8.16 |
+| API contract tests (published OpenAPI matches served behaviour) | `backend/tests/test_api_contract.py`, `backend-test-contract` job in `.github/workflows/ci.yml` | ISO 27001 A.8.25/A.8.29 |
+| End-to-end and container-build verification in CI | `frontend-e2e` and `docker-build` jobs in `.github/workflows/ci.yml` | ISO 27001 A.8.29/A.8.31 |
 | CSV formula-injection defense | `backend/app/utils/csv_export.py` (`SafeCsvWriter`) | ISO 27001 A.8.26 |
 | Upload hardening (content sniffing, EXIF strip, size caps), SSRF guards | `image_validator.py`, `url_validator.py`, `SECURITY_IMAGE_UPLOADS.md` | ISO 27001 A.8.26 |
 | SAST + dependency scanning in CI (Bandit, pip-audit, npm audit at high) | `.github/workflows/ci.yml` | ISO 27001 A.8.8 |

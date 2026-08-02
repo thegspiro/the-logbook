@@ -338,6 +338,30 @@ GET    /api/v1/scheduling/reports/availability       # Member availability
 GET    /api/v1/scheduling/summary                    # Dashboard summary stats
 ```
 
+#### Worked vs. scheduled *(field rename, 2026-08-01)*
+
+Both responses used to name their figures as though scheduled and worked time
+were the same kind of number. `GET /summary` was the worst case: three counts
+of *scheduled* shifts sat beside a sum of *worked* attendance minutes, under
+names that gave no hint. The fields now say which they are.
+
+| Endpoint | Was | Now |
+|----------|-----|-----|
+| `/summary` | `total_shifts`, `shifts_this_week`, `shifts_this_month` | `shifts_scheduled`, `shifts_scheduled_this_week`, `shifts_scheduled_this_month` |
+| `/summary` | `total_hours_this_month` | `hours_worked_this_month` |
+| `/reports/member-hours` | `shift_count`, `total_minutes`, `total_hours` | `shifts_attended`, `worked_minutes`, `worked_hours` — plus `shifts_scheduled`, `scheduled_minutes`, `scheduled_hours` |
+
+`member-hours` is also **sourced from attendance** now
+(`ShiftAttendance.duration_minutes`, from check-in/check-out) rather than
+assignment durations. An assignment is a plan: a shift can run short or long,
+and a member can be rostered for one they never work, so anything that credits
+a member has to use the measured figure. The scheduled totals stay alongside
+so the difference is visible.
+
+The two aggregates are merged on member rather than joined, so a member who
+worked a shift they were never assigned to appears in the report with
+`shifts_scheduled: 0`.
+
 ---
 
 ## Frontend Pages

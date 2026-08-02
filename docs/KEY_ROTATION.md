@@ -22,6 +22,28 @@ So a rotation is safe at every intermediate step: the moment you deploy the
 new key with the old one in the legacy list, everything still reads, and all
 new writes already use the new key.
 
+### Key-derivation work factor *(2026-08-01)*
+
+The key is derived from `ENCRYPTION_KEY` with PBKDF2-HMAC-SHA256. New writes
+use **600,000 iterations** and carry a `$gcm2$` marker; values written before
+that carry `$gcm1$` and are derived at the previous **100,000**.
+
+Both counts are permanent. The iteration count is part of a value's identity —
+change it and the derived key changes — so raising it without keeping the old
+one would have made every previously encrypted field unreadable. Decryption
+picks the count from the value's own marker, and the legacy key ring works at
+either.
+
+The drain step below rewrites `$gcm1$` values at the new factor as a side
+effect: `decrypts_with_current_key()` reports them as needing a rewrite, so no
+separate migration is required.
+
+Scope, stated honestly: iteration count defends a *low-entropy* input. A
+properly generated `ENCRYPTION_KEY` (64 hex characters) is not brute-forceable
+at any count. This is defense in depth for installations that set a weak key
+or fall back to the `SECRET_KEY`-derived salt, plus alignment with OWASP's
+current recommendation, which auditors do check.
+
 ## Procedure
 
 1. **Back up first** — database and your current `.env` secrets

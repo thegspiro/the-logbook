@@ -84,6 +84,17 @@ fewer widgets than the Chief's view but still informative.]**
 > "**Notifications** — any messages, reminders, or action items that need your
 > attention."
 
+**[SCREEN: Point to the four hours cards — Total Hours, Training, Standby,
+Administrative]**
+
+> "**Your hours.** Total Hours is just the other three added together —
+> Training, Standby, and Administrative. All four are **this month**, and each
+> card tells you underneath exactly what it's counting: completed courses,
+> shifts worked, time clocked in."
+
+> "If you're looking for your hours going all the way back, that's on **My
+> Training**, not here. This card is the current month only."
+
 **[CALLOUT: "Your dashboard = your personal fire department briefing"]**
 
 **[TRANSITION: Events section]**

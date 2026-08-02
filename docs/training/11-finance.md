@@ -289,6 +289,29 @@ When a member submits a request (purchase request, expense report, or check requ
 3. **Processes steps in order** -- Each step must complete before the next one activates. Notification steps auto-advance after sending.
 4. **Completes the chain** -- When all steps are complete, the request moves to Approved status and the appropriate budget action occurs (e.g., encumbrance for purchase requests).
 
+### Separation of Duties *(2026-08-01)*
+
+**You cannot approve a request you raised**, even holding `finance.approve`.
+The system refuses the approval and tells you to route it to another
+authorized approver.
+
+This is the control every set of department bylaws puts on disbursements, and
+it is what ISO/IEC 27001 calls segregation of duties (A.5.3). Before this,
+holding the approval permission was the only check — a treasurer could raise a
+check request and walk it through its own chain unassisted.
+
+It applies to all three request types (purchase requests, expense reports,
+check requests). Notes:
+
+- **Denying your own request is still allowed.** Withdrawing something you
+  submitted is not a conflict of interest.
+- **Auto-approve thresholds are unaffected.** A department deciding that
+  requests under a dollar amount need no review is a policy choice, and the
+  chain records those steps as Auto-Approved without anyone acting.
+- **Small departments:** if only one person holds `finance.approve`, that
+  person cannot submit requests through the chain. Grant the permission to a
+  second officer — which is the point of the control, not a workaround.
+
 ### Chain Resolution (Specificity)
 
 When multiple chains could apply to a request, the system selects the most specific match using a point-based scoring system:

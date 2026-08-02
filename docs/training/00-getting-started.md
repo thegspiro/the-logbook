@@ -145,6 +145,7 @@ Below the member-facing pages and above the Administration section, you will fin
 The dashboard is your landing page after login. It provides an at-a-glance view of what matters most:
 
 - **Quick Stats** - Total members, active members, upcoming events, training completion rates
+- **Your Hours** - Four cards: **Total Hours** plus the three things it adds up — **Training**, **Standby**, and **Administrative**. Every one of them is **month-to-date**, and each card says what it counts underneath the number
 - **Upcoming Events** - The next few scheduled events
 - **Upcoming Shifts** - Your next assigned shifts
 - **Recent Activity** - Latest actions across the department
@@ -155,6 +156,17 @@ The dashboard is your landing page after login. It provides an at-a-glance view 
 > _[Screenshot of the dashboard showing the stats cards at the top, the notification section with "Clear All" button, a persistent department message with "Persistent" badge, individual notification cards with dismiss (X) buttons, the upcoming events panel, and upcoming shifts panel]_
 
 > **Hint:** The dashboard is personalized. Officers and administrators see additional summary cards with department-wide metrics. Regular members see their own upcoming items and assignments.
+
+> **Your hours may look lower than before (2026-08-01).** The Total Hours card
+> has always said "This month", but only Standby was actually month-scoped —
+> Training and Administrative were lifetime totals, so the total was two
+> all-time numbers added to one monthly one. All three are now month-to-date,
+> which is what the card claims. Your lifetime training hours have not changed
+> and are still on **My Training**.
+>
+> Each card now names its own source: Training counts completed courses,
+> Standby counts shifts worked, Administrative counts time clocked in — all
+> for the current month, in your department's timezone.
 
 ### Notification Cards (2026-03-26)
 
