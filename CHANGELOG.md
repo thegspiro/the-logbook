@@ -321,6 +321,51 @@ retention, and continuity practices that previously had no software support.
 `20260801_0013` (leave `end_date` nullable fix), `20260801_0014`
 (`user_consents`).
 
+### Cleanup batch: deferred audit items, Pydantic v2 style, config docs (2026-07-31)
+
+**Fixed**
+
+- **Finance request numbers are now per-org and race-safe.** The
+  `request_number`/`report_number` columns carried a *global* unique
+  constraint while numbers were generated per org — the first org to hold
+  `PR-2026-0001` blocked every other org's first purchase request of the
+  year — and the `count()+1` generator raced with itself and re-issued
+  numbers after deletions. Migration `20260801_0011` swaps in per-org
+  composite uniques; generation is MAX-of-suffix-based; creates go through
+  a SAVEPOINT-wrapped retry-on-conflict allocator. New
+  `TestRequestNumberAllocation` integration tests.
+
+**Changed**
+
+- **Equipment-check read endpoints are permission-gated (EC-7).** The five
+  check-flow reads (`get_check`, `get_shift_checks`, `get_item_history`,
+  `get_last_check_results`, `get_shift_checklists`) now require
+  `equipment_check.view` OR `equipment_check.submit` instead of bare
+  authentication. The default member position gains
+  `equipment_check.submit` (migration `20260801_0010` backfills existing
+  orgs), so member behavior is unchanged — but access is now revocable via
+  the position editor. `view` (which also opens the compliance/failure
+  reports) stays leadership-only.
+- **Member status changes follow a lifecycle state machine** (module
+  audit, roles #5 — previously any-to-any for a `members.manage` holder):
+  suspension resolves to reinstatement or termination, retired/dropped
+  members have explicit reinstatement paths, and ARCHIVED is reachable
+  only via the dedicated archive/reactivate endpoints. Blocked
+  transitions return 400 with the allowed targets listed. New unit suite
+  `test_member_status_transitions.py`.
+- **Pydantic v1 remnants migrated to v2 style**: `@validator` →
+  `@field_validator` (onboarding) and `class Config` →
+  `model_config = ConfigDict(...)` (onboarding, training schemas,
+  messages) — removes the deprecation warnings and the last v1-API
+  dependency ahead of Pydantic 3.
+- **Config/docs open decisions closed** (`docs/KNOWN_LIMITATIONS.md`):
+  the `SECRET_KEY` "guidance mismatch" was a misreading
+  (`openssl rand -hex 32` outputs 64 hex chars — README now says so);
+  `.env.example` already ships `ENVIRONMENT=development`; the unused
+  `VITE_WS_URL` / `VITE_ENABLE_PWA` variables are removed from
+  `vite-env.d.ts`, env examples, `frontend/setup.sh`, and all docs/wiki
+  pages (never read anywhere, same rationale as the `MODULE_*_ENABLED`
+  removal).
 
 ### Documentation: secondary-doc sweep for the 2026-07-29 elections batch (2026-07-31)
 

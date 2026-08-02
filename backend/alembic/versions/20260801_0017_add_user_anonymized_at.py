@@ -4,8 +4,8 @@ Set when a departed member's PII has been scrubbed while their operational
 history (training, attendance, property custody) is retained. The timestamp
 doubles as the flag; NULL means not anonymized.
 
-Revision ID: 20260801_0012
-Revises: 20260801_0011
+Revision ID: 20260801_0017
+Revises: 20260801_0016
 Create Date: 2026-08-01 00:12:00.000000
 """
 
@@ -14,8 +14,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers
-revision = "20260801_0012"
-down_revision = "20260801_0011"
+revision = "20260801_0017"
+down_revision = "20260801_0016"
 branch_labels = None
 depends_on = None
 

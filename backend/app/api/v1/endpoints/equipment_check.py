@@ -510,7 +510,12 @@ async def reorder_items(
 async def get_shift_checklists(
     shift_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # EC-7: read endpoints accept view OR submit — members hold
+    # equipment_check.submit (default member position) so the check-performing
+    # flow keeps working, while report endpoints stay view-only.
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """Get all applicable checklists for the current user on a shift."""
     service = EquipmentCheckService(db)
@@ -612,7 +617,10 @@ async def get_shift_checks(
     shift_id: str,
     check_timing: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # EC-7: view OR submit (see get_shift_checklists)
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """Get all completed equipment checks for a shift."""
     service = EquipmentCheckService(db)
@@ -628,7 +636,10 @@ async def get_shift_checks(
 async def get_check(
     check_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # EC-7: view OR submit (see get_shift_checklists)
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """Get a single completed equipment check with item details."""
     service = EquipmentCheckService(db)
@@ -643,7 +654,10 @@ async def get_item_history(
     item_id: str,
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # EC-7: view OR submit (see get_shift_checklists)
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """Get check history for a specific template item."""
     service = EquipmentCheckService(db)
@@ -657,7 +671,10 @@ async def get_last_check_results(
     template_id: str,
     apparatus_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # EC-7: view OR submit (see get_shift_checklists)
+    current_user: User = Depends(
+        require_permission("equipment_check.view", "equipment_check.submit")
+    ),
 ):
     """Get item results from the most recent completed check for a template.
 

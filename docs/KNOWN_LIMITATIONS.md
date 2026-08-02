@@ -28,8 +28,9 @@ here.
 
 | Item | Status | Detail |
 |------|--------|--------|
-| **`SECRET_KEY` guidance mismatch** | Open decision | README suggests `openssl rand -hex 32` (32 chars) while the documented recommendation is 64 chars (config hard-min is 32). Align the guidance to one number. |
-| **`.env.example` defaults to `ENVIRONMENT=production`** | Open decision | In production, config makes `SECURITY_ENFORCE_HTTPS=True` and a non-empty `REDIS_PASSWORD` startup-blocking, neither of which is in the quick-start example — so a by-the-book quick start is blocked at startup. Decide whether the example should default to `development`. |
+| **`SECRET_KEY` guidance mismatch** | ✅ Resolved (2026-07-31) | Not a mismatch: `openssl rand -hex 32` outputs **64 hex characters** (32 bytes), which meets the 64-char recommendation (config hard-min is 32 chars). README annotated with the output length to prevent the same misreading. |
+| **`.env.example` defaults to `ENVIRONMENT=production`** | ✅ Resolved | `.env.example` and `.env.example.full` both ship `ENVIRONMENT=development` (and docker-compose defaults to development), so the by-the-book quick start is not blocked. |
+| **Frontend env vars documented but unused** | ✅ Resolved (2026-08-01) | `VITE_WS_URL`, `VITE_ENABLE_PWA`, `VITE_ENV` and `VITE_ENABLE_ANALYTICS` are all read by nothing — not by `frontend/src`, not by `vite.config.ts`. Removed from `vite-env.d.ts`, `frontend/.env.example`, `frontend/setup.sh` and every docs/wiki page. Two were actively misleading: the inventory socket derives its URL from the page origin (which is what makes it work behind a reverse proxy), and the PWA plugin is registered unconditionally, so `VITE_ENABLE_PWA=false` still shipped the service worker whose `NetworkOnly` rule for `/api/` is part of the HIPAA caching posture. Reintroduce one only alongside code that reads it. |
 
 ## Training Module
 

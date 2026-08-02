@@ -30,6 +30,113 @@ from app.services.admin_continuity_service import (
 
 router = APIRouter()
 
+# Lifecycle state machine for admin-driven status changes (module audit,
+# roles #5 — previously any-to-any). Transitions reflect the membership
+# lifecycle: probationary/active/inactive/leave/suspended interchange within
+# membership; retirement and drops end it; a dropped or retired member can be
+# reinstated (probationary or active, per bylaws). ARCHIVED is deliberately
+# absent on both sides: /archive and /reactivate are dedicated endpoints with
+# their own side effects, and this endpoint must not bypass them.
+ALLOWED_STATUS_TRANSITIONS: dict[UserStatus, frozenset[UserStatus]] = {
+    UserStatus.PROBATIONARY: frozenset(
+        {
+            UserStatus.ACTIVE,
+            UserStatus.INACTIVE,
+            UserStatus.SUSPENDED,
+            UserStatus.LEAVE,
+            UserStatus.DROPPED_VOLUNTARY,
+            UserStatus.DROPPED_INVOLUNTARY,
+        }
+    ),
+    UserStatus.ACTIVE: frozenset(
+        {
+            UserStatus.PROBATIONARY,
+            UserStatus.INACTIVE,
+            UserStatus.SUSPENDED,
+            UserStatus.LEAVE,
+            UserStatus.RETIRED,
+            UserStatus.DROPPED_VOLUNTARY,
+            UserStatus.DROPPED_INVOLUNTARY,
+        }
+    ),
+    UserStatus.INACTIVE: frozenset(
+        {
+            UserStatus.PROBATIONARY,
+            UserStatus.ACTIVE,
+            UserStatus.SUSPENDED,
+            UserStatus.LEAVE,
+            UserStatus.RETIRED,
+            UserStatus.DROPPED_VOLUNTARY,
+            UserStatus.DROPPED_INVOLUNTARY,
+        }
+    ),
+    # Suspension resolves to reinstatement or termination — never straight
+    # to leave/retirement, which would launder an unresolved suspension.
+    UserStatus.SUSPENDED: frozenset(
+        {
+            UserStatus.PROBATIONARY,
+            UserStatus.ACTIVE,
+            UserStatus.INACTIVE,
+            UserStatus.DROPPED_VOLUNTARY,
+            UserStatus.DROPPED_INVOLUNTARY,
+        }
+    ),
+    UserStatus.LEAVE: frozenset(
+        {
+            UserStatus.ACTIVE,
+            UserStatus.INACTIVE,
+            UserStatus.SUSPENDED,
+            UserStatus.RETIRED,
+            UserStatus.DROPPED_VOLUNTARY,
+            UserStatus.DROPPED_INVOLUNTARY,
+        }
+    ),
+    UserStatus.RETIRED: frozenset(
+        {
+            UserStatus.ACTIVE,
+            UserStatus.INACTIVE,
+        }
+    ),
+    UserStatus.DROPPED_VOLUNTARY: frozenset(
+        {
+            UserStatus.PROBATIONARY,
+            UserStatus.ACTIVE,
+        }
+    ),
+    UserStatus.DROPPED_INVOLUNTARY: frozenset(
+        {
+            UserStatus.PROBATIONARY,
+            UserStatus.ACTIVE,
+        }
+    ),
+    UserStatus.ARCHIVED: frozenset(),
+}
+
+
+def assert_transition_allowed(
+    current_status: UserStatus, new_status: UserStatus
+) -> None:
+    """Raise HTTPException(400) when the lifecycle change is not allowed."""
+    if new_status == UserStatus.ARCHIVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use the archive endpoint to archive a member",
+        )
+    allowed = ALLOWED_STATUS_TRANSITIONS.get(current_status, frozenset())
+    if new_status not in allowed:
+        if current_status == UserStatus.ARCHIVED:
+            detail = "Member is archived; use the reactivate endpoint"
+        else:
+            valid = ", ".join(sorted(s.value for s in allowed))
+            detail = (
+                f"Cannot change status from '{current_status.value}' to "
+                f"'{new_status.value}'. Allowed: {valid}"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
 
 class MemberStatusChangeRequest(BaseModel):
     """Request body for changing a member's status."""
@@ -217,9 +324,14 @@ async def change_member_status(
             detail=f"Member is already {new_status.value}",
         )
 
+    # Enforce the lifecycle state machine
+    assert_transition_allowed(UserStatus(previous_status), new_status)
+
     # Every status other than ACTIVE fails the is_active check that
     # authentication requires, so this endpoint is the cheapest single-request
-    # path to locking an organization out of its own admin tools.
+    # path to locking an organization out of its own admin tools. Checked after
+    # the transition rules: if the change is not a legal one at all, saying so
+    # is more useful than explaining who would be left holding the keys.
     if new_status != UserStatus.ACTIVE:
         try:
             await assert_not_last_administrator(

@@ -3,8 +3,8 @@
 Current-state consent per (user, type); the change history lives in the
 tamper-evident audit log as ``consent_updated`` events.
 
-Revision ID: 20260801_0014
-Revises: 20260801_0013
+Revision ID: 20260801_0019
+Revises: 20260801_0018
 Create Date: 2026-08-01 00:14:00.000000
 """
 
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers
-revision = "20260801_0014"
-down_revision = "20260801_0013"
+revision = "20260801_0019"
+down_revision = "20260801_0018"
 branch_labels = None
 depends_on = None
 

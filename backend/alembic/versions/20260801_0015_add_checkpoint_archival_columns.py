@@ -13,8 +13,8 @@ sanction that deletion cryptographically:
   still fails verification.
 - archived_at: when the export-and-purge ran.
 
-Revision ID: 20260801_0010
-Revises: 20260801_0009
+Revision ID: 20260801_0015
+Revises: 20260801_0011
 Create Date: 2026-08-01 00:10:00.000000
 """
 
@@ -23,8 +23,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers
-revision = "20260801_0010"
-down_revision = "20260801_0009"
+revision = "20260801_0015"
+down_revision = "20260801_0011"
 branch_labels = None
 depends_on = None
 

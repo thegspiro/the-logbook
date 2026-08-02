@@ -6,8 +6,8 @@ migration (20260220_0300) created the column NOT NULL — so inserting a
 permanent leave fails with IntegrityError 1048 on any real database. Align
 the schema with the model's contract.
 
-Revision ID: 20260801_0013
-Revises: 20260801_0012
+Revision ID: 20260801_0018
+Revises: 20260801_0017
 Create Date: 2026-08-01 00:13:00.000000
 """
 
@@ -16,8 +16,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers
-revision = "20260801_0013"
-down_revision = "20260801_0012"
+revision = "20260801_0018"
+down_revision = "20260801_0017"
 branch_labels = None
 depends_on = None
 

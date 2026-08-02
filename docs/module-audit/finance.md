@@ -95,10 +95,16 @@ flagged — needs an idempotency-key decision + a status-transition guard.
   already include the just-added row (depending on load timing) → double-count /
   drift. It now recomputes from a fresh `SUM(amount)` aggregate over the
   persisted line items, which is authoritative.
-- **Flagged (needs a schema/sequence change):** `_generate_request_number` uses
-  `count()+1` (race → duplicate `PR-YYYY-NNNN`). A robust fix needs a unique
-  constraint on the request-number column + retry-on-conflict (or a row-locked
-  per-org sequence) — a migration, deferred.
+- **✅ Fixed (2026-07-31):** `_generate_request_number` used `count()+1`
+  (race → duplicate `PR-YYYY-NNNN`; count-based numbering also re-issued
+  numbers after deletions). Worse, the columns were **globally** unique while
+  numbering was per-org — org B's first `PR-2026-0001` collided with org A's.
+  Migration `20260801_0011` replaces the global unique with a per-org
+  composite (`uq_*_org_number`), the generator is now MAX-of-suffix-based,
+  and creates go through `_flush_with_unique_number` — a SAVEPOINT-wrapped
+  retry-on-conflict allocator (offset stepping defeats REPEATABLE READ
+  snapshot staleness) that never poisons the caller's outer transaction.
+  Covered by `TestRequestNumberAllocation` in `tests/test_finance.py`.
 - **Flagged (cross-cutting refactor):** float money math in
   `get_budget_summary`/`get_dues_summary` and throughout the spend-tracking path
   (`_add_to_spent`, budget comparisons, response payloads). Converting money to
