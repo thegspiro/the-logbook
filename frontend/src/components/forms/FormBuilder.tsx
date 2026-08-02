@@ -418,7 +418,7 @@ const FormBuilder = ({
         updated.push(newField);
       }
       setFields(updated);
-      onFieldsChange?.(updated as FieldDefinition[]);
+      onFieldsChange?.(updated);
     }
 
     setEditorOpen(false);
@@ -444,7 +444,7 @@ const FormBuilder = ({
       // Re-index sort orders
       updated.forEach((f, i) => { f.sort_order = i; });
       setFields(updated);
-      onFieldsChange?.(updated as FieldDefinition[]);
+      onFieldsChange?.(updated);
     }
   };
 

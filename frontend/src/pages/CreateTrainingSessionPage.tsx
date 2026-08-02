@@ -12,7 +12,7 @@ import {
   Repeat,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { TrainingSessionCreate, TrainingType, TrainingCourse } from '../types/training';
+import type { TrainingSessionCreate, TrainingCourse } from '../types/training';
 import type { RecurrencePattern } from '../types/event';
 import type { User } from '../types/user';
 import type { Location } from '../services/api';
@@ -782,7 +782,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       </label>
                       <select
                         value={formData.training_type}
-                        onChange={(e) => updateField('training_type', e.target.value as TrainingType)}
+                        onChange={(e) => updateField('training_type', e.target.value)}
                         className="form-input py-3"
                       >
                         <option value="certification">Certification</option>

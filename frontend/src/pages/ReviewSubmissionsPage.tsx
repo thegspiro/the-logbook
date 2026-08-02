@@ -766,7 +766,7 @@ const ConfigEditor: React.FC<{
     setFieldConfig((prev) => ({
       ...prev,
       [fieldName]: { ...(prev[fieldName] ?? { visible: true, required: false, label: '' }), [prop]: value },
-    } as Record<string, FieldConfig>));
+    }));
   };
 
   const handleSave = async () => {

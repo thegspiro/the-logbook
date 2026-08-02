@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import type { TrainingSummaryReport } from '../../types';
+import { toDisplayString } from '../../../../utils/displayValue';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
 
@@ -24,7 +25,7 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
       key: 'total_hours',
       header: 'Hours',
       align: 'right' as const,
-      render: (v: unknown) => (typeof v === 'number' ? v.toFixed(1) : v != null ? String(v as string | number) : '0'),
+      render: (v: unknown) => (typeof v === 'number' ? v.toFixed(1) : v != null ? toDisplayString(v) : '0'),
     },
   ];
 
@@ -36,7 +37,7 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
       key: 'total_hours',
       header: 'Total Hours',
       align: 'right' as const,
-      render: (v: unknown) => (typeof v === 'number' ? v.toFixed(1) : v != null ? String(v as string | number) : '0'),
+      render: (v: unknown) => (typeof v === 'number' ? v.toFixed(1) : v != null ? toDisplayString(v) : '0'),
     },
   ];
 
@@ -48,7 +49,7 @@ export const TrainingSummaryRenderer: React.FC<Props> = ({ data }) => {
       key: 'completion_pct',
       header: 'Completion %',
       align: 'right' as const,
-      render: (v: unknown) => (typeof v === 'number' ? `${v}%` : v != null ? String(v as string | number) : '0%'),
+      render: (v: unknown) => (typeof v === 'number' ? `${v}%` : v != null ? toDisplayString(v) : '0%'),
     },
   ];
 

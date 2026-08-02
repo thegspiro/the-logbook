@@ -62,6 +62,6 @@ describe('CloneElectionModal', () => {
     renderModal({ error: 'Election not found' });
     expect(screen.getByRole('alert')).toHaveTextContent('Election not found');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledExactlyOnceWith(expect.anything());
   });
 });

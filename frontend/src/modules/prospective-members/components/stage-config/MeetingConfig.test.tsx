@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import MeetingConfig from './MeetingConfig';
-import type { MeetingStageConfig, StageConfig } from '../../types';
+import type { MeetingStageConfig } from '../../types';
 
 const baseConfig: MeetingStageConfig = {
   meeting_type: 'chief_meeting',
@@ -15,7 +15,7 @@ const renderConfig = (
   const setConfig = vi.fn();
   render(
     <MeetingConfig
-      config={{ ...baseConfig, ...overrides } as StageConfig}
+      config={{ ...baseConfig, ...overrides }}
       setConfig={setConfig}
       customCategories={[]}
       getNextEventForType={() => undefined}

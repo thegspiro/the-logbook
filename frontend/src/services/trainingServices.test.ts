@@ -79,7 +79,7 @@ describe('trainingService', () => {
       const updated = { id: 'c1', name: 'Updated Course' };
       mockPatch.mockResolvedValueOnce({ data: updated });
 
-      const result = await trainingService.updateCourse('c1', updates as never);
+      const result = await trainingService.updateCourse('c1', updates);
 
       expect(mockPatch).toHaveBeenCalledWith('/training/courses/c1', updates);
       expect(result).toEqual(updated);
@@ -141,7 +141,7 @@ describe('trainingService', () => {
       const updated = { id: 'r1', hours_completed: 8 };
       mockPatch.mockResolvedValueOnce({ data: updated });
 
-      const result = await trainingService.updateRecord('r1', updates as never);
+      const result = await trainingService.updateRecord('r1', updates);
 
       expect(mockPatch).toHaveBeenCalledWith('/training/records/r1', updates);
       expect(result).toEqual(updated);

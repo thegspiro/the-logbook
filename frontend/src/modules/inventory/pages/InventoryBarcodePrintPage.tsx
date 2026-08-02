@@ -342,7 +342,7 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, o
           maxWidth: '100%', flexShrink: 0, display: 'block',
           colorAdjust: 'exact', WebkitPrintColorAdjust: 'exact',
           printColorAdjust: 'exact',
-        } as React.CSSProperties}
+        }}
       />
       {subtitle && (
         <div style={{ fontSize: preset.subtitleFontSize, color: '#444', textAlign: 'center', lineHeight: 1.1, marginTop: '1px' }}>

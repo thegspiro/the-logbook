@@ -56,7 +56,7 @@ describe('inventoryService', () => {
       const created = { id: 'c1', ...data };
       mockPost.mockResolvedValueOnce({ data: created });
 
-      const result = await inventoryService.createCategory(data as never);
+      const result = await inventoryService.createCategory(data);
 
       expect(mockPost).toHaveBeenCalledWith('/inventory/categories', data);
       expect(result).toEqual(created);
@@ -116,7 +116,7 @@ describe('inventoryService', () => {
       const created = { id: 'i1', ...data };
       mockPost.mockResolvedValueOnce({ data: created });
 
-      const result = await inventoryService.createItem(data as never);
+      const result = await inventoryService.createItem(data);
 
       expect(mockPost).toHaveBeenCalledWith('/inventory/items', data);
       expect(result).toEqual(created);
@@ -128,7 +128,7 @@ describe('inventoryService', () => {
       const updated = { id: 'i1', name: 'Updated Helmet' };
       mockPatch.mockResolvedValueOnce({ data: updated });
 
-      const result = await inventoryService.updateItem('i1', { name: 'Updated Helmet' } as never);
+      const result = await inventoryService.updateItem('i1', { name: 'Updated Helmet' });
 
       expect(mockPatch).toHaveBeenCalledWith('/inventory/items/i1', { name: 'Updated Helmet' });
       expect(result).toEqual(updated);
@@ -327,7 +327,7 @@ describe('inventoryService', () => {
       const created = { id: 'm1', ...data };
       mockPost.mockResolvedValueOnce({ data: created });
 
-      const result = await inventoryService.createMaintenanceRecord(data as never);
+      const result = await inventoryService.createMaintenanceRecord(data);
 
       expect(mockPost).toHaveBeenCalledWith('/inventory/maintenance', data);
       expect(result).toEqual(created);
@@ -339,7 +339,7 @@ describe('inventoryService', () => {
       const updated = { id: 'm1', notes: 'Updated notes' };
       mockPatch.mockResolvedValueOnce({ data: updated });
 
-      const result = await inventoryService.updateMaintenanceRecord('i1', 'm1', { notes: 'Updated notes' } as never);
+      const result = await inventoryService.updateMaintenanceRecord('i1', 'm1', { notes: 'Updated notes' });
 
       expect(mockPatch).toHaveBeenCalledWith('/inventory/items/i1/maintenance/m1', { notes: 'Updated notes' });
       expect(result).toEqual(updated);
@@ -507,7 +507,7 @@ describe('inventoryService', () => {
       const updated = { id: 'sa1', name: 'Updated Bay' };
       mockPut.mockResolvedValueOnce({ data: updated });
 
-      const result = await inventoryService.updateStorageArea('sa1', { name: 'Updated Bay' } as never);
+      const result = await inventoryService.updateStorageArea('sa1', { name: 'Updated Bay' });
 
       expect(mockPut).toHaveBeenCalledWith('/inventory/storage-areas/sa1', { name: 'Updated Bay' });
       expect(result).toEqual(updated);
@@ -673,7 +673,7 @@ describe('inventoryService', () => {
       const response = { item_id: 'i1', ...data };
       mockPost.mockResolvedValueOnce({ data: response });
 
-      const result = await inventoryService.createNFPACompliance('i1', data as never);
+      const result = await inventoryService.createNFPACompliance('i1', data);
 
       expect(mockPost).toHaveBeenCalledWith('/inventory/items/i1/nfpa-compliance', data);
       expect(result).toEqual(response);
@@ -798,7 +798,7 @@ describe('inventoryService', () => {
       const response = { user_id: 'u1', ...data };
       mockPut.mockResolvedValueOnce({ data: response });
 
-      const result = await inventoryService.upsertMemberSizePreferences('u1', data as never);
+      const result = await inventoryService.upsertMemberSizePreferences('u1', data);
 
       expect(mockPut).toHaveBeenCalledWith('/inventory/members/u1/size-preferences', data);
       expect(result).toEqual(response);
@@ -849,14 +849,14 @@ describe('inventoryService', () => {
     it('should propagate API errors from PATCH requests', async () => {
       mockPatch.mockRejectedValueOnce(new Error('404 Not Found'));
 
-      await expect(inventoryService.updateItem('bad-id', {} as never)).rejects.toThrow('404 Not Found');
+      await expect(inventoryService.updateItem('bad-id', {})).rejects.toThrow('404 Not Found');
     });
 
     it('should propagate API errors from PUT requests', async () => {
       mockPut.mockRejectedValueOnce(new Error('Validation Error'));
 
       await expect(
-        inventoryService.updateStorageArea('bad-id', {} as never),
+        inventoryService.updateStorageArea('bad-id', {}),
       ).rejects.toThrow('Validation Error');
     });
 

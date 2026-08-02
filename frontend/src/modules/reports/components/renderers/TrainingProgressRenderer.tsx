@@ -4,6 +4,7 @@
 
 import React from 'react';
 import type { TrainingProgressReport } from '../../types';
+import { toDisplayString } from '../../../../utils/displayValue';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
 
@@ -37,13 +38,13 @@ export const TrainingProgressRenderer: React.FC<Props> = ({ data }) => {
       header: 'Requirements',
       align: 'center' as const,
       render: (_: unknown, row: Record<string, unknown>) =>
-        `${row.requirements_completed != null ? String(row.requirements_completed as string | number) : '0'} / ${row.requirements_total != null ? String(row.requirements_total as string | number) : '0'}`,
+        `${row.requirements_completed != null ? toDisplayString(row.requirements_completed) : '0'} / ${row.requirements_total != null ? toDisplayString(row.requirements_total) : '0'}`,
     },
     {
       key: 'status',
       header: 'Status',
       render: (v: unknown) => {
-        const s = v != null ? String(v as string | number) : 'unknown';
+        const s = v != null ? toDisplayString(v) : 'unknown';
         const colors: Record<string, string> = {
           active: 'bg-green-500/20 text-green-700 dark:text-green-300',
           completed: 'bg-blue-500/20 text-blue-700 dark:text-blue-300',

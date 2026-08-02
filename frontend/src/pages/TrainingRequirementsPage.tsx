@@ -175,7 +175,7 @@ const TrainingRequirementsPage: React.FC = () => {
   const handleSave = async (data: TrainingRequirementCreate | TrainingRequirementUpdate, isEdit: boolean, id?: string) => {
     try {
       if (isEdit && id) {
-        const updated = await trainingService.updateRequirement(id, data as TrainingRequirementUpdate);
+        const updated = await trainingService.updateRequirement(id, data);
         setRequirements(requirements.map(r => r.id === id ? updated : r));
         toast.success('Requirement updated');
       } else {
@@ -696,14 +696,14 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
     checklist_items: (seed?.checklist_items || []).join('\n'),
     passing_score: seed?.passing_score || undefined,
     max_attempts: seed?.max_attempts || undefined,
-    frequency: seed?.frequency || 'annual' as RequirementFrequency,
+    frequency: seed?.frequency || 'annual',
     year: seed?.year || new Date().getFullYear() as number | undefined,
     allows_external_credit: seed?.allows_external_credit ?? false,
     applies_to_all: seed?.applies_to_all ?? true,
     required_membership_types: seed?.required_membership_types || [] as string[],
     due_date: seed?.due_date || '',
     start_date: seed?.start_date || '',
-    due_date_type: seed?.due_date_type || 'calendar_period' as DueDateType,
+    due_date_type: seed?.due_date_type || 'calendar_period',
     rolling_period_months: seed?.rolling_period_months || 12,
     period_start_month: seed?.period_start_month || 1,
     period_start_day: seed?.period_start_day || 1,
@@ -893,7 +893,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     skills_evaluation: 'skills_practice',
                   };
                   const dueDateTypeMap: Record<string, DueDateType> = {
-                    certification: 'certification_period' as DueDateType,
+                    certification: 'certification_period',
                   };
                   const autoTrainingType = trainingTypeMap[reqType];
                   const autoDueDateType = dueDateTypeMap[reqType];

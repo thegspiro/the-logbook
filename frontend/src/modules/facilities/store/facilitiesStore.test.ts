@@ -284,7 +284,7 @@ describe('facilitiesStore', () => {
   describe('UI state setters', () => {
     it('clearSelectedFacility should reset selected state', () => {
       useFacilitiesStore.setState({
-        selectedFacility: mockFacility as never,
+        selectedFacility: mockFacility,
         selectedFacilityRooms: [{ id: 'r1', facilityId: 'f1', name: 'Bay 1', condition: 'good', createdAt: '', updatedAt: '' }] as never[],
         selectedFacilitySystems: [{ id: 's1', facilityId: 'f1', name: 'HVAC', systemType: 'hvac', condition: 'good', createdAt: '', updatedAt: '' }] as never[],
         selectedFacilityContacts: [{ id: 'c1', facilityId: 'f1', contactType: 'plumber', createdAt: '', updatedAt: '' }] as never[],

@@ -13,9 +13,7 @@ import { colorCardStyle } from "../../utils/colorContrast";
 
 /** Returns the minimum staffing target for a shift, or null if none is configured. */
 const getStaffingTarget = (shift: ShiftRecord): number | null => {
-  const positions = normalizePositions(
-    (shift.apparatus_positions ?? shift.positions) as unknown[] | null,
-  );
+  const positions = normalizePositions(shift.apparatus_positions ?? shift.positions);
   const requiredCount = positions.filter(p => p.required).length;
   if (requiredCount > 0) return requiredCount;
   if (shift.min_staffing != null && shift.min_staffing > 0) return shift.min_staffing;

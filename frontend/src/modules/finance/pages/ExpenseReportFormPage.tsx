@@ -17,7 +17,6 @@ import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { ExpenseType } from '../types';
-import type { ExpenseReport } from '../types';
 
 // =============================================================================
 // Validation Schema
@@ -224,7 +223,7 @@ const ExpenseReportFormPage: React.FC = () => {
       const desc = data.description?.trim();
       if (desc) payload.description = desc;
 
-      const created = await createExpenseReport(payload as Partial<ExpenseReport>);
+      const created = await createExpenseReport(payload);
       toast.success('Expense report created');
       void navigate(`/finance/expenses/${created.id}`);
     } catch {

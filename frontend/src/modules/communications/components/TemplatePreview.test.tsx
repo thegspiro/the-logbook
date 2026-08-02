@@ -59,7 +59,7 @@ describe('TemplatePreview', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /refresh/i }));
-    expect(onRefresh).toHaveBeenCalledOnce();
+    expect(onRefresh).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
   it('has desktop/mobile viewport toggle', () => {

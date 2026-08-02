@@ -24,7 +24,7 @@ function hasMessage(value: unknown): value is { message: string } {
     typeof value === 'object' &&
     value !== null &&
     'message' in value &&
-    typeof (value as { message: unknown }).message === 'string'
+    typeof value.message === 'string'
   );
 }
 
@@ -36,7 +36,7 @@ function hasName(value: unknown): value is { name: string } {
     typeof value === 'object' &&
     value !== null &&
     'name' in value &&
-    typeof (value as { name: unknown }).name === 'string'
+    typeof value.name === 'string'
   );
 }
 
@@ -48,7 +48,7 @@ function hasDetail(value: unknown): value is { detail: string } {
     typeof value === 'object' &&
     value !== null &&
     'detail' in value &&
-    typeof (value as { detail: unknown }).detail === 'string'
+    typeof value.detail === 'string'
   );
 }
 
@@ -68,7 +68,7 @@ function hasResponse(value: unknown): value is { response: AxiosLikeResponse } {
     typeof value === 'object' &&
     value !== null &&
     'response' in value &&
-    typeof (value as { response: unknown }).response === 'object' &&
+    typeof value.response === 'object' &&
     (value as { response: { status: unknown } }).response !== null &&
     typeof (value as { response: { status: unknown } }).response.status === 'number'
   );

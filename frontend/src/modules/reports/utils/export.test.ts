@@ -38,13 +38,13 @@ describe('generateCsv', () => {
 
   it('handles null and undefined values', () => {
     const rows = [{ name: null, value: undefined, count: 0 }];
-    const csv = generateCsv(rows as Array<Record<string, unknown>>);
+    const csv = generateCsv(rows);
     expect(csv).toContain(',0');
   });
 
   it('handles array values by joining with semicolons', () => {
     const rows = [{ roles: ['admin', 'member'] }];
-    const csv = generateCsv(rows as Array<Record<string, unknown>>);
+    const csv = generateCsv(rows);
     expect(csv).toContain('"admin; member"');
   });
 });

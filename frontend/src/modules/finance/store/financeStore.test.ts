@@ -395,7 +395,7 @@ describe('financeStore', () => {
 
       const result = await getState().createApprovalChain({
         name: 'New Chain',
-      } as never);
+      });
 
       expect(result).toEqual(chain);
       expect(getState().approvalChains).toContainEqual(chain);
@@ -406,7 +406,7 @@ describe('financeStore', () => {
       mockApprovalChainCreate.mockRejectedValue(new Error('Invalid'));
 
       await expect(
-        getState().createApprovalChain({ name: 'Bad' } as never),
+        getState().createApprovalChain({ name: 'Bad' }),
       ).rejects.toThrow('Invalid');
 
       expect(getState().error).toBe('Invalid');
@@ -603,7 +603,7 @@ describe('financeStore', () => {
 
       const result = await getState().createPurchaseRequest({
         title: 'Helmets',
-      } as never);
+      });
 
       expect(result).toEqual(pr);
       const state = getState();
@@ -616,7 +616,7 @@ describe('financeStore', () => {
       mockPRCreate.mockRejectedValue(new Error('Missing fields'));
 
       await expect(
-        getState().createPurchaseRequest({ title: '' } as never),
+        getState().createPurchaseRequest({ title: '' }),
       ).rejects.toThrow('Missing fields');
 
       expect(getState().error).toBe('Missing fields');
@@ -737,7 +737,7 @@ describe('financeStore', () => {
 
       const result = await getState().createExpenseReport({
         title: 'Conference',
-      } as never);
+      });
 
       expect(result).toEqual(report);
       expect(getState().expenseReports[0]).toEqual(report);
@@ -748,7 +748,7 @@ describe('financeStore', () => {
       mockERCreate.mockRejectedValue(new Error('Validation error'));
 
       await expect(
-        getState().createExpenseReport({ title: '' } as never),
+        getState().createExpenseReport({ title: '' }),
       ).rejects.toThrow('Validation error');
 
       expect(getState().error).toBe('Validation error');
@@ -866,7 +866,7 @@ describe('financeStore', () => {
 
       const result = await getState().createCheckRequest({
         payeeName: 'Supplier Co',
-      } as never);
+      });
 
       expect(result).toEqual(cr);
       expect(getState().checkRequests[0]).toEqual(cr);
@@ -877,7 +877,7 @@ describe('financeStore', () => {
       mockCRCreate.mockRejectedValue(new Error('Missing payee'));
 
       await expect(
-        getState().createCheckRequest({ payeeName: '' } as never),
+        getState().createCheckRequest({ payeeName: '' }),
       ).rejects.toThrow('Missing payee');
 
       expect(getState().error).toBe('Missing payee');

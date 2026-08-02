@@ -66,7 +66,7 @@ export function useAppUpdate(): AppUpdateState {
         typeof data === 'object' &&
         data !== null &&
         'buildId' in data &&
-        typeof (data as { buildId: unknown }).buildId === 'string'
+        typeof data.buildId === 'string'
       ) {
         const serverBuildId = (data as { buildId: string }).buildId;
         if (
@@ -126,7 +126,7 @@ export function useAppUpdate(): AppUpdateState {
           typeof d === 'object' &&
           d !== null &&
           'buildId' in d &&
-          typeof (d as { buildId: unknown }).buildId === 'string'
+          typeof d.buildId === 'string'
         ) {
           dismissedBuildRef.current = (d as { buildId: string }).buildId;
         }
