@@ -29,7 +29,7 @@ jobs:
     name: Trivy dependency scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Scan lockfiles for HIGH/CRITICAL vulnerabilities
         uses: aquasecurity/trivy-action@0.29.0
@@ -47,7 +47,7 @@ jobs:
     name: Generate SBOM
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Generate SPDX SBOM (Syft)
         uses: anchore/sbom-action@v0
