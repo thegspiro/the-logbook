@@ -119,7 +119,7 @@ const PastEventsTab: React.FC = () => {
           <p className="mt-1 text-sm text-theme-text-muted">
             {typeFilter === 'all'
               ? 'There are no past events to display.'
-              : `No past ${getEventTypeLabel(typeFilter as EventType).toLowerCase()} events found.`}
+              : `No past ${getEventTypeLabel(typeFilter).toLowerCase()} events found.`}
           </p>
         </div>
       ) : (

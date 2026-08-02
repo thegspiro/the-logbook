@@ -49,10 +49,7 @@ describe('lazyWithRetry', () => {
   it('calls React.lazy with a factory function', () => {
     const importFn = vi.fn().mockResolvedValue({ default: (() => null) as unknown as ComponentType<unknown> });
     lazyWithRetry(importFn);
-    expect(mockLazy).toHaveBeenCalledOnce();
-    const firstCall = mockLazy.mock.calls[0];
-    expect(firstCall).toBeDefined();
-    expect(typeof firstCall?.[0]).toBe('function');
+    expect(mockLazy).toHaveBeenCalledExactlyOnceWith(expect.any(Function));
   });
 
   it('resolves successfully on the first import attempt', async () => {
@@ -63,7 +60,7 @@ describe('lazyWithRetry', () => {
     const result = await factory();
 
     expect(result.default).toBe(FakeComponent);
-    expect(importFn).toHaveBeenCalledOnce();
+    expect(importFn).toHaveBeenCalledExactlyOnceWith();
   });
 
   it('retries once on transient failure and resolves on second attempt', async () => {
@@ -91,7 +88,7 @@ describe('lazyWithRetry', () => {
     const winner = await Promise.race([result.then(() => 'resolved').catch(() => 'rejected'), timeout]);
 
     expect(winner).toBe('timed_out');
-    expect(window.location.reload).toHaveBeenCalledOnce();
+    expect(window.location.reload).toHaveBeenCalledExactlyOnceWith();
     expect(sessionStorage.getItem('chunk_reload')).toBe('/dashboard');
   });
 
@@ -123,7 +120,7 @@ describe('lazyWithRetry', () => {
     const winner = await Promise.race([result.then(() => 'resolved').catch(() => 'rejected'), timeout]);
 
     expect(winner).toBe('timed_out');
-    expect(window.location.reload).toHaveBeenCalledOnce();
+    expect(window.location.reload).toHaveBeenCalledExactlyOnceWith();
     expect(sessionStorage.getItem('chunk_reload')).toBe('/dashboard');
   });
 

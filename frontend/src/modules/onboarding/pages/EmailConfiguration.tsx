@@ -513,7 +513,7 @@ const EmailConfiguration: React.FC = () => {
                   </label>
                   <select
                     value={config.smtpEncryption || 'tls'}
-                    onChange={(e) => handleInputChange('smtpEncryption', e.target.value as 'tls' | 'ssl' | 'none')}
+                    onChange={(e) => handleInputChange('smtpEncryption', e.target.value)}
                     className="form-input py-3"
                   >
                     <option value="tls">TLS (STARTTLS)</option>

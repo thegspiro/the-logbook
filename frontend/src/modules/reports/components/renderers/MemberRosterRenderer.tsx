@@ -4,6 +4,7 @@
 
 import React from 'react';
 import type { MemberRosterReport } from '../../types';
+import { toDisplayString } from '../../../../utils/displayValue';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
 
@@ -17,21 +18,21 @@ export const MemberRosterRenderer: React.FC<Props> = ({ data }) => {
       key: 'name',
       header: 'Name',
       render: (_: unknown, row: Record<string, unknown>) =>
-        `${row.first_name != null ? String(row.first_name as string) : ''} ${row.last_name != null ? String(row.last_name as string) : ''}`.trim(),
+        `${toDisplayString(row.first_name)} ${toDisplayString(row.last_name)}`.trim(),
     },
     { key: 'email', header: 'Email' },
     { key: 'rank', header: 'Rank' },
     {
       key: 'status',
       header: 'Status',
-      render: (v: unknown) => <span className="capitalize">{v != null ? String(v as string | number) : '-'}</span>,
+      render: (v: unknown) => <span className="capitalize">{v != null ? toDisplayString(v) : '-'}</span>,
     },
     { key: 'station', header: 'Station' },
     { key: 'membership_number', header: 'Member #' },
     {
       key: 'roles',
       header: 'Roles',
-      render: (v: unknown) => (Array.isArray(v) ? v.join(', ') : v != null ? String(v as string | number) : '-'),
+      render: (v: unknown) => (Array.isArray(v) ? v.join(', ') : v != null ? toDisplayString(v) : '-'),
     },
     { key: 'joined_date', header: 'Joined' },
   ];

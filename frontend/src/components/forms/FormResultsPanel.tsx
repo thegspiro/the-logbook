@@ -19,6 +19,7 @@ import { formsService } from '../../services/api';
 import type { FormField, FormSubmission } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatShortDateTime } from '../../utils/dateFormatting';
+import { toDisplayString } from '../../utils/displayValue';
 import { FieldType } from '../../constants/enums';
 
 const CHOICE_TYPES = new Set(['select', 'multiselect', 'checkbox', 'radio']);
@@ -109,7 +110,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
         const values: string[] = [];
         for (const sub of submissions) {
           const raw = sub.data[field.id];
-          const val = typeof raw === 'string' ? raw.trim() : raw != null ? String(raw as string | number | boolean).trim() : '';
+          const val = typeof raw === 'string' ? raw.trim() : toDisplayString(raw).trim();
           if (val) values.push(val);
         }
 

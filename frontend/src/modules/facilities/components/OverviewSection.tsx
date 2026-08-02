@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
-import type { FacilityCreate } from '../../../services/facilitiesServices';
 import type { Facility, FacilityType, FacilityStatus } from '../types';
 import { inputCls, labelCls } from '../constants';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -93,7 +92,7 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
         }
       }
 
-      await updateFacility(facility.id, payload as Partial<FacilityCreate>);
+      await updateFacility(facility.id, payload);
       toast.success('Facility updated');
       setIsEditing(false);
     } catch {

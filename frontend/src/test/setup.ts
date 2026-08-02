@@ -53,6 +53,9 @@ if (!('mediaDevices' in navigator)) {
 globalThis.IntersectionObserver = class IntersectionObserver {
   readonly root: Element | null = null;
   readonly rootMargin: string = '';
+  // Required by lib.dom's IntersectionObserver as of TypeScript 7; jsdom does
+  // not implement the observer at all, so the value is inert.
+  readonly scrollMargin: string = '';
   readonly thresholds: ReadonlyArray<number> = [];
   constructor(_callback: IntersectionObserverCallback, _options?: IntersectionObserverInit) {}
   disconnect() {}

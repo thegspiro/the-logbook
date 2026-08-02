@@ -75,7 +75,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
 
   const cycleTheme = () => {
     const order = ['light', 'dark', 'system', 'high-contrast'] as const;
-    const currentIndex = order.indexOf(theme as typeof order[number]);
+    const currentIndex = order.indexOf(theme);
     const nextIndex = (currentIndex + 1) % order.length;
     setTheme(order[nextIndex] ?? 'system');
   };

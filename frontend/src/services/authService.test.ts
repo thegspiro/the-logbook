@@ -85,7 +85,7 @@ describe('authService', () => {
       await authService.logout();
 
       expect(mockPost).toHaveBeenCalledWith('/auth/logout');
-      expect(mockClearCache).toHaveBeenCalledOnce();
+      expect(mockClearCache).toHaveBeenCalledExactlyOnceWith();
     });
 
     it('should clear the cache even after successful logout', async () => {
@@ -93,7 +93,7 @@ describe('authService', () => {
 
       await authService.logout();
 
-      expect(mockClearCache).toHaveBeenCalledOnce();
+      expect(mockClearCache).toHaveBeenCalledExactlyOnceWith();
     });
   });
 

@@ -38,6 +38,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
+import { toDisplayString } from '../../../utils/displayValue';
 import { ApplicantStatus, StageType as StageTypeEnum } from '../../../constants/enums';
 import ElectionPackageSection from './ElectionPackageSection';
 import LinkedEventsSection from './LinkedEventsSection';
@@ -85,7 +86,7 @@ function formatFieldValue(value: unknown): string {
       return '—';
     }
   }
-  return String(value as string | number);
+  return toDisplayString(value);
 }
 
 interface ApplicantDetailDrawerProps {

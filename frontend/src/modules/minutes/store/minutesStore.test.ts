@@ -174,7 +174,7 @@ describe('minutesStore', () => {
       await useMinutesStore.getState().fetchStats();
       const state = useMinutesStore.getState();
 
-      expect(mockGetStats).toHaveBeenCalledOnce();
+      expect(mockGetStats).toHaveBeenCalledExactlyOnceWith();
       expect(state.stats).toEqual(mockStats);
       expect(state.statsLoading).toBe(false);
     });

@@ -210,7 +210,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    appliesTo: ApprovalEntityType.PURCHASE_REQUEST as string,
+    appliesTo: ApprovalEntityType.PURCHASE_REQUEST as ApprovalEntityType,
     minAmount: '',
     maxAmount: '',
     budgetCategoryId: '',
@@ -366,7 +366,9 @@ const ApprovalChainsSettingsPage: React.FC = () => {
               <select
                 className={selectClass}
                 value={formData.appliesTo}
-                onChange={(e) => setFormData({ ...formData, appliesTo: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, appliesTo: e.target.value as ApprovalEntityType })
+                }
               >
                 <option value={ApprovalEntityType.PURCHASE_REQUEST}>Purchase Requests</option>
                 <option value={ApprovalEntityType.EXPENSE_REPORT}>Expense Reports</option>

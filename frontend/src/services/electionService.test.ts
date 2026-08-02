@@ -85,7 +85,7 @@ describe('electionService', () => {
       const updated = { id: 'el1', title: 'Updated Title' };
       mockPatch.mockResolvedValueOnce({ data: updated });
 
-      const result = await electionService.updateElection('el1', updateData as never);
+      const result = await electionService.updateElection('el1', updateData);
 
       expect(mockPatch).toHaveBeenCalledWith('/elections/el1', updateData);
       expect(result).toEqual(updated);
@@ -272,7 +272,7 @@ describe('electionService', () => {
       const response = { sent: 2, failed: 0 };
       mockPost.mockResolvedValueOnce({ data: response });
 
-      const result = await electionService.sendBallotEmail('el1', emailData as never);
+      const result = await electionService.sendBallotEmail('el1', emailData);
 
       expect(mockPost).toHaveBeenCalledWith('/elections/el1/send-ballot', emailData);
       expect(result).toEqual(response);
@@ -430,7 +430,7 @@ describe('electionService', () => {
       const response = { success: true, votes_cast: 1 };
       mockPost.mockResolvedValueOnce({ data: response });
 
-      const result = await electionService.submitBallot('tok-abc123', votes as never);
+      const result = await electionService.submitBallot('tok-abc123', votes);
 
       expect(mockPost).toHaveBeenCalledWith('/elections/ballot/vote/bulk', { votes, token: 'tok-abc123' });
       expect(result).toEqual(response);
@@ -443,7 +443,7 @@ describe('electionService', () => {
       ];
       mockPost.mockResolvedValueOnce({ data: { success: true, votes_cast: 4 } });
 
-      await electionService.submitBallot('tok-abc123', votes as never);
+      await electionService.submitBallot('tok-abc123', votes);
 
       expect(mockPost).toHaveBeenCalledWith('/elections/ballot/vote/bulk', { votes, token: 'tok-abc123' });
     });
