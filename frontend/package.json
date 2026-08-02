@@ -28,7 +28,7 @@
     "dompurify": "^3.4.12",
     "html5-qrcode": "^2.3.8",
     "jsbarcode": "^3.12.3",
-    "lucide-react": "^0.576.0",
+    "lucide-react": "^1.28.0",
     "qrcode.react": "4.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
