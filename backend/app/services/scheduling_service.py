@@ -3759,26 +3759,41 @@ class SchedulingService:
     async def get_member_hours_report(
         self, organization_id: UUID, start_date: date, end_date: date
     ) -> List[Dict]:
-        """Get total scheduled hours per member from shift assignments in a date range"""
-        duration_minutes = func.timestampdiff(
+        """Per-member hours for a date range, worked and scheduled.
+
+        Hours come from attendance (``ShiftAttendance.duration_minutes``,
+        derived from check-in/check-out), because an assignment is a plan and
+        not a measurement: a shift can run short or long, and a member can be
+        rostered for one they never work. Anything that credits or pays a
+        member has to be the measured figure.
+
+        The scheduled totals stay alongside rather than being dropped, so the
+        difference between plan and actual is visible in the report instead of
+        being something a reader has to know to ask about. Where the two
+        disagree, worked is the authoritative one.
+
+        A member who worked a shift they were not assigned to appears too —
+        the two aggregates are merged on user, not joined.
+        """
+        scheduled_minutes = func.timestampdiff(
             text("MINUTE"), Shift.start_time, Shift.end_time
         )
 
-        result = await self.db.execute(
+        # Both queries constrain the joined user to the org as well as the
+        # assignment/attendance row: those tables carry a user_id that could
+        # reference a foreign user, and this report exposes email + name.
+        scheduled_result = await self.db.execute(
             select(
                 ShiftAssignment.user_id,
                 User.email,
                 User.first_name,
                 User.last_name,
                 func.count(ShiftAssignment.id).label("shift_count"),
-                func.coalesce(func.sum(duration_minutes), 0).label("total_minutes"),
+                func.coalesce(func.sum(scheduled_minutes), 0).label("minutes"),
             )
             .join(Shift, ShiftAssignment.shift_id == Shift.id)
             .join(User, ShiftAssignment.user_id == User.id)
             .where(ShiftAssignment.organization_id == str(organization_id))
-            # Also constrain the joined user to the org — an assignment row's
-            # user_id could reference a foreign user (see shift_officer_id
-            # validation), and this report exposes email + name.
             .where(User.organization_id == str(organization_id))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
@@ -3788,26 +3803,70 @@ class SchedulingService:
                 User.first_name,
                 User.last_name,
             )
-            .order_by(func.sum(duration_minutes).desc())
         )
-        rows = result.all()
 
-        # "scheduled", not "total": these are assignment durations, so a shift
-        # somebody was rostered for but never worked still counts. The actual
-        # figure lives on the completion reports (ShiftCompletionReport
-        # .hours_on_shift) and will legitimately be lower.
-        return [
-            {
-                "user_id": row.user_id,
-                "email": row.email,
-                "first_name": row.first_name or "",
-                "last_name": row.last_name or "",
-                "shifts_scheduled": row.shift_count,
-                "scheduled_minutes": row.total_minutes,
-                "scheduled_hours": round(float(row.total_minutes) / 60.0, 1),
-            }
-            for row in rows
-        ]
+        worked_result = await self.db.execute(
+            select(
+                ShiftAttendance.user_id,
+                User.email,
+                User.first_name,
+                User.last_name,
+                func.count(ShiftAttendance.id).label("shift_count"),
+                func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0).label(
+                    "minutes"
+                ),
+            )
+            .join(Shift, ShiftAttendance.shift_id == Shift.id)
+            .join(User, ShiftAttendance.user_id == User.id)
+            .where(Shift.organization_id == str(organization_id))
+            .where(User.organization_id == str(organization_id))
+            .where(Shift.shift_date >= start_date)
+            .where(Shift.shift_date <= end_date)
+            .group_by(
+                ShiftAttendance.user_id,
+                User.email,
+                User.first_name,
+                User.last_name,
+            )
+        )
+
+        members: Dict[str, Dict] = {}
+
+        def _entry(row) -> Dict:
+            return members.setdefault(
+                row.user_id,
+                {
+                    "user_id": row.user_id,
+                    "email": row.email,
+                    "first_name": row.first_name or "",
+                    "last_name": row.last_name or "",
+                    "shifts_attended": 0,
+                    "worked_minutes": 0,
+                    "worked_hours": 0.0,
+                    "shifts_scheduled": 0,
+                    "scheduled_minutes": 0,
+                    "scheduled_hours": 0.0,
+                },
+            )
+
+        for row in scheduled_result.all():
+            entry = _entry(row)
+            entry["shifts_scheduled"] = row.shift_count
+            entry["scheduled_minutes"] = int(row.minutes or 0)
+            entry["scheduled_hours"] = round(float(row.minutes or 0) / 60.0, 1)
+
+        for row in worked_result.all():
+            entry = _entry(row)
+            entry["shifts_attended"] = row.shift_count
+            entry["worked_minutes"] = int(row.minutes or 0)
+            entry["worked_hours"] = round(float(row.minutes or 0) / 60.0, 1)
+
+        # Ordered by the figure the report is about.
+        return sorted(
+            members.values(),
+            key=lambda m: (m["worked_hours"], m["scheduled_hours"]),
+            reverse=True,
+        )
 
     async def get_shift_coverage_report(
         self, organization_id: UUID, start_date: date, end_date: date

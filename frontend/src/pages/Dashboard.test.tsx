@@ -51,7 +51,7 @@ vi.mock('../services/api', () => ({
     getMyEnrollments: vi.fn().mockResolvedValue({ items: [] }),
   },
   trainingModuleConfigService: {
-    getMyTraining: vi.fn().mockResolvedValue({ hours_summary: { total_hours: 0 } }),
+    getMyTraining: vi.fn().mockResolvedValue({ hours_summary: { total_hours: 0, hours_this_month: 0 } }),
   },
   organizationService: {
     getSetupChecklist: vi.fn().mockResolvedValue({ completed_count: 0, total_count: 0 }),

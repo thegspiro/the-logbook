@@ -412,6 +412,12 @@ const Dashboard: React.FC = () => {
 
   const loadHours = async () => {
     try {
+      // Month-to-date in the organization's timezone, not UTC — near midnight
+      // a UTC-derived date lands in the wrong month for half the country.
+      const today = getTodayLocalDate(tz);
+      const monthStart = `${today.slice(0, 7)}-01`;
+      const monthEnd = today;
+
       const [schedulingSummary, trainingSummary, adminHoursSummary] =
         await Promise.all([
           schedulingService.getSummary().catch((err) => {
@@ -422,13 +428,20 @@ const Dashboard: React.FC = () => {
             console.error("Failed to load training summary:", err);
             return null;
           }),
-          adminHoursEntryService.getSummary().catch((err) => {
-            console.error("Failed to load admin hours summary:", err);
-            return null;
-          }),
+          adminHoursEntryService
+            .getSummary({ startDate: monthStart, endDate: monthEnd })
+            .catch((err) => {
+              console.error("Failed to load admin hours summary:", err);
+              return null;
+            }),
         ]);
+      // All three are month-to-date, because the card above them says "This
+      // month" and the total adds them together. Training and administrative
+      // hours were previously lifetime figures — so the headline "Total
+      // Hours / This month" summed two lifetime numbers with one monthly one
+      // and meant nothing.
       setHours({
-        training: trainingSummary?.hours_summary?.total_hours ?? 0,
+        training: trainingSummary?.hours_summary?.hours_this_month ?? 0,
         standby: schedulingSummary?.hours_worked_this_month || 0,
         administrative: adminHoursSummary?.totalHours ?? 0,
       });
@@ -847,7 +860,7 @@ const Dashboard: React.FC = () => {
             value={totalHours}
             icon={Clock}
             iconColor="text-blue-700 dark:text-blue-400"
-            description="This month"
+            description="This month: training + standby + admin"
             loading={loadingHours}
           />
 
@@ -856,7 +869,7 @@ const Dashboard: React.FC = () => {
             value={hours.training}
             icon={BookOpen}
             iconColor="text-green-700 dark:text-green-400"
-            description="Training hours"
+            description="Completed courses, this month"
             loading={loadingHours}
             valueColor="text-green-700 dark:text-green-400"
           />
@@ -866,7 +879,7 @@ const Dashboard: React.FC = () => {
             value={hours.standby}
             icon={Shield}
             iconColor="text-yellow-700 dark:text-yellow-400"
-            description="Standby hours"
+            description="Shifts worked, this month"
             loading={loadingHours}
             valueColor="text-yellow-700 dark:text-yellow-400"
             onClick={() => void navigate("/scheduling?tab=my-shifts&view=past")}
@@ -878,7 +891,7 @@ const Dashboard: React.FC = () => {
             value={hours.administrative}
             icon={Briefcase}
             iconColor="text-purple-700 dark:text-purple-400"
-            description="Admin hours"
+            description="Clocked in, this month"
             loading={loadingHours}
             valueColor="text-purple-700 dark:text-purple-400"
             onClick={() => void navigate("/admin-hours")}

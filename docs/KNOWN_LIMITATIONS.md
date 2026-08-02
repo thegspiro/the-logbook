@@ -53,20 +53,21 @@ fields now say which measure they are:
 |----------|-----|-----|----------|
 | `GET /scheduling/summary` | `total_shifts`, `shifts_this_week`, `shifts_this_month` | `shifts_scheduled`, `shifts_scheduled_this_week`, `shifts_scheduled_this_month` | Scheduled `Shift` rows |
 | `GET /scheduling/summary` | `total_hours_this_month` | `hours_worked_this_month` | Actual `ShiftAttendance` minutes |
-| `GET /scheduling/reports/member-hours` | `shift_count`, `total_minutes`, `total_hours` | `shifts_scheduled`, `scheduled_minutes`, `scheduled_hours` | Assignment durations — a shift rostered but never worked still counts |
+| `GET /scheduling/reports/member-hours` | `shift_count`, `total_minutes`, `total_hours` | `shifts_attended`, `worked_minutes`, `worked_hours` (+ `shifts_scheduled`, `scheduled_minutes`, `scheduled_hours`) | Attendance check-in/check-out, with the scheduled plan alongside |
 | `GET /training/module-config/my-training` | `shift_stats.total_shifts`, `.total_hours` | `.shifts_completed`, `.hours_reported` | `ShiftCompletionReport` rows |
 
-No number changed — only what each is called, plus the UI labels above them
-("Scheduled Shifts", "Hours Worked This Month"). Deciding whether a given
-screen *should* show scheduled or worked figures is still open; see the rows
-below.
+The member-hours report was then **re-sourced from attendance** (2026-08-01):
+an assignment is a plan, not a measurement — a shift can run short or long,
+or be assigned and never worked — so anything that credits or pays a member
+now uses the measured figure. Scheduled totals ride alongside with a
+Difference column, so plan-vs-actual is visible rather than something a
+reader has to know to ask about.
 
 | Item | Status | Detail |
 |------|--------|--------|
 | **`ManualShiftReportPage` local-date pattern** | Open (small fix) | Uses `toISOString().split('T')[0]` for "today", which is UTC-shifted near midnight; should use `getTodayLocalDate(tz)`. Tracked here because it lives in a module outside the current review scope. |
 | **Platoon presets cover 3-platoon rotations** | Accepted | Multi-platoon generation offsets are validated for the common 3-platoon presets (24/48, Kelly, 48/96). Departments running non-standard platoon counts should verify the generated tiling. See [SCHEDULING_MODULE.md → Platoon Rotations](./SCHEDULING_MODULE.md#platoon-rotations-added-2026-06-19). |
 | **"Shifts completed" has three sources of truth** | Open (needs product decision) | A `RequirementType.SHIFTS` requirement is counted from `TrainingRecord`s in `training_service._evaluate_requirement`/`check_requirement_progress`, but from actual `ShiftAttendance` in `scheduling_service.get_shift_compliance` — and the pipeline also credits progress via the `RequirementProgress` ledger. The same requirement can therefore show different numbers on different screens. Reconciling changes established compliance numbers, so it needs an owner decision on the authoritative source before it's unified onto one shared helper. Deferred during the 2026-07-16 lifecycle review. |
-| **Member-hours report shows scheduled, not worked, hours** | Open (needs product decision) | `get_member_hours_report` sums scheduled assignment durations, not actual `ShiftAttendance` duration, so it diverges from hours actually worked/credited. The fields and UI labels now say "scheduled" (2026-08-01), so the report is no longer *misleading* — but whether a member-hours report should be sourced from attendance instead is still an owner call. |
 | **No formal "active/in-progress" shift state** | Accepted | `ShiftStatus` is `scheduled`/`cancelled` only; a shift's "activeness" is implied by `start_time`/`end_time` vs. now, and `is_finalized` marks closed. The live readiness panel (2026-07-16) covers most of the operational need without a dedicated state. |
 
 ## Multi-Tenant Isolation & Module Audit (2026-07-25)

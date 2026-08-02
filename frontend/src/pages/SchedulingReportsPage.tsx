@@ -284,12 +284,6 @@ export const SchedulingReportsPage: React.FC = () => {
     }
   };
 
-  const formatDuration = (minutes: number) => {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return `${h}h ${m}m`;
-  };
-
   const formatResponseTime = (seconds?: number) => {
     if (!seconds) return '-';
     if (seconds < 60) return `${Math.round(seconds)}s`;
@@ -418,16 +412,24 @@ export const SchedulingReportsPage: React.FC = () => {
                   icon={<Clock className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />}
                 />
                 <StatCard
-                  label="Scheduled Shifts"
-                  value={memberHoursReport.members.reduce((sum, m) => sum + m.shifts_scheduled, 0)}
+                  label="Shifts Worked"
+                  value={memberHoursReport.members.reduce((sum, m) => sum + m.shifts_attended, 0)}
                   icon={<Shield className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />}
                 />
                 <StatCard
-                  label="Scheduled Hours"
-                  value={memberHoursReport.members.reduce((sum, m) => sum + m.scheduled_hours, 0).toFixed(1)}
+                  label="Hours Worked"
+                  value={memberHoursReport.members.reduce((sum, m) => sum + m.worked_hours, 0).toFixed(1)}
                   icon={<BarChart3 className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />}
                 />
               </div>
+
+              {/* Say what the numbers are, so nobody has to infer it from a
+                  column header that could mean either measure. */}
+              <p className="text-theme-text-muted text-xs mb-4">
+                Hours worked are measured from shift check-in and check-out. Scheduled
+                hours are the assigned shift length — shown for comparison, since a
+                shift can run short or long, or be assigned and not worked.
+              </p>
 
               {/* Table */}
               {memberHoursReport.members.length === 0 ? (
@@ -441,9 +443,10 @@ export const SchedulingReportsPage: React.FC = () => {
                     <thead>
                       <tr className="border-b border-theme-surface-border">
                         <th scope="col" className="text-left py-3 px-4 text-theme-text-secondary font-medium">Member</th>
-                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Scheduled Shifts</th>
-                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Scheduled Minutes</th>
+                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Shifts Worked</th>
+                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Hours Worked</th>
                         <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Scheduled Hours</th>
+                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Difference</th>
                         <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Avg Per Shift</th>
                       </tr>
                     </thead>
@@ -458,11 +461,15 @@ export const SchedulingReportsPage: React.FC = () => {
                               <p className="text-xs text-theme-text-muted">{m.email}</p>
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-right text-theme-text-primary">{m.shifts_scheduled}</td>
-                          <td className="py-3 px-4 text-right text-theme-text-secondary">{formatDuration(m.scheduled_minutes)}</td>
-                          <td className="py-3 px-4 text-right text-theme-text-primary font-medium">{m.scheduled_hours.toFixed(1)}</td>
+                          <td className="py-3 px-4 text-right text-theme-text-primary">{m.shifts_attended}</td>
+                          <td className="py-3 px-4 text-right text-theme-text-primary font-medium">{m.worked_hours.toFixed(1)}</td>
+                          <td className="py-3 px-4 text-right text-theme-text-secondary">{m.scheduled_hours.toFixed(1)}</td>
+                          <td className="py-3 px-4 text-right text-theme-text-secondary">
+                            {(m.worked_hours - m.scheduled_hours) >= 0 ? '+' : ''}
+                            {(m.worked_hours - m.scheduled_hours).toFixed(1)}
+                          </td>
                           <td className="py-3 px-4 text-right text-theme-text-muted">
-                            {m.shifts_scheduled > 0 ? (m.scheduled_hours / m.shifts_scheduled).toFixed(1) : '0'}h
+                            {m.shifts_attended > 0 ? (m.worked_hours / m.shifts_attended).toFixed(1) : '0'}h
                           </td>
                         </tr>
                       ))}

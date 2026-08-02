@@ -90,13 +90,28 @@ that looked like a bug.
 |----------|-----|-----|
 | `GET /scheduling/summary` | `total_shifts`, `shifts_this_week`, `shifts_this_month` | `shifts_scheduled`, `shifts_scheduled_this_week`, `shifts_scheduled_this_month` |
 | `GET /scheduling/summary` | `total_hours_this_month` | `hours_worked_this_month` |
-| `GET /scheduling/reports/member-hours` | `shift_count`, `total_minutes`, `total_hours` | `shifts_scheduled`, `scheduled_minutes`, `scheduled_hours` |
+| `GET /scheduling/reports/member-hours` | `shift_count`, `total_minutes`, `total_hours` | `shifts_attended`, `worked_minutes`, `worked_hours`, plus `shifts_scheduled`, `scheduled_minutes`, `scheduled_hours` |
 | `GET /training/module-config/my-training` | `shift_stats.total_shifts`, `.total_hours` | `.shifts_completed`, `.hours_reported` |
 
-No number changed — only what each is called, and the UI labels above them
-("Scheduled Shifts", "Scheduled Hours", "Hours Worked This Month"). Whether a
-given screen *should* show the scheduled or the worked figure remains an open
-product question, tracked in `docs/KNOWN_LIMITATIONS.md`.
+**Member hours now come from attendance.** An assignment is a plan, not a
+measurement — a shift can run short or long, or be assigned and never worked —
+so the member-hours report is sourced from `ShiftAttendance` check-in/check-out
+rather than assignment durations. Anything that credits or pays a member uses
+the measured figure. The scheduled totals stay alongside with a Difference
+column so plan-vs-actual is visible rather than something a reader has to know
+to ask about, and a member who worked a shift they were never rostered for now
+appears in the report (the two aggregates are merged on member, not joined).
+
+**Fixed — the dashboard's "Total Hours" summed incompatible periods.** The card
+is labelled "This month", but only standby hours were month-scoped: training
+and administrative hours were *lifetime* totals, so the headline figure added
+two all-time numbers to one monthly one and meant nothing. All three are now
+month-to-date (in the organization's timezone, not UTC), and every card says
+what it counts — "Completed courses, this month", "Shifts worked, this month",
+"Clocked in, this month", and "This month: training + standby + admin" on the
+total. `GET /training/module-config/my-training` gained
+`hours_summary.hours_this_month` for this; its `total_hours` stays lifetime,
+which is the right reading for "my training record".
 
 **Testing & CI**
 
