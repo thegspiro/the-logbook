@@ -9,10 +9,10 @@ vi.mock('../modules/scheduling/services/api', () => ({
   schedulingService: {
     getShifts: vi.fn().mockResolvedValue({ shifts: [], total: 0, skip: 0, limit: 100 }),
     getSummary: vi.fn().mockResolvedValue({
-      total_shifts: 10,
-      shifts_this_week: 3,
-      shifts_this_month: 8,
-      total_hours_this_month: 96,
+      shifts_scheduled: 10,
+      shifts_scheduled_this_week: 3,
+      shifts_scheduled_this_month: 8,
+      hours_worked_this_month: 96,
     }),
     getBasicApparatus: vi.fn().mockResolvedValue([]),
     getTemplates: vi.fn().mockResolvedValue([]),

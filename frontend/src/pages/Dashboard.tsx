@@ -429,7 +429,7 @@ const Dashboard: React.FC = () => {
         ]);
       setHours({
         training: trainingSummary?.hours_summary?.total_hours ?? 0,
-        standby: schedulingSummary?.total_hours_this_month || 0,
+        standby: schedulingSummary?.hours_worked_this_month || 0,
         administrative: adminHoursSummary?.totalHours ?? 0,
       });
       setMyCerts(trainingSummary?.certifications ?? []);

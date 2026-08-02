@@ -253,9 +253,14 @@ export interface MemberHoursReportEntry {
   email: string;
   first_name: string;
   last_name: string;
-  shift_count: number;
-  total_minutes: number;
-  total_hours: number;
+  /**
+   * Scheduled, not worked: these are assignment durations, so a shift a
+   * member was rostered for but never worked still counts. Completion
+   * reports carry the actual figure and will legitimately be lower.
+   */
+  shifts_scheduled: number;
+  scheduled_minutes: number;
+  scheduled_hours: number;
 }
 
 export interface MemberHoursReport {

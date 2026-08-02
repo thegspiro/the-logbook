@@ -379,6 +379,18 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # docker-compose.yml uses ${VAR:?message} required-variable syntax for its
+    # secrets, so `docker compose config` exits non-zero unless they are set —
+    # and a CI checkout has no .env. These are throwaway values that only have
+    # to exist for substitution to succeed; nothing is deployed from this job.
+    # (The minimal and arm compose files have no required vars.)
+    env:
+      SECRET_KEY: ci-compose-validation-only-not-a-real-secret
+      ENCRYPTION_KEY: "00000000000000000000000000000000000000000000000000000000000000ci"
+      ENCRYPTION_SALT: "000000000000000000000000000000ci"
+      DB_PASSWORD: ci-compose-validation
+      MYSQL_ROOT_PASSWORD: ci-compose-validation
+      REDIS_PASSWORD: ci-compose-validation
     steps:
       - uses: actions/checkout@v4
 

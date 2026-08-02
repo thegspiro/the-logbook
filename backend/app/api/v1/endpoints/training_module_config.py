@@ -408,9 +408,12 @@ async def get_my_training_summary(
             )
         )
         srow = stats_result.one()
+        # Counted from ShiftCompletionReport, so these are shifts actually
+        # worked and hours actually reported — not the scheduled figures the
+        # scheduling module reports under similar names.
         result["shift_stats"] = {
-            "total_shifts": srow[0],
-            "total_hours": float(srow[1]),
+            "shifts_completed": srow[0],
+            "hours_reported": float(srow[1]),
             "total_calls": int(srow[2]),
             "avg_rating": round(float(srow[3]), 1) if srow[3] else None,
         }

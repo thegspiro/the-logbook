@@ -1586,9 +1586,14 @@ export interface MyTrainingSummary {
     officer_narrative?: string;
     skills_observed?: unknown[];
   }>;
+  /**
+   * Counted from completion reports: shifts actually worked and hours
+   * actually reported — not the scheduled figures the scheduling module
+   * reports under similar names.
+   */
   shift_stats?: {
-    total_shifts: number;
-    total_hours: number;
+    shifts_completed: number;
+    hours_reported: number;
     total_calls: number;
     avg_rating: number | null;
   };

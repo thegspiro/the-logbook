@@ -1563,11 +1563,17 @@ class SchedulingService:
         total_minutes = hours_result.scalar() or 0
         total_hours = round(float(total_minutes) / 60.0, 1)
 
+        # Field names say which of the two measures each figure is. This one
+        # object previously mixed them: three counts of *scheduled* Shift rows
+        # sat beside a sum of *worked* ShiftAttendance minutes, all under names
+        # ("total_shifts", "total_hours_this_month") that gave no hint, so a
+        # member comparing this screen to a completion report saw a
+        # discrepancy that looked like a bug.
         return {
-            "total_shifts": total_shifts,
-            "shifts_this_week": shifts_this_week,
-            "shifts_this_month": shifts_this_month,
-            "total_hours_this_month": total_hours,
+            "shifts_scheduled": total_shifts,
+            "shifts_scheduled_this_week": shifts_this_week,
+            "shifts_scheduled_this_month": shifts_this_month,
+            "hours_worked_this_month": total_hours,
         }
 
     # ============================================
@@ -3786,15 +3792,19 @@ class SchedulingService:
         )
         rows = result.all()
 
+        # "scheduled", not "total": these are assignment durations, so a shift
+        # somebody was rostered for but never worked still counts. The actual
+        # figure lives on the completion reports (ShiftCompletionReport
+        # .hours_on_shift) and will legitimately be lower.
         return [
             {
                 "user_id": row.user_id,
                 "email": row.email,
                 "first_name": row.first_name or "",
                 "last_name": row.last_name or "",
-                "shift_count": row.shift_count,
-                "total_minutes": row.total_minutes,
-                "total_hours": round(float(row.total_minutes) / 60.0, 1),
+                "shifts_scheduled": row.shift_count,
+                "scheduled_minutes": row.total_minutes,
+                "scheduled_hours": round(float(row.total_minutes) / 60.0, 1),
             }
             for row in rows
         ]

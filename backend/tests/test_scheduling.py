@@ -523,9 +523,12 @@ class TestCalendarHelpers:
         )
 
         summary = await svc.get_summary(uuid.UUID(org_id))
-        assert summary["total_shifts"] >= 1
-        assert summary["shifts_this_week"] >= 0
-        assert summary["shifts_this_month"] >= 1
+        # Names carry the measure: these count scheduled shifts, while
+        # hours_worked_this_month sums actual attendance.
+        assert summary["shifts_scheduled"] >= 1
+        assert summary["shifts_scheduled_this_week"] >= 0
+        assert summary["shifts_scheduled_this_month"] >= 1
+        assert "hours_worked_this_month" in summary
 
 
 # ── Template Tests ───────────────────────────────────────────────────
@@ -2022,7 +2025,10 @@ class TestReporting:
         assert len(report) >= 1
         member_entry = next((r for r in report if r["user_id"] == user2_id), None)
         assert member_entry is not None
-        assert member_entry["total_hours"] == 12.0
+        # Scheduled, not worked — the shift duration, whether or not the
+        # member attended.
+        assert member_entry["scheduled_hours"] == 12.0
+        assert member_entry["shifts_scheduled"] >= 1
 
     @pytest.mark.asyncio
     async def test_coverage_report(self, db_session, setup_org_and_users):

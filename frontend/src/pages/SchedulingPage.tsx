@@ -598,10 +598,10 @@ const SchedulingPage: React.FC = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
                 <div className="card p-3 sm:p-4">
                   <p className="text-theme-text-muted text-xs sm:text-sm">
-                    Total Shifts
+                    Scheduled Shifts
                   </p>
                   <p className="text-theme-text-primary text-xl sm:text-2xl font-bold">
-                    {summary.total_shifts}
+                    {summary.shifts_scheduled}
                   </p>
                 </div>
                 <div className="card p-3 sm:p-4">
@@ -609,7 +609,7 @@ const SchedulingPage: React.FC = () => {
                     This Week
                   </p>
                   <p className="text-theme-text-primary text-xl sm:text-2xl font-bold">
-                    {summary.shifts_this_week}
+                    {summary.shifts_scheduled_this_week}
                   </p>
                 </div>
                 <div className="card p-3 sm:p-4">
@@ -617,15 +617,15 @@ const SchedulingPage: React.FC = () => {
                     This Month
                   </p>
                   <p className="text-theme-text-primary text-xl sm:text-2xl font-bold">
-                    {summary.shifts_this_month}
+                    {summary.shifts_scheduled_this_month}
                   </p>
                 </div>
                 <div className="card p-3 sm:p-4">
                   <p className="text-theme-text-muted text-xs sm:text-sm">
-                    Hours This Month
+                    Hours Worked This Month
                   </p>
                   <p className="text-theme-text-primary text-xl sm:text-2xl font-bold">
-                    {summary.total_hours_this_month}
+                    {summary.hours_worked_this_month}
                   </p>
                 </div>
               </div>

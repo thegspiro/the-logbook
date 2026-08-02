@@ -75,11 +75,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bucket and endpoint, SharePoint site, SSO issuer, OAuth tenant and client
   IDs). Both now redact for callers without the relevant admin permission.
 
+**Changed — scheduling response fields say which measure they are**
+
+Shift counts and hours came from three tables, and two shipped under the
+*same field name* with incompatible meanings — `GET /scheduling/summary`
+returned three counts of *scheduled* shifts beside a sum of *worked*
+attendance minutes, all named as though they were the same kind of number. A
+member comparing that screen against a completion report saw a discrepancy
+that looked like a bug.
+
+**Breaking (API response fields):**
+
+| Endpoint | Was | Now |
+|----------|-----|-----|
+| `GET /scheduling/summary` | `total_shifts`, `shifts_this_week`, `shifts_this_month` | `shifts_scheduled`, `shifts_scheduled_this_week`, `shifts_scheduled_this_month` |
+| `GET /scheduling/summary` | `total_hours_this_month` | `hours_worked_this_month` |
+| `GET /scheduling/reports/member-hours` | `shift_count`, `total_minutes`, `total_hours` | `shifts_scheduled`, `scheduled_minutes`, `scheduled_hours` |
+| `GET /training/module-config/my-training` | `shift_stats.total_shifts`, `.total_hours` | `.shifts_completed`, `.hours_reported` |
+
+No number changed — only what each is called, and the UI labels above them
+("Scheduled Shifts", "Scheduled Hours", "Hours Worked This Month"). Whether a
+given screen *should* show the scheduled or the worked figure remains an open
+product question, tracked in `docs/KNOWN_LIMITATIONS.md`.
+
 **Testing & CI**
 
 - **Playwright E2E and container tests now run in CI.** Neither had ever run.
   Repairing the E2E suite is what surfaced the two dashboard defects above;
-  the container job is the first thing in CI to build a production image.
+  the container job is the first thing in CI to build a production image. The
+  container job supplies the six secrets `docker-compose.yml` declares with
+  `${VAR:?}` required-variable syntax — without them `docker compose config`
+  exits non-zero on a checkout with no `.env`, which would have failed the job
+  on its first run.
 - **API contract tests unblocked, then made to pass, and wired into CI.**
   They could never finish — schemathesis's ASGI transport re-ran the app's
   whole lifespan per generated case, blocking forever without a database. Now

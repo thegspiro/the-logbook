@@ -110,7 +110,7 @@ const mockTrainingData = {
   ],
   enrollments: [],
   shift_reports: [],
-  shift_stats: { total_shifts: 0, total_hours: 0, total_calls: 0, avg_rating: null },
+  shift_stats: { shifts_completed: 0, hours_reported: 0, total_calls: 0, avg_rating: null },
   submissions: [],
 };
 

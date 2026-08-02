@@ -155,7 +155,7 @@ const routes = ({ empty = false }: MockOptions): [string, () => unknown][] => [
 
   ['**/api/v1/scheduling/my-shifts**', () => (empty ? { shifts: [], total: 0 } : myShifts())],
   ['**/api/v1/scheduling/shifts/open**', () => []],
-  ['**/api/v1/scheduling/summary**', () => ({ total_hours_this_month: 24 })],
+  ['**/api/v1/scheduling/summary**', () => ({ hours_worked_this_month: 24 })],
 
   ['**/api/v1/admin-hours/summary**', () => ({ totalHours: 8 })],
 

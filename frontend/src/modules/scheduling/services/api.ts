@@ -174,10 +174,15 @@ export interface ShiftAttendanceRecord {
 }
 
 export interface SchedulingSummary {
-  total_shifts: number;
-  shifts_this_week: number;
-  shifts_this_month: number;
-  total_hours_this_month: number;
+  /**
+   * Counts of *scheduled* shifts. The hours figure below is of hours
+   * actually *worked* (from attendance), so the two will not reconcile —
+   * the names carry the distinction because these sit side by side in the UI.
+   */
+  shifts_scheduled: number;
+  shifts_scheduled_this_week: number;
+  shifts_scheduled_this_month: number;
+  hours_worked_this_month: number;
 }
 
 /** Event template metadata stored in the positions field for event-category templates. */

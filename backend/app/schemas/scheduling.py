@@ -284,12 +284,17 @@ class ShiftsListResponse(BaseModel):
 
 
 class SchedulingSummary(BaseModel):
-    """Schema for scheduling module summary"""
+    """Schema for scheduling module summary.
 
-    total_shifts: int
-    shifts_this_week: int
-    shifts_this_month: int
-    total_hours_this_month: float
+    The shift counts are of *scheduled* shifts; the hours figure is of hours
+    actually *worked* (from attendance). The names carry that distinction
+    because the two are routinely compared and will not match.
+    """
+
+    shifts_scheduled: int
+    shifts_scheduled_this_week: int
+    shifts_scheduled_this_month: int
+    hours_worked_this_month: float
 
 
 # ============================================

@@ -418,13 +418,13 @@ export const SchedulingReportsPage: React.FC = () => {
                   icon={<Clock className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />}
                 />
                 <StatCard
-                  label="Total Shifts"
-                  value={memberHoursReport.members.reduce((sum, m) => sum + m.shift_count, 0)}
+                  label="Scheduled Shifts"
+                  value={memberHoursReport.members.reduce((sum, m) => sum + m.shifts_scheduled, 0)}
                   icon={<Shield className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />}
                 />
                 <StatCard
-                  label="Total Hours"
-                  value={memberHoursReport.members.reduce((sum, m) => sum + m.total_hours, 0).toFixed(1)}
+                  label="Scheduled Hours"
+                  value={memberHoursReport.members.reduce((sum, m) => sum + m.scheduled_hours, 0).toFixed(1)}
                   icon={<BarChart3 className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />}
                 />
               </div>
@@ -441,9 +441,9 @@ export const SchedulingReportsPage: React.FC = () => {
                     <thead>
                       <tr className="border-b border-theme-surface-border">
                         <th scope="col" className="text-left py-3 px-4 text-theme-text-secondary font-medium">Member</th>
-                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Shifts</th>
-                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Total Minutes</th>
-                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Total Hours</th>
+                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Scheduled Shifts</th>
+                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Scheduled Minutes</th>
+                        <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Scheduled Hours</th>
                         <th scope="col" className="text-right py-3 px-4 text-theme-text-secondary font-medium">Avg Per Shift</th>
                       </tr>
                     </thead>
@@ -458,11 +458,11 @@ export const SchedulingReportsPage: React.FC = () => {
                               <p className="text-xs text-theme-text-muted">{m.email}</p>
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-right text-theme-text-primary">{m.shift_count}</td>
-                          <td className="py-3 px-4 text-right text-theme-text-secondary">{formatDuration(m.total_minutes)}</td>
-                          <td className="py-3 px-4 text-right text-theme-text-primary font-medium">{m.total_hours.toFixed(1)}</td>
+                          <td className="py-3 px-4 text-right text-theme-text-primary">{m.shifts_scheduled}</td>
+                          <td className="py-3 px-4 text-right text-theme-text-secondary">{formatDuration(m.scheduled_minutes)}</td>
+                          <td className="py-3 px-4 text-right text-theme-text-primary font-medium">{m.scheduled_hours.toFixed(1)}</td>
                           <td className="py-3 px-4 text-right text-theme-text-muted">
-                            {m.shift_count > 0 ? (m.total_hours / m.shift_count).toFixed(1) : '0'}h
+                            {m.shifts_scheduled > 0 ? (m.scheduled_hours / m.shifts_scheduled).toFixed(1) : '0'}h
                           </td>
                         </tr>
                       ))}
