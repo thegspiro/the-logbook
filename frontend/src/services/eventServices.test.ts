@@ -88,7 +88,7 @@ describe('eventService', () => {
       const updated = { id: 'e1', title: 'Updated Title' };
       mockPatch.mockResolvedValueOnce({ data: updated });
 
-      const result = await eventService.updateEvent('e1', updateData as never);
+      const result = await eventService.updateEvent('e1', updateData);
 
       expect(mockPatch).toHaveBeenCalledWith('/events/e1', updateData);
       expect(result).toEqual(updated);
@@ -176,7 +176,7 @@ describe('eventService', () => {
       const rsvp = { id: 'r1', checked_in: true };
       mockPost.mockResolvedValueOnce({ data: rsvp });
 
-      const result = await eventService.checkInAttendee('e1', checkInData as never);
+      const result = await eventService.checkInAttendee('e1', checkInData);
 
       expect(mockPost).toHaveBeenCalledWith('/events/e1/check-in', checkInData);
       expect(result).toEqual(rsvp);
@@ -265,7 +265,7 @@ describe('eventService', () => {
       const rsvp = { id: 'r1', user_id: 'u1' };
       mockPost.mockResolvedValueOnce({ data: rsvp });
 
-      const result = await eventService.addAttendee('e1', data as never);
+      const result = await eventService.addAttendee('e1', data);
 
       expect(mockPost).toHaveBeenCalledWith('/events/e1/add-attendee', data);
       expect(result).toEqual(rsvp);
@@ -324,7 +324,7 @@ describe('eventService', () => {
       const template = { id: 't1', name: 'New Template' };
       mockPost.mockResolvedValueOnce({ data: template });
 
-      const result = await eventService.createTemplate(data as never);
+      const result = await eventService.createTemplate(data);
 
       expect(mockPost).toHaveBeenCalledWith('/events/templates', data);
       expect(result).toEqual(template);

@@ -553,7 +553,7 @@ describe('EventDetailPage', () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
-      vi.mocked(eventService.deleteEvent).mockResolvedValue(undefined as unknown as void);
+      vi.mocked(eventService.deleteEvent).mockResolvedValue(undefined);
 
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);

@@ -153,7 +153,7 @@ describe('userService', () => {
       mockPatch.mockResolvedValue({ data: updatedUser });
 
       const contactInfo = { phone: '555-1234', email: 'new@example.com' };
-      const result = await userService.updateContactInfo('u1', contactInfo as never);
+      const result = await userService.updateContactInfo('u1', contactInfo);
 
       expect(mockPatch).toHaveBeenCalledWith('/users/u1/contact-info', contactInfo);
       expect(result).toEqual(updatedUser);
@@ -167,7 +167,7 @@ describe('userService', () => {
       mockPatch.mockResolvedValue({ data: updatedUser });
 
       const profileData = { first_name: 'Jane', last_name: 'Smith' };
-      const result = await userService.updateUserProfile('u1', profileData as never);
+      const result = await userService.updateUserProfile('u1', profileData);
 
       expect(mockPatch).toHaveBeenCalledWith('/users/u1/profile', profileData);
       expect(result).toEqual(updatedUser);

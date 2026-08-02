@@ -183,9 +183,9 @@ describe('schedulingStore', () => {
 
       await useSchedulingStore.getState().loadInitialData();
 
-      expect(mockGetUsers).toHaveBeenCalledOnce();
-      expect(mockGetTemplates).toHaveBeenCalledOnce();
-      expect(mockGetBasicApparatus).toHaveBeenCalledOnce();
+      expect(mockGetUsers).toHaveBeenCalledExactlyOnceWith();
+      expect(mockGetTemplates).toHaveBeenCalledExactlyOnceWith({ active_only: true });
+      expect(mockGetBasicApparatus).toHaveBeenCalledExactlyOnceWith();
     });
 
     it('should skip already-loaded data', async () => {

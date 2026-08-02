@@ -259,7 +259,7 @@ describe('emailTemplatesService', () => {
       const updated = { id: 't1', ...updateData };
       mockPut.mockResolvedValueOnce({ data: updated });
 
-      const result = await emailTemplatesService.updateTemplate('t1', updateData as never);
+      const result = await emailTemplatesService.updateTemplate('t1', updateData);
 
       expect(mockPut).toHaveBeenCalledWith('/email-templates/t1', updateData);
       expect(result).toEqual(updated);

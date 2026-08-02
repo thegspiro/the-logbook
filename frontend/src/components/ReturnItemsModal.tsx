@@ -181,14 +181,14 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
     setSelections((prev) => ({
       ...prev,
       [recordId]: { ...(prev[recordId] ?? { returnCondition: '', quantityReturning: 0 }), returnCondition: condition },
-    } as Record<string, ReturnSelection>));
+    }));
   };
 
   const updateQuantity = (recordId: string, qty: number) => {
     setSelections((prev) => ({
       ...prev,
       [recordId]: { ...(prev[recordId] ?? { returnCondition: '', quantityReturning: 0 }), quantityReturning: qty },
-    } as Record<string, ReturnSelection>));
+    }));
   };
 
   const selectAll = () => {

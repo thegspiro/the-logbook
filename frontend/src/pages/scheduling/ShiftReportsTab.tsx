@@ -29,7 +29,6 @@ import type {
   ShiftCompletionReport,
   ShiftCompletionReportCreate,
   ShiftCrewMember,
-  TaskPerformed,
   TrainingModuleConfig,
   TraineeShiftStats,
   OfficerShiftAnalytics,
@@ -314,9 +313,9 @@ export const ShiftReportsTab: React.FC = () => {
       saveDraft({
         shiftId: form.shift_id || '',
         shiftLabel: linkedShiftLabel || '',
-        formData: form as Record<string, unknown>,
+        formData: form,
         crewSelections: Array.from(selectedCrewIds),
-        traineeEvals: traineeEvals as Record<string, unknown>,
+        traineeEvals: traineeEvals,
         crewRemarks,
         savedAt: Date.now(),
       });
@@ -450,7 +449,7 @@ export const ShiftReportsTab: React.FC = () => {
   const updateTraineeEval = (userId: string, field: keyof CrewMemberEvaluation, value: unknown) => {
     setTraineeEvals(prev => ({
       ...prev,
-      [userId]: { ...prev[userId], user_id: userId, [field]: value } as CrewMemberEvaluation,
+      [userId]: { ...prev[userId], user_id: userId, [field]: value },
     }));
   };
 
@@ -1729,7 +1728,7 @@ export const ShiftReportsTab: React.FC = () => {
                                       <input type="text" placeholder="Task name" value={task.task}
                                         onChange={e => {
                                           const updated = [...(eval_?.tasks_performed || [])];
-                                          updated[i] = { ...updated[i], task: e.target.value } as TaskPerformed;
+                                          updated[i] = { ...updated[i], task: e.target.value };
                                           updateTraineeEval(member.user_id, 'tasks_performed', updated);
                                         }}
                                         className="form-input focus:ring-violet-500 text-xs flex-1 py-1.5"

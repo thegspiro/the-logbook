@@ -207,7 +207,7 @@ function LocationSetupWizard({
             ...(s.state.trim() ? { state: s.state.trim() } : {}),
             ...(s.zip.trim() ? { zip: s.zip.trim() } : {}),
           });
-          newStations[i] = { ...s, saved: true, savedId: created.id } as WizardStation;
+          newStations[i] = { ...s, saved: true, savedId: created.id };
         }
       }
       setStations(newStations);
@@ -920,7 +920,7 @@ export default function LocationsPage() {
         if (oldName !== payload.name) {
           const stationRooms = rooms.get(oldName) || [];
           for (const room of stationRooms) {
-            await locationsService.updateLocation(room.id, { building: payload.name } as LocationCreate);
+            await locationsService.updateLocation(room.id, { building: payload.name });
           }
         }
         toast.success('Station updated');

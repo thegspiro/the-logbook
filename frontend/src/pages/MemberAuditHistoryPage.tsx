@@ -16,6 +16,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { userService } from '../services/api';
 import { formatDate } from '../utils/dateFormatting';
+import { toDisplayString } from '../utils/displayValue';
 import { useTimezone } from '../hooks/useTimezone';
 import type { MemberAuditLogEntry } from '../types/user';
 import type { UserWithRoles } from '../types/role';
@@ -149,7 +150,7 @@ export const MemberAuditHistoryPage: React.FC = () => {
     if (value === null || value === undefined) return 'N/A';
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (typeof value === 'object') return JSON.stringify(value);
-    return String(value as string | number);
+    return toDisplayString(value);
   };
 
   const formatEventDataKey = (key: string): string => {

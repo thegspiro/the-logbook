@@ -74,7 +74,7 @@ export const MedicalScreeningPage: React.FC = () => {
     async (data: ScreeningRequirementCreate | ScreeningRequirementUpdate) => {
       try {
         if (editingRequirement) {
-          await updateRequirement(editingRequirement.id, data as ScreeningRequirementUpdate);
+          await updateRequirement(editingRequirement.id, data);
           toast.success('Requirement updated');
         } else {
           await createRequirement(data as ScreeningRequirementCreate);
@@ -93,7 +93,7 @@ export const MedicalScreeningPage: React.FC = () => {
     async (data: ScreeningRecordCreate | ScreeningRecordUpdate) => {
       try {
         if (editingRecord) {
-          await updateRecord(editingRecord.id, data as ScreeningRecordUpdate);
+          await updateRecord(editingRecord.id, data);
           toast.success('Record updated');
         } else {
           await createRecord(data as ScreeningRecordCreate);

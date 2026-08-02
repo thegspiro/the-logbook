@@ -542,7 +542,7 @@ const AddMember: React.FC = () => {
                 <select
                   value={formData.preferredContact}
                   onChange={(e) =>
-                    handleInputChange('preferredContact', e.target.value as 'phone' | 'email' | 'text')
+                    handleInputChange('preferredContact', e.target.value)
                   }
                   className="form-input"
                 >

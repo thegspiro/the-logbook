@@ -70,7 +70,7 @@ describe('LiveTurnoutPanel', () => {
     render(
       <LiveTurnoutPanel
         electionId="e1"
-        election={{ ...election, quorum_type: 'none' } as Election}
+        election={{ ...election, quorum_type: 'none' }}
       />,
     );
     await waitFor(() => {

@@ -71,7 +71,7 @@ export const ManualEntrySettingsPanel: React.FC = () => {
         updates.manual_entry_default_duration_hours = defaultDuration;
       }
       const result = await trainingModuleConfigService.updateConfig(
-        updates as Partial<TrainingModuleConfig>,
+        updates,
       );
       setConfig(result);
       toast.success('Settings saved');

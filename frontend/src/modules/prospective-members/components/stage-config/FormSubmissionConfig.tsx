@@ -67,7 +67,7 @@ const FormSubmissionConfig: React.FC<FormSubmissionConfigProps> = ({
                 ...config,
                 form_id: formId,
                 form_name: selectedForm?.name ?? '',
-              } as FormStageConfig);
+              });
               setErrors((prev) => ({ ...prev, form_id: '' }));
               setFormValidation(null);
               if (formId) {
