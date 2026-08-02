@@ -133,11 +133,31 @@ This is a deliberate design decision for data integrity and HIPAA compliance —
 
 ### What Happens When You Lose Connection
 
-- Actions that require the server will show an error message (typically "Network error" or "Unable to connect")
-- The app does not queue actions for later — if a submission fails, you need to retry when connected
-- The UI remains responsive; you just cannot load new data or submit changes
+- The UI remains responsive; you just cannot load new data
+- Most actions that require the server show an error message (typically "Network error" or "Unable to connect")
+- **Four things are queued for later** instead of failing: equipment checks
+  (including photos), shift reports, training submissions, and event RSVPs.
+  You get a "Queued for sync" toast, and the app sends them automatically when
+  the device is back online — see the walkthrough in
+  [Realistic Example: Mobile Workflow](#realistic-example-mobile-workflow--event-check-in-equipment-scan--offline-queue).
 
 > **Hint:** If you are attending an event at a location with poor cell coverage, check in or RSVP before you arrive while you still have signal. QR code check-in also works — the scan happens on the device and the check-in is submitted when the device has connectivity.
+
+### Signing Out Clears Queued Work *(2026-08-01)*
+
+Station computers are shared: whoever is on duty signs in on the same browser.
+Anything left on the device is readable by the next person to sit down, so
+**signing out erases everything held locally** — queued equipment checks and
+their photos, queued shift reports, queued training submissions and RSVPs, and
+saved shift-report drafts.
+
+**If you have queued work, get back online and let it sync before you sign
+out.** Anything still waiting is discarded. The app is not silent about it: if
+signing out threw away unsent items, the login page tells you how many.
+
+On your own phone this rarely matters, because you stay signed in. It matters
+on the shared terminal in the bay, which is exactly where somebody is most
+likely to sign out mid-shift.
 
 ---
 

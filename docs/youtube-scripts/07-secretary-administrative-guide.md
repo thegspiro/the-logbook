@@ -247,6 +247,14 @@ member who arrived late, excusing an absence.]**
 > "This is useful for departments where officers report their non-operational
 > time for annual reports or for reimbursement tracking."
 
+**[SCREEN: Show a pending entry belonging to the signed-in officer, with the
+Approve button refusing]**
+
+> "One rule worth knowing if you're the person who approves these: **you can't
+> approve your own hours.** Officers log time into the same pool they sign
+> off, so somebody else has to review yours. You can still reject or withdraw
+> your own entry — it's approving it that needs a second pair of eyes."
+
 **[TRANSITION: Documents section]**
 
 ---

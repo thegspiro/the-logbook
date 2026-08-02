@@ -44,11 +44,23 @@ All responses are in JSON format with appropriate HTTP status codes.
 ```
 
 ### Error Response (4xx, 5xx)
+
 ```json
 {
-  "error": "error_code",
-  "message": "Human-readable error message",
-  "details": {}
+  "detail": "Human-readable reason for the failure."
+}
+```
+
+A single `detail` string. *(Corrected 2026-08-01 — this page previously showed
+an `{error, message, details}` shape that no endpoint has ever returned.)*
+
+The one exception is **422**, where `detail` is an array of per-field objects:
+
+```json
+{
+  "detail": [
+    { "field": "slug", "message": "This field is required." }
+  ]
 }
 ```
 
@@ -56,11 +68,19 @@ All responses are in JSON format with appropriate HTTP status codes.
 
 | Status Code | Description |
 |-------------|-------------|
+| 400 | Malformed, expired, or already-acted-on request |
 | 401 | Invalid or missing API key |
 | 403 | Portal disabled or insufficient permissions |
+| 404 | Unknown token, slug, or display code — or the record is not public |
+| 422 | Request failed validation (see the array form above) |
 | 429 | Rate limit exceeded |
 | 500 | Internal server error |
 | 503 | Public portal is disabled |
+
+> These are now declared in the OpenAPI schema per route, so a client
+> generated from `/openapi.json` handles them as real responses rather than
+> protocol violations. An automated contract suite (`backend-test-contract`
+> in CI) checks that the schema and the application stay in agreement.
 
 ---
 

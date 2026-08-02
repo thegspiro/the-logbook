@@ -342,6 +342,12 @@ action]**
 > "When it's time to test, select the template and the member being evaluated.
 > The system presents each skill in order."
 
+> "One thing you'll notice: you can't select **yourself** as the candidate.
+> Skills testing is somebody observing you perform — so the examiner and the
+> candidate have to be two different people. If you want to run through a
+> sheet on your own to practice, switch the test into **practice mode**;
+> practice attempts don't touch anyone's record."
+
 **[SCREEN: Show the active skill test interface (ActiveSkillTestPage)]**
 
 > "Walk through each skill — mark it as pass or fail, add notes on performance,

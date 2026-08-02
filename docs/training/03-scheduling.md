@@ -38,7 +38,7 @@ Navigate to **Shift Scheduling** in the sidebar. The scheduling page is organize
 | **Reports** | Hours, coverage, and compliance reports |
 | **Settings** | Notification preferences, shift rules, coverage settings, and shift report configuration (section toggles, apparatus skills/tasks, rating scale) |
 
-> **Note:** *(2026-04-11)* Departments that do not use the Scheduling module can file shift completion reports via the standalone **Manual Shift Report** page at `/training/manual-shift-report`. See [Training > Manual Shift Report Entry](./02-training.md#manual-shift-report-entry) for details.
+> **Note:** *(2026-04-11)* Departments that do not use the Scheduling module can file shift completion reports via the standalone **Manual Shift Report** page at `/training/manual-shift-report`. See [Training > Manual Shift Report Entry](./02-training.md#manual-shift-report-entry-2026-04-11) for details.
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Scheduling page showing the tab bar at the top with all seven tabs, and the Schedule (calendar) tab active showing a monthly calendar view with color-coded shifts]_
@@ -321,10 +321,28 @@ The **Reports** tab provides several reporting views:
 
 | Report | Description |
 |--------|-------------|
-| **Member Hours** | Total hours per member for a date range |
+| **Member Hours** | Hours *worked* per member for a date range, with the scheduled hours alongside |
 | **Coverage** | Shift staffing levels and gaps |
 | **Call Volume** | Calls by day, week, or month |
 | **Compliance** | Member compliance against shift/hours requirements |
+
+### Member Hours: worked vs. scheduled *(2026-08-01)*
+
+The report's headline figures — **Shifts Worked** and **Hours Worked** — are
+measured from shift check-in and check-out. **Scheduled Hours** is the length
+of the shifts a member was assigned, and a **Difference** column shows the gap.
+
+They will not match, and that is the point: a shift can run short or long, and
+a member can be rostered for one they never work. Anything that credits a
+member uses the worked figure.
+
+Before this change the report showed only assignment durations while calling
+them "Total Hours", so a member comparing it against their shift completion
+reports saw a discrepancy with nothing to explain it.
+
+> A member who worked a shift they were never assigned to appears in the
+> report too — hours are not lost because the paperwork did not match what
+> happened on the day.
 
 ### Compliance Report
 

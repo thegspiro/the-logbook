@@ -311,7 +311,33 @@ pytest tests/test_users.py::test_create_user
 
 # Watch mode
 pytest-watch
+
+# API contract tests (schemathesis). Opt-in: the module starts a real server
+# at import time and pytest imports every test module during collection, so
+# without the gate an ordinary `pytest` run would boot the app and hold
+# database connections. Needs a migrated database.
+RUN_API_CONTRACT_TESTS=1 pytest tests/test_api_contract.py --timeout=300
+
+# Container tests (build the production images, start them, check health).
+# Skipped automatically when no Docker daemon is reachable.
+pytest tests/test_docker_integration.py -m docker --timeout=1800
 ```
+
+### Test markers
+
+`pytest.ini` registers `unit`, `integration`, `slow`, `docker`, `onboarding`
+and `asyncio`. CI splits on them:
+
+| Job | Selection |
+|-----|-----------|
+| `backend-test` | `not integration and not slow and not docker` |
+| `backend-test-integration` | `integration and not docker and not slow` (MySQL + Redis services) |
+| `backend-test-contract` | `tests/test_api_contract.py` with `RUN_API_CONTRACT_TESTS=1` |
+| `docker-build` | `-m docker`, after verifying a daemon is reachable |
+
+The daemon check in `docker-build` is deliberate: every test in that module
+skips itself when Docker is absent, and 19 skips would otherwise report as a
+passing job.
 
 ### Test Structure
 

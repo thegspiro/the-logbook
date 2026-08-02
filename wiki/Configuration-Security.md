@@ -182,16 +182,40 @@ header.
 
 ---
 
-## Database & Redis TLS Verification *(2026-07)*
+## Database & Redis TLS Verification *(updated 2026-08)*
 
 `DB_SSL` / `REDIS_SSL` enable TLS for the database and Redis connections. If they
 are enabled **without** the corresponding CA path set, the connection is
 encrypted but the server certificate is **not verified** (`CERT_NONE`) — which
-offers no protection against an active man-in-the-middle. Startup emits a
-**WARNING** in this case.
+offers no protection against an active man-in-the-middle.
+
+**This blocks startup in production and staging.** It used to be a warning.
+The reasoning: a channel that looks encrypted but authenticates nobody is
+*worse* than honest plaintext on a private network, because it is
+indistinguishable from a correct configuration — nobody goes looking for a
+problem the dashboard says you do not have.
 
 - Set **`DB_SSL_CA`** / **`REDIS_SSL_CA`** to the CA certificate path for full
-  MITM protection (certificate verification).
+  MITM protection (certificate verification). This is the fix.
+- Or set **`SECURITY_ALLOW_UNVERIFIED_TLS=true`** to accept the risk. It is
+  logged loudly on every boot, so the acceptance does not quietly outlive the
+  person who made it. Clear the flag once a CA is configured.
+
+Plaintext DB/Redis (`DB_SSL` unset) remains a **warning**, not a block — a
+container-internal network is a legitimate deployment, and promoting it would
+break every existing install at startup.
+
+### Rate limiting is now a real switch
+
+`RATE_LIMIT_ENABLED` was declared in config and documented, but read by no
+limiter — an operator who set it `false` got rate limiting anyway, and no
+warning. As of 2026-08-01 it genuinely gates `check_rate_limit`,
+`public_rate_limit`, and the public-portal IP limiter.
+
+Production and staging **refuse to start** with it disabled: turning it off
+removes brute-force and abuse protection from every authentication and public
+endpoint at once. The switch exists for load testing and fuzzing, where the
+limiter masks the behaviour under test.
 
 ---
 

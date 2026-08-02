@@ -151,13 +151,29 @@ Navigate to **Training Admin > Skills Testing > Tests** and click **New Test**.
 ### Setting Up a Test Session
 
 1. **Select Template** — Choose a published skill sheet template from the dropdown.
-2. **Select Candidate** — Choose the member being evaluated from the organization roster.
+2. **Select Candidate** — Choose the member being evaluated from the organization roster. **You cannot select yourself** *(2026-08-01)* — see [Separation of Duties](#separation-of-duties) below.
 3. **Linked Requirement** *(optional)* — If the template is linked to a training requirement, it is pre-selected here. You can **override it for this test** to point at a **different requirement** — for example, when the same skill satisfies a requirement in another phase or program.
 4. Click **Start Test**.
 
 The system creates a new test session with:
 - The current user as the **examiner**
 - Status set to **not_started**
+
+### Separation of Duties
+
+*(Added 2026-08-01.)* The examiner is always the person creating the test, and
+the candidate comes from the form — so nothing previously stopped an
+instructor examining themselves and recording a pass. Because a passing test
+**completes the linked training requirement**, that pass counts toward
+certification.
+
+The system now refuses to create a graded test where the examiner and the
+candidate are the same person. A second qualified examiner has to observe you,
+which is what a psychomotor evaluation means.
+
+**Practice mode is exempt.** Practice attempts are not logged to the audit
+trail, never touch enrollment progress, and self-drilling is the point of
+them — so you can run a practice test on yourself freely.
 - The template's sections and criteria loaded for scoring
 
 > **Screenshot placeholder:**

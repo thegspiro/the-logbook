@@ -113,6 +113,12 @@ their duties require:
   enabled contact-info visibility, and only the fields it has enabled (email,
   phone, mobile can each be shown or hidden). See
   [Administration & Reports > Contact Info Visibility](./08-admin-reports.md#contact-info-visibility).
+  The setting is now enforced on *every* roster view *(2026-08-01)* — one
+  admin-page endpoint previously returned the full member record regardless,
+  so a member who was refused an email address on the roster could obtain it
+  by loading a different screen. **Home address and personal email are never
+  shown to ordinary members at any visibility setting** — those are visible
+  only to members who manage the roster.
 - **Medical screening records** are restricted to members holding medical
   screening permissions specifically. A general administrator role does not
   include them.
