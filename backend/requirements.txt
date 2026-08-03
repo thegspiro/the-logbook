@@ -62,7 +62,7 @@ twilio==9.10.9
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.59  # AWS S3
+boto3==1.43.61  # AWS S3
 azure-storage-blob==12.30.0
 google-cloud-storage==2.19.0
 python-magic==0.4.27
