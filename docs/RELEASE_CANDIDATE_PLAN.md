@@ -80,6 +80,7 @@ upgrade*, which is what a new department actually touches first.
 | 1.5 | Onboarding wizard end to end on a clean database | First-run path a new department hits |
 | 1.6 | Verify published image tags per `docs/DOCKER-BUILD-PUBLISH.md` | Image the RC actually ships as |
 | 1.7 | Seed-data check — every file registered in `SEED_DATA_FILES` applies cleanly | Missing seed data crashes at query time, not migrate time |
+| 1.8 | Document the supported deployment topology, and that a **remote** database or Redis requires `DB_SSL`/`REDIS_SSL` + a CA | Single-host Compose keeps DB traffic on an internal bridge; a separate DB host puts it on a real wire. See the CI-9 note in Phase 2 |
 
 ### Exit criteria
 - [ ] A clean host reaches a working login following only the published docs
@@ -97,7 +98,6 @@ categories a department cannot detect on its own.
 
 | ID | Item | Why it blocks | Decision |
 |---|---|---|---|
-| **CI-9** | Production DB/Redis TLS only *warns* instead of blocking startup | A HIPAA deployment can boot with PHI crossing the network in cleartext. Fail-open on the encryption boundary is the wrong default for this product | 🔑 Flipping to fail-closed refuses boot for any production currently running without TLS. Ops call |
 | **ORU-8** | `GET /users/{id}/with-roles` serializes full PII (DOB, home address, emergency contacts) to any `users.view` holder, bypassing the `contact_info_visibility` gate the list endpoint honors | The gate exists and is silently bypassed on a sibling endpoint — an inconsistency departments will reasonably assume is enforced | 🔑 Gating changes what `users.view` holders see today |
 | **FE-6** | Shift-report drafts (crew names, trainee evaluations) persist in `localStorage`; queued equipment-check payloads persist in IndexedDB. Idle-logout clears neither | Station kiosks are the deployment model. The next member reads the previous member's drafts via DevTools | 🔑 Purging on logout drops unsynced work — product call on whether drafts survive re-login |
 | **FIN-6** | `record_dues_payment` does `amount_paid += amount` with no idempotency on `transaction_reference`; recording against a `WAIVED` record silently recomputes it to `PAID` | A retried payment double-credits collections and a waive is destroyed with no audit trail. Money, silently wrong | Fix — needs an idempotency key + status-transition guard |
@@ -107,6 +107,25 @@ categories a department cannot detect on its own.
 
 Documented in `KNOWN_LIMITATIONS.md` and shipped as known:
 
+- **CI-9** (production DB/Redis TLS only warns) — **reassessed 2026-08-02, does
+  not block.** The audit line reads as fail-open on encryption; the code isn't.
+  The genuinely dangerous case — `DB_SSL=True` with no `DB_SSL_CA`, i.e.
+  encrypted but unverified, a config that *looks* secure and isn't — already
+  raises `RuntimeError` and refuses to start in production/staging, waivable
+  only via an explicit `SECURITY_ALLOW_UNVERIFIED_TLS` that re-warns every boot
+  (`main.py:1290-1309`). What merely warns is `DB_SSL=False`, which is the
+  honest state: nobody is misled into believing they have TLS. And in the
+  supported topology it is close to moot — MySQL and Redis deliberately expose
+  no host ports (SEC-14) and sit on the internal `intranet-network` bridge, so
+  that traffic never leaves the host. The user-facing encryption boundary,
+  which is the one carrying PHI over a real network, is separately enforced by
+  `SECURITY_ENFORCE_HTTPS` as a startup-blocking CRITICAL. Making `DB_SSL`
+  itself mandatory would refuse boot for essentially every single-host install
+  in exchange for protection against an attacker who already has root on the
+  box — and could read `DB_PASSWORD` out of the environment anyway. The real
+  residual risk is a **remote** database (managed MySQL, separate DB host),
+  where the traffic does cross a wire; that is a deployment-profile
+  documentation item, tracked as 1.8 above, not a startup gate.
 - **FIN-4 / FIN-5** (separation of duties on disbursement; reimbursement
   visibility) — real, but both need a new `finance.disburse` permission with
   seed + role + frontend work. Volunteer departments frequently have one
@@ -177,8 +196,12 @@ Phase 1 is genuinely unknown.
 
 ## Open decisions needed
 
-1. **CI-9** — does fail-closed TLS ship in the RC, knowing it refuses boot for
-   any production running without TLS today?
-2. **ORU-8 / FE-6** — both close real PHI exposure but change existing behavior.
+1. **ORU-8 / FE-6** — both close real PHI exposure but change existing behavior.
    Fix in the RC, or document and defer?
-3. **Pilot** — which department runs the RC, and for how long?
+2. **Pilot** — which department runs the RC, and for how long?
+
+> **Note on how these were triaged.** Phase 2 was assembled from the audit
+> write-ups in `docs/module-audit/`, not from re-reading each implementation.
+> CI-9 was listed as a blocker on that basis and removed once the code was
+> actually read — the summary overstated it. Treat the remaining entries as
+> needing the same verification before anyone plans around them.
