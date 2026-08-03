@@ -96,17 +96,38 @@ Most are legitimate accept-and-document. These are the ones I'd hold an RC for,
 because each is either PHI exposure or silent data corruption — the two
 categories a department cannot detect on its own.
 
+Verified against the implementation 2026-08-02, not just the audit write-ups.
+
 | ID | Item | Why it blocks | Decision |
 |---|---|---|---|
-| **ORU-8** | `GET /users/{id}/with-roles` serializes full PII (DOB, home address, emergency contacts) to any `users.view` holder, bypassing the `contact_info_visibility` gate the list endpoint honors | The gate exists and is silently bypassed on a sibling endpoint — an inconsistency departments will reasonably assume is enforced | 🔑 Gating changes what `users.view` holders see today |
-| **FE-6** | Shift-report drafts (crew names, trainee evaluations) persist in `localStorage`; queued equipment-check payloads persist in IndexedDB. Idle-logout clears neither | Station kiosks are the deployment model. The next member reads the previous member's drafts via DevTools | 🔑 Purging on logout drops unsynced work — product call on whether drafts survive re-login |
+| **ORU-8a** | `GET /users/{id}/with-roles` returns the raw ORM user via `UserProfileResponse` with no visibility filtering, while its sibling `GET /users/with-roles` redacts through `_redact_contact_fields`. Org-scoped, so no cross-tenant leak — but a member refused an email on the roster can read it, plus `personal_email` and the full home address, from the detail URL | The list endpoint's own comment says "redact here too, or the setting is advisory." The detail endpoint is what makes it advisory | Fix — reuse the existing helper. Small |
+| **ORU-8b** | `GET /organization/settings` strips infrastructure identifiers via `without_infrastructure()`, but neither that nor `redacted()` touches `it_team` — so every authenticated member gets the IT roster (names, emails, phones) and the free-form `backup_access` dict | `backup_access` is unstructured operational text; whatever an admin typed there is readable by any account, including a compromised volunteer login | Fix — extend `without_infrastructure()`. Small |
 | **FIN-6** | `record_dues_payment` does `amount_paid += amount` with no idempotency on `transaction_reference`; recording against a `WAIVED` record silently recomputes it to `PAID` | A retried payment double-credits collections and a waive is destroyed with no audit trail. Money, silently wrong | Fix — needs an idempotency key + status-transition guard |
 | **XC-1** | Create/update paths store client-supplied FK ids without verifying they are in-org | The shared helper (`app/utils/org_scoping.py`) already exists and is wired into the confirmed-impact paths. This is finishing a rollout, not designing one | Fix — mechanical, per-module, with tests |
+
+ORU-8 was originally carried here as a single item needing a product decision on
+what `users.view` may see. On reading the code it is two narrow gaps left behind
+by a fix that already landed for the other half of each pair, and both are
+closed by reusing machinery that exists. Neither needs a policy decision — the
+policy is already expressed in `contact_info_visibility` and in
+`without_infrastructure()`; these are the two call sites that don't consult it.
 
 ### Deliberately *not* blocking
 
 Documented in `KNOWN_LIMITATIONS.md` and shipped as known:
 
+- **FE-6 / FE-7** (device-local PII surviving logout on a shared terminal) —
+  **already fixed; verified 2026-08-02.** `utils/purgeLocalMemberData.ts` clears
+  all four stores (shift-report drafts, the equipment-check / shift-report /
+  generic offline queues, photo blobs included), is awaited inside
+  `authStore.logout()`, and is reached by the idle path too because
+  `useIdleTimer` calls that same `logout()`. Each store is bounded at 3s so no
+  IndexedDB pathology can stall logout, the purge is non-throwing by
+  construction so it cannot strand a member signed in, and the discarded count
+  is surfaced on the login page rather than the work vanishing silently. The
+  product question this item was carrying — do drafts survive re-login — has
+  already been answered *no*, deliberately, with the reasoning recorded in the
+  module docstring. Nothing left to decide.
 - **CI-9** (production DB/Redis TLS only warns) — **reassessed 2026-08-02, does
   not block.** The audit line reads as fail-open on encryption; the code isn't.
   The genuinely dangerous case — `DB_SSL=True` with no `DB_SSL_CA`, i.e.
@@ -196,12 +217,18 @@ Phase 1 is genuinely unknown.
 
 ## Open decisions needed
 
-1. **ORU-8 / FE-6** — both close real PHI exposure but change existing behavior.
-   Fix in the RC, or document and defer?
-2. **Pilot** — which department runs the RC, and for how long?
+1. **Pilot** — which department runs the RC, and for how long?
 
-> **Note on how these were triaged.** Phase 2 was assembled from the audit
-> write-ups in `docs/module-audit/`, not from re-reading each implementation.
-> CI-9 was listed as a blocker on that basis and removed once the code was
-> actually read — the summary overstated it. Treat the remaining entries as
-> needing the same verification before anyone plans around them.
+That is the only one left. Phase 2 no longer contains a behaviour-policy
+question: ORU-8 turned out to be two missed call sites rather than a decision
+about what `users.view` should see, and FE-6's decision was already made and
+implemented.
+
+> **Note on how these were triaged.** Phase 2 was first assembled from the
+> audit write-ups in `docs/module-audit/` rather than the implementations, and
+> the write-ups proved unreliable in both directions — CI-9 read far worse than
+> the code, FE-6 was already fixed, ORU-8 was half-fixed and its remaining half
+> much narrower than described. The entries above have since been read against
+> the source. **FIN-6 and XC-1 have not been**, and should be before anyone
+> plans around them. More generally: `KNOWN_LIMITATIONS.md` lags the code, so
+> treat it as a list of things to check, not a list of things that are true.
