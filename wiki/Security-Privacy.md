@@ -168,21 +168,44 @@ task.
 
 ---
 
-## Need-to-Know Enforcement *(2026-08-01)*
+## Need-to-Know Enforcement *(updated 2026-08-02)*
 
-Two endpoints returned more than the caller was entitled to. Both are fixed;
-both are worth knowing about because they shaped what "visibility settings"
+Endpoints that returned more than the caller was entitled to. All are fixed;
+they are worth knowing about because they shaped what "visibility settings"
 actually meant.
 
 **The contact-visibility setting was bypassable.** `GET /users` filtered
-contact details against the organization's setting, but `GET /users/with-roles`
-— the admin members page — returned every column on the member record. Both
-require only `users.view`, so a member refused an email address on one screen
-could read it on the other, along with home address and personal email, which
-the roster never exposes at any setting. Both endpoints now redact
-identically, and address plus personal email are restricted to members who
-manage the roster. The redaction also fails closed: if the settings row cannot
-be read, contact details are hidden rather than shown.
+contact details against the organization's setting, but the two
+`with-roles` endpoints returned every column on the member record. All require
+only `users.view`, so a member refused an email address on one screen could
+read it on another, along with home address and personal email, which the
+roster never exposes at any setting.
+
+Fixed in two passes, and the second is the instructive one: the roster
+endpoint was corrected first, leaving the **individual profile** endpoint
+still unredacted *(closed 2026-08-02)*. A partial fix here is barely a fix —
+anything withheld on the roster remained one request away. All member-record
+endpoints now redact through the same shared code so the two cannot drift
+apart again, and the redaction fails closed: if the settings row cannot be
+read, contact details are hidden rather than shown. Members always see their
+own record in full, which matters because the settings page loads a member's
+own profile through that endpoint and writes the fields back — redacting for
+self would have blanked a member's own address on their next save.
+
+**Date of birth and emergency contacts are leadership-only** *(2026-08-02)*.
+Restricted to `members.manage` holders and the member themselves, with **no
+setting that can publish them** — `contact_info_visibility` deliberately has no
+flag for either.
+
+Emergency contacts are treated this way because they are not solely the
+member's data: they name a spouse, parent or neighbour who is not in the
+department, never consented to appear in its systems, and holds no account
+with which to remove themselves. Date of birth is restricted because, paired
+with a name, it is the field most useful for impersonation.
+
+Disclosure is recorded on the `user_viewed` audit event, so the trail
+distinguishes *who saw the restricted fields* from who merely opened a
+profile.
 
 **Organization settings leaked infrastructure.** `GET /organization/settings`
 is open to every authenticated member — the page needs branding, module
@@ -194,6 +217,12 @@ infrastructure for anyone who can log in — including a member who left last
 week, or a compromised volunteer account. Callers without `settings.manage`
 now get those fields blanked; the response keeps its shape, so the settings
 page renders "not configured" rather than breaking.
+
+That strip initially missed the **IT team block** *(closed 2026-08-02)* — the
+names, direct email and phone of whoever administers the deployment, plus
+`backup_access`, a free-text field holding whatever an admin wrote about
+break-glass procedures. It is now emptied for callers without
+`settings.manage` alongside the rest.
 
 ---
 

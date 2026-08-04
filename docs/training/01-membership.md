@@ -71,8 +71,8 @@ Click on any member in the directory to view their profile. The profile page inc
 - **Assigned Inventory** - Equipment currently assigned to the member
 
 **Right Column:**
-- **Contact Information** - Email, phone, mobile, address (editable by the member or officers)
-- **Emergency Contacts** - Emergency contact list
+- **Contact Information** - Email, phone, mobile, address (editable by the member or officers). Which fields other members see depends on your department's [contact info visibility](./08-admin-reports.md#contact-info-visibility) setting; home address is never shown to ordinary members
+- **Emergency Contacts** - Emergency contact list. **Visible only to leadership (`members.manage`) and to the member themselves** — the section is hidden entirely for everyone else, and no setting publishes it. Date of birth is restricted the same way
 - **Roles & Permissions** - Assigned positions and their permissions
 - **Quick Stats** - Training count, total hours, assigned equipment count
 - **Leave of Absence** - Any active leave periods (shown if applicable)
