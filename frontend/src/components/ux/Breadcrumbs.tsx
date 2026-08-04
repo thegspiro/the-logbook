@@ -25,6 +25,7 @@ const PATH_LABELS: Record<string, string> = {
   members: 'Members',
   training: 'Training',
   inventory: 'Inventory',
+  store: 'Department Store',
   scheduling: 'Scheduling',
   facilities: 'Facilities',
   elections: 'Elections',

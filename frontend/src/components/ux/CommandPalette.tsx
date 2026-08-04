@@ -44,6 +44,7 @@ const COMMANDS: CommandItem[] = [
   { id: 'events', label: 'Events', path: '/events', icon: Calendar, section: 'Navigation', keywords: ['meetings', 'calendar'] },
   { id: 'training', label: 'My Training', path: '/training/my-training', icon: GraduationCap, section: 'Navigation', keywords: ['courses', 'certifications'] },
   { id: 'inventory', label: 'Inventory', path: '/inventory', icon: Package, section: 'Navigation', keywords: ['equipment', 'supplies'] },
+  { id: 'store', label: 'Department Store', path: '/store', icon: Package, section: 'Navigation', keywords: ['storefront', 'shop', 'merch', 'apparel', 'order'] },
   { id: 'scheduling', label: 'Scheduling', path: '/scheduling', icon: Clock, section: 'Navigation', keywords: ['shifts', 'calendar'] },
   { id: 'facilities', label: 'Facilities', path: '/facilities', icon: Building2, section: 'Navigation', keywords: ['buildings', 'stations'] },
   { id: 'documents', label: 'Documents', path: '/documents', icon: FileText, section: 'Navigation', keywords: ['files', 'uploads'] },
@@ -56,6 +57,7 @@ const COMMANDS: CommandItem[] = [
   { id: 'add-member', label: 'Add Member', path: '/members/add', icon: Users, section: 'Actions', permission: 'members.manage' },
   { id: 'submit-training', label: 'Submit Training', path: '/training/submit', icon: GraduationCap, section: 'Actions' },
   { id: 'my-equipment', label: 'My Equipment', path: '/inventory/my-equipment', icon: Package, section: 'Actions' },
+  { id: 'my-store-orders', label: 'My Store Orders', path: '/store/orders', icon: Package, section: 'Actions' },
 
   // Admin
   { id: 'settings', label: 'Organization Settings', path: '/settings', icon: Settings, section: 'Admin', permission: 'settings.manage' },

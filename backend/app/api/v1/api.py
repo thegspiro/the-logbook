@@ -55,6 +55,7 @@ from app.api.v1.endpoints import (
     security_monitoring,
     shift_completion,
     skills_testing,
+    storefront,
     training,
     training_enhancements,
     training_module_config,
@@ -97,6 +98,7 @@ api_router.include_router(
 )
 api_router.include_router(elections.router, prefix="/elections", tags=["elections"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+api_router.include_router(storefront.router, prefix="/store", tags=["storefront"])
 api_router.include_router(labels.router, tags=["labels"])
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
 api_router.include_router(

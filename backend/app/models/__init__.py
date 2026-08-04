@@ -279,6 +279,23 @@ from app.models.public_portal import (
 )
 from app.models.security_alert import AlertType, SecurityAlertRecord, ThreatLevel
 from app.models.skills_testing import SkillTemplate, SkillTest
+from app.models.storefront import (
+    StoreFulfillmentMethod,
+    StoreOrder,
+    StoreOrderEvent,
+    StoreOrderEventType,
+    StoreOrderItem,
+    StoreOrderStatus,
+    StoreOrderWindow,
+    StorePaymentMethod,
+    StorePaymentStatus,
+    StoreProduct,
+    StoreProductStatus,
+    StoreProductVariant,
+    StoreSettings,
+    StoreWindowProduct,
+    StoreWindowStatus,
+)
 from app.models.training import (
     ExternalCategoryMapping,
     ExternalTrainingImport,
@@ -478,6 +495,22 @@ __all__ = [
     # Skills testing models
     "SkillTemplate",
     "SkillTest",
+    # Storefront models
+    "StoreSettings",
+    "StoreProduct",
+    "StoreProductVariant",
+    "StoreOrderWindow",
+    "StoreWindowProduct",
+    "StoreOrder",
+    "StoreOrderItem",
+    "StoreOrderEvent",
+    "StoreProductStatus",
+    "StoreWindowStatus",
+    "StoreOrderStatus",
+    "StorePaymentStatus",
+    "StorePaymentMethod",
+    "StoreFulfillmentMethod",
+    "StoreOrderEventType",
     # Inventory models
     "InventoryCategory",
     "InventoryItem",

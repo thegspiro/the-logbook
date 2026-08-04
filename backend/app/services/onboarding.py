@@ -984,6 +984,7 @@ class OnboardingService:
             "scheduling",
             "apparatus",
             "facilities",
+            "storefront",
             # Governance modules
             "elections",
             "minutes",
