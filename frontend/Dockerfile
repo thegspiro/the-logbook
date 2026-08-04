@@ -1,7 +1,7 @@
 # Multi-stage build for React frontend
 
 # Development stage
-FROM node:25-alpine AS development
+FROM node:26-alpine AS development
 
 # Upgrade to npm 11.9.0 (latest stable)
 RUN npm install -g npm@11.9.0
@@ -24,7 +24,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev", "--", "--host"]
 
 # Build stage
-FROM node:25-alpine AS build
+FROM node:26-alpine AS build
 
 # Upgrade to npm 11.9.0 (latest stable)
 RUN npm install -g npm@11.9.0
