@@ -120,10 +120,28 @@ respects. `finance_service.py:1736-1746` has three defects in eleven lines:
    record recomputes `status` to `PAID`/`PARTIAL` while leaving `waived_by`,
    `waived_at` and `waive_reason` populated — an internally contradictory row.
 
-The status guard and the field-clobbering are unambiguous bugs, fixable now.
-Genuine idempotency needs somewhere to record processed references — a payments
-ledger table or a unique constraint — which is a schema decision plus a
-migration. **That is the one thing here still needing an owner call.**
+**Fixed 2026-08-02 — (2) and (3).** A payment against a `WAIVED` or `EXEMPT`
+record is now refused rather than silently converting it; `EXEMPT` was included
+because it is the same shape, though the audit named only `WAIVED`. Payment
+detail is assigned only when the caller actually supplied it, matching the
+`if value is not None` idiom `update_dues_schedule` already uses in the same
+file. Eight unit tests, all four of the behavioural ones confirmed failing
+against the pre-fix code.
+
+**Still open — (1), genuine idempotency.** Needs somewhere to record processed
+references: a payments ledger table, or a uniqueness constraint on
+`(dues_id, transaction_reference)`. Either is a schema decision plus a
+migration. **The one thing here still needing an owner call.**
+
+Worth knowing while deciding: there is **no way out of `WAIVED` through the
+API**. `PUT /dues/{dues_id}` is `record_dues_payment` itself, and the only
+other dues route is `POST /dues/{id}/waive` — there is no generic update and no
+unwaive. Before the guard that gap was hidden, because recording a payment
+happened to clear the status as a side effect. Now that the guard refuses,
+"waived by mistake, then they paid" has no in-app remedy. A small
+`POST /dues/{id}/unwaive` under `finance.manage`, writing an audit event, is
+the obvious companion — worth pairing with whichever idempotency model you
+pick, since both touch this endpoint group.
 
 ORU-8 was originally carried here as a single item needing a product decision on
 what `users.view` may see. On reading the code it is two narrow gaps left behind
