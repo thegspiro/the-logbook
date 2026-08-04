@@ -31,6 +31,15 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # member_dues is a model-only table: it is created by the application's
+    # startup create_all(), never by a migration. On a fresh database this
+    # revision therefore runs before it exists, and both the FK below and the
+    # backfill would fail with "Table 'member_dues' doesn't exist". A fresh
+    # install has no dues to carry forward, so skip entirely and let
+    # create_all() build dues_payments from the model.
+    if not sa.inspect(op.get_bind()).has_table("member_dues"):
+        return
+
     op.create_table(
         "dues_payments",
         sa.Column("id", sa.String(36), primary_key=True),
@@ -116,6 +125,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if not sa.inspect(op.get_bind()).has_table("dues_payments"):
+        return
+
     op.drop_index("uq_dues_payment_reference", table_name="dues_payments")
     op.drop_index("ix_dues_payments_dues", table_name="dues_payments")
     op.drop_index("ix_dues_payments_org_id", table_name="dues_payments")

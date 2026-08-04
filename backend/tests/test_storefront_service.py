@@ -1,0 +1,808 @@
+"""
+Database-backed tests for StorefrontService.
+
+These are the paths that pure-logic tests cannot reach: the order-number
+allocator, the SQL rollups (which previously truncated at one page), the
+stock/limit enforcement, the payment ledger, and — most importantly —
+cross-tenant isolation. They also exercise the storefront migration, since
+the schema has to exist for any of this to run.
+"""
+
+import uuid
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+
+import pytest
+
+from app.models.storefront import (
+    StoreOrderStatus,
+    StoreOrderWindow,
+    StorePaymentMethod,
+    StorePaymentStatus,
+    StoreProduct,
+    StoreProductStatus,
+    StoreProductVariant,
+    StoreWindowStatus,
+)
+from app.models.user import Organization, User
+from app.services.storefront_service import StorefrontService
+
+pytestmark = pytest.mark.integration
+
+
+# ======================================================================
+# Fixtures / helpers
+# ======================================================================
+
+
+async def _make_org(db, name="Storefront FD"):
+    org = Organization(name=name, slug=f"store-{uuid.uuid4().hex[:8]}")
+    db.add(org)
+    await db.flush()
+    return org
+
+
+async def _make_member(db, org, first="Pat", last="Member"):
+    suffix = uuid.uuid4().hex[:8]
+    user = User(
+        id=str(uuid.uuid4()),
+        organization_id=org.id,
+        username=f"member-{suffix}",
+        email=f"member-{suffix}@example.org",
+        first_name=first,
+        last_name=last,
+    )
+    db.add(user)
+    await db.flush()
+    return user
+
+
+async def _enable_store(service, org, **overrides):
+    payload = {"is_enabled": True, "allow_pickup": True}
+    payload.update(overrides)
+    return await service.update_settings(org.id, payload)
+
+
+async def _make_product(db, org, **overrides):
+    fields = {
+        "id": str(uuid.uuid4()),
+        "organization_id": org.id,
+        "name": "Job Shirt",
+        "price": Decimal("45.00"),
+        "status": StoreProductStatus.ACTIVE,
+    }
+    fields.update(overrides)
+    product = StoreProduct(**fields)
+    db.add(product)
+    await db.flush()
+    return product
+
+
+async def _make_open_window(db, org, **overrides):
+    fields = {
+        "id": str(uuid.uuid4()),
+        "organization_id": org.id,
+        "name": "Fall apparel",
+        "status": StoreWindowStatus.OPEN,
+        "include_all_products": True,
+        "notify_on_open": False,
+    }
+    fields.update(overrides)
+    window = StoreOrderWindow(**fields)
+    db.add(window)
+    await db.flush()
+    return window
+
+
+def _cart(product_id, quantity=1, variant_id=None, text=None):
+    return {
+        "items": [
+            {
+                "product_id": product_id,
+                "variant_id": variant_id,
+                "quantity": quantity,
+                "personalization_text": text,
+            }
+        ],
+        "fulfillment_method": "pickup",
+        "payment_method": StorePaymentMethod.VENMO,
+    }
+
+
+# ======================================================================
+# Order placement
+# ======================================================================
+
+
+class TestOrderPlacement:
+    async def test_places_an_order_and_prices_it_from_the_catalog(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+
+        order = await service.create_order(org.id, member, _cart(product.id, 2))
+
+        assert order.order_number.startswith("ORD-")
+        assert order.subtotal == Decimal("90.00")
+        assert order.total == Decimal("90.00")
+        assert order.status == StoreOrderStatus.AWAITING_PAYMENT
+        assert order.payment_status == StorePaymentStatus.UNPAID
+        assert len(order.items) == 1
+        assert order.items[0].unit_price == Decimal("45.00")
+
+    async def test_order_numbers_do_not_repeat_within_an_org(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+
+        numbers = {
+            (await service.create_order(org.id, member, _cart(product.id))).order_number
+            for _ in range(3)
+        }
+        assert len(numbers) == 3
+
+    async def test_two_orgs_can_hold_the_same_order_number(self, db_session):
+        service = StorefrontService(db_session)
+        numbers = []
+        for name in ("Org A", "Org B"):
+            org = await _make_org(db_session, name)
+            member = await _make_member(db_session, org)
+            await _enable_store(service, org)
+            product = await _make_product(db_session, org)
+            await _make_open_window(db_session, org)
+            order = await service.create_order(org.id, member, _cart(product.id))
+            numbers.append(order.order_number)
+        # Numbering is per-org, so both departments start at 0001.
+        assert numbers[0] == numbers[1]
+
+    async def test_rejects_an_order_when_the_store_is_offline(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await service.update_settings(org.id, {"is_enabled": False})
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+
+        with pytest.raises(ValueError, match="not currently open"):
+            await service.create_order(org.id, member, _cart(product.id))
+
+    async def test_rejects_an_order_with_no_open_window(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+
+        with pytest.raises(ValueError, match="no open order window"):
+            await service.create_order(org.id, member, _cart(product.id))
+
+    async def test_a_draft_product_cannot_be_ordered(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, status=StoreProductStatus.DRAFT)
+        await _make_open_window(db_session, org)
+
+        with pytest.raises(ValueError, match="no longer available"):
+            await service.create_order(org.id, member, _cart(product.id))
+
+    async def test_applies_tax_only_to_taxable_lines(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org, tax_rate=Decimal("0.10"))
+        taxable = await _make_product(
+            db_session, org, name="Taxable", price=Decimal("100.00"), is_taxable=True
+        )
+        await _make_open_window(db_session, org)
+
+        order = await service.create_order(org.id, member, _cart(taxable.id))
+        assert order.tax_amount == Decimal("10.00")
+        assert order.total == Decimal("110.00")
+
+
+# ======================================================================
+# Stock and per-member limits
+# ======================================================================
+
+
+class TestLimits:
+    async def test_stock_cap_blocks_an_oversized_order(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(
+            db_session, org, track_stock=True, stock_quantity=3
+        )
+        await _make_open_window(db_session, org)
+
+        with pytest.raises(ValueError, match="remain available"):
+            await service.create_order(org.id, member, _cart(product.id, 4))
+
+    async def test_stock_is_consumed_across_separate_orders(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(
+            db_session, org, track_stock=True, stock_quantity=3
+        )
+        await _make_open_window(db_session, org)
+
+        await service.create_order(org.id, member, _cart(product.id, 2))
+        with pytest.raises(ValueError, match="remain available"):
+            await service.create_order(org.id, member, _cart(product.id, 2))
+
+    async def test_cancelled_orders_release_their_stock(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(
+            db_session, org, track_stock=True, stock_quantity=2
+        )
+        await _make_open_window(db_session, org)
+
+        first = await service.create_order(org.id, member, _cart(product.id, 2))
+        await service.cancel_order(
+            first.id, org.id, str(member.id), notify_member=False
+        )
+
+        second = await service.create_order(org.id, member, _cart(product.id, 2))
+        assert second.items[0].quantity == 2
+
+    async def test_per_member_cap_counts_only_that_member(self, db_session):
+        org = await _make_org(db_session)
+        member_a = await _make_member(db_session, org)
+        member_b = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, max_per_member=1)
+        await _make_open_window(db_session, org)
+
+        await service.create_order(org.id, member_a, _cart(product.id, 1))
+        with pytest.raises(ValueError, match="remain available"):
+            await service.create_order(org.id, member_a, _cart(product.id, 1))
+
+        # The other member's allowance is untouched.
+        assert await service.create_order(org.id, member_b, _cart(product.id, 1))
+
+    async def test_a_products_cap_spans_its_variants(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(
+            db_session, org, requires_variant=True, max_per_member=2
+        )
+        for label in ("L", "XL"):
+            db_session.add(
+                StoreProductVariant(
+                    id=str(uuid.uuid4()),
+                    organization_id=org.id,
+                    product_id=product.id,
+                    label=label,
+                )
+            )
+        await db_session.flush()
+        await _make_open_window(db_session, org)
+
+        refreshed = await service.get_product(product.id, org.id)
+        variant_ids = [v.id for v in refreshed.variants]
+
+        payload = {
+            "items": [
+                {"product_id": product.id, "variant_id": variant_ids[0], "quantity": 2},
+                {"product_id": product.id, "variant_id": variant_ids[1], "quantity": 1},
+            ],
+            "fulfillment_method": "pickup",
+        }
+        # The cap is per product, not per variant: 2 + 1 exceeds it.
+        with pytest.raises(ValueError, match="remain available"):
+            await service.create_order(org.id, member, payload)
+
+
+# ======================================================================
+# Personalization
+# ======================================================================
+
+
+class TestPersonalization:
+    async def test_adds_the_upcharge_and_stores_the_text(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(
+            db_session,
+            org,
+            price=Decimal("45.00"),
+            personalization_enabled=True,
+            personalization_price=Decimal("8.00"),
+            personalization_max_length=10,
+        )
+        await _make_open_window(db_session, org)
+
+        order = await service.create_order(
+            org.id, member, _cart(product.id, 1, text="SMITH")
+        )
+        assert order.items[0].personalization_text == "SMITH"
+        assert order.items[0].unit_price == Decimal("53.00")
+
+    async def test_text_is_discarded_when_the_product_does_not_offer_it(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(
+            db_session, org, personalization_enabled=False, price=Decimal("45.00")
+        )
+        await _make_open_window(db_session, org)
+
+        order = await service.create_order(
+            org.id, member, _cart(product.id, 1, text="SMITH")
+        )
+        # No upcharge is smuggled onto a product the department never
+        # agreed to personalize.
+        assert order.items[0].personalization_text is None
+        assert order.items[0].unit_price == Decimal("45.00")
+
+    async def test_rejects_text_over_the_limit(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(
+            db_session,
+            org,
+            personalization_enabled=True,
+            personalization_max_length=5,
+        )
+        await _make_open_window(db_session, org)
+
+        with pytest.raises(ValueError, match="limited to 5 characters"):
+            await service.create_order(
+                org.id, member, _cart(product.id, 1, text="WAY TOO LONG")
+            )
+
+    async def test_required_personalization_is_enforced(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(
+            db_session,
+            org,
+            personalization_enabled=True,
+            personalization_required=True,
+            personalization_label="a name",
+        )
+        await _make_open_window(db_session, org)
+
+        with pytest.raises(ValueError, match="requires a name"):
+            await service.create_order(org.id, member, _cart(product.id))
+
+    async def test_different_texts_stay_separate_lines(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(
+            db_session, org, personalization_enabled=True, personalization_max_length=20
+        )
+        window = await _make_open_window(db_session, org)
+
+        payload = {
+            "items": [
+                {
+                    "product_id": product.id,
+                    "quantity": 1,
+                    "personalization_text": "SMITH",
+                },
+                {
+                    "product_id": product.id,
+                    "quantity": 1,
+                    "personalization_text": "JONES",
+                },
+            ],
+            "fulfillment_method": "pickup",
+        }
+        order = await service.create_order(org.id, member, payload)
+        assert len(order.items) == 2
+
+        # The vendor sheet needs one row per name, never a merged count.
+        tallies = await service._window_tallies(window.id, org.id)
+        assert {t["personalization_text"] for t in tallies} == {"SMITH", "JONES"}
+
+
+# ======================================================================
+# Rollups (the paths that used to truncate at one page)
+# ======================================================================
+
+
+class TestRollups:
+    async def test_window_summary_counts_every_order_past_the_page_size(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("10.00"))
+        window = await _make_open_window(db_session, org)
+
+        order_count = 12
+        for _ in range(order_count):
+            member = await _make_member(db_session, org)
+            await service.create_order(org.id, member, _cart(product.id))
+
+        summary = await service.get_window_summary(window.id, org.id)
+        assert summary["order_count"] == order_count
+        assert summary["member_count"] == order_count
+        assert summary["gross_sales"] == Decimal("120.00")
+        assert summary["outstanding"] == Decimal("120.00")
+        # One product, one variant-less line: a single merged tally row.
+        assert len(summary["tallies"]) == 1
+        assert summary["tallies"][0]["quantity"] == order_count
+
+    async def test_summary_excludes_cancelled_orders(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("10.00"))
+        window = await _make_open_window(db_session, org)
+
+        keep = await service.create_order(org.id, member, _cart(product.id))
+        drop = await service.create_order(org.id, member, _cart(product.id))
+        await service.cancel_order(drop.id, org.id, str(member.id), notify_member=False)
+
+        summary = await service.get_window_summary(window.id, org.id)
+        assert summary["order_count"] == 1
+        assert summary["gross_sales"] == Decimal("10.00")
+        assert keep.id
+
+    async def test_rollups_for_many_windows_come_back_in_one_call(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("10.00"))
+
+        window_a = await _make_open_window(db_session, org, name="A")
+        await service.create_order(org.id, member, _cart(product.id, 2))
+        await service.close_window(window_a.id, org.id, notify_members=False)
+
+        window_b = await _make_open_window(db_session, org, name="B")
+        await service.create_order(org.id, member, _cart(product.id))
+
+        rollups = await service.get_window_rollups(org.id, [window_a.id, window_b.id])
+        assert rollups[window_a.id]["gross_sales"] == Decimal("20.00")
+        assert rollups[window_b.id]["gross_sales"] == Decimal("10.00")
+
+    async def test_a_window_with_no_orders_rolls_up_to_zero(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        window = await _make_open_window(db_session, org)
+
+        rollups = await service.get_window_rollups(org.id, [window.id])
+        assert rollups[window.id]["order_count"] == 0
+        assert rollups[window.id]["gross_sales"] == Decimal("0.00")
+
+    async def test_csv_export_covers_every_order(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("10.00"))
+        await _make_open_window(db_session, org)
+
+        for _ in range(7):
+            member = await _make_member(db_session, org)
+            await service.create_order(org.id, member, _cart(product.id))
+
+        csv_text = await service.export_orders_csv(org.id)
+        # Header plus one row per order line.
+        assert len(csv_text.strip().splitlines()) == 8
+        assert "Personalization" in csv_text.splitlines()[0]
+
+
+# ======================================================================
+# Payments
+# ======================================================================
+
+
+class TestPayments:
+    async def test_recording_the_full_balance_marks_the_order_paid(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        updated = await service.record_payment(
+            order.id, org.id, Decimal("45.00"), str(member.id), notify_member=False
+        )
+        assert updated.payment_status == StorePaymentStatus.PAID
+        assert updated.status == StoreOrderStatus.PAID
+        assert updated.paid_at is not None
+
+    async def test_a_partial_payment_leaves_a_balance(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        updated = await service.record_payment(
+            order.id, org.id, Decimal("20.00"), str(member.id), notify_member=False
+        )
+        assert updated.payment_status == StorePaymentStatus.PARTIAL
+        assert updated.amount_paid == Decimal("20.00")
+
+    async def test_a_member_report_never_settles_the_ledger(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        updated = await service.report_payment(
+            order.id, org.id, str(member.id), StorePaymentMethod.VENMO, reference="abc"
+        )
+        assert updated.payment_status == StorePaymentStatus.PENDING_VERIFICATION
+        # Self-reported means "please check", not "paid".
+        assert updated.amount_paid == Decimal("0.00")
+
+    async def test_refund_cannot_exceed_what_was_paid(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+        await service.record_payment(
+            order.id, org.id, Decimal("45.00"), str(member.id), notify_member=False
+        )
+
+        with pytest.raises(ValueError, match="cannot exceed"):
+            await service.refund_order(
+                order.id,
+                org.id,
+                str(member.id),
+                amount=Decimal("99.00"),
+                notify_member=False,
+            )
+
+
+# ======================================================================
+# Window lifecycle
+# ======================================================================
+
+
+class TestWindowLifecycle:
+    async def test_scheduler_opens_and_closes_on_time(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        past = datetime.now(timezone.utc) - timedelta(minutes=5)
+        window = await _make_open_window(
+            db_session,
+            org,
+            status=StoreWindowStatus.SCHEDULED,
+            opens_at=past - timedelta(hours=1),
+            closes_at=None,
+            auto_open=True,
+        )
+
+        assert await service.run_window_lifecycle(org.id) >= 1
+        reloaded = await service.get_window(window.id, org.id)
+        assert reloaded.status == StoreWindowStatus.OPEN
+
+        reloaded.closes_at = past
+        reloaded.auto_close = True
+        await db_session.commit()
+
+        await service.run_window_lifecycle(org.id)
+        closed = await service.get_window(window.id, org.id)
+        assert closed.status == StoreWindowStatus.CLOSED
+
+    async def test_a_closed_window_stops_accepting_orders(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+        window = await _make_open_window(db_session, org)
+
+        await service.close_window(window.id, org.id, notify_members=False)
+        with pytest.raises(ValueError, match="no open order window"):
+            await service.create_order(org.id, member, _cart(product.id))
+
+    async def test_a_window_with_orders_cannot_be_deleted(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+        window = await _make_open_window(db_session, org)
+        await service.create_order(org.id, member, _cart(product.id))
+
+        with pytest.raises(ValueError, match="already has orders"):
+            await service.delete_window(window.id, org.id)
+
+
+# ======================================================================
+# Multi-tenant isolation (CLAUDE.md pitfall #14)
+# ======================================================================
+
+
+class TestOrgIsolation:
+    async def _two_orgs_with_an_order(self, db_session):
+        service = StorefrontService(db_session)
+        org_a = await _make_org(db_session, "Org A")
+        org_b = await _make_org(db_session, "Org B")
+        member = await _make_member(db_session, org_a)
+        await _enable_store(service, org_a)
+        product = await _make_product(db_session, org_a)
+        await _make_open_window(db_session, org_a)
+        order = await service.create_order(org_a.id, member, _cart(product.id))
+        return service, org_a, org_b, order, product
+
+    async def test_another_org_cannot_read_the_order(self, db_session):
+        service, _org_a, org_b, order, _p = await self._two_orgs_with_an_order(
+            db_session
+        )
+        assert await service.get_order(order.id, org_b.id) is None
+
+    async def test_another_org_cannot_advance_the_order(self, db_session):
+        service, _org_a, org_b, order, _p = await self._two_orgs_with_an_order(
+            db_session
+        )
+        with pytest.raises(ValueError, match="not found"):
+            await service.update_order_status(
+                order.id,
+                org_b.id,
+                StoreOrderStatus.FULFILLED,
+                None,
+                notify_member=False,
+            )
+
+    async def test_another_org_cannot_record_a_payment(self, db_session):
+        service, _org_a, org_b, order, _p = await self._two_orgs_with_an_order(
+            db_session
+        )
+        with pytest.raises(ValueError, match="not found"):
+            await service.record_payment(
+                order.id, org_b.id, Decimal("10.00"), None, notify_member=False
+            )
+
+    async def test_another_org_cannot_read_the_product(self, db_session):
+        service, _org_a, org_b, _order, product = await self._two_orgs_with_an_order(
+            db_session
+        )
+        assert await service.get_product(product.id, org_b.id) is None
+
+    async def test_a_window_cannot_offer_another_orgs_product(self, db_session):
+        service, org_a, org_b, _order, product = await self._two_orgs_with_an_order(
+            db_session
+        )
+        # Org B builds a window that points at Org A's catalog row.
+        with pytest.raises(ValueError, match="Invalid product"):
+            await service.create_window(
+                org_b.id,
+                {
+                    "name": "Cross-tenant",
+                    "include_all_products": False,
+                    "offerings": [{"product_id": product.id, "sort_order": 0}],
+                },
+                None,
+            )
+        assert org_a.id != org_b.id
+
+    async def test_another_orgs_orders_are_absent_from_the_export(self, db_session):
+        service, _org_a, org_b, order, _p = await self._two_orgs_with_an_order(
+            db_session
+        )
+        csv_text = await service.export_orders_csv(org_b.id)
+        assert order.order_number not in csv_text
+
+    async def test_a_member_only_sees_their_own_order(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+
+        owner = await _make_member(db_session, org)
+        other = await _make_member(db_session, org)
+        order = await service.create_order(org.id, owner, _cart(product.id))
+
+        assert await service.get_order(order.id, org.id, user_id=str(owner.id))
+        assert await service.get_order(order.id, org.id, user_id=str(other.id)) is None
+
+
+# ======================================================================
+# Product photos
+# ======================================================================
+
+
+class TestProductImages:
+    async def test_stores_and_replaces_a_photo(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        product = await _make_product(db_session, org)
+
+        await service.set_product_image(
+            product.id, org.id, b"first-bytes", "image/webp", None
+        )
+        stored = await service.get_product_image(product.id, org.id)
+        assert stored.data == b"first-bytes"
+        assert stored.byte_size == len(b"first-bytes")
+
+        await service.set_product_image(
+            product.id, org.id, b"second", "image/webp", None
+        )
+        replaced = await service.get_product_image(product.id, org.id)
+        assert replaced.data == b"second"
+
+    async def test_photos_are_org_scoped(self, db_session):
+        service = StorefrontService(db_session)
+        org_a = await _make_org(db_session, "A")
+        org_b = await _make_org(db_session, "B")
+        product = await _make_product(db_session, org_a)
+        await service.set_product_image(
+            product.id, org_a.id, b"bytes", "image/webp", None
+        )
+
+        assert await service.get_product_image(product.id, org_b.id) is None
+        with pytest.raises(ValueError, match="not found"):
+            await service.set_product_image(
+                product.id, org_b.id, b"x", "image/webp", None
+            )
+
+    async def test_has_image_lookup_never_loads_the_bytes(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        with_photo = await _make_product(db_session, org, name="With")
+        without = await _make_product(db_session, org, name="Without")
+        await service.set_product_image(
+            with_photo.id, org.id, b"bytes", "image/webp", None
+        )
+
+        found = await service.products_with_images(org.id, [with_photo.id, without.id])
+        assert found == {with_photo.id}
+
+    async def test_deleting_a_photo_falls_back_to_the_external_url(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        product = await _make_product(
+            db_session, org, image_url="https://example.org/shirt.png"
+        )
+        await service.set_product_image(
+            product.id, org.id, b"bytes", "image/webp", None
+        )
+        assert service.resolve_image_url(product, True).startswith(
+            f"/api/v1/store/products/{product.id}/image"
+        )
+
+        await service.delete_product_image(product.id, org.id)
+        assert await service.get_product_image(product.id, org.id) is None
+        assert (
+            service.resolve_image_url(product, False) == "https://example.org/shirt.png"
+        )

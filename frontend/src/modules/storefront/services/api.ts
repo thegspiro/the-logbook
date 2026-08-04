@@ -26,6 +26,7 @@ export interface OrderItemInput {
   productId: string;
   variantId?: string | undefined;
   quantity: number;
+  personalizationText?: string | undefined;
 }
 
 export interface PlaceOrderInput {
@@ -132,6 +133,19 @@ export const storefrontService = {
 
   async archiveProduct(productId: string): Promise<void> {
     await api.delete(`/store/products/${productId}`);
+  },
+
+  async uploadProductImage(productId: string, file: File): Promise<StoreProduct> {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await api.post<StoreProduct>(`/store/products/${productId}/image`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async deleteProductImage(productId: string): Promise<void> {
+    await api.delete(`/store/products/${productId}/image`);
   },
 
   // --- Order windows ---

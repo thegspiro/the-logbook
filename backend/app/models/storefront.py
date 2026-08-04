@@ -33,6 +33,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -233,6 +234,17 @@ class StoreProduct(Base):
         default=StoreProductStatus.DRAFT,
     )
     max_per_member = Column(Integer, nullable=True)
+
+    # --- Personalization (embroidered name, engraved callsign, ...) --------
+    # An upcharge is common because personalizing is a per-unit vendor cost,
+    # and personalized lines can never be pooled in the vendor tally: each
+    # distinct text is its own row on the purchase order.
+    personalization_enabled = Column(Boolean, nullable=False, default=False)
+    personalization_required = Column(Boolean, nullable=False, default=False)
+    personalization_label = Column(String(120), nullable=True)
+    personalization_max_length = Column(Integer, nullable=False, default=30)
+    personalization_price = Column(Numeric(10, 2), nullable=False, default=0)
+
     track_stock = Column(Boolean, nullable=False, default=False)
     stock_quantity = Column(Integer, nullable=True)
     requires_variant = Column(Boolean, nullable=False, default=False)
@@ -254,6 +266,12 @@ class StoreProduct(Base):
 
     organization = relationship("Organization", foreign_keys=[organization_id])
     inventory_item = relationship("InventoryItem", foreign_keys=[inventory_item_id])
+    image = relationship(
+        "StoreProductImage",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
     variants = relationship(
         "StoreProductVariant",
         back_populates="product",
@@ -311,6 +329,53 @@ class StoreProductVariant(Base):
             "product_id", "label", name="uq_store_product_variants_product_label"
         ),
     )
+
+
+class StoreProductImage(Base):
+    """Uploaded product photo, stored out of line from the catalog row.
+
+    Kept in its own table (and served by its own endpoint) so listing the
+    catalog never drags a few hundred KB of image bytes per product through
+    the ORM -- the storefront lists every active product at once.
+    """
+
+    __tablename__ = "store_product_images"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    product_id = Column(
+        String(36),
+        ForeignKey("store_products.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    content_type = Column(String(100), nullable=False, default="image/webp")
+    # 16MB MEDIUMBLOB: MySQL's default BLOB caps at 64KB, which silently
+    # truncates an optimized product photo (a few hundred KB).
+    data = Column(LargeBinary(length=16_777_215), nullable=False)
+    byte_size = Column(Integer, nullable=False, default=0)
+
+    uploaded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    product = relationship("StoreProduct", back_populates="image")
 
 
 class StoreOrderWindow(Base):
@@ -586,6 +651,11 @@ class StoreOrderItem(Base):
     product_name = Column(String(255), nullable=False)
     variant_label = Column(String(120), nullable=True)
     sku = Column(String(100), nullable=True)
+
+    # What the member asked to have printed/embroidered on this line. Two
+    # otherwise-identical lines with different text are deliberately separate
+    # rows -- they are different physical goods.
+    personalization_text = Column(String(200), nullable=True)
 
     unit_price = Column(Numeric(10, 2), nullable=False, default=0)
     quantity = Column(Integer, nullable=False, default=1)

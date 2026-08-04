@@ -213,6 +213,11 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                       <td className="text-theme-text-primary py-1.5 pr-2">
                         {item.productName}
                         {item.variantLabel && <span className="text-theme-text-muted"> — {item.variantLabel}</span>}
+                        {item.personalizationText && (
+                          <div className="text-theme-text-muted text-xs italic">
+                            &ldquo;{item.personalizationText}&rdquo;
+                          </div>
+                        )}
                       </td>
                       <td className="text-theme-text-secondary px-2 py-1.5 text-center">{item.quantity}</td>
                       <td className="text-theme-text-secondary px-2 py-1.5 text-right">

@@ -20,15 +20,18 @@ import { PAYMENT_METHOD_LABELS, StoreFulfillmentMethod, type StorefrontProductOf
 
 const ProductCard: React.FC<{
   offer: StorefrontProductOffer;
-  onAdd: (variantId: string | undefined, quantity: number) => void;
+  onAdd: (variantId: string | undefined, quantity: number, personalizationText: string | undefined) => void;
 }> = ({ offer, onAdd }) => {
   const [variantId, setVariantId] = useState<string>(offer.variants[0]?.id ?? '');
   const [quantity, setQuantity] = useState(1);
+  const [personalization, setPersonalization] = useState('');
 
   const selectedVariant = offer.variants.find((v) => v.id === variantId);
   const price = Number(selectedVariant ? selectedVariant.price : offer.price);
   const remaining = selectedVariant ? selectedVariant.availableQuantity : offer.availableQuantity;
   const soldOut = selectedVariant ? !selectedVariant.isAvailable : !offer.isAvailable;
+  const upcharge = Number(offer.personalizationPrice ?? 0);
+  const missingRequiredText = offer.personalizationEnabled && offer.personalizationRequired && !personalization.trim();
 
   return (
     <div className="card-secondary flex flex-col gap-3 p-4">
@@ -84,6 +87,28 @@ const ProductCard: React.FC<{
         </p>
       )}
 
+      {offer.personalizationEnabled && (
+        <div>
+          <label htmlFor={`personalization-${offer.id}`} className="form-label text-xs">
+            {offer.personalizationLabel || 'Personalization'}
+            {offer.personalizationRequired ? '' : ' (optional)'}
+            {upcharge > 0 ? ` — +${formatCurrency(upcharge)}` : ''}
+          </label>
+          <input
+            id={`personalization-${offer.id}`}
+            type="text"
+            value={personalization}
+            maxLength={offer.personalizationMaxLength}
+            onChange={(e) => setPersonalization(e.target.value)}
+            className="form-input"
+            placeholder="e.g. SMITH"
+          />
+          <p className="text-theme-text-muted mt-0.5 text-xs">
+            {personalization.length}/{offer.personalizationMaxLength} characters
+          </p>
+        </div>
+      )}
+
       <div className="mt-auto flex items-center gap-2">
         <div className="border-theme-surface-border flex items-center rounded-lg border">
           <button
@@ -107,10 +132,11 @@ const ProductCard: React.FC<{
         <button
           type="button"
           className="btn-primary btn-md flex-1"
-          disabled={soldOut || (offer.requiresVariant && !variantId)}
+          disabled={soldOut || (offer.requiresVariant && !variantId) || missingRequiredText}
           onClick={() => {
-            onAdd(variantId || undefined, quantity);
+            onAdd(variantId || undefined, quantity, personalization.trim() || undefined);
             setQuantity(1);
+            setPersonalization('');
           }}
         >
           {soldOut ? 'Sold out' : 'Add to cart'}
@@ -298,8 +324,8 @@ const StorefrontPage: React.FC = () => {
                   <ProductCard
                     key={offer.id}
                     offer={offer}
-                    onAdd={(variantId, quantity) => {
-                      addToCart(offer, variantId, quantity);
+                    onAdd={(variantId, quantity, personalizationText) => {
+                      addToCart(offer, variantId, quantity, personalizationText);
                       toast.success(`${offer.name} added to cart`);
                     }}
                   />
@@ -343,7 +369,7 @@ const StorefrontPage: React.FC = () => {
                           type="button"
                           aria-label={`Remove ${line.productName}`}
                           className="btn-icon text-theme-text-muted hover:text-red-500"
-                          onClick={() => removeFromCart(line.productId, line.variantId)}
+                          onClick={() => removeFromCart(line.productId, line.variantId, line.personalizationText)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -418,6 +444,7 @@ const StorefrontPage: React.FC = () => {
                 <span className="text-theme-text-primary">
                   {line.quantity} × {line.productName}
                   {line.variantLabel ? ` (${line.variantLabel})` : ''}
+                  {line.personalizationText ? ` — "${line.personalizationText}"` : ''}
                 </span>
                 <span className="text-theme-text-primary">{formatCurrency(line.unitPrice * line.quantity)}</span>
               </li>

@@ -144,6 +144,7 @@ const MyOrdersPage: React.FC = () => {
                         <span>
                           {item.quantity} × {item.productName}
                           {item.variantLabel ? ` (${item.variantLabel})` : ''}
+                          {item.personalizationText ? ` — "${item.personalizationText}"` : ''}
                         </span>
                         <span>{formatCurrency(Number(item.lineTotal))}</span>
                       </li>

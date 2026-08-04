@@ -15,7 +15,9 @@ Permissions
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends
+from fastapi import File as FastAPIFile
+from fastapi import HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,8 +64,36 @@ from app.schemas.storefront import (
     StoreWindowSummaryResponse,
 )
 from app.services.storefront_service import StorefrontService
+from app.utils.image_processing import optimize_image
 
 router = APIRouter()
+
+# Product photos are re-encoded before storage, so this bounds the *upload*,
+# not what ends up in the database.
+_MAX_IMAGE_BYTES = 5 * 1024 * 1024
+_ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp"}
+
+
+def _detect_image_mime(contents: bytes) -> str:
+    """Identify an image by magic bytes.
+
+    A client-supplied Content-Type is not evidence of anything; sniffing the
+    header is what stops a renamed executable from being stored and served
+    back to members.
+    """
+    try:
+        import magic
+
+        return magic.from_buffer(contents, mime=True)
+    except Exception:
+        # libmagic is optional in some deployments; fall back to signatures.
+        if contents[:8] == b"\x89PNG\r\n\x1a\n":
+            return "image/png"
+        if contents[:2] == b"\xff\xd8":
+            return "image/jpeg"
+        if contents[:4] == b"RIFF" and contents[8:12] == b"WEBP":
+            return "image/webp"
+        return "unknown"
 
 
 # ==========================================================================
@@ -194,8 +224,10 @@ def _window_summary(window: StoreOrderWindow) -> Dict[str, Any]:
     }
 
 
-def _product_payload(product: StoreProduct) -> Dict[str, Any]:
+def _product_payload(product: StoreProduct, has_image: bool = False) -> Dict[str, Any]:
     return {
+        "image_url": StorefrontService.resolve_image_url(product, has_image),
+        "has_image": has_image,
         **{
             field: getattr(product, field)
             for field in (
@@ -204,7 +236,6 @@ def _product_payload(product: StoreProduct) -> Dict[str, Any]:
                 "name",
                 "sku",
                 "description",
-                "image_url",
                 "category",
                 "inventory_item_id",
                 "price",
@@ -215,6 +246,11 @@ def _product_payload(product: StoreProduct) -> Dict[str, Any]:
                 "track_stock",
                 "stock_quantity",
                 "requires_variant",
+                "personalization_enabled",
+                "personalization_required",
+                "personalization_label",
+                "personalization_max_length",
+                "personalization_price",
                 "sort_order",
                 "internal_notes",
                 "created_at",
@@ -465,7 +501,12 @@ async def list_products(
         search=search,
         include_archived=include_archived,
     )
-    return [_product_payload(product) for product in products]
+    with_images = await service.products_with_images(
+        str(current_user.organization_id), [product.id for product in products]
+    )
+    return [
+        _product_payload(product, product.id in with_images) for product in products
+    ]
 
 
 @router.post(
@@ -488,7 +529,14 @@ async def create_product(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))
-    return _product_payload(product)
+    return _product_payload(
+        product,
+        bool(
+            await service.products_with_images(
+                str(current_user.organization_id), [product.id]
+            )
+        ),
+    )
 
 
 @router.get("/products/{product_id}", response_model=StoreProductResponse)
@@ -502,7 +550,14 @@ async def get_product(
     product = await service.get_product(product_id, str(current_user.organization_id))
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return _product_payload(product)
+    return _product_payload(
+        product,
+        bool(
+            await service.products_with_images(
+                str(current_user.organization_id), [product.id]
+            )
+        ),
+    )
 
 
 @router.put("/products/{product_id}", response_model=StoreProductResponse)
@@ -522,7 +577,14 @@ async def update_product(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))
-    return _product_payload(product)
+    return _product_payload(
+        product,
+        bool(
+            await service.products_with_images(
+                str(current_user.organization_id), [product.id]
+            )
+        ),
+    )
 
 
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -537,6 +599,99 @@ async def archive_product(
         await service.archive_product(product_id, str(current_user.organization_id))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=safe_error_detail(exc))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ==========================================================================
+# Product photos
+# ==========================================================================
+
+
+@router.post("/products/{product_id}/image", response_model=StoreProductResponse)
+async def upload_product_image(
+    product_id: str,
+    file: UploadFile = FastAPIFile(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Attach a photo to a catalog item.
+
+    The upload is re-encoded to WebP, which strips EXIF (including any GPS
+    tag on a phone photo) and bounds the stored size — the bytes are served
+    back to every member browsing the store.
+    """
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty")
+    if len(contents) > _MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Images must be {_MAX_IMAGE_BYTES // (1024 * 1024)}MB or smaller",
+        )
+    if _detect_image_mime(contents) not in _ALLOWED_IMAGE_MIMES:
+        raise HTTPException(
+            status_code=400, detail="Invalid image type. Allowed: JPEG, PNG, WebP"
+        )
+
+    try:
+        optimized = optimize_image(
+            contents, max_size=(1200, 1200), quality=82, output_format="WEBP"
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+
+    service = StorefrontService(db)
+    try:
+        await service.set_product_image(
+            product_id,
+            str(current_user.organization_id),
+            optimized,
+            "image/webp",
+            str(current_user.id),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=safe_error_detail(exc))
+
+    product = await service.get_product(product_id, str(current_user.organization_id))
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return _product_payload(product, True)
+
+
+@router.get("/products/{product_id}/image")
+async def get_product_image(
+    product_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.view")),
+) -> Any:
+    """Serve a product photo.
+
+    Cached immutably: the URL carries a ``v=`` stamp from the product's
+    update time, so a replaced photo arrives under a different URL rather
+    than needing a revalidation round trip per image per page load.
+    """
+    service = StorefrontService(db)
+    image = await service.get_product_image(
+        product_id, str(current_user.organization_id)
+    )
+    if image is None:
+        raise HTTPException(status_code=404, detail="No image for this product")
+    return Response(
+        content=image.data,
+        media_type=image.content_type or "image/webp",
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+    )
+
+
+@router.delete("/products/{product_id}/image", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_product_image(
+    product_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Response:
+    """Remove a product photo."""
+    service = StorefrontService(db)
+    await service.delete_product_image(product_id, str(current_user.organization_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -556,20 +711,20 @@ async def list_windows(
     windows = await service.list_windows(
         str(current_user.organization_id), status=status_filter
     )
-    payloads = []
-    for window in windows:
-        summary = await service.get_window_summary(
-            window.id, str(current_user.organization_id)
+    # One grouped query for every window's counters. Calling get_window_summary
+    # per window loaded every order of every window to render a few numbers.
+    rollups = await service.get_window_rollups(
+        str(current_user.organization_id), [window.id for window in windows]
+    )
+    return [
+        _window_payload(
+            window,
+            order_count=rollups[window.id]["order_count"],
+            total_sales=rollups[window.id]["gross_sales"],
+            outstanding=rollups[window.id]["outstanding"],
         )
-        payloads.append(
-            _window_payload(
-                window,
-                order_count=summary["order_count"],
-                total_sales=summary["gross_sales"],
-                outstanding=summary["outstanding"],
-            )
-        )
-    return payloads
+        for window in windows
+    ]
 
 
 @router.post(

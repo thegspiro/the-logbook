@@ -290,6 +290,7 @@ from app.models.storefront import (
     StorePaymentMethod,
     StorePaymentStatus,
     StoreProduct,
+    StoreProductImage,
     StoreProductStatus,
     StoreProductVariant,
     StoreSettings,
@@ -498,6 +499,7 @@ __all__ = [
     # Storefront models
     "StoreSettings",
     "StoreProduct",
+    "StoreProductImage",
     "StoreProductVariant",
     "StoreOrderWindow",
     "StoreWindowProduct",

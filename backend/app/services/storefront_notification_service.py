@@ -18,14 +18,16 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.models.storefront import (
     StoreOrder,
     StoreOrderWindow,
     StorePaymentMethod,
     StoreSettings,
 )
-from app.models.user import Organization, User
+from app.models.user import Organization, User, UserStatus
 from app.services.email_service import EmailService, wrap_email_body
 from app.utils.storefront_payments import build_paypal_url, build_venmo_url
 
@@ -81,7 +83,8 @@ class StorefrontNotificationService:
         result = await self.db.execute(
             select(User.email).where(
                 User.organization_id == str(organization_id),
-                User.is_active.is_(True),
+                User.status == UserStatus.ACTIVE,
+                User.deleted_at.is_(None),
                 User.email.isnot(None),
             )
         )
@@ -90,19 +93,28 @@ class StorefrontNotificationService:
     async def get_admin_recipients(
         self, organization_id: str, settings: Optional[StoreSettings]
     ) -> List[str]:
-        """Store managers plus any extra addresses configured in settings."""
+        """Store managers plus any extra addresses configured in settings.
+
+        Admin-ness is a *position* slug, not a column on User — a member can
+        hold several positions — so the roles relationship is eager-loaded and
+        matched against the shared ADMIN_NOTIFY_ROLE_SLUGS list.
+        """
         result = await self.db.execute(
-            select(User).where(
+            select(User)
+            .where(
                 User.organization_id == str(organization_id),
-                User.is_active.is_(True),
                 User.email.isnot(None),
+                User.deleted_at.is_(None),
             )
+            .options(selectinload(User.roles))
         )
-        recipients = {
-            user.email
-            for user in result.scalars().all()
-            if user.email and user.role in ("admin", "owner", "quartermaster")
-        }
+        recipients = set()
+        for user in result.scalars().all():
+            if not user.email:
+                continue
+            slugs = [role.slug for role in (user.roles or [])]
+            if any(slug in slugs for slug in ADMIN_NOTIFY_ROLE_SLUGS):
+                recipients.add(user.email)
         for extra in (settings.notify_emails if settings else None) or []:
             if isinstance(extra, str) and extra.strip():
                 recipients.add(extra.strip())
@@ -120,6 +132,12 @@ class StorefrontNotificationService:
                 name += (
                     '<br><span style="color:#6b7280;font-size:12px;">'
                     f"{_html.escape(item.variant_label)}</span>"
+                )
+            if item.personalization_text:
+                # Member-entered text rendered into HTML email — escape it.
+                name += (
+                    '<br><span style="color:#6b7280;font-size:12px;">'
+                    f"&ldquo;{_html.escape(item.personalization_text)}&rdquo;</span>"
                 )
             rows += (
                 "<tr>"

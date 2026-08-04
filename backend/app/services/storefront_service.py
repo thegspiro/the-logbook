@@ -18,7 +18,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from loguru import logger
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -36,6 +36,7 @@ from app.models.storefront import (
     StorePaymentMethod,
     StorePaymentStatus,
     StoreProduct,
+    StoreProductImage,
     StoreProductStatus,
     StoreProductVariant,
     StoreSettings,
@@ -49,6 +50,11 @@ from app.utils.org_scoping import assert_in_org
 from app.utils.storefront_payments import build_paypal_url, build_venmo_url
 
 _CENTS = Decimal("0.01")
+
+# Rows pulled per round trip when streaming a full export. Large enough
+# that a typical window is one query, small enough not to hold a whole
+# department's order history in memory at once.
+_EXPORT_PAGE_SIZE = 200
 
 # Orders in these states are no longer claiming stock or counting against a
 # member's per-product limit.
@@ -347,6 +353,105 @@ class StorefrontService:
         return "The change conflicts with an existing record"
 
     # ==================================================================
+    # Product photos
+    # ==================================================================
+
+    async def products_with_images(
+        self, organization_id: str, product_ids: Sequence[str]
+    ) -> set:
+        """Ids of products that have an uploaded photo.
+
+        Selects only the id column: the whole point of the separate table is
+        that listing a catalog never pulls image bytes through the ORM.
+        """
+        ids = [str(pid) for pid in product_ids if pid]
+        if not ids:
+            return set()
+        result = await self.db.execute(
+            select(StoreProductImage.product_id).where(
+                StoreProductImage.product_id.in_(ids),
+                StoreProductImage.organization_id == str(organization_id),
+            )
+        )
+        return set(result.scalars().all())
+
+    @staticmethod
+    def resolve_image_url(product: StoreProduct, has_image: bool) -> Optional[str]:
+        """The URL a client should render for this product.
+
+        An uploaded photo wins over an externally-hosted ``image_url``. The
+        ``v=`` cache-buster is the row's update time, so replacing the photo
+        invalidates whatever the browser cached without a no-store header.
+        """
+        if has_image:
+            updated = _as_aware(product.updated_at)
+            version = int(updated.timestamp()) if updated else 0
+            return f"/api/v1/store/products/{product.id}/image?v={version}"
+        return product.image_url
+
+    async def get_product_image(
+        self, product_id: str, organization_id: str
+    ) -> Optional[StoreProductImage]:
+        """Fetch the stored photo bytes for one product, org-scoped."""
+        result = await self.db.execute(
+            select(StoreProductImage).where(
+                StoreProductImage.product_id == str(product_id),
+                StoreProductImage.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def set_product_image(
+        self,
+        product_id: str,
+        organization_id: str,
+        data: bytes,
+        content_type: str,
+        uploaded_by: Optional[str],
+    ) -> StoreProductImage:
+        """Store (or replace) a product photo."""
+        product = await self.get_product(product_id, organization_id)
+        if not product:
+            raise ValueError("Product not found")
+
+        existing = await self.get_product_image(product_id, organization_id)
+        if existing is not None:
+            existing.data = data
+            existing.content_type = content_type
+            existing.byte_size = len(data)
+            existing.uploaded_by = uploaded_by
+            image = existing
+        else:
+            image = StoreProductImage(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                product_id=product.id,
+                data=data,
+                content_type=content_type,
+                byte_size=len(data),
+                uploaded_by=uploaded_by,
+            )
+            self.db.add(image)
+
+        # Touch the product so resolve_image_url's cache-buster advances and
+        # clients stop serving the previous photo from cache.
+        product.updated_at = _utcnow()
+        await self.db.commit()
+        await self.db.refresh(image)
+        return image
+
+    async def delete_product_image(self, product_id: str, organization_id: str) -> None:
+        """Remove a product photo, falling back to any external image_url."""
+        image = await self.get_product_image(product_id, organization_id)
+        if image is None:
+            return
+        await self.db.delete(image)
+        product = await self.get_product(product_id, organization_id)
+        if product is not None:
+            product.updated_at = _utcnow()
+        await self.db.commit()
+
+    # ==================================================================
     # Order windows
     # ==================================================================
 
@@ -445,8 +550,15 @@ class StorefrontService:
         offerings: Sequence[Dict[str, Any]],
         organization_id: str,
     ) -> None:
-        for offering in window.offerings:
-            await self.db.delete(offering)
+        # Delete by query rather than iterating window.offerings: on a window
+        # that was just flushed the collection is unloaded, and touching it
+        # under asyncio raises MissingGreenlet instead of lazy-loading.
+        await self.db.execute(
+            delete(StoreWindowProduct).where(
+                StoreWindowProduct.window_id == window.id,
+                StoreWindowProduct.organization_id == str(organization_id),
+            )
+        )
         await self.db.flush()
 
         for index, payload in enumerate(offerings):
@@ -667,6 +779,9 @@ class StorefrontService:
             if user_id
             else {}
         )
+        products_with_images = await self.products_with_images(
+            organization_id, [product.id for product in products]
+        )
 
         offers: List[Dict[str, Any]] = []
         for product in products:
@@ -716,12 +831,21 @@ class StorefrontService:
                     "id": product.id,
                     "name": product.name,
                     "description": product.description,
-                    "image_url": product.image_url,
+                    "image_url": self.resolve_image_url(
+                        product, product.id in products_with_images
+                    ),
                     "category": product.category,
                     "price": price,
                     "is_taxable": product.is_taxable,
                     "requires_variant": product.requires_variant,
                     "max_per_member": max_per_member,
+                    "personalization_enabled": product.personalization_enabled,
+                    "personalization_required": product.personalization_required,
+                    "personalization_label": product.personalization_label,
+                    "personalization_max_length": (
+                        product.personalization_max_length or 30
+                    ),
+                    "personalization_price": _money(product.personalization_price),
                     "available_quantity": available,
                     "is_available": available is None or available > 0,
                     "variants": variants,
@@ -965,6 +1089,7 @@ class StorefrontService:
                     product_name=line["product_name"],
                     variant_label=line["variant_label"],
                     sku=line["sku"],
+                    personalization_text=line["personalization_text"],
                     unit_price=line["unit_price"],
                     quantity=line["quantity"],
                     line_total=line["line_total"],
@@ -1000,6 +1125,58 @@ class StorefrontService:
             )
         return full_order
 
+    async def _lock_products(
+        self, product_ids: Sequence[str], organization_id: str
+    ) -> None:
+        """Take a row lock on each product being ordered.
+
+        Availability is a read-then-write: we count what has already been
+        ordered, then insert. Without a lock two members submitting at the
+        same moment both see the last unit as free and both get it. Locking
+        the product row serializes concurrent orders for that product, so the
+        second submission's count includes the first. Ids are locked in a
+        stable order because two carts holding the same pair of products in
+        opposite orders would otherwise deadlock.
+        """
+        ordered_ids = sorted({str(pid) for pid in product_ids if pid})
+        if not ordered_ids:
+            return
+        await self.db.execute(
+            select(StoreProduct.id)
+            .where(
+                StoreProduct.id.in_(ordered_ids),
+                StoreProduct.organization_id == str(organization_id),
+            )
+            .order_by(StoreProduct.id)
+            .with_for_update()
+        )
+
+    @staticmethod
+    def _normalize_personalization(
+        product: StoreProduct, raw: Optional[str]
+    ) -> Optional[str]:
+        """Validate and clean the per-line personalization text.
+
+        Returns ``None`` when the product does not offer personalization, so a
+        client cannot smuggle arbitrary text onto a line the department never
+        agreed to customize.
+        """
+        text = (raw or "").strip()
+        if not product.personalization_enabled:
+            return None
+        if not text:
+            if product.personalization_required:
+                label = product.personalization_label or "personalization"
+                raise ValueError(f"'{product.name}' requires {label}")
+            return None
+        limit = product.personalization_max_length or 30
+        if len(text) > limit:
+            raise ValueError(
+                f"Personalization for '{product.name}' is limited to "
+                f"{limit} characters"
+            )
+        return text
+
     async def _price_lines(
         self,
         organization_id: str,
@@ -1019,25 +1196,37 @@ class StorefrontService:
         )
         offerings = {o.product_id: o for o in offering_result.scalars().all()}
 
+        # Lock first, then count: the counts below must not be able to change
+        # under a concurrent order between here and the insert.
+        await self._lock_products(
+            [item["product_id"] for item in items], organization_id
+        )
+
         window_totals = await self._ordered_quantities(window.id, organization_id)
         member_totals = await self._ordered_quantities(
             window.id, organization_id, user_id=user_id
         )
 
         # Collapse duplicate cart lines so per-product limits see the true ask.
-        merged: Dict[Tuple[str, Optional[str]], int] = {}
+        # Personalization is part of the key: two shirts with different names
+        # are different goods and must stay separate lines.
+        merged: Dict[Tuple[str, Optional[str], Optional[str]], int] = {}
         for item in items:
-            key = (str(item["product_id"]), item.get("variant_id"))
+            key = (
+                str(item["product_id"]),
+                item.get("variant_id"),
+                (item.get("personalization_text") or "").strip() or None,
+            )
             merged[key] = merged.get(key, 0) + int(item["quantity"])
 
         lines: List[Dict[str, Any]] = []
         requested_per_product: Dict[str, int] = {}
-        for (product_id, variant_id), quantity in merged.items():
+        for (product_id, _variant_id, _text), quantity in merged.items():
             requested_per_product[product_id] = (
                 requested_per_product.get(product_id, 0) + quantity
             )
 
-        for (product_id, variant_id), quantity in merged.items():
+        for (product_id, variant_id, personalization), quantity in merged.items():
             product = await self.get_product(product_id, organization_id)
             if product is None or product.status != StoreProductStatus.ACTIVE:
                 raise ValueError("One of the items is no longer available")
@@ -1067,6 +1256,12 @@ class StorefrontService:
                 else product.price
             )
             unit_price = _money(price + _money(variant.price_delta if variant else 0))
+
+            personalization_text = self._normalize_personalization(
+                product, personalization
+            )
+            if personalization_text:
+                unit_price = _money(unit_price + _money(product.personalization_price))
 
             max_per_member = (
                 offering.max_per_member
@@ -1104,6 +1299,7 @@ class StorefrontService:
                     "product_name": product.name,
                     "variant_label": variant.label if variant else None,
                     "sku": (variant.sku if variant and variant.sku else product.sku),
+                    "personalization_text": personalization_text,
                     "unit_price": unit_price,
                     "quantity": quantity,
                     "line_total": _money(unit_price * quantity),
@@ -1523,6 +1719,196 @@ class StorefrontService:
     # Reporting
     # ==================================================================
 
+    async def _order_rollup(
+        self,
+        organization_id: str,
+        window_ids: Optional[Sequence[str]] = None,
+    ) -> Dict[Optional[str], Dict[str, Any]]:
+        """Money and order counters per window, computed in SQL.
+
+        Aggregating in the database rather than loading orders and summing in
+        Python is not just faster: the previous page-and-sum approach silently
+        stopped at the first page, so a window with more orders than the page
+        size reported a short tally, a wrong outstanding balance, and sent the
+        department to the vendor with the wrong quantities.
+
+        ``window_ids`` of ``None`` rolls up every window (plus orphaned orders
+        under the ``None`` key); an empty sequence returns ``{}``.
+        """
+        if window_ids is not None and len(window_ids) == 0:
+            return {}
+
+        paid = Decimal("0")
+        filters = [
+            StoreOrder.organization_id == str(organization_id),
+            StoreOrder.status != StoreOrderStatus.CANCELLED,
+        ]
+        if window_ids is not None:
+            filters.append(StoreOrder.window_id.in_([str(w) for w in window_ids]))
+
+        balance = StoreOrder.total - StoreOrder.amount_paid
+        result = await self.db.execute(
+            select(
+                StoreOrder.window_id,
+                func.count(StoreOrder.id),
+                func.count(func.distinct(StoreOrder.user_id)),
+                func.coalesce(func.sum(StoreOrder.total), paid),
+                func.coalesce(func.sum(StoreOrder.amount_paid), paid),
+                func.coalesce(func.sum(case((balance > 0, balance), else_=paid)), paid),
+                func.sum(
+                    case(
+                        (
+                            StoreOrder.payment_status.in_(
+                                [
+                                    StorePaymentStatus.UNPAID,
+                                    StorePaymentStatus.PARTIAL,
+                                ]
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                func.sum(
+                    case(
+                        (
+                            StoreOrder.payment_status
+                            == StorePaymentStatus.PENDING_VERIFICATION,
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                func.sum(
+                    case(
+                        (
+                            StoreOrder.status == StoreOrderStatus.READY_FOR_PICKUP,
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                func.sum(
+                    case(
+                        (
+                            StoreOrder.status.notin_(
+                                [
+                                    StoreOrderStatus.FULFILLED,
+                                    StoreOrderStatus.CANCELLED,
+                                ]
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+            )
+            .where(*filters)
+            .group_by(StoreOrder.window_id)
+        )
+
+        rollups: Dict[Optional[str], Dict[str, Any]] = {}
+        for row in result.all():
+            (
+                window_id,
+                order_count,
+                member_count,
+                gross,
+                collected,
+                outstanding,
+                unpaid,
+                pending,
+                ready,
+                open_count,
+            ) = row
+            rollups[window_id] = {
+                "order_count": int(order_count or 0),
+                "member_count": int(member_count or 0),
+                "gross_sales": _money(gross),
+                "collected": _money(collected),
+                "outstanding": _money(outstanding),
+                "unpaid_order_count": int(unpaid or 0),
+                "pending_verification_count": int(pending or 0),
+                "ready_for_pickup_count": int(ready or 0),
+                "open_order_count": int(open_count or 0),
+            }
+        return rollups
+
+    @staticmethod
+    def _empty_rollup() -> Dict[str, Any]:
+        return {
+            "order_count": 0,
+            "member_count": 0,
+            "gross_sales": Decimal("0.00"),
+            "collected": Decimal("0.00"),
+            "outstanding": Decimal("0.00"),
+            "unpaid_order_count": 0,
+            "pending_verification_count": 0,
+            "ready_for_pickup_count": 0,
+            "open_order_count": 0,
+        }
+
+    async def _window_tallies(
+        self, window_id: str, organization_id: str
+    ) -> List[Dict[str, Any]]:
+        """The vendor purchase-order sheet for a window, grouped in SQL.
+
+        Personalized lines are grouped separately from plain ones: the vendor
+        needs one row per distinct name to embroider, not a merged count.
+        """
+        result = await self.db.execute(
+            select(
+                StoreOrderItem.product_id,
+                StoreOrderItem.product_name,
+                StoreOrderItem.variant_label,
+                StoreOrderItem.sku,
+                StoreOrderItem.personalization_text,
+                func.sum(StoreOrderItem.quantity),
+                func.max(StoreOrderItem.unit_price),
+                func.coalesce(func.sum(StoreOrderItem.line_total), Decimal("0")),
+            )
+            .join(StoreOrder, StoreOrder.id == StoreOrderItem.order_id)
+            .where(
+                StoreOrder.window_id == str(window_id),
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.status != StoreOrderStatus.CANCELLED,
+            )
+            .group_by(
+                StoreOrderItem.product_id,
+                StoreOrderItem.product_name,
+                StoreOrderItem.variant_label,
+                StoreOrderItem.sku,
+                StoreOrderItem.personalization_text,
+            )
+            .order_by(
+                StoreOrderItem.product_name,
+                StoreOrderItem.variant_label,
+                StoreOrderItem.personalization_text,
+            )
+        )
+        return [
+            {
+                "product_id": product_id,
+                "product_name": product_name,
+                "variant_label": variant_label,
+                "sku": sku,
+                "personalization_text": personalization_text,
+                "quantity": int(quantity or 0),
+                "unit_price": _money(unit_price),
+                "line_total": _money(line_total),
+            }
+            for (
+                product_id,
+                product_name,
+                variant_label,
+                sku,
+                personalization_text,
+                quantity,
+                unit_price,
+                line_total,
+            ) in result.all()
+        ]
+
     async def get_window_summary(
         self, window_id: str, organization_id: str
     ) -> Dict[str, Any]:
@@ -1530,59 +1916,31 @@ class StorefrontService:
         if not window:
             raise ValueError("Order window not found")
 
-        orders, _ = await self.list_orders(
-            organization_id, window_id=window_id, page=1, page_size=200
-        )
-        active = [o for o in orders if o.status != StoreOrderStatus.CANCELLED]
-
-        gross = _money(sum(Decimal(o.total or 0) for o in active))
-        collected = _money(sum(Decimal(o.amount_paid or 0) for o in active))
-
-        tallies: Dict[Tuple[Optional[str], Optional[str]], Dict[str, Any]] = {}
-        for order in active:
-            for item in order.items:
-                key = (item.product_id, item.variant_id)
-                entry = tallies.setdefault(
-                    key,
-                    {
-                        "product_id": item.product_id,
-                        "product_name": item.product_name,
-                        "variant_label": item.variant_label,
-                        "sku": item.sku,
-                        "quantity": 0,
-                        "unit_price": _money(item.unit_price),
-                        "line_total": Decimal("0.00"),
-                    },
-                )
-                entry["quantity"] += item.quantity
-                entry["line_total"] = _money(
-                    entry["line_total"] + Decimal(item.line_total or 0)
-                )
+        rollups = await self._order_rollup(organization_id, [window_id])
+        rollup = rollups.get(window.id, self._empty_rollup())
 
         return {
             "window_id": window.id,
             "window_name": window.name,
             "status": window.status,
-            "order_count": len(active),
-            "member_count": len({o.user_id for o in active if o.user_id}),
-            "gross_sales": gross,
-            "collected": collected,
-            "outstanding": _money(gross - collected),
-            "unpaid_order_count": sum(
-                1
-                for o in active
-                if o.payment_status
-                in (StorePaymentStatus.UNPAID, StorePaymentStatus.PARTIAL)
-            ),
-            "pending_verification_count": sum(
-                1
-                for o in active
-                if o.payment_status == StorePaymentStatus.PENDING_VERIFICATION
-            ),
-            "tallies": sorted(
-                tallies.values(),
-                key=lambda row: (row["product_name"], row["variant_label"] or ""),
-            ),
+            "order_count": rollup["order_count"],
+            "member_count": rollup["member_count"],
+            "gross_sales": rollup["gross_sales"],
+            "collected": rollup["collected"],
+            "outstanding": rollup["outstanding"],
+            "unpaid_order_count": rollup["unpaid_order_count"],
+            "pending_verification_count": rollup["pending_verification_count"],
+            "tallies": await self._window_tallies(window.id, organization_id),
+        }
+
+    async def get_window_rollups(
+        self, organization_id: str, window_ids: Sequence[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Counters for many windows in one query (the admin windows list)."""
+        rollups = await self._order_rollup(organization_id, window_ids)
+        return {
+            str(window_id): rollups.get(str(window_id), self._empty_rollup())
+            for window_id in window_ids
         }
 
     async def get_dashboard(self, organization_id: str) -> Dict[str, Any]:
@@ -1590,25 +1948,26 @@ class StorefrontService:
         open_windows = await self.get_open_windows(organization_id)
         active_window = open_windows[0] if open_windows else None
 
-        orders, _ = await self.list_orders(organization_id, page=1, page_size=200)
-        active = [o for o in orders if o.status != StoreOrderStatus.CANCELLED]
-
-        outstanding = _money(
-            sum(
-                Decimal(o.total or 0) - Decimal(o.amount_paid or 0)
-                for o in active
-                if Decimal(o.total or 0) > Decimal(o.amount_paid or 0)
+        org_totals = await self._order_rollup(organization_id)
+        combined = self._empty_rollup()
+        for rollup in org_totals.values():
+            for key in (
+                "order_count",
+                "unpaid_order_count",
+                "pending_verification_count",
+                "ready_for_pickup_count",
+                "open_order_count",
+            ):
+                combined[key] += rollup[key]
+            combined["outstanding"] = _money(
+                combined["outstanding"] + rollup["outstanding"]
             )
-        )
+
         collected = Decimal("0.00")
         if active_window is not None:
-            collected = _money(
-                sum(
-                    Decimal(o.amount_paid or 0)
-                    for o in active
-                    if o.window_id == active_window.id
-                )
-            )
+            collected = org_totals.get(active_window.id, self._empty_rollup())[
+                "collected"
+            ]
 
         product_count = await self.db.scalar(
             select(func.count(StoreProduct.id)).where(
@@ -1617,30 +1976,19 @@ class StorefrontService:
             )
         )
 
+        recent_orders, _ = await self.list_orders(organization_id, page=1, page_size=10)
+
         return {
             "is_enabled": settings.is_enabled,
             "active_window": active_window,
-            "open_order_count": sum(
-                1
-                for o in active
-                if o.status
-                not in (StoreOrderStatus.FULFILLED, StoreOrderStatus.CANCELLED)
-            ),
-            "awaiting_payment_count": sum(
-                1 for o in active if o.payment_status == StorePaymentStatus.UNPAID
-            ),
-            "pending_verification_count": sum(
-                1
-                for o in active
-                if o.payment_status == StorePaymentStatus.PENDING_VERIFICATION
-            ),
-            "ready_for_pickup_count": sum(
-                1 for o in active if o.status == StoreOrderStatus.READY_FOR_PICKUP
-            ),
-            "outstanding_balance": outstanding,
+            "open_order_count": combined["open_order_count"],
+            "awaiting_payment_count": combined["unpaid_order_count"],
+            "pending_verification_count": combined["pending_verification_count"],
+            "ready_for_pickup_count": combined["ready_for_pickup_count"],
+            "outstanding_balance": combined["outstanding"],
             "collected_this_window": collected,
             "active_product_count": int(product_count or 0),
-            "recent_orders": orders[:10],
+            "recent_orders": recent_orders,
         }
 
     async def export_orders_csv(
@@ -1653,14 +2001,25 @@ class StorefrontService:
 
         Written with SafeCsvWriter — member names and notes are free text and
         would otherwise execute as formulas when opened in Excel/Sheets.
+
+        Pages through the whole result set rather than taking the first page:
+        an export that silently stopped at the page size would send the
+        department to the vendor with the wrong quantities.
         """
-        orders, _ = await self.list_orders(
-            organization_id,
-            window_id=window_id,
-            status=status,
-            page=1,
-            page_size=200,
-        )
+        orders: List[StoreOrder] = []
+        page = 1
+        while True:
+            batch, total = await self.list_orders(
+                organization_id,
+                window_id=window_id,
+                status=status,
+                page=page,
+                page_size=_EXPORT_PAGE_SIZE,
+            )
+            orders.extend(batch)
+            if len(orders) >= total or not batch:
+                break
+            page += 1
         output = io.StringIO()
         writer = SafeCsvWriter(output, quoting=csv.QUOTE_MINIMAL)
         writer.writerow(
@@ -1671,6 +2030,7 @@ class StorefrontService:
                 "Email",
                 "Item",
                 "Option",
+                "Personalization",
                 "SKU",
                 "Quantity",
                 "Unit Price",
@@ -1700,6 +2060,7 @@ class StorefrontService:
                         order.customer_email or "",
                         item.product_name,
                         item.variant_label or "",
+                        item.personalization_text or "",
                         item.sku or "",
                         item.quantity,
                         f"{_money(item.unit_price)}",

@@ -203,6 +203,11 @@ class StoreProductBase(BaseModel):
     is_taxable: bool = False
     status: StoreProductStatus = StoreProductStatus.DRAFT
     max_per_member: Optional[int] = Field(None, ge=1)
+    personalization_enabled: bool = False
+    personalization_required: bool = False
+    personalization_label: Optional[str] = Field(None, max_length=120)
+    personalization_max_length: int = Field(default=30, ge=1, le=200)
+    personalization_price: Decimal = Field(default=Decimal("0"), ge=0)
     track_stock: bool = False
     stock_quantity: Optional[int] = Field(None, ge=0)
     requires_variant: bool = False
@@ -220,6 +225,10 @@ class StoreProductCreate(StoreProductBase):
         if self.requires_variant and not self.variants:
             raise ValueError(
                 "A product that requires a variant must define at least one variant"
+            )
+        if self.personalization_required and not self.personalization_enabled:
+            raise ValueError(
+                "Personalization must be enabled before it can be required"
             )
         return self
 
@@ -240,6 +249,11 @@ class StoreProductUpdate(BaseModel):
     is_taxable: Optional[bool] = None
     status: Optional[StoreProductStatus] = None
     max_per_member: Optional[int] = Field(None, ge=1)
+    personalization_enabled: Optional[bool] = None
+    personalization_required: Optional[bool] = None
+    personalization_label: Optional[str] = Field(None, max_length=120)
+    personalization_max_length: Optional[int] = Field(None, ge=1, le=200)
+    personalization_price: Optional[Decimal] = Field(None, ge=0)
     track_stock: Optional[bool] = None
     stock_quantity: Optional[int] = Field(None, ge=0)
     requires_variant: Optional[bool] = None
@@ -266,11 +280,17 @@ class StoreProductResponse(UTCResponseBase):
     is_taxable: bool
     status: StoreProductStatus
     max_per_member: Optional[int] = None
+    personalization_enabled: bool
+    personalization_required: bool
+    personalization_label: Optional[str] = None
+    personalization_max_length: int
+    personalization_price: Decimal
     track_stock: bool
     stock_quantity: Optional[int] = None
     requires_variant: bool
     sort_order: int
     internal_notes: Optional[str] = None
+    has_image: bool = False
     variants: List[StoreProductVariantResponse] = Field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -302,6 +322,11 @@ class StorefrontProductOffer(UTCResponseBase):
     is_taxable: bool
     requires_variant: bool
     max_per_member: Optional[int] = None
+    personalization_enabled: bool = False
+    personalization_required: bool = False
+    personalization_label: Optional[str] = None
+    personalization_max_length: int = 30
+    personalization_price: Decimal = Decimal("0")
     available_quantity: Optional[int] = None
     is_available: bool
     variants: List[StorefrontVariantOption] = Field(default_factory=list)
@@ -486,6 +511,9 @@ class StoreOrderItemInput(BaseModel):
     product_id: str = Field(..., min_length=1, max_length=36)
     variant_id: Optional[str] = Field(None, max_length=36)
     quantity: int = Field(..., ge=1, le=999)
+    # Free text the member wants embroidered/engraved on this line. The server
+    # discards it for products that do not offer personalization.
+    personalization_text: Optional[str] = Field(None, max_length=200)
 
 
 class StoreOrderCreate(BaseModel):
@@ -525,6 +553,7 @@ class StoreOrderItemResponse(UTCResponseBase):
     product_name: str
     variant_label: Optional[str] = None
     sku: Optional[str] = None
+    personalization_text: Optional[str] = None
     unit_price: Decimal
     quantity: int
     line_total: Decimal
@@ -686,6 +715,7 @@ class StoreWindowProductTally(UTCResponseBase):
     product_name: str
     variant_label: Optional[str] = None
     sku: Optional[str] = None
+    personalization_text: Optional[str] = None
     quantity: int
     unit_price: Decimal
     line_total: Decimal

@@ -227,8 +227,14 @@ export interface StoreProduct {
   trackStock: boolean;
   stockQuantity?: number | null;
   requiresVariant: boolean;
+  personalizationEnabled: boolean;
+  personalizationRequired: boolean;
+  personalizationLabel?: string | null;
+  personalizationMaxLength: number;
+  personalizationPrice: string;
   sortOrder: number;
   internalNotes?: string | null;
+  hasImage: boolean;
   variants: StoreProductVariant[];
 }
 
@@ -246,6 +252,11 @@ export interface StoreProductInput {
   trackStock: boolean;
   stockQuantity?: number | undefined;
   requiresVariant: boolean;
+  personalizationEnabled: boolean;
+  personalizationRequired: boolean;
+  personalizationLabel?: string | undefined;
+  personalizationMaxLength: number;
+  personalizationPrice: number;
   sortOrder: number;
   internalNotes?: string | undefined;
   variants: StoreProductVariantInput[];
@@ -317,6 +328,11 @@ export interface StorefrontProductOffer {
   isTaxable: boolean;
   requiresVariant: boolean;
   maxPerMember?: number | null;
+  personalizationEnabled: boolean;
+  personalizationRequired: boolean;
+  personalizationLabel?: string | null;
+  personalizationMaxLength: number;
+  personalizationPrice: string;
   availableQuantity?: number | null;
   isAvailable: boolean;
   variants: StorefrontVariantOption[];
@@ -357,6 +373,7 @@ export interface StoreOrderItem {
   productName: string;
   variantLabel?: string | null;
   sku?: string | null;
+  personalizationText?: string | null;
   unitPrice: string;
   quantity: number;
   lineTotal: string;
@@ -432,6 +449,7 @@ export interface StoreWindowProductTally {
   productName: string;
   variantLabel?: string | null;
   sku?: string | null;
+  personalizationText?: string | null;
   quantity: number;
   unitPrice: string;
   lineTotal: string;
@@ -476,6 +494,9 @@ export interface CartLine {
   variantId?: string | undefined;
   productName: string;
   variantLabel?: string | undefined;
+  /** Free text to embroider/engrave. Part of the line identity: two shirts
+   *  with different names are different goods, never merged into one line. */
+  personalizationText?: string | undefined;
   unitPrice: number;
   quantity: number;
   isTaxable: boolean;
