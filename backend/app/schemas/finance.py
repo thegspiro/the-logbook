@@ -589,6 +589,24 @@ class MemberDuesResponse(UTCResponseBase):
     updated_at: datetime
 
 
+class DuesPaymentResponse(UTCResponseBase):
+    """One payment in a member's dues ledger"""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    organization_id: str
+    member_dues_id: str
+    amount: float
+    payment_method: Optional[str] = None
+    transaction_reference: Optional[str] = None
+    notes: Optional[str] = None
+    received_at: datetime
+    recorded_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class MemberDuesPayment(BaseModel):
     """Record a dues payment"""
 
@@ -601,6 +619,15 @@ class MemberDuesPayment(BaseModel):
 class MemberDuesWaive(BaseModel):
     """Waive a member's dues"""
 
+    reason: str = Field(..., min_length=1)
+
+
+class MemberDuesUnwaive(BaseModel):
+    """Reverse a waiver on a member's dues"""
+
+    # Required for the same reason the waive requires one: reversing a
+    # financial decision should say why, and the reason is the only thing the
+    # audit event can record about intent.
     reason: str = Field(..., min_length=1)
 
 

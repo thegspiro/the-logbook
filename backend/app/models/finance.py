@@ -939,11 +939,87 @@ class MemberDues(Base):
     dues_schedule = relationship("DuesSchedule", back_populates="member_dues")
     user = relationship("User", foreign_keys=[user_id])
     waiver_approver = relationship("User", foreign_keys=[waived_by])
+    payments = relationship(
+        "DuesPayment",
+        back_populates="member_dues",
+        cascade="all, delete-orphan",
+        order_by="DuesPayment.received_at",
+    )
 
     __table_args__ = (
         Index("ix_member_dues_org_id", "organization_id"),
         Index("ix_member_dues_user", "user_id", "status"),
         Index("ix_member_dues_schedule", "dues_schedule_id", "status"),
+    )
+
+
+class DuesPayment(Base):
+    """A single payment received against a member's dues (FIN-6).
+
+    ``MemberDues`` used to be the only record of payment: one ``amount_paid``
+    total plus one set of ``payment_method`` / ``transaction_reference`` /
+    ``notes`` columns, all overwritten by whichever payment was entered last.
+    Nothing recorded that a payment had *happened*, so a retry could not be
+    distinguished from a second instalment, and the detail of every earlier
+    payment was destroyed as soon as another arrived.
+
+    Each payment is now a row here, and the columns on ``MemberDues`` are
+    derived from this ledger rather than mutated in place — see
+    ``_apply_payment_totals``. That makes the total recomputable rather than
+    accumulated, which is what allows a double-submission to be rejected
+    without guessing.
+    """
+
+    __tablename__ = "dues_payments"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    member_dues_id = Column(
+        String(36),
+        ForeignKey("member_dues.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    amount = Column(Numeric(12, 2), nullable=False)
+    payment_method = Column(String(50), nullable=True)
+    transaction_reference = Column(String(200), nullable=True)
+    notes = Column(Text, nullable=True)
+    received_at = Column(DateTime(timezone=True), nullable=False)
+    # SET NULL requires nullable=True (MySQL 1830). The ledger row must outlive
+    # the member who entered it — losing the treasurer must not lose the money.
+    recorded_by = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    member_dues = relationship("MemberDues", back_populates="payments")
+    organization = relationship("Organization", foreign_keys=[organization_id])
+    recorder = relationship("User", foreign_keys=[recorded_by])
+
+    __table_args__ = (
+        # Idempotency key. MySQL permits multiple NULLs in a unique index, so
+        # cash taken at a meeting with no reference is unaffected — the
+        # constraint binds only when a reference identifies the transaction.
+        UniqueConstraint(
+            "member_dues_id",
+            "transaction_reference",
+            name="uq_dues_payment_reference",
+        ),
+        Index("ix_dues_payments_org_id", "organization_id"),
+        Index("ix_dues_payments_dues", "member_dues_id", "received_at"),
     )
 
 
