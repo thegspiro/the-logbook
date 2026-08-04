@@ -219,7 +219,7 @@ RSVP list and check-in status]**
 
 > "There's no setting to change that, and that's deliberate. Emergency contacts
 > aren't really your members' data — they're a spouse's name and phone number,
-> a parent's, a neighbour's. Those people never joined your department and have
+> a parent's, a neighbor's. Those people never joined your department and have
 > no account here to remove themselves. So the system doesn't offer you the
 > option of putting them on the roster."
 

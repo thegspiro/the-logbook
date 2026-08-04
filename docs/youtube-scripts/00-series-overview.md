@@ -58,6 +58,8 @@ services.
 | 8j | Require End-of-Shift Checks Before Finalizing | Script 5 |
 | 8k | Download Everything The Logbook Knows About You | Script 6 |
 | 8l | Why You're Not Getting Department Texts | Script 6 |
+| 8m | You Waived Dues by Mistake — Undo It ⚠️ *(hold: needs the dues UI)* | Script 7 |
+| 8n | Recording a Dues Payment Twice Won't Charge Twice ⚠️ *(hold: needs the dues UI)* | Script 7 |
 | 12a | "Why Can't This Member Vote?" — Eligibility Debugging | Script 12 |
 | 12b | Test Ballots — Practice Without Polluting the Results | Script 12 |
 | 12c | Closed Early? Here's Why Results Are Hidden | Script 12 |

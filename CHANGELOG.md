@@ -7,7 +7,153 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Release-readiness pass (2026-08-02)
+### Security: date of birth and emergency contacts are leadership-only (2026-08-04)
+
+**Security**
+
+- **The last two ORU-8 disclosure gaps are closed.** Each was a call site that
+  did not consult a policy the codebase already expressed.
+  - `GET /users/{id}/with-roles` returned the raw user record while its sibling
+    `GET /users/with-roles` redacted against the organization's
+    `contact_info_visibility` setting. Both need only `users.view`, so the
+    setting was advisory — anything the roster withheld was one request to the
+    detail URL away, plus `personal_email` and the full home address, which the
+    roster never exposes at any setting. Both endpoints now share
+    `_clear_hidden_contact_fields` and `_load_contact_visibility` (which fails
+    closed when the settings row cannot be read) so they cannot drift again.
+    `members.manage` holders **and the subject** are exempt: the settings page
+    loads a member's own profile through that endpoint and writes the fields
+    back, so redacting for self would have blanked their own address and phone
+    on the next save.
+  - `without_infrastructure()` stripped mail host, S3 bucket, SSO issuer and
+    OAuth client IDs from `GET /organization/settings` but not `it_team`, so
+    every authenticated member still received the names, direct email and phone
+    of whoever administers the deployment — plus `backup_access`, an
+    unstructured dict holding whatever an admin wrote about break-glass access.
+    Now emptied (rather than nulled, so the settings UI still renders the
+    section) for callers without `settings.manage`.
+- **Date of birth and emergency contacts are restricted to leadership.** Both
+  were served to any `users.view` holder by the two with-roles endpoints, and
+  `MemberProfilePage` rendered the emergency-contacts section to any viewer —
+  `canEdit` gated editing, not viewing. They are now cleared for everyone
+  except `members.manage` holders and the member themselves. They are handled
+  separately from the contact block because they are a different category:
+  `contact_info_visibility` deliberately has no flag for them, so **no
+  organization setting can publish them**. Emergency contacts are also PII
+  belonging to people who are not members of the department at all — a member's
+  spouse or parent, by name and phone — who never consented to appear in a
+  roster and hold no account to remove themselves.
+- **Disclosure is recorded, not just access.** The existing `user_viewed` audit
+  event now carries `restricted_pii_disclosed`, so the trail answers who saw
+  another member's date of birth and family contacts rather than merely who
+  opened a profile.
+
+**Changed**
+
+- The member profile **hides** the emergency-contacts section from viewers who
+  may not see it rather than rendering it empty — an empty section reads as
+  "none on file", which is a different and wrong statement about the member.
+
+### Finance: dues payments are a ledger, not a running total (FIN-6) (2026-08-04)
+
+**Fixed**
+
+- **Recording a payment silently reversed a waiver.** A payment against a
+  `WAIVED` record recomputed `status` to `PAID`/`PARTIAL` while leaving
+  `waived_by`, `waived_at` and `waive_reason` populated — a row that
+  contradicted itself. Because the dues summary derives `total_waived` from
+  `status == WAIVED`, the waived amount silently moved into collections with
+  nothing recording that it had ever been waived. Payments against `WAIVED` and
+  `EXEMPT` records are now refused with an explanatory error.
+- **Every payment erased the previous payment's detail.** `payment_method`,
+  `transaction_reference` and `notes` were each assigned from
+  `kwargs.get(...)`, and the endpoint passes `**data.model_dump()`, which
+  materializes every omitted optional field as `None` — so a second partial
+  payment that did not re-send `notes` destroyed the first payment's,
+  unrecoverably. Fields are now assigned only when supplied.
+- **A retried payment double-credited collections.** `amount_paid` accumulated
+  on every call with nothing consulting `transaction_reference`, so a
+  double-clicked Save or a replayed request charged the member twice.
+
+**Added**
+
+- **`dues_payments` ledger** (migration `20260802_0001`) — one row per payment,
+  with `recorded_by` (`SET NULL`, nullable: the ledger must outlive the
+  treasurer who entered it). The columns on `member_dues` became a projection
+  of it: `amount_paid` is **re-derived** as the sum of the ledger by
+  `_apply_payment_totals` rather than added to a running figure, and
+  `payment_method` / `transaction_reference` / `notes` project the newest row.
+  A double-credit would require a duplicate ledger row, which the uniqueness
+  constraint on `(member_dues_id, transaction_reference)` refuses — the bug
+  class stops being representable instead of being guarded against. Payments
+  with no reference — cash at a meeting — are never deduplicated, because two
+  identical cash amounts are two payments and collapsing them would lose money.
+  The migration backfills one row per already-paid record, without which a
+  derived total would recompute an existing balance to zero.
+- **`GET /finance/dues/{id}/payments`** (`finance.view`) — the ledger, oldest
+  first. The dues record carries only the derived total and the newest
+  payment's detail, so this is the only place earlier payments can be read
+  back; a history nobody can read would be half a fix.
+- **`POST /finance/dues/{id}/unwaive`** (`finance.manage`, reason required) —
+  payments against waived dues are refused and `PUT /dues/{id}` *is* the
+  payment route, so `WAIVED` had no exit: a department that waived by mistake
+  and then received the money had no in-app remedy. The gap predates the guard
+  but was masked, because recording a payment used to clear the status as a
+  side effect of the bug. Reversal restores whatever the ledger says — PENDING
+  when nothing was paid, PARTIAL or PAID when something was. The waive reason
+  is cleared rather than left on an un-waived record (the same contradictory
+  row FIN-6 was about) and carried into a `finance.dues_waiver_reversed` audit
+  event alongside the reason for the reversal.
+
+> **Backend only.** `DuesManagementPage` is read-only and no frontend code calls
+> the payment, waive, unwaive or ledger endpoints, so these behaviors are
+> reachable through the API alone until the dues management UI is built. The
+> gap predates this work and is recorded in `docs/KNOWN_LIMITATIONS.md`.
+
+### Tooling: CI restored, lint pins aligned, dependency bumps (2026-08-04)
+
+**Fixed**
+
+- **No backend test had been running on main.** `backend/requirements.txt` was
+  unresolvable — `isort==8.0.1` against `pylint==3.3.4`, which requires
+  `isort<7` — so `pip install` exited `ResolutionImpossible` and Backend Unit
+  Tests and Backend Security Scan both died at their install step, which in
+  turn skipped Backend Integration Tests, Backend API Contract Tests and the
+  Docker image build. pylint 4.x widens the cap to `isort<9`, so the pin moves
+  up rather than holding isort back.
+- **Backend Lint was green against a toolchain nobody ran.** CI's "Install
+  linting tools" step claimed to mirror `requirements.txt` but installed flake8
+  7.2.0 / isort 5.13.2 against 7.3.0 / 8.0.1 there, and omitted
+  `flake8-pytest-style` entirely. Aligning them surfaced two real
+  disagreements: isort 8 wraps a from-import differently once a sibling `as`
+  alias has split it (three files reformatted), and PT028 fires on any function
+  named `test_*`, catching two FastAPI "test connection" route handlers whose
+  `Depends()` defaults the framework requires (added as documented per-file
+  ignores rather than changing the endpoints).
+- **`npm ci` failed on main** with "Missing: vite@8.2.0 from lock file" and 37
+  other entries; the lockfile was regenerated on top of main.
+
+**Changed**
+
+- **Dependency bumps**: `jsdom` 26 → 30, `@testing-library/jest-dom` 6 → 7,
+  `@hookform/resolvers` 3 → 5, `lint-staged` 15 → 17, `react-hook-form` 7.84.0,
+  `@playwright/test` 1.62.1, `vitest` 4.1.10, `typescript-eslint` 8.65,
+  node 25 → 26-alpine in the frontend image; backend `black` 26.5.1,
+  `mypy` 2.3.0, `faker` 40.36.0, `aiofiles` 25.1.0, `boto3` 1.43.61;
+  `aquasecurity/trivy-action` 0.36.0.
+- **New `utils/displayValue.ts`.** typescript-eslint 8.65's
+  `no-unnecessary-type-assertion` sees through `'x' in value` narrowing and
+  flagged 105 assertions across 54 files. Where an assertion was the only thing
+  keeping `String()` off an `unknown` report value, removing it exposed
+  `no-base-to-string` — those sites now use `toDisplayString()`, which
+  JSON-encodes objects rather than rendering `[object Object]`. The assertions
+  had been asserting a shape the API never guaranteed.
+- Test assertions that used `toHaveBeenCalledOnce()` now assert their real
+  arguments (`@vitest/eslint-plugin` 1.6.24 flags it). The autofix would have
+  written a bare `toHaveBeenCalledExactlyOnceWith()`, which asserts *zero*
+  arguments — banned by Pitfall #13 and wrong for the sites in question.
+
+### Members: CSV import template matches what the API accepts (2026-08-04)
 
 **Fixed**
 

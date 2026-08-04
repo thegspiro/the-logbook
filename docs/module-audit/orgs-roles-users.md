@@ -115,17 +115,51 @@ the email actually changes.
 **Status:** flagged — each needs a priority/ceiling-on-current-perms rule or a
 last-admin guard, which changes today's allowed admin workflow.
 
-### ORU-8 — MED/LOW (flagged) — Broader PII/config exposure than the privacy gate intends
-- `GET /users/{id}/with-roles` and `GET /users/with-roles` serialize full contact
-  PII (email, phone, home address, DOB, emergency contacts) to any `users.view`
-  holder, bypassing the `contact_info_visibility` gate the list endpoint honors.
-  (users #2)
-- `GET /settings` (`get_current_user`-only) returns integration identifiers
+### ORU-8 — MED/LOW — ✅ FIXED (2026-08-04) — Broader PII/config exposure than the privacy gate intends
+- `GET /users/{id}/with-roles` and `GET /users/with-roles` serialized full
+  contact PII (email, phone, home address, DOB, emergency contacts) to any
+  `users.view` holder, bypassing the `contact_info_visibility` gate the list
+  endpoint honors. (users #2)
+- `GET /settings` (`get_current_user`-only) returned integration identifiers
   (OAuth `client_id`, tenant id, Authentik URL, SMTP host/user, S3 bucket/region)
   and the whole `it_team` block (member names/emails/phones + free-form
   `backup_access`) to any authenticated member. (orgs #5)
-**Status:** flagged — gating these behind `settings.manage` / a PII schema split
-is a product decision on who may see full PII/infra config.
+
+**Fixed in two passes**, and on reading the code neither needed the product
+decision this was carried for — the policy was already expressed, in
+`contact_info_visibility` and in `without_infrastructure()`. These were the call
+sites that did not consult it.
+
+- **ORU-8a.** The roster endpoint was redacted first; `GET /users/{id}/with-roles`
+  was left returning the raw ORM record, which made the setting *advisory* —
+  anything the roster withheld was one request to the detail URL away, plus
+  `personal_email` and the full home address, which the roster never exposes at
+  any visibility setting. Both endpoints now share `_clear_hidden_contact_fields`
+  and `_load_contact_visibility` (fails closed when the settings row is
+  unreadable) so they cannot drift again. `members.manage` holders **and the
+  subject** are exempt: `UserSettingsPage` loads a member's own profile through
+  that endpoint and writes the fields back, so redacting for self would have
+  blanked their own address and phone on the next save.
+- **ORU-8b.** `without_infrastructure()` stripped the identifiers but not
+  `it_team`, so every authenticated member still received the names, direct
+  email and phone of whoever administers the deployment, plus `backup_access` —
+  unstructured text about break-glass access. Now emptied (not nulled, so the
+  settings UI still renders the section) for callers without `settings.manage`.
+- **Date of birth and emergency contacts** were the part that *was* a product
+  call, since `contact_info_visibility` has no flag for either. Decided
+  leadership-only, unconditionally: cleared by `_clear_leadership_only_fields`
+  for everyone except `members.manage` holders and the member themselves, with
+  no setting able to publish them. `members.manage` was chosen over a new
+  permission because it already resolves to the intended population, where
+  `users.view` reaches 24 positions and `members.view` reaches every member; it
+  also needs no seed migration, so existing organizations get the restriction on
+  upgrade. Emergency contacts are PII belonging to people who are not members of
+  the department at all and cannot remove themselves, which is why there is
+  deliberately no setting. `MemberProfilePage` mirrors the gate and hides the
+  section rather than rendering it empty. Disclosure is recorded on the existing
+  `user_viewed` audit event via `restricted_pii_disclosed`.
+
+**Status:** fixed. Covered by `tests/test_pii_exposure.py`.
 
 ### ORU-9 — LOW — mostly FIXED — Correctness/robustness polish
 - **✅ Membership-ID generation hardened.** `generate_next_membership_id` now

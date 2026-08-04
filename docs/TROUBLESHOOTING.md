@@ -118,7 +118,8 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 106. [Auth Cookie LAN HTTP Issues](#auth-cookie-lan-http-issues)
 107. [TypeScript Build Error Batch Fix](#typescript-build-error-batch-fix)
 108. [Prospective Members Event Linking](#prospective-members-event-linking)
-109. [Getting Help](#getting-help)
+109. [Dues Payment & Waiver Issues](#dues-payment--waiver-issues)
+110. [Getting Help](#getting-help)
 
 ---
 
@@ -6808,6 +6809,65 @@ ESLint also cleaned to 0 errors, 0 warnings across 59 files.
 - Events that are cancelled after linking show a "Cancelled" badge on the applicant's event list
 - Multiple applicants can be linked to the same event (e.g., group orientation)
 - The "President Interview" preset in StageConfigModal pre-configures a meeting stage with one click
+
+---
+
+## Dues Payment & Waiver Issues
+
+### Problem: "These dues are marked waived and are not owing" when recording a payment
+
+**Cause (Intentional, 2026-08-04):** Payments against `WAIVED` or `EXEMPT` dues
+are refused. Previously the payment went through, recomputed the record to
+Paid/Partial while leaving the waiver fields populated, and — because the dues
+summary derives *Total Waived* from the status — silently moved the waived
+amount into your collection figures with nothing recording it had ever been
+waived.
+
+**Fix:** Reverse the waiver first. On the dues record, choose **Reverse
+Waiver** and give a reason (`POST /finance/dues/{id}/unwaive`, `finance.manage`).
+The record returns to whatever the payment history says — Pending if nothing was
+ever paid, Partial or Paid if something was — and the original waive reason is
+written to the audit log as `finance.dues_waiver_reversed` rather than left on a
+record that is no longer waived. Then record the payment normally.
+
+### Problem: A resubmitted payment did not increase the amount paid
+
+**Cause (Intentional, 2026-08-04):** Payments are idempotent on
+`transaction_reference`. If that check or receipt number is already recorded
+against these dues, the resubmission returns the record untouched instead of
+crediting it twice — which is what protects a double-clicked Save or a form
+resubmitted over a slow connection.
+
+**Fix:** If it really is a second payment, give it its own reference (or leave
+the reference blank — unreferenced cash is never deduplicated, because two
+identical cash amounts are two payments). Check the payment history
+(`GET /finance/dues/{id}/payments`, `finance.view`) to see what was actually
+recorded.
+
+### Problem: An earlier payment's method or notes disappeared
+
+**Status (Fixed 2026-08-04):** `payment_method`, `transaction_reference` and
+`notes` were assigned from the request on every call, and the endpoint
+materializes omitted optional fields as `None` — so a second installment that
+did not re-send `notes` blanked the first payment's, with no ledger to recover
+them from.
+
+**Fix:** Pull the latest backend and run migrations. Each payment is now its own
+row in `dues_payments` and keeps its own detail; the columns on the dues record
+project the newest payment. Detail lost before the upgrade is not recoverable —
+the backfill can only create one ledger row per already-paid record.
+
+### Problem: After upgrading, a member's balance looks wrong
+
+**Cause:** `amount_paid` is now **derived** from the ledger rather than
+accumulated, so an existing paid record with no ledger row behind it would
+recompute to zero. Migration `20260802_0001` backfills one row per already-paid
+record precisely to prevent this.
+
+**Fix:** Confirm the migration ran (`npm run db:migrate`; it should be reachable
+from the single Alembic head) and that `dues_payments` contains a row for each
+record with a non-zero `amount_paid`. Do not write `member_dues.amount_paid`
+directly — it is overwritten on the next payment.
 
 ---
 

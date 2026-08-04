@@ -198,7 +198,7 @@ setting that can publish them** — `contact_info_visibility` deliberately has n
 flag for either.
 
 Emergency contacts are treated this way because they are not solely the
-member's data: they name a spouse, parent or neighbour who is not in the
+member's data: they name a spouse, parent or neighbor who is not in the
 department, never consented to appear in its systems, and holds no account
 with which to remove themselves. Date of birth is restricted because, paired
 with a name, it is the field most useful for impersonation.

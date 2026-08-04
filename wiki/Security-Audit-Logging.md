@@ -40,6 +40,8 @@ Every significant action in the system is recorded in the audit log with:
 | **Authentication (OAuth)** | `oauth_login` — successful sign-in via Google or Microsoft *(2026-05-29)* |
 | **Events** | `event_attendee_overwritten` (severity `warning`) — a manager overwrote an existing RSVP when adding an attendee *(2026-05-29)* |
 | **Security** | Alert generated, alert acknowledged, integrity check |
+| **Member PII** | `user_viewed` carries `restricted_pii_disclosed` — `true` when the viewer is leadership reading *another* member's record, i.e. the only path that discloses a date of birth and a family's names and phone numbers. The flag makes the trail answer "who saw it", not merely "who looked" *(2026-08-04)* |
+| **Finance** | `finance.dues_waiver_reversed` (severity `warning`) — a dues waiver was reversed, recording the reason given for the reversal **and** the original waive reason, which is cleared from the record itself so an un-waived row cannot carry a waiver rationale *(2026-08-04)* |
 
 ---
 

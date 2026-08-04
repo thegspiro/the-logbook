@@ -435,6 +435,82 @@ Finalize is blocked]**
 
 ---
 
+## SHORT 8M: You Waived Dues by Mistake — Undo It
+
+**Length:** 50 seconds
+**Extracted From:** New — Training doc 11 (Finance); referenced from Script 7
+**Status:** ⚠️ **Do not film yet.** The behavior is live in the API, but the
+Dues page is read-only in the current release — there is no Reverse Waiver or
+Record Payment button to demonstrate. Hold both shorts until the dues
+management UI ships.
+
+---
+
+**[SCREEN: Finance → Dues, a member's row showing a "Waived" status badge]**
+
+> "You waived a member's dues. Then they paid anyway. Now the payment won't go
+> in — and that's on purpose."
+
+**[CALLOUT: "Waived dues refuse payment"]**
+
+> "Recording money against waived dues used to quietly cancel the waiver and
+> slide that amount into your collection figures, with nothing anywhere saying
+> it had ever been waived. So it's blocked now."
+
+**[SCREEN: Open the dues record; click "Reverse Waiver"; type a reason]**
+
+> "Reverse the waiver instead. Give a reason — you need one, same as waiving
+> did — and it goes to the audit log along with the original reason."
+
+**[SCREEN: The status badge flips from Waived back to Pending]**
+
+> "The record goes back to whatever the payment history says. Nothing paid?
+> Pending. Something paid earlier? Partial or Paid. Nothing is guessed."
+
+**[SCREEN: Record the payment — it now succeeds]**
+
+> "Now record the payment. Takes ten seconds, and your books still say what
+> actually happened."
+
+---
+
+## SHORT 8N: Recording a Dues Payment Twice Won't Charge Twice
+
+**Length:** 45 seconds
+**Extracted From:** New — Training doc 11 (Finance); referenced from Script 7
+**Status:** ⚠️ **Do not film yet.** The behavior is live in the API, but the
+Dues page is read-only in the current release — there is no Reverse Waiver or
+Record Payment button to demonstrate. Hold both shorts until the dues
+management UI ships.
+
+---
+
+**[SCREEN: The Record Payment form, with a check number in the transaction
+reference field]**
+
+> "Slow connection, you hit Save twice. Did that member just get charged
+> double?"
+
+**[CALLOUT: "Same reference = same payment"]**
+
+> "No — as long as you put the check or receipt number in the transaction
+> reference. The second submission is recognized as the same payment and
+> ignored."
+
+**[SCREEN: Scroll to the payment history list, showing one entry, not two]**
+
+> "One entry. And that's the other thing worth knowing: payments are a history
+> now, not one running total. Every installment keeps its own method, reference
+> and notes — a second payment no longer wipes the first one's detail."
+
+**[SCREEN: Cash payment with the reference field empty]**
+
+> "One exception. Cash with no reference is never treated as a duplicate — two
+> twenty-dollar bills at the same meeting are two payments, and the system
+> won't quietly merge them. Want it to catch duplicates? Give it a reference."
+
+---
+
 ## Production Notes for Shorts
 
 ### Format Guidelines

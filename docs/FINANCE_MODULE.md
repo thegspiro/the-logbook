@@ -315,6 +315,14 @@ Enums:
 - `GET /finance/dues/summary` (collection rates, outstanding totals)
 - `POST /finance/dues/send-reminders` (trigger email notifications for overdue)
 
+> **No frontend calls any of the dues write endpoints yet.**
+> `DuesManagementPage` is read-only, and `financeStore` exposes only
+> `fetchDuesSchedules` / `fetchMemberDues` / `fetchDuesSummary`;
+> `modules/finance/services/api.ts` has no `unwaive` or payment-history method.
+> Schedule creation, dues generation, payment recording, waive, unwaive and the
+> ledger are API-only until that page is built out. Tracked in
+> `KNOWN_LIMITATIONS.md`.
+
 > **Why `unwaive` exists.** Payments against waived dues are refused, and
 > `PUT /finance/dues/{id}` *is* the payment route, so without a reversal there
 > is no way out of `WAIVED`: a department that waived by mistake and then

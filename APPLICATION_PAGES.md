@@ -68,6 +68,8 @@ Complete reference of all pages in the application, organized by module.
 | `/members/:userId` | Member Profile | Authenticated |
 | `/members/:userId/training` | Member Training History | Authenticated |
 
+> *(2026-08-04)* **Member Profile** is authenticated-only, but two of its fields are not. Date of birth and emergency contacts are served only to `members.manage` holders and to the member themselves; the page hides the emergency-contacts section entirely for everyone else rather than rendering it empty. No organization setting can publish them — `contact_info_visibility` (email/phone/mobile) has no flag for either. The rest of the contact block is redacted against that setting, on the same terms as the member directory.
+
 ### Members Admin Hub (`/members/admin`)
 
 Requires `members.manage` permission. Tab-based admin interface.

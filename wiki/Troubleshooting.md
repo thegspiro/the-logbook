@@ -90,6 +90,7 @@ This guide covers common issues and their solutions for The Logbook deployment.
 84. [Auth Cookies on LAN HTTP](#auth-cookies-on-lan-http-2026-03-12)
 85. [TypeScript Build Errors After Update](#typescript-build-errors-after-update-2026-03-12)
 86. [Member CSV Import](#member-csv-import-2026-08-04)
+87. [Dues Payments & Waivers](#dues-payments--waivers-2026-08-04)
 
 ---
 
@@ -2131,6 +2132,39 @@ row. Use the exact role name from **Roles**.
 Only `firstName`, `lastName`, `email`. Blank `membershipNumber` is
 auto-assigned. Emergency contacts need name + relationship + phone together or
 all blank. There is no `status` column — imports are always Active.
+
+---
+
+## Dues Payments & Waivers (2026-08-04)
+
+### Problem: "These dues are marked waived and are not owing" on a payment
+
+**Cause (Intentional):** Payments against Waived or Exempt dues are refused.
+They used to go through, cancelling the waiver as a side effect and moving the
+waived amount into collections with nothing recording it had ever been waived.
+
+**Fix:** Reverse the waiver first (**Reverse Waiver**, reason required,
+`finance.manage`), then record the payment. The record returns to whatever the
+payment history says, and the original waive reason goes to the audit log as
+`finance.dues_waiver_reversed`.
+
+### Problem: A resubmitted payment did not increase the amount paid
+
+**Cause (Intentional):** Payments are idempotent on the transaction reference —
+a reference already on the record returns it untouched instead of crediting
+twice. That is what makes a double-clicked Save safe. Unreferenced cash is
+never deduplicated. Give a genuine second payment its own reference, and check
+`GET /finance/dues/{id}/payments` for what was actually recorded.
+
+### Problem: A balance looks wrong after upgrading
+
+**Cause:** `amount_paid` is now derived from the `dues_payments` ledger rather
+than accumulated, so a paid record with no ledger row would recompute to zero.
+Migration `20260802_0001` backfills one row per already-paid record.
+
+**Fix:** Confirm migrations ran and that `dues_payments` has a row for every
+record with a non-zero `amount_paid`. Never write `member_dues.amount_paid`
+directly — it is recomputed on the next payment.
 
 ---
 
