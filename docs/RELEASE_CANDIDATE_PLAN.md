@@ -258,15 +258,23 @@ Phase 1 is genuinely unknown.
    destroyed-payment-history problem and is the more honest model for money;
    the constraint is smaller. Either needs a migration. The status guard and
    the field-clobbering are getting fixed regardless — they need no decision.
-2. **DOB and emergency contacts** — surfaced while fixing ORU-8, not previously
-   tracked. Both endpoints expose `date_of_birth` and `emergency_contacts`
-   (names and phone numbers of members' family, who are not department members)
-   to any `users.view` holder, and `MemberProfilePage` renders the emergency
-   contacts section for any viewer — `canEdit` gates editing, not viewing.
-   Unlike ORU-8 there is no policy to apply: `contact_info_visibility` has no
-   flag for either. Officers plausibly *should* see emergency contacts; the
-   whole membership plausibly should not. Needs a product call.
-3. **Pilot** — which department runs the RC, and for how long?
+2. **Pilot** — which department runs the RC, and for how long?
+
+**Decided 2026-08-02 — DOB and emergency contacts are leadership-only.**
+Surfaced while fixing ORU-8 and not previously tracked. Now gated on
+`members.manage` (or the member themselves) on both `with-roles` endpoints,
+with no organization setting able to publish them — `contact_info_visibility`
+deliberately has no flag for either. `members.manage` was chosen over a new
+permission because it already resolves to exactly the intended population —
+fire chief, deputy and assistant chief, captain, president, vice-president,
+secretary, assistant secretary, membership coordinator, IT manager — whereas
+`users.view` reaches 24 positions and `members.view` reaches every member. It
+also needs no seed migration, so existing organizations get the restriction on
+upgrade rather than after a role edit. Disclosure to leadership is recorded on
+the `user_viewed` audit event, so the trail answers *who saw it*, not merely
+who looked. `MemberProfilePage` hides the emergency-contacts section entirely
+for everyone else rather than rendering an empty one, which would read as "none
+on file" — a different and wrong statement about the member.
 
 > **Note on how these were triaged.** Phase 2 was first assembled from the
 > audit write-ups in `docs/module-audit/` rather than the implementations, and
