@@ -30,6 +30,7 @@ import {
   UserPlus,
   SlidersHorizontal,
   Target,
+  Store,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -415,6 +416,12 @@ export const InventoryAdminHub: React.FC = () => {
                 icon={<Upload className="w-5 h-5 text-theme-text-muted group-hover:text-theme-text-primary" />}
                 title="Import / Export"
                 description="Bulk import from CSV or export inventory data"
+              />
+              <NavCard
+                to="/store/admin"
+                icon={<Store className="w-5 h-5 text-theme-text-muted group-hover:text-theme-text-primary" />}
+                title="Department Store"
+                description="Order windows, catalog, and member order payments"
               />
             </div>
           </Section>

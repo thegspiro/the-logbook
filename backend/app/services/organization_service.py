@@ -83,6 +83,7 @@ class OrganizationService:
         "hr-payroll": "hr_payroll",
         "hr_payroll": "hr_payroll",
         "grants": "grants",
+        "storefront": "storefront",
         "prospective-members": "prospective_members",
         "prospective_members": "prospective_members",
         "public-info": "public_info",

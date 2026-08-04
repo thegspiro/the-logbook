@@ -34,6 +34,7 @@ import { getSchedulingRoutes } from './modules/scheduling';
 import { getEventsRoutes, getEventsPublicRoutes } from './modules/events';
 import { getTrainingRoutes } from './modules/training';
 import { getInventoryRoutes } from './modules/inventory';
+import { getStorefrontRoutes } from './modules/storefront';
 import { getElectionsRoutes, getElectionsPublicRoutes } from './modules/elections';
 import { getMinutesRoutes } from './modules/minutes';
 import { getFacilitiesRoutes, getFacilitiesPublicRoutes } from './modules/facilities';
@@ -135,6 +136,7 @@ function App() {
                   {getDocumentsRoutes()}
                   {getTrainingRoutes()}
                   {getInventoryRoutes()}
+                  {getStorefrontRoutes()}
                   {getSchedulingRoutes()}
                   {getFacilitiesRoutes()}
                   {getElectionsRoutes()}

@@ -721,6 +721,11 @@ class ModuleSettings(BaseModel):
     incidents: bool = Field(default=False, description="Incidents & Reports module")
     hr_payroll: bool = Field(default=False, description="HR & Payroll module")
     grants: bool = Field(default=False, description="Grants & Fundraising module")
+    storefront: bool = Field(
+        default=False,
+        description="Department Storefront module (member ordering, sold via "
+        "Venmo/PayPal/cash/check)",
+    )
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""
@@ -758,6 +763,7 @@ class ModuleSettingsUpdate(BaseModel):
     incidents: Optional[bool] = None
     hr_payroll: Optional[bool] = None
     grants: Optional[bool] = None
+    storefront: Optional[bool] = None
     prospective_members: Optional[bool] = None
     public_info: Optional[bool] = None
 

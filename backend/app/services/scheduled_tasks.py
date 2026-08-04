@@ -210,6 +210,18 @@ SCHEDULE = {
         "recommended_time": "* * * * *",
         "cron": "* * * * *",
     },
+    "storefront_window_lifecycle": {
+        "description": "Open/close department-store order windows that reached their scheduled time and send the closing-soon reminder",
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15 * * * *",
+        "cron": "*/15 * * * *",
+    },
+    "storefront_payment_reminders": {
+        "description": "Email members whose store orders still carry an unpaid balance past the configured grace period",
+        "frequency": "daily",
+        "recommended_time": "09:00",
+        "cron": "0 9 * * *",
+    },
     "inventory_low_stock_alerts": {
         "description": "Send email alerts to admins when inventory items fall below their reorder point",
         "frequency": "daily",
@@ -3232,6 +3244,33 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "publish_scheduled_messages", "published": published}
 
 
+async def run_storefront_window_lifecycle(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Open and close department-store order windows that have reached their
+    scheduled time, and send the "closing soon" last call. Every 15 minutes.
+    """
+    from app.services.storefront_service import StorefrontService
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        service = StorefrontService(db_session)
+        return await service.run_window_lifecycle(str(org.id))
+
+    return await _for_each_org(db, "storefront_window_lifecycle", process)
+
+
+async def run_storefront_payment_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Remind members whose store orders still carry a balance. Daily at 09:00.
+    """
+    from app.services.storefront_service import StorefrontService
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        service = StorefrontService(db_session)
+        return await service.run_payment_reminders(str(org.id))
+
+    return await _for_each_org(db, "storefront_payment_reminders", process)
+
+
 async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
     Send email alerts to admins when inventory items drop below reorder point.
@@ -4445,6 +4484,8 @@ TASK_RUNNERS = {
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
     "scheduled_emails": run_scheduled_emails,
+    "storefront_window_lifecycle": run_storefront_window_lifecycle,
+    "storefront_payment_reminders": run_storefront_payment_reminders,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
@@ -4480,6 +4521,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "election_lifecycle": 900,
     "shift_auto_checkout": 900,
     "publish_scheduled_messages": 900,
+    "storefront_window_lifecycle": 900,
     # Every 30 minutes
     "event_reminders": 1800,
     "post_event_validation": 1800,
@@ -4494,6 +4536,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "action_item_reminders": 86400,
     "inventory_low_stock_alerts": 86400,
     "inventory_overdue_alerts": 86400,
+    "storefront_payment_reminders": 86400,
     "compliance_auto_reports": 86400,
     "message_history_cleanup": 86400,
     "series_end_reminders": 86400,

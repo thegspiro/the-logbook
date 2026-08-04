@@ -37,6 +37,7 @@ import {
   Globe,
   HardDrive,
   Key,
+  Store,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { HelpLink } from '../components/HelpLink';
@@ -97,6 +98,7 @@ const ADDITIONAL_MODULES: ConfigurableModule[] = [
   { key: 'incidents', name: 'Incidents & Reports', description: 'Incident logging, run reports, and analytics', icon: <FileText className="w-5 h-5" /> },
   { key: 'hr_payroll', name: 'HR & Payroll', description: 'Time tracking, compensation, and benefits management', icon: <Briefcase className="w-5 h-5" /> },
   { key: 'grants', name: 'Grants & Fundraising', description: 'Grant tracking, fundraising campaigns, and budget management', icon: <DollarSign className="w-5 h-5" /> },
+  { key: 'storefront', name: 'Department Store', description: 'Sell apparel and gear to members with open/close order windows, paid via Venmo, PayPal, cash, or check', icon: <Store className="w-5 h-5" /> },
 ];
 
 const CONFIGURABLE_MODULES: ConfigurableModule[] = [...STANDARD_MODULES, ...ADDITIONAL_MODULES];

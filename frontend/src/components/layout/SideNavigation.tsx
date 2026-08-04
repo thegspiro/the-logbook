@@ -39,6 +39,7 @@ import {
   CreditCard,
   ScanLine,
   Stethoscope,
+  Store,
 } from "lucide-react";
 import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
@@ -259,6 +260,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               { label: "Inventory", path: "/inventory", icon: Package },
             ]
           : []),
+        ...(isModuleOn("storefront")
+          ? [{ label: "Department Store", path: "/store", icon: Store }]
+          : []),
         // Full apparatus module or lightweight version
         ...(isModuleOn("apparatus")
           ? [{ label: "Apparatus", path: "/apparatus", icon: Truck }]
@@ -407,6 +411,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                   path: "/inventory/admin",
                   icon: Package,
                   permission: "inventory.manage",
+                } as NavItem,
+              ]
+            : []),
+          ...(isModuleOn("storefront")
+            ? [
+                {
+                  label: "Store Admin",
+                  path: "/store/admin",
+                  icon: Store,
+                  permission: "storefront.manage",
                 } as NavItem,
               ]
             : []),

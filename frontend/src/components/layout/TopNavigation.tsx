@@ -138,6 +138,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
           { label: 'My Equipment', path: '/inventory/my-equipment' },
           { label: 'Inventory', path: '/inventory' },
         ] : []),
+        ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store' }] : []),
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus' }]
           : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
@@ -175,6 +176,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
         ...(isModuleOn('training') ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }] : []),
         ...(isModuleOn('inventory') ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }] : []),
+        ...(isModuleOn('storefront') ? [{ label: 'Store Admin', path: '/store/admin', permission: 'storefront.manage' }] : []),
         { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
         DIV,
         ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'forms.view' }] : []),

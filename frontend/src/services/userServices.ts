@@ -288,6 +288,7 @@ export interface ModuleSettingsData {
   incidents: boolean;
   hr_payroll: boolean;
   grants: boolean;
+  storefront: boolean;
   prospective_members: boolean;
   public_info: boolean;
 }
