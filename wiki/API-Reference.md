@@ -447,6 +447,33 @@ POST   /api/v1/training/skills-testing/tests/{id}/complete             # Complet
 
 ---
 
+## Member Dues — Payment Ledger *(2026-08-02)*
+
+Each payment against a member's dues is its own row. The dues record's
+`amountPaid` is the **sum of that ledger**, recomputed on every write, and
+`paymentMethod` / `transactionReference` / `notes` / `paidDate` project the
+newest payment. Write payments, not totals.
+
+```
+PUT    /api/v1/finance/dues/{dues_id}            # Record a payment (finance.manage)
+GET    /api/v1/finance/dues/{dues_id}/payments   # Payment ledger, oldest first (finance.view)
+POST   /api/v1/finance/dues/{dues_id}/waive      # Waive dues; reason required (finance.manage)
+POST   /api/v1/finance/dues/{dues_id}/unwaive    # Reverse a waiver; reason required (finance.manage)
+```
+
+**Idempotency.** `PUT /finance/dues/{id}` is idempotent on
+`transactionReference`: resubmitting a reference already recorded against those
+dues returns the record unchanged rather than erroring, so a retried or
+double-submitted payment cannot double-credit. Enforced by a uniqueness
+constraint on `(member_dues_id, transaction_reference)`. Payments **without** a
+reference are never deduplicated — two identical cash amounts are two payments.
+
+**Waived dues reject payment.** `PUT` returns `400` when the record is `WAIVED`
+or `EXEMPT`; those are not owing, and recording money against them would cancel
+the waiver as a side effect. Use `/unwaive` first — it restores whatever the
+ledger says (`PENDING` / `PARTIAL` / `PAID`) and writes a
+`finance.dues_waiver_reversed` audit event carrying the erased waive reason.
+
 ## Privacy, Consent & Retention *(2026-07-31)*
 
 Data-subject rights and records retention. See
