@@ -622,6 +622,15 @@ class MemberDuesWaive(BaseModel):
     reason: str = Field(..., min_length=1)
 
 
+class MemberDuesUnwaive(BaseModel):
+    """Reverse a waiver on a member's dues"""
+
+    # Required for the same reason the waive requires one: reversing a
+    # financial decision should say why, and the reason is the only thing the
+    # audit event can record about intent.
+    reason: str = Field(..., min_length=1)
+
+
 class DuesSummaryResponse(BaseModel):
     """Aggregated dues collection summary"""
 

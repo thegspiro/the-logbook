@@ -225,6 +225,68 @@ class TestIdempotency:
         assert dues.amount_paid == Decimal("40.00")
 
 
+class TestUnwaive:
+    """The way back out of WAIVED, which payments deliberately no longer are."""
+
+    async def test_reversing_a_waiver_restores_what_the_ledger_says(self):
+        dues = _dues(
+            [_payment("40.00", minutes_ago=60, payment_method="check")],
+            status=DuesStatus.WAIVED,
+            waived_by=str(uuid.uuid4()),
+            waive_reason="Hardship — approved by the board",
+        )
+        service = _service_for(dues)
+
+        result, prior_reason = await service.unwaive_dues(
+            dues.id, ORG_ID, reason="Member paid after all"
+        )
+
+        assert prior_reason == "Hardship — approved by the board"
+        # 40 of 100 was already on the ledger, so it lands on PARTIAL — not
+        # PENDING, and not the PAID the old code would have produced.
+        assert result.status == DuesStatus.PARTIAL
+        assert result.amount_paid == Decimal("40.00")
+        assert result.waived_by is None
+        assert result.waive_reason is None
+
+    async def test_an_unpaid_record_returns_to_pending(self):
+        dues = _dues(
+            status=DuesStatus.WAIVED,
+            waive_reason="Hardship",
+            amount_paid=Decimal("0.00"),
+        )
+        service = _service_for(dues)
+
+        result, _ = await service.unwaive_dues(
+            dues.id, ORG_ID, reason="Entered in error"
+        )
+
+        assert result.status == DuesStatus.PENDING
+        assert result.amount_paid == Decimal("0.00")
+
+    async def test_reversing_a_record_that_is_not_waived_is_refused(self):
+        dues = _dues(status=DuesStatus.PARTIAL, amount_paid=Decimal("40.00"))
+        service = _service_for(dues)
+
+        with pytest.raises(ValueError, match="not waived"):
+            await service.unwaive_dues(dues.id, ORG_ID, reason="Mistake")
+
+    async def test_payment_is_accepted_again_after_reversal(self):
+        # The whole point: waived by mistake, member paid, treasurer needs to
+        # record it. Before the reversal endpoint this was a dead end.
+        dues = _dues(status=DuesStatus.WAIVED, waive_reason="Hardship")
+        service = _service_for(dues)
+
+        await service.unwaive_dues(dues.id, ORG_ID, reason="Member paid after all")
+        await service.record_dues_payment(
+            dues.id, ORG_ID, amount_paid=100.0, transaction_reference="CHK-2001"
+        )
+
+        assert dues.status == DuesStatus.PAID
+        assert dues.amount_paid == Decimal("100.00")
+        assert len(dues.payments) == 1
+
+
 class TestTotalsAreDerived:
     """`_apply_payment_totals` recomputes rather than accumulates."""
 
