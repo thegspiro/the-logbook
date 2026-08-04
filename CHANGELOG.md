@@ -7,65 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Members: CSV import template matches what the API accepts (2026-08-04)
+### Release-readiness pass (2026-08-02)
 
 **Fixed**
 
-- **The member import template could not be imported.** `downloadTemplate()`
-  emitted a `membershipNumber` column while the uploader's header check
-  required `departmentId` — the name that column carried before the
-  2026-02-21 badge-number consolidation. Downloading the template and
-  uploading it back unchanged
-  failed at the header check with "Missing required columns: departmentid",
-  so nothing in the file was ever read. The template and its validator now
-  derive from one `TEMPLATE_HEADERS` list, and `departmentId` is still
-  accepted as the legacy spelling so rosters built from an older download
-  keep importing.
-- **A quoted field containing a comma shifted every column after it.** The
-  parser was `text.split('\n').map(r => r.split(','))`, so an address like
-  `"123 Main St, Apt 4"` pushed `email` into the `city` position and the row
-  was rejected as missing required fields — a well-formed row reported as
-  malformed. Replaced with a minimal RFC 4180 parser that honors quoted
-  fields, doubled quotes and CRLF.
-- **The header check demanded 13 columns the backend treats as optional**
-  (address, phone, join date, emergency contact). `AdminUserCreate` only
-  rejects a request missing `firstName`, `lastName` or `email`. A department
-  that had names and emails but no addresses could not import at all, and a
-  blank `membershipNumber` — which the server auto-assigns — was refused.
-  Required is now those three; absent optional columns raise a non-blocking
-  warning.
-- **The `role` column was parsed and then discarded.** Roles are assigned by
-  id, and the import never populated `role_ids`, so every imported member
-  landed with no position regardless of what the spreadsheet said. Role names
-  now resolve against `/roles` (case-insensitive); a name matching no
-  configured role is reported against its row instead of being ignored.
-- **A partial emergency contact reached the API as an opaque 422.** A contact
-  name without its relationship and phone violates `EmergencyContact`'s
-  constraints; it is now caught row-side with the row number and the two
-  fields to fill in.
+- **`pip install -r backend/requirements.txt` could not resolve.** `isort==8.0.1`
+  against `pylint==3.3.4`, which caps `isort<7`. pip exited
+  `ResolutionImpossible`, so Backend Unit Tests and Backend Security Scan died
+  at their install step and took Backend Integration Tests, API Contract Tests
+  and the Docker image build down with them — **no backend test had been running
+  on `main`.** pylint moved to 4.x, which widens the cap, rather than holding
+  isort back.
+- **CI lint pins had drifted from `requirements.txt`.** The workflow claimed to
+  mirror it but installed flake8 7.2.0 / isort 5.13.2 against 7.3.0 / 8.0.1, and
+  omitted `flake8-pytest-style` entirely, so Backend Lint was green against a
+  toolchain nobody actually ran. Aligning them surfaced an isort 5-vs-8
+  disagreement on wrapping from-imports split by an `as` alias (three files
+  reformatted) and two PT028 false positives on FastAPI "test connection" route
+  handlers (documented per-file-ignores).
+- **`npm ci` could not install.** The lockfile was missing `vite@8.2.0` and 37
+  other entries, breaking every frontend CI job. Regenerated, and the
+  `npm-minor-patch` group bump (21 packages) applied on top.
+- **`tsc --noEmit` failed on `main`.** The `IntersectionObserver` test mock was
+  missing `scrollMargin`, required by TypeScript 7's `lib.dom`.
+- **Report cells could render `[object Object]`.** Removing type assertions the
+  upgraded `typescript-eslint` flagged exposed that report renderers were
+  asserting a shape the API never guaranteed; a new `toDisplayString()` util
+  JSON-encodes objects instead.
+- **`toHaveNoViolations()` silently lost its type.** vitest 4.1 stopped hoisting
+  `@vitest/expect`, so the `vitest-axe` matcher augmentation targeting that
+  module specifier no longer resolved. Now augments `vitest`.
+
+**Security**
+
+- **Member contact details could be read past the visibility setting (ORU-8).**
+  `GET /users/{id}/with-roles` returned the raw member record while its sibling
+  roster endpoint redacted against `contact_info_visibility`. Both need only
+  `users.view`, so anything withheld on the roster — including home address and
+  personal email, which the roster never exposes at any setting — was one
+  request to the profile URL away. Both now redact through shared, fail-closed
+  helpers. Members-managers and **the member themselves** are exempt; the
+  settings page loads a member's own profile through that endpoint and writes
+  the fields back, so redacting for self would have blanked their own address on
+  the next save.
+- **Date of birth and emergency contacts are now leadership-only.** Restricted
+  to `members.manage` holders and the member themselves, with no organization
+  setting able to publish them. Emergency contacts name people outside the
+  department — a spouse, a parent — who never consented to appear in it and hold
+  no account to remove themselves. Disclosure is recorded on the `user_viewed`
+  audit event, and the profile page hides the section entirely rather than
+  rendering it empty, which would read as "none on file".
+- **Organization settings still exposed the IT team block (ORU-8).** The
+  infrastructure strip covered mail host, S3 bucket, SSO issuer and OAuth client
+  IDs but missed `it_team` — the names, direct email and phone of whoever
+  administers the deployment, plus `backup_access`, free text describing
+  break-glass procedures. Now emptied for callers without `settings.manage`.
 
 **Changed**
 
-- **`status` removed from the template.** `POST /users` always creates members
-  as Active and exposes no field to override it, so the column silently
-  discarded whatever a department typed. Status is set after import from the
-  member's admin edit page.
-- Import preview labels the membership number column **Member #** rather than
-  **Dept ID** — the label the rest of the UI has used since 2026-02-21.
+- **Member dues are now a payment ledger rather than a running total (FIN-6).**
+  `MemberDues` was the only record of payment: one `amount_paid` figure plus one
+  set of method/reference/notes columns, overwritten by whichever payment was
+  entered last. Three defects followed from that single design fact — a retried
+  submission double-credited because nothing consulted `transaction_reference`;
+  a second instalment that didn't resend `notes` destroyed the first payment's,
+  unrecoverably; and recording against a `WAIVED` record cancelled the waiver
+  while leaving its reason attached, moving the waived amount into collection
+  figures.
 
-**Added**
+  Each payment is now a row in `dues_payments`, and `amount_paid` is **re-derived
+  as the sum of that ledger** rather than accumulated. Double-crediting would
+  require a duplicate ledger row, which a uniqueness constraint on
+  `(member_dues_id, transaction_reference)` refuses — the failure stops being
+  representable rather than being guarded against. Payments without a reference
+  are never deduplicated, because two identical cash amounts are two payments.
 
-- **`username` column.** The username was always derived from the email
-  local-part, which collides when two members share one across domains
-  (`j.doe@a.com`, `j.doe@b.org`) — the second row failed with "Username
-  already exists" for a field the department never saw. The column is
-  optional and still defaults to the email local-part.
-- `ImportMembers.test.tsx` (15 cases), including a round-trip that feeds the
-  generated template straight back into the uploader — the drift that caused
-  the original bug.
-- `Blob.text()` / `Blob.arrayBuffer()` polyfill in `src/test/setup.ts`. jsdom
-  implements neither, which is why no test previously covered any CSV import
-  page's file reading.
+  Migration `20260802_0001` **backfills one row per already-paid record**; without
+  it, derived totals would recompute every existing balance to zero.
+
+  `GET /finance/dues/{id}/payments` exposes the ledger, and
+  `POST /finance/dues/{id}/unwaive` reverses a waiver — necessary because
+  refusing payments on waived dues would otherwise leave no way out of `WAIVED`.
 
 ### Security & correctness follow-up (2026-08-01)
 
