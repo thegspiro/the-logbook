@@ -437,6 +437,68 @@ async def check_contact_info_enabled(
     }
 
 
+async def _load_contact_visibility(
+    db: AsyncSession, current_user: User, is_admin: bool
+) -> dict[str, bool]:
+    """Read the org's contact_info_visibility flags for an unprivileged caller.
+
+    Returns an empty mapping — i.e. show nothing — for admins (who bypass
+    redaction anyway) and whenever the settings row cannot be read. Failing
+    closed matters here: an unreadable settings row must hide contact details,
+    not reveal them.
+    """
+    if is_admin:
+        return {}
+
+    org_service = OrganizationService(db)
+    try:
+        org_settings = await org_service.get_organization_settings(
+            current_user.organization_id
+        )
+        contact = org_settings.contact_info_visibility
+        if not contact.enabled:
+            return {}
+        return {
+            "show_email": contact.show_email,
+            "show_phone": contact.show_phone,
+            "show_mobile": contact.show_mobile,
+        }
+    except Exception as e:
+        logger.warning(
+            f"Failed to load contact visibility settings, redacting contact "
+            f"info for user {current_user.id}: {e}"
+        )
+        return {}
+
+
+def _clear_hidden_contact_fields(
+    payload: UserWithRolesResponse | UserProfileResponse, visibility: dict[str, bool]
+) -> None:
+    """Blank, in place, the contact details an unprivileged caller may not see.
+
+    Shared by the roster and the single-member profile so the two cannot drift:
+    ORU-8 was exactly that drift — the roster redacted, the detail endpoint
+    returned the same columns untouched, and a member refused an email address
+    on the roster could read it (plus personal_email and the home address) by
+    requesting the detail URL instead.
+    """
+    if not visibility.get("show_email", False):
+        payload.email = None
+    if not visibility.get("show_phone", False):
+        payload.phone = None
+    if not visibility.get("show_mobile", False):
+        payload.mobile = None
+
+    # Never surfaced to the general membership at any visibility setting, so the
+    # setting has no "show" flag for them — they are admin-only by definition.
+    payload.personal_email = None
+    payload.address_street = None
+    payload.address_city = None
+    payload.address_state = None
+    payload.address_zip = None
+    payload.address_country = None
+
+
 def _redact_contact_fields(
     user: User, visibility: dict[str, bool], is_admin: bool
 ) -> UserWithRolesResponse:
@@ -455,22 +517,7 @@ def _redact_contact_fields(
     if is_admin:
         return payload
 
-    if not visibility.get("show_email", False):
-        payload.email = None
-    if not visibility.get("show_phone", False):
-        payload.phone = None
-    if not visibility.get("show_mobile", False):
-        payload.mobile = None
-
-    # Never surfaced by the roster endpoint at any visibility setting, so the
-    # setting has no "show" flag for them — they are admin-only by definition.
-    payload.personal_email = None
-    payload.address_street = None
-    payload.address_city = None
-    payload.address_state = None
-    payload.address_zip = None
-    payload.address_country = None
-
+    _clear_hidden_contact_fields(payload, visibility)
     return payload
 
 
@@ -493,28 +540,7 @@ async def list_users_with_roles(
     is_admin = _has_permission(
         "members.manage", _collect_user_permissions(current_user)
     )
-
-    visibility: dict[str, bool] = {}
-    if not is_admin:
-        org_service = OrganizationService(db)
-        try:
-            org_settings = await org_service.get_organization_settings(
-                current_user.organization_id
-            )
-            contact = org_settings.contact_info_visibility
-            if contact.enabled:
-                visibility = {
-                    "show_email": contact.show_email,
-                    "show_phone": contact.show_phone,
-                    "show_mobile": contact.show_mobile,
-                }
-        except Exception as e:
-            # Fail closed: an unreadable settings row must hide contact
-            # details, not reveal them.
-            logger.warning(
-                f"Failed to load contact visibility settings, redacting contact "
-                f"info on /users/with-roles: {e}"
-            )
+    visibility = await _load_contact_visibility(db, current_user, is_admin)
 
     result = await db.execute(
         select(User)
@@ -945,6 +971,11 @@ async def get_user_with_roles(
     This endpoint is for the member profile page.
     Users can view any member's profile, but can only see notification preferences for their own profile.
 
+    Contact information is redacted against the organization's
+    `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
+    see `_clear_hidden_contact_fields`. Members-managers and the subject
+    themselves are exempt.
+
     **Authentication required**
     """
     result = await db.execute(
@@ -974,7 +1005,22 @@ async def get_user_with_roles(
         username=current_user.username,
     )
 
-    return user
+    # SEC (ORU-8): redact on the same terms as the roster. Without this the
+    # visibility setting is advisory — anything the roster withheld is one
+    # request to this URL away. The subject is exempt: UserSettingsPage loads
+    # its own profile through here and writes the fields back, so redacting for
+    # self would blank a member's own address and phone on their next save.
+    is_admin = _has_permission(
+        "members.manage", _collect_user_permissions(current_user)
+    )
+    is_self = str(current_user.id) == str(user_id)
+
+    payload = UserProfileResponse.model_validate(user)
+    if not (is_admin or is_self):
+        visibility = await _load_contact_visibility(db, current_user, is_admin)
+        _clear_hidden_contact_fields(payload, visibility)
+
+    return payload
 
 
 @router.patch("/{user_id}/contact-info", response_model=UserProfileResponse)
