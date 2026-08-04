@@ -1871,6 +1871,55 @@ class FinanceService:
         await self.db.refresh(dues, ["updated_at"])
         return dues
 
+    async def unwaive_dues(
+        self,
+        dues_id: str,
+        org_id: str,
+        reason: str,
+    ) -> tuple[MemberDues, Optional[str]]:
+        """Reverse a waiver, returning the record to what its ledger says.
+
+        Recording a payment against waived dues is refused, so without this
+        there is no way out of WAIVED: ``PUT /dues/{id}`` is the payment route
+        and the only other dues endpoint is the waive itself. A department that
+        waived by mistake and then received the money had no in-app remedy.
+
+        Returns the record together with the waive reason being erased, so the
+        caller can put it in the audit event. The reason is cleared rather than
+        kept, because a waive_reason left on an un-waived record is exactly the
+        self-contradictory row FIN-6 was about — the tamper-evident audit log is
+        where that history belongs.
+        """
+        result = await self.db.execute(
+            select(MemberDues)
+            .where(
+                MemberDues.id == dues_id,
+                MemberDues.organization_id == org_id,
+            )
+            .options(selectinload(MemberDues.payments))
+        )
+        dues = result.scalar_one_or_none()
+        if not dues:
+            raise ValueError("Member dues record not found")
+
+        if dues.status != DuesStatus.WAIVED:
+            raise ValueError(
+                "These dues are not waived, so there is nothing to reverse."
+            )
+
+        prior_reason = dues.waive_reason
+        dues.waived_by = None
+        dues.waived_at = None
+        dues.waive_reason = None
+
+        # The ledger decides what the record becomes — PENDING when nothing was
+        # ever paid, PARTIAL or PAID when something was. Nothing to guess.
+        _apply_payment_totals(dues)
+
+        await self.db.flush()
+        await self.db.refresh(dues, ["updated_at"])
+        return dues, prior_reason
+
     async def get_dues_summary(
         self, org_id: str, schedule_id: Optional[str] = None
     ) -> dict:

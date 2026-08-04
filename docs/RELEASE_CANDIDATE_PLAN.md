@@ -155,12 +155,12 @@ read would only be half the fix.
 15 unit tests. Ledger behaviour is tested through `_apply_payment_totals`,
 which is pure, so it runs in CI's unit job rather than needing MySQL.
 
-**Companion still open.** There is no way out of `WAIVED` through the API:
-`PUT /dues/{dues_id}` is `record_dues_payment` itself and the only other dues
-route is `POST /dues/{id}/waive` — no generic update, no unwaive. The gap
-predates this work but was masked, because recording a payment used to clear
-the status as a side effect of the bug. A small `POST /dues/{id}/unwaive` under
-`finance.manage`, writing an audit event, closes it.
+**Companion closed.** `POST /finance/dues/{id}/unwaive` under `finance.manage`
+reverses a waiver and lets the ledger decide what the record becomes — PENDING
+when nothing was paid, PARTIAL or PAID when something was. The erased waive
+reason is carried into a `finance.dues_waiver_reversed` audit event, since a
+waive_reason left on an un-waived record would be the same contradictory row
+FIN-6 was about. Requires a reason, like the waive it reverses.
 
 ORU-8 was originally carried here as a single item needing a product decision on
 what `users.view` may see. On reading the code it is two narrow gaps left behind
