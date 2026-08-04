@@ -37,14 +37,18 @@ jobs:
         # to wrap a from-import that a sibling `as` alias has split in two.
         run: pip install 'flake8==7.3.0' 'black==25.1.0' 'isort==8.0.1' 'flake8-pytest-style==2.2.0'
 
+      # tests/ is in scope alongside app/. It was left out originally, which
+      # let 85 violations accumulate unseen: lint-staged only lints *staged*
+      # files, so a test file's problems surfaced to whoever next happened to
+      # touch it rather than to the person who introduced them.
       - name: Run flake8
-        run: flake8 app/
+        run: flake8 app/ tests/
 
       - name: Check formatting with black
-        run: black --check app/
+        run: black --check app/ tests/
 
       - name: Check import order with isort
-        run: isort --check-only app/
+        run: isort --check-only app/ tests/
 
   backend-security:
     name: Backend Security Scan
