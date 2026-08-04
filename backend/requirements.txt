@@ -137,7 +137,7 @@ schemathesis==4.24.3
 faker==40.36.0
 
 # Code Quality
-black==25.1.0
+black==26.5.1
 flake8==7.3.0
 flake8-pytest-style==2.2.0
 mypy==1.19.1
