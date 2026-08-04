@@ -31,6 +31,7 @@ from app.models.finance import (
     BudgetCategory,
     CheckRequest,
     CheckRequestStatus,
+    DuesPayment,
     DuesSchedule,
     DuesStatus,
     ExpenseLineItem,
@@ -47,6 +48,43 @@ from app.models.finance import (
 from app.models.user import User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
+
+
+def _apply_payment_totals(dues: MemberDues) -> None:
+    """Re-derive the aggregate columns on ``dues`` from its payment ledger.
+
+    The columns on ``MemberDues`` are a cache of the ledger, not an independent
+    record. Recomputing the total from the rows — rather than adding to a
+    running figure — is what makes FIN-6's class of bug unrepresentable: a
+    double-credit would need a duplicate ledger row, which the uniqueness
+    constraint on ``(member_dues_id, transaction_reference)`` refuses.
+
+    ``payment_method`` / ``transaction_reference`` / ``notes`` continue to
+    describe the most recent payment. They are retained because
+    ``MemberDuesResponse`` exposes them, but they are now projections of the
+    newest row instead of whatever the last write happened to leave behind, so
+    they can no longer contradict the ledger or be blanked by an omitted field.
+
+    Deliberately does not touch WAIVED or EXEMPT: callers refuse payments
+    against those before reaching here, and a waiver is not a function of what
+    has been paid.
+    """
+    payments = sorted(dues.payments, key=lambda p: p.received_at)
+
+    dues.amount_paid = sum((p.amount for p in payments), Decimal("0.00"))
+
+    latest = payments[-1] if payments else None
+    dues.paid_date = latest.received_at if latest else None
+    dues.payment_method = latest.payment_method if latest else None
+    dues.transaction_reference = latest.transaction_reference if latest else None
+    dues.notes = latest.notes if latest else None
+
+    if dues.amount_paid >= dues.amount_due:
+        dues.status = DuesStatus.PAID
+    elif dues.amount_paid > 0:
+        dues.status = DuesStatus.PARTIAL
+    else:
+        dues.status = DuesStatus.PENDING
 
 
 class FinanceService:
@@ -1721,33 +1759,91 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def record_dues_payment(
-        self, dues_id: str, org_id: str, **kwargs
+        self,
+        dues_id: str,
+        org_id: str,
+        recorded_by: Optional[str] = None,
+        **kwargs,
     ) -> MemberDues:
+        """Append a payment to the dues ledger and re-derive the totals.
+
+        Idempotent on ``transaction_reference``: re-submitting a payment that
+        already exists against these dues returns the record untouched rather
+        than crediting it twice. A payment with no reference — cash at a
+        meeting — cannot be deduplicated and is always appended, which is why
+        the reference is the thing worth capturing.
+        """
         result = await self.db.execute(
-            select(MemberDues).where(
+            select(MemberDues)
+            .where(
                 MemberDues.id == dues_id,
                 MemberDues.organization_id == org_id,
             )
+            .options(selectinload(MemberDues.payments))
         )
         dues = result.scalar_one_or_none()
         if not dues:
             raise ValueError("Member dues record not found")
 
-        amount_paid = Decimal(str(kwargs.get("amount_paid", 0)))
-        dues.amount_paid = dues.amount_paid + amount_paid
-        dues.payment_method = kwargs.get("payment_method")
-        dues.transaction_reference = kwargs.get("transaction_reference")
-        dues.notes = kwargs.get("notes")
-        dues.paid_date = datetime.now(timezone.utc)
+        # FIN-6: a record that is not owing must not be silently converted into
+        # one that was paid. Recording a payment here used to recompute status
+        # to PAID/PARTIAL while leaving waived_by / waived_at / waive_reason
+        # populated — a self-contradictory row — and because the dues summary
+        # derives total_waived from `status == WAIVED`, the waived amount
+        # silently moved into collections with nothing recording that it had
+        # ever been waived. Refuse instead: reversing a waiver is a deliberate
+        # act, not a side effect of entering a payment.
+        if dues.status in (DuesStatus.WAIVED, DuesStatus.EXEMPT):
+            raise ValueError(
+                f"These dues are marked {dues.status.value} and are not owing. "
+                "Reverse that first if payment was received in error."
+            )
 
-        if dues.amount_paid >= dues.amount_due:
-            dues.status = DuesStatus.PAID
-        elif dues.amount_paid > 0:
-            dues.status = DuesStatus.PARTIAL
+        reference = kwargs.get("transaction_reference")
+        if reference and any(
+            payment.transaction_reference == reference for payment in dues.payments
+        ):
+            # Already recorded. Returning the current state — rather than
+            # raising — is what makes a retried or double-clicked submission
+            # safe, which is the entire point of capturing the reference.
+            logger.info(
+                f"Dues payment {reference!r} already recorded against {dues_id}; "
+                "ignoring duplicate submission"
+            )
+            return dues
+
+        payment = DuesPayment(
+            organization_id=dues.organization_id,
+            member_dues_id=dues.id,
+            amount=Decimal(str(kwargs.get("amount_paid", 0))),
+            payment_method=kwargs.get("payment_method"),
+            transaction_reference=reference,
+            notes=kwargs.get("notes"),
+            received_at=datetime.now(timezone.utc),
+            recorded_by=recorded_by,
+        )
+        dues.payments.append(payment)
+
+        _apply_payment_totals(dues)
 
         await self.db.flush()
         await self.db.refresh(dues, ["updated_at"])
         return dues
+
+    async def list_dues_payments(self, dues_id: str, org_id: str) -> list[DuesPayment]:
+        """Return the payment ledger for one member's dues, oldest first."""
+        result = await self.db.execute(
+            select(MemberDues)
+            .where(
+                MemberDues.id == dues_id,
+                MemberDues.organization_id == org_id,
+            )
+            .options(selectinload(MemberDues.payments))
+        )
+        dues = result.scalar_one_or_none()
+        if not dues:
+            raise ValueError("Member dues record not found")
+        return list(dues.payments)
 
     async def waive_dues(
         self,
@@ -1774,6 +1870,55 @@ class FinanceService:
         await self.db.flush()
         await self.db.refresh(dues, ["updated_at"])
         return dues
+
+    async def unwaive_dues(
+        self,
+        dues_id: str,
+        org_id: str,
+        reason: str,
+    ) -> tuple[MemberDues, Optional[str]]:
+        """Reverse a waiver, returning the record to what its ledger says.
+
+        Recording a payment against waived dues is refused, so without this
+        there is no way out of WAIVED: ``PUT /dues/{id}`` is the payment route
+        and the only other dues endpoint is the waive itself. A department that
+        waived by mistake and then received the money had no in-app remedy.
+
+        Returns the record together with the waive reason being erased, so the
+        caller can put it in the audit event. The reason is cleared rather than
+        kept, because a waive_reason left on an un-waived record is exactly the
+        self-contradictory row FIN-6 was about — the tamper-evident audit log is
+        where that history belongs.
+        """
+        result = await self.db.execute(
+            select(MemberDues)
+            .where(
+                MemberDues.id == dues_id,
+                MemberDues.organization_id == org_id,
+            )
+            .options(selectinload(MemberDues.payments))
+        )
+        dues = result.scalar_one_or_none()
+        if not dues:
+            raise ValueError("Member dues record not found")
+
+        if dues.status != DuesStatus.WAIVED:
+            raise ValueError(
+                "These dues are not waived, so there is nothing to reverse."
+            )
+
+        prior_reason = dues.waive_reason
+        dues.waived_by = None
+        dues.waived_at = None
+        dues.waive_reason = None
+
+        # The ledger decides what the record becomes — PENDING when nothing was
+        # ever paid, PARTIAL or PAID when something was. Nothing to guess.
+        _apply_payment_totals(dues)
+
+        await self.db.flush()
+        await self.db.refresh(dues, ["updated_at"])
+        return dues, prior_reason
 
     async def get_dues_summary(
         self, org_id: str, schedule_id: Optional[str] = None

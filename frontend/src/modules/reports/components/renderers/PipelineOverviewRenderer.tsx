@@ -4,6 +4,7 @@
 
 import React from 'react';
 import type { PipelineOverviewReport } from '../../types';
+import { toDisplayString } from '../../../../utils/displayValue';
 import { ReportTable } from '../ReportTable';
 import { StatCard } from '../StatCard';
 
@@ -18,12 +19,12 @@ export const PipelineOverviewRenderer: React.FC<Props> = ({ data }) => {
     {
       key: 'avg_days_in_group',
       header: 'Avg Days',
-      render: (v: unknown) => (v != null ? String(v as string | number) : '—'),
+      render: (v: unknown) => (v != null ? toDisplayString(v) : '—'),
     },
     {
       key: 'completion_rate',
       header: 'Completion %',
-      render: (v: unknown) => (v != null ? `${String(v as string | number)}%` : '—'),
+      render: (v: unknown) => (v != null ? `${toDisplayString(v)}%` : '—'),
     },
   ];
 
@@ -34,7 +35,7 @@ export const PipelineOverviewRenderer: React.FC<Props> = ({ data }) => {
       key: 'status',
       header: 'Status',
       render: (v: unknown) => (
-        <span className="capitalize">{v != null ? String(v as string | number) : '—'}</span>
+        <span className="capitalize">{v != null ? toDisplayString(v) : '—'}</span>
       ),
     },
     { key: 'current_group', header: 'Current Group' },

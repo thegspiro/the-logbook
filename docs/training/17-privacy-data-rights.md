@@ -113,12 +113,29 @@ their duties require:
   enabled contact-info visibility, and only the fields it has enabled (email,
   phone, mobile can each be shown or hidden). See
   [Administration & Reports > Contact Info Visibility](./08-admin-reports.md#contact-info-visibility).
-  The setting is now enforced on *every* roster view *(2026-08-01)* — one
-  admin-page endpoint previously returned the full member record regardless,
-  so a member who was refused an email address on the roster could obtain it
-  by loading a different screen. **Home address and personal email are never
-  shown to ordinary members at any visibility setting** — those are visible
-  only to members who manage the roster.
+  The setting is now enforced on *every* view of a member record
+  *(2026-08-02)*, the individual profile page included. Two endpoints
+  previously returned the full record regardless, so a member who was refused
+  an email address on the roster could obtain it by loading a different
+  screen. **Home address and personal email are never shown to ordinary
+  members at any visibility setting** — those are visible only to members who
+  manage the roster.
+- **Date of birth and emergency contacts are restricted to leadership**
+  *(2026-08-02)* — the chiefs, captains, president, vice-president,
+  secretaries and membership coordinator, plus you on your own record. There
+  is deliberately no setting that publishes them: your department cannot opt
+  into showing them on the roster.
+
+  Emergency contacts get this treatment because they are not your data alone.
+  They name a spouse, a parent, a neighbour — people who are not members of
+  the department, never agreed to appear in its systems, and have no account
+  with which to remove themselves. Date of birth is restricted because,
+  paired with a name, it is the field most useful to someone impersonating
+  you.
+
+  When a leader opens your profile, the audit log records whether that
+  restricted information was actually disclosed — so "who saw my family's
+  phone number" is a question with an answer, not just "who opened the page".
 - **Medical screening records** are restricted to members holding medical
   screening permissions specifically. A general administrator role does not
   include them.

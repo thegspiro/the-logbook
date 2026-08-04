@@ -39,7 +39,7 @@ const ProgramPrintPage: React.FC = () => {
       trainingProgramService.getProgramRequirements(programId).catch(() => []),
     ])
       .then(([p, reqs]) => {
-        setProgram(p as ProgramWithDetails & { enrollments?: ProgramEnrollment[] });
+        setProgram(p);
         setProgramRequirements(reqs);
       })
       .catch(() => setError('Failed to load program'))

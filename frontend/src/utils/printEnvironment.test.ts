@@ -11,7 +11,7 @@ function mockPointer(coarseNoHover: boolean) {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
     dispatchEvent: vi.fn(),
-  })) as unknown as typeof window.matchMedia;
+  }));
 }
 
 describe('prefersPdfOverBrowserPrint', () => {

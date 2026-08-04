@@ -537,6 +537,11 @@ export const MemberProfilePage: React.FC = () => {
   const isAdmin =
     checkPermission("users.update") || checkPermission("members.manage");
   const canEdit = currentUser?.id === userId || isAdmin;
+  // Emergency contacts are leadership-only server-side (members.manage or the
+  // member themselves). Mirror that gate here so everyone else sees no section
+  // at all — a rendered-but-empty section reads as "none on file", which is a
+  // different and wrong statement about the member.
+  const canViewRestrictedPii = canEdit;
 
   if (loading) {
     return (
@@ -1018,21 +1023,23 @@ export const MemberProfilePage: React.FC = () => {
               )}
             </div>
 
-            {/* Emergency Contacts */}
-            <EmergencyContactsSection
-              user={user}
-              canEdit={canEdit}
-              editingContacts={editingContacts}
-              savingContacts={savingContacts}
-              error={error}
-              contactsForm={contactsForm}
-              onEditEmergencyContacts={handleEditEmergencyContacts}
-              onSaveEmergencyContacts={handleSaveEmergencyContacts}
-              onCancelEditContacts={() => setEditingContacts(false)}
-              onAddContact={handleAddContact}
-              onRemoveContact={handleRemoveContact}
-              onContactChange={handleContactChange}
-            />
+            {/* Emergency Contacts — leadership and the member only */}
+            {canViewRestrictedPii && (
+              <EmergencyContactsSection
+                user={user}
+                canEdit={canEdit}
+                editingContacts={editingContacts}
+                savingContacts={savingContacts}
+                error={error}
+                contactsForm={contactsForm}
+                onEditEmergencyContacts={handleEditEmergencyContacts}
+                onSaveEmergencyContacts={handleSaveEmergencyContacts}
+                onCancelEditContacts={() => setEditingContacts(false)}
+                onAddContact={handleAddContact}
+                onRemoveContact={handleRemoveContact}
+                onContactChange={handleContactChange}
+              />
+            )}
 
             {/* Employment Info */}
             <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">

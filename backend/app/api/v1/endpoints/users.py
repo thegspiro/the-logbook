@@ -437,6 +437,93 @@ async def check_contact_info_enabled(
     }
 
 
+async def _load_contact_visibility(
+    db: AsyncSession, current_user: User, is_admin: bool
+) -> dict[str, bool]:
+    """Read the org's contact_info_visibility flags for an unprivileged caller.
+
+    Returns an empty mapping — i.e. show nothing — for admins (who bypass
+    redaction anyway) and whenever the settings row cannot be read. Failing
+    closed matters here: an unreadable settings row must hide contact details,
+    not reveal them.
+    """
+    if is_admin:
+        return {}
+
+    org_service = OrganizationService(db)
+    try:
+        org_settings = await org_service.get_organization_settings(
+            current_user.organization_id
+        )
+        contact = org_settings.contact_info_visibility
+        if not contact.enabled:
+            return {}
+        return {
+            "show_email": contact.show_email,
+            "show_phone": contact.show_phone,
+            "show_mobile": contact.show_mobile,
+        }
+    except Exception as e:
+        logger.warning(
+            f"Failed to load contact visibility settings, redacting contact "
+            f"info for user {current_user.id}: {e}"
+        )
+        return {}
+
+
+def _clear_leadership_only_fields(
+    payload: UserWithRolesResponse | UserProfileResponse,
+) -> None:
+    """Blank, in place, the fields restricted to leadership.
+
+    Date of birth and emergency contacts are a different category from the rest
+    of the contact block, and are handled separately for that reason:
+
+    * `contact_info_visibility` deliberately has no flag for them. They are not
+      roster data a department may choose to publish — they are leadership-only
+      unconditionally, so there is no configuration that discloses them.
+    * Emergency contacts are PII belonging to people who are not members of the
+      department at all — a member's spouse or parent, by name and phone. They
+      never consented to appear in the roster, and cannot remove themselves.
+    * Date of birth is identity-theft-grade and is the field most often paired
+      with a name to impersonate someone.
+
+    Cleared for everyone except `members.manage` holders and the member
+    themselves; both exemptions are applied by the callers, which return early
+    before reaching this.
+    """
+    payload.date_of_birth = None
+    payload.emergency_contacts = []
+
+
+def _clear_hidden_contact_fields(
+    payload: UserWithRolesResponse | UserProfileResponse, visibility: dict[str, bool]
+) -> None:
+    """Blank, in place, the contact details an unprivileged caller may not see.
+
+    Shared by the roster and the single-member profile so the two cannot drift:
+    ORU-8 was exactly that drift — the roster redacted, the detail endpoint
+    returned the same columns untouched, and a member refused an email address
+    on the roster could read it (plus personal_email and the home address) by
+    requesting the detail URL instead.
+    """
+    if not visibility.get("show_email", False):
+        payload.email = None
+    if not visibility.get("show_phone", False):
+        payload.phone = None
+    if not visibility.get("show_mobile", False):
+        payload.mobile = None
+
+    # Never surfaced to the general membership at any visibility setting, so the
+    # setting has no "show" flag for them — they are admin-only by definition.
+    payload.personal_email = None
+    payload.address_street = None
+    payload.address_city = None
+    payload.address_state = None
+    payload.address_zip = None
+    payload.address_country = None
+
+
 def _redact_contact_fields(
     user: User, visibility: dict[str, bool], is_admin: bool
 ) -> UserWithRolesResponse:
@@ -455,22 +542,8 @@ def _redact_contact_fields(
     if is_admin:
         return payload
 
-    if not visibility.get("show_email", False):
-        payload.email = None
-    if not visibility.get("show_phone", False):
-        payload.phone = None
-    if not visibility.get("show_mobile", False):
-        payload.mobile = None
-
-    # Never surfaced by the roster endpoint at any visibility setting, so the
-    # setting has no "show" flag for them — they are admin-only by definition.
-    payload.personal_email = None
-    payload.address_street = None
-    payload.address_city = None
-    payload.address_state = None
-    payload.address_zip = None
-    payload.address_country = None
-
+    _clear_hidden_contact_fields(payload, visibility)
+    _clear_leadership_only_fields(payload)
     return payload
 
 
@@ -493,28 +566,7 @@ async def list_users_with_roles(
     is_admin = _has_permission(
         "members.manage", _collect_user_permissions(current_user)
     )
-
-    visibility: dict[str, bool] = {}
-    if not is_admin:
-        org_service = OrganizationService(db)
-        try:
-            org_settings = await org_service.get_organization_settings(
-                current_user.organization_id
-            )
-            contact = org_settings.contact_info_visibility
-            if contact.enabled:
-                visibility = {
-                    "show_email": contact.show_email,
-                    "show_phone": contact.show_phone,
-                    "show_mobile": contact.show_mobile,
-                }
-        except Exception as e:
-            # Fail closed: an unreadable settings row must hide contact
-            # details, not reveal them.
-            logger.warning(
-                f"Failed to load contact visibility settings, redacting contact "
-                f"info on /users/with-roles: {e}"
-            )
+    visibility = await _load_contact_visibility(db, current_user, is_admin)
 
     result = await db.execute(
         select(User)
@@ -945,6 +997,13 @@ async def get_user_with_roles(
     This endpoint is for the member profile page.
     Users can view any member's profile, but can only see notification preferences for their own profile.
 
+    Contact information is redacted against the organization's
+    `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
+    see `_clear_hidden_contact_fields`. Date of birth and emergency contacts are
+    leadership-only regardless of that setting — see
+    `_clear_leadership_only_fields`. Members-managers and the subject themselves
+    are exempt from both.
+
     **Authentication required**
     """
     result = await db.execute(
@@ -961,6 +1020,16 @@ async def get_user_with_roles(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
+    is_admin = _has_permission(
+        "members.manage", _collect_user_permissions(current_user)
+    )
+    is_self = str(current_user.id) == str(user_id)
+    # Leadership reading someone else's record is the access worth being able
+    # to reconstruct later: it is the only path that discloses another member's
+    # date of birth and their family's names and phone numbers. Recorded on the
+    # event so the audit trail answers "who saw it", not merely "who looked".
+    discloses_restricted_pii = is_admin and not is_self
+
     await log_audit_event(
         db=db,
         event_type="user_viewed",
@@ -969,12 +1038,24 @@ async def get_user_with_roles(
         event_data={
             "viewed_user_id": str(user_id),
             "viewed_username": user.username,
+            "restricted_pii_disclosed": discloses_restricted_pii,
         },
         user_id=str(current_user.id),
         username=current_user.username,
     )
 
-    return user
+    # SEC (ORU-8): redact on the same terms as the roster. Without this the
+    # visibility setting is advisory — anything the roster withheld is one
+    # request to this URL away. The subject is exempt: UserSettingsPage loads
+    # its own profile through here and writes the fields back, so redacting for
+    # self would blank a member's own address and phone on their next save.
+    payload = UserProfileResponse.model_validate(user)
+    if not (is_admin or is_self):
+        visibility = await _load_contact_visibility(db, current_user, is_admin)
+        _clear_hidden_contact_fields(payload, visibility)
+        _clear_leadership_only_fields(payload)
+
+    return payload
 
 
 @router.patch("/{user_id}/contact-info", response_model=UserProfileResponse)

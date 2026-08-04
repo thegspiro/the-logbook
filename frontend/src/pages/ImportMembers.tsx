@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { CSVMemberRow } from '../types/member';
-import { userService } from '../services/api';
+import { userService, roleService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 
 interface ImportResult {
@@ -17,6 +17,184 @@ interface ImportResult {
   failed: number;
   errors: Array<{ row: number; error: string; data: unknown }>;
 }
+
+/**
+ * Columns emitted by the downloadable template, in display order.
+ *
+ * The validator below derives its required/recommended sets from this list, so
+ * the template can never again ship a file that its own validator rejects.
+ * `status` is deliberately absent: POST /users always creates members as
+ * Active and has no field to override it, so a status column would silently
+ * discard whatever the department typed.
+ */
+const TEMPLATE_HEADERS = [
+  'firstName',
+  'lastName',
+  'middleName',
+  'membershipNumber',
+  'username',
+  'dateOfBirth',
+  'street',
+  'city',
+  'state',
+  'zipCode',
+  'primaryPhone',
+  'secondaryPhone',
+  'email',
+  'joinDate',
+  'rank',
+  'role',
+  'station',
+  'platoon',
+  'emergencyName1',
+  'emergencyRelationship1',
+  'emergencyPhone1',
+  'emergencyEmail1',
+  'emergencyName2',
+  'emergencyRelationship2',
+  'emergencyPhone2',
+  'emergencyEmail2',
+] as const;
+
+/**
+ * Only these three are enforced as hard requirements, because they are the only
+ * fields `AdminUserCreate` rejects a request without. Membership numbers are
+ * auto-assigned server-side when omitted, and every other column maps to an
+ * Optional backend field — blocking the upload on them turns a partial roster
+ * into an unimportable one.
+ */
+const REQUIRED_HEADERS = ['firstname', 'lastname', 'email'] as const;
+
+/**
+ * `departmentId` is the legacy spelling of `membershipNumber` from earlier
+ * versions of this template. Accept either so rosters built from an older
+ * download still import.
+ */
+const MEMBERSHIP_NUMBER_HEADERS = ['membershipnumber', 'departmentid'] as const;
+
+const OPTIONAL_HEADERS = TEMPLATE_HEADERS.filter(
+  (h) => !(REQUIRED_HEADERS as readonly string[]).includes(h.toLowerCase())
+);
+
+/**
+ * Minimal RFC 4180 parser. A plain `split(',')` shifts every column right of a
+ * quoted address ("123 Main St, Apt 4") — which surfaces as bogus "missing
+ * required field" errors on rows that are actually well-formed.
+ */
+const parseCsv = (text: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      row.push(field);
+      field = '';
+    } else if (char === '\n' || char === '\r') {
+      // Treat CRLF as a single terminator.
+      if (char === '\r' && text[i + 1] === '\n') i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += char;
+    }
+  }
+
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return rows;
+};
+
+const isBlankRow = (row: string[]): boolean => row.every((cell) => cell.trim() === '');
+
+const cell = (row: string[], headers: string[], name: string): string | undefined => {
+  const index = headers.indexOf(name);
+  if (index === -1) return undefined;
+  return row[index]?.trim();
+};
+
+const buildRow = (row: string[], headers: string[]): CSVMemberRow => ({
+  firstName: cell(row, headers, 'firstname') || '',
+  lastName: cell(row, headers, 'lastname') || '',
+  middleName: cell(row, headers, 'middlename'),
+  membershipNumber:
+    MEMBERSHIP_NUMBER_HEADERS.map((h) => cell(row, headers, h)).find((v) => v) || '',
+  username: cell(row, headers, 'username'),
+  dateOfBirth: cell(row, headers, 'dateofbirth'),
+  street: cell(row, headers, 'street') || '',
+  city: cell(row, headers, 'city') || '',
+  state: cell(row, headers, 'state') || '',
+  zipCode: cell(row, headers, 'zipcode') || '',
+  primaryPhone: cell(row, headers, 'primaryphone') || '',
+  secondaryPhone: cell(row, headers, 'secondaryphone'),
+  email: cell(row, headers, 'email') || '',
+  joinDate: cell(row, headers, 'joindate') || '',
+  status: cell(row, headers, 'status'),
+  rank: cell(row, headers, 'rank'),
+  role: cell(row, headers, 'role'),
+  station: cell(row, headers, 'station'),
+  platoon: cell(row, headers, 'platoon'),
+  emergencyName1: cell(row, headers, 'emergencyname1') || '',
+  emergencyRelationship1: cell(row, headers, 'emergencyrelationship1') || '',
+  emergencyPhone1: cell(row, headers, 'emergencyphone1') || '',
+  emergencyEmail1: cell(row, headers, 'emergencyemail1'),
+  emergencyName2: cell(row, headers, 'emergencyname2'),
+  emergencyRelationship2: cell(row, headers, 'emergencyrelationship2'),
+  emergencyPhone2: cell(row, headers, 'emergencyphone2'),
+  emergencyEmail2: cell(row, headers, 'emergencyemail2'),
+});
+
+/**
+ * Row-level checks that mirror the backend's own constraints, so a bad cell is
+ * reported against its row number here instead of coming back as an opaque 422.
+ */
+const validateRow = (data: CSVMemberRow): string | null => {
+  const missing: string[] = [];
+  if (!data.firstName) missing.push('firstName');
+  if (!data.lastName) missing.push('lastName');
+  if (!data.email) missing.push('email');
+  if (missing.length > 0) {
+    return `Missing required fields: ${missing.join(', ')}`;
+  }
+
+  // EmergencyContact requires name, relationship and phone together; a partial
+  // contact is rejected by the API rather than saved with blanks.
+  if (data.emergencyName1 && (!data.emergencyRelationship1 || !data.emergencyPhone1)) {
+    return 'Emergency contact 1 needs both emergencyRelationship1 and emergencyPhone1';
+  }
+  if (data.emergencyName2 && (!data.emergencyRelationship2 || !data.emergencyPhone2)) {
+    return 'Emergency contact 2 needs both emergencyRelationship2 and emergencyPhone2';
+  }
+
+  return null;
+};
+
+const usernameFromEmail = (email: string): string =>
+  (email.split('@')[0] ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
 const ImportMembers: React.FC = () => {
   const navigate = useNavigate();
@@ -46,76 +224,51 @@ const ImportMembers: React.FC = () => {
     setValidating(true);
     try {
       const text = await file.text();
-      const rows = text.split('\n').map((row) => row.split(','));
+      const rows = parseCsv(text);
+      const headerRow = rows[0];
 
-      if (!rows[0] || rows[0].length === 0) {
+      if (!headerRow || isBlankRow(headerRow)) {
         toast.error('The file is empty or has no header row.');
         setValidating(false);
         return;
       }
 
-      // Check headers
-      const headers = rows[0].map((h) => h.trim().toLowerCase());
-      const requiredHeaders = [
-        'firstname',
-        'lastname',
-        'departmentid',
-        'street',
-        'city',
-        'state',
-        'zipcode',
-        'primaryphone',
-        'email',
-        'joindate',
-        'emergencyname1',
-        'emergencyrelationship1',
-        'emergencyphone1',
-      ];
+      const headers = headerRow.map((h) => h.trim().toLowerCase());
 
-      const missingHeaders = requiredHeaders.filter((h) => !headers.includes(h));
+      const missingHeaders = REQUIRED_HEADERS.filter((h) => !headers.includes(h));
       if (missingHeaders.length > 0) {
         toast.error(`Missing required columns: ${missingHeaders.join(', ')}`);
         setValidating(false);
         return;
       }
 
-      // Parse preview (first 5 rows)
-      const preview: CSVMemberRow[] = [];
-      for (let i = 1; i < Math.min(6, rows.length); i++) {
-        const row = rows[i];
-        if (!row || row.length < 2) continue; // Skip empty rows
-        preview.push({
-          firstName: row[headers.indexOf('firstname')]?.trim() || '',
-          lastName: row[headers.indexOf('lastname')]?.trim() || '',
-          middleName: row[headers.indexOf('middlename')]?.trim(),
-          membershipNumber: (row[headers.indexOf('membershipnumber')] || row[headers.indexOf('departmentid')])?.trim() || '',
-          dateOfBirth: row[headers.indexOf('dateofbirth')]?.trim(),
-          street: row[headers.indexOf('street')]?.trim() || '',
-          city: row[headers.indexOf('city')]?.trim() || '',
-          state: row[headers.indexOf('state')]?.trim() || '',
-          zipCode: row[headers.indexOf('zipcode')]?.trim() || '',
-          primaryPhone: row[headers.indexOf('primaryphone')]?.trim() || '',
-          secondaryPhone: row[headers.indexOf('secondaryphone')]?.trim(),
-          email: row[headers.indexOf('email')]?.trim() || '',
-          joinDate: row[headers.indexOf('joindate')]?.trim() || '',
-          status: row[headers.indexOf('status')]?.trim(),
-          rank: row[headers.indexOf('rank')]?.trim(),
-          role: row[headers.indexOf('role')]?.trim(),
-          station: row[headers.indexOf('station')]?.trim(),
-          platoon: row[headers.indexOf('platoon')]?.trim(),
-          emergencyName1: row[headers.indexOf('emergencyname1')]?.trim() || '',
-          emergencyRelationship1: row[headers.indexOf('emergencyrelationship1')]?.trim() || '',
-          emergencyPhone1: row[headers.indexOf('emergencyphone1')]?.trim() || '',
-          emergencyEmail1: row[headers.indexOf('emergencyemail1')]?.trim(),
-          emergencyName2: row[headers.indexOf('emergencyname2')]?.trim(),
-          emergencyRelationship2: row[headers.indexOf('emergencyrelationship2')]?.trim(),
-          emergencyPhone2: row[headers.indexOf('emergencyphone2')]?.trim(),
-          emergencyEmail2: row[headers.indexOf('emergencyemail2')]?.trim(),
-        });
+      const dataRows = rows.slice(1).filter((row) => !isBlankRow(row));
+      if (dataRows.length === 0) {
+        toast.error('The file has a header row but no member data.');
+        setValidating(false);
+        return;
       }
 
-      setPreviewData(preview);
-      toast.success(`File validated successfully! Found ${rows.length - 1} members to import.`);
+      const missingOptional = OPTIONAL_HEADERS.filter((h) => {
+        const key = h.toLowerCase();
+        // Either spelling of the membership number column satisfies this one.
+        if (key === 'membershipnumber') {
+          return !MEMBERSHIP_NUMBER_HEADERS.some((alias) => headers.includes(alias));
+        }
+        return !headers.includes(key);
+      });
+      if (missingOptional.length > 0) {
+        const shown = missingOptional.slice(0, 4).join(', ');
+        const rest = missingOptional.length - 4;
+        toast(
+          `Importing without ${missingOptional.length} optional column(s): ${shown}` +
+            (rest > 0 ? ` and ${rest} more` : ''),
+          { icon: '⚠️' }
+        );
+      }
+
+      setPreviewData(dataRows.slice(0, 5).map((row) => buildRow(row, headers)));
+      toast.success(`File validated successfully! Found ${dataRows.length} members to import.`);
     } catch (_error) {
       toast.error('Failed to parse CSV file. Please check the format.');
     }
@@ -134,66 +287,61 @@ const ImportMembers: React.FC = () => {
 
     try {
       const text = await file.text();
-      const rows = text.split('\n').map((row) => row.split(','));
+      const rows = parseCsv(text);
+      const headerRow = rows[0];
 
-      if (!rows[0] || rows[0].length === 0) {
+      if (!headerRow || isBlankRow(headerRow)) {
         result.errors.push({ row: 0, error: 'The file is empty or has no header row.', data: null });
         setImportResult(result);
         setImporting(false);
         return;
       }
 
-      const headers = rows[0].map((h) => h.trim().toLowerCase());
+      const headers = headerRow.map((h) => h.trim().toLowerCase());
+
+      // Roles are named in the CSV but the API assigns them by id, so resolve
+      // the org's roles once up front rather than per row.
+      const rolesByName = new Map<string, string>();
+      if (headers.includes('role')) {
+        try {
+          const roles = await roleService.getRoles();
+          roles.forEach((role) => rolesByName.set(role.name.trim().toLowerCase(), role.id));
+        } catch (_error) {
+          toast.error('Could not load roles; the role column will be skipped.');
+        }
+      }
 
       // Process each row (skip header)
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        if (!row || row.length < 2) continue; // Skip empty rows
+        if (!row || isBlankRow(row)) continue; // Skip empty rows
 
-        const rowData: CSVMemberRow = {
-          firstName: row[headers.indexOf('firstname')]?.trim() || '',
-          lastName: row[headers.indexOf('lastname')]?.trim() || '',
-          middleName: row[headers.indexOf('middlename')]?.trim(),
-          membershipNumber: (row[headers.indexOf('membershipnumber')] || row[headers.indexOf('departmentid')])?.trim() || '',
-          dateOfBirth: row[headers.indexOf('dateofbirth')]?.trim(),
-          street: row[headers.indexOf('street')]?.trim() || '',
-          city: row[headers.indexOf('city')]?.trim() || '',
-          state: row[headers.indexOf('state')]?.trim() || '',
-          zipCode: row[headers.indexOf('zipcode')]?.trim() || '',
-          primaryPhone: row[headers.indexOf('primaryphone')]?.trim() || '',
-          secondaryPhone: row[headers.indexOf('secondaryphone')]?.trim(),
-          email: row[headers.indexOf('email')]?.trim() || '',
-          joinDate: row[headers.indexOf('joindate')]?.trim() || '',
-          status: row[headers.indexOf('status')]?.trim(),
-          rank: row[headers.indexOf('rank')]?.trim(),
-          role: row[headers.indexOf('role')]?.trim(),
-          station: row[headers.indexOf('station')]?.trim(),
-          platoon: row[headers.indexOf('platoon')]?.trim(),
-          emergencyName1: row[headers.indexOf('emergencyname1')]?.trim() || '',
-          emergencyRelationship1: row[headers.indexOf('emergencyrelationship1')]?.trim() || '',
-          emergencyPhone1: row[headers.indexOf('emergencyphone1')]?.trim() || '',
-          emergencyEmail1: row[headers.indexOf('emergencyemail1')]?.trim(),
-          emergencyName2: row[headers.indexOf('emergencyname2')]?.trim(),
-          emergencyRelationship2: row[headers.indexOf('emergencyrelationship2')]?.trim(),
-          emergencyPhone2: row[headers.indexOf('emergencyphone2')]?.trim(),
-          emergencyEmail2: row[headers.indexOf('emergencyemail2')]?.trim(),
-        };
+        const rowData = buildRow(row, headers);
 
-        // Skip rows without required fields
-        if (!rowData.firstName || !rowData.lastName || !rowData.email) {
+        const validationError = validateRow(rowData);
+        if (validationError) {
           result.failed++;
           result.errors.push({
             row: i + 1,
-            error: 'Missing required fields (firstName, lastName, or email)',
+            error: validationError,
+            data: rowData,
+          });
+          continue;
+        }
+
+        const roleId = rowData.role ? rolesByName.get(rowData.role.toLowerCase()) : undefined;
+        if (rowData.role && rolesByName.size > 0 && !roleId) {
+          result.failed++;
+          result.errors.push({
+            row: i + 1,
+            error: `Unknown role "${rowData.role}". Create it under Roles first, or clear the column.`,
             data: rowData,
           });
           continue;
         }
 
         try {
-          // Generate username from email
-          const emailPrefix = rowData.email.split('@')[0] ?? '';
-          const username = emailPrefix.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+          const username = rowData.username || usernameFromEmail(rowData.email);
 
           // Build emergency contacts array
           const emergencyContacts: Array<{
@@ -246,6 +394,7 @@ const ImportMembers: React.FC = () => {
             ...(rowData.city ? { address_city: rowData.city } : {}),
             ...(rowData.state ? { address_state: rowData.state } : {}),
             ...(rowData.zipCode ? { address_zip: rowData.zipCode } : {}),
+            ...(roleId ? { role_ids: [roleId] } : {}),
           });
 
           result.success++;
@@ -274,65 +423,41 @@ const ImportMembers: React.FC = () => {
   };
 
   const downloadTemplate = () => {
-    const headers = [
-      'firstName',
-      'lastName',
-      'middleName',
-      'membershipNumber',
-      'dateOfBirth',
-      'street',
-      'city',
-      'state',
-      'zipCode',
-      'primaryPhone',
-      'secondaryPhone',
-      'email',
-      'joinDate',
-      'status',
-      'rank',
-      'role',
-      'station',
-      'platoon',
-      'emergencyName1',
-      'emergencyRelationship1',
-      'emergencyPhone1',
-      'emergencyEmail1',
-      'emergencyName2',
-      'emergencyRelationship2',
-      'emergencyPhone2',
-      'emergencyEmail2',
-    ];
+    const exampleValues: Record<(typeof TEMPLATE_HEADERS)[number], string> = {
+      firstName: 'John',
+      lastName: 'Doe',
+      middleName: 'Michael',
+      membershipNumber: 'FF-001',
+      username: 'john.doe',
+      dateOfBirth: '1985-03-15',
+      street: '123 Main Street, Apt 4',
+      city: 'Springfield',
+      state: 'IL',
+      zipCode: '62701',
+      primaryPhone: '(555) 123-4567',
+      secondaryPhone: '(555) 987-6543',
+      email: 'john.doe@example.com',
+      joinDate: '2020-01-15',
+      rank: 'Firefighter',
+      role: 'Member',
+      station: 'Station 1',
+      platoon: 'A',
+      emergencyName1: 'Jane Doe',
+      emergencyRelationship1: 'Spouse',
+      emergencyPhone1: '(555) 234-5678',
+      emergencyEmail1: 'jane.doe@example.com',
+      emergencyName2: 'Bob Doe',
+      emergencyRelationship2: 'Parent',
+      emergencyPhone2: '(555) 345-6789',
+      emergencyEmail2: 'bob.doe@example.com',
+    };
 
-    const exampleRow = [
-      'John',
-      'Doe',
-      'Michael',
-      'FF-001',
-      '1985-03-15',
-      '123 Main Street',
-      'Springfield',
-      'IL',
-      '62701',
-      '(555) 123-4567',
-      '(555) 987-6543',
-      'john.doe@example.com',
-      '2020-01-15',
-      'active',
-      'Firefighter',
-      'Engine Operator',
-      'Station 1',
-      'A',
-      'Jane Doe',
-      'Spouse',
-      '(555) 234-5678',
-      'jane.doe@example.com',
-      'Bob Doe',
-      'Parent',
-      '(555) 345-6789',
-      'bob.doe@example.com',
-    ];
+    const escapeCell = (value: string): string =>
+      /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 
-    const csv = [headers.join(','), exampleRow.join(',')].join('\n');
+    const exampleRow = TEMPLATE_HEADERS.map((h) => escapeCell(exampleValues[h]));
+
+    const csv = [TEMPLATE_HEADERS.join(','), exampleRow.join(',')].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -380,7 +505,12 @@ const ImportMembers: React.FC = () => {
           </h2>
           <ol className="text-blue-200 text-sm space-y-2 ml-6 list-decimal">
             <li>Download the CSV template below</li>
-            <li>Fill in member information in the template</li>
+            <li>
+              Fill in member information — <strong>firstName</strong>, <strong>lastName</strong> and{' '}
+              <strong>email</strong> are required on every row; the rest are optional
+            </li>
+            <li>Leave membershipNumber blank to have the system assign one</li>
+            <li>Role must match a role name configured under Roles</li>
             <li>Upload your completed CSV file</li>
             <li>Review the preview and import</li>
           </ol>
@@ -437,6 +567,7 @@ const ImportMembers: React.FC = () => {
             accept=".csv"
             onChange={handleFileSelect}
             className="hidden"
+            data-testid="csv-file-input"
           />
 
           {validating && (
@@ -460,7 +591,7 @@ const ImportMembers: React.FC = () => {
                 <thead className="bg-theme-input-bg border-b border-theme-surface-border">
                   <tr>
                     <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Name</th>
-                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Dept ID</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Member #</th>
                     <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Email</th>
                     <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Phone</th>
                     <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Emergency Contact</th>
@@ -476,7 +607,9 @@ const ImportMembers: React.FC = () => {
                       <td className="px-4 py-2 text-theme-text-secondary">{row.email}</td>
                       <td className="px-4 py-2 text-theme-text-secondary">{row.primaryPhone}</td>
                       <td className="px-4 py-2 text-theme-text-secondary">
-                        {row.emergencyName1} ({row.emergencyRelationship1})
+                        {row.emergencyName1
+                          ? `${row.emergencyName1}${row.emergencyRelationship1 ? ` (${row.emergencyRelationship1})` : ''}`
+                          : '—'}
                       </td>
                     </tr>
                   ))}

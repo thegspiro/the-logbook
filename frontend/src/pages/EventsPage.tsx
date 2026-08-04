@@ -833,7 +833,7 @@ export const EventsPage: React.FC = () => {
                   : 'Get started by creating a new event.'
                 : typeFilter.startsWith('cat:')
                   ? `No events in "${customCategories.find((c) => c.value === typeFilter.slice(4))?.label || typeFilter.slice(4)}" category.`
-                  : `No ${getEventTypeLabel(typeFilter as EventType).toLowerCase()} events found.`
+                  : `No ${getEventTypeLabel(typeFilter).toLowerCase()} events found.`
           }
           actions={canManage && !showPastEvents ? [
             { label: 'Create Event', onClick: () => window.location.href = '/events/new', icon: Plus },

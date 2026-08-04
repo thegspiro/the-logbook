@@ -236,7 +236,7 @@ const SortableItemWrapper: React.FC<SortableItemWrapperProps> = ({
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
       {children({
-        listeners: (listeners ?? undefined) as Record<string, unknown> | undefined,
+        listeners: (listeners ?? undefined),
         setNodeRef,
         style,
         attributes,
@@ -271,7 +271,7 @@ const SortableCompartmentWrapper: React.FC<SortableCompartmentWrapperProps> = ({
 
   return (
     <>{children({
-      listeners: (listeners ?? undefined) as Record<string, unknown> | undefined,
+      listeners: (listeners ?? undefined),
       setNodeRef,
       style,
       attributes,

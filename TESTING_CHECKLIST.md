@@ -69,6 +69,15 @@
 | MEM-16 | Reactivate archived member | Status restored to ACTIVE, can log in again |
 | MEM-17 | Bulk import members via CSV | Members created, temp passwords generated, summary shown |
 | MEM-18 | Bulk import with invalid CSV data (missing required fields) | Errors listed per row, valid rows still importable |
+| MEM-17a | Download the CSV template and upload it back unmodified | Accepted; the example row imports. No "missing required columns" error |
+| MEM-17b | Import a file containing only firstName, lastName, email | Accepted; warning names the absent optional columns but does not block |
+| MEM-17c | Import with a legacy `departmentId` column instead of `membershipNumber` | Accepted; value stored as the membership number |
+| MEM-17d | Import a row whose address contains a quoted comma (`"123 Main St, Apt 4"`) | Columns stay aligned; address stored intact, row not reported as missing fields |
+| MEM-17e | Import with blank `membershipNumber` | Membership number auto-assigned by the server |
+| MEM-17f | Import with a `role` matching a configured role name (any casing) | Member created with that role assigned |
+| MEM-17g | Import with a `role` matching no configured role | Row fails naming the unknown role; no member created for it |
+| MEM-17h | Import an emergency contact name with blank relationship/phone | Row fails naming both missing fields; no 422 surfaced to the user |
+| MEM-17i | Import two members whose emails share a local-part (`j.doe@a.com`, `j.doe@b.org`) with no username column | Second row fails "Username already exists"; passes when a `username` column is supplied |
 | MEM-19 | View member list with search filter | Results filter by name, rank, station |
 | MEM-20 | View member list filtered by status | Only members of selected status shown |
 | MEM-21 | Contact info visibility when org disables it | Phone/email/address hidden from non-admin members |

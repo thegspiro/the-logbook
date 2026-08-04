@@ -232,7 +232,7 @@ export const ApparatusFormPage: React.FC = () => {
       });
 
       if (isEditing && id) {
-        await apparatusService.updateApparatus(id, cleanedData as ApparatusUpdate);
+        await apparatusService.updateApparatus(id, cleanedData);
         toast.success('Apparatus updated successfully');
       } else {
         await apparatusService.createApparatus(cleanedData as ApparatusCreate);

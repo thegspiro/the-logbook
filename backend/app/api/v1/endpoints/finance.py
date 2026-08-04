@@ -39,6 +39,7 @@ from app.schemas.finance import (
     CheckRequestCreate,
     CheckRequestResponse,
     CheckRequestUpdate,
+    DuesPaymentResponse,
     DuesScheduleCreate,
     DuesScheduleResponse,
     DuesScheduleUpdate,
@@ -59,6 +60,7 @@ from app.schemas.finance import (
     FiscalYearUpdate,
     MemberDuesPayment,
     MemberDuesResponse,
+    MemberDuesUnwaive,
     MemberDuesWaive,
     PendingApprovalResponse,
     PurchaseRequestCreate,
@@ -1226,10 +1228,35 @@ async def record_dues_payment(
         return await service.record_dues_payment(
             dues_id,
             str(current_user.organization_id),
+            recorded_by=str(current_user.id),
             **data.model_dump(),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.get("/dues/{dues_id}/payments", response_model=list[DuesPaymentResponse])
+async def list_dues_payments(
+    dues_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    """
+    List every payment recorded against one member's dues, oldest first.
+
+    The dues record itself carries only the derived total and the most recent
+    payment's detail; this is the underlying ledger those are computed from,
+    and the only place earlier payments can be read back.
+    """
+    service = FinanceService(db)
+    try:
+        return await service.list_dues_payments(
+            dues_id, str(current_user.organization_id)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
@@ -1249,6 +1276,48 @@ async def waive_dues(
             str(current_user.id),
             data.reason,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.post("/dues/{dues_id}/unwaive", response_model=MemberDuesResponse)
+async def unwaive_dues(
+    dues_id: str,
+    data: MemberDuesUnwaive,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.manage")),
+):
+    """
+    Reverse a waiver, returning the dues to whatever the payment ledger says.
+
+    Payments against waived dues are refused, so this is the only way back —
+    the case being "waived by mistake, then the member paid".
+    """
+    service = FinanceService(db)
+    try:
+        dues, prior_reason = await service.unwaive_dues(
+            dues_id,
+            str(current_user.organization_id),
+            data.reason,
+        )
+        # The erased waiver survives here and nowhere else.
+        await log_audit_event(
+            db=db,
+            event_type="finance.dues_waiver_reversed",
+            event_category="finance",
+            severity="warning",
+            event_data={
+                "dues_id": dues_id,
+                "reason": data.reason,
+                "reversed_waive_reason": prior_reason,
+                "restored_status": dues.status.value,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return dues
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:

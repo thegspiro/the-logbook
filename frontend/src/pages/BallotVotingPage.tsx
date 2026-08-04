@@ -142,7 +142,7 @@ export const BallotVotingPage: React.FC = () => {
         ...(prev[itemId] ?? emptyChoice()),
         write_in_name: name,
       },
-    } as Record<string, ItemChoice>));
+    }));
   }, []);
 
   /** Toggle a candidate in an approval / multi-vote item's checkbox list. */

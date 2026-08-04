@@ -170,7 +170,7 @@ export const ManualShiftReportPage: React.FC = () => {
   const updateEval = (userId: string, field: keyof CrewMemberEvaluation, value: unknown) => {
     setTraineeEvals(prev => ({
       ...prev,
-      [userId]: { ...prev[userId], user_id: userId, [field]: value } as CrewMemberEvaluation,
+      [userId]: { ...prev[userId], user_id: userId, [field]: value },
     }));
   };
 

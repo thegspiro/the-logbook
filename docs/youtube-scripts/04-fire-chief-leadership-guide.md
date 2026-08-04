@@ -210,6 +210,25 @@ RSVP list and check-in status]**
 > current on all their certifications? How's their attendance? Have they
 > completed the required training for their position?"
 
+**[SCREEN: Scroll to the Emergency Contacts section on the profile]**
+
+> "Two things on this page you're seeing because of your position, and ordinary
+> members are not: date of birth, and emergency contacts. Chiefs, captains, the
+> president, vice-president, secretaries and the membership coordinator can see
+> them. Everyone else gets nothing — the section isn't even rendered."
+
+> "There's no setting to change that, and that's deliberate. Emergency contacts
+> aren't really your members' data — they're a spouse's name and phone number,
+> a parent's, a neighbour's. Those people never joined your department and have
+> no account here to remove themselves. So the system doesn't offer you the
+> option of putting them on the roster."
+
+> "The other half of that: when you open a member's profile, the system records
+> that you saw those fields. Not to police you — you have a legitimate reason,
+> that's why you have the access. But if a member ever asks who's been looking
+> at their family's phone number, you want that to be a question with an
+> answer."
+
 ### MEMBER ID CARDS (12:00 – 12:30)
 
 **[SCREEN: Navigate to Member ID Card page (MemberIdCardPage)]**

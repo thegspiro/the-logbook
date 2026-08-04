@@ -198,7 +198,7 @@ export const EventAnalyticsPage: React.FC = () => {
       if (endDate) params['end_date'] = new Date(endDate).toISOString();
 
       const resp = await eventService.getAnalyticsSummary(params);
-      setData(mapSummary(resp as RawAnalyticsSummary));
+      setData(mapSummary(resp));
     } catch {
       setError('Failed to load analytics data. Please try again.');
     } finally {

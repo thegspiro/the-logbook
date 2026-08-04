@@ -954,6 +954,14 @@ class OrganizationSettingsResponse(BaseModel):
                 "email_service": self.email_service.without_infrastructure(),
                 "file_storage": self.file_storage.without_infrastructure(),
                 "auth": self.auth.without_infrastructure(),
+                # The IT team block is the same class of disclosure as the
+                # identifiers above, and was missed when they were stripped: it
+                # names the people who administer the deployment, with their
+                # direct email and phone, alongside `backup_access` — an
+                # unstructured dict holding whatever an admin wrote about
+                # break-glass access. Emptied rather than nulled so the settings
+                # UI still renders the (empty) section.
+                "it_team": ITTeamSettings(),
             }
         )
 

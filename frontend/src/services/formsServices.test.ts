@@ -164,7 +164,7 @@ describe('formsService', () => {
       const field = { id: 'field1', ...fieldData };
       mockPost.mockResolvedValueOnce({ data: field });
 
-      const result = await formsService.addField('f1', fieldData as never);
+      const result = await formsService.addField('f1', fieldData);
 
       expect(mockPost).toHaveBeenCalledWith('/forms/f1/fields', fieldData);
       expect(result).toEqual(field);
@@ -178,7 +178,7 @@ describe('formsService', () => {
       const updated = { id: 'field1', label: 'Updated Label' };
       mockPatch.mockResolvedValueOnce({ data: updated });
 
-      const result = await formsService.updateField('f1', 'field1', updateData as never);
+      const result = await formsService.updateField('f1', 'field1', updateData);
 
       expect(mockPatch).toHaveBeenCalledWith('/forms/f1/fields/field1', updateData);
       expect(result).toEqual(updated);

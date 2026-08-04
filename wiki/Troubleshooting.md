@@ -89,6 +89,7 @@ This guide covers common issues and their solutions for The Logbook deployment.
 83. [Minutes Module Table Name Mismatch](#minutes-module-table-name-mismatch-2026-03-12)
 84. [Auth Cookies on LAN HTTP](#auth-cookies-on-lan-http-2026-03-12)
 85. [TypeScript Build Errors After Update](#typescript-build-errors-after-update-2026-03-12)
+86. [Member CSV Import](#member-csv-import-2026-08-04)
 
 ---
 
@@ -2098,6 +2099,38 @@ docker-compose up -d
 ### Problem: New stage types not visible
 
 **Cause:** New types (`automated_email`, `form_dropdown`, `meeting`) require latest frontend. Rebuild and clear cache.
+
+---
+
+## Member CSV Import (2026-08-04)
+
+### Problem: "Missing required columns: departmentid" on the downloaded template
+
+**Status (Fixed 2026-08-04):** The template generator emitted `membershipNumber`
+while the uploader still required `departmentId` — the pre-2026-02-21 name for
+that column — so the template it produced was rejected on upload.
+
+**Fix:** Pull latest frontend and re-download the template. Rosters built from
+an older template still import; `departmentId` is accepted as the legacy
+spelling.
+
+### Problem: A complete-looking row fails with "Missing required fields"
+
+**Cause (Fixed 2026-08-04):** Parsing split on every comma, so a quoted address
+(`"123 Main St, Apt 4"`) shifted every column after it. Fixed by parsing quoted
+fields properly.
+
+### Problem: Imported members have no position
+
+**Cause (Fixed 2026-08-04):** The `role` column was parsed but never sent. Role
+names now resolve against configured roles; an unmatched name is reported per
+row. Use the exact role name from **Roles**.
+
+### Required columns
+
+Only `firstName`, `lastName`, `email`. Blank `membershipNumber` is
+auto-assigned. Emergency contacts need name + relationship + phone together or
+all blank. There is no `status` column — imports are always Active.
 
 ---
 
