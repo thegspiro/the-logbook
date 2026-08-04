@@ -100,10 +100,30 @@ Verified against the implementation 2026-08-02, not just the audit write-ups.
 
 | ID | Item | Why it blocks | Decision |
 |---|---|---|---|
-| **ORU-8a** | `GET /users/{id}/with-roles` returns the raw ORM user via `UserProfileResponse` with no visibility filtering, while its sibling `GET /users/with-roles` redacts through `_redact_contact_fields`. Org-scoped, so no cross-tenant leak — but a member refused an email on the roster can read it, plus `personal_email` and the full home address, from the detail URL | The list endpoint's own comment says "redact here too, or the setting is advisory." The detail endpoint is what makes it advisory | Fix — reuse the existing helper. Small |
-| **ORU-8b** | `GET /organization/settings` strips infrastructure identifiers via `without_infrastructure()`, but neither that nor `redacted()` touches `it_team` — so every authenticated member gets the IT roster (names, emails, phones) and the free-form `backup_access` dict | `backup_access` is unstructured operational text; whatever an admin typed there is readable by any account, including a compromised volunteer login | Fix — extend `without_infrastructure()`. Small |
-| **FIN-6** | `record_dues_payment` does `amount_paid += amount` with no idempotency on `transaction_reference`; recording against a `WAIVED` record silently recomputes it to `PAID` | A retried payment double-credits collections and a waive is destroyed with no audit trail. Money, silently wrong | Fix — needs an idempotency key + status-transition guard |
-| **XC-1** | Create/update paths store client-supplied FK ids without verifying they are in-org | The shared helper (`app/utils/org_scoping.py`) already exists and is wired into the confirmed-impact paths. This is finishing a rollout, not designing one | Fix — mechanical, per-module, with tests |
+| **ORU-8a** | `GET /users/{id}/with-roles` returned the raw ORM user with no visibility filtering while its sibling roster endpoint redacted | The roster's own comment says "redact here too, or the setting is advisory." The detail endpoint was what made it advisory | ✅ **Fixed** — shared `_clear_hidden_contact_fields` / `_load_contact_visibility`, subject and members-managers exempt |
+| **ORU-8b** | `without_infrastructure()` stripped mail host, S3 bucket, SSO issuer and OAuth client IDs but not `it_team` — so every authenticated member got the IT roster and the free-form `backup_access` dict | `backup_access` is unstructured operational text; whatever an admin typed there was readable by any account | ✅ **Fixed** — `it_team` emptied for callers without `settings.manage` |
+| **FIN-6** | `record_dues_payment` does `amount_paid += amount` with no dedup on `transaction_reference`, overwrites `transaction_reference` / `payment_method` / `notes` on every call, and recomputes a `WAIVED` record to `PAID`/`PARTIAL` | Money, silently wrong, with no ledger to reconstruct from — `MemberDues` stores aggregates only, so a clobbered reference is gone | 🔑 Status guard is unambiguous; real idempotency needs a decision — see below |
+
+**FIN-6, verified 2026-08-02.** Confirmed, and worse than the write-up in two
+respects. `finance_service.py:1736-1746` has three defects in eleven lines:
+
+1. **No idempotency.** `amount_paid = amount_paid + amount_paid_arg` with
+   nothing consulting `transaction_reference`. A retried or replayed request
+   double-credits collections.
+2. **Prior payment detail is destroyed, not just duplicated.** `payment_method`,
+   `transaction_reference` and `notes` are each assigned `kwargs.get(...)` —
+   which returns `None` when the caller omits the field. A second partial
+   payment that doesn't resend `notes` blanks the first payment's notes. There
+   is no payments ledger: `MemberDues` holds aggregates only, so nothing can be
+   reconstructed afterwards.
+3. **A waive is silently reversed.** Recording a payment against a `WAIVED`
+   record recomputes `status` to `PAID`/`PARTIAL` while leaving `waived_by`,
+   `waived_at` and `waive_reason` populated — an internally contradictory row.
+
+The status guard and the field-clobbering are unambiguous bugs, fixable now.
+Genuine idempotency needs somewhere to record processed references — a payments
+ledger table or a unique constraint — which is a schema decision plus a
+migration. **That is the one thing here still needing an owner call.**
 
 ORU-8 was originally carried here as a single item needing a product decision on
 what `users.view` may see. On reading the code it is two narrow gaps left behind
@@ -116,6 +136,22 @@ policy is already expressed in `contact_info_visibility` and in
 
 Documented in `KNOWN_LIMITATIONS.md` and shipped as known:
 
+- **XC-1** (create/update paths storing unvalidated client-supplied FK ids) —
+  **reassessed 2026-08-02, moved out of the blockers.** Real and open: the
+  shared helper exists at `app/utils/org_scoping.py` and fails closed, but only
+  two files import it, and just 6 of 79 service modules carry any in-org FK
+  check. What changed my read is *which* instances remain. Per
+  `CROSS-CUTTING.md`, every instance with confirmed cross-tenant impact was
+  already fixed in place — the elections `meeting_id`/`event_id` leak, apparatus
+  operators' foreign `user_id` PII, the membership-pipeline `form_id` write, the
+  inventory fail-open, and the forms processors driving cross-module writes. The
+  residual is the low-impact class the audit itself describes as
+  "mis-attribution / orphan rows, not cross-tenant disclosure," because the
+  writes are org-stamped. Rolling the helper across ~73 remaining service
+  modules with per-module tests is weeks of mechanical work; gating a release
+  candidate on it is disproportionate to a dangling FK. Schedule it as a
+  tracked rollout, and require the helper in new create/update paths from now
+  on — that part is free.
 - **FE-6 / FE-7** (device-local PII surviving logout on a shared terminal) —
   **already fixed; verified 2026-08-02.** `utils/purgeLocalMemberData.ts` clears
   all four stores (shift-report drafts, the equipment-check / shift-report /
@@ -217,18 +253,26 @@ Phase 1 is genuinely unknown.
 
 ## Open decisions needed
 
-1. **Pilot** — which department runs the RC, and for how long?
-
-That is the only one left. Phase 2 no longer contains a behaviour-policy
-question: ORU-8 turned out to be two missed call sites rather than a decision
-about what `users.view` should see, and FE-6's decision was already made and
-implemented.
+1. **FIN-6 idempotency model** — a payments ledger table, or a uniqueness
+   constraint on `(dues_id, transaction_reference)`? A ledger also fixes the
+   destroyed-payment-history problem and is the more honest model for money;
+   the constraint is smaller. Either needs a migration. The status guard and
+   the field-clobbering are getting fixed regardless — they need no decision.
+2. **DOB and emergency contacts** — surfaced while fixing ORU-8, not previously
+   tracked. Both endpoints expose `date_of_birth` and `emergency_contacts`
+   (names and phone numbers of members' family, who are not department members)
+   to any `users.view` holder, and `MemberProfilePage` renders the emergency
+   contacts section for any viewer — `canEdit` gates editing, not viewing.
+   Unlike ORU-8 there is no policy to apply: `contact_info_visibility` has no
+   flag for either. Officers plausibly *should* see emergency contacts; the
+   whole membership plausibly should not. Needs a product call.
+3. **Pilot** — which department runs the RC, and for how long?
 
 > **Note on how these were triaged.** Phase 2 was first assembled from the
 > audit write-ups in `docs/module-audit/` rather than the implementations, and
-> the write-ups proved unreliable in both directions — CI-9 read far worse than
-> the code, FE-6 was already fixed, ORU-8 was half-fixed and its remaining half
-> much narrower than described. The entries above have since been read against
-> the source. **FIN-6 and XC-1 have not been**, and should be before anyone
-> plans around them. More generally: `KNOWN_LIMITATIONS.md` lags the code, so
-> treat it as a list of things to check, not a list of things that are true.
+> the write-ups proved unreliable in **both** directions — CI-9 read far worse
+> than the code, FE-6 was already fixed, ORU-8 was half-fixed with a narrower
+> remainder, FIN-6 was worse than described, and XC-1's dangerous instances
+> were already closed. Every Phase 2 entry has now been read against the
+> source. The general lesson: `KNOWN_LIMITATIONS.md` lags the code, so treat it
+> as a list of things to check, not a list of things that are true.
