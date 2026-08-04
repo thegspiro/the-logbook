@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Release-readiness pass (2026-08-02)
+
+**Fixed**
+
+- **`pip install -r backend/requirements.txt` could not resolve.** `isort==8.0.1`
+  against `pylint==3.3.4`, which caps `isort<7`. pip exited
+  `ResolutionImpossible`, so Backend Unit Tests and Backend Security Scan died
+  at their install step and took Backend Integration Tests, API Contract Tests
+  and the Docker image build down with them — **no backend test had been running
+  on `main`.** pylint moved to 4.x, which widens the cap, rather than holding
+  isort back.
+- **CI lint pins had drifted from `requirements.txt`.** The workflow claimed to
+  mirror it but installed flake8 7.2.0 / isort 5.13.2 against 7.3.0 / 8.0.1, and
+  omitted `flake8-pytest-style` entirely, so Backend Lint was green against a
+  toolchain nobody actually ran. Aligning them surfaced an isort 5-vs-8
+  disagreement on wrapping from-imports split by an `as` alias (three files
+  reformatted) and two PT028 false positives on FastAPI "test connection" route
+  handlers (documented per-file-ignores).
+- **`npm ci` could not install.** The lockfile was missing `vite@8.2.0` and 37
+  other entries, breaking every frontend CI job. Regenerated, and the
+  `npm-minor-patch` group bump (21 packages) applied on top.
+- **`tsc --noEmit` failed on `main`.** The `IntersectionObserver` test mock was
+  missing `scrollMargin`, required by TypeScript 7's `lib.dom`.
+- **Report cells could render `[object Object]`.** Removing type assertions the
+  upgraded `typescript-eslint` flagged exposed that report renderers were
+  asserting a shape the API never guaranteed; a new `toDisplayString()` util
+  JSON-encodes objects instead.
+- **`toHaveNoViolations()` silently lost its type.** vitest 4.1 stopped hoisting
+  `@vitest/expect`, so the `vitest-axe` matcher augmentation targeting that
+  module specifier no longer resolved. Now augments `vitest`.
+
+**Security**
+
+- **Member contact details could be read past the visibility setting (ORU-8).**
+  `GET /users/{id}/with-roles` returned the raw member record while its sibling
+  roster endpoint redacted against `contact_info_visibility`. Both need only
+  `users.view`, so anything withheld on the roster — including home address and
+  personal email, which the roster never exposes at any setting — was one
+  request to the profile URL away. Both now redact through shared, fail-closed
+  helpers. Members-managers and **the member themselves** are exempt; the
+  settings page loads a member's own profile through that endpoint and writes
+  the fields back, so redacting for self would have blanked their own address on
+  the next save.
+- **Date of birth and emergency contacts are now leadership-only.** Restricted
+  to `members.manage` holders and the member themselves, with no organization
+  setting able to publish them. Emergency contacts name people outside the
+  department — a spouse, a parent — who never consented to appear in it and hold
+  no account to remove themselves. Disclosure is recorded on the `user_viewed`
+  audit event, and the profile page hides the section entirely rather than
+  rendering it empty, which would read as "none on file".
+- **Organization settings still exposed the IT team block (ORU-8).** The
+  infrastructure strip covered mail host, S3 bucket, SSO issuer and OAuth client
+  IDs but missed `it_team` — the names, direct email and phone of whoever
+  administers the deployment, plus `backup_access`, free text describing
+  break-glass procedures. Now emptied for callers without `settings.manage`.
+
+**Changed**
+
+- **Member dues are now a payment ledger rather than a running total (FIN-6).**
+  `MemberDues` was the only record of payment: one `amount_paid` figure plus one
+  set of method/reference/notes columns, overwritten by whichever payment was
+  entered last. Three defects followed from that single design fact — a retried
+  submission double-credited because nothing consulted `transaction_reference`;
+  a second instalment that didn't resend `notes` destroyed the first payment's,
+  unrecoverably; and recording against a `WAIVED` record cancelled the waiver
+  while leaving its reason attached, moving the waived amount into collection
+  figures.
+
+  Each payment is now a row in `dues_payments`, and `amount_paid` is **re-derived
+  as the sum of that ledger** rather than accumulated. Double-crediting would
+  require a duplicate ledger row, which a uniqueness constraint on
+  `(member_dues_id, transaction_reference)` refuses — the failure stops being
+  representable rather than being guarded against. Payments without a reference
+  are never deduplicated, because two identical cash amounts are two payments.
+
+  Migration `20260802_0001` **backfills one row per already-paid record**; without
+  it, derived totals would recompute every existing balance to zero.
+
+  `GET /finance/dues/{id}/payments` exposes the ledger, and
+  `POST /finance/dues/{id}/unwaive` reverses a waiver — necessary because
+  refusing payments on waived dues would otherwise leave no way out of `WAIVED`.
+
 ### Security & correctness follow-up (2026-08-01)
 
 **Fixed**
