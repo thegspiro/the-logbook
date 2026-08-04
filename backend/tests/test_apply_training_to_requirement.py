@@ -62,7 +62,8 @@ class TestApplyTrainingToRequirement:
             verified_by=uuid4(),
         )
 
-        assert applied is True and error is None
+        assert applied is True
+        assert error is None
         call = svc.update_requirement_progress.await_args
         assert call.kwargs["updates"].progress_value == 6.0
 
@@ -153,7 +154,8 @@ class TestValidateApplyTarget:
             requirement_id=req.id,
         )
 
-        assert ok is True and error is None
+        assert ok is True
+        assert error is None
 
     async def test_not_enrolled_fails_without_side_effects(self):
         # Pre-flight check the review endpoint runs BEFORE approving, so an

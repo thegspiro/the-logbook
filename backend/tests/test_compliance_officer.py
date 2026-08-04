@@ -545,7 +545,8 @@ class TestRecordCompletenessFieldChecks:
 
     def test_hours_completed_positive(self):
         record = self._make_record(hours_completed=4.0)
-        assert record.hours_completed is not None and record.hours_completed > 0
+        assert record.hours_completed is not None
+        assert record.hours_completed > 0
 
     def test_hours_completed_zero(self):
         record = self._make_record(hours_completed=0)
@@ -577,11 +578,13 @@ class TestRecordCompletenessFieldChecks:
 
     def test_location_both_missing(self):
         record = self._make_record(location=None, location_id=None)
-        assert not (bool(record.location) or bool(record.location_id))
+        assert not record.location
+        assert not record.location_id
 
     def test_location_both_empty_strings(self):
         record = self._make_record(location="", location_id="")
-        assert not (bool(record.location) or bool(record.location_id))
+        assert not record.location
+        assert not record.location_id
 
 
 class TestRecordCompletenessEvaluate:

@@ -188,16 +188,19 @@ def _ms_settings(monkeypatch):
     monkeypatch.setattr(settings, "AZURE_AD_ALLOWED_DOMAINS", "")
 
 
-def test_ms_is_configured_true_when_complete(_ms_settings):
+@pytest.mark.usefixtures("_ms_settings")
+def test_ms_is_configured_true_when_complete():
     assert MicrosoftOAuthService.is_configured() is True
 
 
-def test_ms_is_configured_false_without_tenant(_ms_settings, monkeypatch):
+@pytest.mark.usefixtures("_ms_settings")
+def test_ms_is_configured_false_without_tenant(monkeypatch):
     monkeypatch.setattr(settings, "AZURE_AD_TENANT_ID", None)
     assert MicrosoftOAuthService.is_configured() is False
 
 
-def test_ms_authorization_url_is_tenant_scoped(_ms_settings):
+@pytest.mark.usefixtures("_ms_settings")
+def test_ms_authorization_url_is_tenant_scoped():
     url = MicrosoftOAuthService.build_authorization_url("st")
     assert url.startswith(f"https://login.microsoftonline.com/{_TENANT}/")
     q = parse_qs(urlparse(url).query)
@@ -206,7 +209,8 @@ def test_ms_authorization_url_is_tenant_scoped(_ms_settings):
     assert q["response_mode"] == ["query"]
 
 
-async def test_ms_resolve_user_uses_email_claim(_ms_settings):
+@pytest.mark.usefixtures("_ms_settings")
+async def test_ms_resolve_user_uses_email_claim():
     user = _user()
     svc = MicrosoftOAuthService(_db_returning(user))
     resolved, reason = await svc.resolve_user(
@@ -218,7 +222,8 @@ async def test_ms_resolve_user_uses_email_claim(_ms_settings):
     assert user.oauth_subject == "ms-1"
 
 
-async def test_ms_resolve_user_falls_back_to_preferred_username(_ms_settings):
+@pytest.mark.usefixtures("_ms_settings")
+async def test_ms_resolve_user_falls_back_to_preferred_username():
     user = _user()
     svc = MicrosoftOAuthService(_db_returning(user))
     resolved, reason = await svc.resolve_user(
@@ -228,14 +233,16 @@ async def test_ms_resolve_user_falls_back_to_preferred_username(_ms_settings):
     assert reason is None
 
 
-async def test_ms_resolve_user_requires_some_email(_ms_settings):
+@pytest.mark.usefixtures("_ms_settings")
+async def test_ms_resolve_user_requires_some_email():
     svc = MicrosoftOAuthService(_db_returning(_user()))
     resolved, reason = await svc.resolve_user({"sub": "ms-1"})
     assert resolved is None
     assert reason == "no_email"
 
 
-async def test_ms_resolve_user_enforces_domain_allowlist(_ms_settings, monkeypatch):
+@pytest.mark.usefixtures("_ms_settings")
+async def test_ms_resolve_user_enforces_domain_allowlist(monkeypatch):
     monkeypatch.setattr(settings, "AZURE_AD_ALLOWED_DOMAINS", "dept.org")
     svc = MicrosoftOAuthService(_db_returning(_user(email="x@outlook.com")))
     resolved, reason = await svc.resolve_user({"email": "x@outlook.com", "sub": "ms-1"})
@@ -243,7 +250,8 @@ async def test_ms_resolve_user_enforces_domain_allowlist(_ms_settings, monkeypat
     assert reason == "domain_not_allowed"
 
 
-async def test_ms_resolve_user_conflicts_with_other_provider(_ms_settings):
+@pytest.mark.usefixtures("_ms_settings")
+async def test_ms_resolve_user_conflicts_with_other_provider():
     # A user already linked to Google cannot sign in via Microsoft.
     user = _user(oauth_provider="google", oauth_subject="g-sub")
     svc = MicrosoftOAuthService(_db_returning(user))

@@ -48,7 +48,8 @@ class TestSessionPhaseWarning:
             _event(), uuid4()
         )
         assert warning is not None
-        assert "Phase 2" in warning and "Basics" in warning
+        assert "Phase 2" in warning
+        assert "Basics" in warning
 
     async def test_no_warning_when_session_in_current_phase(self):
         ts = SimpleNamespace(program_id="prog-1", phase_id="ph-1", event_id="ev-1")

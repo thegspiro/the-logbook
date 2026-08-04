@@ -60,7 +60,8 @@ class TestUpdateProgram:
         program, error = await svc.update_training_program(
             uuid4(), uuid4(), TrainingProgramUpdate(name="X")
         )
-        assert program is None and error == "Training program not found"
+        assert program is None
+        assert error == "Training program not found"
 
     async def test_updates_fields(self):
         prog = SimpleNamespace(name="Old", description=None, structure_type=None)
@@ -71,7 +72,8 @@ class TestUpdateProgram:
             uuid4(), uuid4(), TrainingProgramUpdate(name="New", description="d")
         )
         assert error is None
-        assert prog.name == "New" and prog.description == "d"
+        assert prog.name == "New"
+        assert prog.description == "d"
         db.commit.assert_awaited_once()
 
     async def test_invalid_structure_type_rejected(self):
@@ -81,7 +83,8 @@ class TestUpdateProgram:
         program, error = await svc.update_training_program(
             uuid4(), uuid4(), TrainingProgramUpdate(structure_type="banana")
         )
-        assert program is None and "Invalid structure type" in error
+        assert program is None
+        assert "Invalid structure type" in error
 
 
 class TestDeleteProgram:
@@ -89,7 +92,8 @@ class TestDeleteProgram:
         svc = TrainingProgramService(RecordingSession([]))
         svc.get_program_by_id = AsyncMock(return_value=None)
         ok, error = await svc.delete_training_program(uuid4(), uuid4())
-        assert ok is False and error == "Training program not found"
+        assert ok is False
+        assert error == "Training program not found"
 
     async def test_deletes_everything_and_orphan_requirement(self):
         req_id = str(uuid4())
@@ -112,7 +116,8 @@ class TestDeleteProgram:
 
         ok, error = await svc.delete_training_program(uuid4(), uuid4())
 
-        assert ok is True and error is None
+        assert ok is True
+        assert error is None
         # RequirementProgress, Enrollment, Milestone, ProgramRequirement, Phase,
         # orphan TrainingRequirement, Program = 7 deletes.
         assert db.stmt_types().count("Delete") == 7
@@ -126,7 +131,8 @@ class TestUpdatePhase:
         phase, error = await svc.update_program_phase(
             uuid4(), uuid4(), uuid4(), ProgramPhaseUpdate(name="X")
         )
-        assert phase is None and error == "Program phase not found"
+        assert phase is None
+        assert error == "Program phase not found"
 
     async def test_ignores_phase_number_but_sets_others(self):
         phase = SimpleNamespace(
@@ -158,7 +164,8 @@ class TestReorderPhases:
         db = RecordingSession([_scalars([p1])])
         svc = TrainingProgramService(db)
         phases, error = await svc.reorder_program_phases(uuid4(), uuid4(), [uuid4()])
-        assert phases is None and "every phase exactly once" in error
+        assert phases is None
+        assert "every phase exactly once" in error
 
     async def test_renumbers_in_order(self):
         p1 = SimpleNamespace(id=str(uuid4()), phase_number=1)
@@ -169,7 +176,8 @@ class TestReorderPhases:
             uuid4(), uuid4(), [p2.id, p1.id]
         )
         assert error is None
-        assert p2.phase_number == 1 and p1.phase_number == 2
+        assert p2.phase_number == 1
+        assert p1.phase_number == 2
         db.commit.assert_awaited_once()
 
 
@@ -196,9 +204,11 @@ class TestDeletePhase:
 
         ok, error = await svc.delete_program_phase(phase_id, uuid4(), uuid4())
 
-        assert ok is True and error is None
+        assert ok is True
+        assert error is None
         assert phase in db.deleted
-        assert "Delete" in db.stmt_types() and "Update" in db.stmt_types()
+        assert "Delete" in db.stmt_types()
+        assert "Update" in db.stmt_types()
         # Both enrollments recomputed; only the parked one re-advanced.
         assert svc._recalculate_enrollment_progress.await_count == 2
         assert svc._maybe_auto_advance_phase.await_count == 1
@@ -223,7 +233,8 @@ class TestRemoveRequirement:
 
         ok, error = await svc.remove_requirement_from_program(uuid4(), uuid4(), uuid4())
 
-        assert ok is True and error is None
+        assert ok is True
+        assert error is None
         assert link in db.deleted
         assert db.stmt_types().count("Delete") == 2  # progress rows + orphan req
         svc._recalculate_enrollment_progress.assert_awaited_once()
@@ -239,7 +250,8 @@ class TestReorderRequirements:
             uuid4(), uuid4(), [b.id, a.id]
         )
         assert error is None
-        assert b.sort_order == 0 and a.sort_order == 1
+        assert b.sort_order == 0
+        assert a.sort_order == 1
 
     async def test_rejects_foreign_id(self):
         a = SimpleNamespace(id=str(uuid4()), sort_order=0)
@@ -248,7 +260,8 @@ class TestReorderRequirements:
         links, error = await svc.reorder_program_requirements(
             uuid4(), uuid4(), [uuid4()]
         )
-        assert links is None and "does not belong" in error
+        assert links is None
+        assert "does not belong" in error
 
 
 class TestMilestones:
@@ -260,13 +273,15 @@ class TestMilestones:
         _, error = await svc.update_program_milestone(
             uuid4(), uuid4(), uuid4(), ProgramMilestoneUpdate(name="New")
         )
-        assert error is None and ms.name == "New"
+        assert error is None
+        assert ms.name == "New"
 
     async def test_delete_missing(self):
         svc = TrainingProgramService(RecordingSession([]))
         svc._get_program_milestone = AsyncMock(return_value=None)
         ok, error = await svc.delete_program_milestone(uuid4(), uuid4(), uuid4())
-        assert ok is False and error == "Program milestone not found"
+        assert ok is False
+        assert error == "Program milestone not found"
 
 
 class TestRecomputeForRequirement:

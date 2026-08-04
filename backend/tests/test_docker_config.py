@@ -96,7 +96,7 @@ class TestBackendDockerfile:
     """Validate backend/Dockerfile structure and best practices."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
+    def _setup(self):
         self.path = BACKEND_DIR / "Dockerfile"
         self.content = _read(self.path)
         self.stages = _parse_dockerfile_stages(self.content)
@@ -191,7 +191,7 @@ class TestFrontendDockerfile:
     """Validate frontend/Dockerfile structure and best practices."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
+    def _setup(self):
         self.path = FRONTEND_DIR / "Dockerfile"
         self.content = _read(self.path)
         self.stages = _parse_dockerfile_stages(self.content)
@@ -267,7 +267,7 @@ class TestDockerCompose:
     """Validate docker-compose.yml structure and service definitions."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
+    def _setup(self):
         self.path = ROOT_DIR / "docker-compose.yml"
         self.content = _read(self.path)
         self.config = yaml.safe_load(self.content)
@@ -376,7 +376,7 @@ class TestDockerComposeMinimal:
     """Validate docker-compose.minimal.yml override file."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
+    def _setup(self):
         self.path = ROOT_DIR / "docker-compose.minimal.yml"
         self.content = _read(self.path)
         self.config = yaml.safe_load(self.content)
@@ -396,8 +396,9 @@ class TestDockerComposeMinimal:
         cmd = backend.get("command", [])
         cmd_str = " ".join(cmd) if isinstance(cmd, list) else str(cmd)
         assert (
-            "--workers" in cmd_str and "1" in cmd_str
+            "--workers" in cmd_str
         ), "Minimal profile backend should use a single worker"
+        assert "1" in cmd_str, "Minimal profile backend should use a single worker"
 
     def test_has_resource_limits(self):
         """Minimal profile should set memory limits for constrained environments."""
@@ -415,7 +416,7 @@ class TestDockerComposeArm:
     """Validate docker-compose.arm.yml override file."""
 
     @pytest.fixture(autouse=True)
-    def setup(self):
+    def _setup(self):
         self.path = ROOT_DIR / "docker-compose.arm.yml"
         if not self.path.exists():
             pytest.skip("docker-compose.arm.yml not present")
@@ -452,7 +453,7 @@ class TestHealthEndpointContract:
     """
 
     @pytest.fixture(autouse=True)
-    def setup(self):
+    def _setup(self):
         self.main_py = _read(BACKEND_DIR / "main.py")
 
     def test_health_endpoint_is_defined(self):
@@ -519,14 +520,20 @@ class TestSupportingFiles:
         """SPA routing must fall back to index.html."""
         nginx_conf = _read(FRONTEND_DIR / "nginx.conf")
         assert (
-            "try_files" in nginx_conf and "index.html" in nginx_conf
+            "try_files" in nginx_conf
+        ), "nginx.conf must have SPA try_files fallback to index.html"
+        assert (
+            "index.html" in nginx_conf
         ), "nginx.conf must have SPA try_files fallback to index.html"
 
     def test_nginx_conf_proxies_health(self):
         """nginx should proxy /health to the backend."""
         nginx_conf = _read(FRONTEND_DIR / "nginx.conf")
         assert (
-            "/health" in nginx_conf and "proxy_pass" in nginx_conf
+            "/health" in nginx_conf
+        ), "nginx.conf should proxy /health requests to the backend"
+        assert (
+            "proxy_pass" in nginx_conf
         ), "nginx.conf should proxy /health requests to the backend"
 
     def test_nginx_conf_proxies_api(self):

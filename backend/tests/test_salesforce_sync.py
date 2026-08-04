@@ -258,7 +258,9 @@ async def test_create_record_respects_disabled_graceful(monkeypatch):
         )
 
     monkeypatch.setattr(sf, "_request", fake_request)
-    with pytest.raises(Exception):
+    # With graceful field-dropping off, the first 400 is fatal rather than
+    # being retried without the offending field.
+    with pytest.raises(Exception, match="Failed to create Contact"):
         await sf.create_record("Contact", {"LastName": "Doe", "Foo__c": "x"})
 
 
