@@ -464,6 +464,17 @@ Copy button, and Reset link]**
 > your profile photo is uploaded — it appears on your ID card and in the
 > directory."
 
+> "Two things on that page other members do *not* see: your date of birth, and
+> your emergency contacts. Those are limited to your chiefs, captains,
+> secretaries and membership coordinator — and to you. There's no department
+> setting that can put them on the roster, and when an officer does open them,
+> the system records it."
+
+> "That last part matters for your emergency contacts especially. Those are a
+> spouse's phone number, a parent's — people who never joined the department and
+> have no login here to take themselves back out. So the system treats them as
+> theirs, not just yours."
+
 ### MOBILE ACCESS (20:30 – 21:00)
 
 > "The Logbook is a Progressive Web App — which means it works on your phone's

@@ -82,12 +82,43 @@ every member's reimbursement amounts and payee detail. Lower sensitivity than
 dues (FIN-3) but the same XC-2 shape. **Status:** flagged — scoping non-managers
 to their own submissions is a behavior change for treasurers on `.view`.
 
-### FIN-6 — MEDIUM (flagged) — `record_dues_payment` has no idempotency and no status guard
-`amount_paid += amount` accumulates on every call with no dedup on the
+### FIN-6 — MEDIUM — ✅ FIXED (2026-08-04) — `record_dues_payment` has no idempotency and no status guard
+`amount_paid += amount` accumulated on every call with no dedup on the
 client-supplied `transaction_reference`, so a retried/replayed payment
-double-credits collections; and recording a payment against a `WAIVED` record
-silently recomputes it to `PAID`/`PARTIAL`, destroying the waive. **Status:**
-flagged — needs an idempotency-key decision + a status-transition guard.
+double-credited collections; recording a payment against a `WAIVED` record
+silently recomputed it to `PAID`/`PARTIAL`, destroying the waive (and moving the
+waived amount into collections, since `get_dues_summary` derives `total_waived`
+from `status == WAIVED`); and `payment_method` / `transaction_reference` /
+`notes` were each assigned `kwargs.get(...)` against an endpoint that passes
+`**data.model_dump()`, so every call blanked whatever an earlier payment had
+written.
+
+**Fix.** The three shared one cause — `MemberDues` was the only record of
+payment, so nothing recorded that a payment had *happened*. A `dues_payments`
+ledger (migration `20260802_0001`) now holds one row per payment and the columns
+on `MemberDues` are a projection of it:
+
+- `amount_paid` is **re-derived** by `_apply_payment_totals` as the sum of the
+  ledger rather than accumulated. A double-credit would require a duplicate
+  ledger row, which `UniqueConstraint(member_dues_id, transaction_reference)`
+  refuses — the bug class stops being representable rather than being guarded.
+  Re-submitting a known reference returns the record untouched, so a
+  double-clicked form is safe. Unreferenced cash is never deduplicated: two
+  identical cash amounts are two payments.
+- `payment_method` / `transaction_reference` / `notes` project the newest ledger
+  row, so they can no longer be blanked or contradict the ledger.
+- `WAIVED` and `EXEMPT` refuse payment. `EXEMPT` was included because it is the
+  same shape, though the audit named only `WAIVED`.
+- The migration **backfills** one row per already-paid record — without it a
+  derived total would recompute an existing balance to zero.
+
+**Companion.** `POST /finance/dues/{id}/unwaive` (`finance.manage`, reason
+required) is the deliberate reversal that replaces the old accidental one; the
+ledger decides the restored status, and the erased waive reason is carried into
+a `finance.dues_waiver_reversed` audit event rather than left on an un-waived
+row. `GET /finance/dues/{id}/payments` (`finance.view`) exposes the ledger.
+15 unit tests over `_apply_payment_totals`, which is pure and therefore runs in
+CI's unit job rather than needing MySQL. **Status:** fixed.
 
 ### FIN-7 — LOW/MED — partially FIXED — Correctness/DoS polish
 - **✅ `add_expense_line_item` total drift fixed.** It recomputed `total_amount`

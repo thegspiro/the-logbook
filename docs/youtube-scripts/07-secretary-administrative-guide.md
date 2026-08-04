@@ -32,6 +32,18 @@ is the person who keeps the department running behind the scenes.]**
 > management, document administration, forms and data collection, elections
 > support, administrative hours tracking, and your daily workflow."
 
+> **Treasurers — production note, not a spoken beat:** dues live in the Finance
+> module, which this guide doesn't cover, and the Dues page is read-only in the
+> current release — schedules, the collection summary and member records are
+> visible, but payments, waivers and waiver reversals are API-only until the
+> management UI ships. Two behaviors changed underneath and are worth covering
+> once there is something to point a camera at: payments are now a full history
+> rather than one running total (a second installment no longer erases the first
+> one's method and notes, and a resubmitted check number can't charge a member
+> twice), and a waiver must be deliberately reversed before a payment will go
+> in. Shorts **8m** and **8n** are written and on hold for the same reason; the
+> written walkthrough is in the Finance training document.
+
 **[TRANSITION: Meeting minutes]**
 
 ---

@@ -91,6 +91,13 @@
 | MEM-29 | Member audit history pagination (Load More) | Additional entries loaded without resetting scroll position |
 | MEM-30 | View own ID card as regular member | Own card accessible without special permission |
 | MEM-31 | View another member's ID card without permission | 403 Forbidden (requires members.view or members.manage) |
+| MEM-32 | View another member's profile as a `users.view` holder without `members.manage` | Date of birth and emergency contacts are absent from the response; the emergency-contacts section is not rendered at all (not rendered empty) |
+| MEM-33 | View your own profile as a plain member | Your own date of birth and emergency contacts are still returned and editable |
+| MEM-34 | View another member's profile as a `members.manage` holder | Date of birth and emergency contacts returned; `user_viewed` audit event carries `restricted_pii_disclosed: true` |
+| MEM-35 | `GET /users/{id}/with-roles` with contact visibility disabled, as a non-manager | Email, phone and mobile redacted per the org setting, and `personalEmail` plus the full home address always absent — matching `GET /users/with-roles` exactly |
+| MEM-36 | Same as MEM-35 with the organization settings row unreadable | Contact fields redacted (fails closed), not disclosed |
+| MEM-37 | Load your own profile in Settings, change one field, save | Address, phone and personal email survive the round trip (the subject is exempt from redaction) |
+| MEM-38 | `GET /organization/settings` as a member without `settings.manage` | `it_team` returned empty and `backup_access` absent; mail host, S3 bucket/endpoint, SharePoint site, SSO issuer and OAuth tenant/client IDs still redacted; the settings UI still renders the IT section |
 
 ## 3. Role & Permission Management
 
@@ -806,6 +813,26 @@
 | IMP-33 | **Infrastructure** | Set up automated database backups with off-site storage | High | **Partially — backup script with cloud support exists but automation/scheduling not configured** |
 | IMP-34 | **Frontend** | Lazy-load heavy module pages (elections, facilities, apparatus) to reduce initial bundle size | Medium | **Implemented** |
 | IMP-35 | **Frontend** | Add `rel="noopener noreferrer"` to all external links for security | Low | **Implemented** |
+
+## 31. Finance Module — Dues & Payments
+
+| ID | Test | Expected Outcome |
+|---|---|---|
+| FIN-01 | Record a dues payment with a transaction reference | Payment appended to the ledger; `amountPaid` equals the sum of the ledger; status becomes Partial or Paid |
+| FIN-02 | Resubmit the same payment with a reference already on the record | Record returned unchanged; no second ledger row; `amountPaid` unchanged |
+| FIN-03 | Record two identical cash payments with no reference | Both recorded as separate ledger rows; neither is treated as a duplicate |
+| FIN-04 | Record a second installment omitting `paymentMethod` and `notes` | The earlier payment's method and notes survive on its own ledger row; the dues record projects the newest payment's detail |
+| FIN-05 | Record a payment against a **Waived** record | Refused with an explanatory error; waiver, `waivedBy`, `waivedAt` and reason all intact; dues summary `totalWaived` unchanged |
+| FIN-06 | Record a payment against an **Exempt** record | Refused on the same terms as Waived |
+| FIN-07 | `GET /finance/dues/{id}/payments` as a `finance.view` holder | Full ledger returned oldest first, with amount, method, reference, notes, `receivedAt` and `recordedBy` |
+| FIN-08 | `GET /finance/dues/{id}/payments` for a dues record in another organization | 404; no cross-tenant read |
+| FIN-09 | Reverse a waiver on a record with no payments | Status returns to Pending; waive reason cleared; `finance.dues_waiver_reversed` audit event written carrying the erased reason and the reversal reason |
+| FIN-10 | Reverse a waiver on a record with a prior partial payment | Status returns to Partial (or Paid if the ledger covers the amount due) — derived from the ledger, not guessed |
+| FIN-11 | Reverse a waiver with an empty reason | Rejected (422); a reason is required, matching the waive it reverses |
+| FIN-12 | Reverse a waiver as a `finance.view`-only holder | 403; the reversal requires `finance.manage` |
+| FIN-13 | Waive → reverse → record the payment | End-to-end path succeeds; the payment that was previously impossible is recorded |
+| FIN-14 | Upgrade an existing install with already-paid dues (migration `20260802_0001`) | One ledger row backfilled per paid record; balances unchanged after the first subsequent write re-derives the total |
+| FIN-15 | Delete a member who recorded payments | Ledger rows survive with `recordedBy` set to NULL; amounts and history intact |
 
 ## 23. Implementation Status Review (2026-03-02)
 

@@ -775,6 +775,19 @@ Navigate to **Finance > Dues** to manage member dues and assessments.
 
 Dues management handles the collection of recurring fees from members -- annual dues, quarterly assessments, equipment fees, or any other recurring financial obligation.
 
+> **⚠️ Current release: the Dues page is read-only.** It shows schedules, the
+> collection summary and each member's dues record, and nothing else — there
+> are no **Create Dues Schedule**, **Generate Dues**, **Record Payment**,
+> **Waive** or **Reverse Waiver** buttons on it yet. Every write action
+> described in this chapter exists as an API endpoint (`POST
+> /finance/dues-schedules`, `POST /finance/dues-schedules/{id}/generate`, `PUT
+> /finance/dues/{id}`, `POST /finance/dues/{id}/waive`, `POST
+> /finance/dues/{id}/unwaive`, `GET /finance/dues/{id}/payments`) and behaves
+> exactly as described below, but until the management UI ships they have to be
+> driven through the API. The click-paths in this chapter describe the intended
+> UI; treat them as the specification, not as what is on screen today. Tracked
+> in [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
+
 ### Dues Schedules
 
 A dues schedule defines the terms of a recurring fee:
@@ -858,12 +871,12 @@ Two consequences worth knowing:
   already been recorded against these dues, the second submission is ignored and
   the record is returned unchanged. A double-clicked Save, or a form resubmitted
   after a slow connection, is safe.
-- **Cash with no reference is never treated as a duplicate.** Two £20 cash
+- **Cash with no reference is never treated as a duplicate.** Two $20 cash
   payments on the same evening are two payments. If you want the system to be
   able to spot a duplicate, give the payment a reference.
 
 You do not need to re-enter the payment method or notes from an earlier
-instalment. Leaving them blank records this payment without them; it no longer
+installment. Leaving them blank records this payment without them; it no longer
 erases what the previous payment said.
 
 ### Payment History
@@ -876,8 +889,8 @@ it. The dues record itself shows only the running total and the most recent
 payment's detail, so the history is where you go to answer "what did they
 actually pay, and when?"
 
-This matters at audit time: the summary figure alone cannot show that a £100
-balance was three separate instalments, or which of them was the cheque that
+This matters at audit time: the summary figure alone cannot show that a $100
+balance was three separate installments, or which of them was the check that
 bounced.
 
 ### Waiving Dues

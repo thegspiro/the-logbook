@@ -290,8 +290,11 @@ start over at #1.
   non-managers now confined to their own dues, dues managers keep the
   cross-member view). 4 flagged: FIN-4 (no SoD on terminal money movement —
   needs finance.disburse tier), FIN-5 (reimbursement/payee records readable by
-  any finance.view holder), FIN-6 (record_dues_payment no idempotency + waive
-  overwrite), FIN-7 (✅ add_expense_line_item total drift fixed via fresh SUM
+  any finance.view holder), FIN-6 (✅ FIXED 2026-08-04: dues_payments ledger —
+  amount_paid re-derived from the ledger with a uniqueness constraint on
+  (member_dues_id, transaction_reference) as the idempotency key, WAIVED/EXEMPT
+  refuse payment, POST /dues/{id}/unwaive as the deliberate reversal, GET
+  /dues/{id}/payments exposes the history), FIN-7 (✅ add_expense_line_item total drift fixed via fresh SUM
   aggregate; still flagged: request-number race needs unique-constraint
   migration, module-wide float→Decimal, export/pagination DoS refactor, overspend
   guard, pending-approvals not assignee-filtered). See
@@ -317,8 +320,11 @@ start over at #1.
   un-redacted; return .redacted()), ORU-6 (LOW: contact-info email uniqueness
   UUID-vs-str self-exclusion bug + email_verified not reset on change; both
   fixed). Flagged: ORU-7 (role-edit ceiling on current perms / last-admin
-  lockout / member-role mass-escalate), ORU-8 (with-roles + GET /settings expose
-  PII/infra config broader than the privacy gate), ORU-9 (✅ membership-id row
+  lockout / member-role mass-escalate), ORU-8 (✅ FIXED 2026-08-04: the detail
+  with-roles endpoint now redacts through the same fail-closed helpers as the
+  roster, GET /settings strips it_team/backup_access below settings.manage, and
+  DOB + emergency contacts are leadership-only with no setting able to publish
+  them — disclosure recorded on user_viewed), ORU-9 (✅ membership-id row
   lock FOR UPDATE + loop cap, ✅ users.edit perm-name reconcile, ✅ deep-merge
   settings; deferred: member_status state machine, audit-history org filter —
   blocked on audit_logs org column). See orgs-roles-users.md. Next:

@@ -124,6 +124,45 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### August 2026 — Date of Birth & Emergency Contacts Are Leadership-Only
+
+- **Only leadership can see a member's date of birth and emergency contacts** —
+  chiefs, captains, the president and vice-president, secretaries, the
+  membership coordinator and the IT manager (anyone holding `members.manage`),
+  plus the member themselves. Everyone else sees nothing, and the member
+  profile hides the emergency-contacts section entirely rather than showing an
+  empty one
+- **No setting can publish them.** The contact-visibility toggles cover email,
+  phone and mobile; there is deliberately no toggle for these two. Emergency
+  contacts name people outside the department — a spouse, a parent, a neighbor —
+  who never joined and hold no account to remove themselves
+- **Viewing them is recorded.** Opening another member's profile as leadership
+  writes `restricted_pii_disclosed` on the audit event, so "who looked at my
+  family's phone number?" is a question with an answer
+- **A member's own contact details are no longer readable around the roster
+  setting** — the individual profile endpoint redacts on the same terms as the
+  roster (it previously returned the full record, including home address and
+  personal email, to anyone who could view members)
+- **Organization settings no longer expose the IT team block** — names, direct
+  emails, phones and break-glass notes are now limited to `settings.manage`
+
+### August 2026 — Dues Payments Are a Ledger
+
+- **Every payment is kept, not just the latest** — a member's dues record now
+  has a full payment history (amount, method, reference, notes, when, and which
+  officer entered it). Entering a second installment no longer erases the first
+  one's method or notes
+- **Recording the same payment twice no longer charges twice.** If the payment
+  carries a transaction reference (check or receipt number) and that reference
+  is already on the record, the resubmission is ignored — a double-clicked Save
+  is safe. Cash with no reference is never treated as a duplicate, because two
+  identical cash amounts are two payments
+- **Payments against waived dues are refused** instead of silently cancelling
+  the waiver and moving the waived amount into your collection figures
+- **Waivers can now be reversed** — waived by mistake, or waived and then paid
+  anyway? Reverse the waiver (a reason is required, and it's audit-logged), and
+  the record returns to whatever the payment history says
+
 ### August 2026 — Member CSV Import Fixes
 
 - **The member import template is importable again** — the generated template

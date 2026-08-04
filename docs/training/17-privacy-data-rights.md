@@ -127,7 +127,7 @@ their duties require:
   into showing them on the roster.
 
   Emergency contacts get this treatment because they are not your data alone.
-  They name a spouse, a parent, a neighbour — people who are not members of
+  They name a spouse, a parent, a neighbor — people who are not members of
   the department, never agreed to appear in its systems, and have no account
   with which to remove themselves. Date of birth is restricted because,
   paired with a name, it is the field most useful to someone impersonating
