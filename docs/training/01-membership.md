@@ -152,14 +152,33 @@ For bulk onboarding, you can import members from a CSV file:
 > **Screenshot placeholder:**
 > _[Screenshot of the Import Members page showing the file upload area, the download template link, and a preview table of parsed CSV data with validation indicators (green checkmarks for valid rows, red X for errors)]_
 
-**CSV Columns:**
-- `first_name`, `last_name` (required)
-- `email` (required, must be unique)
-- `username`, `phone`, `mobile`
-- `rank`, `station`, `membership_number`
-- `hire_date` (format: YYYY-MM-DD)
+**CSV Columns:** (the downloaded template contains all of them, in this order)
 
-> **Troubleshooting:** If rows fail validation, the preview will highlight the issues. Common problems include duplicate emails, missing required fields, or incorrectly formatted dates.
+| Column | Notes |
+|--------|-------|
+| `firstName`, `lastName` | **Required** |
+| `email` | **Required**, must be unique in the department |
+| `middleName` | |
+| `membershipNumber` | Must be unique. Leave blank to have one auto-assigned |
+| `username` | Login name; defaults to the part of the email before `@` |
+| `dateOfBirth`, `joinDate` | Format: `YYYY-MM-DD` |
+| `street`, `city`, `state`, `zipCode` | Wrap any value containing a comma in double quotes |
+| `primaryPhone`, `secondaryPhone` | |
+| `rank`, `station`, `platoon` | |
+| `role` | Must match a role name configured under **Roles** |
+| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1` | Supply all three or leave all three blank |
+| `emergencyEmail1` | |
+| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule |
+
+Only `firstName`, `lastName` and `email` are enforced — a file containing just
+those three columns imports successfully. Any column not in this list is
+ignored, including `departmentId`, which older templates used as the name for
+`membershipNumber` and which is still accepted.
+
+Imported members are always created with **Active** status; there is no status
+column. Adjust status afterwards from the member's admin edit page.
+
+> **Troubleshooting:** If rows fail validation, the results panel lists each failing row number and the reason. Common problems include duplicate emails, a `role` that does not match a configured role name, a partially filled emergency contact, or incorrectly formatted dates.
 
 ---
 

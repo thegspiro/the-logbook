@@ -119,6 +119,8 @@ export interface CSVMemberRow {
   lastName: string;
   middleName?: string | undefined;
   membershipNumber: string;
+  /** Optional login name; derived from the email local-part when omitted. */
+  username?: string | undefined;
   dateOfBirth?: string | undefined;
   street: string;
   city: string;
