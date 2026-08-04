@@ -49,6 +49,35 @@ if (!('mediaDevices' in navigator)) {
   });
 }
 
+// jsdom implements Blob/File but not the Blob.text() / .arrayBuffer() readers
+// that CSV import pages use to read an uploaded file. Back them with
+// FileReader, which jsdom does implement.
+if (typeof Blob !== 'undefined' && typeof Blob.prototype.text !== 'function') {
+  const readAs = <T>(read: (reader: FileReader) => void): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as T);
+      reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob'));
+      read(reader);
+    });
+
+  Object.defineProperty(Blob.prototype, 'text', {
+    configurable: true,
+    writable: true,
+    value: function text(this: Blob): Promise<string> {
+      return readAs<string>((reader) => reader.readAsText(this));
+    },
+  });
+
+  Object.defineProperty(Blob.prototype, 'arrayBuffer', {
+    configurable: true,
+    writable: true,
+    value: function arrayBuffer(this: Blob): Promise<ArrayBuffer> {
+      return readAs<ArrayBuffer>((reader) => reader.readAsArrayBuffer(this));
+    },
+  });
+}
+
 // Mock IntersectionObserver
 globalThis.IntersectionObserver = class IntersectionObserver {
   readonly root: Element | null = null;

@@ -231,7 +231,9 @@ printable QR code.]**
 **[SCREEN: Show the invitation email preview if available]**
 
 > "For bulk import — twenty members, fifty members — use the CSV import. Download
-> the template, fill it in, upload. We cover that in the full IT Manager guide."
+> the template, fill it in, upload. Only first name, last name and email are
+> required, so don't stall waiting on addresses. We cover that in the full
+> IT Manager guide."
 
 **[CALLOUT: "CSV import for bulk roster upload"]**
 

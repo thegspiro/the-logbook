@@ -16,108 +16,109 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 4. [User Account Issues](#user-account-issues)
 5. [Member Management Issues](#member-management-issues)
 6. [Network & Connection Problems](#network--connection-problems)
-6. [Image Upload Issues](#image-upload-issues)
-7. [Database & Migration Issues](#database--migration-issues)
-8. [Startup Sequence Issues](#startup-sequence-issues)
-9. [Prospective Members Module Issues](#prospective-members-module-issues)
-10. [Elections Module Issues](#elections-module-issues)
-11. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
-12. [Documents Module Issues](#documents-module-issues)
-13. [Events Module Issues](#events-module-issues)
-14. [Facilities Module](#facilities-module)
-15. [Locations & Kiosk Display](#locations--kiosk-display)
-16. [Theme & Display Issues](#theme--display-issues)
-17. [Dashboard Issues](#dashboard-issues)
-18. [TypeScript Build Issues](#typescript-build-issues)
-19. [Error Message Reference](#error-message-reference)
-19. [Error Handling Patterns](#error-handling-patterns)
-20. [Centralized Constants & Enum Usage Issues](#centralized-constants--enum-usage-issues)
-21. [CSS Variable & Theming Issues](#css-variable--theming-issues)
-22. [Dependency Version Management](#dependency-version-management)
-23. [Skills Testing Module Issues](#skills-testing-module-issues)
-24. [Public Outreach Request Pipeline Issues](#public-outreach-request-pipeline-issues)
-25. [Admin Hours Module Issues](#admin-hours-module-issues)
-26. [Scheduling Shift Pattern Issues](#scheduling-shift-pattern-issues)
-27. [Elections Module — Voting & Detail Page Issues](#elections-module--voting--detail-page-issues)
-28. [Backend Logging & Observability](#backend-logging--observability)
-29. [Organization Settings Issues](#organization-settings-issues)
-30. [Member ID Card Issues](#member-id-card-issues)
-31. [Dynamic Import / Chunk Load Issues](#dynamic-import--chunk-load-issues)
-32. [Platform Analytics Issues](#platform-analytics-issues)
-33. [Brute-Force & Rate Limiting Issues](#brute-force--rate-limiting-issues)
-34. [Navigation & Module Enablement Issues](#navigation--module-enablement-issues)
-35. [Frontend Cache Refresh Issues](#frontend-cache-refresh-issues)
-36. [Scheduling Module Refactor Issues](#scheduling-module-refactor-issues)
-37. [Security Alert & Audit Issues](#security-alert--audit-issues)
-38. [Accessibility & Theme Issues](#accessibility--theme-issues)
-39. [Email Notification Templates Issues](#email-notification-templates-issues)
-40. [Session & Login Resilience Issues](#session--login-resilience-issues)
-41. [Admin Hours Edit & Sessions Issues](#admin-hours-edit--sessions-issues)
-42. [Shift Editing & Position Change Issues](#shift-editing--position-change-issues)
-43. [Training Registry & Import Issues](#training-registry--import-issues)
-44. [CSS Migration & Inline Style Issues](#css-migration--inline-style-issues)
-45. [MySQL Connection Resilience](#mysql-connection-resilience)
-46. [Mobile Member ID Scanner Issues](#mobile-member-id-scanner-issues)
-47. [API Service Split & Import Issues](#api-service-split--import-issues)
-48. [exactOptionalPropertyTypes Issues](#exactoptionalpropertytypes-issues)
-49. [Route Module Extraction Issues](#route-module-extraction-issues)
-50. [Python Typing Modernization Issues](#python-typing-modernization-issues)
-51. [IP Spoofing & Security Middleware](#ip-spoofing--security-middleware)
-52. [Module Component Decomposition Issues](#module-component-decomposition-issues)
-53. [Tailwind CSS v4 Migration Issues](#tailwind-css-v4-migration-issues)
-54. [React 19 Upgrade Issues](#react-19-upgrade-issues)
-55. [ESLint v9 Flat Config Issues](#eslint-v9-flat-config-issues)
-56. [Vitest 4 & Zod 4 Upgrade Issues](#vitest-4--zod-4-upgrade-issues)
-57. [Forms Module — Integration & Builder Issues](#forms-module--integration--builder-issues)
-58. [Pipeline Stage Reorder & New Stage Types](#pipeline-stage-reorder--new-stage-types)
-59. [Inventory CSV Import Issues](#inventory-csv-import-issues)
-60. [Events Settings 422 Errors](#events-settings-422-errors)
-61. [Onboarding Auth Cookie Issues](#onboarding-auth-cookie-issues)
-62. [Docker Frontend Build Issues](#docker-frontend-build-issues)
-63. [Alembic Migration Graph Walk Failures](#alembic-migration-graph-walk-failures)
-64. [WebSocket CSRF Dependency Errors](#websocket-csrf-dependency-errors)
-65. [Form-to-Pipeline Integration Issues](#form-to-pipeline-integration-issues)
-66. [Facility Address Display Issues](#facility-address-display-issues)
-67. [Admin Hours camelCase Mismatch](#admin-hours-camelcase-mismatch)
-68. [Custom Event Categories Issues](#custom-event-categories-issues)
-69. [ProspectResponse Metadata Serialization](#prospectresponse-metadata-serialization)
-70. [Modal Click-Through Issues](#modal-click-through-issues)
-71. [Theme Variable Compliance Issues](#theme-variable-compliance-issues)
-72. [Email Template Enum Drift](#email-template-enum-drift)
-73. [Inventory Empty String Clearing Issues](#inventory-empty-string-clearing-issues)
-74. [Inventory WebSocket 403 & 422 Errors](#inventory-websocket-403--422-errors)
-75. [Inventory Charges & Return Request Issues](#inventory-charges--return-request-issues)
-76. [Barcode Label Printing Issues](#barcode-label-printing-issues)
-77. [Training Recertification & xAPI Issues](#training-recertification--xapi-issues)
-78. [Compliance Officer Dashboard Issues](#compliance-officer-dashboard-issues)
-79. [Grants Module Serialization Issues](#grants-module-serialization-issues)
-80. [GrantNote Metadata Attribute Conflict](#grantnote-metadata-attribute-conflict)
-81. [Reports Rank Display Issues](#reports-rank-display-issues)
-82. [Prospective Member Stage History Issues](#prospective-member-stage-history-issues)
-83. [Clipboard Copy Fallback Issues](#clipboard-copy-fallback-issues)
-84. [Onboarding Auth State Reset Issues](#onboarding-auth-state-reset-issues)
-85. [Unraid App Removal Cleanup](#unraid-app-removal-cleanup)
-86. [Facilities MissingGreenlet Error](#facilities-missinggreenlet-error)
-87. [Login Cookie Delivery & Auth Flow Issues](#login-cookie-delivery--auth-flow-issues)
-88. [Security Middleware ASGI & Memory Issues](#security-middleware-asgi--memory-issues)
-89. [Elections Ballot Position Matching Issues](#elections-ballot-position-matching-issues)
-90. [Events Attendance Finalization Issues](#events-attendance-finalization-issues)
-91. [Facilities Container Startup Crash Chain](#facilities-container-startup-crash-chain)
-92. [Facilities Route Ordering & Seed Data Issues](#facilities-route-ordering--seed-data-issues)
-93. [Facilities Room-Location Integration Issues](#facilities-room-location-integration-issues)
-94. [Facilities NFPA Compliance Fields](#facilities-nfpa-compliance-fields)
-95. [Onboarding Empty String 422 Errors](#onboarding-empty-string-422-errors)
-96. [Pydantic 422 Error Display Issues](#pydantic-422-error-display-issues)
-97. [QR Check-In Timezone & ISO String Issues](#qr-check-in-timezone--iso-string-issues)
-98. [Recurring Event Pattern Issues](#recurring-event-pattern-issues)
-99. [Events Settings JSON Persistence Issues](#events-settings-json-persistence-issues)
-100. [Custom Event Categories Schema Issues](#custom-event-categories-schema-issues)
-101. [Form Value Empty String 422 Errors](#form-value-empty-string-422-errors)
-102. [Minutes Module Table Name Issues](#minutes-module-table-name-issues)
-103. [Auth Cookie LAN HTTP Issues](#auth-cookie-lan-http-issues)
-104. [TypeScript Build Error Batch Fix](#typescript-build-error-batch-fix)
-105. [Prospective Members Event Linking](#prospective-members-event-linking)
-106. [Getting Help](#getting-help)
+7. [Image Upload Issues](#image-upload-issues)
+8. [Database & Migration Issues](#database--migration-issues)
+9. [Startup Sequence Issues](#startup-sequence-issues)
+10. [Prospective Members Module Issues](#prospective-members-module-issues)
+11. [Elections Module Issues](#elections-module-issues)
+12. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
+13. [Documents Module Issues](#documents-module-issues)
+14. [Events Module Issues](#events-module-issues)
+15. [Facilities Module](#facilities-module)
+16. [Locations & Kiosk Display](#locations--kiosk-display)
+17. [Theme & Display Issues](#theme--display-issues)
+18. [Dashboard Issues](#dashboard-issues)
+19. [TypeScript Build Issues](#typescript-build-issues)
+20. [Error Message Reference](#error-message-reference)
+21. [Error Handling Patterns](#error-handling-patterns)
+22. [Centralized Constants & Enum Usage Issues](#centralized-constants--enum-usage-issues)
+23. [CSS Variable & Theming Issues](#css-variable--theming-issues)
+24. [Dependency Version Management](#dependency-version-management)
+25. [Skills Testing Module Issues](#skills-testing-module-issues)
+26. [Public Outreach Request Pipeline Issues](#public-outreach-request-pipeline-issues)
+27. [Admin Hours Module Issues](#admin-hours-module-issues)
+28. [Scheduling Shift Pattern Issues](#scheduling-shift-pattern-issues)
+29. [Elections Module — Voting & Detail Page Issues](#elections-module--voting--detail-page-issues)
+30. [Backend Logging & Observability](#backend-logging--observability)
+31. [Organization Settings Issues](#organization-settings-issues)
+32. [Member ID Card Issues](#member-id-card-issues)
+33. [Dynamic Import / Chunk Load Issues](#dynamic-import--chunk-load-issues)
+34. [Platform Analytics Issues](#platform-analytics-issues)
+35. [Brute-Force & Rate Limiting Issues](#brute-force--rate-limiting-issues)
+36. [Navigation & Module Enablement Issues](#navigation--module-enablement-issues)
+37. [Frontend Cache Refresh Issues](#frontend-cache-refresh-issues)
+38. [Scheduling Module Refactor Issues](#scheduling-module-refactor-issues)
+39. [Security Alert & Audit Issues](#security-alert--audit-issues)
+40. [Accessibility & Theme Issues](#accessibility--theme-issues)
+41. [Email Notification Templates Issues](#email-notification-templates-issues)
+42. [Session & Login Resilience Issues](#session--login-resilience-issues)
+43. [Admin Hours Edit & Sessions Issues](#admin-hours-edit--sessions-issues)
+44. [Shift Editing & Position Change Issues](#shift-editing--position-change-issues)
+45. [Training Registry & Import Issues](#training-registry--import-issues)
+46. [CSS Migration & Inline Style Issues](#css-migration--inline-style-issues)
+47. [MySQL Connection Resilience](#mysql-connection-resilience)
+48. [Mobile Member ID Scanner Issues](#mobile-member-id-scanner-issues)
+49. [API Service Split & Import Issues](#api-service-split--import-issues)
+50. [exactOptionalPropertyTypes Issues](#exactoptionalpropertytypes-issues)
+51. [Route Module Extraction Issues](#route-module-extraction-issues)
+52. [Python Typing Modernization Issues](#python-typing-modernization-issues)
+53. [IP Spoofing & Security Middleware](#ip-spoofing--security-middleware)
+54. [Module Component Decomposition Issues](#module-component-decomposition-issues)
+55. [Tailwind CSS v4 Migration Issues](#tailwind-css-v4-migration-issues)
+56. [React 19 Upgrade Issues](#react-19-upgrade-issues)
+57. [ESLint v9 Flat Config Issues](#eslint-v9-flat-config-issues)
+58. [Vitest 4 & Zod 4 Upgrade Issues](#vitest-4--zod-4-upgrade-issues)
+59. [Forms Module — Integration & Builder Issues](#forms-module--integration--builder-issues)
+60. [Pipeline Stage Reorder & New Stage Types](#pipeline-stage-reorder--new-stage-types)
+61. [Member CSV Import Issues](#member-csv-import-issues)
+62. [Inventory CSV Import Issues](#inventory-csv-import-issues)
+63. [Events Settings 422 Errors](#events-settings-422-errors)
+64. [Onboarding Auth Cookie Issues](#onboarding-auth-cookie-issues)
+65. [Docker Frontend Build Issues](#docker-frontend-build-issues)
+66. [Alembic Migration Graph Walk Failures](#alembic-migration-graph-walk-failures)
+67. [WebSocket CSRF Dependency Errors](#websocket-csrf-dependency-errors)
+68. [Form-to-Pipeline Integration Issues](#form-to-pipeline-integration-issues)
+69. [Facility Address Display Issues](#facility-address-display-issues)
+70. [Admin Hours camelCase Mismatch](#admin-hours-camelcase-mismatch)
+71. [Custom Event Categories Issues](#custom-event-categories-issues)
+72. [ProspectResponse Metadata Serialization](#prospectresponse-metadata-serialization)
+73. [Modal Click-Through Issues](#modal-click-through-issues)
+74. [Theme Variable Compliance Issues](#theme-variable-compliance-issues)
+75. [Email Template Enum Drift](#email-template-enum-drift)
+76. [Inventory Empty String Clearing Issues](#inventory-empty-string-clearing-issues)
+77. [Inventory WebSocket 403 & 422 Errors](#inventory-websocket-403--422-errors)
+78. [Inventory Charges & Return Request Issues](#inventory-charges--return-request-issues)
+79. [Barcode Label Printing Issues](#barcode-label-printing-issues)
+80. [Training Recertification & xAPI Issues](#training-recertification--xapi-issues)
+81. [Compliance Officer Dashboard Issues](#compliance-officer-dashboard-issues)
+82. [Grants Module Serialization Issues](#grants-module-serialization-issues)
+83. [GrantNote Metadata Attribute Conflict](#grantnote-metadata-attribute-conflict)
+84. [Reports Rank Display Issues](#reports-rank-display-issues)
+85. [Prospective Member Stage History Issues](#prospective-member-stage-history-issues)
+86. [Clipboard Copy Fallback Issues](#clipboard-copy-fallback-issues)
+87. [Onboarding Auth State Reset Issues](#onboarding-auth-state-reset-issues)
+88. [Unraid App Removal Cleanup](#unraid-app-removal-cleanup)
+89. [Facilities MissingGreenlet Error](#facilities-missinggreenlet-error)
+90. [Login Cookie Delivery & Auth Flow Issues](#login-cookie-delivery--auth-flow-issues)
+91. [Security Middleware ASGI & Memory Issues](#security-middleware-asgi--memory-issues)
+92. [Elections Ballot Position Matching Issues](#elections-ballot-position-matching-issues)
+93. [Events Attendance Finalization Issues](#events-attendance-finalization-issues)
+94. [Facilities Container Startup Crash Chain](#facilities-container-startup-crash-chain)
+95. [Facilities Route Ordering & Seed Data Issues](#facilities-route-ordering--seed-data-issues)
+96. [Facilities Room-Location Integration Issues](#facilities-room-location-integration-issues)
+97. [Facilities NFPA Compliance Fields](#facilities-nfpa-compliance-fields)
+98. [Onboarding Empty String 422 Errors](#onboarding-empty-string-422-errors)
+99. [Pydantic 422 Error Display Issues](#pydantic-422-error-display-issues)
+100. [QR Check-In Timezone & ISO String Issues](#qr-check-in-timezone--iso-string-issues)
+101. [Recurring Event Pattern Issues](#recurring-event-pattern-issues)
+102. [Events Settings JSON Persistence Issues](#events-settings-json-persistence-issues)
+103. [Custom Event Categories Schema Issues](#custom-event-categories-schema-issues)
+104. [Form Value Empty String 422 Errors](#form-value-empty-string-422-errors)
+105. [Minutes Module Table Name Issues](#minutes-module-table-name-issues)
+106. [Auth Cookie LAN HTTP Issues](#auth-cookie-lan-http-issues)
+107. [TypeScript Build Error Batch Fix](#typescript-build-error-batch-fix)
+108. [Prospective Members Event Linking](#prospective-members-event-linking)
+109. [Getting Help](#getting-help)
 
 ---
 
@@ -5859,6 +5860,65 @@ Check that `@dnd-kit/core` and `@dnd-kit/sortable` are in `package.json`.
 **Cause:** The new stage types require the latest frontend code. The `PipelineStageType` enum was expanded with `automated_email`, `form_dropdown`, and `meeting` types.
 
 **Fix:** Pull latest changes, rebuild frontend, and clear browser cache. The new types appear in the stage type selector in the Pipeline Builder.
+
+---
+
+## Member CSV Import Issues
+
+### Problem: "Missing required columns: departmentid" when uploading the downloaded template
+
+**Status (Fixed 2026-08-04):** The template generator emitted a
+`membershipNumber` column while the uploader's header check still required
+`departmentId`, the name that column carried before the 2026-02-21 badge-number
+consolidation. The downloaded template was therefore rejected on upload without
+a single row being read.
+
+**Fix:** Pull the latest frontend and re-download the template. Both the
+template and the validator now come from one column list. If you have already
+built a roster from an older template, it still imports — `departmentId` is
+accepted as the legacy spelling of `membershipNumber`.
+
+### Problem: Rows fail with "Missing required fields" but the row looks complete
+
+**Cause (Fixed 2026-08-04):** The parser split on every comma, so a quoted
+field containing one — `"123 Main St, Apt 4"` — shifted every column after it.
+The email landed in the city column and the row was reported as missing
+required fields.
+
+**Fix:** Pull the latest frontend; quoted fields are now parsed correctly. On
+any version, keep commas inside double quotes — a spreadsheet exporting to CSV
+does this for you.
+
+### Problem: Imported members have no position/role
+
+**Cause (Fixed 2026-08-04):** The `role` column was read from the CSV and then
+never sent — roles are assigned by id, and the import never resolved the name.
+
+**Fix:** Pull the latest frontend. Role names are matched (case-insensitively)
+against the roles configured under **Roles**, and a name matching none is
+reported against its row instead of being silently ignored. Use the exact role
+name as it appears in the system.
+
+### Problem: A row fails with "Username already exists" though no username was given
+
+**Cause:** The username defaults to the part of the email before `@`, so two
+members with `j.doe@example.com` and `j.doe@other.org` generate the same one.
+
+**Fix:** Add a `username` column (present in the template since 2026-08-04) and
+give the colliding members distinct values.
+
+### Which columns are actually required?
+
+Only `firstName`, `lastName` and `email`. Everything else is optional and a
+missing optional column produces a warning, not a rejection. Notes:
+
+- Leave `membershipNumber` blank to have one auto-assigned.
+- Emergency contacts are all-or-nothing per contact: supply `emergencyName1`,
+  `emergencyRelationship1` and `emergencyPhone1` together, or leave all three
+  blank. A name on its own is rejected.
+- There is no `status` column — imported members are always created **Active**.
+  Change status afterwards from the member's admin edit page.
+- `dateOfBirth` and `joinDate` use `YYYY-MM-DD`.
 
 ---
 

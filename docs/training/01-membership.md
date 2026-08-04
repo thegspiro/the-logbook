@@ -110,7 +110,7 @@ Click the **Edit** button (pencil icon) on the relevant section to make changes.
 
 ## Adding Members
 
-**Required Permission:** `members.manage`
+**Required Permission:** `members.create`
 
 Navigate to **Administration > Members > Member Management**, then click the **Add Member** tab.
 
@@ -138,7 +138,7 @@ Navigate to **Administration > Members > Member Management**, then click the **A
 
 ## Importing Members from CSV
 
-**Required Permission:** `members.manage`
+**Required Permission:** `members.create`
 
 For bulk onboarding, you can import members from a CSV file:
 
@@ -150,16 +150,35 @@ For bulk onboarding, you can import members from a CSV file:
 6. Confirm the import.
 
 > **Screenshot placeholder:**
-> _[Screenshot of the Import Members page showing the file upload area, the download template link, and a preview table of parsed CSV data with validation indicators (green checkmarks for valid rows, red X for errors)]_
+> _[Screenshot of the Import Members page showing the file upload area, the download template link, and the preview table of the first five parsed rows (name, member #, email, phone, emergency contact), plus the post-import results panel with successful/failed counts and the per-row error list]_
 
-**CSV Columns:**
-- `first_name`, `last_name` (required)
-- `email` (required, must be unique)
-- `username`, `phone`, `mobile`
-- `rank`, `station`, `membership_number`
-- `hire_date` (format: YYYY-MM-DD)
+**CSV Columns:** (the downloaded template contains all of them, in this order)
 
-> **Troubleshooting:** If rows fail validation, the preview will highlight the issues. Common problems include duplicate emails, missing required fields, or incorrectly formatted dates.
+| Column | Notes |
+|--------|-------|
+| `firstName`, `lastName` | **Required** |
+| `email` | **Required**, must be unique in the department |
+| `middleName` | |
+| `membershipNumber` | Must be unique. Leave blank to have one auto-assigned |
+| `username` | Login name; defaults to the part of the email before `@` |
+| `dateOfBirth`, `joinDate` | Format: `YYYY-MM-DD` |
+| `street`, `city`, `state`, `zipCode` | Wrap any value containing a comma in double quotes |
+| `primaryPhone`, `secondaryPhone` | |
+| `rank`, `station`, `platoon` | |
+| `role` | Must match a role name configured under **Roles** |
+| `emergencyName1`, `emergencyRelationship1`, `emergencyPhone1` | Supply all three or leave all three blank |
+| `emergencyEmail1` | |
+| `emergencyName2`, `emergencyRelationship2`, `emergencyPhone2`, `emergencyEmail2` | Optional second contact, same rule |
+
+Only `firstName`, `lastName` and `email` are enforced — a file containing just
+those three columns imports successfully. Any column not in this list is
+ignored, including `departmentId`, which older templates used as the name for
+`membershipNumber` and which is still accepted.
+
+Imported members are always created with **Active** status; there is no status
+column. Adjust status afterwards from the member's admin edit page.
+
+> **Troubleshooting:** If rows fail validation, the results panel lists each failing row number and the reason. Common problems include duplicate emails, a `role` that does not match a configured role name, a partially filled emergency contact, or incorrectly formatted dates.
 
 ---
 
@@ -575,7 +594,12 @@ The EVOC level is set by administrators via the member admin edit page and is us
 |-------|----------|
 | "Email already in use" when adding a member | Each member must have a unique email. Check if the email belongs to an existing or archived member. |
 | Member cannot log in after creation | Ensure the welcome email was sent, or manually share the temporary password. Check that the member's status is Active. |
-| CSV import rows failing | Review the error details in the preview. Common issues: duplicate emails, missing required fields, date format (use YYYY-MM-DD). |
+| CSV import rows failing | Review the per-row error list in the results panel shown after the import. Common issues: duplicate emails, missing required fields, date format (use YYYY-MM-DD). |
+| CSV upload rejected with "Missing required columns: departmentid" | Fixed 2026-08-04 — the generated template and the uploader disagreed on that column's name. Pull latest and re-download the template. Rosters built from an older template still import. |
+| A row that looks complete fails as "Missing required fields" | Fixed 2026-08-04 — a comma inside a field (typically an address) used to shift every column after it. Pull latest, and keep such values wrapped in double quotes. |
+| Imported members have no position assigned | Fixed 2026-08-04 — the `role` column was read but never applied. Pull latest and use the exact role name from **Roles**; an unmatched name now fails that row rather than importing without a role. |
+| Import row fails "Username already exists" but no username was given | Usernames default to the part of the email before `@`, so `j.doe@a.com` and `j.doe@b.org` collide. Add a `username` column with distinct values. |
+| Imported members are all Active regardless of the spreadsheet | Expected — the create endpoint has no status field, and the misleading `status` column was removed from the template on 2026-08-04. Set status afterwards from Admin Edit. |
 | Prospect not showing in pipeline | Check the pipeline filter. Prospects may be in a different pipeline or have a status of Withdrawn/Transferred. |
 | Auto-advance not triggering | Verify that "Auto-advance when form is submitted" (or documents uploaded) is checked in the stage configuration. The setting defaults to off. |
 | Automated email not sent | Check that SMTP is configured in Settings > Email. Verify the prospect has a valid email address. Check the scheduled email logs for errors. |

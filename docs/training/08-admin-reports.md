@@ -701,20 +701,31 @@ He assigns himself the **IT Manager** position (full access).
 Rather than adding 45 members one by one, Steve uses CSV import:
 
 1. Downloads the CSV template
-2. Fills it in with member data from the district's existing spreadsheet:
+2. Fills it in with member data from the district's existing spreadsheet. Only
+   `firstName`, `lastName` and `email` are required, so he keeps the columns he
+   has data for and deletes the rest:
 
 ```csv
-first_name,last_name,email,username,phone,rank,station,membership_number,hire_date
+firstName,lastName,email,username,primaryPhone,rank,station,membershipNumber,joinDate
 John,Adams,jadams@email.com,jadams,(555)111-0001,Captain,Station 1,VCF-001,2008-06-15
 Sarah,Brooks,sbrooks@email.com,sbrooks,(555)111-0002,Lieutenant,Station 1,VCF-002,2012-03-20
 David,Carter,dcarter@email.com,dcarter,(555)111-0003,Firefighter,Station 1,VCF-003,2018-09-01
 ...
 ```
 
-3. Uploads the CSV
-4. Reviews the preview — 44 rows pass validation, 1 row has an invalid email (corrects it)
-5. Confirms the import
-6. Checks **Send Welcome Email** — all 45 members receive login credentials
+3. Uploads the CSV. The upload is accepted with a note listing the optional
+   columns he left out
+4. Reviews the preview of the first five rows, then confirms the import
+5. One row fails — a member's email was mistyped and rejected as a duplicate.
+   The results panel names the row number; Steve corrects that row and
+   re-uploads just it
+6. **Send Welcome Email** is on by default — all 45 members receive login
+   credentials
+
+> **Hint:** Steve leaves `membershipNumber` blank for three new recruits who
+> have not been assigned one; the system generates theirs. He also drops the
+> `role` column from his spreadsheet — the district's role names don't match
+> what he configured in Step 2, and an unmatched name fails the row.
 
 ---
 

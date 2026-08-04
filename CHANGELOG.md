@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Members: CSV import template matches what the API accepts (2026-08-04)
+
+**Fixed**
+
+- **The member import template could not be imported.** `downloadTemplate()`
+  emitted a `membershipNumber` column while the uploader's header check
+  required `departmentId` — the name that column carried before the
+  2026-02-21 badge-number consolidation. Downloading the template and
+  uploading it back unchanged
+  failed at the header check with "Missing required columns: departmentid",
+  so nothing in the file was ever read. The template and its validator now
+  derive from one `TEMPLATE_HEADERS` list, and `departmentId` is still
+  accepted as the legacy spelling so rosters built from an older download
+  keep importing.
+- **A quoted field containing a comma shifted every column after it.** The
+  parser was `text.split('\n').map(r => r.split(','))`, so an address like
+  `"123 Main St, Apt 4"` pushed `email` into the `city` position and the row
+  was rejected as missing required fields — a well-formed row reported as
+  malformed. Replaced with a minimal RFC 4180 parser that honors quoted
+  fields, doubled quotes and CRLF.
+- **The header check demanded 13 columns the backend treats as optional**
+  (address, phone, join date, emergency contact). `AdminUserCreate` only
+  rejects a request missing `firstName`, `lastName` or `email`. A department
+  that had names and emails but no addresses could not import at all, and a
+  blank `membershipNumber` — which the server auto-assigns — was refused.
+  Required is now those three; absent optional columns raise a non-blocking
+  warning.
+- **The `role` column was parsed and then discarded.** Roles are assigned by
+  id, and the import never populated `role_ids`, so every imported member
+  landed with no position regardless of what the spreadsheet said. Role names
+  now resolve against `/roles` (case-insensitive); a name matching no
+  configured role is reported against its row instead of being ignored.
+- **A partial emergency contact reached the API as an opaque 422.** A contact
+  name without its relationship and phone violates `EmergencyContact`'s
+  constraints; it is now caught row-side with the row number and the two
+  fields to fill in.
+
+**Changed**
+
+- **`status` removed from the template.** `POST /users` always creates members
+  as Active and exposes no field to override it, so the column silently
+  discarded whatever a department typed. Status is set after import from the
+  member's admin edit page.
+- Import preview labels the membership number column **Member #** rather than
+  **Dept ID** — the label the rest of the UI has used since 2026-02-21.
+
+**Added**
+
+- **`username` column.** The username was always derived from the email
+  local-part, which collides when two members share one across domains
+  (`j.doe@a.com`, `j.doe@b.org`) — the second row failed with "Username
+  already exists" for a field the department never saw. The column is
+  optional and still defaults to the email local-part.
+- `ImportMembers.test.tsx` (15 cases), including a round-trip that feeds the
+  generated template straight back into the uploader — the drift that caused
+  the original bug.
+- `Blob.text()` / `Blob.arrayBuffer()` polyfill in `src/test/setup.ts`. jsdom
+  implements neither, which is why no test previously covered any CSV import
+  page's file reading.
+
 ### Security & correctness follow-up (2026-08-01)
 
 **Fixed**
