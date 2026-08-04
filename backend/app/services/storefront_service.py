@@ -13,6 +13,7 @@ quantities only.
 
 import csv
 import io
+import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -33,6 +34,8 @@ from app.models.storefront import (
     StoreOrderItem,
     StoreOrderStatus,
     StoreOrderWindow,
+    StorePaymentEvent,
+    StorePaymentEventStatus,
     StorePaymentMethod,
     StorePaymentStatus,
     StoreProduct,
@@ -55,6 +58,20 @@ _CENTS = Decimal("0.01")
 # that a typical window is one query, small enough not to hold a whole
 # department's order history in memory at once.
 _EXPORT_PAGE_SIZE = 200
+
+# Order numbers are allocated as ORD-YYYY-NNNN. Matching a payment reference
+# looks for that exact shape rather than any digit run, so a payer typing their
+# phone number into the note cannot accidentally name an order.
+_ORDER_NUMBER_RE = re.compile(r"ORD-\d{4}-\d{4,}")
+
+# Inbound payments that still need somebody to look at them. MATCHED is in the
+# list on purpose: it means the money is attributable but nothing has been
+# applied yet, which is exactly the queue an administrator works through.
+_UNRESOLVED_PAYMENT_STATUSES = (
+    StorePaymentEventStatus.UNMATCHED,
+    StorePaymentEventStatus.AMBIGUOUS,
+    StorePaymentEventStatus.MATCHED,
+)
 
 # Orders in these states are no longer claiming stock or counting against a
 # member's per-product limit.
@@ -1848,6 +1865,263 @@ class StorefrontService:
                 skipped += 1
                 errors.append({"order_id": str(order_id), "error": str(exc)})
         return {"updated": updated, "skipped": skipped, "errors": errors}
+
+    # ==================================================================
+    # External payment reconciliation
+    # ==================================================================
+
+    async def find_order_by_reference(
+        self, organization_id: str, *references: Optional[str]
+    ) -> Optional[StoreOrder]:
+        """Locate an order from whatever reference a payment carried.
+
+        Matching is on the order number only, and only when it appears as a
+        recognisable token. Fuzzy matching on payer name or amount was
+        considered and rejected: applying money to the wrong member's order is
+        worse than leaving it for a human, and two members can easily owe the
+        same amount in the same window.
+        """
+        candidates: List[str] = []
+        for reference in references:
+            if not reference:
+                continue
+            candidates.extend(_ORDER_NUMBER_RE.findall(str(reference).upper()))
+        if not candidates:
+            return None
+
+        result = await self.db.execute(
+            select(StoreOrder)
+            .options(selectinload(StoreOrder.items), selectinload(StoreOrder.window))
+            .where(
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.order_number.in_(candidates),
+            )
+            .limit(2)
+        )
+        orders = list(result.scalars().all())
+        # More than one hit means the reference named several orders; that is
+        # not something to guess at.
+        return orders[0] if len(orders) == 1 else None
+
+    async def record_external_payment(
+        self,
+        organization_id: str,
+        provider: str,
+        capture: Dict[str, Any],
+        raw_payload: Optional[Dict[str, Any]] = None,
+        auto_apply: bool = True,
+    ) -> StorePaymentEvent:
+        """Record a payment a provider reports receiving, and try to match it.
+
+        Always writes a row, whatever the outcome. A payment that cannot be
+        matched is the case that most needs to reach a person: the money has
+        left the member's account, so silently discarding the notification
+        would leave them chasing an order that still says unpaid.
+        """
+        external_id = str(capture.get("capture_id") or capture.get("event_id") or "")
+        if not external_id:
+            raise ValueError("Payment notification carried no identifier")
+
+        existing = await self.db.execute(
+            select(StorePaymentEvent).where(
+                StorePaymentEvent.organization_id == str(organization_id),
+                StorePaymentEvent.provider == provider,
+                StorePaymentEvent.external_id == external_id,
+            )
+        )
+        already = existing.scalar_one_or_none()
+        if already is not None:
+            # Providers retry until they get a 2xx, so redelivery is normal
+            # traffic rather than an error — acknowledge without re-applying.
+            return already
+
+        amount = _money(capture.get("amount"))
+        reference = (
+            capture.get("invoice_id") or capture.get("custom_id") or capture.get("note")
+        )
+
+        event = StorePaymentEvent(
+            id=generate_uuid(),
+            organization_id=str(organization_id),
+            provider=provider,
+            external_id=external_id,
+            event_id=capture.get("event_id"),
+            amount=amount,
+            currency=(capture.get("currency") or "USD")[:3],
+            payer_name=capture.get("payer_name"),
+            payer_email=capture.get("payer_email"),
+            reference=(str(reference)[:255] if reference else None),
+            raw_payload=raw_payload,
+            status=StorePaymentEventStatus.UNMATCHED,
+        )
+
+        order = await self.find_order_by_reference(
+            organization_id,
+            capture.get("invoice_id"),
+            capture.get("custom_id"),
+            capture.get("note"),
+        )
+
+        if order is None:
+            event.note = "No order number found in the payment reference."
+        else:
+            event.matched_order_id = order.id
+            balance = _money(
+                Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
+            )
+            if order.status == StoreOrderStatus.CANCELLED:
+                event.status = StorePaymentEventStatus.AMBIGUOUS
+                event.note = f"Order {order.order_number} is cancelled."
+            elif balance <= 0:
+                event.status = StorePaymentEventStatus.AMBIGUOUS
+                event.note = f"Order {order.order_number} already has no balance due."
+            elif amount != balance:
+                # A short or over payment is a conversation with the member,
+                # not something to resolve by guessing which way to round.
+                event.status = StorePaymentEventStatus.AMBIGUOUS
+                event.note = (
+                    f"Amount {amount} does not match the {balance} balance on "
+                    f"order {order.order_number}."
+                )
+            elif not auto_apply:
+                event.status = StorePaymentEventStatus.MATCHED
+                event.note = "Automatic application is turned off for this integration."
+            else:
+                event.status = StorePaymentEventStatus.MATCHED
+
+        self.db.add(event)
+        await self.db.commit()
+        await self.db.refresh(event)
+
+        if event.status == StorePaymentEventStatus.MATCHED and auto_apply and order:
+            return await self.apply_payment_event(
+                event.id, organization_id, actor_id=None
+            )
+        return event
+
+    async def apply_payment_event(
+        self,
+        event_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        order_id: Optional[str] = None,
+    ) -> StorePaymentEvent:
+        """Settle the matched order from a recorded payment.
+
+        ``order_id`` lets an administrator attach an unmatched payment to the
+        order it belongs to — the manual half of reconciliation.
+        """
+        event = await self.get_payment_event(event_id, organization_id)
+        if event is None:
+            raise ValueError("Payment not found")
+        if event.status == StorePaymentEventStatus.APPLIED:
+            return event
+
+        target_id = order_id or event.matched_order_id
+        if not target_id:
+            raise ValueError("Choose an order to apply this payment to")
+
+        order = await self.get_order(target_id, organization_id)
+        if order is None:
+            raise ValueError("Order not found")
+
+        await self.record_payment(
+            order.id,
+            organization_id,
+            _money(event.amount),
+            actor_id,
+            payment_method=(
+                StorePaymentMethod.PAYPAL
+                if event.provider == "paypal"
+                else order.payment_method
+            ),
+            reference=event.external_id,
+            mark_paid=True,
+            notify_member=True,
+        )
+
+        event.matched_order_id = order.id
+        event.status = StorePaymentEventStatus.APPLIED
+        event.resolved_at = _utcnow()
+        event.resolved_by = actor_id
+        event.note = f"Applied to order {order.order_number}."
+        await self.db.commit()
+        # Re-read rather than refresh: the caller serializes the matched order
+        # alongside the event, and refresh() would leave that relationship
+        # expired for a lazy load asyncio cannot service.
+        refreshed = await self.get_payment_event(event.id, organization_id)
+        return refreshed or event
+
+    async def ignore_payment_event(
+        self,
+        event_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        reason: Optional[str] = None,
+    ) -> StorePaymentEvent:
+        """Dismiss a payment that does not belong to any store order."""
+        event = await self.get_payment_event(event_id, organization_id)
+        if event is None:
+            raise ValueError("Payment not found")
+        if event.status == StorePaymentEventStatus.APPLIED:
+            raise ValueError("An applied payment cannot be dismissed")
+
+        event.status = StorePaymentEventStatus.IGNORED
+        event.resolved_at = _utcnow()
+        event.resolved_by = actor_id
+        if reason:
+            event.note = reason
+        await self.db.commit()
+        refreshed = await self.get_payment_event(event.id, organization_id)
+        return refreshed or event
+
+    async def get_payment_event(
+        self, event_id: str, organization_id: str
+    ) -> Optional[StorePaymentEvent]:
+        result = await self.db.execute(
+            select(StorePaymentEvent)
+            .options(selectinload(StorePaymentEvent.matched_order))
+            .where(
+                StorePaymentEvent.id == str(event_id),
+                StorePaymentEvent.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def count_unresolved_payment_events(self, organization_id: str) -> int:
+        """How many inbound payments still need somebody to look at them."""
+        result = await self.db.execute(
+            select(func.count(StorePaymentEvent.id)).where(
+                StorePaymentEvent.organization_id == str(organization_id),
+                StorePaymentEvent.status.in_(_UNRESOLVED_PAYMENT_STATUSES),
+            )
+        )
+        return int(result.scalar() or 0)
+
+    async def list_payment_events(
+        self,
+        organization_id: str,
+        status: Optional[str] = None,
+        unresolved_only: bool = False,
+        limit: int = 100,
+    ) -> List[StorePaymentEvent]:
+        filters = [StorePaymentEvent.organization_id == str(organization_id)]
+        if status:
+            try:
+                wanted = StorePaymentEventStatus(str(status).lower())
+            except ValueError:
+                raise ValueError(f"Unknown payment status: {status}")
+            filters.append(StorePaymentEvent.status == wanted)
+        elif unresolved_only:
+            filters.append(StorePaymentEvent.status.in_(_UNRESOLVED_PAYMENT_STATUSES))
+        result = await self.db.execute(
+            select(StorePaymentEvent)
+            .options(selectinload(StorePaymentEvent.matched_order))
+            .where(*filters)
+            .order_by(StorePaymentEvent.received_at.desc())
+            .limit(max(min(limit, 500), 1))
+        )
+        return list(result.scalars().all())
 
     # ==================================================================
     # Reporting

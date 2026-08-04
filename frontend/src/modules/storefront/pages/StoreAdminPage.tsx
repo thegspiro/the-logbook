@@ -2,23 +2,24 @@
  * Store Admin Page
  *
  * Quartermaster view of the department store, tabbed: overview, order windows,
- * catalog, orders, and settings.
+ * catalog, orders, inbound payments, and settings.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { ArrowLeft, CalendarClock, Loader2, Package, Settings, ShoppingBag, Store } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Loader2, Package, Settings, ShoppingBag, Store, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '../../../utils/dateFormatting';
 import { StoreCatalogTab } from '../components/StoreCatalogTab';
 import { StoreOrdersTab } from '../components/StoreOrdersTab';
+import { StorePaymentsTab } from '../components/StorePaymentsTab';
 import { StoreSettingsTab } from '../components/StoreSettingsTab';
 import { StoreWindowsTab } from '../components/StoreWindowsTab';
 import { storefrontService } from '../services/api';
 import { StorePaymentStatus, type StoreDashboard } from '../types';
 
-type TabId = 'overview' | 'windows' | 'catalog' | 'orders' | 'settings';
+type TabId = 'overview' | 'windows' | 'catalog' | 'orders' | 'payments' | 'settings';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <Store className="h-4 w-4" /> },
@@ -29,6 +30,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   },
   { id: 'catalog', label: 'Catalog', icon: <Package className="h-4 w-4" /> },
   { id: 'orders', label: 'Orders', icon: <ShoppingBag className="h-4 w-4" /> },
+  { id: 'payments', label: 'Payments', icon: <Wallet className="h-4 w-4" /> },
   {
     id: 'settings',
     label: 'Settings',
@@ -206,6 +208,7 @@ const StoreAdminPage: React.FC = () => {
             initialPaymentFilter={ordersPaymentFilter}
           />
         )}
+        {activeTab === 'payments' && <StorePaymentsTab onChanged={() => void loadDashboard()} />}
         {activeTab === 'settings' && <StoreSettingsTab onChanged={() => void loadDashboard()} />}
       </div>
     </div>

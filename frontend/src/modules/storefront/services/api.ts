@@ -11,6 +11,8 @@ import type {
   StoreOrderListResponse,
   StoreOrderWindow,
   StoreOrderWindowInput,
+  StorePaymentEvent,
+  StorePaymentEventList,
   StorePermissions,
   StoreProduct,
   StoreProductInput,
@@ -342,6 +344,32 @@ export const storefrontService = {
     notifyMembers: boolean;
   }): Promise<{ updated: number; skipped: number }> {
     const response = await api.post<{ updated: number; skipped: number }>('/store/orders/bulk-status', payload);
+    return response.data;
+  },
+
+  // ---- External payment reconciliation ----
+
+  async listPaymentEvents(params?: {
+    status?: string | undefined;
+    unresolvedOnly?: boolean | undefined;
+  }): Promise<StorePaymentEventList> {
+    const response = await api.get<StorePaymentEventList>('/store/payments', {
+      params: { status: params?.status, unresolved_only: params?.unresolvedOnly },
+    });
+    return response.data;
+  },
+
+  async applyPaymentEvent(eventId: string, orderId?: string): Promise<StorePaymentEvent> {
+    const response = await api.post<StorePaymentEvent>(`/store/payments/${eventId}/apply`, {
+      orderId,
+    });
+    return response.data;
+  },
+
+  async ignorePaymentEvent(eventId: string, reason?: string): Promise<StorePaymentEvent> {
+    const response = await api.post<StorePaymentEvent>(`/store/payments/${eventId}/ignore`, {
+      reason,
+    });
     return response.data;
   },
 

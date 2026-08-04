@@ -57,6 +57,10 @@ from app.schemas.storefront import (
     StoreOrderWindowCreate,
     StoreOrderWindowResponse,
     StoreOrderWindowUpdate,
+    StorePaymentEventApply,
+    StorePaymentEventIgnore,
+    StorePaymentEventListResponse,
+    StorePaymentEventResponse,
     StoreProductCreate,
     StoreProductResponse,
     StoreProductUpdate,
@@ -1343,3 +1347,133 @@ async def get_store_permissions(
         "can_order": user_has_permission(current_user, "storefront.order"),
         "can_manage": user_has_permission(current_user, "storefront.manage"),
     }
+
+
+# ==========================================================================
+# External payment reconciliation
+# ==========================================================================
+
+
+def _payment_event_payload(event: Any) -> Dict[str, Any]:
+    """Shape one inbound payment, with enough of the order to act on it."""
+    order = getattr(event, "matched_order", None)
+    balance: Optional[Decimal] = None
+    if order is not None:
+        balance = max(
+            Decimal(order.total or 0) - Decimal(order.amount_paid or 0), Decimal("0")
+        )
+    return {
+        "id": event.id,
+        "provider": event.provider,
+        "external_id": event.external_id,
+        "amount": event.amount,
+        "currency": event.currency,
+        "payer_name": event.payer_name,
+        "payer_email": event.payer_email,
+        "reference": event.reference,
+        "status": event.status,
+        "note": event.note,
+        "matched_order_id": event.matched_order_id,
+        "matched_order_number": order.order_number if order else None,
+        "matched_order_member": order.customer_name if order else None,
+        "matched_order_balance": balance,
+        "received_at": event.received_at,
+        "resolved_at": event.resolved_at,
+    }
+
+
+@router.get("/payments", response_model=StorePaymentEventListResponse)
+async def list_payment_events(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    unresolved_only: bool = Query(False),
+    limit: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Inbound payments a connected provider reported, newest first."""
+    service = StorefrontService(db)
+    org_id = str(current_user.organization_id)
+    events = await service.list_payment_events(
+        org_id,
+        status=status_filter,
+        unresolved_only=unresolved_only,
+        limit=limit,
+    )
+    # Counted independently of the current filter so the review badge does not
+    # disappear the moment somebody filters the list to something else.
+    unresolved = await service.count_unresolved_payment_events(org_id)
+    return {
+        "items": [_payment_event_payload(event) for event in events],
+        "unresolved_count": unresolved,
+    }
+
+
+@router.post("/payments/{event_id}/apply", response_model=StorePaymentEventResponse)
+async def apply_payment_event(
+    event_id: str,
+    payload: StorePaymentEventApply,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Settle an order from a recorded payment."""
+    service = StorefrontService(db)
+    try:
+        event = await service.apply_payment_event(
+            event_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            order_id=payload.order_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+
+    await log_audit_event(
+        db=db,
+        event_type="store_payment_applied",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "payment_event_id": event_id,
+            "provider": event.provider,
+            "order_id": event.matched_order_id,
+            "amount": str(event.amount),
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    return _payment_event_payload(event)
+
+
+@router.post("/payments/{event_id}/ignore", response_model=StorePaymentEventResponse)
+async def ignore_payment_event(
+    event_id: str,
+    payload: StorePaymentEventIgnore,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Dismiss a payment that does not belong to any store order."""
+    service = StorefrontService(db)
+    try:
+        event = await service.ignore_payment_event(
+            event_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+
+    await log_audit_event(
+        db=db,
+        event_type="store_payment_ignored",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "payment_event_id": event_id,
+            "provider": event.provider,
+            "reason": payload.reason,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    return _payment_event_payload(event)

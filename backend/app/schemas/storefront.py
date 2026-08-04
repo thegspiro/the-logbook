@@ -17,6 +17,7 @@ from app.models.storefront import (
     StoreFulfillmentMethod,
     StoreOrderEventType,
     StoreOrderStatus,
+    StorePaymentEventStatus,
     StorePaymentMethod,
     StorePaymentStatus,
     StoreProductStatus,
@@ -816,3 +817,58 @@ class StoreBulkStatusResult(UTCResponseBase):
     updated: int
     skipped: int
     errors: List[Dict[str, str]] = Field(default_factory=list)
+
+
+# ============================================
+# External payment reconciliation
+# ============================================
+
+
+class StorePaymentEventResponse(UTCResponseBase):
+    """One payment a provider reported, and what the storefront did with it"""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    provider: str
+    external_id: str
+    amount: Decimal
+    currency: str
+    payer_name: Optional[str] = None
+    payer_email: Optional[str] = None
+    reference: Optional[str] = None
+    status: StorePaymentEventStatus
+    note: Optional[str] = None
+    matched_order_id: Optional[str] = None
+    matched_order_number: Optional[str] = None
+    matched_order_member: Optional[str] = None
+    matched_order_balance: Optional[Decimal] = None
+    received_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
+
+
+class StorePaymentEventListResponse(UTCResponseBase):
+    """Inbound payments, newest first"""
+
+    model_config = _RESPONSE_CONFIG
+
+    items: List[StorePaymentEventResponse] = Field(default_factory=list)
+    unresolved_count: int = 0
+
+
+class StorePaymentEventApply(BaseModel):
+    """Settle an order from a recorded payment"""
+
+    model_config = _REQUEST_CONFIG
+
+    # Supplied when an administrator attaches a payment the matcher could not
+    # place; omitted to accept the order the matcher already found.
+    order_id: Optional[str] = None
+
+
+class StorePaymentEventIgnore(BaseModel):
+    """Dismiss a payment that does not belong to any store order"""
+
+    model_config = _REQUEST_CONFIG
+
+    reason: Optional[str] = Field(default=None, max_length=500)

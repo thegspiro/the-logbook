@@ -164,6 +164,19 @@ INTEGRATION_CATALOG = [
         "status": "available",
     },
     {
+        "integration_type": "paypal",
+        "name": "PayPal",
+        "description": (
+            "Reconcile store payments automatically. Connect the department's "
+            "own PayPal Business account and PayPal will tell Logbook what it "
+            "received; captures whose reference carries a store order number "
+            "settle that order without anyone marking it paid by hand. No "
+            "payment is ever taken on this site."
+        ),
+        "category": "Payments",
+        "status": "available",
+    },
+    {
         "integration_type": "active911",
         "name": "Active911",
         "description": "Receive dispatch alerts and mapping from Active911 paging platform.",

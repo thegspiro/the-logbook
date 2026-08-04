@@ -96,6 +96,13 @@ async def test_integration_connection(integration: Integration) -> str:
         service = SalesforceService(creds)
         return await service.test_connection()
 
+    if itype == "paypal":
+        from app.services.integration_services.paypal_service import (
+            test_connection as paypal_test_connection,
+        )
+
+        return await paypal_test_connection(integration)
+
     if itype == "documenso":
         from app.services.integration_services.documenso_service import DocumensoService
 

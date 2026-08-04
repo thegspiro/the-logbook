@@ -111,6 +111,17 @@ class StoreFulfillmentMethod(str, enum.Enum):
     SHIP = "ship"
 
 
+class StorePaymentEventStatus(str, enum.Enum):
+    """How an externally-reported payment was reconciled."""
+
+    APPLIED = "applied"  # Matched an order and settled it
+    MATCHED = "matched"  # Matched an order but was not applied automatically
+    UNMATCHED = "unmatched"  # No order could be identified — needs a human
+    AMBIGUOUS = "ambiguous"  # Reference matched, amount did not
+    IGNORED = "ignored"  # Dismissed by an administrator
+    DUPLICATE = "duplicate"  # Provider redelivered a capture we already have
+
+
 class StoreOrderEventType(str, enum.Enum):
     """Timeline entry types on an order"""
 
@@ -611,6 +622,91 @@ class StoreOrder(Base):
         Index("ix_store_orders_org_status", "organization_id", "status"),
         Index("ix_store_orders_org_payment", "organization_id", "payment_status"),
         Index("ix_store_orders_org_window", "organization_id", "window_id"),
+    )
+
+
+class StorePaymentEvent(Base):
+    """A payment a provider says it received, and what we did about it.
+
+    Every inbound capture is recorded here whether or not it could be matched,
+    because the failures are the point: a payment that arrives with no usable
+    reference still has to reach a human, and silently dropping it would leave
+    a member marked unpaid with money gone from their account.
+
+    This is a ledger of *external* reports, deliberately separate from
+    ``store_orders.amount_paid``. Applying an event writes the payment through
+    the normal service path; this table records that it happened and why.
+    """
+
+    __tablename__ = "store_payment_events"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    provider = Column(String(30), nullable=False, default="paypal")
+    # The provider's own id for the money movement. Unique per org so a
+    # redelivered webhook is recognised rather than double-counted.
+    external_id = Column(String(120), nullable=False)
+    event_id = Column(String(120), nullable=True)
+
+    amount = Column(Numeric(10, 2), nullable=False, default=0)
+    currency = Column(String(3), nullable=False, default="USD")
+
+    payer_name = Column(String(200), nullable=True)
+    payer_email = Column(String(255), nullable=True)
+    # Whatever reference the payer or the department attached — an invoice id,
+    # a custom id, or a free-text note. This is what matching reads.
+    reference = Column(String(255), nullable=True)
+
+    status = Column(
+        SQLEnum(StorePaymentEventStatus, values_callable=_enum_values),
+        nullable=False,
+        default=StorePaymentEventStatus.UNMATCHED,
+    )
+    matched_order_id = Column(
+        String(36),
+        ForeignKey("store_orders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    note = Column(Text, nullable=True)
+    # The provider payload, kept for support: when a match goes wrong the
+    # original is the only way to work out why.
+    raw_payload = Column(JSON, nullable=True)
+
+    received_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    organization = relationship("Organization", foreign_keys=[organization_id])
+    matched_order = relationship("StoreOrder", foreign_keys=[matched_order_id])
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "provider",
+            "external_id",
+            name="uq_store_payment_events_provider_external",
+        ),
+        Index("ix_store_payment_events_org_status", "organization_id", "status"),
     )
 
 

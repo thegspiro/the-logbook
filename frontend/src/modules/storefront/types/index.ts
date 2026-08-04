@@ -501,3 +501,39 @@ export interface CartLine {
   quantity: number;
   isTaxable: boolean;
 }
+
+/** How an externally-reported payment was reconciled against store orders. */
+export const StorePaymentEventStatus = {
+  APPLIED: 'applied',
+  MATCHED: 'matched',
+  UNMATCHED: 'unmatched',
+  AMBIGUOUS: 'ambiguous',
+  IGNORED: 'ignored',
+  DUPLICATE: 'duplicate',
+} as const;
+export type StorePaymentEventStatus = (typeof StorePaymentEventStatus)[keyof typeof StorePaymentEventStatus];
+
+/** One payment a connected provider reported receiving. */
+export interface StorePaymentEvent {
+  id: string;
+  provider: string;
+  externalId: string;
+  amount: string;
+  currency: string;
+  payerName?: string | null;
+  payerEmail?: string | null;
+  reference?: string | null;
+  status: StorePaymentEventStatus;
+  note?: string | null;
+  matchedOrderId?: string | null;
+  matchedOrderNumber?: string | null;
+  matchedOrderMember?: string | null;
+  matchedOrderBalance?: string | null;
+  receivedAt?: string | null;
+  resolvedAt?: string | null;
+}
+
+export interface StorePaymentEventList {
+  items: StorePaymentEvent[];
+  unresolvedCount: number;
+}
