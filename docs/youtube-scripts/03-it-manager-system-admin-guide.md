@@ -138,31 +138,49 @@ IP Security, Platform Analytics.]**
 **[SCREEN: Click to download the template. Open it in a spreadsheet
 application briefly to show the columns.]**
 
-> "The template has columns for first name, last name, email, phone, position,
-> membership type, station, and more. Fill this in with your department roster.
-> A few tips:"
+> "The template has columns for name, email, membership number, address, phone,
+> rank, role, station, platoon, and two emergency contacts. Fill this in with
+> your department roster. A few tips:"
 
 **[CALLOUT: Tips list]**
 
+> "**Only three columns are required** — first name, last name, and email.
+> Everything else is optional. If you don't have addresses yet, delete those
+> columns and import anyway; you can fill them in later."
+
 > "**Emails must be unique** — every member needs a different email address."
 
-> "**Position names must match** — use the exact position names from the system.
-> 'Firefighter,' not 'FF' or 'fire fighter.'"
+> "**Leave membership number blank** to have the system assign one."
+
+> "**Role names must match** — use the exact role name from your Roles page.
+> 'Firefighter,' not 'FF' or 'fire fighter.' A name that doesn't match will
+> fail that row rather than import the member without a role."
+
+> "**Emergency contacts are all-or-nothing** — if you give a name, give the
+> relationship and phone too, or leave all three blank."
 
 > "**Empty optional fields are fine** — just leave them blank, don't put 'N/A.'"
 
 **[SCREEN: Show uploading the completed CSV file]**
 
-> "Upload your CSV and the system will validate it. You'll see a preview showing
-> what will be imported, along with any warnings about invalid data."
+> "Upload your CSV and the system checks the header row, then shows you a
+> preview of the first five members so you can confirm the columns landed
+> where you expect."
 
-**[SCREEN: Show the preview/validation screen with some rows highlighted]**
+**[SCREEN: Show the preview table]**
 
-> "Green means good, yellow means a warning — like a duplicate email or
-> unrecognized position name. Red means an error that needs fixing. Fix the
-> issues in your spreadsheet, re-upload, and go."
+> "If you left out optional columns, you'll get a note saying which ones — that's
+> a heads-up, not an error. A missing required column stops the upload and names
+> the column."
 
-**[SCREEN: Click "Import" and show the progress bar / completion message]**
+**[SCREEN: Click Import, then show the results panel with the error list]**
+
+> "After the import, you get a count of successes and failures, and every failed
+> row is listed by row number with the reason — a duplicate email, an
+> unrecognized role, a bad date. Fix those rows in your spreadsheet and
+> re-upload just them."
+
+**[SCREEN: Show the completion summary — successful and failed counts]**
 
 ### MANAGING MEMBER ACCOUNTS (8:30 – 10:00)
 

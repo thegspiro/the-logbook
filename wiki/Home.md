@@ -124,6 +124,28 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### August 2026 — Member CSV Import Fixes
+
+- **The member import template is importable again** — the generated template
+  shipped a `membershipNumber` column while the uploader required
+  `departmentId`, so the downloaded template was rejected on upload with
+  "Missing required columns: departmentid". Both now come from one list;
+  `departmentId` still works for rosters built from an older download
+- **Only `firstName`, `lastName` and `email` are required** — the uploader
+  previously demanded 13 columns the API treats as optional, so a roster
+  without addresses or emergency contacts could not be imported at all. A
+  blank `membershipNumber` is auto-assigned
+- **Addresses containing commas import correctly** — quoted CSV fields are
+  parsed properly instead of shifting every column after them, which had
+  surfaced as missing-required-field errors on well-formed rows
+- **The `role` column is applied**, resolved by role name; an unrecognized
+  name is reported against its row rather than dropped silently
+- **New `username` column** (optional; defaults to the part of the email
+  before `@`) to resolve collisions between members sharing an email
+  local-part across domains
+- **Removed the `status` column** — imported members are always Active; the
+  column had no effect
+
 ### July 2026 — ISO Compliance: Privacy, Retention & Operations
 
 - **Member privacy rights** — self-service personal-data export, consent
