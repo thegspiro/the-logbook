@@ -39,6 +39,7 @@ from app.schemas.finance import (
     CheckRequestCreate,
     CheckRequestResponse,
     CheckRequestUpdate,
+    DuesPaymentResponse,
     DuesScheduleCreate,
     DuesScheduleResponse,
     DuesScheduleUpdate,
@@ -1226,10 +1227,35 @@ async def record_dues_payment(
         return await service.record_dues_payment(
             dues_id,
             str(current_user.organization_id),
+            recorded_by=str(current_user.id),
             **data.model_dump(),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+@router.get("/dues/{dues_id}/payments", response_model=list[DuesPaymentResponse])
+async def list_dues_payments(
+    dues_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("finance.view")),
+):
+    """
+    List every payment recorded against one member's dues, oldest first.
+
+    The dues record itself carries only the derived total and the most recent
+    payment's detail; this is the underlying ledger those are computed from,
+    and the only place earlier payments can be read back.
+    """
+    service = FinanceService(db)
+    try:
+        return await service.list_dues_payments(
+            dues_id, str(current_user.organization_id)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 

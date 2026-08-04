@@ -89,7 +89,7 @@ upgrade*, which is what a new department actually touches first.
 
 ---
 
-## Phase 2 — Close the security items that block 🔑
+## Phase 2 — Close the security items that block ✅
 
 `docs/KNOWN_LIMITATIONS.md` carries ~20 open items from the completed audit.
 Most are legitimate accept-and-document. These are the ones I'd hold an RC for,
@@ -102,10 +102,10 @@ Verified against the implementation 2026-08-02, not just the audit write-ups.
 |---|---|---|---|
 | **ORU-8a** | `GET /users/{id}/with-roles` returned the raw ORM user with no visibility filtering while its sibling roster endpoint redacted | The roster's own comment says "redact here too, or the setting is advisory." The detail endpoint was what made it advisory | ✅ **Fixed** — shared `_clear_hidden_contact_fields` / `_load_contact_visibility`, subject and members-managers exempt |
 | **ORU-8b** | `without_infrastructure()` stripped mail host, S3 bucket, SSO issuer and OAuth client IDs but not `it_team` — so every authenticated member got the IT roster and the free-form `backup_access` dict | `backup_access` is unstructured operational text; whatever an admin typed there was readable by any account | ✅ **Fixed** — `it_team` emptied for callers without `settings.manage` |
-| **FIN-6** | `record_dues_payment` does `amount_paid += amount` with no dedup on `transaction_reference`, overwrites `transaction_reference` / `payment_method` / `notes` on every call, and recomputes a `WAIVED` record to `PAID`/`PARTIAL` | Money, silently wrong, with no ledger to reconstruct from — `MemberDues` stores aggregates only, so a clobbered reference is gone | 🔑 Status guard is unambiguous; real idempotency needs a decision — see below |
+| **FIN-6** | `record_dues_payment` accumulated into an aggregate with no record that a payment had happened | Money, silently wrong, with nothing to reconstruct from | ✅ **Fixed** — payments ledger; totals derived, not accumulated |
 
-**FIN-6, verified 2026-08-02.** Confirmed, and worse than the write-up in two
-respects. `finance_service.py:1736-1746` has three defects in eleven lines:
+**What was wrong (verified against the code 2026-08-02).** Worse than the
+write-up in two respects — three defects in eleven lines:
 
 1. **No idempotency.** `amount_paid = amount_paid + amount_paid_arg` with
    nothing consulting `transaction_reference`. A retried or replayed request
@@ -120,28 +120,47 @@ respects. `finance_service.py:1736-1746` has three defects in eleven lines:
    record recomputes `status` to `PAID`/`PARTIAL` while leaving `waived_by`,
    `waived_at` and `waive_reason` populated — an internally contradictory row.
 
-**Fixed 2026-08-02 — (2) and (3).** A payment against a `WAIVED` or `EXEMPT`
-record is now refused rather than silently converting it; `EXEMPT` was included
-because it is the same shape, though the audit named only `WAIVED`. Payment
-detail is assigned only when the caller actually supplied it, matching the
-`if value is not None` idiom `update_dues_schedule` already uses in the same
-file. Eight unit tests, all four of the behavioural ones confirmed failing
-against the pre-fix code.
+**Fixed 2026-08-02 — all three, at the root rather than the symptom.** The
+shared cause was that `MemberDues` was the only record of payment: one
+`amount_paid` total plus one set of detail columns, overwritten by whichever
+payment was entered last. Nothing recorded that a payment had *happened*, so a
+retry was indistinguishable from a second instalment and each payment destroyed
+the previous one's detail.
 
-**Still open — (1), genuine idempotency.** Needs somewhere to record processed
-references: a payments ledger table, or a uniqueness constraint on
-`(dues_id, transaction_reference)`. Either is a schema decision plus a
-migration. **The one thing here still needing an owner call.**
+A `dues_payments` ledger (migration `20260802_0001`) now holds one row per
+payment, and the columns on `MemberDues` became a projection of it:
 
-Worth knowing while deciding: there is **no way out of `WAIVED` through the
-API**. `PUT /dues/{dues_id}` is `record_dues_payment` itself, and the only
-other dues route is `POST /dues/{id}/waive` — there is no generic update and no
-unwaive. Before the guard that gap was hidden, because recording a payment
-happened to clear the status as a side effect. Now that the guard refuses,
-"waived by mistake, then they paid" has no in-app remedy. A small
-`POST /dues/{id}/unwaive` under `finance.manage`, writing an audit event, is
-the obvious companion — worth pairing with whichever idempotency model you
-pick, since both touch this endpoint group.
+* `amount_paid` is **re-derived** by `_apply_payment_totals` as the sum of the
+  ledger, not added to a running figure. A double-credit would require a
+  duplicate ledger row, which the uniqueness constraint on
+  `(member_dues_id, transaction_reference)` refuses — the bug class stops being
+  representable rather than being guarded against.
+* Idempotency is that constraint plus an in-service check: re-submitting a
+  reference already on the record returns it untouched instead of raising, so a
+  double-clicked form is safe. Payments with no reference — cash at a meeting —
+  are never deduplicated, because two identical cash amounts are two payments.
+* `payment_method` / `transaction_reference` / `notes` project the newest
+  ledger row, so they can no longer be blanked by an omitted field or drift
+  from the ledger.
+* `WAIVED` and `EXEMPT` records refuse payment outright. `EXEMPT` was included
+  because it is the same shape, though the audit named only `WAIVED`.
+
+The migration **backfills** one ledger row per already-paid record. That is the
+load-bearing part: once totals are derived, an existing balance with no ledger
+row behind it would recompute to zero.
+
+`GET /finance/dues/{id}/payments` exposes the ledger — a history nobody can
+read would only be half the fix.
+
+15 unit tests. Ledger behaviour is tested through `_apply_payment_totals`,
+which is pure, so it runs in CI's unit job rather than needing MySQL.
+
+**Companion still open.** There is no way out of `WAIVED` through the API:
+`PUT /dues/{dues_id}` is `record_dues_payment` itself and the only other dues
+route is `POST /dues/{id}/waive` — no generic update, no unwaive. The gap
+predates this work but was masked, because recording a payment used to clear
+the status as a side effect of the bug. A small `POST /dues/{id}/unwaive` under
+`finance.manage`, writing an audit event, closes it.
 
 ORU-8 was originally carried here as a single item needing a product decision on
 what `users.view` may see. On reading the code it is two narrow gaps left behind
@@ -271,28 +290,10 @@ Phase 1 is genuinely unknown.
 
 ## Open decisions needed
 
-1. **FIN-6 idempotency model** — a payments ledger table, or a uniqueness
-   constraint on `(dues_id, transaction_reference)`? A ledger also fixes the
-   destroyed-payment-history problem and is the more honest model for money;
-   the constraint is smaller. Either needs a migration. The status guard and
-   the field-clobbering are getting fixed regardless — they need no decision.
-2. **Pilot** — which department runs the RC, and for how long?
+1. **Pilot** — which department runs the RC, and for how long?
 
-**Decided 2026-08-02 — DOB and emergency contacts are leadership-only.**
-Surfaced while fixing ORU-8 and not previously tracked. Now gated on
-`members.manage` (or the member themselves) on both `with-roles` endpoints,
-with no organization setting able to publish them — `contact_info_visibility`
-deliberately has no flag for either. `members.manage` was chosen over a new
-permission because it already resolves to exactly the intended population —
-fire chief, deputy and assistant chief, captain, president, vice-president,
-secretary, assistant secretary, membership coordinator, IT manager — whereas
-`users.view` reaches 24 positions and `members.view` reaches every member. It
-also needs no seed migration, so existing organizations get the restriction on
-upgrade rather than after a role edit. Disclosure to leadership is recorded on
-the `user_viewed` audit event, so the trail answers *who saw it*, not merely
-who looked. `MemberProfilePage` hides the emergency-contacts section entirely
-for everyone else rather than rendering an empty one, which would read as "none
-on file" — a different and wrong statement about the member.
+That is the only one left. Every other Phase 2 item is either fixed or
+explicitly accepted, and none of the remaining work needs a policy call.
 
 > **Note on how these were triaged.** Phase 2 was first assembled from the
 > audit write-ups in `docs/module-audit/` rather than the implementations, and

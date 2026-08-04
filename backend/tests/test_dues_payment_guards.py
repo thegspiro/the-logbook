@@ -19,20 +19,22 @@ they run without a database and stay in CI's unit job.
 """
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.models.finance import DuesStatus, MemberDues
-from app.services.finance_service import FinanceService
+from app.models.finance import DuesPayment, DuesStatus, MemberDues
+from app.services.finance_service import FinanceService, _apply_payment_totals
 
 pytestmark = [pytest.mark.unit]
 
 ORG_ID = str(uuid.uuid4())
+BASE_TIME = datetime(2026, 3, 1, 19, 30, tzinfo=timezone.utc)
 
 
-def _dues(**overrides) -> MemberDues:
+def _dues(payments: list[DuesPayment] | None = None, **overrides) -> MemberDues:
     values = {
         "id": str(uuid.uuid4()),
         "organization_id": ORG_ID,
@@ -44,7 +46,21 @@ def _dues(**overrides) -> MemberDues:
         "due_date": None,
     }
     values.update(overrides)
-    return MemberDues(**values)
+    dues = MemberDues(**values)
+    for payment in payments or []:
+        dues.payments.append(payment)
+    return dues
+
+
+def _payment(amount: str, *, minutes_ago: int = 0, **overrides) -> DuesPayment:
+    values = {
+        "id": str(uuid.uuid4()),
+        "organization_id": ORG_ID,
+        "amount": Decimal(amount),
+        "received_at": BASE_TIME - timedelta(minutes=minutes_ago),
+    }
+    values.update(overrides)
+    return DuesPayment(**values)
 
 
 def _service_for(dues: MemberDues) -> FinanceService:
@@ -106,40 +122,25 @@ class TestWaivedAndExemptAreProtected:
         assert dues.amount_paid == Decimal("100.00")
 
 
-class TestPaymentDetailIsNotClobbered:
-    async def test_omitted_fields_keep_their_previous_values(self):
-        dues = _dues(
-            amount_paid=Decimal("40.00"),
-            status=DuesStatus.PARTIAL,
+class TestEarlierPaymentsSurvive:
+    """The ledger is what makes earlier payments recoverable at all.
+
+    Previously a second instalment overwrote the first payment's method,
+    reference and notes on the single dues row, with nothing else holding them.
+    """
+
+    async def test_a_second_instalment_does_not_erase_the_first(self):
+        first = _payment(
+            "40.00",
+            minutes_ago=60,
             payment_method="check",
             transaction_reference="CHK-1041",
             notes="First installment, collected at the March meeting",
         )
-        service = _service_for(dues)
-
-        # A second installment entered without re-typing the earlier detail —
-        # exactly what the endpoint sends when the form leaves them blank.
-        await service.record_dues_payment(
-            dues.id,
-            ORG_ID,
-            amount_paid=60.0,
-            payment_method=None,
-            transaction_reference=None,
-            notes=None,
-        )
-
-        assert dues.amount_paid == Decimal("100.00")
-        assert dues.status == DuesStatus.PAID
-        assert dues.payment_method == "check"
-        assert dues.transaction_reference == "CHK-1041"
-        assert dues.notes == "First installment, collected at the March meeting"
-
-    async def test_supplied_fields_still_overwrite(self):
         dues = _dues(
+            [first],
             amount_paid=Decimal("40.00"),
             status=DuesStatus.PARTIAL,
-            payment_method="check",
-            transaction_reference="CHK-1041",
         )
         service = _service_for(dues)
 
@@ -152,6 +153,123 @@ class TestPaymentDetailIsNotClobbered:
             notes="Balance settled in person",
         )
 
+        assert len(dues.payments) == 2
+        assert first.notes == "First installment, collected at the March meeting"
+        assert first.transaction_reference == "CHK-1041"
+        assert first.amount == Decimal("40.00")
+
+    async def test_summary_columns_project_the_newest_payment(self):
+        dues = _dues(
+            [_payment("40.00", minutes_ago=60, payment_method="check")],
+            amount_paid=Decimal("40.00"),
+            status=DuesStatus.PARTIAL,
+        )
+        service = _service_for(dues)
+
+        await service.record_dues_payment(
+            dues.id,
+            ORG_ID,
+            amount_paid=60.0,
+            payment_method="cash",
+            transaction_reference="CASH-7",
+        )
+
         assert dues.payment_method == "cash"
         assert dues.transaction_reference == "CASH-7"
-        assert dues.notes == "Balance settled in person"
+        assert dues.amount_paid == Decimal("100.00")
+        assert dues.status == DuesStatus.PAID
+
+
+class TestIdempotency:
+    async def test_resubmitting_the_same_reference_does_not_double_credit(self):
+        dues = _dues(
+            [_payment("100.00", minutes_ago=5, transaction_reference="CHK-1041")],
+            amount_paid=Decimal("100.00"),
+            status=DuesStatus.PAID,
+        )
+        service = _service_for(dues)
+
+        await service.record_dues_payment(
+            dues.id, ORG_ID, amount_paid=100.0, transaction_reference="CHK-1041"
+        )
+
+        assert len(dues.payments) == 1
+        assert dues.amount_paid == Decimal("100.00")
+
+    async def test_a_distinct_reference_is_recorded_normally(self):
+        dues = _dues(
+            [_payment("40.00", minutes_ago=60, transaction_reference="CHK-1041")],
+            amount_paid=Decimal("40.00"),
+            status=DuesStatus.PARTIAL,
+        )
+        service = _service_for(dues)
+
+        await service.record_dues_payment(
+            dues.id, ORG_ID, amount_paid=60.0, transaction_reference="CHK-1042"
+        )
+
+        assert len(dues.payments) == 2
+        assert dues.amount_paid == Decimal("100.00")
+
+    async def test_unreferenced_payments_are_never_deduplicated(self):
+        # Cash at a meeting has nothing to identify it, so two identical
+        # amounts are two payments — collapsing them would lose money.
+        dues = _dues([_payment("20.00", minutes_ago=60, payment_method="cash")])
+        service = _service_for(dues)
+
+        await service.record_dues_payment(
+            dues.id, ORG_ID, amount_paid=20.0, payment_method="cash"
+        )
+
+        assert len(dues.payments) == 2
+        assert dues.amount_paid == Decimal("40.00")
+
+
+class TestTotalsAreDerived:
+    """`_apply_payment_totals` recomputes rather than accumulates."""
+
+    def test_total_is_the_sum_of_the_ledger(self):
+        dues = _dues(
+            [
+                _payment("25.00", minutes_ago=90),
+                _payment("30.00", minutes_ago=60),
+                _payment("45.00", minutes_ago=30),
+            ],
+            amount_paid=Decimal("999.00"),  # a corrupted aggregate...
+        )
+
+        _apply_payment_totals(dues)
+
+        assert dues.amount_paid == Decimal("100.00")  # ...is corrected, not added to
+        assert dues.status == DuesStatus.PAID
+
+    def test_ordering_follows_received_at_not_insertion(self):
+        dues = _dues(
+            [
+                _payment("10.00", minutes_ago=5, payment_method="cash"),
+                _payment("10.00", minutes_ago=90, payment_method="check"),
+            ]
+        )
+
+        _apply_payment_totals(dues)
+
+        # The newest payment by receipt time is the cash one, despite the
+        # check having been appended second.
+        assert dues.payment_method == "cash"
+        assert dues.paid_date == BASE_TIME - timedelta(minutes=5)
+
+    def test_an_empty_ledger_returns_the_record_to_pending(self):
+        dues = _dues(amount_paid=Decimal("50.00"), status=DuesStatus.PARTIAL)
+
+        _apply_payment_totals(dues)
+
+        assert dues.amount_paid == Decimal("0.00")
+        assert dues.status == DuesStatus.PENDING
+        assert dues.paid_date is None
+
+    def test_partial_when_the_ledger_falls_short(self):
+        dues = _dues([_payment("60.00")], amount_due=Decimal("100.00"))
+
+        _apply_payment_totals(dues)
+
+        assert dues.status == DuesStatus.PARTIAL
