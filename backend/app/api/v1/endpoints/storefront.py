@@ -37,6 +37,7 @@ from app.models.storefront import (
 )
 from app.models.user import User
 from app.schemas.storefront import (
+    StoreBulkPayment,
     StoreBulkStatusResult,
     StoreBulkStatusUpdate,
     StoreDashboardResponse,
@@ -45,12 +46,14 @@ from app.schemas.storefront import (
     StoreOrderCancel,
     StoreOrderCreate,
     StoreOrderListResponse,
+    StoreOrderMarkPaid,
     StoreOrderMessage,
     StoreOrderPaymentRecord,
     StoreOrderPaymentReport,
     StoreOrderRefund,
     StoreOrderResponse,
     StoreOrderStatusUpdate,
+    StoreOrderWaive,
     StoreOrderWindowCreate,
     StoreOrderWindowResponse,
     StoreOrderWindowUpdate,
@@ -1095,6 +1098,118 @@ async def record_payment(
     )
     settings = await service.get_settings(str(current_user.organization_id))
     return _order_payload(order, service, settings, include_internal=True)
+
+
+@router.post("/orders/{order_id}/mark-paid", response_model=StoreOrderResponse)
+async def mark_order_paid(
+    order_id: str,
+    payload: StoreOrderMarkPaid,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Settle an order's whole remaining balance in one step.
+
+    The department collects out-of-band (Venmo, cash at drill), so this — not
+    a gateway callback — is how an order becomes paid.
+    """
+    service = StorefrontService(db)
+    try:
+        order = await service.mark_order_paid(
+            order_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            payment_method=payload.payment_method,
+            reference=payload.reference,
+            notify_member=payload.notify_member,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    await log_audit_event(
+        db=db,
+        event_type="store_order_marked_paid",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "order_id": str(order_id),
+            "order_number": order.order_number,
+            "total": str(order.total),
+            "reference": payload.reference,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    settings = await service.get_settings(str(current_user.organization_id))
+    return _order_payload(order, service, settings, include_internal=True)
+
+
+@router.post("/orders/{order_id}/waive", response_model=StoreOrderResponse)
+async def waive_order_payment(
+    order_id: str,
+    payload: StoreOrderWaive,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Comp an order — the department is not collecting on it."""
+    service = StorefrontService(db)
+    try:
+        order = await service.waive_order_payment(
+            order_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            reason=payload.reason,
+            notify_member=payload.notify_member,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    await log_audit_event(
+        db=db,
+        event_type="store_order_payment_waived",
+        event_category="storefront",
+        severity="warning",
+        event_data={
+            "order_id": str(order_id),
+            "order_number": order.order_number,
+            "total": str(order.total),
+            "reason": payload.reason,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    settings = await service.get_settings(str(current_user.organization_id))
+    return _order_payload(order, service, settings, include_internal=True)
+
+
+@router.post("/orders/bulk-payment", response_model=StoreBulkStatusResult)
+async def bulk_mark_orders_paid(
+    payload: StoreBulkPayment,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Settle many orders at once — reconciling a payout statement."""
+    service = StorefrontService(db)
+    result = await service.bulk_mark_paid(
+        str(current_user.organization_id),
+        payload.order_ids,
+        str(current_user.id),
+        payment_method=payload.payment_method,
+        reference=payload.reference,
+        notify_members=payload.notify_members,
+    )
+    await log_audit_event(
+        db=db,
+        event_type="store_orders_bulk_marked_paid",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "requested": len(payload.order_ids),
+            "updated": result["updated"],
+            "skipped": result["skipped"],
+            "reference": payload.reference,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return result
 
 
 @router.post("/orders/{order_id}/refund", response_model=StoreOrderResponse)

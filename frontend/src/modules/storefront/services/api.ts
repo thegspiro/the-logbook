@@ -268,6 +268,36 @@ export const storefrontService = {
     return response.data;
   },
 
+  async markOrderPaid(
+    orderId: string,
+    payload: {
+      paymentMethod?: string | undefined;
+      reference?: string | undefined;
+      notifyMember: boolean;
+    }
+  ): Promise<StoreOrder> {
+    const response = await api.post<StoreOrder>(`/store/orders/${orderId}/mark-paid`, payload);
+    return response.data;
+  },
+
+  async waiveOrderPayment(
+    orderId: string,
+    payload: { reason?: string | undefined; notifyMember: boolean }
+  ): Promise<StoreOrder> {
+    const response = await api.post<StoreOrder>(`/store/orders/${orderId}/waive`, payload);
+    return response.data;
+  },
+
+  async bulkMarkPaid(payload: {
+    orderIds: string[];
+    paymentMethod?: string | undefined;
+    reference?: string | undefined;
+    notifyMembers: boolean;
+  }): Promise<{ updated: number; skipped: number }> {
+    const response = await api.post<{ updated: number; skipped: number }>('/store/orders/bulk-payment', payload);
+    return response.data;
+  },
+
   async refundOrder(
     orderId: string,
     payload: {

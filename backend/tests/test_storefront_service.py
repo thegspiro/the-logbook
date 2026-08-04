@@ -568,6 +568,166 @@ class TestPayments:
         # Self-reported means "please check", not "paid".
         assert updated.amount_paid == Decimal("0.00")
 
+    async def test_mark_paid_settles_the_whole_balance(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id, 2))
+
+        updated = await service.mark_order_paid(
+            order.id, org.id, str(member.id), notify_member=False
+        )
+        assert updated.amount_paid == Decimal("90.00")
+        assert updated.payment_status == StorePaymentStatus.PAID
+        assert updated.status == StoreOrderStatus.PAID
+
+    async def test_mark_paid_tops_up_a_partial_payment(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+        await service.record_payment(
+            order.id, org.id, Decimal("20.00"), str(member.id), notify_member=False
+        )
+
+        updated = await service.mark_order_paid(
+            order.id, org.id, str(member.id), notify_member=False
+        )
+        # Pays the remaining 25, not another full 45.
+        assert updated.amount_paid == Decimal("45.00")
+        assert updated.payment_status == StorePaymentStatus.PAID
+
+    async def test_mark_paid_on_a_settled_order_is_a_no_op(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+        await service.mark_order_paid(
+            order.id, org.id, str(member.id), notify_member=False
+        )
+
+        again = await service.mark_order_paid(
+            order.id, org.id, str(member.id), notify_member=False
+        )
+        assert again.amount_paid == Decimal("45.00")
+
+    async def test_a_cancelled_order_cannot_be_marked_paid(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+        await service.cancel_order(
+            order.id, org.id, str(member.id), notify_member=False
+        )
+
+        with pytest.raises(ValueError, match="cancelled order"):
+            await service.mark_order_paid(
+                order.id, org.id, str(member.id), notify_member=False
+            )
+
+    async def test_another_org_cannot_mark_an_order_paid(self, db_session):
+        service = StorefrontService(db_session)
+        org_a = await _make_org(db_session, "A")
+        org_b = await _make_org(db_session, "B")
+        member = await _make_member(db_session, org_a)
+        await _enable_store(service, org_a)
+        product = await _make_product(db_session, org_a)
+        await _make_open_window(db_session, org_a)
+        order = await service.create_order(org_a.id, member, _cart(product.id))
+
+        with pytest.raises(ValueError, match="not found"):
+            await service.mark_order_paid(order.id, org_b.id, None, notify_member=False)
+
+    async def test_waiving_collects_nothing_but_clears_the_order(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        window = await _make_open_window(db_session, org)
+        order = await service.create_order(org.id, member, _cart(product.id))
+
+        waived = await service.waive_order_payment(
+            order.id, org.id, str(member.id), reason="Comped", notify_member=False
+        )
+        assert waived.payment_status == StorePaymentStatus.WAIVED
+        assert waived.status == StoreOrderStatus.PAID
+        # No money moved, so the rollup must not invent revenue.
+        assert waived.amount_paid == Decimal("0.00")
+        summary = await service.get_window_summary(window.id, org.id)
+        assert summary["collected"] == Decimal("0.00")
+        assert summary["gross_sales"] == Decimal("45.00")
+
+    async def test_bulk_mark_paid_settles_a_selection(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("10.00"))
+        window = await _make_open_window(db_session, org)
+
+        orders = []
+        for _ in range(4):
+            member = await _make_member(db_session, org)
+            orders.append(await service.create_order(org.id, member, _cart(product.id)))
+
+        result = await service.bulk_mark_paid(
+            org.id,
+            [o.id for o in orders],
+            None,
+            payment_method=StorePaymentMethod.VENMO,
+            reference="statement-2026-08",
+            notify_members=False,
+        )
+        assert result["updated"] == 4
+        assert result["skipped"] == 0
+
+        summary = await service.get_window_summary(window.id, org.id)
+        assert summary["collected"] == Decimal("40.00")
+        assert summary["outstanding"] == Decimal("0.00")
+
+    async def test_bulk_mark_paid_skips_already_settled_orders(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org, price=Decimal("10.00"))
+        await _make_open_window(db_session, org)
+
+        member_a = await _make_member(db_session, org)
+        paid = await service.create_order(org.id, member_a, _cart(product.id))
+        await service.mark_order_paid(paid.id, org.id, None, notify_member=False)
+        member_b = await _make_member(db_session, org)
+        unpaid = await service.create_order(org.id, member_b, _cart(product.id))
+
+        result = await service.bulk_mark_paid(
+            org.id, [paid.id, unpaid.id], None, notify_members=False
+        )
+        # A mixed selection must not fail on the already-handled ones.
+        assert result["updated"] == 1
+        assert result["skipped"] == 1
+        assert result["errors"] == []
+
+    async def test_bulk_mark_paid_reports_unknown_ids(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        result = await service.bulk_mark_paid(
+            org.id, ["does-not-exist"], None, notify_members=False
+        )
+        assert result["updated"] == 0
+        assert result["skipped"] == 1
+        assert result["errors"][0]["order_id"] == "does-not-exist"
+
     async def test_refund_cannot_exceed_what_was_paid(self, db_session):
         org = await _make_org(db_session)
         member = await _make_member(db_session, org)

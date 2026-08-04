@@ -1499,6 +1499,140 @@ class StorefrontService:
             )
         return refreshed or order
 
+    async def mark_order_paid(
+        self,
+        order_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        payment_method: Optional[StorePaymentMethod] = None,
+        reference: Optional[str] = None,
+        notify_member: bool = True,
+    ) -> StoreOrder:
+        """Settle an order's whole remaining balance in one step.
+
+        The common case by far: money arrived out-of-band (a Venmo transfer, a
+        cash handoff at drill) for exactly the amount owed, and whoever is
+        working the orders just needs to say so. Typing the amount in adds a
+        chance to fat-finger it, so this reads the balance off the order.
+        """
+        order = await self.get_order(order_id, organization_id)
+        if not order:
+            raise ValueError("Order not found")
+        if order.status == StoreOrderStatus.CANCELLED:
+            raise ValueError("A cancelled order cannot take a payment")
+
+        balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
+        if balance <= 0:
+            # Already settled (or waived) — not an error, just nothing to do,
+            # so a bulk run over a mixed selection doesn't fail on it.
+            return order
+
+        return await self.record_payment(
+            order_id,
+            organization_id,
+            balance,
+            actor_id,
+            payment_method=payment_method or order.payment_method,
+            reference=reference,
+            mark_paid=True,
+            notify_member=notify_member,
+        )
+
+    async def waive_order_payment(
+        self,
+        order_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        reason: Optional[str] = None,
+        notify_member: bool = True,
+    ) -> StoreOrder:
+        """Comp an order — the department is not collecting on it.
+
+        Distinct from recording a payment: no money moved, so ``amount_paid``
+        stays where it is and the sales rollup still reports the order's value
+        as uncollected rather than inventing revenue.
+        """
+        order = await self.get_order(order_id, organization_id)
+        if not order:
+            raise ValueError("Order not found")
+        if order.status == StoreOrderStatus.CANCELLED:
+            raise ValueError("A cancelled order cannot be waived")
+
+        order.payment_status = StorePaymentStatus.WAIVED
+        order.paid_at = _utcnow()
+        order.payment_verified_by = actor_id
+        if order.status in (
+            StoreOrderStatus.SUBMITTED,
+            StoreOrderStatus.AWAITING_PAYMENT,
+        ):
+            order.status = StoreOrderStatus.PAID
+
+        self.db.add(
+            StoreOrderEvent(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                order_id=order.id,
+                event_type=StoreOrderEventType.PAYMENT_RECORDED,
+                message=reason or "Payment waived by the department",
+                is_member_visible=True,
+                created_by=actor_id,
+            )
+        )
+        await self.db.commit()
+
+        refreshed = await self.get_order(order_id, organization_id)
+        if refreshed and notify_member:
+            settings = await self.get_settings(organization_id)
+            await self.notifications.send_order_update(
+                refreshed,
+                reason or "No payment is due on this order.",
+                settings,
+            )
+        return refreshed or order
+
+    async def bulk_mark_paid(
+        self,
+        organization_id: str,
+        order_ids: Sequence[str],
+        actor_id: Optional[str],
+        payment_method: Optional[StorePaymentMethod] = None,
+        reference: Optional[str] = None,
+        notify_members: bool = True,
+    ) -> Dict[str, Any]:
+        """Settle many orders at once — reconciling a payout statement.
+
+        Orders that already carry no balance are counted as skipped rather
+        than failing the run, so a treasurer can select a whole window
+        without first weeding out the ones already handled.
+        """
+        updated = 0
+        skipped = 0
+        errors: List[Dict[str, str]] = []
+        for order_id in order_ids:
+            try:
+                before = await self.get_order(order_id, organization_id)
+                if before is None:
+                    raise ValueError("Order not found")
+                balance = _money(
+                    Decimal(before.total or 0) - Decimal(before.amount_paid or 0)
+                )
+                if balance <= 0:
+                    skipped += 1
+                    continue
+                await self.mark_order_paid(
+                    order_id,
+                    organization_id,
+                    actor_id,
+                    payment_method=payment_method,
+                    reference=reference,
+                    notify_member=notify_members,
+                )
+                updated += 1
+            except ValueError as exc:
+                skipped += 1
+                errors.append({"order_id": str(order_id), "error": str(exc)})
+        return {"updated": updated, "skipped": skipped, "errors": errors}
+
     async def report_payment(
         self,
         order_id: str,

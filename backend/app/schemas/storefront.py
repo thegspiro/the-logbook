@@ -664,6 +664,36 @@ class StoreOrderPaymentReport(BaseModel):
     note: Optional[str] = None
 
 
+class StoreOrderMarkPaid(BaseModel):
+    """Settle an order's whole remaining balance."""
+
+    model_config = _REQUEST_CONFIG
+
+    payment_method: Optional[StorePaymentMethod] = None
+    reference: Optional[str] = Field(None, max_length=200)
+    notify_member: bool = True
+
+
+class StoreOrderWaive(BaseModel):
+    """Comp an order — no money is being collected."""
+
+    model_config = _REQUEST_CONFIG
+
+    reason: Optional[str] = None
+    notify_member: bool = True
+
+
+class StoreBulkPayment(BaseModel):
+    """Settle several orders at once (reconciling a payout statement)."""
+
+    model_config = _REQUEST_CONFIG
+
+    order_ids: List[str] = Field(..., min_length=1, max_length=500)
+    payment_method: Optional[StorePaymentMethod] = None
+    reference: Optional[str] = Field(None, max_length=200)
+    notify_members: bool = True
+
+
 class StoreOrderRefund(BaseModel):
     """Record a refund issued outside the app"""
 
