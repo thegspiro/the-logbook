@@ -29,7 +29,7 @@ from app.models.storefront import (
 )
 from app.models.user import Organization, User, UserStatus
 from app.services.email_service import EmailService, wrap_email_body
-from app.utils.storefront_payments import build_paypal_url, build_venmo_url
+from app.utils.storefront_payments import build_payment_options
 
 # Colors used for the email header banner, by notice kind.
 _HEADER_BLUE = "#1d4ed8"
@@ -40,6 +40,8 @@ _HEADER_RED = "#b91c1c"
 _METHOD_LABELS = {
     StorePaymentMethod.VENMO: "Venmo",
     StorePaymentMethod.PAYPAL: "PayPal",
+    StorePaymentMethod.CASH_APP: "Cash App",
+    StorePaymentMethod.ZELLE: "Zelle",
     StorePaymentMethod.CASH: "Cash",
     StorePaymentMethod.CHECK: "Check",
     StorePaymentMethod.PAYROLL_DEDUCTION: "Payroll deduction",
@@ -192,75 +194,42 @@ class StorefrontNotificationService:
         settings: Optional[StoreSettings],
         currency: str,
     ) -> str:
-        """Render 'how to pay' with a prefilled Venmo/PayPal link when possible."""
+        """Render 'how to pay' with a button per configured payment app.
+
+        Every accepted method is offered, not only the one picked at checkout:
+        the member is reading this on a phone that may or may not have the app
+        they chose, and the money only has to arrive.
+        """
         balance = Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
         if balance <= 0 or not settings:
             return ""
 
-        method = order.payment_method
+        options = build_payment_options(settings, balance, order.order_number)
         lines: List[str] = [
             f"<p><strong>Balance due: {_money(balance, currency)}</strong></p>"
         ]
 
-        link: Optional[str] = None
-        if method == StorePaymentMethod.VENMO:
-            link = build_venmo_url(
-                settings.venmo_handle, balance, f"{order.order_number}"
-            )
-            if settings.venmo_handle:
-                lines.append(
-                    "<p>Send payment on Venmo to "
-                    f"<strong>@{_html.escape(settings.venmo_handle)}</strong> and put "
-                    f"<strong>{_html.escape(order.order_number)}</strong> in the note."
-                    "</p>"
-                )
-        elif method == StorePaymentMethod.PAYPAL:
-            link = build_paypal_url(settings.paypal_me_url, balance)
-            target = settings.paypal_me_url or settings.paypal_email
-            if target:
-                lines.append(
-                    "<p>Send payment on PayPal to "
-                    f"<strong>{_html.escape(target)}</strong> and reference "
-                    f"<strong>{_html.escape(order.order_number)}</strong>.</p>"
-                )
-        elif method == StorePaymentMethod.CHECK and settings.check_payable_to:
-            lines.append(
-                "<p>Make the check payable to "
-                f"<strong>{_html.escape(settings.check_payable_to)}</strong> and "
-                f"reference <strong>{_html.escape(order.order_number)}</strong>.</p>"
-            )
-            if settings.check_mailing_address:
-                lines.append(
-                    '<p style="white-space:pre-line;">'
-                    f"{_html.escape(settings.check_mailing_address)}</p>"
-                )
-        elif method == StorePaymentMethod.CASH and settings.cash_instructions:
-            lines.append(
-                '<p style="white-space:pre-line;">'
-                f"{_html.escape(settings.cash_instructions)}</p>"
-            )
-        elif (
-            method == StorePaymentMethod.PAYROLL_DEDUCTION
-            and settings.payroll_deduction_instructions
-        ):
-            lines.append(
-                '<p style="white-space:pre-line;">'
-                f"{_html.escape(settings.payroll_deduction_instructions)}</p>"
-            )
-        elif method == StorePaymentMethod.OTHER and settings.other_payment_instructions:
-            lines.append(
-                '<p style="white-space:pre-line;">'
-                f"{_html.escape(settings.other_payment_instructions)}</p>"
-            )
+        chosen = order.payment_method
+        if chosen:
+            options.sort(key=lambda o: o["method"] != chosen.value)
 
-        if link:
-            lines.append(
-                f'<p><a href="{_html.escape(link, quote=True)}" '
-                'style="display:inline-block;background:#1d4ed8;color:#ffffff;'
-                "padding:10px 18px;border-radius:6px;text-decoration:none;"
-                'font-weight:600;">Pay '
-                f"{_money(balance, currency)} now</a></p>"
-            )
+        buttons: List[str] = []
+        for option in options:
+            detail = self._payment_option_detail(option, order.order_number)
+            if detail:
+                lines.append(detail)
+            url = option.get("payment_url")
+            if url:
+                buttons.append(
+                    f'<a href="{_html.escape(url, quote=True)}" '
+                    'style="display:inline-block;background:#1d4ed8;color:#ffffff;'
+                    "padding:10px 18px;border-radius:6px;text-decoration:none;"
+                    'font-weight:600;margin:0 8px 8px 0;">'
+                    f"Pay with {_html.escape(option['label'])}</a>"
+                )
+
+        if buttons:
+            lines.append(f"<p>{''.join(buttons)}</p>")
 
         if settings.payment_instructions:
             lines.append(
@@ -269,6 +238,31 @@ class StorefrontNotificationService:
             )
 
         return "".join(lines)
+
+    def _payment_option_detail(
+        self, option: Dict[str, Any], reference: str
+    ) -> Optional[str]:
+        """One line telling the member where to send it and what to reference."""
+        label = _html.escape(option["label"])
+        handle = option.get("handle")
+        parts: List[str] = []
+
+        if handle:
+            sentence = (
+                f"Send payment on {label} to <strong>{_html.escape(handle)}</strong>"
+            )
+            # Only ask the member to type the order number when the link will
+            # not carry it for them.
+            if not option.get("prefills_reference"):
+                sentence += f" and reference <strong>{_html.escape(reference)}</strong>"
+            parts.append(f"<p>{sentence}.</p>")
+
+        instructions = option.get("instructions")
+        if instructions:
+            parts.append(
+                '<p style="white-space:pre-line;">' f"{_html.escape(instructions)}</p>"
+            )
+        return "".join(parts) or None
 
     # ------------------------------------------------------------------
     # Delivery

@@ -23,6 +23,7 @@ export type {
   StoreOrderItem,
   StoreOrderWindow,
   StorePaymentEvent,
+  StorePaymentOption,
   StoreProduct,
   StoreSettings,
   Storefront,

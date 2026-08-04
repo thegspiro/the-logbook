@@ -17,6 +17,12 @@ from the PayPal cases only.
 > peer-to-peer transfers — there is nothing to connect to. PayPal exposes
 > capture webhooks on Business accounts, which is what makes this possible.
 
+Members can still *pay* by Venmo, Cash App, or Zelle — the store shows a
+prefilled button (or, for Zelle, the handle to type) for every method the
+department has configured. See "Payment buttons" below. PayPal is simply the
+only one that can report back, so it is the only one that settles an order
+without a human.
+
 ## Setting it up
 
 ### 1. Create a REST app in PayPal
@@ -130,3 +136,32 @@ Each entry offers:
 - Matching, listing, applying, and dismissing are all scoped to the paying
   organization. A payment reported by one department's PayPal account cannot
   settle another department's order, even if the reference names it.
+
+## Payment buttons (all methods)
+
+Separately from reconciliation, a member with a balance due sees a button for
+every payment method the department both **accepts** and **has configured**.
+Configure these under **Store → Admin → Settings → Payments**.
+
+| Method | What the member gets | Carries the order number? |
+|--------|---------------------|---------------------------|
+| Venmo | Button, prefilled with amount and the order number in the note | Yes |
+| PayPal | Button to your PayPal.Me link, prefilled with the amount | No — shown to type |
+| Cash App | Button to your `$cashtag`, prefilled with the amount | No — Cash App has no note field |
+| Zelle | The registered email or phone, tap to copy | No — shown to type |
+| Check / cash / payroll | Payee and your written instructions | No |
+
+A method with nothing configured is **hidden**, not shown as a dead button —
+a link that goes nowhere tells a member the money moved when it did not.
+
+Two behaviours worth knowing:
+
+- A member is not locked into the method they picked at checkout. All
+  configured methods stay available, because the money only has to arrive.
+- If the department later stops accepting a method, orders already placed on
+  it keep their button. Someone who still owes on a Venmo order needs to be
+  able to pay it.
+
+Where the link cannot carry the order number, the member is shown the
+reference to type. That reference is what lets a treasurer match the payment,
+so it is never hidden.

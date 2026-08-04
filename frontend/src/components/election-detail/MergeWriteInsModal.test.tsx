@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MergeWriteInsModal from './MergeWriteInsModal';
 import type { Candidate } from '../../types/election';
@@ -30,13 +30,7 @@ const onClose = vi.fn();
 
 const renderModal = () =>
   render(
-    <MergeWriteInsModal
-      candidates={candidates}
-      merging={false}
-      error={null}
-      onSubmit={onSubmit}
-      onClose={onClose}
-    />,
+    <MergeWriteInsModal candidates={candidates} merging={false} error={null} onSubmit={onSubmit} onClose={onClose} />
   );
 
 describe('MergeWriteInsModal', () => {
@@ -62,9 +56,7 @@ describe('MergeWriteInsModal', () => {
     await user.click(screen.getByRole('checkbox', { name: /bob baker/ }));
     const target = screen.getByLabelText('Count their votes for');
     // The selected source disappears from the target options.
-    expect(
-      Array.from(target.querySelectorAll('option')).map((o) => o.textContent),
-    ).not.toContain('bob baker (Chief)');
+    expect(within(target).queryByRole('option', { name: 'bob baker (Chief)' })).not.toBeInTheDocument();
 
     await user.selectOptions(target, 'real');
     await user.click(screen.getByRole('button', { name: 'Merge 1 Variant' }));
@@ -79,7 +71,7 @@ describe('MergeWriteInsModal', () => {
         error="bob baker has already been merged"
         onSubmit={onSubmit}
         onClose={onClose}
-      />,
+      />
     );
     expect(screen.getByRole('alert')).toHaveTextContent('already been merged');
   });

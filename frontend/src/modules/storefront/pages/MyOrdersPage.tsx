@@ -8,13 +8,14 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { ArrowLeft, CircleDollarSign, ExternalLink, Loader2, ShoppingBag, XCircle } from 'lucide-react';
+import { ArrowLeft, CircleDollarSign, Loader2, ShoppingBag, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { Modal } from '../../../components/Modal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { PaymentOptions } from '../components/PaymentOptions';
 import { storefrontService } from '../services/api';
 import { useStorefrontStore } from '../store/storefrontStore';
 import {
@@ -173,37 +174,14 @@ const MyOrdersPage: React.FC = () => {
                       <div className="flex items-start gap-2">
                         <CircleDollarSign className="mt-0.5 h-4 w-4 shrink-0" />
                         <div className="min-w-0 text-sm">
-                          <p className="font-medium">
-                            Pay {formatCurrency(balance)}
-                            {instructions.label ? ` by ${instructions.label}` : ''}
-                          </p>
-                          {instructions.handle && (
-                            <p className="mt-1 text-xs">
-                              Send to <strong>{instructions.handle}</strong> and reference{' '}
-                              <strong>{instructions.reference}</strong>
-                            </p>
-                          )}
-                          {instructions.instructions && (
-                            <p className="mt-1 text-xs whitespace-pre-line">{instructions.instructions}</p>
-                          )}
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {instructions.paymentUrl && (
-                              <a
-                                href={instructions.paymentUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="btn-primary btn-md"
-                              >
-                                Pay now
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </a>
-                            )}
-                            {order.paymentStatus !== 'pending_verification' && (
-                              <button type="button" className="btn-secondary btn-md" onClick={() => openReport(order)}>
-                                I&apos;ve sent payment
-                              </button>
-                            )}
-                          </div>
+                          <p className="font-medium">Pay {formatCurrency(balance)}</p>
+                          <PaymentOptions
+                            instructions={instructions}
+                            amount={balance}
+                            onReport={
+                              order.paymentStatus !== 'pending_verification' ? () => openReport(order) : undefined
+                            }
+                          />
                         </div>
                       </div>
                     </div>

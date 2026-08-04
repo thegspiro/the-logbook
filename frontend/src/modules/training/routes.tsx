@@ -12,83 +12,43 @@
 import React from 'react';
 import { Route, Navigate } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
-import { useAuthStore } from '../../stores/authStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
+import { CourseLibraryRoute } from './components/CourseLibraryRoute';
 
 // Training Module - Member-facing
 const MyTrainingPage = lazyWithRetry(() => import('../../pages/MyTrainingPage'));
-const SubmitTrainingPage = lazyWithRetry(
-  () => import('../../pages/SubmitTrainingPage'),
-);
-const CourseLibraryPage = lazyWithRetry(
-  () => import('../../pages/CourseLibraryPage'),
-);
-const TrainingProgramsPage = lazyWithRetry(
-  () => import('../../pages/TrainingProgramsPage'),
-);
-const PipelineDetailPage = lazyWithRetry(
-  () => import('../../pages/PipelineDetailPage'),
-);
-const MyProgramProgressPage = lazyWithRetry(
-  () => import('../../pages/MyProgramProgressPage'),
-);
+const SubmitTrainingPage = lazyWithRetry(() => import('../../pages/SubmitTrainingPage'));
+const TrainingProgramsPage = lazyWithRetry(() => import('../../pages/TrainingProgramsPage'));
+const PipelineDetailPage = lazyWithRetry(() => import('../../pages/PipelineDetailPage'));
+const MyProgramProgressPage = lazyWithRetry(() => import('../../pages/MyProgramProgressPage'));
 
 // Training Module - Admin
 const TrainingAdminPage = lazyWithRetry(() =>
   import('../../pages/TrainingAdminPage').then((m) => ({
     default: m.TrainingAdminPage,
-  })),
+  }))
 );
 
 // Compliance Requirements Configuration
-const ComplianceRequirementsConfigPage = lazyWithRetry(
-  () => import('../../pages/ComplianceRequirementsConfigPage'),
-);
+const ComplianceRequirementsConfigPage = lazyWithRetry(() => import('../../pages/ComplianceRequirementsConfigPage'));
 
 // Skills Testing Module
 const SkillsTestingPage = lazyWithRetry(() =>
   import('../../pages/SkillsTestingPage').then((m) => ({
     default: m.SkillsTestingPage,
-  })),
+  }))
 );
-const SkillTemplateBuilderPage = lazyWithRetry(
-  () => import('../../pages/SkillTemplateBuilderPage'),
-);
-const StartSkillTestPage = lazyWithRetry(
-  () => import('../../pages/StartSkillTestPage'),
-);
-const ActiveSkillTestPage = lazyWithRetry(
-  () => import('../../pages/ActiveSkillTestPage'),
-);
+const SkillTemplateBuilderPage = lazyWithRetry(() => import('../../pages/SkillTemplateBuilderPage'));
+const StartSkillTestPage = lazyWithRetry(() => import('../../pages/StartSkillTestPage'));
+const ActiveSkillTestPage = lazyWithRetry(() => import('../../pages/ActiveSkillTestPage'));
 
 // Training Module - Manual Shift Report (scheduling module disabled)
-const ManualShiftReportPage = lazyWithRetry(
-  () => import('../../pages/training/ManualShiftReportPage'),
-);
+const ManualShiftReportPage = lazyWithRetry(() => import('../../pages/training/ManualShiftReportPage'));
 
 // Training Module - Print Pages
-const MemberTrainingPrintPage = lazyWithRetry(
-  () => import('../../pages/training/MemberTrainingPrintPage'),
-);
-const ProgramPrintPage = lazyWithRetry(
-  () => import('../../pages/training/ProgramPrintPage'),
-);
-const CompliancePrintPage = lazyWithRetry(
-  () => import('../../pages/training/CompliancePrintPage'),
-);
-
-/**
- * Course Library entry point. Members browse the catalog on the standalone page;
- * training officers are sent into the admin hub's Course Library tab so they get
- * the training-admin header/nav in context (rather than a bare standalone page).
- */
-const CourseLibraryRoute: React.FC = () => {
-  const checkPermission = useAuthStore((s) => s.checkPermission);
-  if (checkPermission('training.manage')) {
-    return <Navigate to="/training/admin?page=setup&tab=courses" replace />;
-  }
-  return <CourseLibraryPage />;
-};
+const MemberTrainingPrintPage = lazyWithRetry(() => import('../../pages/training/MemberTrainingPrintPage'));
+const ProgramPrintPage = lazyWithRetry(() => import('../../pages/training/ProgramPrintPage'));
+const CompliancePrintPage = lazyWithRetry(() => import('../../pages/training/CompliancePrintPage'));
 
 export const getTrainingRoutes = () => {
   return (
@@ -99,15 +59,9 @@ export const getTrainingRoutes = () => {
       <Route path="/training/submit" element={<SubmitTrainingPage />} />
       <Route path="/training/courses" element={<CourseLibraryRoute />} />
       <Route path="/training/programs" element={<TrainingProgramsPage />} />
-      <Route
-        path="/training/programs/:programId"
-        element={<PipelineDetailPage />}
-      />
+      <Route path="/training/programs/:programId" element={<PipelineDetailPage />} />
       {/* Member-facing read-only progression view for one enrollment */}
-      <Route
-        path="/training/my-progress/:enrollmentId"
-        element={<MyProgramProgressPage />}
-      />
+      <Route path="/training/my-progress/:enrollmentId" element={<MyProgramProgressPage />} />
 
       {/* Training Module - Admin Hub */}
       <Route
@@ -130,68 +84,30 @@ export const getTrainingRoutes = () => {
       />
 
       {/* Training Module - Legacy redirects to admin hub sub-pages */}
-      <Route
-        path="/training/officer"
-        element={
-          <Navigate
-            to="/training/admin?page=dashboard&tab=overview"
-            replace
-          />
-        }
-      />
+      <Route path="/training/officer" element={<Navigate to="/training/admin?page=dashboard&tab=overview" replace />} />
       <Route
         path="/training/submissions"
-        element={
-          <Navigate
-            to="/training/admin?page=records&tab=submissions"
-            replace
-          />
-        }
+        element={<Navigate to="/training/admin?page=records&tab=submissions" replace />}
       />
       <Route
         path="/training/requirements"
-        element={
-          <Navigate
-            to="/training/admin?page=setup&tab=requirements"
-            replace
-          />
-        }
+        element={<Navigate to="/training/admin?page=setup&tab=requirements" replace />}
       />
       <Route
         path="/training/sessions/new"
-        element={
-          <Navigate
-            to="/training/admin?page=records&tab=sessions"
-            replace
-          />
-        }
+        element={<Navigate to="/training/admin?page=records&tab=sessions" replace />}
       />
       <Route
         path="/training/programs/new"
-        element={
-          <Navigate
-            to="/training/admin?page=setup&tab=pipelines"
-            replace
-          />
-        }
+        element={<Navigate to="/training/admin?page=setup&tab=pipelines" replace />}
       />
       <Route
         path="/training/shift-reports"
-        element={
-          <Navigate
-            to="/training/admin?page=records&tab=shift-reports"
-            replace
-          />
-        }
+        element={<Navigate to="/training/admin?page=records&tab=shift-reports" replace />}
       />
       <Route
         path="/training/integrations"
-        element={
-          <Navigate
-            to="/training/admin?page=setup&tab=integrations"
-            replace
-          />
-        }
+        element={<Navigate to="/training/admin?page=setup&tab=integrations" replace />}
       />
 
       {/* Manual Shift Report — fallback for orgs without scheduling */}

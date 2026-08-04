@@ -98,6 +98,8 @@ class StorePaymentMethod(str, enum.Enum):
 
     VENMO = "venmo"
     PAYPAL = "paypal"
+    CASH_APP = "cash_app"
+    ZELLE = "zelle"
     CASH = "cash"
     CHECK = "check"
     PAYROLL_DEDUCTION = "payroll_deduction"
@@ -167,6 +169,11 @@ class StoreSettings(Base):
     venmo_handle = Column(String(100), nullable=True)
     paypal_me_url = Column(String(300), nullable=True)
     paypal_email = Column(String(255), nullable=True)
+    cash_app_cashtag = Column(String(100), nullable=True)
+    # Zelle has no deep link — this handle is shown for the member to type
+    # into their own bank's app. See utils/storefront_payments.py.
+    zelle_handle = Column(String(255), nullable=True)
+    zelle_instructions = Column(Text, nullable=True)
     check_payable_to = Column(String(200), nullable=True)
     check_mailing_address = Column(Text, nullable=True)
     cash_instructions = Column(Text, nullable=True)

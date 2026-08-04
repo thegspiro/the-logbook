@@ -46,6 +46,8 @@ export type StorePaymentStatus = (typeof StorePaymentStatus)[keyof typeof StoreP
 export const StorePaymentMethod = {
   VENMO: 'venmo',
   PAYPAL: 'paypal',
+  CASH_APP: 'cash_app',
+  ZELLE: 'zelle',
   CASH: 'cash',
   CHECK: 'check',
   PAYROLL_DEDUCTION: 'payroll_deduction',
@@ -62,6 +64,8 @@ export type StoreFulfillmentMethod = (typeof StoreFulfillmentMethod)[keyof typeo
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   venmo: 'Venmo',
   paypal: 'PayPal',
+  cash_app: 'Cash App',
+  zelle: 'Zelle',
   cash: 'Cash',
   check: 'Check',
   payroll_deduction: 'Payroll deduction',
@@ -136,6 +140,9 @@ export interface StoreSettings {
   venmoHandle?: string | null;
   paypalMeUrl?: string | null;
   paypalEmail?: string | null;
+  cashAppCashtag?: string | null;
+  zelleHandle?: string | null;
+  zelleInstructions?: string | null;
   checkPayableTo?: string | null;
   checkMailingAddress?: string | null;
   cashInstructions?: string | null;
@@ -167,6 +174,9 @@ export interface StoreSettingsUpdate {
   venmoHandle?: string | undefined;
   paypalMeUrl?: string | undefined;
   paypalEmail?: string | undefined;
+  cashAppCashtag?: string | undefined;
+  zelleHandle?: string | undefined;
+  zelleInstructions?: string | undefined;
   checkPayableTo?: string | undefined;
   checkMailingAddress?: string | undefined;
   cashInstructions?: string | undefined;
@@ -391,6 +401,19 @@ export interface StoreOrderEvent {
   createdAt?: string | null;
 }
 
+/** One configured way to settle an order. */
+export interface StorePaymentOption {
+  method: string;
+  label: string;
+  handle?: string | null;
+  /** Null for methods with nothing to open — Zelle, cash, check. */
+  paymentUrl?: string | null;
+  instructions?: string | null;
+  /** True when the link carries the order number, so the member does not
+   *  have to type it into the payment app themselves. */
+  prefillsReference: boolean;
+}
+
 export interface StorePaymentInstructions {
   method?: string | null;
   label?: string | null;
@@ -399,6 +422,9 @@ export interface StorePaymentInstructions {
   instructions?: string | null;
   reference?: string | null;
   amountDue: string;
+  /** Every method the department accepts and has configured, the one chosen
+   *  at checkout first. The member is not locked into that choice. */
+  options?: StorePaymentOption[];
 }
 
 export interface StoreOrder {

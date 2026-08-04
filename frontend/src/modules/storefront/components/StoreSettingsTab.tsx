@@ -25,6 +25,9 @@ interface FormState {
   venmoHandle: string;
   paypalMeUrl: string;
   paypalEmail: string;
+  cashAppCashtag: string;
+  zelleHandle: string;
+  zelleInstructions: string;
   checkPayableTo: string;
   checkMailingAddress: string;
   cashInstructions: string;
@@ -56,6 +59,9 @@ const toForm = (settings: StoreSettings): FormState => ({
   venmoHandle: settings.venmoHandle ?? '',
   paypalMeUrl: settings.paypalMeUrl ?? '',
   paypalEmail: settings.paypalEmail ?? '',
+  cashAppCashtag: settings.cashAppCashtag ?? '',
+  zelleHandle: settings.zelleHandle ?? '',
+  zelleInstructions: settings.zelleInstructions ?? '',
   checkPayableTo: settings.checkPayableTo ?? '',
   checkMailingAddress: settings.checkMailingAddress ?? '',
   cashInstructions: settings.cashInstructions ?? '',
@@ -126,6 +132,9 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
       venmoHandle: form.venmoHandle.trim() || undefined,
       paypalMeUrl: form.paypalMeUrl.trim() || undefined,
       paypalEmail: form.paypalEmail.trim() || undefined,
+      cashAppCashtag: form.cashAppCashtag.trim() || undefined,
+      zelleHandle: form.zelleHandle.trim() || undefined,
+      zelleInstructions: form.zelleInstructions.trim() || undefined,
       checkPayableTo: form.checkPayableTo.trim() || undefined,
       checkMailingAddress: form.checkMailingAddress.trim() || undefined,
       cashInstructions: form.cashInstructions.trim() || undefined,
@@ -290,6 +299,60 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
                 value={form.paypalEmail}
                 onChange={(e) => update('paypalEmail', e.target.value)}
                 className="form-input"
+              />
+            </div>
+          </div>
+        )}
+
+        {accepts(StorePaymentMethod.CASH_APP) && (
+          <div>
+            <label htmlFor="settings-cashapp" className="form-label">
+              Cash App $cashtag
+            </label>
+            <input
+              id="settings-cashapp"
+              type="text"
+              value={form.cashAppCashtag}
+              onChange={(e) => update('cashAppCashtag', e.target.value)}
+              className="form-input"
+              placeholder="$FallsChurchFire"
+            />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Cash App has no note field, so members are shown the order number to type in themselves.
+            </p>
+          </div>
+        )}
+
+        {accepts(StorePaymentMethod.ZELLE) && (
+          <div className="form-grid-2">
+            <div>
+              <label htmlFor="settings-zelle" className="form-label">
+                Zelle email or phone
+              </label>
+              <input
+                id="settings-zelle"
+                type="text"
+                value={form.zelleHandle}
+                onChange={(e) => update('zelleHandle', e.target.value)}
+                className="form-input"
+                placeholder="treasurer@yourdept.org"
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Zelle runs inside each member&apos;s own banking app, so there is no link to open — they are shown this
+                handle to enter.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="settings-zelle-notes" className="form-label">
+                Zelle instructions
+              </label>
+              <textarea
+                id="settings-zelle-notes"
+                rows={2}
+                value={form.zelleInstructions}
+                onChange={(e) => update('zelleInstructions', e.target.value)}
+                className="form-input"
+                placeholder='Look for "Falls Church Fire Dept" when confirming the recipient.'
               />
             </div>
           </div>

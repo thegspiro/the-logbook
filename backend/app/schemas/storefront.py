@@ -24,6 +24,7 @@ from app.models.storefront import (
     StoreWindowStatus,
 )
 from app.schemas.base import UTCResponseBase
+from app.utils.storefront_payments import normalize_cashtag, normalize_zelle_handle
 
 _RESPONSE_CONFIG = ConfigDict(
     from_attributes=True,
@@ -67,6 +68,9 @@ class StoreSettingsUpdate(BaseModel):
     venmo_handle: Optional[str] = Field(None, max_length=100)
     paypal_me_url: Optional[str] = Field(None, max_length=300)
     paypal_email: Optional[str] = Field(None, max_length=255)
+    cash_app_cashtag: Optional[str] = Field(None, max_length=100)
+    zelle_handle: Optional[str] = Field(None, max_length=255)
+    zelle_instructions: Optional[str] = None
     check_payable_to: Optional[str] = Field(None, max_length=200)
     check_mailing_address: Optional[str] = None
     cash_instructions: Optional[str] = None
@@ -104,6 +108,36 @@ class StoreSettingsUpdate(BaseModel):
         cleaned = _strip_or_none(v)
         return cleaned.lstrip("@") if cleaned else cleaned
 
+    @field_validator("cash_app_cashtag")
+    @classmethod
+    def _clean_cashtag(cls, v: Optional[str]) -> Optional[str]:
+        # Rejected here rather than silently dropped: a typo'd cashtag would
+        # otherwise just make the Cash App button vanish with no explanation.
+        cleaned = _strip_or_none(v)
+        if cleaned is None:
+            return None
+        normalized = normalize_cashtag(cleaned)
+        if not normalized:
+            raise ValueError(
+                "Enter a valid Cash App $cashtag (letters, digits and "
+                "underscores, starting with a letter)"
+            )
+        return normalized
+
+    @field_validator("zelle_handle")
+    @classmethod
+    def _clean_zelle(cls, v: Optional[str]) -> Optional[str]:
+        cleaned = _strip_or_none(v)
+        if cleaned is None:
+            return None
+        normalized = normalize_zelle_handle(cleaned)
+        if not normalized:
+            raise ValueError(
+                "Zelle is registered against an email address or a 10-digit "
+                "mobile number"
+            )
+        return normalized
+
 
 class StoreSettingsResponse(UTCResponseBase):
     """Storefront configuration as seen by administrators"""
@@ -122,6 +156,9 @@ class StoreSettingsResponse(UTCResponseBase):
     venmo_handle: Optional[str] = None
     paypal_me_url: Optional[str] = None
     paypal_email: Optional[str] = None
+    cash_app_cashtag: Optional[str] = None
+    zelle_handle: Optional[str] = None
+    zelle_instructions: Optional[str] = None
     check_payable_to: Optional[str] = None
     check_mailing_address: Optional[str] = None
     cash_instructions: Optional[str] = None
@@ -576,6 +613,23 @@ class StoreOrderEventResponse(UTCResponseBase):
     created_at: Optional[datetime] = None
 
 
+class StorePaymentOption(UTCResponseBase):
+    """One configured way to settle an order"""
+
+    model_config = _RESPONSE_CONFIG
+
+    method: str
+    label: str
+    handle: Optional[str] = None
+    # Deep link that opens the payment app prefilled with the amount. None for
+    # methods that have no link to open (Zelle, cash, check).
+    payment_url: Optional[str] = None
+    instructions: Optional[str] = None
+    # True when the link carries the order number through, so the UI knows
+    # whether to tell the member to type the reference themselves.
+    prefills_reference: bool = False
+
+
 class StorePaymentInstructions(UTCResponseBase):
     """Where and how to send the money for one order"""
 
@@ -589,6 +643,9 @@ class StorePaymentInstructions(UTCResponseBase):
     instructions: Optional[str] = None
     reference: Optional[str] = None
     amount_due: Decimal = Decimal("0")
+    # Every method the department accepts and has configured, the one chosen at
+    # checkout first. The member is not locked into that choice.
+    options: List[StorePaymentOption] = Field(default_factory=list)
 
 
 class StoreOrderResponse(UTCResponseBase):

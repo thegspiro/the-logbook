@@ -50,7 +50,10 @@ from app.models.user import Organization, User
 from app.services.storefront_notification_service import StorefrontNotificationService
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.org_scoping import assert_in_org
-from app.utils.storefront_payments import build_paypal_url, build_venmo_url
+from app.utils.storefront_payments import (
+    build_payment_option,
+    build_payment_options,
+)
 
 _CENTS = Decimal("0.01")
 
@@ -2494,6 +2497,12 @@ class StorefrontService:
     # Payment instructions
     # ==================================================================
 
+    def build_payment_options(
+        self, settings: StoreSettings, balance: Decimal, reference: str
+    ) -> List[Dict[str, Any]]:
+        """Every configured way to settle, in the order the department listed."""
+        return build_payment_options(settings, balance, reference)
+
     def build_payment_instructions(
         self, order: StoreOrder, settings: StoreSettings
     ) -> Optional[Dict[str, Any]]:
@@ -2503,50 +2512,36 @@ class StorefrontService:
             return None
 
         method = order.payment_method
+        options = self.build_payment_options(settings, balance, order.order_number)
+        # The method chosen at checkout leads, but the rest stay available —
+        # see build_payment_options.
+        chosen = next(
+            (o for o in options if method and o["method"] == method.value), None
+        )
+        if chosen is not None:
+            options = [chosen] + [o for o in options if o is not chosen]
+        elif method is not None:
+            # The department may have stopped accepting this method since the
+            # order was placed. The member still owes the balance and still
+            # needs somewhere to send it, so their own method is rebuilt even
+            # though it is no longer offered to new orders.
+            chosen = build_payment_option(method, settings, balance, order.order_number)
+            if chosen is not None:
+                options = [chosen] + options
+
         payload: Dict[str, Any] = {
-            "method": method.value if method else None,
-            "label": None,
-            "payment_url": None,
-            "handle": None,
-            "instructions": settings.payment_instructions,
+            "method": (
+                chosen["method"] if chosen else (method.value if method else None)
+            ),
+            "label": chosen["label"] if chosen else None,
+            "payment_url": chosen["payment_url"] if chosen else None,
+            "handle": chosen["handle"] if chosen else None,
+            "instructions": (chosen and chosen["instructions"])
+            or settings.payment_instructions,
             "reference": order.order_number,
             "amount_due": balance,
+            "options": options,
         }
-
-        if method == StorePaymentMethod.VENMO:
-            payload["label"] = "Venmo"
-            payload["handle"] = (
-                f"@{settings.venmo_handle}" if settings.venmo_handle else None
-            )
-            payload["payment_url"] = build_venmo_url(
-                settings.venmo_handle, balance, order.order_number
-            )
-        elif method == StorePaymentMethod.PAYPAL:
-            payload["label"] = "PayPal"
-            payload["handle"] = settings.paypal_me_url or settings.paypal_email
-            payload["payment_url"] = build_paypal_url(settings.paypal_me_url, balance)
-        elif method == StorePaymentMethod.CHECK:
-            payload["label"] = "Check"
-            payload["handle"] = settings.check_payable_to
-            payload["instructions"] = (
-                settings.check_mailing_address or settings.payment_instructions
-            )
-        elif method == StorePaymentMethod.CASH:
-            payload["label"] = "Cash"
-            payload["instructions"] = (
-                settings.cash_instructions or settings.payment_instructions
-            )
-        elif method == StorePaymentMethod.PAYROLL_DEDUCTION:
-            payload["label"] = "Payroll deduction"
-            payload["instructions"] = (
-                settings.payroll_deduction_instructions or settings.payment_instructions
-            )
-        elif method == StorePaymentMethod.OTHER:
-            payload["label"] = "Other"
-            payload["instructions"] = (
-                settings.other_payment_instructions or settings.payment_instructions
-            )
-
         return payload
 
     # ==================================================================
