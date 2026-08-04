@@ -1733,12 +1733,34 @@ class FinanceService:
         if not dues:
             raise ValueError("Member dues record not found")
 
+        # FIN-6: a record that is not owing must not be silently converted into
+        # one that was paid. Recording a payment here used to recompute status
+        # to PAID/PARTIAL while leaving waived_by / waived_at / waive_reason
+        # populated — a self-contradictory row — and because the dues summary
+        # derives total_waived from `status == WAIVED`, the waived amount
+        # silently moved into collections with nothing recording that it had
+        # ever been waived. Refuse instead: reversing a waiver is a deliberate
+        # act, not a side effect of entering a payment.
+        if dues.status in (DuesStatus.WAIVED, DuesStatus.EXEMPT):
+            raise ValueError(
+                f"These dues are marked {dues.status.value} and are not owing. "
+                "Reverse that first if payment was received in error."
+            )
+
         amount_paid = Decimal(str(kwargs.get("amount_paid", 0)))
         dues.amount_paid = dues.amount_paid + amount_paid
-        dues.payment_method = kwargs.get("payment_method")
-        dues.transaction_reference = kwargs.get("transaction_reference")
-        dues.notes = kwargs.get("notes")
         dues.paid_date = datetime.now(timezone.utc)
+
+        # FIN-6: assign only what the caller actually supplied. The endpoint
+        # passes `**data.model_dump()`, which materializes every optional field
+        # as None when omitted, so a bare `= kwargs.get(...)` blanked these on
+        # every call. With no payments ledger — MemberDues stores aggregates
+        # only — a second partial payment that did not resend `notes` destroyed
+        # the first payment's, unrecoverably. Same idiom as update_dues_schedule.
+        for field in ("payment_method", "transaction_reference", "notes"):
+            value = kwargs.get(field)
+            if value is not None:
+                setattr(dues, field, value)
 
         if dues.amount_paid >= dues.amount_due:
             dues.status = DuesStatus.PAID
