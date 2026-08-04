@@ -13,7 +13,7 @@ Two endpoints returned more than the caller was entitled to:
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -52,6 +52,15 @@ def _member() -> User:
         compliance_exempt=False,
         email_verified=True,
         mfa_enabled=False,
+        date_of_birth=date(1988, 4, 12),
+        emergency_contacts=[
+            {
+                "name": "Alex Smith",
+                "relationship": "Spouse",
+                "phone": "555-0177",
+                "is_primary": True,
+            }
+        ],
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
@@ -107,6 +116,36 @@ class TestWithRolesContactRedaction:
         assert result.first_name == "Jordan"
         assert result.last_name == "Smith"
         assert result.username == "jsmith"
+
+
+class TestLeadershipOnlyFields:
+    """Date of birth and emergency contacts are restricted to leadership.
+
+    Distinct from the contact block above: `contact_info_visibility` has no
+    flag for these, so no organization setting can publish them. Emergency
+    contacts are PII belonging to people who are not members at all.
+    """
+
+    def test_roster_hides_them_from_ordinary_members(self):
+        result = _redact_contact_fields(_member(), ALL_VISIBLE, is_admin=False)
+
+        assert result.date_of_birth is None
+        assert result.emergency_contacts == []
+
+    def test_no_visibility_setting_can_reveal_them(self):
+        # Every flag on is still not enough — there is no flag for these.
+        every_flag_on = dict.fromkeys(["show_email", "show_phone", "show_mobile"], True)
+        result = _redact_contact_fields(_member(), every_flag_on, is_admin=False)
+
+        assert result.date_of_birth is None
+        assert result.emergency_contacts == []
+
+    def test_leadership_sees_them(self):
+        result = _redact_contact_fields(_member(), {}, is_admin=True)
+
+        assert result.date_of_birth == date(1988, 4, 12)
+        assert len(result.emergency_contacts) == 1
+        assert result.emergency_contacts[0].name == "Alex Smith"
 
 
 class TestSettingsInfrastructureRedaction:
@@ -332,6 +371,45 @@ class TestProfileEndpointAppliesRedaction:
 
         assert result.address_street == "12 Ladder Lane"
         assert result.personal_email == "jsmith@example.org"
+
+    async def test_plain_viewer_gets_no_dob_or_emergency_contacts(self):
+        subject = _member()
+        caller = self._caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["users.view"],
+        )
+
+        result = await self._call(subject, caller)
+
+        assert result.date_of_birth is None
+        assert result.emergency_contacts == []
+
+    async def test_leadership_sees_dob_and_emergency_contacts(self):
+        subject = _member()
+        caller = self._caller(
+            user_id=str(uuid.uuid4()),
+            org_id=subject.organization_id,
+            permissions=["members.manage"],
+        )
+
+        result = await self._call(subject, caller)
+
+        assert result.date_of_birth == date(1988, 4, 12)
+        assert result.emergency_contacts[0].phone == "555-0177"
+
+    async def test_members_see_their_own_dob_and_emergency_contacts(self):
+        subject = _member()
+        caller = self._caller(
+            user_id=subject.id,
+            org_id=subject.organization_id,
+            permissions=["users.view"],
+        )
+
+        result = await self._call(subject, caller)
+
+        assert result.date_of_birth == date(1988, 4, 12)
+        assert len(result.emergency_contacts) == 1
 
     async def test_members_see_their_own_contact_details(self):
         # UserSettingsPage loads the member's own profile through this endpoint

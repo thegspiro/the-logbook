@@ -471,6 +471,31 @@ async def _load_contact_visibility(
         return {}
 
 
+def _clear_leadership_only_fields(
+    payload: UserWithRolesResponse | UserProfileResponse,
+) -> None:
+    """Blank, in place, the fields restricted to leadership.
+
+    Date of birth and emergency contacts are a different category from the rest
+    of the contact block, and are handled separately for that reason:
+
+    * `contact_info_visibility` deliberately has no flag for them. They are not
+      roster data a department may choose to publish — they are leadership-only
+      unconditionally, so there is no configuration that discloses them.
+    * Emergency contacts are PII belonging to people who are not members of the
+      department at all — a member's spouse or parent, by name and phone. They
+      never consented to appear in the roster, and cannot remove themselves.
+    * Date of birth is identity-theft-grade and is the field most often paired
+      with a name to impersonate someone.
+
+    Cleared for everyone except `members.manage` holders and the member
+    themselves; both exemptions are applied by the callers, which return early
+    before reaching this.
+    """
+    payload.date_of_birth = None
+    payload.emergency_contacts = []
+
+
 def _clear_hidden_contact_fields(
     payload: UserWithRolesResponse | UserProfileResponse, visibility: dict[str, bool]
 ) -> None:
@@ -518,6 +543,7 @@ def _redact_contact_fields(
         return payload
 
     _clear_hidden_contact_fields(payload, visibility)
+    _clear_leadership_only_fields(payload)
     return payload
 
 
@@ -973,8 +999,10 @@ async def get_user_with_roles(
 
     Contact information is redacted against the organization's
     `contact_info_visibility` setting exactly as `GET /users/with-roles` does —
-    see `_clear_hidden_contact_fields`. Members-managers and the subject
-    themselves are exempt.
+    see `_clear_hidden_contact_fields`. Date of birth and emergency contacts are
+    leadership-only regardless of that setting — see
+    `_clear_leadership_only_fields`. Members-managers and the subject themselves
+    are exempt from both.
 
     **Authentication required**
     """
@@ -992,6 +1020,16 @@ async def get_user_with_roles(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
+    is_admin = _has_permission(
+        "members.manage", _collect_user_permissions(current_user)
+    )
+    is_self = str(current_user.id) == str(user_id)
+    # Leadership reading someone else's record is the access worth being able
+    # to reconstruct later: it is the only path that discloses another member's
+    # date of birth and their family's names and phone numbers. Recorded on the
+    # event so the audit trail answers "who saw it", not merely "who looked".
+    discloses_restricted_pii = is_admin and not is_self
+
     await log_audit_event(
         db=db,
         event_type="user_viewed",
@@ -1000,6 +1038,7 @@ async def get_user_with_roles(
         event_data={
             "viewed_user_id": str(user_id),
             "viewed_username": user.username,
+            "restricted_pii_disclosed": discloses_restricted_pii,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -1010,15 +1049,11 @@ async def get_user_with_roles(
     # request to this URL away. The subject is exempt: UserSettingsPage loads
     # its own profile through here and writes the fields back, so redacting for
     # self would blank a member's own address and phone on their next save.
-    is_admin = _has_permission(
-        "members.manage", _collect_user_permissions(current_user)
-    )
-    is_self = str(current_user.id) == str(user_id)
-
     payload = UserProfileResponse.model_validate(user)
     if not (is_admin or is_self):
         visibility = await _load_contact_visibility(db, current_user, is_admin)
         _clear_hidden_contact_fields(payload, visibility)
+        _clear_leadership_only_fields(payload)
 
     return payload
 
