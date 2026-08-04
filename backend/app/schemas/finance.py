@@ -589,6 +589,24 @@ class MemberDuesResponse(UTCResponseBase):
     updated_at: datetime
 
 
+class DuesPaymentResponse(UTCResponseBase):
+    """One payment in a member's dues ledger"""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    organization_id: str
+    member_dues_id: str
+    amount: float
+    payment_method: Optional[str] = None
+    transaction_reference: Optional[str] = None
+    notes: Optional[str] = None
+    received_at: datetime
+    recorded_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class MemberDuesPayment(BaseModel):
     """Record a dues payment"""
 
