@@ -71,9 +71,23 @@ Navigate to **Administration > Organization Settings > Organization** to manage 
 
 Control which contact information fields are visible to members:
 
-- Toggle visibility of email, phone, mobile, and address fields
-- Members will only see the fields you enable
-- Officers always see all fields regardless of this setting
+- Toggle visibility of **email, phone and mobile**
+- Members will only see the fields you enable, on every screen that shows a
+  member record — the roster and the individual profile page alike
+- Officers who manage the roster (`members.manage`) always see all fields
+  regardless of this setting, and members always see their own record in full
+
+Some fields are **not** governed by this setting and have no toggle:
+
+| Field | Who can see it |
+|-------|----------------|
+| Home address, personal email | Roster managers only — never shown to ordinary members at any setting |
+| **Date of birth, emergency contacts** | Leadership only (`members.manage`), plus the member themselves. There is deliberately no setting that publishes them |
+
+Emergency contacts are withheld by default because they identify people
+outside the department — a member's spouse or parent, by name and phone — who
+never consented to appear in it. Leadership access to those fields is recorded
+in the audit log.
 
 ### Membership ID Settings
 
