@@ -282,19 +282,45 @@ Pages:
 **Additional tables in `finance.py`:**
 - **`dues_schedules`** — id, organization_id, name (e.g., "2026 Annual Dues"), amount `Numeric(12,2)`, frequency (ANNUAL, SEMI_ANNUAL, QUARTERLY, MONTHLY), due_date, grace_period_days, late_fee_amount `Numeric(12,2)` (nullable), fiscal_year_id, applies_to_membership_types (JSON array — e.g., ["active", "probationary"]), is_active, notes, created_by, created_at, updated_at
 - **`member_dues`** — id, organization_id, dues_schedule_id (FK), user_id (FK users), amount_due `Numeric(12,2)`, amount_paid `Numeric(12,2)`, status (enum), due_date, paid_date, payment_method, transaction_reference, late_fee_applied `Numeric(12,2)`, waived_by (FK users, nullable), waived_at, waive_reason, notes, created_at, updated_at
+- **`dues_payments`** *(2026-08-02)* — id, organization_id, member_dues_id (FK, CASCADE), amount `Numeric(12,2)`, payment_method, transaction_reference, notes, received_at, recorded_by (FK users, `SET NULL`, nullable — a ledger row must outlive the member who recorded it), created_at, updated_at. Unique on `(member_dues_id, transaction_reference)`.
+
+> **`member_dues` payment columns are derived, not authoritative.** `amount_paid`
+> is the **sum of the ledger**, recomputed by `_apply_payment_totals` on every
+> write rather than accumulated; `paid_date`, `payment_method`,
+> `transaction_reference` and `notes` project the newest `dues_payments` row.
+> Write to the ledger and let those follow — assigning them directly will be
+> overwritten on the next payment, and was the cause of FIN-6.
+>
+> The uniqueness constraint is the idempotency key: a resubmitted
+> `transaction_reference` cannot create a second row, so a retried or
+> double-clicked payment cannot double-credit. MySQL permits repeated NULLs in a
+> unique index, so cash taken at a meeting with no reference is unconstrained —
+> two identical cash amounts are two payments, and collapsing them would lose
+> money.
 
 Enums:
 - `DuesStatus`: PENDING, PAID, PARTIAL, OVERDUE, WAIVED, EXEMPT
+  - `EXEMPT` is currently unreachable — nothing in the codebase sets it. It is
+    guarded alongside `WAIVED` on the payment path, but has no reversal route.
 
 **Endpoints:**
 - `GET/POST /finance/dues-schedules`
 - `GET/PUT /finance/dues-schedules/{id}`
 - `POST /finance/dues-schedules/{id}/generate` (bulk-create member_dues for all eligible members)
 - `GET /finance/dues` (list with member/status filters)
-- `PUT /finance/dues/{id}` (record payment)
+- `PUT /finance/dues/{id}` (record payment — appends to the ledger; idempotent on `transaction_reference`; refuses `WAIVED`/`EXEMPT`)
+- `GET /finance/dues/{id}/payments` *(2026-08-02)* — the payment ledger, oldest first. `finance.view`. The only place earlier payments can be read back, since the dues record itself carries only the derived total and the newest payment's detail
 - `POST /finance/dues/{id}/waive`
+- `POST /finance/dues/{id}/unwaive` *(2026-08-02)* — reverse a waiver. `finance.manage`, reason required. Restores whatever the ledger says (PENDING / PARTIAL / PAID) and writes a `finance.dues_waiver_reversed` audit event carrying the erased waive reason
 - `GET /finance/dues/summary` (collection rates, outstanding totals)
 - `POST /finance/dues/send-reminders` (trigger email notifications for overdue)
+
+> **Why `unwaive` exists.** Payments against waived dues are refused, and
+> `PUT /finance/dues/{id}` *is* the payment route, so without a reversal there
+> is no way out of `WAIVED`: a department that waived by mistake and then
+> received the money had no in-app remedy. Before the payment guard the gap was
+> hidden, because recording a payment happened to clear the status as a side
+> effect of the bug.
 
 ### Frontend
 

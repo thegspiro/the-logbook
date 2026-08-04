@@ -846,7 +846,39 @@ After creating a schedule, you need to generate individual dues records for each
 3. Enter the **amount paid** (must be greater than zero), **payment method**, and optionally a **transaction reference** (check number, receipt number, etc.) and **notes**.
 4. Click **Save**.
 
-Payments are cumulative -- each payment adds to the existing `amountPaid`. If the total amount paid reaches or exceeds the amount due, the status automatically changes to **Paid**. If it is between zero and the amount due, the status changes to **Partial**. The `paidDate` is recorded.
+Every payment is recorded as its own entry in the member's payment history. The
+amount paid shown on the dues record is the **sum of that history**, so if the
+total reaches or exceeds the amount due the status changes to **Paid**, and if it
+is between zero and the amount due it changes to **Partial**.
+
+Two consequences worth knowing:
+
+- **Entering a payment twice does not charge the member twice.** If you supply a
+  transaction reference (check number, receipt number) and that reference has
+  already been recorded against these dues, the second submission is ignored and
+  the record is returned unchanged. A double-clicked Save, or a form resubmitted
+  after a slow connection, is safe.
+- **Cash with no reference is never treated as a duplicate.** Two £20 cash
+  payments on the same evening are two payments. If you want the system to be
+  able to spot a duplicate, give the payment a reference.
+
+You do not need to re-enter the payment method or notes from an earlier
+instalment. Leaving them blank records this payment without them; it no longer
+erases what the previous payment said.
+
+### Payment History
+
+**Required Permission:** `finance.view`
+
+Each member's dues record keeps the full list of payments received against it --
+amount, method, reference, notes, when it was received, and which officer entered
+it. The dues record itself shows only the running total and the most recent
+payment's detail, so the history is where you go to answer "what did they
+actually pay, and when?"
+
+This matters at audit time: the summary figure alone cannot show that a £100
+balance was three separate instalments, or which of them was the cheque that
+bounced.
 
 ### Waiving Dues
 
@@ -860,6 +892,28 @@ To waive a member's dues:
 4. Confirm.
 
 The record is marked as **Waived** with the officer's ID, timestamp, and reason recorded for audit purposes.
+
+Once dues are waived, **payments against them are refused.** They are no longer
+owing, so recording money against them would quietly cancel the waiver — which
+is what used to happen, and it also moved the waived amount into your collection
+figures with nothing recording that it had ever been waived.
+
+### Reversing a Waiver
+
+**Required Permission:** `finance.manage`
+
+If dues were waived by mistake -- or waived and then paid anyway -- reverse the
+waiver before recording the payment:
+
+1. Find the member's dues record.
+2. Click **Reverse Waiver**.
+3. Enter a **reason** for the reversal (required).
+4. Confirm.
+
+The record returns to whatever its payment history says: **Pending** if nothing
+was ever paid, **Partial** or **Paid** if something was. The original waiver
+reason is not silently discarded -- it is written into the audit log alongside
+your reason for reversing, so both halves of the decision survive.
 
 ### Dues Summary
 
@@ -886,7 +940,12 @@ The summary can be filtered by a specific dues schedule using the optional `sche
 |----------|----------|
 | Generating dues when records already exist | The system checks for existing records per member per schedule (idempotency guard). Only members without existing records get new ones |
 | Member joins mid-period | Their dues are not automatically generated. Run Generate Dues again -- the system will only create records for members who do not already have one |
-| Partial payment followed by additional payment | Payments are cumulative. The second payment is added to the first. If the total reaches the amount due, status changes to Paid |
+| Partial payment followed by additional payment | Both are kept as separate entries in the payment history. The amount paid is the sum of them. If the total reaches the amount due, status changes to Paid |
+| The same payment entered twice with the same transaction reference | The second submission is ignored and the record returned unchanged -- the member is not charged twice |
+| Two cash payments of the same amount, neither with a reference | Both are recorded. Without a reference there is nothing to tell a duplicate from a genuine second payment, and dropping one would lose money |
+| A later payment entered without a method or notes | Recorded as-is. Earlier payments keep their own detail; blank fields no longer overwrite them |
+| Payment recorded against waived or exempt dues | Refused with an explanatory error. Reverse the waiver first (see Reversing a Waiver) |
+| Waiver reversed | Status returns to whatever the payment history says -- Pending, Partial or Paid. The original waive reason is written to the audit log, not discarded |
 | Partial payment followed by waiver | The waiver sets the status to Waived. The amount already paid is not refunded -- this is an administrative decision |
 | Dues schedule with no membership type filter | Dues are generated for all active users in the organization |
 | Changing the dues amount on a schedule | Only affects newly generated records. Existing member dues records retain the original `amountDue` |
