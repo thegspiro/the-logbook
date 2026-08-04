@@ -163,6 +163,8 @@ export interface StoreSettings {
   windowReminderHours: number;
   termsText?: string | null;
   receiptFooter?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface StoreSettingsUpdate {
@@ -246,6 +248,8 @@ export interface StoreProduct {
   internalNotes?: string | null;
   hasImage: boolean;
   variants: StoreProductVariant[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface StoreProductInput {
@@ -304,6 +308,8 @@ export interface StoreOrderWindow {
   totalSales: string;
   outstandingBalance: string;
   offerings: StoreWindowOffering[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface StoreOrderWindowInput {
@@ -461,6 +467,8 @@ export interface StoreOrder {
   items: StoreOrderItem[];
   events: StoreOrderEvent[];
   paymentInstructions?: StorePaymentInstructions | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface StoreOrderListResponse {
