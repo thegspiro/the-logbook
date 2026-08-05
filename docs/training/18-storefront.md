@@ -89,9 +89,18 @@ off, members see nothing; you keep everything.
 
 ### Payment methods
 
+A new store starts on **cash** only. That is deliberate: cash is the one
+method that works with nothing filled in, so a fresh store can take an order
+on day one. Tick the others as you configure them.
+
 Tick every method your department accepts, then fill in the details for each.
-The member-facing side only shows a method that is **both ticked and
-configured** — see [Paying](#paying-member-view).
+Except for the offline methods — cash, payroll deduction, other — the
+member-facing side only shows a method that is **both ticked and configured**;
+a ticked method with no handle stays hidden. See
+[Paying](#paying-member-view).
+
+Un-tick everything and it falls back to cash. A store has to accept something,
+and cash is the floor.
 
 | Method | What to enter |
 |--------|---------------|

@@ -174,17 +174,26 @@ A member with a balance due sees a button for every method the department both
 | Check | Payee and mailing address | No |
 | Cash / payroll deduction / other | Free-text instructions | No |
 
-A method appears only when it is **both** in `accepted_payment_methods` **and**
-configured with a usable handle. Either alone hides it: a method with nothing
-configured would be a dead button, and a link that goes nowhere tells a member
-the money moved when it did not; a configured method the department has not
-ticked is one it does not take.
+A method appears only when it is in `accepted_payment_methods` **and** has
+whatever it needs to work. For Venmo, PayPal, Cash App and Zelle that means a
+usable handle — either condition alone hides it, since a method with nothing
+configured would be a dead button and a link that goes nowhere tells a member
+the money moved when it did not. The offline methods (cash, payroll deduction,
+other) need nothing, so ticking them is enough.
+
+That asymmetry is why **a new store starts on cash alone**
+(`_DEFAULT_PAYMENT_METHODS`). Seeding Venmo, PayPal and check ticked — as it
+used to — showed the quartermaster three methods that were switched on and did
+nothing, because members never saw them until a handle was entered. Cash is the
+honest floor: it needs no setup and it works.
+
+Un-ticking everything normalizes back to cash rather than storing an empty
+list. A store has to accept something, and it removes the "no method at all"
+state from every code path that would otherwise have to reason about it.
 
 The same list is enforced at checkout (`create_order` raises for a method not
 in `accepted_payment_methods`), so hiding the button is not the only thing
-standing in the way. An empty list is treated as "not set up yet" and does not
-block ordering — the member sees no buttons and the order number to quote,
-which is recoverable in a way a refused order is not.
+standing in the way of a crafted request.
 
 **Zelle deliberately has no link.** It runs inside each bank's own app and
 publishes no web or deep-link scheme, so the most that can honestly be offered

@@ -108,6 +108,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   back are skipped rather than advanced, and come back named, since they were
   never on the sheet the vendor received.
 
+- **A new store starts on cash alone.** It used to seed Venmo, PayPal, cash
+  and check all ticked — but only cash works with nothing configured, so the
+  settings screen showed a quartermaster three methods that were switched on
+  and did nothing while members saw only one. Cash is the honest floor: no
+  setup, and it works. Everything else is ticked as it is configured, and
+  un-ticking everything normalizes back to cash rather than leaving a store
+  nobody can pay.
+
 **Fixed**
 
 - **A held order could be marked ready for pickup.** Under *payment required

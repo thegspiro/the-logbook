@@ -79,7 +79,13 @@ members" toggle.]**
 **[SCREEN: The Settings tab, ticking Venmo, PayPal, Cash App, Zelle and Check.
 Each tick reveals its fields.]**
 
-> "Tick every method you actually accept, then fill in the details. Venmo
+**[CALLOUT: "A new store starts on cash."]**
+
+> "Out of the box you'll find just **cash** ticked. That's on purpose — it's the
+> only method that works with nothing filled in, so you can take an order on
+> day one. Everything else you tick as you set it up."
+
+> "So: tick every method you actually accept, then fill in the details. Venmo
 > handle. PayPal.Me link. Cash App cashtag. Zelle email or phone. Who checks are
 > payable to."
 

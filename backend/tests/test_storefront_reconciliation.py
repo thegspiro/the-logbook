@@ -57,6 +57,10 @@ async def _placed_order(db, org, service, price=Decimal("45.00")):
         {
             "is_enabled": True,
             "allow_pickup": True,
+            # A new store accepts cash only; these orders are placed on PayPal,
+            # which a department reconciling PayPal payments would have set up.
+            "accepted_payment_methods": ["paypal", "cash"],
+            "paypal_me_url": "https://paypal.me/fcfd",
             "send_order_confirmation": False,
             "notify_admins_on_order": False,
             "send_status_updates": False,

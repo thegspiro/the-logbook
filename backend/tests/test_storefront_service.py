@@ -28,6 +28,7 @@ from app.models.storefront import (
 )
 from app.models.user import Organization, User
 from app.services.storefront_service import StorefrontService
+from app.utils.storefront_payments import build_payment_options
 
 pytestmark = pytest.mark.integration
 
@@ -60,7 +61,18 @@ async def _make_member(db, org, first="Pat", last="Member"):
 
 
 async def _enable_store(service, org, **overrides):
-    payload = {"is_enabled": True, "allow_pickup": True}
+    """A store that has finished setting up — which is what most tests need.
+
+    A brand-new store accepts cash only, since that is the one method that
+    works before anything is configured. Tests here place Venmo orders, so the
+    helper configures Venmo the way a department would.
+    """
+    payload = {
+        "is_enabled": True,
+        "allow_pickup": True,
+        "accepted_payment_methods": ["venmo", "cash"],
+        "venmo_handle": "FallsChurchFire",
+    }
     payload.update(overrides)
     return await service.update_settings(org.id, payload)
 
@@ -1751,16 +1763,24 @@ class TestAcceptedMethodsAtCheckout:
         )
         assert order.payment_method == StorePaymentMethod.CASH_APP
 
-    async def test_a_store_that_has_ticked_nothing_does_not_block_ordering(
-        self, db_session
-    ):
-        # Mid-setup, with no methods chosen yet, an order should not be
-        # rejected — the member is shown no buttons and told the reference to
-        # quote, which is recoverable. Refusing the order is not.
+    async def test_un_ticking_everything_falls_back_to_cash(self, db_session):
+        # A store has to accept something. Cash is the floor because it is the
+        # only method that works with nothing configured.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await self._store(db_session, org, service, ["venmo", "cash_app"])
+
+        settings = await service.update_settings(
+            org.id, {"accepted_payment_methods": []}
+        )
+        assert settings.accepted_payment_methods == ["cash"]
+
+    async def test_cash_is_then_the_only_method_that_checks_out(self, db_session):
         org = await _make_org(db_session)
         member = await _make_member(db_session, org)
         service = StorefrontService(db_session)
-        product = await self._store(db_session, org, service, [])
+        product = await self._store(db_session, org, service, ["venmo"])
+        await service.update_settings(org.id, {"accepted_payment_methods": []})
 
         order = await service.create_order(
             org.id,
@@ -1768,7 +1788,36 @@ class TestAcceptedMethodsAtCheckout:
             {
                 "items": [{"product_id": product.id, "quantity": 1}],
                 "fulfillment_method": "pickup",
-                "payment_method": StorePaymentMethod.VENMO,
+                "payment_method": StorePaymentMethod.CASH,
             },
         )
-        assert order.order_number
+        assert order.payment_method == StorePaymentMethod.CASH
+
+        with pytest.raises(ValueError, match="not accepted by this store"):
+            await service.create_order(
+                org.id,
+                member,
+                {
+                    "items": [{"product_id": product.id, "quantity": 1}],
+                    "fulfillment_method": "pickup",
+                    "payment_method": StorePaymentMethod.VENMO,
+                },
+            )
+
+    async def test_a_brand_new_store_starts_on_cash(self, db_session):
+        # Not Venmo/PayPal/check ticked-but-unconfigured, which showed the
+        # quartermaster three methods that were on and did nothing.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+
+        settings = await service.get_settings(org.id)
+        assert settings.accepted_payment_methods == ["cash"]
+
+    async def test_a_brand_new_store_can_be_paid_before_any_setup(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        settings = await service.get_settings(org.id)
+
+        options = build_payment_options(settings, Decimal("45.00"), "ORD-1")
+        # Cash needs no handle, so the floor is a method that actually works.
+        assert [o["label"] for o in options] == ["Cash"]

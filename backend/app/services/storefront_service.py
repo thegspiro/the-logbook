@@ -83,6 +83,11 @@ _PAYMENT_GATED_STATUSES = (
 # be made about them. Under BEFORE_PICKUP they exist and are on the shelf.
 _NO_GOODS_STATUSES = (StoreOrderStatus.ORDERED, StoreOrderStatus.READY_FOR_PICKUP)
 
+# Where a new store starts. Cash alone, because it is the only method that
+# works with nothing configured — ticking Venmo before entering a handle would
+# show the quartermaster a method that is switched on and does nothing.
+_DEFAULT_PAYMENT_METHODS = (StorePaymentMethod.CASH.value,)
+
 _UNRESOLVED_PAYMENT_STATUSES = (
     StorePaymentEventStatus.UNMATCHED,
     StorePaymentEventStatus.AMBIGUOUS,
@@ -241,12 +246,7 @@ class StorefrontService:
             is_enabled=False,
             store_name="Department Store",
             currency="USD",
-            accepted_payment_methods=[
-                StorePaymentMethod.VENMO.value,
-                StorePaymentMethod.PAYPAL.value,
-                StorePaymentMethod.CASH.value,
-                StorePaymentMethod.CHECK.value,
-            ],
+            accepted_payment_methods=list(_DEFAULT_PAYMENT_METHODS),
             tax_rate=Decimal("0"),
         )
         self.db.add(settings)
@@ -277,11 +277,11 @@ class StorefrontService:
             if value is None or not hasattr(settings, key):
                 continue
             if key == "accepted_payment_methods":
-                setattr(
-                    settings,
-                    key,
-                    [m.value if hasattr(m, "value") else str(m) for m in value],
-                )
+                chosen = [m.value if hasattr(m, "value") else str(m) for m in value]
+                # A store has to accept something, and cash is the one method
+                # that needs no setup to work. Un-ticking everything therefore
+                # lands back here rather than leaving a store nobody can pay.
+                setattr(settings, key, chosen or list(_DEFAULT_PAYMENT_METHODS))
             elif key == "notify_emails":
                 setattr(
                     settings, key, [str(e).strip() for e in value if str(e).strip()]
