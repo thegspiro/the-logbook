@@ -71,7 +71,6 @@ class EventRequest(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Requester contact info

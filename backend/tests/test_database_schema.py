@@ -14,7 +14,7 @@ Run with:
 import enum
 
 import pytest
-from sqlalchemy import BigInteger, Boolean, Integer, String
+from sqlalchemy import BigInteger, Boolean, Integer, String, UniqueConstraint
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import RelationshipProperty
 
@@ -635,7 +635,18 @@ class TestIndexCoverage:
         ), "Critical parent-child FK columns without indexes:\n" + "\n".join(unindexed)
 
     def test_organization_id_is_indexed(self):
-        """Organization_id columns must be indexed for multi-tenant queries."""
+        """Organization_id must lead an index so tenant filters can use it.
+
+        Leading position is the requirement, not mere membership: a
+        ``WHERE organization_id = ?`` filter can only use an index where
+        organization_id is the leftmost column. An index on
+        ``(user_id, organization_id)`` does not help it.
+
+        A UniqueConstraint counts — MySQL materialises one as a unique index,
+        which serves a leftmost-prefix lookup exactly like a plain index. That
+        is the only coverage several tables have, now that indexes duplicating
+        a composite's leading column have been removed.
+        """
         # Tables where org_id is part of a small child table (indexed via parent FK)
         index_via_parent_ok = {"form_integrations"}
         unindexed = []
@@ -644,18 +655,26 @@ class TestIndexCoverage:
                 continue
             if table_name in index_via_parent_ok:
                 continue
-            col_indexed = False
+
+            leading = []
             for idx in table.indexes:
-                idx_col_names = [c.name for c in idx.columns]
-                if "organization_id" in idx_col_names:
-                    col_indexed = True
-                    break
+                cols = [c.name for c in idx.columns]
+                if cols:
+                    leading.append(cols[0])
+            for constraint in table.constraints:
+                if isinstance(constraint, UniqueConstraint):
+                    cols = [c.name for c in constraint.columns]
+                    if cols:
+                        leading.append(cols[0])
+
             org_col = table.columns["organization_id"]
             if org_col.primary_key or org_col.unique:
-                col_indexed = True
-            if not col_indexed:
+                continue
+            if "organization_id" not in leading:
                 unindexed.append(table_name)
-        assert not unindexed, "Tables with unindexed organization_id:\n" + "\n".join(
+        assert (
+            not unindexed
+        ), "Tables where organization_id does not lead any index:\n" + "\n".join(
             unindexed
         )
 

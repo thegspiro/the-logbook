@@ -68,7 +68,6 @@ class Meeting(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Meeting Information
@@ -219,7 +218,6 @@ class MeetingActionItem(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Action Item Details

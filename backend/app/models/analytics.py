@@ -28,7 +28,7 @@ class AnalyticsEvent(Base):
     __tablename__ = "analytics_events"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), nullable=False, index=True)
+    organization_id = Column(String(36), nullable=False)
     event_type = Column(
         String(50), nullable=False
     )  # qr_scan, check_in_success, check_in_failure, etc.

@@ -224,10 +224,7 @@ class FiscalYear(Base):
         "Budget", back_populates="fiscal_year", cascade="all, delete-orphan"
     )
 
-    __table_args__ = (
-        Index("ix_fiscal_years_org_id", "organization_id"),
-        Index("ix_fiscal_years_org_status", "organization_id", "status"),
-    )
+    __table_args__ = (Index("ix_fiscal_years_org_status", "organization_id", "status"),)
 
 
 class BudgetCategory(Base):
@@ -327,7 +324,6 @@ class Budget(Base):
     creator = relationship("User", foreign_keys=[created_by])
 
     __table_args__ = (
-        Index("ix_budgets_org_fy", "organization_id", "fiscal_year_id"),
         Index(
             "ix_budgets_org_fy_cat",
             "organization_id",
@@ -394,7 +390,6 @@ class ApprovalChain(Base):
     )
 
     __table_args__ = (
-        Index("ix_approval_chains_org_id", "organization_id"),
         Index(
             "ix_approval_chains_org_applies",
             "organization_id",
@@ -511,7 +506,6 @@ class ApprovalStepRecord(Base):
             "entity_id",
         ),
         Index("ix_approval_step_records_assigned", "assigned_to", "status"),
-        Index("ix_approval_step_records_token", "approval_token"),
     )
 
 
@@ -612,7 +606,6 @@ class PurchaseRequest(Base):
         UniqueConstraint(
             "organization_id", "request_number", name="uq_purchase_requests_org_number"
         ),
-        Index("ix_purchase_requests_org_id", "organization_id"),
         Index(
             "ix_purchase_requests_org_status",
             "organization_id",
@@ -696,7 +689,6 @@ class ExpenseReport(Base):
         UniqueConstraint(
             "organization_id", "report_number", name="uq_expense_reports_org_number"
         ),
-        Index("ix_expense_reports_org_id", "organization_id"),
         Index(
             "ix_expense_reports_org_status",
             "organization_id",
@@ -813,7 +805,6 @@ class CheckRequest(Base):
         UniqueConstraint(
             "organization_id", "request_number", name="uq_check_requests_org_number"
         ),
-        Index("ix_check_requests_org_id", "organization_id"),
         Index(
             "ix_check_requests_org_status",
             "organization_id",

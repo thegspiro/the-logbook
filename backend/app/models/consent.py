@@ -48,7 +48,6 @@ class UserConsent(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     consent_type = Column(
         Enum(ConsentType, values_callable=lambda x: [e.value for e in x]),

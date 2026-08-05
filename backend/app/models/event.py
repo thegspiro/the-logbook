@@ -304,7 +304,6 @@ class EventRSVP(Base):
     user = relationship("User", foreign_keys=[user_id])
 
     __table_args__ = (
-        Index("ix_event_rsvps_event_id", "event_id"),
         Index("ix_event_rsvps_user_id", "user_id"),
         Index("ix_event_rsvps_organization_id", "organization_id"),
         # Unique constraint: one RSVP per user per event

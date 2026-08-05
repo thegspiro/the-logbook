@@ -21,7 +21,7 @@ class Integration(Base):
     __tablename__ = "integrations"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), nullable=False, index=True)
+    organization_id = Column(String(36), nullable=False)
     integration_type = Column(
         String(50), nullable=False
     )  # google-calendar, slack, etc.

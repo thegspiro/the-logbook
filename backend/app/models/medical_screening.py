@@ -115,7 +115,6 @@ class ScreeningRequirement(Base):
     )
 
     __table_args__ = (
-        Index("idx_screening_req_org", "organization_id"),
         Index("idx_screening_req_org_type", "organization_id", "screening_type"),
     )
 
@@ -200,7 +199,6 @@ class ScreeningRecord(Base):
     reviewer = relationship("User", foreign_keys=[reviewed_by])
 
     __table_args__ = (
-        Index("idx_screening_rec_org", "organization_id"),
         Index("idx_screening_rec_user", "user_id"),
         Index("idx_screening_rec_prospect", "prospect_id"),
         Index("idx_screening_rec_status", "organization_id", "status"),
