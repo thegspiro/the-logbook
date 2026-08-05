@@ -83,6 +83,8 @@ Established before the first iteration, so any later failure is attributable:
 | `frontend && npx eslint .` | ✅ 0 errors |
 | `isort --check-only` | ⚠️ isort not installed in the review sandbox |
 | DB-backed `pytest` | ⚠️ cannot run — no MySQL, no Docker daemon. Non-DB tests do run. See CHECKLIST.md → *Known sandbox limitations* |
+| Full backend suite | ✅ 2498 passed, 0 failed (648 DB-fixture errors) — was 2494 passed / **4 failed** before the Alembic duplicate-revision fix |
+| Full frontend suite | ✅ 2207 passed (159 files) |
 
 ---
 
@@ -149,4 +151,33 @@ Established before the first iteration, so any later failure is attributable:
   `BALLOT_FORENSICS_GUIDE.md`, so behind the proxy `unique_ip_count` collapses to
   1 and every election permanently trips the suspicious-IP threshold.
   See auth-session.md. Next: A3 scheduled tasks & cron.
+- **Owner-directed follow-up (2026-08-05)** — two decisions taken on the A2
+  findings, both implemented:
+  - **AXC-1 swept.** The remaining **33** sites (the earlier "28" was an
+    undercount) across 7 files now use `get_client_ip`. Verified behavior-neutral:
+    the affected test selection returns an identical 151 passed / 145
+    fixture-errors before and after. The sweep found one thing the survey had
+    missed — `public_portal_security.py:469` keyed the **public-portal rate
+    limiter** on the peer IP, so every anonymous visitor shared one bucket and a
+    single caller could lock out the whole portal (the H5 global-lockout shape,
+    still live on the public surface). Remaining decision: historical rows still
+    hold proxy IPs; recommend noting the cutover in `BALLOT_FORENSICS_GUIDE.md`
+    rather than rewriting hash-chained audit history.
+  - **AUTH-2 resolved.** The owner's rule — *messages always go to the member's
+    email* — removed the backfill blocker, since consent can now suppress a text
+    without suppressing the notice. SMS is gated on consent in both send paths
+    (the second, an inventory low-stock alert in `scheduled_tasks.py`, was found
+    by grepping every `SMSService` caller); email is unconditional and no longer
+    honors the `email_notifications` preference. Three existing tests encoded the
+    old contract and were **updated, not deleted**; three added, including
+    `test_member_without_sms_consent_is_still_emailed` — the invariant the whole
+    change rests on. `PHOTO_USE`/`PUBLIC_ROSTER_LISTING` still have no consumer
+    to gate; the app has no public roster or photo publishing.
+- **Pre-existing blocker found and fixed (2026-08-05)** — the full backend suite
+  had **4 failing tests** that pre-dated this work: two branches merged the same
+  day both claimed Alembic revision `20260805_0010`, leaving a duplicate id and
+  two heads. `alembic upgrade head` — i.e. `npm run db:migrate` — **could not
+  run at all**. `reconcile_index_set` renumbered to `20260805_0011` and
+  sequenced after the drop (disjoint tables, so only the label moved).
+  Backend suite now **2498 passed, 0 failed**; frontend **2207 passed**.
 </content>

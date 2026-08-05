@@ -22,7 +22,7 @@ from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security_middleware import check_rate_limit
+from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.election import Candidate, Election, ElectionStatus, Vote
 from app.models.event import Event, EventRSVP, RSVPStatus
@@ -459,7 +459,7 @@ async def cast_vote_with_token(
         token=token,
         candidate_id=vote_data.candidate_id,
         position=vote_data.position,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         vote_rank=vote_data.vote_rank,
     )
@@ -513,7 +513,7 @@ async def submit_ballot_with_token(
     result, error = await service.submit_ballot_with_token(
         token=token,
         votes=[v.model_dump() for v in ballot.votes],
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -1948,7 +1948,7 @@ async def cast_vote(
         candidate_id=vote.candidate_id,
         position=vote.position,
         organization_id=current_user.organization_id,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         vote_rank=vote.vote_rank,
     )
@@ -2000,7 +2000,7 @@ async def cast_bulk_votes(
                 candidate_id=vote_item.candidate_id,
                 position=vote_item.position,
                 organization_id=current_user.organization_id,
-                ip_address=request.client.host if request.client else None,
+                ip_address=get_client_ip(request),
                 user_agent=request.headers.get("user-agent"),
                 vote_rank=vote_item.vote_rank,
                 commit=False,
@@ -3351,7 +3351,7 @@ async def cast_proxy_vote(
         proxy_authorization_id=vote.proxy_authorization_id,
         position=vote.position,
         organization_id=current_user.organization_id,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
         vote_rank=vote.vote_rank,
     )

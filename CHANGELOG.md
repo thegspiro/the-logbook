@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Consent is now enforced, client IPs are real, and the migration chain has one head (2026-08-05)
+
+**Fixed**
+
+- **The migration chain had two heads and a duplicate revision id.** Two
+  branches merged the same day each claimed `20260805_0010` off parent
+  `20260805_0009` — `drop_onboarding_checklist_table` and
+  `reconcile_index_set`. Alembic cannot resolve a duplicate id, so
+  `alembic upgrade head` (and therefore `npm run db:migrate`) **failed on every
+  deployment**, and four migration-chain tests had been failing. The index
+  reconciliation is renumbered to `20260805_0011` and sequenced after the drop;
+  the two touch disjoint tables, so only the label and parent pointer moved. It
+  is the same collision `20260805_0101` documents escaping, recreated within the
+  hour — the renumbered file now records that.
+- **Client IPs were the reverse-proxy's address in 39 places across 8 files.**
+  `request.client.host` was used instead of `get_client_ip(request)`, so behind
+  the production nginx every session row, audit event, security alert and vote
+  recorded one identical internal IP. Three consequences worth naming: ballot
+  fraud detection (`suspicious_ips` / `unique_ip_count`, documented in
+  `BALLOT_FORENSICS_GUIDE.md`) was inverted into a permanent false positive
+  rather than merely weakened; the IP-security module's own request/approval
+  audit carried no attribution; and the **public-portal rate limiter was keyed
+  on the proxy**, so all anonymous visitors shared one bucket and a single
+  caller could lock out every visitor. Corrected going forward — rows already
+  written still hold proxy addresses.
+
+**Changed**
+
+- **Member consent is enforced instead of merely recorded.**
+  `ConsentService.has_consent` previously had **zero callers**: members could
+  refuse photo use, public-roster listing, or SMS, and the choice was stored,
+  audit-logged, and ignored. SMS is now gated on the recorded consent in both
+  send paths (department-message escalation and the inventory low-stock alert),
+  via a new bulk `granted_user_ids` helper that fails closed — never asked
+  counts as refused. US TCPA requires express consent for text messaging.
+- **Email is now the channel of record and is unconditional.** Every department
+  message is emailed — not only urgent or acknowledgment-required ones — and
+  email is no longer filtered by the `email_notifications` preference. This is
+  what makes consent enforcement safe: consent may suppress a member's *text*,
+  but never the notice itself, so nobody can be left able to say they were never
+  told. The preference still governs the reminder and alert flows, and the
+  settings-page wording was updated to say so.
+- Note: `PHOTO_USE` and `PUBLIC_ROSTER_LISTING` consents are collected but have
+  **no consumer to gate** — the app has no public roster and publishes no member
+  photos today. Whoever builds either must gate on `has_consent`; the
+  requirement is recorded in the `consent_service` docstring.
+
 ### Training: a course can carry a syllabus, and a cohort runs it (2026-08-05)
 
 **Added**

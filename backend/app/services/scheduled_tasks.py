@@ -3354,7 +3354,20 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
 
             sms_svc = SMSService()
             if sms_svc.enabled:
-                admin_phones = [a.phone for a in admins if getattr(a, "phone", None)]
+                # TCPA: text messaging needs express consent. The email above
+                # is unconditional, so an admin without SMS consent still gets
+                # this alert — only the text is suppressed.
+                from app.models.consent import ConsentType
+                from app.services.consent_service import ConsentService
+
+                consented = await ConsentService(db_session).granted_user_ids(
+                    [str(a.id) for a in admins], ConsentType.SMS_NOTIFICATIONS
+                )
+                admin_phones = [
+                    a.phone
+                    for a in admins
+                    if getattr(a, "phone", None) and str(a.id) in consented
+                ]
                 if admin_phones:
                     sms_body = (
                         f"Low Stock Alert: {len(low_stock)} inventory item(s) "

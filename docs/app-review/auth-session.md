@@ -101,7 +101,12 @@ imported. Effective in the production profile; in a deployment that leaves
 `TRUSTED_PROXY_IPS` unset it correctly falls back to the peer IP, so the change
 is never worse than before.
 
-### AUTH-2 — MED — The consent system is recorded but never enforced — 🚩 FLAGGED
+### AUTH-2 — MED — The consent system is recorded but never enforced — ✅ FIXED (2026-08-05)
+
+> **Resolved by owner decision.** The blocker below was "enforcing this stops
+> SMS to every member who was never asked". The owner's rule removes it:
+> *messages always go to the member's email, so consent may suppress the text
+> but never the notice.* Implementation at the end of this finding.
 
 **What:** `ConsentService.has_consent` (`consent_service.py:75`) has **zero
 callers** — `grep -rn "has_consent" app/` returns only the definition and the
@@ -125,13 +130,52 @@ provides statutory damages per message. This is an ISO 27701 control that is
 inert — arguably worse than not having it, because the UI represents to the
 member that their choice takes effect.
 
-**Why not fixed:** enforcement is a genuine behavior change needing an owner
-decision, not a safe fix. `has_consent` treats "never asked" as refused, so
-wiring it in as documented would **immediately stop SMS to every existing
-member** (none of whom have been asked) and drop un-consented members from the
-public roster. The rollout needs a decision on backfill (treat existing members
-as grandfathered-in, or run a consent campaign first), which is exactly the kind
-of call this review flags rather than makes.
+**Why it was initially flagged:** enforcement is a behavior change.
+`has_consent` treats "never asked" as refused, so wiring it in as documented
+would immediately stop SMS to every existing member (none of whom have been
+asked). That needed an owner decision on backfill.
+
+**Resolution — email is the channel of record.** The owner's rule makes
+enforcement safe without any backfill: consent may suppress the *text*, but the
+member is always reached by email, so nobody can be left able to say they were
+never told. Implemented as:
+
+- **`ConsentService.granted_user_ids(user_ids, type)`** — a bulk, fail-closed
+  companion to `has_consent`. The fan-out paths target the whole roster, so a
+  per-recipient `has_consent` would have been an N+1 on the send path. An id
+  with no row is simply absent from the set, i.e. treated as refused.
+- **SMS is consent-gated in both send paths** — department-message escalation
+  (`message_delivery_service._send_sms`) and the inventory low-stock admin alert
+  (`scheduled_tasks.py:3353`, found by grepping every `SMSService` caller). The
+  gate is *in addition to* the existing channel preference, because TCPA
+  consent and a UI toggle are not the same thing.
+- **Email is now unconditional** (`message_delivery_service.deliver`) — sent for
+  every department message, not only urgent/ack-required ones, and **no longer
+  filtered by the `email_notifications` preference**. A member must not be able
+  to opt out of the record that they were told something. Email is sent *before*
+  the SMS branch so the ordering itself encodes the invariant.
+- **The `email_notifications` preference is not dead** — it still governs the
+  seven reminder/alert flows (`scheduled_tasks`, `cert_alert_service`,
+  `scheduling_service`). The settings-page helper text was reworded to say so,
+  since the toggle no longer covers department announcements.
+- **Tests:** three existing tests encoded the old contract and were **updated,
+  not deleted** (`test_every_message_is_emailed`,
+  `test_email_ignores_opt_out_and_reaches_everyone_with_an_address`, and the SMS
+  gating test now patches consent). Three added:
+  `test_sms_requires_consent_even_when_the_channel_is_on`,
+  `test_no_consent_means_no_sms_at_all`, and
+  `test_member_without_sms_consent_is_still_emailed` — the last one is the
+  invariant that makes the whole change safe. 15/15 pass.
+
+**Still open — the other two consent types have no consumer to gate.**
+Investigation found **no public roster endpoint and no public photo
+publishing** anywhere in the app: `api/public/portal.py` exposes only org info,
+stats, public events, application status, and health, behind a default-deny
+field whitelist. So `PUBLIC_ROSTER_LISTING` and `PHOTO_USE` are being collected
+for features that do not exist yet. Nothing to enforce today; whoever builds
+them must gate on `has_consent`. This is now recorded in the
+`consent_service` module docstring so the requirement sits where it will be
+read.
 
 ### AUTH-3 — LOW — `core/audit.py` docstring teaches the wrong IP pattern — ✅ FIXED
 
