@@ -53,6 +53,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "@vitest/eslint-plugin": "^1.6.24",
     "@vitest/ui": "^4.1.10",
+    "esbuild": "^0.27.0",
     "eslint": "^9.39.3",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -72,7 +73,7 @@
     "vitest-axe": "^0.1.0"
   },
   "overrides": {
-    "esbuild": "0.27.0"
+    "esbuild": "^0.27.0"
   },
   "engines": {
     "node": ">=22.0.0",

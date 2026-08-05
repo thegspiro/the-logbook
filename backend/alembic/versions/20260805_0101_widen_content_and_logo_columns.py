@@ -14,9 +14,22 @@ The models are corrected alongside this revision, which fixes future installs.
 This revision fixes the databases that already exist. On a chain-built database
 both columns are already LONGTEXT and the MODIFY is a no-op.
 
-Revision ID: 20260805_0001
-Revises: 20260802_0010
+Revision ID: 20260805_0101
+Revises: 20260805_0002
 Create Date: 2026-08-05 00:00:00.000000
+
+Numbered 0101 but sequenced before 0003: this revision and 20260805_0102 were
+authored on a branch off 20260802_0010 that claimed ids 0001 and 0002, which
+the course-cohort branch had already taken. Renumbering these two — rather
+than the seven downstream of them — kept every id cited in the wiki, the
+CHANGELOG and docs/ pointing at the revision it was written about. The
+position in the chain is the one the DDL was written for; only the label moved.
+
+The 01xx band is deliberate. These two were first relabelled 0010 and 0011,
+the next two numbers the sequence would hand out — and 20260805_0010 was
+taken by `reconcile_index_set` on main within the hour, recreating the exact
+duplicate this pair was renamed to escape. Sitting at 0101 they cannot be
+reached by ordinary allocation, which increments by one from 0001.
 
 """
 
@@ -26,8 +39,8 @@ from sqlalchemy.dialects import mysql
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260805_0001"
-down_revision = "20260802_0010"
+revision = "20260805_0101"
+down_revision = "20260805_0002"
 branch_labels = None
 depends_on = None
 

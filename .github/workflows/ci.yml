@@ -35,7 +35,12 @@ jobs:
         # isort 5.13.2 here vs 7.3.0 / 8.0.1 there), so CI was green against a
         # toolchain no developer actually ran — isort 5 and 8 disagree on how
         # to wrap a from-import that a sibling `as` alias has split in two.
-        run: pip install 'flake8==7.3.0' 'black==25.1.0' 'isort==8.0.1' 'flake8-pytest-style==2.2.0'
+        #
+        # Then black drifted the other way: 25.1.0 here against 26.5.1 there,
+        # so CI went *red* on four files that black 26 — the version the
+        # pre-commit hook and every developer runs — formats exactly as they
+        # are. A pinned version is only a gate if both sides pin the same one.
+        run: pip install 'flake8==7.3.0' 'black==26.5.1' 'isort==8.0.1' 'flake8-pytest-style==2.2.0'
 
       # tests/ is in scope alongside app/. It was left out originally, which
       # let 85 violations accumulate unseen: lint-staged only lints *staged*
