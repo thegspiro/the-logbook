@@ -114,6 +114,17 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 | **Scheduling: swap accept-path lacks re-validation & self-approval guard; finalize trusts manual_hours** | Open (LOW/MED, needs design) | When a shift swap is *accepted* by the counterparty (vs. manager approval), the target shift's capacity/cancellation/finalization is not re-validated at accept time and the approver-identity check is looser than the manual-review path. Separately, `finalize_shift` trusts a client-supplied `manual_hours` override with no bound. Both are behavior changes deferred for an owner decision. (SCH-5/6) |
 | **Recurring: create/update paths trust client-supplied FK ids without an org check (XC-1)** | Open (LOW, systemic) | The dominant cross-cutting pattern — create/update methods store `user_id`/`category_id`/`assignee_id`/etc. without verifying the referenced row is in-org. Individually low impact (org-stamped writes → dangling/mis-attributed FKs, not disclosure), but pervasive. Best closed by a shared `assert_in_org(db, Model, id, org_id)` helper rolled out per module. Full instances in [`docs/module-audit/CROSS-CUTTING.md`](./module-audit/CROSS-CUTTING.md) (XC-1/2/3). |
 
+## Application Review — Feature Rotation (2026-08-05)
+
+Owner-decision items from the feature-by-feature review under
+[`docs/app-review/`](./app-review/PROGRESS.md).
+
+| Limitation | Status | Detail |
+|---|---|---|
+| **Storefront: no separation of duties on payments** | Open (MED, needs new permission) | One `storefront.manage` holder can record a payment, mark an order paid, waive the balance, and issue a refund. Same shape as FIN-4 and AH-4, and the same trade-off: reasonable for a small department, not for a large one. A `storefront.disburse` tier would mirror the proposed `finance.disburse`. (SF future-dev #3) |
+| **Storefront: `auto_apply_payments` defaults on** | Open (LOW, product decision) | When a PayPal integration's config omits `auto_apply_payments`, it defaults to `True`, so an exact-amount capture settles an order with no human in the loop. Well-guarded (amount must equal the balance exactly; anything else is recorded `AMBIGUOUS`), but it is an implicit default on a money path and should be an explicit choice in the integration setup UI. (SF future-dev #4) |
+| **Storefront: no reconciliation backfill** | Open (MED, robustness) | If PayPal's verify-webhook-signature API is unreachable, the webhook returns 401 and PayPal eventually stops retrying — the capture is then absent from the ledger with no way to re-ingest it. The Transaction Search API (rejected in the service docstring for its multi-hour lag) is the natural backfill source for exactly this case. (SF future-dev #1) |
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
