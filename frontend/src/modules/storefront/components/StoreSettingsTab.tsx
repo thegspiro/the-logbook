@@ -724,14 +724,27 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
                       </span>
                     </span>
                   </label>
+                  {/* Nine buttons all read "Preview", so the notice has to be
+                      in the accessible name. Two constraints shape how:
+
+                      - The name must come from one text node. The
+                        accessible-name algorithm trims each node before
+                        concatenating, so visible "Preview" + sr-only " the …
+                        email" computes as "Previewthe … email" — no word
+                        boundary. The visible label is hidden and the sr-only
+                        span carries the whole phrase instead.
+                      - It must not be an aria-label. Testing Library's
+                        ByLabelText matches aria-label, so labelling this button
+                        "…the Order placed with the vendor email" would make it
+                        a second match for the switch beside it. */}
                   <button
                     type="button"
                     onClick={() => setPreviewNotice(notice.notice)}
                     className="text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target flex shrink-0 items-center gap-1 text-xs"
                   >
                     <Eye className="h-4 w-4" aria-hidden="true" />
-                    Preview
-                    <span className="sr-only"> the {notice.label} email</span>
+                    <span aria-hidden="true">Preview</span>
+                    <span className="sr-only">Preview the {notice.label} email</span>
                   </button>
                 </div>
               ))}
