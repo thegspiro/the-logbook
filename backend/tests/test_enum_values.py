@@ -111,17 +111,13 @@ async def test_organization_type_query_by_enum(db_session):
 async def test_organization_type_database_enum_definition(db_session):
     """Test that the database ENUM type has correct lowercase values"""
 
-    result = await db_session.execute(
-        text(
-            """
+    result = await db_session.execute(text("""
         SELECT COLUMN_TYPE
         FROM INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA = DATABASE()
         AND TABLE_NAME = 'organizations'
         AND COLUMN_NAME = 'organization_type'
-    """
-        )
-    )
+    """))
 
     row = result.fetchone()
     assert row is not None, "organization_type column not found"

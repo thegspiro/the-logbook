@@ -20,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -254,7 +255,6 @@ class DocumentFolder(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Folder Information
@@ -329,13 +329,11 @@ class Document(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     folder_id = Column(
         String(36),
         ForeignKey("document_folders.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # Document Information
@@ -353,10 +351,14 @@ class Document(Base):
         Enum(DocumentStatus, values_callable=lambda x: [e.value for e in x]),
         default=DocumentStatus.ACTIVE,
         nullable=False,
+        server_default="active",
     )
 
-    # Rich content (for generated documents like published minutes)
-    content_html = Column(Text, nullable=True)
+    # Rich content (for generated documents like published minutes).
+    # LONGTEXT, not TEXT: a published set of minutes routinely exceeds TEXT's
+    # 64 KB ceiling. Migration 20260213_0800 created this column as LONGTEXT;
+    # the model has to match or fresh installs truncate document bodies.
+    content_html = Column(Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True)
 
     # Source tracking (links generated docs to their origin)
     source_type = Column(String(50), nullable=True)  # e.g. "meeting_minutes"

@@ -74,15 +74,13 @@ async def _current_enum_values(
     """Return the column's ENUM label list, or None if it is not an ENUM."""
     row = (
         await db.execute(
-            text(
-                """
+            text("""
                 SELECT COLUMN_TYPE
                 FROM INFORMATION_SCHEMA.COLUMNS
                 WHERE TABLE_SCHEMA = :schema
                   AND TABLE_NAME = :table
                   AND COLUMN_NAME = :column
-                """
-            ),
+                """),
             {"schema": schema, "table": table, "column": column},
         )
     ).fetchone()

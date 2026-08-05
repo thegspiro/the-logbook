@@ -74,7 +74,6 @@ class NotificationRule(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Rule Information
@@ -88,11 +87,13 @@ class NotificationRule(Base):
         Enum(NotificationCategory, values_callable=lambda x: [e.value for e in x]),
         default=NotificationCategory.GENERAL,
         nullable=False,
+        server_default="general",
     )
     channel = Column(
         Enum(NotificationChannel, values_callable=lambda x: [e.value for e in x]),
         default=NotificationChannel.IN_APP,
         nullable=False,
+        server_default="in_app",
     )
 
     # Settings
@@ -135,7 +136,6 @@ class NotificationLog(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     rule_id = Column(
         String(36),
@@ -149,7 +149,6 @@ class NotificationLog(Base):
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     recipient_email = Column(String(255))
     channel = Column(
@@ -254,7 +253,6 @@ class DepartmentMessage(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Content
@@ -264,6 +262,7 @@ class DepartmentMessage(Base):
         Enum(MessagePriority, values_callable=lambda x: [e.value for e in x]),
         default=MessagePriority.NORMAL,
         nullable=False,
+        server_default="normal",
     )
 
     # Targeting
@@ -271,6 +270,7 @@ class DepartmentMessage(Base):
         Enum(MessageTargetType, values_callable=lambda x: [e.value for e in x]),
         default=MessageTargetType.ALL,
         nullable=False,
+        server_default="all",
     )
     target_roles = Column(
         JSON, nullable=True

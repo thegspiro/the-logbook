@@ -64,7 +64,7 @@ class Election(Base):
     position_eligibility = Column(JSON, nullable=True)
 
     # Email notification tracking
-    email_sent = Column(Boolean, nullable=False, default=False)
+    email_sent = Column(Boolean, nullable=False, default=False, server_default="0")
     email_sent_at = Column(DateTime(timezone=True), nullable=True)
     email_recipients = Column(
         JSON, nullable=True
@@ -121,10 +121,17 @@ class Election(Base):
     eligible_voters = Column(JSON, nullable=True)  # List of user IDs or role slugs
 
     # Voting method and victory conditions
-    voting_method = Column(String(50), nullable=False, default="simple_majority")
+    voting_method = Column(
+        String(50),
+        nullable=False,
+        default="simple_majority",
+        server_default="simple_majority",
+    )
     # Voting methods: simple_majority, ranked_choice, approval, supermajority
 
-    victory_condition = Column(String(50), nullable=False, default="most_votes")
+    victory_condition = Column(
+        String(50), nullable=False, default="most_votes", server_default="most_votes"
+    )
     # Victory conditions: most_votes, majority, supermajority, threshold
 
     victory_threshold = Column(Integer, nullable=True)
@@ -151,22 +158,24 @@ class Election(Base):
     eligible_roster_snapshot = Column(JSON, nullable=True)
 
     # Runoff configuration
-    enable_runoffs = Column(Boolean, nullable=False, default=False)
+    enable_runoffs = Column(Boolean, nullable=False, default=False, server_default="0")
     # Whether to automatically create runoff elections if no winner
 
-    runoff_type = Column(String(50), nullable=False, default="top_two")
+    runoff_type = Column(
+        String(50), nullable=False, default="top_two", server_default="top_two"
+    )
     # Runoff types: top_two (top 2 candidates advance), eliminate_lowest (remove lowest, re-vote)
 
-    max_runoff_rounds = Column(Integer, nullable=False, default=3)
+    max_runoff_rounds = Column(Integer, nullable=False, default=3, server_default="3")
     # Maximum number of runoff rounds to prevent infinite loops
 
-    is_runoff = Column(Boolean, nullable=False, default=False)
+    is_runoff = Column(Boolean, nullable=False, default=False, server_default="0")
     # Indicates this election is a runoff from another election
 
     parent_election_id = Column(String(36), ForeignKey("elections.id"), nullable=True)
     # Reference to parent election if this is a runoff
 
-    runoff_round = Column(Integer, nullable=False, default=0)
+    runoff_round = Column(Integer, nullable=False, default=0, server_default="0")
     # Which round of runoff this is (0 = original election)
 
     # Per-election anonymity salt for voter hash (SEC-12).
@@ -196,7 +205,7 @@ class Election(Base):
 
     # Quorum configuration — minimum voter turnout for valid results
     quorum_type = Column(
-        String(20), nullable=False, default="none"
+        String(20), nullable=False, default="none", server_default="none"
     )  # none, percentage, count
     quorum_value = Column(Integer, nullable=True)  # e.g., 51 (percent) or 20 (count)
 
@@ -339,12 +348,12 @@ class VotingToken(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
 
     # Usage tracking
-    used = Column(Boolean, nullable=False, default=False)
+    used = Column(Boolean, nullable=False, default=False, server_default="0")
     used_at = Column(DateTime(timezone=True), nullable=True)
 
     # Test-ballot flag — votes cast with a test token are marked is_test
     # and excluded from results/stats/rosters
-    is_test = Column(Boolean, nullable=False, default=False)
+    is_test = Column(Boolean, nullable=False, default=False, server_default="0")
 
     # Ballot items this voter was eligible for when the token was issued.
     # Eligibility cannot be recomputed at submission time because the token
@@ -361,7 +370,7 @@ class VotingToken(Base):
 
     # Access tracking
     first_accessed_at = Column(DateTime(timezone=True), nullable=True)
-    access_count = Column(Integer, nullable=False, default=0)
+    access_count = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Multi-position tracking: which positions have been voted on via this token
     positions_voted = Column(JSON, nullable=True)  # ["Chief", "President"]
@@ -432,7 +441,7 @@ class Vote(Base):
     receipt_hash = Column(String(64), nullable=True)
 
     # Test ballot flag — test votes are excluded from real results/stats
-    is_test = Column(Boolean, nullable=False, default=False)
+    is_test = Column(Boolean, nullable=False, default=False, server_default="0")
 
     # Manual (paper-ballot) entry: votes keyed in by an officer from an
     # in-room paper tally. No voter identity or dedup hash — the officer's
@@ -446,7 +455,7 @@ class Vote(Base):
     manual_batch_id = Column(String(36), nullable=True, index=True)
 
     # Proxy voting — tracks when a vote is cast on behalf of another member
-    is_proxy_vote = Column(Boolean, nullable=False, default=False)
+    is_proxy_vote = Column(Boolean, nullable=False, default=False, server_default="0")
     proxy_voter_id = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )  # The person who physically voted
@@ -509,7 +518,9 @@ class ManualBallotBatch(Base):
     )
     notes = Column(Text, nullable=True)
     # 'pending' (awaiting attestations) | 'confirmed' | 'voided'
-    status = Column(String(20), nullable=False, default="pending")
+    status = Column(
+        String(20), nullable=False, default="pending", server_default="pending"
+    )
     # Snapshot of the org's requirement at record time, so changing the
     # setting later never silently confirms or un-confirms an old batch.
     required_attestations = Column(

@@ -25,7 +25,7 @@ class OnboardingStatus(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
 
     # Onboarding completion status
-    is_completed = Column(Boolean, default=False, nullable=False)
+    is_completed = Column(Boolean, default=False, nullable=False, server_default="0")
     completed_at = Column(DateTime(timezone=True))
 
     # Onboarding steps tracking

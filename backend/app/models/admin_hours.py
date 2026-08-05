@@ -56,7 +56,7 @@ class AdminHoursCategory(Base):
     color = Column(String(7), nullable=True)  # Hex color for UI, e.g. "#3B82F6"
 
     # Approval settings
-    require_approval = Column(Boolean, nullable=False, default=True)
+    require_approval = Column(Boolean, nullable=False, default=True, server_default="1")
     auto_approve_under_hours = Column(
         Float, nullable=True
     )  # Auto-approve if under X hours (null = always require approval)
@@ -67,8 +67,8 @@ class AdminHoursCategory(Base):
     )  # Auto clock-out after X hours (null = no limit)
 
     # Status
-    is_active = Column(Boolean, nullable=False, default=True)
-    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
@@ -153,6 +153,7 @@ class AdminHoursEntry(Base):
         ),
         nullable=False,
         default=AdminHoursEntryStatus.ACTIVE,
+        server_default="active",
     )
     approved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)
@@ -216,9 +217,9 @@ class EventHourMapping(Base):
         ForeignKey("admin_hours_categories.id", ondelete="CASCADE"),
         nullable=False,
     )
-    percentage = Column(Integer, nullable=False, default=100)
+    percentage = Column(Integer, nullable=False, default=100, server_default="100")
 
-    is_active = Column(Boolean, nullable=False, default=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

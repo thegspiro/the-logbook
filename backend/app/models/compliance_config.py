@@ -73,18 +73,21 @@ class ComplianceConfig(Base):
         String(30),
         nullable=False,
         default=ComplianceThresholdType.PERCENTAGE.value,
+        server_default="percentage",
     )
     compliant_threshold = Column(
         Float,
         nullable=False,
         default=100.0,
         comment="Min % of requirements met to be compliant",
+        server_default="100.0",
     )
     at_risk_threshold = Column(
         Float,
         nullable=False,
         default=75.0,
         comment="Min % to be at-risk (below = non-compliant)",
+        server_default="75.0",
     )
 
     # -- Grace period --
@@ -93,6 +96,7 @@ class ComplianceConfig(Base):
         nullable=False,
         default=0,
         comment="Days after deadline before marking non-compliant",
+        server_default="0",
     )
 
     # -- Evaluation period boundary --
@@ -113,6 +117,7 @@ class ComplianceConfig(Base):
         String(20),
         nullable=False,
         default=ReportFrequency.NONE.value,
+        server_default="none",
     )
     report_email_recipients = Column(
         JSON,
@@ -128,9 +133,7 @@ class ComplianceConfig(Base):
 
     # -- Notification settings --
     notify_non_compliant_members = Column(
-        Boolean,
-        nullable=False,
-        default=False,
+        Boolean, nullable=False, default=False, server_default="0"
     )
     notify_days_before_deadline = Column(
         JSON,
@@ -223,12 +226,13 @@ class ComplianceProfile(Base):
         ),
     )
 
-    is_active = Column(Boolean, nullable=False, default=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
     priority = Column(
         Integer,
         nullable=False,
         default=0,
         comment="Higher = evaluated first when member matches multiple",
+        server_default="0",
     )
 
     created_at = Column(
@@ -282,6 +286,7 @@ class ComplianceReport(Base):
         String(20),
         nullable=False,
         default=ReportStatus.PENDING.value,
+        server_default="pending",
     )
 
     # -- Report data (JSON snapshot) --

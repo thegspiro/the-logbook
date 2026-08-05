@@ -52,7 +52,7 @@ class AuditLog(Base):
     timestamp_nanos = Column(BigInteger, nullable=False)
 
     # Event Information
-    event_type = Column(String(100), nullable=False, index=True)
+    event_type = Column(String(100), nullable=False)
     event_category = Column(String(50), nullable=False, index=True)
     severity = Column(
         Enum(SeverityLevel, values_callable=lambda x: [e.value for e in x]),
@@ -60,7 +60,7 @@ class AuditLog(Base):
     )
 
     # Actor Information
-    user_id = Column(String(36), index=True)
+    user_id = Column(String(36))
     username = Column(String(255))
     session_id = Column(String(36))
 
@@ -82,7 +82,7 @@ class AuditLog(Base):
 
     # Integrity Chain (Blockchain-inspired)
     previous_hash = Column(String(64), nullable=False)
-    current_hash = Column(String(64), nullable=False, index=True)
+    current_hash = Column(String(64), nullable=False)
     # Hash algorithm version: NULL/1 = legacy unkeyed SHA-256, 2 = keyed
     # HMAC-SHA256, 3 = keyed + organization_id in the hash input. Stored
     # per-row so pre-upgrade entries still verify under their original
@@ -170,7 +170,7 @@ class AuditShipState(Base):
     __tablename__ = "audit_ship_state"
 
     id = Column(Integer, primary_key=True)
-    last_shipped_id = Column(BigInteger, nullable=False, default=0)
+    last_shipped_id = Column(BigInteger, nullable=False, default=0, server_default="0")
     last_shipped_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

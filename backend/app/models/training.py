@@ -309,7 +309,6 @@ class TrainingRecord(Base):
         String(36),
         ForeignKey("training_categories.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # Training Details
@@ -351,7 +350,6 @@ class TrainingRecord(Base):
         String(36),
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     location = Column(
         String(255)
@@ -454,6 +452,7 @@ class TrainingRequirement(Base):
         Enum(RequirementSource, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=RequirementSource.DEPARTMENT,
+        server_default="department",
     )
     registry_name = Column(
         String(100)
@@ -469,7 +468,9 @@ class TrainingRequirement(Base):
     # Officers opt a requirement in when online/third-party delivery is acceptable
     # (e.g. HIPAA CE), and leave it off for in-house-only competencies (e.g. a
     # hands-on radios drill that a Vector course must not check off).
-    allows_external_credit = Column(Boolean, default=False, nullable=False)
+    allows_external_credit = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Requirement Quantities (based on requirement_type)
     required_hours = Column(Float)  # For HOURS type
@@ -581,7 +582,6 @@ class TrainingSession(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Links to Event and Course
@@ -657,7 +657,9 @@ class TrainingSession(Base):
     # pipeline/certificate requirements. Used for sessions that count toward a
     # program but aren't delivered in a way the certifying body (NFPA/NREMT)
     # would accept, so ineligible hours don't inflate a member's certificate.
-    counts_toward_certification = Column(Boolean, default=True, nullable=False)
+    counts_toward_certification = Column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
     # Auto-completion Settings
     auto_create_records = Column(
@@ -1153,7 +1155,6 @@ class TrainingApproval(Base):
         String(36),
         ForeignKey("training_sessions.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     event_id = Column(
         String(36),
@@ -1174,7 +1175,6 @@ class TrainingApproval(Base):
     status = Column(
         Enum(ApprovalStatus, values_callable=lambda x: [e.value for e in x]),
         default=ApprovalStatus.PENDING,
-        index=True,
     )
     approved_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -1242,6 +1242,7 @@ class TrainingProgram(Base):
         Enum(ProgramStructureType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ProgramStructureType.FLEXIBLE,
+        server_default="flexible",
     )
 
     # Prerequisites
@@ -1270,7 +1271,7 @@ class TrainingProgram(Base):
     # biennial recert, which is due every other March 30. recert_interval_months
     # sets the cadence; recert_anchor_month/day optionally pin the reset to a
     # fixed calendar date rather than rolling from the enrollment date.
-    recert_enabled = Column(Boolean, default=False, nullable=False)
+    recert_enabled = Column(Boolean, default=False, nullable=False, server_default="0")
     recert_interval_months = Column(Integer)  # e.g. 24 for a two-year cycle
     recert_anchor_month = Column(Integer)  # 1-12, optional fixed reset month
     recert_anchor_day = Column(Integer)  # 1-31, optional fixed reset day
@@ -1389,13 +1390,11 @@ class ProgramRequirement(Base):
         String(36),
         ForeignKey("training_programs.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     phase_id = Column(
         String(36),
         ForeignKey("program_phases.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )  # Null if not phase-based
     requirement_id = Column(
         String(36),
@@ -1453,7 +1452,6 @@ class ProgramMilestone(Base):
         String(36),
         ForeignKey("training_programs.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     phase_id = Column(
         String(36),
@@ -1609,7 +1607,6 @@ class RequirementProgress(Base):
         String(36),
         ForeignKey("training_requirements.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Progress Tracking
@@ -1701,7 +1698,6 @@ class RequirementProgressCredit(Base):
         String(36),
         ForeignKey("requirement_progress.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     source_type = Column(
         Enum(
@@ -1714,7 +1710,7 @@ class RequirementProgressCredit(Base):
     # training record, etc.). Kept as a plain string so any feed's identifier
     # fits without a cross-table FK.
     source_id = Column(String(64), nullable=False)
-    units = Column(Float, nullable=False, default=0.0)
+    units = Column(Float, nullable=False, default=0.0, server_default="0.0")
 
     applied_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -1811,13 +1807,11 @@ class SkillCheckoff(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     skill_evaluation_id = Column(
         String(36),
         ForeignKey("skill_evaluations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Evaluation Details
@@ -1898,7 +1892,6 @@ class ShiftCompletionReport(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Shift details
@@ -2371,6 +2364,7 @@ class TrainingSubmission(Base):
         default=SubmissionStatus.PENDING_REVIEW,
         nullable=False,
         index=True,
+        server_default="pending_review",
     )
 
     # Review Details
@@ -2543,7 +2537,6 @@ class ExternalCategoryMapping(Base):
         String(36),
         ForeignKey("external_training_providers.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),
@@ -2612,7 +2605,6 @@ class ExternalUserMapping(Base):
         String(36),
         ForeignKey("external_training_providers.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),
@@ -2790,7 +2782,6 @@ class ExternalTrainingImport(Base):
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )  # Mapped internal user
 
     # Import Status
@@ -2949,13 +2940,11 @@ class ShiftAttendance(Base):
         String(36),
         ForeignKey("shifts.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Timing
@@ -2990,7 +2979,6 @@ class ShiftCall(Base):
         String(36),
         ForeignKey("shifts.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),
@@ -3001,9 +2989,7 @@ class ShiftCall(Base):
 
     # Incident Details
     incident_number = Column(String(100))
-    incident_type = Column(
-        String(100), index=True
-    )  # Structure fire, medical, MVA, etc.
+    incident_type = Column(String(100))  # Structure fire, medical, MVA, etc.
 
     # Timing
     dispatched_at = Column(DateTime(timezone=True))
@@ -3109,7 +3095,6 @@ class ShiftTemplate(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(200), nullable=False)
@@ -3179,7 +3164,6 @@ class ShiftPattern(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(200), nullable=False)
@@ -3246,30 +3230,29 @@ class ShiftAssignment(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     shift_id = Column(
         String(36),
         ForeignKey("shifts.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     position = Column(
         Enum(ShiftPosition, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ShiftPosition.FIREFIGHTER,
+        server_default="firefighter",
     )
     assignment_status = Column(
         Enum(AssignmentStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=AssignmentStatus.ASSIGNED,
+        server_default="assigned",
     )
 
     # Training slot — when True this seat is a supervised training/rider
@@ -3330,7 +3313,6 @@ class ShiftSwapRequest(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # The member requesting the swap
@@ -3354,6 +3336,7 @@ class ShiftSwapRequest(Base):
         Enum(SwapRequestStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=SwapRequestStatus.PENDING,
+        server_default="pending",
     )
     reason = Column(Text)
 
@@ -3399,13 +3382,11 @@ class ShiftTimeOff(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     start_date = Column(Date, nullable=False)
@@ -3416,6 +3397,7 @@ class ShiftTimeOff(Base):
         Enum(TimeOffStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=TimeOffStatus.PENDING,
+        server_default="pending",
     )
     approved_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -3461,12 +3443,13 @@ class BasicApparatus(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     unit_number = Column(String(20), nullable=False)
     name = Column(String(100), nullable=False)
-    apparatus_type = Column(String(50), nullable=False, default="engine")
+    apparatus_type = Column(
+        String(50), nullable=False, default="engine", server_default="engine"
+    )
     min_staffing = Column(Integer, default=1)
     positions = Column(
         JSON
@@ -3525,6 +3508,7 @@ class TrainingWaiver(Base):
         Enum(TrainingWaiverType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=TrainingWaiverType.LEAVE_OF_ABSENCE,
+        server_default="leave_of_absence",
     )
     reason = Column(Text, nullable=True)
 
@@ -3541,7 +3525,7 @@ class TrainingWaiver(Base):
     )
     granted_at = Column(DateTime(timezone=True), nullable=True)
 
-    active = Column(Boolean, default=True, nullable=False)
+    active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -3593,7 +3577,6 @@ class RecertificationPathway(Base):
         String(36),
         ForeignKey("training_requirements.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )  # The certification requirement this renews
 
     # Renewal requirements
@@ -3694,7 +3677,6 @@ class RenewalTask(Base):
         String(36),
         ForeignKey("recertification_pathways.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     training_record_id = Column(
         String(36),
@@ -3826,7 +3808,6 @@ class MemberCompetency(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
@@ -3923,13 +3904,11 @@ class InstructorQualification(Base):
         String(36),
         ForeignKey("training_courses.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )  # Specific course authorization
     skill_evaluation_id = Column(
         String(36),
         ForeignKey("skill_evaluations.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )  # Specific skill they can evaluate
     category_id = Column(
         String(36),
@@ -3944,7 +3923,7 @@ class InstructorQualification(Base):
         String(50)
     )  # e.g., "Fire Instructor I", "Fire Instructor II"
     issued_date = Column(Date)
-    expiration_date = Column(Date, index=True)
+    expiration_date = Column(Date)
 
     # Status
     active = Column(Boolean, default=True, index=True)
@@ -4006,13 +3985,11 @@ class TrainingEffectivenessEvaluation(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # What was evaluated
@@ -4020,7 +3997,6 @@ class TrainingEffectivenessEvaluation(Base):
         String(36),
         ForeignKey("training_records.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
     training_session_id = Column(
         String(36),
@@ -4106,7 +4082,6 @@ class MultiAgencyTraining(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Training link
@@ -4114,7 +4089,6 @@ class MultiAgencyTraining(Base):
         String(36),
         ForeignKey("training_sessions.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
     training_record_id = Column(
         String(36),
@@ -4190,11 +4164,10 @@ class XAPIStatement(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Actor (who did it)
-    actor_email = Column(String(255), index=True)
+    actor_email = Column(String(255))
     actor_name = Column(String(255))
     user_id = Column(
         String(36),
@@ -4232,7 +4205,7 @@ class XAPIStatement(Base):
     raw_statement = Column(JSON, nullable=False)
 
     # Processing
-    processed = Column(Boolean, default=False, index=True)
+    processed = Column(Boolean, default=False)
     training_record_id = Column(
         String(36),
         ForeignKey("training_records.id", ondelete="SET NULL"),
@@ -4285,13 +4258,11 @@ class ShiftEquipmentCheck(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     shift_id = Column(
         String(36),
         ForeignKey("shifts.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     template_id = Column(
         String(36),
@@ -4311,7 +4282,7 @@ class ShiftEquipmentCheck(Base):
     checked_at = Column(DateTime(timezone=True), server_default=func.now())
     check_timing = Column(String(30), nullable=False)  # start_of_shift, end_of_shift
     check_context = Column(
-        String(30), nullable=False, default="shift_based"
+        String(30), nullable=False, default="shift_based", server_default="shift_based"
     )  # shift_based, standalone
     overall_status = Column(String(30), nullable=False)  # pass, fail, incomplete
     total_items = Column(Integer, nullable=False, default=0)
@@ -4376,7 +4347,6 @@ class ShiftEquipmentCheckItem(Base):
         String(36),
         ForeignKey("shift_equipment_checks.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     template_item_id = Column(
         String(36),
@@ -4396,7 +4366,7 @@ class ShiftEquipmentCheckItem(Base):
     lot_number = Column(String(100), nullable=True)
     serial_found = Column(String(100), nullable=True)
     lot_found = Column(String(100), nullable=True)
-    updated_serial = Column(Boolean, default=False, nullable=False)
+    updated_serial = Column(Boolean, default=False, nullable=False, server_default="0")
     photo_urls = Column(JSON, nullable=True)
     is_expired = Column(Boolean, default=False, nullable=False)
     expiration_date = Column(Date, nullable=True)

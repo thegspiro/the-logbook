@@ -229,11 +229,12 @@ class ApparatusType(Base):
         Enum(ApparatusCategory, values_callable=lambda x: [e.value for e in x]),
         default=ApparatusCategory.FIRE,
         nullable=False,
+        server_default="fire",
     )
 
     # System vs Custom
     is_system = Column(
-        Boolean, default=False, nullable=False
+        Boolean, default=False, nullable=False, server_default="0"
     )  # System types can't be deleted
     default_type = Column(
         Enum(DefaultApparatusType, values_callable=lambda x: [e.value for e in x]),
@@ -246,7 +247,7 @@ class ApparatusType(Base):
     sort_order = Column(Integer, default=0)  # Display order
 
     # Status
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -296,20 +297,24 @@ class ApparatusStatus(Base):
     description = Column(Text, nullable=True)
 
     # System vs Custom
-    is_system = Column(Boolean, default=False, nullable=False)
+    is_system = Column(Boolean, default=False, nullable=False, server_default="0")
     default_status = Column(
         Enum(DefaultApparatusStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
 
     # Behavior flags
-    is_available = Column(Boolean, default=True, nullable=False)  # Can respond to calls
-    is_operational = Column(Boolean, default=True, nullable=False)  # Is functioning
+    is_available = Column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )  # Can respond to calls
+    is_operational = Column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )  # Is functioning
     requires_reason = Column(
-        Boolean, default=False, nullable=False
+        Boolean, default=False, nullable=False, server_default="0"
     )  # Needs explanation when set
     is_archived_status = Column(
-        Boolean, default=False, nullable=False
+        Boolean, default=False, nullable=False, server_default="0"
     )  # Marks apparatus as archived (sold/disposed)
 
     # Display
@@ -320,7 +325,7 @@ class ApparatusStatus(Base):
     sort_order = Column(Integer, default=0)
 
     # Status
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -511,7 +516,7 @@ class Apparatus(Base):
     # Sale/Disposal Information
     # ===========================================
     is_archived = Column(
-        Boolean, default=False, nullable=False
+        Boolean, default=False, nullable=False, server_default="0"
     )  # Moved to "Previously Owned"
     archived_at = Column(DateTime(timezone=True), nullable=True)
     archived_by = Column(
@@ -533,12 +538,14 @@ class Apparatus(Base):
     # ===========================================
     # NFPA Compliance
     # ===========================================
-    nfpa_tracking_enabled = Column(Boolean, default=False, nullable=False)
+    nfpa_tracking_enabled = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # ===========================================
     # Equipment Check Deficiency Tracking
     # ===========================================
-    has_deficiency = Column(Boolean, default=False, nullable=False)
+    has_deficiency = Column(Boolean, default=False, nullable=False, server_default="0")
     deficiency_since = Column(DateTime(timezone=True), nullable=True)
 
     # ===========================================
@@ -680,10 +687,11 @@ class ApparatusCustomField(Base):
         Enum(CustomFieldType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=CustomFieldType.TEXT,
+        server_default="text",
     )
 
     # Configuration
-    is_required = Column(Boolean, default=False, nullable=False)
+    is_required = Column(Boolean, default=False, nullable=False, server_default="0")
     default_value = Column(Text, nullable=True)  # Default value as string
     placeholder = Column(String(200), nullable=True)  # Input placeholder
 
@@ -705,14 +713,14 @@ class ApparatusCustomField(Base):
     # Display
     sort_order = Column(Integer, default=0)
     show_in_list = Column(
-        Boolean, default=False, nullable=False
+        Boolean, default=False, nullable=False, server_default="0"
     )  # Show in apparatus list view
     show_in_detail = Column(
-        Boolean, default=True, nullable=False
+        Boolean, default=True, nullable=False, server_default="1"
     )  # Show in detail view
 
     # Status
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Timestamps
     created_by = Column(
@@ -763,7 +771,6 @@ class ApparatusPhoto(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # File Information
@@ -781,7 +788,9 @@ class ApparatusPhoto(Base):
     photo_type = Column(
         String(50), nullable=True
     )  # exterior, interior, damage, detail, etc.
-    is_primary = Column(Boolean, default=False, nullable=False)  # Primary display photo
+    is_primary = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )  # Primary display photo
 
     # Timestamps
     uploaded_by = Column(
@@ -827,7 +836,6 @@ class ApparatusDocument(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # File Information
@@ -899,10 +907,11 @@ class ApparatusMaintenanceType(Base):
         Enum(MaintenanceCategory, values_callable=lambda x: [e.value for e in x]),
         default=MaintenanceCategory.PREVENTIVE,
         nullable=False,
+        server_default="preventive",
     )
 
     # System vs Custom
-    is_system = Column(Boolean, default=False, nullable=False)
+    is_system = Column(Boolean, default=False, nullable=False, server_default="0")
 
     # Scheduling
     default_interval_value = Column(
@@ -920,7 +929,9 @@ class ApparatusMaintenanceType(Base):
     )  # Alternative: every X engine hours
 
     # NFPA
-    is_nfpa_required = Column(Boolean, default=False, nullable=False)
+    is_nfpa_required = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     nfpa_reference = Column(String(100), nullable=True)  # e.g., "NFPA 1911 Section 5.2"
 
     # Applicability
@@ -930,7 +941,7 @@ class ApparatusMaintenanceType(Base):
     sort_order = Column(Integer, default=0)
 
     # Status
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -981,25 +992,21 @@ class ApparatusMaintenance(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     maintenance_type_id = Column(
         String(36),
         ForeignKey("apparatus_maintenance_types.id"),
         nullable=False,
-        index=True,
     )
     component_id = Column(
         String(36),
         ForeignKey("apparatus_components.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     service_provider_id = Column(
         String(36),
         ForeignKey("apparatus_service_providers.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # Scheduling
@@ -1014,8 +1021,8 @@ class ApparatusMaintenance(Base):
     performed_by = Column(String(200), nullable=True)  # External vendor/person name
 
     # Status
-    is_completed = Column(Boolean, default=False, nullable=False)
-    is_overdue = Column(Boolean, default=False, nullable=False)
+    is_completed = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_overdue = Column(Boolean, default=False, nullable=False, server_default="0")
 
     # Details
     description = Column(Text, nullable=True)
@@ -1049,7 +1056,7 @@ class ApparatusMaintenance(Base):
     # a vehicle that has years of prior service history).  occurred_date is the
     # authoritative date the work actually happened; created_at remains the date
     # the record was entered into the system.
-    is_historic = Column(Boolean, default=False, nullable=False)
+    is_historic = Column(Boolean, default=False, nullable=False, server_default="0")
     occurred_date = Column(
         Date, nullable=True
     )  # Actual date of work (may differ from created_at)
@@ -1115,7 +1122,6 @@ class ApparatusFuelLog(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Fuel Details
@@ -1132,7 +1138,7 @@ class ApparatusFuelLog(Base):
     hours_at_fill = Column(Numeric(10, 2), nullable=True)
 
     # Fill Details
-    is_full_tank = Column(Boolean, default=True, nullable=False)
+    is_full_tank = Column(Boolean, default=True, nullable=False, server_default="1")
     station_name = Column(String(200), nullable=True)
     station_address = Column(Text, nullable=True)
 
@@ -1189,7 +1195,7 @@ class EvocLevel(Base):
 
     # Cumulative behavior: when True, holding this level also grants all
     # lower-numbered levels. Set False for local regulation exceptions.
-    is_cumulative = Column(Boolean, default=True, nullable=False)
+    is_cumulative = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Link to the training program that certifies this level
     training_program_id = Column(
@@ -1198,9 +1204,9 @@ class EvocLevel(Base):
         nullable=True,
     )
 
-    is_system = Column(Boolean, default=False, nullable=False)
-    sort_order = Column(Integer, default=0, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_system = Column(Boolean, default=False, nullable=False, server_default="0")
+    sort_order = Column(Integer, default=0, nullable=False, server_default="0")
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -1252,13 +1258,11 @@ class ApparatusOperator(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # EVOC certification level achieved by this operator
@@ -1269,7 +1273,7 @@ class ApparatusOperator(Base):
     )
 
     # Certification
-    is_certified = Column(Boolean, default=True, nullable=False)
+    is_certified = Column(Boolean, default=True, nullable=False, server_default="1")
     certification_date = Column(Date, nullable=True)
     certification_expiration = Column(Date, nullable=True)
     certified_by = Column(
@@ -1278,16 +1282,20 @@ class ApparatusOperator(Base):
 
     # License Requirements
     license_type_required = Column(String(50), nullable=True)  # CDL, Class B, etc.
-    license_verified = Column(Boolean, default=False, nullable=False)
+    license_verified = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     license_verified_date = Column(Date, nullable=True)
 
     # Restrictions
-    has_restrictions = Column(Boolean, default=False, nullable=False)
+    has_restrictions = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     restrictions = Column(JSON, nullable=True)  # Array of restriction objects
     restriction_notes = Column(Text, nullable=True)
 
     # Status
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Notes
     notes = Column(Text, nullable=True)
@@ -1349,7 +1357,6 @@ class ApparatusEquipment(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Equipment Details (can be linked or standalone)
@@ -1357,7 +1364,7 @@ class ApparatusEquipment(Base):
 
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
-    quantity = Column(Integer, default=1, nullable=False)
+    quantity = Column(Integer, default=1, nullable=False, server_default="1")
 
     # Location on apparatus
     location_on_apparatus = Column(
@@ -1366,10 +1373,10 @@ class ApparatusEquipment(Base):
 
     # Type
     is_mounted = Column(
-        Boolean, default=False, nullable=False
+        Boolean, default=False, nullable=False, server_default="0"
     )  # Permanently mounted vs removable
     is_required = Column(
-        Boolean, default=False, nullable=False
+        Boolean, default=False, nullable=False, server_default="0"
     )  # Required to be on apparatus
 
     # Tracking
@@ -1377,7 +1384,9 @@ class ApparatusEquipment(Base):
     asset_tag = Column(String(50), nullable=True)
 
     # Status
-    is_present = Column(Boolean, default=True, nullable=False)  # Currently on apparatus
+    is_present = Column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )  # Currently on apparatus
 
     # Notes
     notes = Column(Text, nullable=True)
@@ -1428,11 +1437,8 @@ class ApparatusLocationHistory(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
-    location_id = Column(
-        String(36), ForeignKey("locations.id"), nullable=False, index=True
-    )
+    location_id = Column(String(36), ForeignKey("locations.id"), nullable=False)
 
     # Assignment Period
     assigned_date = Column(DateTime(timezone=True), nullable=False)
@@ -1484,11 +1490,8 @@ class ApparatusStatusHistory(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
-    status_id = Column(
-        String(36), ForeignKey("apparatus_statuses.id"), nullable=False, index=True
-    )
+    status_id = Column(String(36), ForeignKey("apparatus_statuses.id"), nullable=False)
 
     # Status Change Details
     changed_at = Column(
@@ -1544,7 +1547,6 @@ class ApparatusNFPACompliance(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # NFPA Standard
@@ -1553,7 +1555,7 @@ class ApparatusNFPACompliance(Base):
     requirement_description = Column(Text, nullable=False)
 
     # Compliance Status
-    is_compliant = Column(Boolean, default=False, nullable=False)
+    is_compliant = Column(Boolean, default=False, nullable=False, server_default="0")
     compliance_status = Column(
         String(50), default="pending"
     )  # compliant, non_compliant, pending, exempt
@@ -1608,7 +1610,6 @@ class ApparatusReportConfig(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Report Details
@@ -1619,7 +1620,7 @@ class ApparatusReportConfig(Base):
     )  # fleet_status, maintenance, cost_analysis, custom
 
     # Schedule
-    is_scheduled = Column(Boolean, default=False, nullable=False)
+    is_scheduled = Column(Boolean, default=False, nullable=False, server_default="0")
     schedule_frequency = Column(
         String(50), nullable=True
     )  # daily, weekly, monthly, quarterly, yearly
@@ -1641,7 +1642,9 @@ class ApparatusReportConfig(Base):
     )  # Specific apparatus to include (null = all)
     include_type_ids = Column(JSON, nullable=True)  # Specific types to include
     include_status_ids = Column(JSON, nullable=True)  # Specific statuses to include
-    include_archived = Column(Boolean, default=False, nullable=False)
+    include_archived = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Report Fields
     fields_to_include = Column(JSON, nullable=True)  # Array of field names to include
@@ -1658,7 +1661,7 @@ class ApparatusReportConfig(Base):
     )  # Array of email addresses or user_ids
 
     # Status
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Timestamps
     created_by = Column(
@@ -1697,7 +1700,6 @@ class ApparatusServiceProvider(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Provider Identity
@@ -1720,7 +1722,7 @@ class ApparatusServiceProvider(Base):
     )  # List of ComponentType values they service
     certifications = Column(JSON, nullable=True)  # List of certifications held
     is_emergency_service = Column(
-        Boolean, default=False, nullable=False
+        Boolean, default=False, nullable=False, server_default="0"
     )  # Available for emergency repairs
 
     # Business Details
@@ -1729,7 +1731,7 @@ class ApparatusServiceProvider(Base):
     tax_id = Column(String(50), nullable=True)
 
     # Preference
-    is_preferred = Column(Boolean, default=False, nullable=False)
+    is_preferred = Column(Boolean, default=False, nullable=False, server_default="0")
     rating = Column(Integer, nullable=True)  # 1-5 star rating
 
     # Notes
@@ -1737,7 +1739,7 @@ class ApparatusServiceProvider(Base):
     contract_info = Column(Text, nullable=True)  # Contract terms, SLAs, etc.
 
     # Status
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Archive (soft-delete for compliance — providers are never hard-deleted)
     archived_at = Column(DateTime(timezone=True), nullable=True)
@@ -1803,7 +1805,6 @@ class ApparatusComponent(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Component Identity
@@ -1812,6 +1813,7 @@ class ApparatusComponent(Base):
         Enum(ComponentType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ComponentType.OTHER,
+        server_default="other",
     )
     description = Column(Text, nullable=True)
 
@@ -1830,6 +1832,7 @@ class ApparatusComponent(Base):
         Enum(ComponentCondition, values_callable=lambda x: [e.value for e in x]),
         default=ComponentCondition.GOOD,
         nullable=False,
+        server_default="good",
     )
     last_serviced_date = Column(Date, nullable=True)
     last_inspected_date = Column(Date, nullable=True)
@@ -1839,7 +1842,7 @@ class ApparatusComponent(Base):
 
     # Display
     sort_order = Column(Integer, default=0)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Archive (soft-delete)
     archived_at = Column(DateTime(timezone=True), nullable=True)
@@ -1904,13 +1907,11 @@ class ApparatusComponentNote(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     component_id = Column(
         String(36),
         ForeignKey("apparatus_components.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Note Details
@@ -1920,16 +1921,19 @@ class ApparatusComponentNote(Base):
         Enum(NoteType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=NoteType.OBSERVATION,
+        server_default="observation",
     )
     severity = Column(
         Enum(NoteSeverity, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=NoteSeverity.INFO,
+        server_default="info",
     )
     status = Column(
         Enum(NoteStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=NoteStatus.OPEN,
+        server_default="open",
     )
 
     # Service Provider (who did or will do the work)
@@ -2007,13 +2011,11 @@ class EquipmentCheckTemplate(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     apparatus_id = Column(
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
     apparatus_type = Column(String(50), nullable=True)
 
@@ -2021,7 +2023,7 @@ class EquipmentCheckTemplate(Base):
     description = Column(Text, nullable=True)
     check_timing = Column(String(30), nullable=False)  # start_of_shift, end_of_shift
     template_type = Column(
-        String(30), nullable=False, default="equipment"
+        String(30), nullable=False, default="equipment", server_default="equipment"
     )  # equipment, vehicle, combined
     assigned_positions = Column(JSON, nullable=True)  # e.g. ["officer","driver"]
     is_active = Column(Boolean, default=True, nullable=False)
@@ -2069,19 +2071,20 @@ class CheckTemplateCompartment(Base):
         String(36),
         ForeignKey("equipment_check_templates.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     sort_order = Column(Integer, default=0, nullable=False)
     image_url = Column(String(500), nullable=True)
-    is_header = Column(Boolean, default=False, nullable=False)
+    is_header = Column(Boolean, default=False, nullable=False, server_default="0")
     # Storage container kind. Holds either a known preset key
     # (compartment, bag, pack, cabinet, drawer, shelf, box, kit, pouch,
     # tray, case) or a department's own custom label. Lets each
     # department describe where equipment lives in their own terms
     # (e.g. a "pack" inside a "bag" inside a "compartment").
-    container_type = Column(String(50), nullable=False, default="compartment")
+    container_type = Column(
+        String(50), nullable=False, default="compartment", server_default="compartment"
+    )
     parent_compartment_id = Column(
         String(36),
         ForeignKey("check_template_compartments.id", ondelete="SET NULL"),
@@ -2134,7 +2137,6 @@ class CheckTemplateItem(Base):
         String(36),
         ForeignKey("check_template_compartments.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     equipment_id = Column(
         String(36),
@@ -2201,13 +2203,11 @@ class TemplateChangeLog(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     template_id = Column(
         String(36),
         ForeignKey("equipment_check_templates.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),

@@ -59,7 +59,6 @@ class SavedReport(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Configuration

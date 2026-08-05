@@ -94,12 +94,13 @@ class ScreeningRequirement(Base):
         nullable=True,
         comment="JSON list of role names this requirement applies to.",
     )
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
     grace_period_days = Column(
         Integer,
         default=30,
         nullable=False,
         comment="Days past due before flagging non-compliant.",
+        server_default="30",
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -168,6 +169,7 @@ class ScreeningRecord(Base):
         ),
         nullable=False,
         default=ScreeningStatus.SCHEDULED,
+        server_default="scheduled",
     )
     scheduled_date = Column(Date, nullable=True)
     completed_date = Column(Date, nullable=True)

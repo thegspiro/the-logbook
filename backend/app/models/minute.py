@@ -500,8 +500,9 @@ class MinutesTemplate(Base):
         SQLEnum(MinutesMeetingType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MinutesMeetingType.BUSINESS,
+        server_default="business",
     )
-    is_default = Column(Boolean, nullable=False, default=False)
+    is_default = Column(Boolean, nullable=False, default=False, server_default="0")
 
     # Sections definition: JSON array of {order, key, title, default_content, required}
     sections = Column(JSON, nullable=False)
@@ -550,6 +551,7 @@ class MeetingMinutes(Base):
         SQLEnum(MinutesMeetingType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MinutesMeetingType.BUSINESS,
+        server_default="business",
     )
     meeting_date = Column(DateTime(timezone=True), nullable=False)
     location = Column(String(300), nullable=True)
@@ -603,6 +605,7 @@ class MeetingMinutes(Base):
         SQLEnum(MinutesStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MinutesStatus.DRAFT,
+        server_default="draft",
     )
     submitted_at = Column(DateTime(timezone=True), nullable=True)
     submitted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
@@ -716,7 +719,7 @@ class Motion(Base):
     )
 
     # Motion details
-    order = Column(Integer, nullable=False, default=0)
+    order = Column(Integer, nullable=False, default=0, server_default="0")
     motion_text = Column(Text, nullable=False)
     moved_by = Column(String(200), nullable=True)
     seconded_by = Column(String(200), nullable=True)
@@ -727,6 +730,7 @@ class Motion(Base):
         SQLEnum(MotionStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=MotionStatus.PASSED,
+        server_default="passed",
     )
     votes_for = Column(Integer, nullable=True)
     votes_against = Column(Integer, nullable=True)
@@ -773,6 +777,7 @@ class ActionItem(Base):
         SQLEnum(ActionItemPriority, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ActionItemPriority.MEDIUM,
+        server_default="medium",
     )
 
     # Status tracking
@@ -782,6 +787,7 @@ class ActionItem(Base):
         ),
         nullable=False,
         default=MinutesActionItemStatus.PENDING,
+        server_default="pending",
     )
     completed_at = Column(DateTime(timezone=True), nullable=True)
     completion_notes = Column(Text, nullable=True)
