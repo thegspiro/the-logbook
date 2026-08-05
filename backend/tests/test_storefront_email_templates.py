@@ -404,3 +404,172 @@ class TestPerformance:
 
         assert len(notifier._capture) == 5
         assert reads == 1
+
+
+class TestPartialAndAwkwardEdits:
+    """The states an admin lands in halfway through editing."""
+
+    async def test_an_edited_html_body_with_no_text_body_keeps_the_coded_text(
+        self, db_session
+    ):
+        """Mismatched, but a member with a text-only client still gets prose.
+
+        The alternative — an empty plain-text part — reads as a blank email in
+        the clients that refuse HTML.
+        """
+        org = await _store(db_session)
+        await _install(
+            db_session,
+            org,
+            EmailTemplateType.STOREFRONT_ORDER_CONFIRMATION,
+            subject="Custom {{order_number}}",
+            html="<p>Custom body</p>",
+            text=None,
+        )
+
+        preview = await _render(db_session, "order_confirmation", org)
+        assert preview["subject"] == "Custom ORD-2026-0042"
+        assert "Custom body" in preview["html_body"]
+        assert preview["text_body"].startswith("Order ORD-2026-0042 received")
+
+    async def test_a_blank_subject_falls_back_rather_than_sending_blank(
+        self, db_session
+    ):
+        """An email with no subject line looks like spam."""
+        org = await _store(db_session)
+        await _install(
+            db_session,
+            org,
+            EmailTemplateType.STOREFRONT_ORDER_CONFIRMATION,
+            subject="",
+            html="<p>Custom body</p>",
+        )
+
+        preview = await _render(db_session, "order_confirmation", org)
+        assert preview["subject"] == "Order ORD-2026-0042 received"
+
+    async def test_an_unknown_variable_renders_as_nothing_not_as_braces(
+        self, db_session
+    ):
+        """A typo'd variable must not reach a member as {{ordr_number}}."""
+        org = await _store(db_session)
+        await _install(
+            db_session,
+            org,
+            EmailTemplateType.STOREFRONT_ORDER_CONFIRMATION,
+            subject="Order {{order_number}}",
+            html="<p>Ref {{ordr_number}} — typo above.</p>",
+        )
+
+        body = (await _render(db_session, "order_confirmation", org))["html_body"]
+        assert "{{" not in body
+        assert "Ref  — typo above." in body
+
+    async def test_the_test_send_banner_survives_an_edited_template(self, db_session):
+        """The banner is injected into markup the admin arranged, not ours."""
+        sent = []
+
+        class _Capturing:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            async def send_email(self, **kwargs):
+                sent.append(kwargs)
+                return 1, 0
+
+        org = await _store(db_session)
+        await _install(
+            db_session,
+            org,
+            EmailTemplateType.STOREFRONT_ORDER_CONFIRMATION,
+            subject="Custom {{order_number}}",
+            html="<p>Custom body</p>",
+        )
+
+        preview_module.EmailService = _Capturing
+        try:
+            await StorefrontPreviewService(db_session).send_test(
+                "order_confirmation", org.id, "quinn@example.org"
+            )
+        finally:
+            preview_module.EmailService = _NoDelivery
+
+        body = sent[0]["html_body"]
+        assert sent[0]["subject"] == "[TEST] Custom ORD-2026-0042"
+        assert body.index("Test message.") < body.index("Custom body")
+
+    async def test_a_message_a_quartermaster_typed_uses_the_update_template(
+        self, db_session
+    ):
+        """It has no status, so the status phrases render empty rather than odd."""
+        org = await _store(db_session)
+        await _install(
+            db_session,
+            org,
+            EmailTemplateType.STOREFRONT_ORDER_UPDATE,
+            subject="Order {{order_number}}{{status_subject_suffix}}",
+            html="<p>{{order_number}}{{status_label_suffix}}: {{update_message}}</p>",
+        )
+
+        notifier = notify_module.StorefrontNotificationService(db_session, capture=[])
+        settings = await StorefrontService(db_session).get_settings(org.id)
+        order = preview_module._sample_order(settings)
+        await notifier.send_order_update(
+            order, "Your shirt is on the truck.", settings, org
+        )
+
+        message = notifier._capture[0]
+        assert message["subject"] == "Order ORD-2026-0042 update"
+        assert "ORD-2026-0042: Your shirt is on the truck." in message["html_body"]
+
+
+class TestOrgIsolation:
+    async def test_one_orgs_wording_never_reaches_anothers_members(self, db_session):
+        """The template cache is keyed by org as well as notice.
+
+        Every caller builds one service per organization today, so the notice
+        key alone would be enough — which is exactly why this is pinned. A
+        cache that is only correct because of how it happens to be called is
+        one refactor away from mailing org A's wording to org B.
+        """
+        org_a = await _store(db_session)
+        org_b = await _store(db_session)
+        await _install(
+            db_session,
+            org_a,
+            EmailTemplateType.STOREFRONT_ORDER_CONFIRMATION,
+            subject="A's subject {{order_number}}",
+            html="<p>A's wording</p>",
+        )
+
+        notifier = notify_module.StorefrontNotificationService(db_session, capture=[])
+        for org in (org_a, org_b):
+            settings = await StorefrontService(db_session).get_settings(org.id)
+            order = preview_module._sample_order(settings)
+            organization = await notifier._get_organization(org.id)
+            await notifier.send_order_confirmation(order, settings, organization)
+
+        first, second = notifier._capture
+        assert first["subject"] == "A's subject ORD-2026-0042"
+        assert "A's wording" in first["html_body"]
+        # B has no template of its own and must fall back, not inherit A's.
+        assert second["subject"] == "Order ORD-2026-0042 received"
+        assert "A's wording" not in second["html_body"]
+
+    async def test_a_template_is_only_found_in_its_own_org(self, db_session):
+        org_a = await _store(db_session)
+        org_b = await _store(db_session)
+        await _install(
+            db_session,
+            org_a,
+            EmailTemplateType.STOREFRONT_WINDOW_OPEN,
+            subject="A only",
+            html="<p>A only</p>",
+        )
+
+        assert (await _render(db_session, "window_opened", org_a))[
+            "subject"
+        ] == "A only"
+        assert (await _render(db_session, "window_opened", org_b))[
+            "subject"
+        ] == "Store orders are open — Fall job shirts"

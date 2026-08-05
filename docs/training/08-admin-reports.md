@@ -1427,4 +1427,70 @@ off-site copy survives wholesale deletion. See
 
 ---
 
+## Department Store Templates (2026-08-05)
+
+If your department runs the **Store** module, ten more templates appear in the
+list, all named **Store —**. They are the emails the store sends: order
+confirmations, status changes, payment receipts and reminders, the new-order
+alert to store managers, and the four order-window announcements.
+
+They are edited exactly like any other template. Three things about them are
+worth knowing before you start.
+
+### They are gated elsewhere
+
+Every store notice has an on/off switch in **Store → Admin → Settings →
+Notifications**. Editing a template does not switch its notice on. If you
+reword one and nobody receives it, check the switch — that is the usual cause.
+
+Nine switches govern ten templates: the cancellation notice has its own
+template but shares the "status changes" switch, so that "your order is ready"
+and "your order is cancelled" can be worded separately while being turned on
+and off together.
+
+### Some content arrives as a variable
+
+A store email is mostly a table of ordered items and a set of pay buttons.
+Neither can be typed into a template, so the store renders them and passes them
+in:
+
+| Variable | What appears there |
+|----------|--------------------|
+| `{{items_table_html}}` | The ordered items with sizes, embroidery text and prices |
+| `{{payment_block_html}}` | Balance due, a pay button per method the department accepts, and its payment instructions |
+| `{{receipt_footer_html}}` | The receipt footer from the store settings |
+| `{{window_extra_html}}` | Whatever that particular notice adds — a closing time, a vendor, a delivery date |
+
+The editor's variable list shows everything available for whichever template
+you have open, and the preview fills them with sample data. **Removing one
+removes that part of the email** — take `{{payment_block_html}}` out of the
+confirmation and members are no longer told how to pay.
+
+### Until you edit one, nothing changes
+
+A department that never opens these keeps receiving the wording the store has
+always sent. The built-in body is the fallback, not a placeholder, so accepting
+the defaults and never touching the screen produce the same email.
+
+The store's own **Preview** and **Send this to me** buttons (in Settings →
+Notifications) render whichever version is in force — so edit here, then go
+look there.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Reworded template, notice switched off | Nothing sends. The switch gates it, not the template |
+| Template deleted | The store falls back to its built-in wording. Next time this page loads, the template is recreated from the **shipped default** — not from what you deleted |
+| Template set inactive | Falls back to the built-in wording; your edit is kept. The reversible way to undo |
+| Subject left blank | The built-in subject is used rather than sending an email with no subject |
+| HTML edited, text body left blank | The built-in plain-text alternate is used, so text-only clients get old wording. Edit both or neither |
+| Variable name misspelled | Renders as empty. No braces reach the member — and no value does either |
+| Store templates in Schedule Email | Not offered. Each reads from a specific order, which does not exist when scheduled by hand |
+| Store template edited mid-run | Applies from the next scheduled run; a run in progress keeps the version it started with |
+| Cancellations in Message History | Rows predating this change carry `storefront_order_update`; later ones carry `storefront_order_cancelled` |
+| Store module not enabled | The ten templates still exist and are editable, but nothing sends them |
+
+---
+
 **Previous:** [Documents & Forms](./07-documents-forms.md) | **Next:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)

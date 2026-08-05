@@ -485,8 +485,36 @@ with the rest of the platform. Every send is logged to `message_history` under
 a `storefront_*` type, so Communications → Message History is the record of
 what actually went out.
 
-**Template lookups are cached per service instance.** A payment-reminder run
-walks up to 200 orders; without the cache each would re-read the same row.
+**Template lookups are cached per service instance**, keyed by
+`(organization_id, template_type)`. A payment-reminder run walks up to 200
+orders; without the cache each would re-read the same row. Every caller builds
+one service per organization, so the notice key alone would be enough — the org
+is in the key anyway, because a cache that is only correct because of how it
+happens to be called is one refactor away from mailing one department's wording
+to another's members.
+
+### Edge cases
+
+| Situation | What happens | Why |
+|---|---|---|
+| No template row for a notice | The coded body goes out | The fallback is the original email, not a stub |
+| Template set inactive | Falls back to the coded body | How you undo an edit without losing it |
+| Template row deleted | Falls back — until someone opens Email Templates, where `ensure_default_templates` recreates it from the **shipped default**, not the deleted edit | Deleting means "back to default", not "restore my version" |
+| Subject left blank | Coded subject is used | An email with no subject reads as spam |
+| HTML edited, `text_body` left empty | Coded plain-text alternate is used | Mismatched, but better than a blank email in a text-only client |
+| A variable is misspelled | Renders as empty, not as `{{ordr_number}}` | `_replace_variables` drops unknown names |
+| `{{payment_block_html}}` removed | Members are not told how to pay | Deliberate; the variable *is* the payment instructions |
+| Template edited while its switch is off | Nothing sends | Editing a notice does not switch it on — the switch is still the gate |
+| Storefront types in the Schedule Email picker | Excluded | Each reads entirely from an order that does not exist when scheduled; it would send "Order  received" over an empty table |
+| A template edited mid-run | Applies from the next run | The per-instance cache is read once; a scheduled run holds one instance |
+| Cancellations in Message History | Rows before this change carry `storefront_order_update`; rows after carry `storefront_order_cancelled` | The notice gained its own type when it became separately editable |
+| A member with no first name | `{{first_name}}` renders empty ("Hi ,") | Pre-existing in the coded body too; the store takes the name from the order |
+
+`storefront_order_update` is used by two things: an order's status change, and
+a note a quartermaster types on an order and sends. Reword it with both in
+mind — a template that opens "Status update:" reads oddly on a typed note.
+`{{status_label_suffix}}` and `{{status_subject_suffix}}` are empty for the
+typed note, so the default reads correctly either way.
 
 ---
 

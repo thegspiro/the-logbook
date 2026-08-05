@@ -284,6 +284,26 @@ me** show you *that* one — so edit here, then go look.
 Every send is recorded in **Message History** with a `storefront_` type, which
 is where you check whether a particular member's reminder actually went out.
 
+### When it doesn't do what you expect
+
+| What you did | What happens | What to do about it |
+|---|---|---|
+| Edited a template and nobody got it | The **switch** for that notice is off. Editing the words does not turn the notice on | Tick it in Settings → Notifications |
+| Deleted a template to "start over" | You get the shipped default back, not your earlier version | Use **Reset to Default**; it does the same thing without the round trip |
+| Set a template inactive | The store goes back to its built-in wording, and your edit is kept | This is the safe way to undo — nothing is lost |
+| Left the subject line blank | The built-in subject is used instead | An email with no subject looks like spam, so it will not send one |
+| Rewrote the HTML but not the plain-text version | Members on HTML clients (nearly all) see your version; the few on text-only clients see the old wording | Edit the text body too, or leave both alone |
+| Typo'd a variable — `{{ordr_number}}` | It renders as nothing. No braces reach the member, but no order number does either | Copy variable names from the list in the editor |
+| Removed `{{payment_block_html}}` | Members are no longer told how to pay | That is what the variable is; put it back |
+| Cannot find a store notice in **Schedule Email** | They are excluded on purpose | These are raised by the store against a real order. Scheduled by hand there is no order, so it would send "Order  received" over an empty table |
+| Searching Message History for cancellations | Older rows say `storefront_order_update`, newer ones say `storefront_order_cancelled` | The cancellation notice got its own type when it became separately editable. Search both across that date |
+| Email says "Hi ," with no name | The order has no first name on it | Check the member's profile has a first name |
+
+One more worth knowing: **Order Status Change covers two emails** — the
+automatic "your order is now ready for pickup", and a note you type on an order
+and send. They share a template. Word it so it reads for both; the shipped
+default does.
+
 Everything the store sends is logged in **Communications → Message History**
 under a `storefront_` type, so "did she ever get the reminder?" is a question
 with an answer.

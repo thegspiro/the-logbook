@@ -51,7 +51,7 @@ the Venmo app open with an amount prefilled.]**
 
 ---
 
-## CHAPTER 2: Setup — Two Switches, Not One (2:00 – 5:15)
+## CHAPTER 2: Setup — Two Switches, Not One (2:00 – 5:45)
 
 ### ENABLING THE MODULE (2:00 – 2:45)
 
@@ -102,7 +102,7 @@ error.]**
 > "And handles get checked when you save. Mistype a cashtag and you'll hear
 > about it, rather than wondering next month why nobody used Cash App."
 
-### WHAT THE STORE EMAILS (3:30 – 5:15)
+### WHAT THE STORE EMAILS (3:30 – 5:45)
 
 **[SCREEN: Scrolling down Settings to the Notifications panel — two groups,
 nine switches, each with a line of description under it.]**
@@ -189,9 +189,22 @@ first line.]**
 
 **[CALLOUT: "Delete a variable, delete that part of the email."]**
 
-> "Two gotchas. Deleting a variable really deletes it: take the payment block
-> out of the confirmation and nobody gets told how to pay. And **Reset to
-> default** puts the original back if you've painted yourself into a corner."
+> "Deleting a variable really deletes it: take the payment block out of the
+> confirmation and nobody gets told how to pay. **Reset to default** puts the
+> original back if you've painted yourself into a corner."
+
+**[CALLOUT: "Editing the words doesn't switch the notice on."]**
+
+> "And the one that catches everybody: **editing a template doesn't turn the
+> notice on**. Reword something beautifully, nobody gets it, and it's because
+> the switch back in Settings is still off. Words here, on-or-off there."
+
+**[SCREEN: Deleting a template, then reloading the Email Templates page to show
+it reappear with the default wording.]**
+
+> "Don't delete one hoping to start over — you'll get the shipped default back,
+> not your earlier draft. If you want a safe undo, set it **inactive**: the
+> store goes back to its built-in wording and your edit's still sitting there."
 
 > "Until you touch these, nothing changes — you keep getting the wording the
 > store's always sent. And whichever version's live, that Preview button back in
@@ -201,9 +214,9 @@ first line.]**
 
 ---
 
-## CHAPTER 3: The Catalog — Products, Sizes, Names (5:15 – 8:00)
+## CHAPTER 3: The Catalog — Products, Sizes, Names (5:45 – 8:30)
 
-### CREATING A PRODUCT (5:15 – 6:00)
+### CREATING A PRODUCT (5:45 – 6:30)
 
 **[SCREEN: Catalog tab → New item. Filling in "Department Job Shirt", $45,
 taxable, max 2 per member. Status left on Draft.]**
@@ -219,7 +232,7 @@ taxable, max 2 per member. Status left on Draft.]**
 
 > "Leave it on **Draft** while you build. Draft is invisible to members."
 
-### OPTIONS (6:00 – 6:30)
+### OPTIONS (6:30 – 7:00)
 
 **[SCREEN: Add option, adding S through 3XL, setting +3.00 on 2XL and 3XL.]**
 
@@ -229,7 +242,7 @@ taxable, max 2 per member. Status left on Draft.]**
 > delta**. Plus three dollars on 2XL, because your vendor charges you plus
 > three."
 
-### PERSONALIZATION (6:30 – 7:30)
+### PERSONALIZATION (7:00 – 8:00)
 
 **[SCREEN: Enabling personalization — label "Name for embroidery", max 20
 characters, $8.00 surcharge. Then the member view showing the text box.]**
@@ -247,7 +260,7 @@ lines rather than one line of quantity 2.]**
 > never merge into one line of quantity two — they're physically different
 > items, and your vendor needs them listed separately."
 
-### PHOTOS (7:30 – 8:00)
+### PHOTOS (8:00 – 8:30)
 
 **[SCREEN: Uploading a job shirt photo, seeing it appear in the grid.]**
 
@@ -631,3 +644,4 @@ station.]**
 | 13k | Preview Your Store Email Before You Send It | Chapter 2 |
 | 13l | Mail Yourself a Test Before Anyone Else Gets It | Chapter 2 |
 | 13m | Rewrite What Your Store Emails Say | Chapter 2 |
+| 13n | Why Your Reworded Email Never Arrived | Chapter 2 |

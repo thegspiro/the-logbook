@@ -26,7 +26,7 @@ Welcome to the training documentation for The Logbook. These guides are designed
 | 15 | [Prospective Members Pipeline](./15-prospective-members.md) | Pipeline stages, applicant tracking, document collection, interviews, election packages, member conversion |
 | 16 | [Integrations](./16-integrations.md) | Salesforce, calendar sync, Slack/Discord/Teams, PayPal store reconciliation, weather alerts, ePCR import, NEMSIS/NFIRS export, webhooks |
 | 17 | [Privacy & Your Data](./17-privacy-data-rights.md) | Privacy choices/consent, personal-data export, what officers can see, records retention, anonymizing departed members, records requests |
-| 18 | [Department Store](./18-storefront.md) | Store settings, catalog & options, personalization, product photos, order windows, member ordering, payment buttons (Venmo/PayPal/Cash App/Zelle), payment rules for unpaid orders, recording payment, PayPal reconciliation, vendor order & embroidery tallies |
+| 18 | [Department Store](./18-storefront.md) | Store settings, catalog & options, personalization, product photos, order windows, member ordering, payment buttons (Venmo/PayPal/Cash App/Zelle), payment rules for unpaid orders, recording payment, PayPal reconciliation, vendor order & embroidery tallies, notification switches, previews & test sends, rewording the store's emails |
 
 ---
 

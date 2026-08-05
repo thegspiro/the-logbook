@@ -211,6 +211,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `scheduled_emails`. Note for anyone reading a send log: cancellations
     previously recorded as `storefront_order_update` and now record as
     `storefront_order_cancelled`.
+  - **Storefront notices are excluded from the Schedule Email picker.** Each
+    reads entirely from an order or window that does not exist when one is
+    scheduled by hand — the recipient would get "Order&nbsp;&nbsp;received"
+    over an empty table. They are raised by the store, and now editable, but
+    never scheduled.
+  - The template cache is keyed by `(organization_id, template_type)`. Every
+    caller builds one service per org, so the notice alone would be enough
+    today — but a cache that is only correct because of how it happens to be
+    called is one refactor away from mailing one department's wording to
+    another's members.
+  - Behaviour at the awkward edges, all pinned by tests: a blank subject or an
+    empty text body falls back to the built-in one rather than sending a
+    subject-less or blank-bodied email; a misspelled variable renders as
+    nothing rather than reaching a member as `{{ordr_number}}`; deleting a
+    template restores the shipped default on the next visit to the editor,
+    while marking it inactive is the reversible undo; and editing a template
+    never switches its notice on — the switch still gates it.
 
 **Fixed**
 

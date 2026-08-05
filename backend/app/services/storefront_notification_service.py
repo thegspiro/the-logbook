@@ -54,7 +54,7 @@ the module raised on its own.
 
 import html as _html
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
 from sqlalchemy import select
@@ -123,7 +123,7 @@ class StorefrontNotificationService:
         """
         self.db = db
         self._capture = capture
-        self._templates: Dict[str, Optional[EmailTemplate]] = {}
+        self._templates: Dict[Tuple[str, str], Optional[EmailTemplate]] = {}
 
     # ------------------------------------------------------------------
     # Recipients
@@ -377,11 +377,17 @@ class StorefrontNotificationService:
 
         Cached per service instance: a payment-reminder run walks up to 200
         orders, and each would otherwise re-read the same row.
+
+        The cache key includes the organization. Today every caller builds one
+        service per org, so the id alone would do — but a cache that is only
+        correct because of how it happens to be called is one refactor away
+        from serving org A's wording to org B's members.
         """
         if not organization_id:
             return None
-        if template_type in self._templates:
-            return self._templates[template_type]
+        key = (str(organization_id), template_type)
+        if key in self._templates:
+            return self._templates[key]
 
         template: Optional[EmailTemplate] = None
         try:
@@ -391,7 +397,7 @@ class StorefrontNotificationService:
             service = EmailTemplateService(self.db)
             template = await service.get_template(organization_id, enum_type)
         except ValueError:
-            self._templates[template_type] = None
+            self._templates[key] = None
             return None
         except Exception as exc:
             # A template that will not load must not stop the notice: the
@@ -400,7 +406,7 @@ class StorefrontNotificationService:
                 f"Storefront template '{template_type}' failed to load, "
                 f"using the built-in body: {exc}"
             )
-        self._templates[template_type] = template
+        self._templates[key] = template
         return template
 
     async def _send(

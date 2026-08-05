@@ -117,6 +117,8 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Ordering windows, per-member limits, stock locking, vendor tallies
     - Payment tracking for Venmo / PayPal / Cash App / Zelle / cash / check
     - Per-department rules for what an unpaid order may do
+    - The nine notices, their switches, previews and test sends
+    - Editing the store's emails in Communications → Email Templates
     - Why the platform never takes a payment, and what that means for scope
     - Data model, permissions, exports, and design decisions
 
@@ -425,6 +427,8 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Department messages / announcements | [COMMUNICATIONS_MODULE.md](./COMMUNICATIONS_MODULE.md) |
 | Department store / merch orders | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md) |
 | Store payment buttons (Venmo/Cash App/Zelle) | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#payments) |
+| Store emails: switches, previews, test sends | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#notifications) |
+| Rewording a store email | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#wording-and-templates) |
 | PayPal store reconciliation | [STOREFRONT_PAYPAL.md](./STOREFRONT_PAYPAL.md) |
 | Public API (forms, events) | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) |
 | Election security | [module-audit/elections.md](./module-audit/elections.md), [BALLOT_FORENSICS_GUIDE.md](../BALLOT_FORENSICS_GUIDE.md) |
