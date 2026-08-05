@@ -268,6 +268,21 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
 
 ---
 
+### 🗄️ Database Schema
+
+**[DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)** ⭐ **Schema reference**
+- Every table, column, type, key, index and constraint — 232 tables, 3,989 columns
+- Complete foreign key map, grouped by the table each id points at
+- Naming and id conventions; the tables that are not directly org-scoped
+- Generated from the models: `cd backend && python scripts/generate_schema_docs.py`
+
+**[DATABASE_SCHEMA_DRIFT.md](./DATABASE_SCHEMA_DRIFT.md)**
+- Where `create_all()` (fresh installs) and `alembic upgrade head` (existing
+  installs) produce different databases, and which differences self-heal
+- Known durable divergences, with recommended fixes
+
+---
+
 ### 🛠️ Development & Operations
 
 10. **[ONBOARDING_FLOW.md](./ONBOARDING_FLOW.md)**
