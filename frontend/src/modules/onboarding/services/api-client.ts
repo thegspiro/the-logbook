@@ -23,6 +23,25 @@ interface RateLimitError {
   retry_after?: number | undefined;
 }
 
+export interface OnboardingStation {
+  name: string;
+  station_number?: string | undefined;
+  address?: string | undefined;
+  city?: string | undefined;
+  state?: string | undefined;
+  zip_code?: string | undefined;
+  phone?: string | undefined;
+  email?: string | undefined;
+}
+
+export interface OnboardingApparatus {
+  unit_number: string;
+  name?: string | undefined;
+  apparatus_type: string;
+  min_staffing: number;
+  positions: string[];
+}
+
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
   ready?: boolean | undefined;
@@ -375,6 +394,23 @@ class SecureApiClient {
     config: Record<string, unknown>;
   }): Promise<ApiResponse<{ success: boolean; message?: string | undefined }>> {
     return this.request('POST', '/onboarding/test/email', data, true);
+  }
+
+  /**
+   * Save additional stations.
+   * Creates Facility + Location records server-side; re-submitting replaces
+   * the records this step created rather than appending duplicates.
+   */
+  async saveStations(stations: OnboardingStation[]): Promise<ApiResponse<Record<string, unknown>>> {
+    return this.request('POST', '/onboarding/session/stations', { stations }, true);
+  }
+
+  /**
+   * Save apparatus for shift staffing.
+   * Same replace-my-own-rows behavior as saveStations.
+   */
+  async saveApparatus(apparatus: OnboardingApparatus[]): Promise<ApiResponse<Record<string, unknown>>> {
+    return this.request('POST', '/onboarding/session/apparatus', { apparatus }, true);
   }
 
   /**

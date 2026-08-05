@@ -28,6 +28,9 @@ import {
   Loader2,
   Rocket,
   PartyPopper,
+  UserCheck,
+  KeyRound,
+  FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { organizationService } from '../services/api';
@@ -46,6 +49,10 @@ const CATEGORY_STYLES: Record<string, { bgClass: string; textClass: string }> = 
 
 const ITEM_ICONS: Record<string, React.ReactNode> = {
   members: <Users className="w-5 h-5" />,
+  members_signed_in: <UserCheck className="w-5 h-5" />,
+  documents: <FileText className="w-5 h-5" />,
+  events: <Calendar className="w-5 h-5" />,
+  mfa: <KeyRound className="w-5 h-5" />,
   roles: <Shield className="w-5 h-5" />,
   apparatus: <Truck className="w-5 h-5" />,
   locations: <MapPin className="w-5 h-5" />,
@@ -67,6 +74,7 @@ const DepartmentSetupPage: React.FC = () => {
   const [completedCount, setCompletedCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [acknowledgingKey, setAcknowledgingKey] = useState<string | null>(null);
 
   useEffect(() => {
     void loadChecklist();
@@ -83,6 +91,21 @@ const DepartmentSetupPage: React.FC = () => {
       toast.error('Failed to load setup checklist');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAcknowledge = async (item: SetupChecklistItem) => {
+    setAcknowledgingKey(item.key);
+    try {
+      await organizationService.acknowledgeSetupChecklistItem(item.key, !item.is_complete);
+      await loadChecklist();
+      toast.success(
+        item.is_complete ? `"${item.title}" reopened` : `"${item.title}" marked reviewed`
+      );
+    } catch {
+      toast.error('Failed to update that step');
+    } finally {
+      setAcknowledgingKey(null);
     }
   };
 
@@ -160,7 +183,13 @@ const DepartmentSetupPage: React.FC = () => {
         </p>
         <div className="space-y-3">
           {essentialItems.map(item => (
-            <SetupCard key={item.key} item={item} onNavigate={(path) => void navigate(path)} />
+            <SetupCard
+              key={item.key}
+              item={item}
+              onNavigate={(path) => void navigate(path)}
+              onAcknowledge={(target) => void handleAcknowledge(target)}
+              isAcknowledging={acknowledgingKey === item.key}
+            />
           ))}
         </div>
       </div>
@@ -174,7 +203,13 @@ const DepartmentSetupPage: React.FC = () => {
           </p>
           <div className="space-y-3">
             {moduleItems.map(item => (
-              <SetupCard key={item.key} item={item} onNavigate={(path) => void navigate(path)} />
+              <SetupCard
+              key={item.key}
+              item={item}
+              onNavigate={(path) => void navigate(path)}
+              onAcknowledge={(target) => void handleAcknowledge(target)}
+              isAcknowledging={acknowledgingKey === item.key}
+            />
             ))}
           </div>
         </div>
@@ -187,17 +222,28 @@ const DepartmentSetupPage: React.FC = () => {
 interface SetupCardProps {
   item: SetupChecklistItem;
   onNavigate: (path: string) => void;
+  onAcknowledge: (item: SetupChecklistItem) => void;
+  isAcknowledging: boolean;
 }
 
-const SetupCard: React.FC<SetupCardProps> = ({ item, onNavigate }) => {
+const SetupCard: React.FC<SetupCardProps> = ({
+  item,
+  onNavigate,
+  onAcknowledge,
+  isAcknowledging,
+}) => {
   const styles = CATEGORY_STYLES[item.category] || CATEGORY_STYLES.essential;
   const icon = ITEM_ICONS[item.key] || <Circle className="w-5 h-5" />;
 
+  // A review item's "Mark reviewed" control is a real button, so the card
+  // itself can't be one — nesting interactive elements is invalid HTML and
+  // breaks keyboard navigation. The navigation target is its own button.
   return (
-    <button
-      onClick={() => onNavigate(item.path)}
-      className="w-full bg-theme-surface border border-theme-surface-border rounded-xl p-4 hover:border-red-500/30 transition-all group text-left"
-    >
+    <div className="w-full bg-theme-surface border border-theme-surface-border rounded-xl hover:border-red-500/30 transition-all group">
+      <button
+        onClick={() => onNavigate(item.path)}
+        className="w-full p-4 text-left"
+      >
       <div className="flex items-center gap-4">
         {/* Status Icon */}
         <div className="shrink-0">
@@ -225,7 +271,7 @@ const SetupCard: React.FC<SetupCardProps> = ({ item, onNavigate }) => {
                 Required
               </span>
             )}
-            {item.is_complete && item.count > 0 && item.key !== 'org_settings' && (
+            {item.is_complete && item.count > 0 && item.kind !== 'review' && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                 {item.count} {item.count === 1 ? 'item' : 'items'}
               </span>
@@ -237,7 +283,25 @@ const SetupCard: React.FC<SetupCardProps> = ({ item, onNavigate }) => {
         {/* Arrow */}
         <ChevronRight className="w-5 h-5 text-theme-text-muted group-hover:text-red-500 transition-colors shrink-0" />
       </div>
-    </button>
+      </button>
+
+      {item.kind === 'review' && (
+        <div className="px-4 pb-3 -mt-1 pl-18 flex items-center gap-3">
+          <button
+            onClick={() => onAcknowledge(item)}
+            disabled={isAcknowledging}
+            className="text-xs font-medium text-theme-text-secondary hover:text-red-500 underline underline-offset-2 disabled:opacity-50 mobile-touch-target"
+          >
+            {item.is_complete ? 'Mark as not reviewed' : 'Mark as reviewed'}
+          </button>
+          {!item.is_complete && (
+            <span className="text-[11px] text-theme-text-muted">
+              Nothing to count here — confirm once you have looked it over.
+            </span>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 

@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Contrast, Palette, AlertTriangle, Heart, Plus, Trash2, ShieldCheck, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService, userService } from '../services/api';
@@ -22,6 +22,15 @@ import { useRanks } from '../hooks/useRanks';
 
 type TabType = 'account' | 'password' | 'security' | 'emergency' | 'appearance' | 'notifications';
 
+const TAB_IDS: TabType[] = [
+  'account',
+  'password',
+  'security',
+  'emergency',
+  'appearance',
+  'notifications',
+];
+
 export const UserSettingsPage: React.FC = () => {
   const { user, loadUser } = useAuthStore();
   const { rankOptions } = useRanks();
@@ -32,8 +41,17 @@ export const UserSettingsPage: React.FC = () => {
     || user?.password_expired;
   const forceMfaSetup = (location.state as { forceMfaSetup?: boolean } | null)?.forceMfaSetup
     || user?.mfa_enrollment_required;
+  // Deep links land here from the department setup checklist
+  // (/account?tab=security for the MFA step), so honor ?tab= — but never over
+  // a forced password change or MFA enrollment, which must not be navigated
+  // away from.
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const initialTab: TabType = TAB_IDS.includes(requestedTab as TabType)
+    ? (requestedTab as TabType)
+    : 'account';
   const [activeTab, setActiveTab] = useState<TabType>(
-    forcePasswordChange ? 'password' : forceMfaSetup ? 'security' : 'account',
+    forcePasswordChange ? 'password' : forceMfaSetup ? 'security' : initialTab,
   );
 
   // Profile state

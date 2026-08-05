@@ -269,7 +269,7 @@ from app.models.notification import (
     NotificationRule,
     NotificationTrigger,
 )
-from app.models.onboarding import OnboardingChecklistItem, OnboardingStatus
+from app.models.onboarding import OnboardingStatus
 from app.models.operational_rank import OperationalRank
 from app.models.public_portal import (
     PublicPortalAccessLog,
@@ -357,7 +357,6 @@ __all__ = [
     "SeverityLevel",
     # Onboarding models
     "OnboardingStatus",
-    "OnboardingChecklistItem",
     # Email template models
     "EmailTemplate",
     "EmailAttachment",

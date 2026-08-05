@@ -30,7 +30,7 @@ from app.core.database import Base
 # User & Auth
 from app.models.user import Organization, User, Role, Session, user_roles
 from app.models.audit import AuditLog, AuditLogCheckpoint
-from app.models.onboarding import OnboardingStatus, OnboardingChecklistItem, OnboardingSessionModel
+from app.models.onboarding import OnboardingStatus, OnboardingSessionModel
 
 # Location
 from app.models.location import Location

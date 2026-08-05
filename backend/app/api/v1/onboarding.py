@@ -26,7 +26,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user
 from app.api.v1.email_test_helper import (
     test_cloudflare_email,
     test_gmail_oauth,
@@ -37,11 +36,9 @@ from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit
 from app.core.utils import safe_error_detail
 from app.models.onboarding import (
-    OnboardingChecklistItem,
     OnboardingSessionModel,
     OnboardingStatus,
 )
-from app.models.user import User
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
 from app.services.auth_service import AuthService
 from app.services.onboarding import OnboardingService
@@ -189,22 +186,6 @@ class DatabaseCheckResponse(BaseModel):
     error: str | None = None
 
 
-class ChecklistItemResponse(BaseModel):
-    """Response model for checklist item"""
-
-    id: str
-    title: str
-    description: str | None
-    category: str
-    priority: str
-    is_completed: bool
-    completed_at: str | None
-    documentation_link: str | None
-    estimated_time_minutes: int | None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class EmailTestRequest(BaseModel):
     """Request model for testing email configuration"""
 
@@ -289,6 +270,58 @@ class ITTeamRequest(BaseModel):
         default_factory=list, description="IT team members"
     )
     backup_access: dict[str, Any] = Field(..., description="Backup access information")
+
+
+class StationRequest(BaseModel):
+    """A single additional station collected during onboarding"""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    station_number: str | None = Field(None, max_length=50)
+    address: str | None = Field(None, max_length=255)
+    city: str | None = Field(None, max_length=100)
+    state: str | None = Field(None, max_length=50)
+    zip_code: str | None = Field(None, max_length=20)
+    phone: str | None = Field(None, max_length=20)
+    email: EmailStr | None = None
+
+
+class StationsRequest(BaseModel):
+    """Request model for saving additional stations"""
+
+    stations: list[StationRequest] = Field(
+        default_factory=list,
+        # 50 stations is far past any real department; the cap exists so a
+        # malformed or hostile payload cannot drive an unbounded write loop.
+        max_length=50,
+        description="Stations beyond the headquarters created at org setup",
+    )
+
+
+class ApparatusRequest(BaseModel):
+    """A single apparatus collected during onboarding"""
+
+    unit_number: str = Field(..., min_length=1, max_length=20)
+    name: str | None = Field(None, max_length=100)
+    apparatus_type: str = Field(default="engine", max_length=50)
+    min_staffing: int = Field(default=1, ge=1, le=20)
+    positions: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("apparatus_type")
+    @classmethod
+    def normalize_type(cls, v: str) -> str:
+        # Backend enums are lowercase by convention; the frontend sends the
+        # value it renders, which may be title-cased.
+        return v.strip().lower()
+
+
+class ApparatusListRequest(BaseModel):
+    """Request model for saving apparatus"""
+
+    apparatus: list[ApparatusRequest] = Field(
+        default_factory=list,
+        max_length=100,
+        description="Apparatus/vehicles for shift staffing",
+    )
 
 
 class SessionModulesRequest(BaseModel):
@@ -615,6 +648,50 @@ async def _persist_session_data_to_org(
         except Exception as e:
             logger.warning(f"Could not persist email config from onboarding: {e}")
 
+    # Persist file storage configuration. Without this the storage platform the
+    # admin picked — and any credentials they entered — died with the session,
+    # so a department that chose S3 silently ran on local disk.
+    storage_data = session_data.get("file_storage")
+    if storage_data and storage_data.get("platform"):
+        try:
+            import json
+
+            from app.core.security import decrypt_data
+            from app.schemas.organization import encrypt_settings_secrets
+
+            raw_config = {}
+            if storage_data.get("config_encrypted"):
+                raw_config = json.loads(decrypt_data(storage_data["config_encrypted"]))
+
+            # Map camelCase onboarding keys to snake_case org settings keys
+            storage_settings = {
+                "platform": storage_data["platform"],
+                "google_drive_client_id": raw_config.get("googleDriveClientId"),
+                "google_drive_client_secret": raw_config.get("googleDriveClientSecret"),
+                "google_drive_folder_id": raw_config.get("googleDriveFolderId"),
+                "onedrive_tenant_id": raw_config.get("oneDriveTenantId"),
+                "onedrive_client_id": raw_config.get("oneDriveClientId"),
+                "onedrive_client_secret": raw_config.get("oneDriveClientSecret"),
+                "sharepoint_site_url": raw_config.get("sharePointSiteUrl"),
+                "s3_access_key_id": raw_config.get("s3AccessKeyId"),
+                "s3_secret_access_key": raw_config.get("s3SecretAccessKey"),
+                "s3_bucket_name": raw_config.get("s3BucketName"),
+                "s3_region": raw_config.get("s3Region"),
+                "s3_endpoint_url": raw_config.get("s3EndpointUrl"),
+                "local_storage_path": raw_config.get("localStoragePath"),
+            }
+            storage_settings = {
+                k: v for k, v in storage_settings.items() if v is not None
+            }
+            org_settings["file_storage"] = storage_settings
+
+            org_settings = encrypt_settings_secrets(org_settings)
+            logger.info("Persisted file storage configuration from onboarding")
+        except Exception as e:
+            logger.warning(
+                f"Could not persist file storage config from onboarding: {e}"
+            )
+
     # Persist auth provider choice
     auth_data = session_data.get("auth")
     if auth_data and auth_data.get("platform"):
@@ -638,7 +715,8 @@ async def _persist_session_data_to_org(
     organization.settings = org_settings
     await db.flush()
     logger.info(
-        "Persisted session data (IT team, auth, modules) to Organization.settings"
+        "Persisted session data (IT team, email, file storage, auth, modules) "
+        "to Organization.settings"
     )
 
 
@@ -1098,8 +1176,10 @@ async def complete_onboarding(
     """
     Complete the onboarding process
 
-    Marks onboarding as finished and creates post-onboarding checklist.
-    Persists IT team and auth config from session data into Organization.settings.
+    Marks onboarding as finished. Persists IT team and auth config from session
+    data into Organization.settings. Remaining setup work is tracked by the
+    department setup checklist (``GET /organization/setup-checklist``), which
+    derives completion from live data rather than a static seeded list.
     """
     # Validate session
     session = await validate_session(request, db)
@@ -1121,7 +1201,7 @@ async def complete_onboarding(
     try:
         onboarding_status = await service.complete_onboarding(notes=request_data.notes)
 
-        # Commit all changes (org settings, onboarding status, checklist items)
+        # Commit all changes (org settings, onboarding status, seeded defaults)
         # before returning the response to ensure data is persisted
         await db.commit()
 
@@ -1134,81 +1214,12 @@ async def complete_onboarding(
                 if onboarding_status.completed_at
                 else None
             ),
-            "next_steps": "Review the post-onboarding checklist for additional configuration",
+            "next_steps": "Work through the department setup checklist at /setup",
         }
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
-
-
-@router.get("/checklist", response_model=list[ChecklistItemResponse])
-async def get_post_onboarding_checklist(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Get post-onboarding checklist
-
-    Returns list of recommended tasks to complete after onboarding.
-    Requires authentication (post-onboarding endpoint).
-    """
-    service = OnboardingService(db)
-    items = await service.get_post_onboarding_checklist()
-
-    return [
-        ChecklistItemResponse(
-            id=str(item.id),
-            title=item.title,
-            description=item.description,
-            category=item.category,
-            priority=item.priority,
-            is_completed=item.is_completed,
-            completed_at=item.completed_at.isoformat() if item.completed_at else None,
-            documentation_link=item.documentation_link,
-            estimated_time_minutes=item.estimated_time_minutes,
-        )
-        for item in items
-    ]
-
-
-@router.patch("/checklist/{item_id}/complete")
-async def mark_checklist_item_complete(
-    item_id: str,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Mark a checklist item as completed
-
-    Updates the completion status of a post-onboarding checklist item.
-    Requires authentication (post-onboarding endpoint).
-    """
-    from datetime import datetime
-
-    from sqlalchemy import select
-
-    # Find item
-    result = await db.execute(
-        select(OnboardingChecklistItem).where(OnboardingChecklistItem.id == item_id)
-    )
-    item = result.scalar_one_or_none()
-
-    if not item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Checklist item not found"
-        )
-
-    # Mark as completed
-    item.is_completed = True
-    item.completed_at = datetime.now(timezone.utc)
-    await db.commit()
-
-    return {
-        "message": "Checklist item marked as complete",
-        "item_id": item_id,
-        "title": item.title,
-    }
 
 
 @router.post(
@@ -1468,6 +1479,115 @@ async def save_it_team(
 
     return SessionDataResponse(
         success=True, message="IT team information saved successfully", step="it_team"
+    )
+
+
+@router.post("/session/stations", response_model=SessionDataResponse)
+async def save_session_stations(
+    request: Request, data: StationsRequest, db: AsyncSession = Depends(get_db)
+):
+    """
+    Create the department's additional stations.
+
+    Unlike the settings-shaped steps, this writes real Facility and Location
+    rows immediately — the organization already exists by this point, and a
+    station is only useful to the rest of the app once those records are in
+    place. The session keeps the ids so re-submitting this step replaces its
+    own rows instead of stacking duplicates.
+    """
+    session = await validate_session(request, db)
+
+    organization_id = (session.data or {}).get("department", {}).get("organization_id")
+    if not organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Organization must be created before adding stations",
+        )
+
+    service = OnboardingService(db)
+    previous_ids = (session.data or {}).get("stations", {}).get("facility_ids", [])
+
+    try:
+        created_ids = await service.replace_onboarding_stations(
+            organization_id=organization_id,
+            stations=[s.model_dump() for s in data.stations],
+            previous_facility_ids=previous_ids,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    session.data = session.data or {}
+    session.data["stations"] = {
+        "facility_ids": created_ids,
+        "count": len(created_ids),
+        "saved_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    onboarding_status = await service.get_onboarding_status()
+    if onboarding_status:
+        await service._mark_step_completed(onboarding_status, 2, "stations")
+
+    await db.commit()
+
+    return SessionDataResponse(
+        success=True,
+        message=f"Saved {len(created_ids)} station(s)",
+        step="stations",
+    )
+
+
+@router.post("/session/apparatus", response_model=SessionDataResponse)
+async def save_session_apparatus(
+    request: Request, data: ApparatusListRequest, db: AsyncSession = Depends(get_db)
+):
+    """
+    Create the department's apparatus for shift staffing.
+
+    Writes BasicApparatus rows immediately, with the same replace-my-own-rows
+    behavior as the stations step.
+    """
+    session = await validate_session(request, db)
+
+    organization_id = (session.data or {}).get("department", {}).get("organization_id")
+    if not organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Organization must be created before adding apparatus",
+        )
+
+    service = OnboardingService(db)
+    previous_ids = (session.data or {}).get("apparatus", {}).get("apparatus_ids", [])
+
+    try:
+        created_ids = await service.replace_onboarding_apparatus(
+            organization_id=organization_id,
+            apparatus=[a.model_dump() for a in data.apparatus],
+            previous_apparatus_ids=previous_ids,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
+    session.data = session.data or {}
+    session.data["apparatus"] = {
+        "apparatus_ids": created_ids,
+        "count": len(created_ids),
+        "saved_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    onboarding_status = await service.get_onboarding_status()
+    if onboarding_status:
+        await service._mark_step_completed(onboarding_status, 3, "apparatus")
+
+    await db.commit()
+
+    return SessionDataResponse(
+        success=True,
+        message=f"Saved {len(created_ids)} apparatus",
+        step="apparatus",
     )
 
 
@@ -1926,10 +2046,8 @@ async def reset_onboarding(request: Request, db: AsyncSession = Depends(get_db))
     # Import models for deletion
     from app.models.facilities import Facility
     from app.models.location import Location
-    from app.models.onboarding import (  # OnboardingStatus already imported at module level
-        OnboardingChecklistItem,
-        OnboardingSessionModel,
-    )
+
+    # OnboardingStatus and OnboardingSessionModel are already imported at module level
     from app.models.user import Organization, Role, User
 
     try:
@@ -1952,21 +2070,18 @@ async def reset_onboarding(request: Request, db: AsyncSession = Depends(get_db))
         # 1. Delete onboarding sessions
         await db.execute(OnboardingSessionModel.__table__.delete())
 
-        # 2. Delete onboarding checklist items
-        await db.execute(OnboardingChecklistItem.__table__.delete())
-
-        # 3. Delete onboarding status
+        # 2. Delete onboarding status
         await db.execute(OnboardingStatus.__table__.delete())
 
-        # 4. Delete the HQ location and facility created during org setup BEFORE
+        # 3. Delete the HQ location and facility created during org setup BEFORE
         #    users. Location.created_by -> users.id has no ON DELETE rule (i.e.
         #    RESTRICT), so deleting users while a Location references one would
         #    FK-fail and abort the whole reset. These are otherwise only removed
-        #    via the organizations CASCADE (step 8), which runs too late.
+        #    via the organizations CASCADE (step 7), which runs too late.
         await db.execute(Location.__table__.delete())
         await db.execute(Facility.__table__.delete())
 
-        # 5. Delete user_positions associations (junction table for user-role/position mapping)
+        # 4. Delete user_positions associations (junction table for user-role/position mapping)
         try:
             from sqlalchemy import text
 
@@ -1979,13 +2094,13 @@ async def reset_onboarding(request: Request, db: AsyncSession = Depends(get_db))
                 f"Could not delete user_positions (table may not exist yet): {e}"
             )
 
-        # 6. Delete users
+        # 5. Delete users
         await db.execute(User.__table__.delete())
 
-        # 7. Delete roles
+        # 6. Delete roles
         await db.execute(Role.__table__.delete())
 
-        # 8. Delete organizations
+        # 7. Delete organizations
         await db.execute(Organization.__table__.delete())
 
         # Commit all deletions

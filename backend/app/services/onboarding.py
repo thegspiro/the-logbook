@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,8 @@ from app.core.seed_admin_hours import seed_admin_hours_data
 from app.core.utils import generate_display_code, generate_uuid
 from app.models.facilities import Facility, FacilityStatus, FacilityType
 from app.models.location import Location
-from app.models.onboarding import OnboardingChecklistItem, OnboardingStatus
+from app.models.onboarding import OnboardingStatus
+from app.models.training import BasicApparatus
 from app.models.user import IdentifierType, Organization, OrganizationType, Role, User
 from app.services.auth_service import AuthService
 
@@ -43,62 +44,76 @@ class OnboardingService:
         },
         {
             "id": 2,
+            "name": "stations",
+            "title": "Stations",
+            "description": "Add the stations beyond headquarters",
+            "required": False,
+        },
+        {
+            "id": 3,
+            "name": "apparatus",
+            "title": "Apparatus",
+            "description": "Add your engines, trucks, and ambulances",
+            "required": False,
+        },
+        {
+            "id": 4,
             "name": "navigation",
             "title": "Navigation Layout",
             "description": "Choose your preferred navigation layout",
             "required": False,
         },
         {
-            "id": 3,
+            "id": 5,
             "name": "email_platform",
             "title": "Email Platform",
             "description": "Select your email service provider",
             "required": False,
         },
         {
-            "id": 4,
+            "id": 6,
             "name": "email_config",
             "title": "Email Configuration",
             "description": "Configure email settings",
             "required": False,
         },
         {
-            "id": 5,
+            "id": 7,
             "name": "file_storage",
             "title": "File Storage",
             "description": "Choose your file storage solution",
             "required": False,
         },
         {
-            "id": 6,
+            "id": 8,
             "name": "authentication",
             "title": "Authentication",
             "description": "Select authentication method",
             "required": False,
         },
         {
-            "id": 7,
+            "id": 9,
             "name": "admin_user",
             "title": "Create System Owner",
             "description": "Create the first admin user with secure credentials",
             "required": True,
         },
         {
-            "id": 8,
+            "id": 10,
             "name": "it_team",
             "title": "IT Team & Backup Access",
             "description": "Configure IT team and backup access",
             "required": False,
         },
         {
-            "id": 9,
+            "id": 11,
             "name": "roles",
             "title": "Role Setup",
             "description": "Configure roles and permissions",
             "required": False,
         },
         {
-            "id": 10,
+            "id": 12,
             "name": "modules",
             "title": "Select Modules",
             "description": "Choose which modules to enable for your organization",
@@ -548,118 +563,17 @@ class OnboardingService:
                 state = org.mailing_state
                 zip_code = org.mailing_zip
 
-        # Pick a default type that matches the organization type
-        default_type_name = (
-            "EMS Station"
-            if org.organization_type == OrganizationType.EMS_ONLY
-            else "Fire Station"
-        )
-
-        type_result = await self.db.execute(
-            select(FacilityType).where(
-                or_(
-                    FacilityType.organization_id == org.id,
-                    FacilityType.organization_id.is_(None),
-                ),
-                FacilityType.is_active.is_(True),
-                FacilityType.name == default_type_name,
-            )
-        )
-        facility_type = type_result.scalar_one_or_none()
-
-        # Fallback to any active station-category type
-        if not facility_type:
-            type_result = await self.db.execute(
-                select(FacilityType)
-                .where(
-                    or_(
-                        FacilityType.organization_id == org.id,
-                        FacilityType.organization_id.is_(None),
-                    ),
-                    FacilityType.is_active.is_(True),
-                )
-                .limit(1)
-            )
-            facility_type = type_result.scalar_one_or_none()
-
-        if not facility_type:
-            # Seed data may be missing — attempt auto-creation
-            from app.services.facilities_service import FacilitiesService
-
-            await FacilitiesService(self.db)._ensure_system_defaults()
-            type_result = await self.db.execute(
-                select(FacilityType).where(
-                    or_(
-                        FacilityType.organization_id == org.id,
-                        FacilityType.organization_id.is_(None),
-                    ),
-                    FacilityType.is_active.is_(True),
-                    FacilityType.name == default_type_name,
-                )
-            )
-            facility_type = type_result.scalar_one_or_none()
-            if not facility_type:
-                # Fall back to any type at all
-                type_result = await self.db.execute(
-                    select(FacilityType)
-                    .where(
-                        or_(
-                            FacilityType.organization_id == org.id,
-                            FacilityType.organization_id.is_(None),
-                        ),
-                        FacilityType.is_active.is_(True),
-                    )
-                    .limit(1)
-                )
-                facility_type = type_result.scalar_one_or_none()
-
-        if not facility_type:
+        facility_type, facility_status = await self._resolve_facility_defaults(org)
+        if not facility_type or not facility_status:
             logger.warning(
-                "No facility types available for org {} — skipping "
+                "No facility types/statuses available for org {} — skipping "
                 "headquarters facility creation",
                 org.id,
             )
             return
 
-        # Look up the system "Operational" status
-        status_result = await self.db.execute(
-            select(FacilityStatus).where(
-                or_(
-                    FacilityStatus.organization_id == org.id,
-                    FacilityStatus.organization_id.is_(None),
-                ),
-                FacilityStatus.is_active.is_(True),
-                FacilityStatus.name == "Operational",
-            )
-        )
-        facility_status = status_result.scalar_one_or_none()
-
-        if not facility_status:
-            # Fallback to any active status
-            status_result = await self.db.execute(
-                select(FacilityStatus)
-                .where(
-                    or_(
-                        FacilityStatus.organization_id == org.id,
-                        FacilityStatus.organization_id.is_(None),
-                    ),
-                    FacilityStatus.is_active.is_(True),
-                )
-                .limit(1)
-            )
-            facility_status = status_result.scalar_one_or_none()
-
-        if not facility_status:
-            logger.warning(
-                "No facility statuses available for org {} — skipping "
-                "headquarters facility creation",
-                org.id,
-            )
-            return
-
-        facility = Facility(
-            id=generate_uuid(),
-            organization_id=org.id,
+        await self._create_facility_with_location(
+            org=org,
             name=org.name,
             facility_number="Station 1",
             facility_type_id=facility_type.id,
@@ -669,10 +583,111 @@ class OnboardingService:
             city=city,
             state=state,
             zip_code=zip_code,
-            county=org.county,
             phone=org.phone,
-            fax=org.fax,
             email=org.email,
+            fax=org.fax,
+        )
+
+    async def _resolve_facility_defaults(
+        self, org: Organization
+    ) -> tuple[Optional[FacilityType], Optional[FacilityStatus]]:
+        """Resolve the facility type and status new stations should be created with.
+
+        Preference order for the type is: the station type matching the
+        organization type ("EMS Station" for EMS-only, "Fire Station"
+        otherwise), then any active type, then any active type after forcing
+        the system defaults to seed. That last step matters because a fresh
+        install whose seed migration did not run has no facility types at all,
+        and silently skipping station creation would lose the admin's input.
+        """
+        default_type_name = (
+            "EMS Station"
+            if org.organization_type == OrganizationType.EMS_ONLY
+            else "Fire Station"
+        )
+
+        def _org_scoped(model):
+            return or_(
+                model.organization_id == org.id,
+                model.organization_id.is_(None),
+            )
+
+        async def _find_type(name: Optional[str]) -> Optional[FacilityType]:
+            query = select(FacilityType).where(
+                _org_scoped(FacilityType),
+                FacilityType.is_active.is_(True),
+            )
+            if name:
+                query = query.where(FacilityType.name == name)
+            result = await self.db.execute(query.limit(1))
+            return result.scalars().first()
+
+        facility_type = await _find_type(default_type_name) or await _find_type(None)
+
+        if not facility_type:
+            # Seed data may be missing — attempt auto-creation
+            from app.services.facilities_service import FacilitiesService
+
+            await FacilitiesService(self.db)._ensure_system_defaults()
+            facility_type = await _find_type(default_type_name) or await _find_type(
+                None
+            )
+
+        async def _find_status(name: Optional[str]) -> Optional[FacilityStatus]:
+            query = select(FacilityStatus).where(
+                _org_scoped(FacilityStatus),
+                FacilityStatus.is_active.is_(True),
+            )
+            if name:
+                query = query.where(FacilityStatus.name == name)
+            result = await self.db.execute(query.limit(1))
+            return result.scalars().first()
+
+        facility_status = await _find_status("Operational") or await _find_status(None)
+
+        return facility_type, facility_status
+
+    async def _create_facility_with_location(
+        self,
+        *,
+        org: Organization,
+        name: str,
+        facility_number: Optional[str],
+        facility_type_id: str,
+        status_id: str,
+        address_line1: Optional[str],
+        address_line2: Optional[str] = None,
+        city: Optional[str],
+        state: Optional[str],
+        zip_code: Optional[str],
+        phone: Optional[str] = None,
+        email: Optional[str] = None,
+        fax: Optional[str] = None,
+    ) -> Facility:
+        """Create a Facility and its linked Location.
+
+        Every station needs both records: the Facility drives the Facilities
+        module (maintenance, inspections), while the Location is what the
+        Events location picker, QR check-in, and scheduling read. Creating one
+        without the other leaves a station that exists in one module and is
+        invisible in the others.
+        """
+        facility = Facility(
+            id=generate_uuid(),
+            organization_id=org.id,
+            name=name,
+            facility_number=facility_number,
+            facility_type_id=facility_type_id,
+            status_id=status_id,
+            address_line1=address_line1,
+            address_line2=address_line2,
+            city=city,
+            state=state,
+            zip_code=zip_code,
+            county=org.county,
+            phone=phone,
+            fax=fax,
+            email=email,
             is_owned=True,
             is_archived=False,
             status_changed_at=datetime.now(UTC),
@@ -681,15 +696,13 @@ class OnboardingService:
         self.db.add(facility)
         await self.db.flush()
 
-        # Also create a linked Location record so the headquarters appears
-        # in the Events location picker, QR check-in, and other modules.
         display_code = await self._generate_unique_display_code()
 
         location = Location(
             id=generate_uuid(),
             organization_id=org.id,
-            name=org.name,
-            address=addr_line1,
+            name=name,
+            address=address_line1,
             city=city,
             state=state,
             zip=zip_code,
@@ -699,6 +712,8 @@ class OnboardingService:
         )
         self.db.add(location)
         await self.db.flush()
+
+        return facility
 
     async def _generate_unique_display_code(self, max_attempts: int = 20) -> str:
         """Generate a display code that doesn't collide with existing ones."""
@@ -735,6 +750,138 @@ class OnboardingService:
             self.db.add(role)
 
         await self.db.flush()
+
+    async def replace_onboarding_stations(
+        self,
+        organization_id: str,
+        stations: List[Dict[str, Any]],
+        previous_facility_ids: List[str],
+    ) -> List[str]:
+        """Create the additional stations collected during onboarding.
+
+        The wizard lets the admin go back and edit this step, so the previous
+        pass's records are removed first — identified by the ids the session
+        recorded, never by "everything that is not the HQ". Deleting by shape
+        would take out stations an admin created in another tab.
+
+        Args:
+            organization_id: Organization UUID
+            stations: dicts with name, station_number, address, city, state,
+                zip_code, phone, email
+            previous_facility_ids: facility ids created by an earlier pass
+
+        Returns:
+            The facility ids created by this pass.
+        """
+        org = await self._get_organization(organization_id)
+        if not org:
+            raise ValueError("Organization not found")
+
+        if previous_facility_ids:
+            # Locations FK to facilities without a cascade, so they go first.
+            await self.db.execute(
+                delete(Location).where(
+                    Location.organization_id == organization_id,
+                    Location.facility_id.in_(previous_facility_ids),
+                )
+            )
+            await self.db.execute(
+                delete(Facility).where(
+                    Facility.organization_id == organization_id,
+                    Facility.id.in_(previous_facility_ids),
+                )
+            )
+            await self.db.flush()
+
+        if not stations:
+            return []
+
+        facility_type, facility_status = await self._resolve_facility_defaults(org)
+        if not facility_type or not facility_status:
+            raise ValueError(
+                "No facility types or statuses are available. "
+                "Station setup cannot continue."
+            )
+
+        created_ids: List[str] = []
+        for station in stations:
+            name = (station.get("name") or "").strip()
+            if not name:
+                continue
+
+            facility = await self._create_facility_with_location(
+                org=org,
+                name=name,
+                facility_number=(station.get("station_number") or "").strip() or None,
+                facility_type_id=facility_type.id,
+                status_id=facility_status.id,
+                address_line1=(station.get("address") or "").strip() or None,
+                city=(station.get("city") or "").strip() or None,
+                state=(station.get("state") or "").strip() or None,
+                zip_code=(station.get("zip_code") or "").strip() or None,
+                phone=(station.get("phone") or "").strip() or None,
+                email=(station.get("email") or "").strip() or None,
+            )
+            created_ids.append(facility.id)
+
+        return created_ids
+
+    async def replace_onboarding_apparatus(
+        self,
+        organization_id: str,
+        apparatus: List[Dict[str, Any]],
+        previous_apparatus_ids: List[str],
+    ) -> List[str]:
+        """Create the apparatus collected during onboarding.
+
+        Writes ``BasicApparatus`` rather than the full Apparatus module record:
+        onboarding collects only what shift staffing needs (unit number, type,
+        minimum staffing, riding positions), and BasicApparatus is exactly that
+        shape. Departments that enable the Apparatus module later get the full
+        record with maintenance history and inventory on top.
+
+        Like stations, a re-submission replaces only the rows this step created.
+        """
+        if previous_apparatus_ids:
+            await self.db.execute(
+                delete(BasicApparatus).where(
+                    BasicApparatus.organization_id == organization_id,
+                    BasicApparatus.id.in_(previous_apparatus_ids),
+                )
+            )
+            await self.db.flush()
+
+        created_ids: List[str] = []
+        for unit in apparatus:
+            unit_number = (unit.get("unit_number") or "").strip()
+            if not unit_number:
+                continue
+
+            positions = [
+                str(p).strip() for p in (unit.get("positions") or []) if str(p).strip()
+            ]
+
+            record = BasicApparatus(
+                id=generate_uuid(),
+                organization_id=organization_id,
+                unit_number=unit_number,
+                name=(unit.get("name") or "").strip() or unit_number,
+                apparatus_type=(unit.get("apparatus_type") or "engine").strip().lower(),
+                min_staffing=max(1, int(unit.get("min_staffing") or 1)),
+                positions=positions or None,
+                is_active=True,
+            )
+            self.db.add(record)
+            created_ids.append(record.id)
+
+        await self.db.flush()
+        return created_ids
+
+    async def _get_organization(self, organization_id: str) -> Optional[Organization]:
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == organization_id)
+        )
+        return result.scalar_one_or_none()
 
     async def create_it_team_users(
         self,
@@ -1118,9 +1265,6 @@ class OnboardingService:
         # Seed default data for the new organization
         await self._seed_default_data()
 
-        # Create post-onboarding checklist
-        await self._create_post_onboarding_checklist()
-
         # Log completion
         await log_audit_event(
             db=self.db,
@@ -1192,119 +1336,6 @@ class OnboardingService:
                 )
         except Exception as e:
             logger.warning("Non-critical: failed to seed admin hours defaults: {}", e)
-
-    async def _create_post_onboarding_checklist(self):
-        """Create post-onboarding checklist items"""
-        checklist_items = [
-            {
-                "title": "Set up TLS/HTTPS certificates",
-                "description": "Enable HTTPS for secure communication",
-                "category": "security",
-                "priority": "critical",
-                "documentation_link": "https://docs.the-logbook.org/security/tls",
-                "estimated_time_minutes": 60,
-                "sort_order": 1,
-            },
-            {
-                "title": "Configure email notifications",
-                "description": "Set up SMTP for email notifications",
-                "category": "configuration",
-                "priority": "high",
-                "documentation_link": "https://docs.the-logbook.org/configuration/email",
-                "estimated_time_minutes": 30,
-                "sort_order": 2,
-            },
-            {
-                "title": "Set up automated backups",
-                "description": "Configure regular database backups",
-                "category": "deployment",
-                "priority": "critical",
-                "documentation_link": "https://docs.the-logbook.org/deployment/backups",
-                "estimated_time_minutes": 45,
-                "sort_order": 3,
-            },
-            {
-                "title": "Review security checklist (HIPAA-aligned)",
-                "description": "Review security settings aligned with HIPAA requirements",
-                "category": "security",
-                "priority": "critical",
-                "documentation_link": "SECURITY.md#security-checklist-aligned-with-hipaa-requirements",
-                "estimated_time_minutes": 120,
-                "sort_order": 4,
-            },
-            {
-                "title": "Enable multi-factor authentication",
-                "description": "Require MFA for all administrative users",
-                "category": "security",
-                "priority": "high",
-                "documentation_link": "SECURITY.md#authentication--authorization",
-                "estimated_time_minutes": 15,
-                "sort_order": 5,
-            },
-            {
-                "title": "Configure firewall rules",
-                "description": "Set up network security and firewall",
-                "category": "security",
-                "priority": "critical",
-                "documentation_link": "https://docs.the-logbook.org/security/firewall",
-                "estimated_time_minutes": 90,
-                "sort_order": 6,
-            },
-            {
-                "title": "Set up monitoring and alerting",
-                "description": "Configure system monitoring and alerts",
-                "category": "deployment",
-                "priority": "high",
-                "documentation_link": "https://docs.the-logbook.org/deployment/monitoring",
-                "estimated_time_minutes": 60,
-                "sort_order": 7,
-            },
-            {
-                "title": "Train staff on security policies",
-                "description": "Conduct security awareness training",
-                "category": "security",
-                "priority": "high",
-                "documentation_link": "SECURITY.md",
-                "estimated_time_minutes": 180,
-                "sort_order": 8,
-            },
-            {
-                "title": "Test disaster recovery plan",
-                "description": "Verify backup restoration procedures",
-                "category": "deployment",
-                "priority": "high",
-                "documentation_link": "https://docs.the-logbook.org/deployment/disaster-recovery",
-                "estimated_time_minutes": 120,
-                "sort_order": 9,
-            },
-            {
-                "title": "Review and customize user roles",
-                "description": "Adjust role permissions for your organization",
-                "category": "configuration",
-                "priority": "medium",
-                "documentation_link": "https://docs.the-logbook.org/configuration/roles",
-                "estimated_time_minutes": 45,
-                "sort_order": 10,
-            },
-        ]
-
-        for item_data in checklist_items:
-            item = OnboardingChecklistItem(**item_data)
-            self.db.add(item)
-
-        await self.db.flush()
-
-    async def get_post_onboarding_checklist(self) -> List[OnboardingChecklistItem]:
-        """
-        Get post-onboarding checklist items
-
-        Returns:
-            List of checklist items sorted by priority and order
-        """
-        result = await self.db.execute(
-            select(OnboardingChecklistItem).order_by(OnboardingChecklistItem.sort_order)
-        )
-        return result.scalars().all()
 
     async def get_system_info(self) -> Dict[str, Any]:
         """

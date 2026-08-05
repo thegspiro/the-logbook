@@ -614,6 +614,35 @@ describe('organizationService', () => {
     });
   });
 
+  // ── acknowledgeSetupChecklistItem ────────────────────────────────────
+  describe('acknowledgeSetupChecklistItem', () => {
+    it('should POST an acknowledgment for a review item', async () => {
+      const response = { item_key: 'org_settings', acknowledged: true };
+      mockPost.mockResolvedValue({ data: response });
+
+      const result = await organizationService.acknowledgeSetupChecklistItem('org_settings');
+
+      expect(mockPost).toHaveBeenCalledWith(
+        '/organization/setup-checklist/org_settings/acknowledge',
+        null,
+        { params: { acknowledged: true } }
+      );
+      expect(result).toEqual(response);
+    });
+
+    it('should POST acknowledged=false when reopening an item', async () => {
+      mockPost.mockResolvedValue({ data: { item_key: 'modules', acknowledged: false } });
+
+      await organizationService.acknowledgeSetupChecklistItem('modules', false);
+
+      expect(mockPost).toHaveBeenCalledWith(
+        '/organization/setup-checklist/modules/acknowledge',
+        null,
+        { params: { acknowledged: false } }
+      );
+    });
+  });
+
   // ── updateSettings ───────────────────────────────────────────────────
   describe('updateSettings', () => {
     it('should PATCH updates to /organization/settings', async () => {

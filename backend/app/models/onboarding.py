@@ -65,46 +65,6 @@ class OnboardingStatus(Base):
         return f"<OnboardingStatus(status={status}, step={self.current_step})>"
 
 
-class OnboardingChecklistItem(Base):
-    """
-    Individual checklist items for post-onboarding setup
-
-    These are recommendations/tasks for after initial onboarding
-    """
-
-    __tablename__ = "onboarding_checklist"
-
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-
-    # Item details
-    title = Column(String(255), nullable=False)
-    description = Column(Text)
-    category = Column(String(50))  # security, configuration, deployment, etc.
-    priority = Column(String(20))  # critical, high, medium, low
-
-    # Status
-    is_completed = Column(Boolean, default=False)
-    completed_at = Column(DateTime(timezone=True))
-    completed_by = Column(String(36))  # User ID
-
-    # Help information
-    documentation_link = Column(Text)
-    estimated_time_minutes = Column(Integer)
-
-    # Ordering
-    sort_order = Column(Integer, default=0)
-
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-
-    def __repr__(self):
-        return (
-            f"<OnboardingChecklistItem(title={self.title}, priority={self.priority})>"
-        )
-
-
 class OnboardingSessionModel(Base):
     """
     Server-side onboarding session storage

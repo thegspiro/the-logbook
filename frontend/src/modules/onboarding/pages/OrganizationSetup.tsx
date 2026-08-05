@@ -674,7 +674,7 @@ const OrganizationSetup: React.FC = () => {
       toast.success('Organization created successfully!');
 
       // Navigate to next step (navigation choice)
-      void navigate('/onboarding/navigation-choice');
+      void navigate('/onboarding/stations');
     } catch (err: unknown) {
       console.error('Failed to save organization:', err);
       // Show the actual error message from the backend (includes validation details)
@@ -1212,8 +1212,7 @@ const OrganizationSetup: React.FC = () => {
 
           {/* Progress Indicator */}
           <ProgressIndicator
-            currentStep={1}
-            totalSteps={10}
+            step="organization"
             className="pt-4 border-t border-theme-nav-border"
           />
         </div>

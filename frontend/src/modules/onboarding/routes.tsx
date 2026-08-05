@@ -4,21 +4,22 @@ import {
   Welcome,
   OnboardingCheck,
   OrganizationSetup,
+  StationSetup,
+  ApparatusSetup,
   NavigationChoice,
   EmailPlatformChoice,
   EmailConfiguration,
   FileStorageChoice,
+  FileStorageConfiguration,
   AuthenticationChoice,
   ITTeamBackupAccess,
   PositionSetup,
   ModuleOverview,
   ModuleConfigTemplate,
   SystemOwnerCreation,
+  SetupComplete,
 } from './pages';
-import {
-  FileStorageConfigPlaceholder,
-  SecurityCheckPlaceholder,
-} from './components/PlaceholderPages';
+import { SecurityCheckPlaceholder } from './components/PlaceholderPages';
 
 /**
  * Onboarding Module Routes
@@ -42,7 +43,13 @@ export const getOnboardingRoutes = () => {
     {/* Legacy route redirect: the old department-info step is now folded into OrganizationSetup */}
     <Route path="/onboarding/department" element={<Navigate to="/onboarding/start" replace />} />
 
-    {/* Onboarding wizard - Step 2: Navigation Choice */}
+    {/* Onboarding wizard - Step 2: Stations beyond headquarters */}
+    <Route path="/onboarding/stations" element={<StationSetup />} />
+
+    {/* Onboarding wizard - Step 3: Apparatus */}
+    <Route path="/onboarding/apparatus" element={<ApparatusSetup />} />
+
+    {/* Onboarding wizard - Step 4: Navigation Choice */}
     <Route path="/onboarding/navigation-choice" element={<NavigationChoice />} />
 
     {/* Onboarding wizard - Email Platform */}
@@ -54,8 +61,8 @@ export const getOnboardingRoutes = () => {
     {/* Onboarding wizard - File Storage Choice */}
     <Route path="/onboarding/file-storage" element={<FileStorageChoice />} />
 
-    {/* Onboarding wizard - File Storage Configuration - Placeholder */}
-    <Route path="/onboarding/file-storage-config" element={<FileStorageConfigPlaceholder />} />
+    {/* Onboarding wizard - File Storage Configuration */}
+    <Route path="/onboarding/file-storage-config" element={<FileStorageConfiguration />} />
 
     {/* Onboarding wizard - Authentication Choice */}
     <Route path="/onboarding/authentication" element={<AuthenticationChoice />} />
@@ -81,6 +88,9 @@ export const getOnboardingRoutes = () => {
     <Route path="/onboarding/system-owner" element={<SystemOwnerCreation />} />
     {/* Legacy route redirect for admin-user */}
     <Route path="/onboarding/admin-user" element={<Navigate to="/onboarding/system-owner" replace />} />
+
+    {/* Onboarding wizard - final handoff into the department setup checklist */}
+    <Route path="/onboarding/complete" element={<SetupComplete />} />
 
     {/* Security Check - Placeholder */}
     <Route path="/onboarding/security-check" element={<SecurityCheckPlaceholder />} />

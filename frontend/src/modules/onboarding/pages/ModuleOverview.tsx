@@ -85,14 +85,14 @@ const ModuleOverview: React.FC = () => {
           throw new Error('Modules saved but setup could not be finalized. Please contact support.');
         }
 
-        toast.success('Welcome to your department dashboard!');
+        toast.success('Setup complete!');
 
-        // Ensure auth store is loaded before navigating to the
-        // protected dashboard route.
+        // Ensure auth store is loaded before navigating — the completion
+        // screen links straight into the protected /setup route.
         const { useAuthStore } = await import('../../../stores/authStore');
         await useAuthStore.getState().loadUser();
 
-        void navigate('/dashboard');
+        void navigate('/onboarding/complete');
         return response;
       },
       {
@@ -377,7 +377,7 @@ const ModuleOverview: React.FC = () => {
 
           {/* Progress Indicator */}
           <div className="card p-6">
-            <ProgressIndicator currentStep={10} totalSteps={10} />
+            <ProgressIndicator step="modules" />
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
         </div>

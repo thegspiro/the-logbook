@@ -7,7 +7,7 @@ Request and response schemas for organization-related endpoints.
 import re
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -682,6 +682,22 @@ class AuthSettings(BaseModel):
         )
 
 
+class SetupProgressSettings(BaseModel):
+    """Tracks which department-setup checklist steps the admin has acknowledged.
+
+    Most checklist items derive completion from real data (member counts,
+    apparatus counts, ...). A handful are *review* steps — "look over your
+    org settings", "confirm your enabled modules" — where no entity count can
+    tell us whether the admin actually looked. Those are completed by explicit
+    acknowledgment, recorded here by checklist item key.
+    """
+
+    acknowledged: List[str] = Field(
+        default_factory=list,
+        description="Checklist item keys the admin has explicitly marked reviewed",
+    )
+
+
 class ModuleSettings(BaseModel):
     """Settings for module enablement across the organization.
 
@@ -816,6 +832,10 @@ class OrganizationSettings(BaseModel):
         default_factory=DepartmentEmailSettings,
         description="Department email generation settings for new members",
     )
+    setup: SetupProgressSettings = Field(
+        default_factory=SetupProgressSettings,
+        description="Department setup checklist acknowledgment state",
+    )
 
     # Allow additional settings
     model_config = ConfigDict(extra="allow")
@@ -862,6 +882,7 @@ class OrganizationSettingsUpdate(BaseModel):
     membership_tiers: Optional[MembershipTierSettings] = None
     membership_id: Optional[MembershipIdSettings] = None
     department_email: Optional[DepartmentEmailSettings] = None
+    setup: Optional[SetupProgressSettings] = None
 
     # Allow additional settings
     model_config = ConfigDict(extra="allow")
@@ -1146,6 +1167,10 @@ class SetupChecklistItem(BaseModel):
     is_complete: bool = False
     count: int = 0
     required: bool = True
+    # "auto" items derive completion from entity counts and cannot be
+    # hand-completed; "review" items have no measurable signal and are
+    # completed by the admin acknowledging them.
+    kind: Literal["auto", "review"] = "auto"
 
 
 class SetupChecklistResponse(BaseModel):

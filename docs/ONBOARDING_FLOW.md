@@ -7,205 +7,84 @@ This document describes the complete onboarding flow for The Logbook application
 ## Onboarding Flow Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         ONBOARDING FLOW                              │
-└─────────────────────────────────────────────────────────────────────┘
-
-  Start
-    │
-    v
-┌──────────────────────┐
-│  1. Welcome Page     │
-│  Route: /            │
-│  Animated intro with │
-│  "Get Started" button│
-│                      │
-└──────────┬───────────┘
-           │
-           │ Button: "Get Started"
-           v
-┌──────────────────────┐
-│ 2. Onboarding Check  │
-│ Route: /onboarding   │
-│ API: GET             │
-│ /api/v1/onboarding/  │
-│ status               │
-└──────────┬───────────┘
-           │
-           │ If needs_onboarding = true
-           v
-┌──────────────────────────────┐
-│ 3. Organization Setup        │
-│ Route: /onboarding/start     │
-│ API: POST /api/v1/onboarding/│
-│ session/organization         │
-│ Collects (comprehensive):    │
-│ - Organization name & slug   │
-│ - Organization type          │
-│ - Timezone                   │
-│ - Contact info (phone/email) │
-│ - Mailing address            │
-│ - Physical address           │
-│ - Department identifiers     │
-│   (FDID/State ID/Dept ID)    │
-│ - Logo upload (optional)     │
-│ COMMITS TO DATABASE          │
-└──────────┬───────────────────┘
-           │
-           │ Button: "Continue" → Navigate to /onboarding/navigation-choice
-           v
-┌──────────────────────────────┐
-│ 4. Navigation Choice         │
-│ Route: /onboarding/          │
-│ navigation-choice            │
-│ Options:                     │
-│ - Top Bar Navigation         │
-│ - Left Sidebar Navigation    │
-└──────────┬───────────────────┘
-           │
-           │ Button: "Continue" → Navigate to /onboarding/email-platform
-           v
-┌──────────────────────────────┐
-│ 5. Email Platform Choice     │
-│ Route: /onboarding/          │
-│ email-platform               │
-│ Options:                     │
-│ - None (Skip)                │
-│ - Google Workspace           │
-│ - Microsoft 365              │
-│ - SMTP (Generic)             │
-│ - Cloudflare Email Service   │
-└──────────┬───────────────────┘
-           │
-           ├─ If "None" → Navigate to /onboarding/file-storage
-           │
-           └─ If service selected → Navigate to /onboarding/email-config
-                │
-                v
-           ┌──────────────────────────────┐
-           │ 5a. Email Configuration      │
-           │ Route: /onboarding/          │
-           │ email-config                 │
-           │ Collects platform-specific   │
-           │ credentials                  │
-           └──────────┬───────────────────┘
-                      │
-                      │ Button: "Continue" → Navigate to /onboarding/file-storage
-                      │ Button: "Skip" → Navigate to /onboarding/file-storage
-                      v
-┌──────────────────────────────┐
-│ 6. File Storage Choice       │
-│ Route: /onboarding/          │
-│ file-storage                 │
-│ Options:                     │
-│ - Local Storage              │
-│ - AWS S3                     │
-│ - Azure Blob Storage         │
-│ - Google Cloud Storage       │
-└──────────┬───────────────────┘
-           │
-           ├─ If "Local" → Navigate to /onboarding/authentication
-           │
-           └─ If cloud service → Navigate to /onboarding/file-storage-config
-                │                  (Placeholder page)
-                │
-                v
-           ┌──────────────────────────────┐
-           │ 6a. File Storage Config      │
-           │ Route: /onboarding/          │
-           │ file-storage-config          │
-           │ (Under development)          │
-           └──────────┬───────────────────┘
-                      │
-                      │ Button: "Continue" → Navigate to /onboarding/authentication
-                      v
-┌──────────────────────────────┐
-│ 7. Authentication Choice     │
-│ Route: /onboarding/          │
-│ authentication               │
-│ Options:                     │
-│ - Local (Username/Password)  │
-│ - OAuth (Google/Microsoft)   │
-│ - SAML                       │
-│ - LDAP                       │
-└──────────┬───────────────────┘
-           │
-           │ Button: "Continue" → Navigate to /onboarding/it-team
-           v
-┌──────────────────────────────┐
-│ 8. IT Team & Backup Access   │
-│ Route: /onboarding/it-team   │
-│ API: POST                    │
-│ /api/v1/onboarding/...       │
-│ Collects IT contact info     │
-└──────────┬───────────────────┘
-           │
-           │ Button: "Continue" → Navigate to /onboarding/positions
-           v
-┌──────────────────────────────┐
-│ 9. Role Setup                │
-│ Route: /onboarding/positions  │
-│ API: POST                    │
-│ /api/v1/onboarding/          │
-│ session/roles                │
-│ Two-tier permission model:   │
-│ - View Access (read-only)    │
-│ - Manage Access (full CRUD)  │
-│ Role templates by category:  │
-│ - Leadership (Chief, Pres)   │
-│ - Officers (Captain, Lt)     │
-│ - Administrative (Sec, Trs)  │
-│ - Specialized (TO, Safety)   │
-│ - Member (Regular members)   │
-└──────────┬───────────────────┘
-           │
-           │ Button: "Continue" → Navigate to /onboarding/modules
-           v
-┌──────────────────────────────┐
-│ 10. Module Overview          │
-│ Route: /onboarding/modules   │
-│ API: POST                    │
-│ /api/v1/onboarding/          │
-│ session/modules              │
-│ Priority-based selection:    │
-│ - Essential (Core modules)   │
-│ - Recommended (Operations)   │
-│ - Optional (Advanced)        │
-└──────────┬───────────────────┘
-           │
-           │ Per Module:
-           │ - "Enable & Configure" → Navigate to /onboarding/modules/{moduleId}/config
-           │ - "Configure Later" → Mark as skipped
-           │ - "Ignore" → Mark as ignored
-           │
-           │ When all modules processed:
-           │ Button: "Continue to Admin Setup" → Navigate to /onboarding/system-owner
-           v
-┌──────────────────────────────┐
-│ 11. Admin User Creation      │
-│ Route: /onboarding/          │
-│ system-owner                 │
-│ API: POST                    │
-│ /api/v1/onboarding/          │
-│ system-owner                 │
-│ Collects:                    │
-│ - Username                   │
-│ - Email                      │
-│ - Password (12+ chars)       │
-│ - First/Last Name            │
-│ - Membership Number (optional)│
-└──────────┬───────────────────┘
-           │
-           │ Button: "Create Admin & Complete Setup"
-           │ API: POST /api/v1/onboarding/complete
-           │
-           v
-┌──────────────────────────────┐
-│ 12. Dashboard                │
-│ Route: /dashboard            │
-│ Onboarding Complete!         │
-└──────────────────────────────┘
+  /  Welcome
+  │      "Get Started"
+  v
+  /onboarding  OnboardingCheck
+  │      GET /api/v1/onboarding/status
+  │      needs_onboarding = false → /login
+  v
+┌─ 1. Organization Setup ──────────────── /onboarding/start
+│  POST /onboarding/session/organization
+│  Name, type, timezone, contact info, mailing + physical address,
+│  department identifiers (FDID / State ID / Dept ID), logo.
+│  COMMITS the organization, and creates the HQ Facility + Location
+│  from the department address.
+└─ v
+┌─ 2. Stations ────────────────────────── /onboarding/stations
+│  POST /onboarding/session/stations
+│  Stations beyond HQ. Skippable — many departments have one.
+│  CREATES Facility + Location per station.
+└─ v
+┌─ 3. Apparatus ───────────────────────── /onboarding/apparatus
+│  POST /onboarding/session/apparatus
+│  Unit number, type, minimum staffing, riding positions. Skippable.
+│  CREATES BasicApparatus per unit.
+└─ v
+┌─ 4. Navigation Choice ───────────────── /onboarding/navigation-choice
+│  Top bar or left sidebar. Stored in the Zustand store.
+└─ v
+┌─ 5. Email Platform ──────────────────── /onboarding/email-platform
+│  None / Google Workspace / Microsoft 365 / SMTP / Cloudflare
+│  "None" skips ahead to file storage.
+└─ v
+┌─ 5a. Email Configuration ────────────── /onboarding/email-config
+│  POST /onboarding/session/email  (credentials encrypted server-side)
+│  POST /onboarding/test/email     (verifies the connection)
+└─ v
+┌─ 6. File Storage Choice ─────────────── /onboarding/file-storage
+│  Local / Google Drive / OneDrive / S3
+└─ v
+┌─ 6a. File Storage Configuration ─────── /onboarding/file-storage-config
+│  POST /onboarding/session/file-storage  (secrets encrypted server-side)
+│  Per-platform credential form. Skipping stores the platform choice
+│  without credentials rather than discarding the step.
+└─ v
+┌─ 7. Authentication Choice ───────────── /onboarding/authentication
+│  Local password / Google / Microsoft / Authentik
+└─ v
+┌─ 8. System Owner ────────────────────── /onboarding/system-owner
+│  POST /onboarding/system-owner
+│  Username, email, password (12+ chars), name, membership number.
+│  Sets the auth cookies — the admin is signed in from here on.
+└─ v
+┌─ 9. IT Team & Backup Access ─────────── /onboarding/it-team
+│  POST /onboarding/session/it-team
+│  IT contacts and backup access. Contacts become user accounts at
+│  completion, with must_change_password set.
+└─ v
+┌─ 10. Positions ──────────────────────── /onboarding/positions
+│  POST /onboarding/session/roles
+│  Two-tier permission model (view / manage) across position templates:
+│  leadership, officers, administrative, specialized, member.
+└─ v
+┌─ 11. Module Overview ────────────────── /onboarding/modules
+│  POST /onboarding/session/modules, then POST /onboarding/complete
+│  Per module: "Enable & Configure" → /onboarding/modules/{id}/config,
+│  "Configure Later", or "Ignore".
+└─ v
+┌─ 12. Setup Complete ─────────────────── /onboarding/complete
+│  Summary of what was configured, plus what still needs the
+│  department's real data.
+│  Primary action → /setup (Department Setup checklist)
+│  Secondary     → /dashboard
+└─ done
 ```
+
+> **Step ordering:** the System Owner is created at step 8, right after the
+> authentication choice — not at the end. The IT team, positions, and module
+> steps all run against an authenticated session.
+
 
 ## Page-by-Page Navigation Details
 
@@ -334,15 +213,91 @@ Response: {
 **Important**: Organization is committed to database at this step (Step 1 of backend flow).
 
 **Navigation**:
-- Button: "Continue" → `/onboarding/navigation-choice`
+- Button: "Continue" → `/onboarding/stations`
 
 **Data Storage**:
-- Database (organization table)
+- Database (organization table, plus the HQ Facility and Location)
 - Zustand store (department name, logo for other components)
 
 ---
 
-### 4. Navigation Choice (`/onboarding/navigation-choice`)
+### 4. Stations (`/onboarding/stations`)
+**Purpose**: Capture stations beyond headquarters
+
+Headquarters is already created from the department address during
+Organization Setup, so this step collects the *other* stations. Without it, a
+multi-station department has to find the Facilities module on its own after
+setup.
+
+**Form Fields** (per station, repeatable):
+- Station Name (required)
+- Station Number
+- Street Address, City, State, ZIP Code
+- Phone, Email
+
+**API Call**:
+```
+POST /api/v1/onboarding/session/stations
+Body: {
+  stations: [{
+    name: string,
+    station_number?: string,
+    address?: string,
+    city?: string,
+    state?: string,
+    zip_code?: string,
+    phone?: string,
+    email?: string
+  }]
+}
+```
+
+Creates a `Facility` and a linked `Location` per station. The session records
+the created facility ids, so returning to this step replaces its own rows
+instead of appending duplicates.
+
+**Navigation**:
+- Button: "Continue" → `/onboarding/apparatus`
+- Button: "Skip — one station only" → `/onboarding/apparatus` (clears any
+  stations a previous pass created)
+
+---
+
+### 5. Apparatus (`/onboarding/apparatus`)
+**Purpose**: Capture apparatus for shift staffing
+
+**Form Fields** (per apparatus, repeatable):
+- Unit Number (required)
+- Name
+- Type (engine, ladder, rescue, ambulance, tanker, brush, command, utility, other)
+- Minimum Staffing (1–20)
+- Riding Positions (common ones offered as one-click adds; free text allowed)
+
+**API Call**:
+```
+POST /api/v1/onboarding/session/apparatus
+Body: {
+  apparatus: [{
+    unit_number: string,
+    name?: string,
+    apparatus_type: string,
+    min_staffing: number,
+    positions: string[]
+  }]
+}
+```
+
+Creates `BasicApparatus` records — the lightweight shape shift scheduling
+needs. Departments that enable the full Apparatus module later get maintenance
+history and inventory on top of these.
+
+**Navigation**:
+- Button: "Continue" → `/onboarding/navigation-choice`
+- Button: "Skip for now" → `/onboarding/navigation-choice`
+
+---
+
+### 6. Navigation Choice (`/onboarding/navigation-choice`)
 **Purpose**: Choose navigation layout
 
 **Options**:
@@ -357,7 +312,7 @@ Response: {
 
 ---
 
-### 5. Email Platform Choice (`/onboarding/email-platform`)
+### 7. Email Platform Choice (`/onboarding/email-platform`)
 **Purpose**: Select email service provider
 
 **Options**:
@@ -376,7 +331,7 @@ Response: {
 
 ---
 
-### 5a. Email Configuration (`/onboarding/email-config`)
+### 7a. Email Configuration (`/onboarding/email-config`)
 **Purpose**: Configure selected email service
 
 **Form Fields** (varies by platform):
@@ -437,7 +392,7 @@ Body: {
 
 ---
 
-### 6. File Storage Choice (`/onboarding/file-storage`)
+### 8. File Storage Choice (`/onboarding/file-storage`)
 **Purpose**: Choose file storage backend
 
 **Options**:
@@ -455,17 +410,31 @@ Body: {
 
 ---
 
-### 6a. File Storage Configuration (`/onboarding/file-storage-config`)
-**Purpose**: Configure cloud storage credentials
+### 8a. File Storage Configuration (`/onboarding/file-storage-config`)
+**Purpose**: Collect cloud storage credentials
 
-**Status**: Placeholder page (under development)
+Renders a per-platform credential form (Google Drive, OneDrive/SharePoint,
+Amazon S3, or a local storage path). Secrets are encrypted with AES-256 before
+being written to the session, and are persisted into
+`Organization.settings.file_storage` at completion.
+
+**API Call**:
+```
+POST /api/v1/onboarding/session/file-storage
+Body: {
+  platform: "googledrive" | "onedrive" | "s3" | "local" | "other",
+  config: { ...platform-specific credentials }
+}
+```
 
 **Navigation**:
-- Button: "Continue to Authentication" → `/onboarding/authentication`
+- Button: "Save & Continue" → `/onboarding/authentication`
+- Button: "I'll add these later" → `/onboarding/authentication` (stores the
+  platform choice with no credentials, so Settings shows what is missing)
 
 ---
 
-### 7. Authentication Choice (`/onboarding/authentication`)
+### 9. Authentication Choice (`/onboarding/authentication`)
 **Purpose**: Choose authentication method
 
 **Options**:
@@ -483,7 +452,50 @@ Body: {
 
 ---
 
-### 8. IT Team & Backup Access (`/onboarding/it-team`)
+### 10. System Owner (`/onboarding/system-owner`)
+**Purpose**: Create the first administrator account
+
+This runs here — right after the authentication choice — not at the end of the
+wizard. Everything after it (IT team, positions, modules, completion) executes
+against an authenticated session, because this endpoint sets the auth cookies.
+
+**Form Fields**:
+- Username (required, min 3 chars)
+- Email (required, valid email)
+- Password (required, min 12 chars)
+- Confirm Password (must match)
+- First Name (required)
+- Last Name (required)
+- Membership Number (optional)
+
+**Validation**:
+- Username: alphanumeric, hyphens, underscores only
+- Password: minimum 12 characters
+- Passwords must match
+
+**API Call**:
+```
+POST /api/v1/onboarding/system-owner
+Body: {
+  username: string,
+  email: string,
+  password: string,
+  password_confirm: string,
+  first_name: string,
+  last_name: string,
+  membership_number?: string
+}
+```
+
+Auth tokens are set as httpOnly cookies; the response's `authenticated` flag
+tells the frontend to set `has_session`.
+
+**Navigation**:
+- Button: "Continue" → `/onboarding/it-team`
+
+---
+
+### 11. IT Team & Backup Access (`/onboarding/it-team`)
 **Purpose**: Configure IT team contact and backup access
 
 **Form Fields**:
@@ -510,7 +522,7 @@ Body: {
 
 ---
 
-### 9. Role Setup (`/onboarding/positions`)
+### 12. Positions (`/onboarding/positions`)
 **Purpose**: Configure roles and permissions using a two-tier model
 
 **Two-Tier Permission Model**:
@@ -557,7 +569,7 @@ Body: {
 
 ---
 
-### 10. Module Overview (`/onboarding/modules`)
+### 13. Module Overview (`/onboarding/modules`)
 **Purpose**: Select and configure optional modules
 
 **Module Categories**:
@@ -593,20 +605,26 @@ Body: {
 > modules are active rather than relying on a small status icon. The control
 > exposes `aria-pressed` for screen readers.
 
-**API Call**:
+**API Calls**:
 ```
-POST /api/v1/onboarding/modules
-Body: {
-  enabled_modules: string[]
-}
+1. POST /api/v1/onboarding/session/modules
+   Body: { modules: string[] }
+
+2. POST /api/v1/onboarding/complete
+   Body: { notes?: string }
 ```
 
+This is where onboarding is finalized. `/complete` persists the session's IT
+team, email, file storage, auth, and module settings into
+`Organization.settings`, seeds default data, and marks setup done.
+
 **Navigation**:
-- Button: "Continue to Admin Setup" → `/onboarding/system-owner`
+- Button: "Continue" → `/onboarding/complete` (after the auth store reloads,
+  so the completion screen can link into the protected `/setup` route)
 
 ---
 
-### 10a. Module Configuration Template (`/onboarding/modules/{moduleId}/config`)
+### 13a. Module Configuration Template (`/onboarding/modules/{moduleId}/config`)
 **Purpose**: Configure individual module settings with two-tier permissions
 
 **Features**:
@@ -621,84 +639,51 @@ Body: {
 
 ---
 
-### 11. Admin User Creation (`/onboarding/system-owner`)
-**Purpose**: Create the first administrator account
+### 14. Setup Complete (`/onboarding/complete`)
+**Purpose**: Close the wizard and hand off to the department setup checklist
 
-**Form Fields**:
-- Username (required, min 3 chars)
-- Email (required, valid email)
-- Password (required, min 12 chars)
-- Confirm Password (must match)
-- First Name (required)
-- Last Name (required)
-- Membership Number (optional)
+Reached after `POST /api/v1/onboarding/complete` succeeds. The wizard used to
+navigate straight to `/dashboard`, which for a brand-new department is an empty
+page — no members, no stations, no events — with nothing explaining what to do
+next.
 
-**Validation**:
-- Username: alphanumeric, hyphens, underscores only
-- Password: minimum 12 characters
-- Passwords must match
-
-**API Calls**:
-```
-1. POST /api/v1/onboarding/organization
-   (if not already created)
-
-2. POST /api/v1/onboarding/system-owner
-   Body: {
-     username: string,
-     email: string,
-     password: string,
-     password_confirm: string,
-     first_name: string,
-     last_name: string,
-     membership_number?: string
-   }
-
-3. POST /api/v1/onboarding/complete
-   Body: {
-     notes?: string
-   }
-```
+**Shows**:
+- What was configured: modules enabled, positions defined, sign-in method,
+  email platform, file storage, IT contacts
+- What is left: roster and member sign-ins, stations and apparatus, SOPs and
+  policies, first event
 
 **Navigation**:
-- Button: "Create Admin & Complete Setup" → `/dashboard`
+- Primary: "Go to Department Setup" → `/setup`
+- Secondary: "Skip to Dashboard" → `/dashboard`
 
 ---
 
-### 12. Dashboard (`/dashboard`)
-**Purpose**: Main application dashboard
+### Department Setup (`/setup`)
+**Purpose**: Track the remaining setup work after the wizard
 
-**Status**: Onboarding complete!
+Backed by `GET /api/v1/organization/setup-checklist`, which derives completion
+from live entity counts rather than a static list. Reachable from both
+navigation components and surfaced as a progress card on the admin dashboard
+while any step is outstanding.
 
-**API Call** (on load):
-```
-GET /api/v1/dashboard/stats
-Response: {
-  total_members: number,
-  active_members: number,
-  total_documents: number,
-  setup_percentage: number,
-  recent_events_count: number,
-  pending_tasks_count: number
-}
-```
+**Essential items**: members, roles, apparatus, stations/locations,
+organization settings, enabled modules, member sign-ins, SOPs and policies,
+first event, and MFA.
 
-**Features Available**:
-- **Stats Cards**: Total members (clickable → /members), documents count, setup percentage
-- **Training Widget**: Top 3 active training enrollments with progress
-- All enabled modules accessible via navigation
-- User profile and settings
+**Module items** appear only when the module is enabled: shift templates,
+training courses and requirements, inventory categories, custom forms, verified
+email delivery, prospective-members pipeline, and integrations.
 
-**Branding Transfer**: Organization name and logo are passed from onboarding to the main application layout via sessionStorage keys `departmentName` and `logoData`. The AppLayout component reads these on mount, with a fallback to `GET /api/v1/auth/branding` if not cached.
+Items are either `kind: "auto"` (derived from entity counts) or `kind:
+"review"` (`org_settings`, `modules` — no measurable signal, completed by the
+admin acknowledging them via
+`POST /api/v1/organization/setup-checklist/{item_key}/acknowledge`).
 
-**Authentication**: The application stores the auth token as `access_token` in localStorage (not `auth_token`). The AppLayout checks this key to verify authentication status. Logout clears both `access_token` and `refresh_token`.
-
-**Post-Onboarding Settings Navigation**:
-- `/account` - User account settings (profile, password, appearance, notifications)
-- `/settings` - Organization settings (requires `settings.manage`)
-- `/settings/roles` - Role management (create/edit/delete roles)
-- `/admin/members` - Member administration (assign roles)
-- `/admin/public-portal` - Public portal configuration
+**Branding Transfer**: Organization name and logo are passed from onboarding to
+the main application layout via sessionStorage keys `departmentName` and
+`logoData`. The AppLayout component reads these on mount, with a fallback to
+`GET /api/v1/auth/branding` if not cached.
 
 ---
 
@@ -840,17 +825,49 @@ Body: {
 ```
 Marks onboarding as finished.
 
-### Post-Onboarding Checklist
+### Configure Stations
 ```
-GET /api/v1/onboarding/checklist
+POST /api/v1/onboarding/session/stations
+Body: {
+  stations: [{
+    name: string,
+    station_number?: string,
+    address?: string,
+    city?: string,
+    state?: string,
+    zip_code?: string,
+    phone?: string,
+    email?: string
+  }]
+}
 ```
-Returns recommended tasks after onboarding.
+Creates Facility + Location records for stations beyond headquarters.
+Re-submitting replaces the rows this step created rather than appending.
 
-### Mark Checklist Item Complete
+### Configure Apparatus
 ```
-PATCH /api/v1/onboarding/checklist/{item_id}/complete
+POST /api/v1/onboarding/session/apparatus
+Body: {
+  apparatus: [{
+    unit_number: string,
+    name?: string,
+    apparatus_type: string,
+    min_staffing: number,
+    positions: string[]
+  }]
+}
 ```
-Marks a checklist item as done.
+Creates BasicApparatus records for shift staffing. Same replace-my-own-rows
+behavior as stations.
+
+### Department Setup Checklist (post-onboarding)
+```
+GET  /api/v1/organization/setup-checklist
+POST /api/v1/organization/setup-checklist/{item_key}/acknowledge?acknowledged=true
+```
+Lives in the organization API, not onboarding. Completion is derived from live
+entity counts; the `acknowledge` endpoint only accepts `kind: "review"` items
+(`org_settings`, `modules`), which have no measurable signal.
 
 ---
 
