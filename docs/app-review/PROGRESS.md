@@ -20,7 +20,7 @@ been through a review pass.
 |---|---------|------|--------|--------|
 | A1 | Storefront & payments | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF | ✅ |
 | A2 | Auth & session lifecycle | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py` | AUTH | ✅ |
-| A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | ⬜ |
+| A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | ✅ |
 | A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | ⬜ |
 | A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | ⬜ |
 | A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ⬜ |
@@ -180,4 +180,30 @@ Established before the first iteration, so any later failure is attributable:
   run at all**. `reconcile_index_set` renumbered to `20260805_0011` and
   sequenced after the drop (disjoint tables, so only the label moved).
   Backend suite now **2498 passed, 0 failed**; frontend **2207 passed**.
+- **A3 scheduled tasks & cron ✅** — 38 task runners, 4570 L, never reviewed.
+  Verified good: both endpoints correctly gated (`/run-task` behind the wildcard
+  System Owner, with the reasoning documented — each task touches every org);
+  `SCHEDULE`/`TASK_RUNNERS` exactly in sync 38/38; reminder dedup real and
+  **avoiding Pitfall #12** (assigns a new dict rather than shallow-copy-and-
+  mutate, so the "sent" flag actually persists — the alternative would have
+  re-sent every reminder on every run); day-level reminders resolve the org's
+  IANA timezone properly instead of approximating in UTC.
+  **3 fixes applied:** CRON-1 (MED: `_for_each_org` rolls back a failed org's
+  work and says why — but **8 runners re-implement that loop inline and none
+  rolled back**, so after a failed flush the shared session was poisoned and
+  every *later* org in the run failed too; self-concealing, because it reports
+  as "many orgs broken" rather than "one org poisoned the session"), CRON-2
+  (LOW/latent: all 9 org queries ignored `Organization.active`; nothing sets it
+  False today so the filter is a provable no-op now and correct once an
+  org-deactivation flow exists), CRON-3 (LOW: the `/run-task` docstring listed
+  5 of 38 tasks — replaced with a pointer to the generated `/tasks` endpoint so
+  it cannot drift again). 1 open: CRON-4 (raw `str(e)` returned to the System
+  Owner — deliberately left, since sanitizing would destroy the operator's only
+  debugging signal; wants a correlation id instead).
+  **3 structural tests added**, each verified to actually fail when its
+  invariant is broken. Both CRON-1 and CRON-2 existed *only* in the inline
+  copies — the shared helper was correct — so the root cause is the
+  duplication; consolidating the 8 copies is recorded as future work.
+  Backend **2501 passed, 0 failed**. See scheduled-tasks.md. Next: A4 email
+  templates & delivery.
 </content>

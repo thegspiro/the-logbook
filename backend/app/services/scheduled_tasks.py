@@ -341,8 +341,17 @@ async def _for_each_org(
     """Run callback(db, org) for each org, collecting results and errors.
 
     The callback must return an int (count of items processed).
+
+    Deactivated organizations are skipped: every task routed through here sends
+    mail, SMS, or push to members, and a decommissioned department must not keep
+    receiving them. The filter is ``isnot(False)`` rather than ``== True`` so a
+    row whose flag was never populated still counts as active. Nothing sets the
+    flag False today, so this is currently a no-op — it keeps the whole task set
+    correct the moment an org-deactivation flow exists.
     """
-    orgs = await db.execute(select(Organization))
+    orgs = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
     organizations = list(orgs.scalars().all())
     results = []
     total = 0
@@ -694,7 +703,9 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.services.email_service import EmailService
 
     now = datetime.now(dt_timezone.utc)
-    orgs = await db.execute(select(Organization))
+    orgs = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
     organizations = list(orgs.scalars().all())
 
     total_reminders = 0
@@ -902,6 +913,13 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Event reminders failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
+            # Orgs share one session: without this rollback a failed flush
+            # leaves the session unusable and every *later* org in this run
+            # fails too. Mirrors _for_each_org.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             continue
 
         total_reminders += org_reminders
@@ -955,7 +973,9 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
     # Look back 2 hours for recently ended events
     lookback = now - timedelta(hours=2)
 
-    orgs = await db.execute(select(Organization))
+    orgs = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
     organizations = list(orgs.scalars().all())
 
     total_notifications = 0
@@ -1084,6 +1104,13 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Post-event validation failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
+            # Orgs share one session: without this rollback a failed flush
+            # leaves the session unusable and every *later* org in this run
+            # fails too. Mirrors _for_each_org.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             continue
 
         total_notifications += org_notifications
@@ -1141,7 +1168,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
     now = datetime.now(dt_timezone.utc)
 
-    orgs = await db.execute(select(Organization))
+    orgs = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
     organizations = list(orgs.scalars().all())
 
     total_notifications = 0
@@ -1446,6 +1475,13 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Post-shift validation failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
+            # Orgs share one session: without this rollback a failed flush
+            # leaves the session unusable and every *later* org in this run
+            # fails too. Mirrors _for_each_org.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             continue
 
         total_notifications += org_notifications
@@ -1504,7 +1540,9 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     now = datetime.now(dt_timezone.utc)
 
-    orgs = await db.execute(select(Organization))
+    orgs = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
     organizations = list(orgs.scalars().all())
 
     total_notifications = 0
@@ -1887,6 +1925,13 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Shift reminders failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
+            # Orgs share one session: without this rollback a failed flush
+            # leaves the session unusable and every *later* org in this run
+            # fails too. Mirrors _for_each_org.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             continue
 
         total_notifications += org_notifications
@@ -2136,7 +2181,9 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
 
     now = datetime.now(dt_timezone.utc)
 
-    orgs = await db.execute(select(Organization))
+    orgs = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
     organizations = list(orgs.scalars().all())
 
     total_notifications = 0
@@ -2523,6 +2570,13 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"End-of-shift summary failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
+            # Orgs share one session: without this rollback a failed flush
+            # leaves the session unusable and every *later* org in this run
+            # fails too. Mirrors _for_each_org.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             continue
 
         total_notifications += org_notifications
@@ -2575,7 +2629,9 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
 
     now = datetime.now(dt_timezone.utc)
 
-    orgs = await db.execute(select(Organization))
+    orgs = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
     organizations = list(orgs.scalars().all())
 
     total_escalations = 0
@@ -2785,6 +2841,13 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Trainee report escalation failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
+            # Orgs share one session: without this rollback a failed flush
+            # leaves the session unusable and every *later* org in this run
+            # fails too. Mirrors _for_each_org.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             continue
 
         total_escalations += org_escalations
@@ -3703,7 +3766,9 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
     now = datetime.now(dt_timezone.utc)
     six_months_from_now = now + timedelta(days=180)
 
-    orgs = await db.execute(select(Organization))
+    orgs = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
     organizations = list(orgs.scalars().all())
 
     total_reminders = 0
@@ -3885,6 +3950,13 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Series end reminders failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
+            # Orgs share one session: without this rollback a failed flush
+            # leaves the session unusable and every *later* org in this run
+            # fails too. Mirrors _for_each_org.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
             continue
 
         total_reminders += org_reminders
@@ -4080,7 +4152,9 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
     lookback = now - timedelta(hours=2)
     grace_cutoff = now - timedelta(minutes=30)
 
-    orgs = await db.execute(select(Organization))
+    orgs = await db.execute(
+        select(Organization).where(Organization.active.isnot(False))
+    )
     organizations = list(orgs.scalars().all())
 
     total_reminders = 0
@@ -4201,6 +4275,13 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                 org.id,
                 e,
             )
+            # Orgs share one session: without this rollback a failed flush
+            # leaves the session unusable and every *later* org in this run
+            # fails too. Mirrors _for_each_org.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
 
         if org_reminders > 0 or org_checkouts > 0:
             results.append(
