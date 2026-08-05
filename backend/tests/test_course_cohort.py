@@ -757,7 +757,7 @@ class TestShiftRemaining:
         assert row.scheduled_start.date() == date(2026, 10, 6)
 
     async def test_zero_days_is_rejected_by_the_schema(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="must not be zero"):
             CohortShiftRequest(days=0)
 
 
