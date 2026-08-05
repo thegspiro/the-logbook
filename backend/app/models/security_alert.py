@@ -76,11 +76,11 @@ class SecurityAlertRecord(Base):
 
     details = Column(JSON, nullable=False, default=dict)
 
-    acknowledged = Column(Boolean, nullable=False, default=False)
+    acknowledged = Column(Boolean, nullable=False, default=False, server_default="0")
     acknowledged_by = Column(String(255))
     acknowledged_at = Column(DateTime(timezone=True))
 
-    resolved = Column(Boolean, nullable=False, default=False)
+    resolved = Column(Boolean, nullable=False, default=False, server_default="0")
     resolved_by = Column(String(255))
     resolved_at = Column(DateTime(timezone=True))
 

@@ -44,15 +44,13 @@ async def validate_enum_consistency(db: AsyncSession) -> Tuple[bool, List[str]]:
 
         async def get_enum_values(table: str, column: str) -> List[str]:
             """Query database for enum values"""
-            query = text(
-                """
+            query = text("""
                 SELECT COLUMN_TYPE
                 FROM INFORMATION_SCHEMA.COLUMNS
                 WHERE TABLE_SCHEMA = :schema
                 AND TABLE_NAME = :table
                 AND COLUMN_NAME = :column
-            """
-            )
+            """)
 
             result = await db.execute(
                 query, {"schema": settings.DB_NAME, "table": table, "column": column}
@@ -182,14 +180,12 @@ async def validate_enum_case_convention(db: AsyncSession) -> Tuple[bool, List[st
         from app.core.config import settings
 
         # Get all enum columns from database
-        query = text(
-            """
+        query = text("""
             SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = :schema
             AND DATA_TYPE = 'enum'
-        """
-        )
+        """)
 
         result = await db.execute(query, {"schema": settings.DB_NAME})
         results = result.fetchall()

@@ -72,7 +72,7 @@ class IPException(Base):
     # ============================================
 
     # IP address (single address; CIDR-range support was never implemented)
-    ip_address = Column(String(45), nullable=False, index=True)
+    ip_address = Column(String(45), nullable=False)
 
     # Exception type
     exception_type = Column(
@@ -94,13 +94,11 @@ class IPException(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # ============================================
@@ -128,7 +126,6 @@ class IPException(Base):
         Enum(IPExceptionApprovalStatus, values_callable=lambda x: [e.value for e in x]),
         default=IPExceptionApprovalStatus.PENDING,
         nullable=False,
-        index=True,
     )
 
     # Request submitted
@@ -263,7 +260,7 @@ class BlockedAccessAttempt(Base):
     country_name = Column(String(100))
 
     # Associated user (if authenticated)
-    user_id = Column(String(36), ForeignKey("users.id"), index=True)
+    user_id = Column(String(36), ForeignKey("users.id"))
 
     # Block reason
     block_reason = Column(String(100), nullable=False, index=True)
@@ -346,21 +343,18 @@ class IPExceptionAuditLog(Base):
         String(36),
         ForeignKey("ip_exceptions.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Action taken
     action = Column(
-        String(50), nullable=False, index=True
+        String(50), nullable=False
     )  # requested, approved, rejected, revoked, expired, used
 
     # Who performed the action
     performed_by = Column(String(36), ForeignKey("users.id"), nullable=False)
 
     # When
-    performed_at = Column(
-        DateTime(timezone=True), server_default=func.now(), index=True
-    )
+    performed_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Details
     details = Column(Text)  # JSON with action-specific details

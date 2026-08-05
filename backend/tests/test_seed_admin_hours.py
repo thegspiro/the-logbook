@@ -116,6 +116,9 @@ class TestSeedCategories:
 
     async def test_creates_categories_when_none_exist(self):
         mock_db = AsyncMock()
+        # db.add() is synchronous — leaving it as an AsyncMock returns an
+        # un-awaited coroutine and emits a RuntimeWarning at collection.
+        mock_db.add = MagicMock()
 
         # Every select returns no existing category
         no_result = MagicMock()
@@ -134,6 +137,9 @@ class TestSeedCategories:
 
     async def test_skips_existing_categories(self):
         mock_db = AsyncMock()
+        # db.add() is synchronous — leaving it as an AsyncMock returns an
+        # un-awaited coroutine and emits a RuntimeWarning at collection.
+        mock_db.add = MagicMock()
 
         existing_cat = MagicMock()
         existing_cat.id = "existing-cat-id"
@@ -164,6 +170,9 @@ class TestSeedEventMappings:
 
     async def test_creates_mappings_for_known_categories(self):
         mock_db = AsyncMock()
+        # db.add() is synchronous — leaving it as an AsyncMock returns an
+        # un-awaited coroutine and emits a RuntimeWarning at collection.
+        mock_db.add = MagicMock()
         no_result = MagicMock()
         no_result.scalar_one_or_none.return_value = None
         mock_db.execute.return_value = no_result
@@ -183,6 +192,9 @@ class TestSeedEventMappings:
 
     async def test_skips_existing_mappings(self):
         mock_db = AsyncMock()
+        # db.add() is synchronous — leaving it as an AsyncMock returns an
+        # un-awaited coroutine and emits a RuntimeWarning at collection.
+        mock_db.add = MagicMock()
         existing = MagicMock()
         existing_result = MagicMock()
         existing_result.scalar_one_or_none.return_value = existing
@@ -203,6 +215,9 @@ class TestSeedEventMappings:
 
     async def test_skips_missing_categories(self):
         mock_db = AsyncMock()
+        # db.add() is synchronous — leaving it as an AsyncMock returns an
+        # un-awaited coroutine and emits a RuntimeWarning at collection.
+        mock_db.add = MagicMock()
         no_result = MagicMock()
         no_result.scalar_one_or_none.return_value = None
         mock_db.execute.return_value = no_result
@@ -231,6 +246,9 @@ class TestSeedAdminHoursData:
     )
     async def test_calls_both_seeders(self, mock_cats, mock_mappings):
         mock_db = AsyncMock()
+        # db.add() is synchronous — leaving it as an AsyncMock returns an
+        # un-awaited coroutine and emits a RuntimeWarning at collection.
+        mock_db.add = MagicMock()
         mock_cats.return_value = {"Cat A": "id-1", "Cat B": "id-2"}
         mock_mappings.return_value = 2
 

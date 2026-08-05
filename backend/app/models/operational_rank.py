@@ -45,8 +45,8 @@ class OperationalRank(Base):
     rank_code = Column(String(100), nullable=False)
     display_name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
-    sort_order = Column(Integer, nullable=False, default=0)
-    is_active = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
+    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
 
     # Shift positions this rank is eligible to sign up for.
     # e.g. ["officer", "driver", "firefighter", "ems"]

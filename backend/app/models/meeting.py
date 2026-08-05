@@ -77,6 +77,7 @@ class Meeting(Base):
         Enum(MeetingType, values_callable=lambda x: [e.value for e in x]),
         default=MeetingType.BUSINESS,
         nullable=False,
+        server_default="business",
     )
     meeting_date = Column(Date, nullable=False, index=True)
     start_time = Column(Time)
@@ -103,6 +104,7 @@ class Meeting(Base):
         Enum(MeetingStatus, values_callable=lambda x: [e.value for e in x]),
         default=MeetingStatus.DRAFT,
         nullable=False,
+        server_default="draft",
     )
 
     # Minutes Content
@@ -157,19 +159,16 @@ class MeetingAttendee(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     meeting_id = Column(
         String(36),
         ForeignKey("meetings.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Attendance
@@ -215,7 +214,6 @@ class MeetingActionItem(Base):
         String(36),
         ForeignKey("meetings.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),
@@ -232,6 +230,7 @@ class MeetingActionItem(Base):
         Enum(ActionItemStatus, values_callable=lambda x: [e.value for e in x]),
         default=ActionItemStatus.OPEN,
         nullable=False,
+        server_default="open",
     )
     priority = Column(Integer, default=0)  # 0=normal, 1=high, 2=urgent
 

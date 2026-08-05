@@ -1728,7 +1728,7 @@ async def import_program(
     """
     if "program" not in payload:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid import format — missing 'program' key",
         )
 
@@ -1768,7 +1768,7 @@ class BulkEnrollmentRequest(BaseModel):
     """Request schema for bulk enrollment"""
 
     user_ids: list[UUID] = Field(
-        ..., min_items=1, description="List of user IDs to enroll"
+        ..., min_length=1, description="List of user IDs to enroll"
     )
     target_completion_date: date | None = None
 

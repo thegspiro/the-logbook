@@ -59,7 +59,9 @@ class Location(Base):
     capacity = Column(Integer, nullable=True)  # Maximum occupancy
 
     # Status
-    is_active = Column(Boolean, nullable=False, default=True)  # Can be used for events
+    is_active = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )  # Can be used for events
 
     # Public display code — short, non-guessable code for kiosk/tablet URLs.
     # Allows tablets to display QR codes at `/display/{code}` without authentication.

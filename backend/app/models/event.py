@@ -80,6 +80,7 @@ class Event(Base):
         SQLEnum(EventType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=EventType.OTHER,
+        server_default="other",
     )
     custom_category = Column(
         String(100), nullable=True
@@ -107,7 +108,7 @@ class Event(Base):
     )  # Recorded by secretary when event actually ends
 
     # RSVP settings
-    requires_rsvp = Column(Boolean, nullable=False, default=False)
+    requires_rsvp = Column(Boolean, nullable=False, default=False, server_default="0")
     rsvp_deadline = Column(DateTime(timezone=True), nullable=True)
     max_attendees = Column(Integer, nullable=True)  # Null means unlimited
     allowed_rsvp_statuses = Column(
@@ -115,11 +116,11 @@ class Event(Base):
     )  # List of allowed RSVP statuses, defaults to ["going", "not_going"]
 
     # Attendance settings
-    is_mandatory = Column(Boolean, nullable=False, default=False)
+    is_mandatory = Column(Boolean, nullable=False, default=False, server_default="0")
 
     # Additional settings
-    allow_guests = Column(Boolean, nullable=False, default=False)
-    send_reminders = Column(Boolean, nullable=False, default=True)
+    allow_guests = Column(Boolean, nullable=False, default=False, server_default="0")
+    send_reminders = Column(Boolean, nullable=False, default=True, server_default="1")
     reminder_schedule = Column(
         JSON, nullable=False, default=lambda: [24]
     )  # List of hours before event to send reminders
@@ -129,6 +130,7 @@ class Event(Base):
         SQLEnum(CheckInWindowType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=CheckInWindowType.FLEXIBLE,
+        server_default="flexible",
     )
     check_in_minutes_before = Column(
         Integer, nullable=True, default=30
@@ -137,11 +139,11 @@ class Event(Base):
         Integer, nullable=True, default=15
     )  # For WINDOW type: minutes after start
     require_checkout = Column(
-        Boolean, nullable=False, default=False
+        Boolean, nullable=False, default=False, server_default="0"
     )  # Require manual check-out
 
     # Recurrence
-    is_recurring = Column(Boolean, nullable=False, default=False)
+    is_recurring = Column(Boolean, nullable=False, default=False, server_default="0")
     recurrence_pattern = Column(
         SQLEnum(RecurrencePattern, values_callable=lambda x: [e.value for e in x]),
         nullable=True,
@@ -165,7 +167,7 @@ class Event(Base):
         JSON, nullable=True
     )  # List of ISO date strings to skip in a recurring series
     rolling_recurrence = Column(
-        Boolean, nullable=False, default=False
+        Boolean, nullable=False, default=False, server_default="0"
     )  # Auto-extend series on a rolling 12-month window
     recurrence_parent_id = Column(
         String(36), ForeignKey("events.id"), nullable=True
@@ -182,7 +184,7 @@ class Event(Base):
 
     # Status
     is_draft = Column(Boolean, default=False, server_default="0")
-    is_cancelled = Column(Boolean, nullable=False, default=False)
+    is_cancelled = Column(Boolean, nullable=False, default=False, server_default="0")
     cancellation_reason = Column(Text, nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -252,9 +254,10 @@ class EventRSVP(Base):
         SQLEnum(RSVPStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=RSVPStatus.GOING,
+        server_default="going",
     )
     guest_count = Column(
-        Integer, nullable=False, default=0
+        Integer, nullable=False, default=0, server_default="0"
     )  # Number of additional guests
     notes = Column(Text, nullable=True)  # Special requests, dietary restrictions, etc.
     dietary_restrictions = Column(String(500), nullable=True)
@@ -272,7 +275,7 @@ class EventRSVP(Base):
     )
 
     # Actual attendance (filled in after event)
-    checked_in = Column(Boolean, nullable=False, default=False)
+    checked_in = Column(Boolean, nullable=False, default=False, server_default="0")
     checked_in_at = Column(DateTime(timezone=True), nullable=True)
     checked_out_at = Column(DateTime(timezone=True), nullable=True)
     attendance_duration_minutes = Column(
@@ -336,6 +339,7 @@ class EventTemplate(Base):
         SQLEnum(EventType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=EventType.OTHER,
+        server_default="other",
     )
     default_title = Column(
         String(200), nullable=True
@@ -347,10 +351,10 @@ class EventTemplate(Base):
     default_duration_minutes = Column(Integer, nullable=True)  # Default event duration
 
     # RSVP defaults
-    requires_rsvp = Column(Boolean, nullable=False, default=False)
+    requires_rsvp = Column(Boolean, nullable=False, default=False, server_default="0")
     max_attendees = Column(Integer, nullable=True)
-    is_mandatory = Column(Boolean, nullable=False, default=False)
-    allow_guests = Column(Boolean, nullable=False, default=False)
+    is_mandatory = Column(Boolean, nullable=False, default=False, server_default="0")
+    allow_guests = Column(Boolean, nullable=False, default=False, server_default="0")
 
     # Check-in defaults
     check_in_window_type = Column(
@@ -359,17 +363,19 @@ class EventTemplate(Base):
     )
     check_in_minutes_before = Column(Integer, nullable=True, default=30)
     check_in_minutes_after = Column(Integer, nullable=True, default=15)
-    require_checkout = Column(Boolean, nullable=False, default=False)
+    require_checkout = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Notification defaults
-    send_reminders = Column(Boolean, nullable=False, default=True)
+    send_reminders = Column(Boolean, nullable=False, default=True, server_default="1")
     reminder_schedule = Column(JSON, nullable=False, default=lambda: [24])
 
     # Custom fields template (structure for custom data fields)
     custom_fields_template = Column(JSON, nullable=True)
 
     # Metadata
-    is_active = Column(Boolean, nullable=False, default=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     created_at = Column(
@@ -411,7 +417,7 @@ class EventExternalAttendee(Base):
     organization_name = Column(String(255), nullable=True)
 
     # Check-in tracking
-    checked_in = Column(Boolean, nullable=False, default=False)
+    checked_in = Column(Boolean, nullable=False, default=False, server_default="0")
     checked_in_at = Column(DateTime(timezone=True), nullable=True)
 
     # Source tracking (e.g., "form_submission" with form submission ID)

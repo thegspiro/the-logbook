@@ -122,6 +122,7 @@ class Organization(Base):
         Enum(OrganizationType, values_callable=lambda x: [e.value for e in x]),
         default=OrganizationType.FIRE_DEPARTMENT,
         nullable=False,
+        server_default="fire_department",
     )
 
     # Timezone
@@ -155,6 +156,7 @@ class Organization(Base):
         Enum(IdentifierType, values_callable=lambda x: [e.value for e in x]),
         default=IdentifierType.DEPARTMENT_ID,
         nullable=False,
+        server_default="department_id",
     )
     fdid = Column(String(50))  # Fire Department ID (NFIRS)
     state_id = Column(String(50))  # State license/certification number
@@ -166,7 +168,11 @@ class Organization(Base):
     tax_id = Column(String(50))  # EIN for 501(c)(3) organizations
 
     # Logo stored as base64 or URL (MEDIUMTEXT for large base64 images)
-    logo = Column(Text().with_variant(mysql.MEDIUMTEXT(), "mysql"))
+    # LONGTEXT, not MEDIUMTEXT: the logo is stored as a base64 data URI, and
+    # migration 20260209_0600 widened this column to LONGTEXT on existing
+    # databases. The model has to match, or fresh installs silently get the
+    # narrower column that migration exists to prevent.
+    logo = Column(Text().with_variant(mysql.LONGTEXT(), "mysql"))
 
     # Legacy field - keep for compatibility
     type = Column(String(50), default="fire_department")
@@ -299,7 +305,9 @@ class User(Base):
     # Compliance exemption — when True, the member is not evaluated against
     # training requirements, shift minimums, admin-hour targets, or
     # certificate maintenance.  Typical use: retired / honorary members.
-    compliance_exempt = Column(Boolean, default=False, nullable=False)
+    compliance_exempt = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     email_verified = Column(Boolean, default=False)
 
@@ -645,6 +653,7 @@ class MemberLeaveOfAbsence(Base):
         Enum(LeaveType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=LeaveType.LEAVE_OF_ABSENCE,
+        server_default="leave_of_absence",
     )
     reason = Column(Text, nullable=True)
 
@@ -656,11 +665,13 @@ class MemberLeaveOfAbsence(Base):
     granted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
     granted_at = Column(DateTime(timezone=True), nullable=True)
 
-    active = Column(Boolean, default=True, nullable=False)
+    active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # When True, no training waiver is auto-created for this leave.
     # Officers can set this to keep training requirements active during the leave.
-    exempt_from_training_waiver = Column(Boolean, default=False, nullable=False)
+    exempt_from_training_waiver = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Back-reference to the auto-created training waiver (if any)
     linked_training_waiver_id = Column(String(36), nullable=True)

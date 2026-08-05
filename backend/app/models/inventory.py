@@ -386,12 +386,14 @@ class InventoryItem(Base):
         default=ItemCondition.GOOD,
         nullable=False,
         index=True,
+        server_default="good",
     )
     status = Column(
         Enum(ItemStatus, values_callable=_enum_values),
         default=ItemStatus.AVAILABLE,
         nullable=False,
         index=True,
+        server_default="available",
     )
     status_notes = Column(Text)
 
@@ -409,7 +411,6 @@ class InventoryItem(Base):
         String(36),
         ForeignKey("item_variant_groups.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # Quantity (for pool items)
@@ -526,7 +527,9 @@ class InventoryLot(Base):
 
     lot_number = Column(String(100), nullable=True)
     expiration_date = Column(Date, nullable=True)
-    quantity = Column(Integer, default=0, nullable=False)  # ready units on hand
+    quantity = Column(
+        Integer, default=0, nullable=False, server_default="0"
+    )  # ready units on hand
     received_date = Column(Date, nullable=True)
     notes = Column(Text, nullable=True)
 
@@ -588,6 +591,7 @@ class ItemAssignment(Base):
         Enum(AssignmentType, values_callable=_enum_values),
         default=AssignmentType.PERMANENT,
         nullable=False,
+        server_default="permanent",
     )
 
     # Dates
@@ -661,7 +665,7 @@ class ItemIssuance(Base):
     )
 
     # How many units were issued (usually 1)
-    quantity_issued = Column(Integer, nullable=False, default=1)
+    quantity_issued = Column(Integer, nullable=False, default=1, server_default="1")
 
     # Dates
     issued_at = Column(
@@ -726,7 +730,6 @@ class IssuanceAllowance(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # What category this allowance applies to
@@ -970,14 +973,17 @@ class DepartureClearance(Base):
         Enum(ClearanceStatus, values_callable=_enum_values),
         default=ClearanceStatus.INITIATED,
         nullable=False,
+        server_default="initiated",
     )
 
     # Summary counts (denormalized for quick dashboard reads)
-    total_items = Column(Integer, nullable=False, default=0)
-    items_cleared = Column(Integer, nullable=False, default=0)
-    items_outstanding = Column(Integer, nullable=False, default=0)
-    total_value = Column(Numeric(10, 2), nullable=False, default=0)
-    value_outstanding = Column(Numeric(10, 2), nullable=False, default=0)
+    total_items = Column(Integer, nullable=False, default=0, server_default="0")
+    items_cleared = Column(Integer, nullable=False, default=0, server_default="0")
+    items_outstanding = Column(Integer, nullable=False, default=0, server_default="0")
+    total_value = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
+    value_outstanding = Column(
+        Numeric(10, 2), nullable=False, default=0, server_default="0"
+    )
 
     # Dates
     initiated_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1054,13 +1060,14 @@ class DepartureClearanceItem(Base):
     item_serial_number = Column(String(255))
     item_asset_tag = Column(String(255))
     item_value = Column(Numeric(10, 2))
-    quantity = Column(Integer, nullable=False, default=1)
+    quantity = Column(Integer, nullable=False, default=1, server_default="1")
 
     # Resolution
     disposition = Column(
         Enum(ClearanceLineDisposition, values_callable=_enum_values),
         default=ClearanceLineDisposition.PENDING,
         nullable=False,
+        server_default="pending",
     )
     return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
     resolved_at = Column(DateTime(timezone=True))
@@ -1131,13 +1138,15 @@ class InventoryNotificationQueue(Base):
     item_name = Column(String(255), nullable=False)
     item_serial_number = Column(String(255))
     item_asset_tag = Column(String(255))
-    quantity = Column(Integer, nullable=False, default=1)
+    quantity = Column(Integer, nullable=False, default=1, server_default="1")
 
     # Who performed the action
     performed_by = Column(String(36), ForeignKey("users.id"))
 
     # Processing state
-    processed = Column(Boolean, default=False, nullable=False, index=True)
+    processed = Column(
+        Boolean, default=False, nullable=False, index=True, server_default="0"
+    )
     processed_at = Column(DateTime(timezone=True))
     # Circuit-breaker fields: track delivery attempts so a persistently
     # failing email destination (e.g. expired SMTP creds) eventually stops
@@ -1176,10 +1185,12 @@ class PropertyReturnReminder(Base):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     reminder_type = Column(String(20), nullable=False)  # "30_day" or "90_day"
-    items_outstanding = Column(Integer, nullable=False, default=0)
-    total_value_outstanding = Column(Numeric(10, 2), nullable=False, default=0)
-    sent_to_member = Column(Boolean, nullable=False, default=True)
-    sent_to_admin = Column(Boolean, nullable=False, default=True)
+    items_outstanding = Column(Integer, nullable=False, default=0, server_default="0")
+    total_value_outstanding = Column(
+        Numeric(10, 2), nullable=False, default=0, server_default="0"
+    )
+    sent_to_member = Column(Boolean, nullable=False, default=True, server_default="1")
+    sent_to_admin = Column(Boolean, nullable=False, default=True, server_default="1")
     sent_at = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -1257,7 +1268,7 @@ class EquipmentRequest(Base):
         ForeignKey("inventory_categories.id", ondelete="SET NULL"),
         nullable=True,
     )  # Category (optional)
-    quantity = Column(Integer, nullable=False, default=1)
+    quantity = Column(Integer, nullable=False, default=1, server_default="1")
     request_type = Column(
         Enum(RequestType, values_callable=_enum_values),
         nullable=False,
@@ -1346,7 +1357,6 @@ class StorageArea(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Name and label (e.g., "Rack A", "Shelf 3", "Box 12")
@@ -1361,16 +1371,13 @@ class StorageArea(Base):
     )
 
     # Hierarchy: parent storage area (e.g., shelf's parent = rack)
-    parent_id = Column(
-        String(36), ForeignKey("storage_areas.id", ondelete="CASCADE"), index=True
-    )
+    parent_id = Column(String(36), ForeignKey("storage_areas.id", ondelete="CASCADE"))
 
     # Room/location this storage area belongs to (top-level only; children inherit)
     location_id = Column(
         String(36),
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # Optional: barcode or QR code for scanning
@@ -1463,6 +1470,7 @@ class WriteOffRequest(Base):
         nullable=False,
         default=WriteOffStatus.PENDING,
         index=True,
+        server_default="pending",
     )
 
     # Who requested and who reviewed
@@ -1529,7 +1537,6 @@ class NFPAItemCompliance(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # NFPA 1851 §10.1.2 — Lifecycle Dates
@@ -1875,7 +1882,7 @@ class ReorderRequest(Base):
         nullable=True,
     )
     item_name = Column(String(255), nullable=False)
-    quantity_requested = Column(Integer, nullable=False, default=1)
+    quantity_requested = Column(Integer, nullable=False, default=1, server_default="1")
     quantity_received = Column(Integer, nullable=True)
 
     # Vendor / ordering details
@@ -1892,11 +1899,13 @@ class ReorderRequest(Base):
         nullable=False,
         default=ReorderStatus.PENDING,
         index=True,
+        server_default="pending",
     )
     urgency = Column(
         Enum(ReorderUrgency, values_callable=_enum_values),
         nullable=False,
         default=ReorderUrgency.NORMAL,
+        server_default="normal",
     )
     notes = Column(Text)
 
@@ -1949,7 +1958,6 @@ class ItemVariantGroup(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Display info
@@ -2005,7 +2013,6 @@ class EquipmentKit(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(255), nullable=False)
@@ -2067,7 +2074,7 @@ class EquipmentKitItem(Base):
     item_name = Column(String(255), nullable=False)  # Display name
 
     # How many to include
-    quantity = Column(Integer, nullable=False, default=1)
+    quantity = Column(Integer, nullable=False, default=1, server_default="1")
 
     # Whether the member picks a size variant (for pool items with variants)
     size_selectable = Column(Boolean, default=False)
@@ -2158,7 +2165,6 @@ class InventoryImpactPlan(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     name = Column(String(255), nullable=False)
     description = Column(Text)

@@ -236,7 +236,7 @@ def validate_schema(engine) -> tuple[bool, list[str]]:
                 "password_hash",
                 "status",
             ],
-            "roles": ["id", "organization_id", "name", "slug", "permissions"],
+            "positions": ["id", "organization_id", "name", "slug", "permissions"],
             "onboarding_sessions": ["id", "session_id", "data", "expires_at"],
             "notification_logs": [
                 "id",

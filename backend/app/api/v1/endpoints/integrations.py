@@ -299,7 +299,7 @@ def _validate_config(integration_type: str, config: dict[str, Any]) -> dict[str,
             return validated.model_dump()
         except Exception as e:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Invalid config for {integration_type}: {e}",
             )
     return config

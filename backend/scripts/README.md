@@ -73,6 +73,42 @@ RECOMMENDED ACTIONS:
 
 ---
 
+## Schema Documentation
+
+### `generate_schema_docs.py`
+
+Renders `docs/DATABASE_SCHEMA.md` from `Base.metadata` — every table, column,
+type, key, index and constraint, plus a full foreign key map and the list of
+tables that are not directly org-scoped.
+
+The models are the right source rather than a live database: `main.py`'s
+`_fast_path_init()` builds a fresh install with `Base.metadata.create_all()`,
+so the models *are* the schema a new deployment gets.
+
+**Usage:**
+
+```bash
+cd backend
+python scripts/generate_schema_docs.py            # regenerate the doc
+python scripts/generate_schema_docs.py --check    # CI: fail if stale
+```
+
+**Exit Codes:**
+- `0`: Doc written, or (with `--check`) doc matches the models
+- `1`: With `--check`, the committed doc is out of date
+
+**Requirements:**
+- No database needed — reads model metadata only
+- SQLAlchemy models must be importable
+
+Run `--check` in CI so a change under `app/models/` cannot land without the
+schema reference being regenerated. That makes every schema change visible in
+review, which is where "does this need a migration too?" is cheapest to ask.
+See [DATABASE_SCHEMA_DRIFT.md](../../docs/DATABASE_SCHEMA_DRIFT.md) for what
+happens when that question goes unasked.
+
+---
+
 ## Adding New Scripts
 
 When adding new utility scripts to this directory:

@@ -29,7 +29,9 @@ class UTCResponseBase(BaseModel):
 
     @model_validator(mode="after")
     def _stamp_naive_datetimes_utc(self) -> "UTCResponseBase":
-        for name in self.model_fields:
+        # Read model_fields off the class, not the instance: Pydantic 2.11
+        # deprecated instance access and removes it in v3.
+        for name in type(self).model_fields:
             val = getattr(self, name)
             if isinstance(val, datetime) and val.tzinfo is None:
                 object.__setattr__(self, name, val.replace(tzinfo=timezone.utc))

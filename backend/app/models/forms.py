@@ -114,12 +114,14 @@ class Form(Base):
         Enum(FormCategory, values_callable=lambda x: [e.value for e in x]),
         default=FormCategory.OPERATIONS,
         nullable=False,
+        server_default="operations",
     )
     status = Column(
         Enum(FormStatus, values_callable=lambda x: [e.value for e in x]),
         default=FormStatus.DRAFT,
         nullable=False,
         index=True,
+        server_default="draft",
     )
 
     # Settings
@@ -218,7 +220,7 @@ class FormField(Base):
     condition_value = Column(String(500), nullable=True)  # Value to compare against
 
     # Layout
-    sort_order = Column(Integer, default=0, nullable=False)
+    sort_order = Column(Integer, default=0, nullable=False, server_default="0")
     width = Column(String(20), default="full")  # "full", "half", "third"
 
     # Timestamps
@@ -313,7 +315,6 @@ class FormIntegration(Base):
         String(36),
         ForeignKey("forms.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False

@@ -276,7 +276,7 @@ class GrantOpportunity(Base):
     program_url = Column(String(500), nullable=True)
 
     # Match requirements
-    match_required = Column(Boolean, nullable=False, default=False)
+    match_required = Column(Boolean, nullable=False, default=False, server_default="0")
     match_percentage = Column(Numeric(5, 2), nullable=True)
     match_description = Column(String(500), nullable=True)
 
@@ -300,7 +300,7 @@ class GrantOpportunity(Base):
     federal_program_code = Column(String(50), nullable=True)  # e.g. "AFG", "SAFER"
 
     # Status
-    is_active = Column(Boolean, nullable=False, default=True)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
     notes = Column(Text, nullable=True)
 
     # Metadata
@@ -362,6 +362,7 @@ class GrantApplication(Base):
         SQLEnum(ApplicationStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ApplicationStatus.RESEARCHING,
+        server_default="researching",
     )
 
     # Financial
@@ -408,6 +409,7 @@ class GrantApplication(Base):
         SQLEnum(GrantPriority, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=GrantPriority.MEDIUM,
+        server_default="medium",
     )
 
     # Link to fundraising campaign (for match campaigns)
@@ -489,14 +491,14 @@ class GrantBudgetItem(Base):
 
     # Financial
     amount_budgeted = Column(Numeric(12, 2), nullable=False)
-    amount_spent = Column(Numeric(12, 2), nullable=False, default=0)
+    amount_spent = Column(Numeric(12, 2), nullable=False, default=0, server_default="0")
     amount_remaining = Column(Numeric(12, 2), nullable=True)
     federal_share = Column(Numeric(12, 2), nullable=True)
     local_match = Column(Numeric(12, 2), nullable=True)
 
     # Notes and ordering
     notes = Column(Text, nullable=True)
-    sort_order = Column(Integer, nullable=False, default=0)
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
 
     # Metadata
     created_at = Column(
@@ -618,6 +620,7 @@ class GrantComplianceTask(Base):
         SQLEnum(ComplianceTaskStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ComplianceTaskStatus.PENDING,
+        server_default="pending",
     )
 
     # Priority
@@ -625,6 +628,7 @@ class GrantComplianceTask(Base):
         SQLEnum(GrantPriority, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=GrantPriority.MEDIUM,
+        server_default="medium",
     )
 
     # Assignment
@@ -633,7 +637,9 @@ class GrantComplianceTask(Base):
     )
 
     # Reminders
-    reminder_days_before = Column(Integer, nullable=False, default=14)
+    reminder_days_before = Column(
+        Integer, nullable=False, default=14, server_default="14"
+    )
     last_reminder_sent = Column(DateTime(timezone=True), nullable=True)
 
     # Report guidance
@@ -691,6 +697,7 @@ class GrantNote(Base):
         SQLEnum(GrantNoteType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=GrantNoteType.GENERAL,
+        server_default="general",
     )
     content = Column(Text, nullable=False)
 
