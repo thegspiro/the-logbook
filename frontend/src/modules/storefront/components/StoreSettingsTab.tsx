@@ -727,11 +727,16 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
                   <button
                     type="button"
                     onClick={() => setPreviewNotice(notice.notice)}
+                    /* Every row's visible label is just "Preview", so the notice
+                       has to be named for screen readers. It must be aria-label,
+                       not an sr-only span: accessible-name computation trims each
+                       child's text before concatenating, so a span opening with a
+                       space announces as "Previewthe Order placed with…". */
+                    aria-label={`Preview the ${notice.label} email`}
                     className="text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target flex shrink-0 items-center gap-1 text-xs"
                   >
                     <Eye className="h-4 w-4" aria-hidden="true" />
                     Preview
-                    <span className="sr-only"> the {notice.label} email</span>
                   </button>
                 </div>
               ))}

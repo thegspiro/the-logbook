@@ -86,13 +86,15 @@ jobs:
         # runner-image packages (pip/setuptools/wheel) don't fail the build.
         # The explicit ignores are the documented deferrals from
         # docs/KNOWN_LIMITATIONS.md: black 26 is a major that reformats the
-        # repo. Remove an ignore when its entry clears. (The pyopenssl
+        # repo, and cryptography's fix is unreachable behind fastapi-mail's
+        # upper pin. Remove an ignore when its entry clears. (The pyopenssl
         # ignores went away with the unused pysaml2 dependency.)
         run: |
           pip install -r requirements.txt
           pip-audit -r requirements.txt \
             --ignore-vuln PYSEC-2026-2120 \
-            --ignore-vuln PYSEC-2026-2121
+            --ignore-vuln PYSEC-2026-2121 \
+            --ignore-vuln PYSEC-2026-3552
 
       - name: Upload Bandit report
         if: always()
