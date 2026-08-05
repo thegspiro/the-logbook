@@ -72,9 +72,77 @@ const REQUIRED_HEADERS = ['firstname', 'lastname', 'email'] as const;
  */
 const MEMBERSHIP_NUMBER_HEADERS = ['membershipnumber', 'departmentid'] as const;
 
+/**
+ * Column names are matched on this normalized form, so a roster exported from
+ * another system ("First Name", "membership_number", "Join-Date") lines up with
+ * the template's camelCase spelling instead of being reported as a missing
+ * required column. The leading BOM strip is belt-and-braces: `Blob.text()`
+ * already removes it, but a file read through another path would otherwise
+ * leave it glued to the first header and fail the required-column check.
+ */
+const normalizeHeader = (header: string): string =>
+  header
+    .replace(/^\uFEFF/, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+
 const OPTIONAL_HEADERS = TEMPLATE_HEADERS.filter(
-  (h) => !(REQUIRED_HEADERS as readonly string[]).includes(h.toLowerCase())
+  (h) => !(REQUIRED_HEADERS as readonly string[]).includes(normalizeHeader(h))
 );
+
+/**
+ * Excel rewrites an ISO date cell into the workstation's locale format the
+ * moment the template is opened and saved, so a filled-in roster comes back
+ * with `3/15/1985` where the template showed `1985-03-15`. The API binds these
+ * columns to a Pydantic `date`, which accepts ISO only — without this every row
+ * of an Excel-edited file fails with an opaque 422.
+ *
+ * Returns the ISO form, or null when the value is not a date this importer
+ * recognizes.
+ */
+const toIsoDate = (value: string): string | null => {
+  const trimmed = value.trim();
+
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(trimmed);
+  const us = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/.exec(trimmed);
+
+  let year: number;
+  let month: number;
+  let day: number;
+
+  if (iso) {
+    year = Number(iso[1] ?? '');
+    month = Number(iso[2] ?? '');
+    day = Number(iso[3] ?? '');
+  } else if (us) {
+    month = Number(us[1] ?? '');
+    day = Number(us[2] ?? '');
+    const rawYear = us[3] ?? '';
+    // A two-digit year is ambiguous; 70+ reads as 19xx so that a 1972 date of
+    // birth does not land in 2072.
+    year =
+      rawYear.length === 2
+        ? Number(rawYear) >= 70
+          ? 1900 + Number(rawYear)
+          : 2000 + Number(rawYear)
+        : Number(rawYear);
+  } else {
+    return null;
+  }
+
+  // Rejects overflow dates (2025-02-30) that would otherwise roll forward.
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
 
 /**
  * Minimal RFC 4180 parser. A plain `split(',')` shifts every column right of a
@@ -190,6 +258,13 @@ const validateRow = (data: CSVMemberRow): string | null => {
     return 'Emergency contact 2 needs both emergencyRelationship2 and emergencyPhone2';
   }
 
+  const badDate = ([['dateOfBirth', data.dateOfBirth], ['joinDate', data.joinDate]] as const).find(
+    ([, value]) => value && toIsoDate(value) === null
+  );
+  if (badDate) {
+    return `${badDate[0]} "${badDate[1] ?? ''}" is not a recognized date — use YYYY-MM-DD or MM/DD/YYYY`;
+  }
+
   return null;
 };
 
@@ -233,7 +308,7 @@ const ImportMembers: React.FC = () => {
         return;
       }
 
-      const headers = headerRow.map((h) => h.trim().toLowerCase());
+      const headers = headerRow.map(normalizeHeader);
 
       const missingHeaders = REQUIRED_HEADERS.filter((h) => !headers.includes(h));
       if (missingHeaders.length > 0) {
@@ -250,7 +325,7 @@ const ImportMembers: React.FC = () => {
       }
 
       const missingOptional = OPTIONAL_HEADERS.filter((h) => {
-        const key = h.toLowerCase();
+        const key = normalizeHeader(h);
         // Either spelling of the membership number column satisfies this one.
         if (key === 'membershipnumber') {
           return !MEMBERSHIP_NUMBER_HEADERS.some((alias) => headers.includes(alias));
@@ -297,7 +372,7 @@ const ImportMembers: React.FC = () => {
         return;
       }
 
-      const headers = headerRow.map((h) => h.trim().toLowerCase());
+      const headers = headerRow.map(normalizeHeader);
 
       // Roles are named in the CSV but the API assigns them by id, so resolve
       // the org's roles once up front rather than per row.
@@ -343,6 +418,10 @@ const ImportMembers: React.FC = () => {
         try {
           const username = rowData.username || usernameFromEmail(rowData.email);
 
+          // validateRow has already rejected anything toIsoDate cannot parse.
+          const dateOfBirth = rowData.dateOfBirth ? toIsoDate(rowData.dateOfBirth) : null;
+          const joinDate = rowData.joinDate ? toIsoDate(rowData.joinDate) : null;
+
           // Build emergency contacts array
           const emergencyContacts: Array<{
             name: string;
@@ -385,8 +464,8 @@ const ImportMembers: React.FC = () => {
             ...(rowData.membershipNumber ? { membership_number: rowData.membershipNumber } : {}),
             ...(rowData.primaryPhone ? { phone: rowData.primaryPhone } : {}),
             ...(rowData.secondaryPhone ? { mobile: rowData.secondaryPhone } : {}),
-            ...(rowData.dateOfBirth ? { date_of_birth: rowData.dateOfBirth } : {}),
-            ...(rowData.joinDate ? { hire_date: rowData.joinDate } : {}),
+            ...(dateOfBirth ? { date_of_birth: dateOfBirth } : {}),
+            ...(joinDate ? { hire_date: joinDate } : {}),
             ...(rowData.rank ? { rank: rowData.rank } : {}),
             ...(rowData.station ? { station: rowData.station } : {}),
             ...(rowData.platoon ? { platoon: rowData.platoon } : {}),
@@ -509,8 +588,10 @@ const ImportMembers: React.FC = () => {
               Fill in member information — <strong>firstName</strong>, <strong>lastName</strong> and{' '}
               <strong>email</strong> are required on every row; the rest are optional
             </li>
+            <li>Replace the sample row — it is imported like any other row if left in</li>
             <li>Leave membershipNumber blank to have the system assign one</li>
             <li>Role must match a role name configured under Roles</li>
+            <li>Dates accept either YYYY-MM-DD or MM/DD/YYYY</li>
             <li>Upload your completed CSV file</li>
             <li>Review the preview and import</li>
           </ol>

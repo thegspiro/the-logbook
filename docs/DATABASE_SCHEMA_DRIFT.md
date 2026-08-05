@@ -8,6 +8,9 @@ schema disagree.
 Every finding has been fixed; each records the revision that closed it. One
 residual difference is documented at the end as a deliberate non-change.
 
+**The two build paths now produce identical schemas** — same tables, columns,
+types, enums, defaults, foreign keys and indexes.
+
 ---
 
 ## Why there are two schemas
@@ -78,7 +81,7 @@ incomplete relative to the models.
 
 | Class | Finding | Count | Status |
 |---|---|---|---|
-| Durable | Column **type** differs between paths | 38 | Fixed — `20260805_0010`, `0011`, `0003`–`0006` |
+| Durable | Column **type** differs between paths | 38 | Fixed — `20260805_0101`, `0102`, `0003`–`0006` |
 | Durable | Foreign key **ON DELETE** rule differs | 18 | Fixed — `20260805_0005`, `0008` |
 | Durable | **Enum value set** differs | 5 | Fixed — `20260805_0003`, `0006` |
 | Durable | **Server default** missing on a NOT NULL column | 283 | Fixed — models + `20260805_0007` |
@@ -86,11 +89,16 @@ incomplete relative to the models.
 | Self-healing | Tables only in models | 37 | Not a defect |
 | Self-healing | Columns only in models | 15 | Not a defect |
 | Model-side | **Duplicate indexes** — same column indexed twice | 136 | Fixed — models + `20260805_0009` |
+| Model-side | **Redundant indexes** — leftmost-prefix / unique-shadowed | 145 | Fixed — models + `20260805_0010` |
+| Durable | **Index set** differs between paths | 82 + 37 | Fixed — `20260805_0010` |
+| Durable | Foreign keys missing on one path | 8 | Fixed — models + `20260805_0010` |
 | Dead | Columns only in migrations | 2 | Fixed — `20260805_0009` |
 
-After `20260805_0010`, `0011` and `0003`–`0009`, re-running the comparison gives **0 type
-mismatches**, **0 foreign key rule differences**, **0 NOT NULL columns without a
-needed default**, and **no table present in one path but not the other**.
+After the whole `20260805` series — `0001`–`0010` plus `0101` and `0102` —
+re-running the comparison gives **0 differences of any kind** on tables both
+paths build: 0 type mismatches, 0 foreign key differences (presence or rule),
+0 NOT NULL columns without a needed default, 0 index differences, and no table
+present in one path but not the other — 1,117 indexes on each side.
 
 The backend suite against a model-built database went from
 **2,648 passed / 16 failed / 372 errors** to **3,036 passed, 0 failed,
@@ -119,7 +127,7 @@ Since the model is what a fresh install gets, new deployments had the narrow
 column and a document body over 64 KB failed to save.
 
 Fixed on both sides: the model now declares
-`Text().with_variant(mysql.LONGTEXT(), "mysql")`, and `20260805_0010` widens
+`Text().with_variant(mysql.LONGTEXT(), "mysql")`, and `20260805_0101` widens
 databases that were built from the model.
 
 ### 2. `organizations.logo` was `MEDIUMTEXT` in the model, `LONGTEXT` in the migration
@@ -131,7 +139,7 @@ that guarantee did not hold. Same fix, same revision as #1.
 > Both of these were originally reported as needing only a model change. That
 > was wrong: databases built by `create_all()` — every install created since the
 > fast path landed — already had the *narrow* column and needed the ALTER too.
-> `20260805_0010` covers them.
+> `20260805_0101` covers them.
 
 ### 3. `users.mfa_secret` was `VARCHAR(32)` on migration-built databases
 
@@ -147,7 +155,7 @@ A raw TOTP secret fits in 32 characters; the **encrypted** ciphertext does not.
 On any database built from the chain, enrolling in MFA truncated the ciphertext
 so it could never be decrypted — with no error at write time.
 
-Fixed by `20260805_0011`. Secrets already truncated stay unrecoverable, so
+Fixed by `20260805_0102`. Secrets already truncated stay unrecoverable, so
 affected members must re-enrol.
 
 ### 4. Enum value sets rejected values the models consider legal
@@ -367,12 +375,57 @@ differently between the two. The models declare these nullable, meaning `NULL`
 is a legal value, so adding defaults would change their semantics rather than
 align them.
 
-**Index sets still differ**: 82 indexes exist only in the models and 11 only in
-the chain. These are genuinely different index sets rather than duplicates, so
-reconciling them is a performance question — which indexes are actually wanted —
-not a correctness one. A chain-built database simply lacks 82 indexes a fresh
-install has, because `create_all()` never adds indexes to tables that already
-exist.
+That is the only remaining difference. The index sets, which previously
+diverged by 93, are now identical — see finding 12.
+
+### 12. The index set was redundant and inconsistent between paths
+
+Three problems, fixed together by `20260805_0010`:
+
+**145 redundant indexes.** `20260805_0009` had removed 136 *exact* duplicates,
+but two subtler kinds survived:
+
+- **Leftmost-prefix duplicates.** A composite index on `(a, b)` already serves
+  every query filtering or sorting on `a` alone, so a separate index on `(a)`
+  costs writes and returns nothing. Most were an `index=True` on a column some
+  composite in `__table_args__` already covered.
+- **Non-unique indexes shadowed by a unique one** over the same column. A
+  unique index answers everything its non-unique twin could.
+
+**The two paths disagreed**: 82 indexes existed only on chain-built databases,
+37 only on `create_all`-built ones.
+
+The models are now the single source of truth. Indexes only the chain had were
+adopted where nothing already covered them — an overdue-checkout composite on
+`checkout_records`, the reporting-period composite on `compliance_reports`,
+`documents(source_type, source_id)`, `item_assignments(item_id, is_active)`,
+`training_categories(organization_id, registry_code)`,
+`training_requirements(organization_id, year)` and `votes(is_proxy_vote)`.
+**Nothing was dropped that a query might want** — only indexes another index
+already answers. The model index count went from 985 to 711.
+
+**Eight foreign keys** were fixed in passing. Five are declared by the models
+and were never created on chain-built databases (`events.updated_by`,
+`event_templates.updated_by`, `event_external_attendees.updated_by`, and both
+actor columns on `facility_rooms`). Three are the reverse: `training_records`,
+`training_sessions` and `skill_checkoffs` each carry an `apparatus_id` that
+`20260218_0400` wires to `apparatus.id` on chain-built databases, while the
+model left it an unconstrained column — so fresh installs had no referential
+integrity there at all. The models now declare all eight.
+
+Every drop is guarded on another index still leading with the same column, and
+creates run before drops, so a foreign key is never left without a backing
+index (MySQL error 1553). `inventory_items.uq_item_org_serial_number` is unique
+and reports colliding rows up front rather than failing part-way with a bare
+1062.
+
+`test_database_schema.py::test_organization_id_is_indexed` was corrected as part
+of this. It only inspected `Index` objects, so it missed the `UniqueConstraint`
+that is now the sole coverage on three tables — MySQL materialises one as a
+unique index, which serves a leftmost-prefix lookup identically. It was also
+tightened to require `organization_id` to *lead* an index rather than merely
+appear in one: a lone `WHERE organization_id = ?` cannot use an index where the
+column sits second.
 
 ---
 

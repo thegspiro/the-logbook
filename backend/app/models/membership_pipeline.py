@@ -108,7 +108,6 @@ class MembershipPipeline(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(255), nullable=False)
@@ -165,7 +164,6 @@ class MembershipPipelineStep(Base):
         String(36),
         ForeignKey("membership_pipelines.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(255), nullable=False)
@@ -229,7 +227,6 @@ class ProspectiveMember(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     pipeline_id = Column(
         String(36),
@@ -351,7 +348,6 @@ class ProspectStepProgress(Base):
         String(36),
         ForeignKey("prospective_members.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     step_id = Column(
         String(36),
@@ -609,7 +605,6 @@ class ProspectInterview(Base):
     interviewer = relationship("User", foreign_keys=[interviewer_id])
 
     __table_args__ = (
-        Index("idx_interview_prospect", "prospect_id"),
         Index("idx_interview_interviewer", "interviewer_id"),
         Index(
             "idx_interview_prospect_interviewer",
@@ -638,7 +633,6 @@ class ProspectEventLink(Base):
         String(36),
         ForeignKey("prospective_members.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     event_id = Column(
         String(36),

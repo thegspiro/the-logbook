@@ -113,7 +113,6 @@ class NotificationRule(Base):
     )
 
     __table_args__ = (
-        Index("idx_notif_rules_org", "organization_id"),
         Index("idx_notif_rules_org_trigger", "organization_id", "trigger"),
         Index("idx_notif_rules_org_enabled", "organization_id", "enabled"),
     )
@@ -190,7 +189,6 @@ class NotificationLog(Base):
     recipient = relationship("User", foreign_keys=[recipient_id], lazy="joined")
 
     __table_args__ = (
-        Index("idx_notif_logs_org", "organization_id"),
         Index("idx_notif_logs_recipient", "recipient_id"),
         Index("idx_notif_logs_org_sent", "organization_id", "sent_at"),
     )
@@ -312,8 +310,6 @@ class DepartmentMessage(Base):
     )
 
     __table_args__ = (
-        Index("idx_dept_msg_org", "organization_id"),
-        Index("idx_dept_msg_org_active", "organization_id", "is_active"),
         Index("idx_dept_msg_org_pinned", "organization_id", "is_pinned"),
         # Inbox/unread queries filter on org + is_active + expires_at, so index
         # the trailing expiry to keep the active-message scan cheap.
@@ -356,6 +352,5 @@ class DepartmentMessageRead(Base):
 
     __table_args__ = (
         UniqueConstraint("message_id", "user_id", name="uq_dept_msg_read_user"),
-        Index("idx_dept_msg_read_msg", "message_id"),
         Index("idx_dept_msg_read_user", "user_id"),
     )

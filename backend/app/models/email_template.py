@@ -78,7 +78,6 @@ class EmailTemplate(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Template identification
@@ -198,7 +197,6 @@ class ScheduledEmail(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Which template to use (nullable — caller may supply raw context)

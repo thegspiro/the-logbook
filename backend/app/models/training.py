@@ -137,7 +137,6 @@ class TrainingCategory(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Category Details
@@ -184,6 +183,7 @@ class TrainingCategory(Base):
     __table_args__ = (
         Index("idx_category_org_code", "organization_id", "code"),
         Index("idx_category_parent", "parent_category_id"),
+        Index("idx_category_registry_code", "organization_id", "registry_code"),
     )
 
     def __repr__(self):
@@ -204,7 +204,6 @@ class TrainingCourse(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Course Information
@@ -295,7 +294,6 @@ class TrainingRecord(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     course_id = Column(
         String(36),
@@ -357,8 +355,11 @@ class TrainingRecord(Base):
 
     # Cross-module link: which apparatus was used for this training
     apparatus_id = Column(
-        String(36), nullable=True, index=True
-    )  # FK to apparatus table (added conditionally)
+        String(36),
+        ForeignKey("apparatus.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Snapshot of member's rank and station at time of training completion
     rank_at_completion = Column(String(100), nullable=True)
@@ -369,7 +370,6 @@ class TrainingRecord(Base):
         String(36),
         ForeignKey("external_training_providers.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     external_record_id = Column(
         String(255), nullable=True
@@ -433,7 +433,6 @@ class TrainingRequirement(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Requirement Details
@@ -561,6 +560,7 @@ class TrainingRequirement(Base):
         Index("idx_requirement_org_source", "organization_id", "source"),
         Index("idx_requirement_type", "requirement_type"),
         Index("idx_requirement_due", "due_date"),
+        Index("idx_requirement_year", "organization_id", "year"),
     )
 
     def __repr__(self):
@@ -641,8 +641,11 @@ class TrainingSession(Base):
         JSON, nullable=True
     )  # List of user IDs for additional instructors
     apparatus_id = Column(
-        String(36), nullable=True, index=True
-    )  # FK to apparatus table (added conditionally)
+        String(36),
+        ForeignKey("apparatus.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Certification Details
     issues_certification = Column(Boolean, default=False)
@@ -696,10 +699,7 @@ class TrainingSession(Base):
     event = relationship("Event", foreign_keys=[event_id], lazy="select")
     course = relationship("TrainingCourse", foreign_keys=[course_id], lazy="select")
 
-    __table_args__ = (
-        Index("idx_training_session_event", "event_id"),
-        Index("idx_training_session_org", "organization_id"),
-    )
+    __table_args__ = (Index("idx_training_session_org", "organization_id"),)
 
     def __repr__(self):
         return f"<TrainingSession(course_name={self.course_name}, event_id={self.event_id})>"
@@ -1199,7 +1199,6 @@ class TrainingApproval(Base):
     __table_args__ = (
         Index("idx_approval_session", "training_session_id"),
         Index("idx_approval_status", "status"),
-        Index("idx_approval_token", "approval_token"),
         Index("idx_approval_deadline", "approval_deadline"),
     )
 
@@ -1222,7 +1221,6 @@ class TrainingProgram(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Program Details
@@ -1330,7 +1328,6 @@ class ProgramPhase(Base):
             "phase_number",
             name="uq_program_phases_program_id_phase_number",
         ),
-        Index("idx_phase_program", "program_id", "phase_number"),
     )
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
@@ -1338,7 +1335,6 @@ class ProgramPhase(Base):
         String(36),
         ForeignKey("training_programs.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Phase Details
@@ -1510,13 +1506,11 @@ class ProgramEnrollment(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     program_id = Column(
         String(36),
         ForeignKey("training_programs.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Enrollment Details
@@ -1601,7 +1595,6 @@ class RequirementProgress(Base):
         String(36),
         ForeignKey("program_enrollments.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     requirement_id = Column(
         String(36),
@@ -1724,7 +1717,6 @@ class RequirementProgressCredit(Base):
             "source_id",
             name="uq_progress_credit_source",
         ),
-        Index("idx_progress_credit_progress", "progress_id"),
     )
 
     def __repr__(self):
@@ -1748,7 +1740,6 @@ class SkillEvaluation(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Skill Details
@@ -1828,8 +1819,11 @@ class SkillCheckoff(Base):
         index=True,
     )
     apparatus_id = Column(
-        String(36), nullable=True, index=True
-    )  # FK to apparatus table (added conditionally)
+        String(36),
+        ForeignKey("apparatus.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     conditions = Column(
         JSON, nullable=True
     )  # Environmental context: {"time_of_day", "weather", "road_conditions", etc.}
@@ -1872,7 +1866,6 @@ class ShiftCompletionReport(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Shift context
@@ -1886,7 +1879,6 @@ class ShiftCompletionReport(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     officer_id = Column(
         String(36),
@@ -2316,13 +2308,11 @@ class TrainingSubmission(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     submitted_by = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Training Details
@@ -2440,7 +2430,6 @@ class ExternalTrainingProvider(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Provider Details
@@ -2583,7 +2572,6 @@ class ExternalCategoryMapping(Base):
     internal_category = relationship("TrainingCategory")
 
     __table_args__ = (
-        Index("idx_ext_mapping_provider", "provider_id"),
         Index("idx_ext_mapping_external", "provider_id", "external_category_id"),
     )
 
@@ -2638,7 +2626,6 @@ class ExternalUserMapping(Base):
     )
 
     __table_args__ = (
-        Index("idx_ext_user_provider", "provider_id"),
         Index("idx_ext_user_external", "provider_id", "external_user_id"),
         Index("idx_ext_user_internal", "internal_user_id"),
     )
@@ -2661,7 +2648,6 @@ class ExternalTrainingSyncLog(Base):
         String(36),
         ForeignKey("external_training_providers.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),
@@ -2732,7 +2718,6 @@ class ExternalTrainingImport(Base):
         String(36),
         ForeignKey("external_training_providers.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),
@@ -2844,7 +2829,6 @@ class Shift(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Shift Details
@@ -3284,7 +3268,6 @@ class ShiftAssignment(Base):
 
     __table_args__ = (
         UniqueConstraint("shift_id", "user_id", name="uq_shift_assignment_shift_user"),
-        Index("idx_shift_assign_shift", "shift_id"),
         Index("idx_shift_assign_user", "user_id"),
         Index("idx_shift_assign_org", "organization_id"),
         # Active-assignment scans filter on (shift_id, assignment_status):
@@ -3495,7 +3478,6 @@ class TrainingWaiver(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
@@ -3567,7 +3549,6 @@ class RecertificationPathway(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Which certification this pathway renews
@@ -3669,7 +3650,6 @@ class RenewalTask(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Links
@@ -3757,7 +3737,6 @@ class CompetencyMatrix(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Target
@@ -3813,7 +3792,6 @@ class MemberCompetency(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     skill_evaluation_id = Column(
         String(36),
@@ -3893,7 +3871,6 @@ class InstructorQualification(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # What they're qualified for
@@ -4304,8 +4281,6 @@ class ShiftEquipmentCheck(Base):
     )
 
     __table_args__ = (
-        Index("idx_shift_equip_check_shift", "shift_id"),
-        Index("idx_shift_equip_check_org", "organization_id"),
         Index("idx_shift_equip_check_user", "checked_by"),
         Index("idx_shift_equip_check_template", "template_id"),
         Index(

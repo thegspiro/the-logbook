@@ -799,7 +799,6 @@ class FundraisingCampaign(Base):
     fundraising_events = relationship("FundraisingEvent", back_populates="campaign")
 
     __table_args__ = (
-        Index("idx_fundraising_campaigns_org", "organization_id"),
         Index("idx_fundraising_campaigns_status", "organization_id", "status"),
         Index("idx_fundraising_campaigns_type", "organization_id", "campaign_type"),
         Index("idx_fundraising_campaigns_dates", "start_date", "end_date"),
@@ -879,7 +878,6 @@ class Donor(Base):
     pledges = relationship("Pledge", back_populates="donor")
 
     __table_args__ = (
-        Index("idx_donors_org", "organization_id"),
         Index("idx_donors_user", "user_id"),
         Index("idx_donors_email", "organization_id", "email"),
         Index("idx_donors_type", "organization_id", "donor_type"),
@@ -983,7 +981,6 @@ class Donation(Base):
     donor = relationship("Donor", back_populates="donations")
 
     __table_args__ = (
-        Index("idx_donations_org", "organization_id"),
         Index("idx_donations_campaign", "campaign_id"),
         Index("idx_donations_donor", "donor_id"),
         Index("idx_donations_date", "donation_date"),
@@ -1059,7 +1056,6 @@ class Pledge(Base):
     donor = relationship("Donor", back_populates="pledges")
 
     __table_args__ = (
-        Index("idx_pledges_org", "organization_id"),
         Index("idx_pledges_campaign", "campaign_id"),
         Index("idx_pledges_donor", "donor_id"),
         Index("idx_pledges_status", "organization_id", "status"),
@@ -1144,7 +1140,6 @@ class FundraisingEvent(Base):
     campaign = relationship("FundraisingCampaign", back_populates="fundraising_events")
 
     __table_args__ = (
-        Index("idx_fundraising_events_org", "organization_id"),
         Index("idx_fundraising_events_campaign", "campaign_id"),
         Index("idx_fundraising_events_date", "event_date"),
         Index("idx_fundraising_events_status", "organization_id", "status"),

@@ -106,7 +106,6 @@ class Location(Base):
         Index("ix_locations_name", "name"),
         Index("ix_locations_is_active", "is_active"),
         Index("ix_locations_facility_id", "facility_id"),
-        Index("ix_locations_facility_room_id", "facility_room_id"),
     )
 
     def __repr__(self):
