@@ -2334,11 +2334,16 @@ class EmailTemplateService:
         else:
             ctx.setdefault("organization_logo_img", "")
 
-        subject = self._replace_variables(template.subject, ctx)
+        # The subject becomes the SMTP Subject: header and the text body the
+        # text/plain alternative — neither is markup, so neither is escaped.
+        # Only html_body is.
+        subject = self._replace_variables(template.subject, ctx, escape_html=False)
         html_body = self._replace_variables(template.html_body, ctx)
         text_body = None
         if template.text_body:
-            text_body = self._replace_variables(template.text_body, ctx)
+            text_body = self._replace_variables(
+                template.text_body, ctx, escape_html=False
+            )
 
         # Wrap HTML body with full document structure and CSS.
         # lang/dir for screen readers (WCAG 3.1.1), meta charset for
@@ -2428,16 +2433,26 @@ class EmailTemplateService:
         "custom_message_html",
     } | _storefront_templates.RAW_HTML_VARIABLES
 
-    def _replace_variables(self, text: str, context: Dict[str, Any]) -> str:
+    def _replace_variables(
+        self, text: str, context: Dict[str, Any], escape_html: bool = True
+    ) -> str:
         """Replace {{variable_name}} placeholders with context values.
 
-        All values are HTML-escaped to prevent injection of malicious
-        HTML/JS through user-controlled template variables (e.g.
+        When rendering into HTML, values are HTML-escaped to prevent injection
+        of malicious HTML/JS through user-controlled template variables (e.g.
         election titles, custom messages, recipient names).
 
         Variables listed in ``_RAW_HTML_VARIABLES`` are inserted without
         escaping because they contain system-generated HTML (item tables,
         logo images, etc.) that is already safe.
+
+        ``escape_html=False`` is for the two destinations that are **not**
+        HTML — the ``Subject:`` header and the ``text/plain`` alternative.
+        Escaping there is not merely unnecessary, it corrupts the output: a
+        member named O'Brien reads as ``O&#x27;Brien`` and an organization
+        called "Falls Church Fire & Rescue" as ``…Fire &amp; Rescue``. There is
+        no injection risk to trade off, because neither destination is parsed
+        as markup.
         """
         import html as _html
 
@@ -2446,7 +2461,7 @@ class EmailTemplateService:
             if var_name not in context:
                 return ""
             value = str(context[var_name])
-            if var_name in self._RAW_HTML_VARIABLES:
+            if not escape_html or var_name in self._RAW_HTML_VARIABLES:
                 return value
             return _html.escape(value)
 

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Email subjects read correctly, and a scheduled email can't borrow another org's template (2026-08-05)
+
+**Fixed**
+
+- **Subject lines and plain-text email bodies were HTML-escaped.** The renderer
+  applied one escaping path to all three of its outputs, but only the HTML body
+  is markup. A department called "Falls Church Fire & Rescue" went out as
+  "Falls Church Fire &amp;amp; Rescue" and a member named O'Brien as
+  "O&amp;#x27;Brien" — in the **subject line**, and throughout the `text/plain`
+  alternative that many clients and all screen readers use. The subject also
+  reached the HTML wrapper already escaped and was escaped a second time into
+  `<title>`. Escaping now applies only to the HTML body; the XSS boundary is
+  unchanged (verified against an `onerror=` payload), and the subject is safe
+  unescaped because CR/LF/NUL are already stripped from headers at the send
+  layer.
+- **A scheduled email could render another organization's template.**
+  `POST /email-templates/schedule` stored a client-supplied `template_id`
+  without checking it belonged to the caller's organization, and the send task
+  then loaded it with no organization filter while eager-loading its uploaded
+  attachments. An admin could schedule an email naming another department's
+  template and have its body and files rendered and mailed to recipients they
+  chose in the same request. Now validated at write time via `assert_in_org` and
+  org-scoped at send time, which also neutralizes any row already stored.
+
 ### Consent is now enforced, client IPs are real, and the migration chain has one head (2026-08-05)
 
 **Fixed**

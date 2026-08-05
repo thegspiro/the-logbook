@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.email_template import (
     EmailAttachment,
     EmailTemplate,
@@ -35,6 +36,7 @@ from app.schemas.email_template import (
     ScheduledEmailUpdate,
 )
 from app.services.email_template_service import SAMPLE_CONTEXT, EmailTemplateService
+from app.utils.org_scoping import assert_in_org
 
 router = APIRouter()
 
@@ -539,6 +541,24 @@ async def schedule_email(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid template_type: {body.template_type}",
         )
+
+    # XC-1: template_id is client-supplied and is later loaded (with its
+    # attachments) by the send task, so a foreign id would render another
+    # organization's template body and files into this org's outgoing mail.
+    if body.template_id:
+        try:
+            await assert_in_org(
+                db,
+                EmailTemplate,
+                body.template_id,
+                current_user.organization_id,
+                label="email template",
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=safe_error_detail(exc),
+            )
 
     scheduled = ScheduledEmail(
         id=generate_uuid(),

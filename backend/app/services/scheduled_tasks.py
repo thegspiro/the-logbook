@@ -3131,9 +3131,17 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
             if item.template_id:
                 from app.models.email_template import EmailTemplate
 
+                # Org-scoped: the id is client-supplied at schedule time, and
+                # this eager-loads the template's body and its uploaded
+                # attachments. Without the filter a foreign template_id renders
+                # another organization's content and files into this org's
+                # outgoing mail (the MM-1 shape).
                 t_result = await db.execute(
                     select(EmailTemplate)
-                    .where(EmailTemplate.id == item.template_id)
+                    .where(
+                        EmailTemplate.id == item.template_id,
+                        EmailTemplate.organization_id == item.organization_id,
+                    )
                     .options(selectinload(EmailTemplate.attachments))
                 )
                 template = t_result.scalar_one_or_none()
