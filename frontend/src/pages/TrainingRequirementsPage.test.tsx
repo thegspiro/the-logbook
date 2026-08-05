@@ -63,6 +63,20 @@ describe('TrainingRequirementsPage', () => {
       },
     ]);
     mockGetCategories.mockResolvedValue([]);
+    // The real endpoint echoes back the persisted requirement, which the page
+    // appends to its list — returning undefined would crash the list filter.
+    mockCreateRequirement.mockResolvedValue({
+      id: 'req-new',
+      name: 'Created Requirement',
+      requirement_type: 'checklist',
+      source: 'department',
+      frequency: 'one_time',
+      applies_to_all: false,
+      active: true,
+      due_date_type: 'calendar_period',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    });
   });
 
   it('renders the requirements page', async () => {
@@ -98,6 +112,85 @@ describe('TrainingRequirementsPage', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByLabelText(/^Name/)).toHaveValue('NREMT EMT Recertification');
     expect(within(dialog).getByLabelText(/Required Hours/)).toHaveValue(40);
+  });
+
+  it('labels a one-time requirement as One Time instead of showing a recurring cycle', async () => {
+    mockGetRequirements.mockResolvedValue([
+      {
+        id: 'req-2',
+        name: 'New Member Orientation Checklist',
+        requirement_type: 'checklist',
+        source: 'department',
+        checklist_items: ['Station tour'],
+        frequency: 'one_time',
+        applies_to_all: false,
+        required_membership_types: ['probationary'],
+        active: true,
+        // Persisted by older saves; must not resurface as an annual cycle
+        due_date_type: 'calendar_period',
+        period_start_month: 1,
+        period_start_day: 1,
+        year: 2026,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    expect(await screen.findByText('One Time')).toBeInTheDocument();
+    expect(screen.queryByText('Calendar Period')).not.toBeInTheDocument();
+    expect(screen.getByText('One time — never resets')).toBeInTheDocument();
+    expect(screen.queryByText('2026')).not.toBeInTheDocument();
+  });
+
+  it('hides cycle and year controls when a one-time template is selected', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /use template/i }));
+    await user.click(screen.getByRole('button', { name: /New Member Orientation Checklist/i }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Frequency')).toHaveValue('one_time');
+    expect(within(dialog).queryByLabelText('Year')).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/Period Start Month/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('radiogroup', { name: /due date type/i })).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/never reset/i)).toBeInTheDocument();
+  });
+
+  it('does not persist a year or calendar period for a one-time requirement', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /use template/i }));
+    await user.click(screen.getByRole('button', { name: /New Member Orientation Checklist/i }));
+
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Create Requirement' }));
+
+    await waitFor(() => {
+      expect(mockCreateRequirement).toHaveBeenCalledWith(
+        expect.objectContaining({ frequency: 'one_time' })
+      );
+    });
+    const payload = mockCreateRequirement.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.year).toBeUndefined();
+    expect(payload.period_start_month).toBeUndefined();
+    expect(payload.period_start_day).toBeUndefined();
+    expect(payload.rolling_period_months).toBeUndefined();
+  });
+
+  it('still shows the cycle controls for a recurring requirement', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /use template/i }));
+    await user.click(screen.getByRole('button', { name: /NFPA 1001 Firefighter Annual Training/i }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Frequency')).toHaveValue('annual');
+    expect(within(dialog).getByLabelText('Year')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/Period Start Month/)).toBeInTheDocument();
   });
 
   it('blocks saving a requirement that would apply to nobody', async () => {
