@@ -6,12 +6,15 @@ calendar date. A cohort is one scheduled run of that course: it materializes
 every syllabus row onto real dates, backed by an Event + TrainingSession, and
 carries the roster of members taking it.
 
-This is also a merge revision. The versions directory had two heads
-(20260801_0020 storefront and 20260802_0001 dues ledger), both branching off
-20260801_0019; chaining off both collapses them back to a single head.
+This revision was originally authored as a merge of the two heads that existed
+when it was written (20260801_0020 storefront and 20260802_0001 dues ledger).
+Those heads were reconciled on main first, by 20260802_0002, which then grew a
+further storefront chain up to 20260802_0010. Keeping the original tuple parent
+would fork the graph again — and worse, make 20260805_0001 a head that skips
+20260802_0003..0010 entirely — so this chains linearly off the current head.
 
 Revision ID: 20260805_0001
-Revises: 20260801_0020, 20260802_0001
+Revises: 20260802_0010
 Create Date: 2026-08-05 00:00:00.000000
 """
 
@@ -21,7 +24,7 @@ from alembic import op
 
 # revision identifiers
 revision = "20260805_0001"
-down_revision = ("20260801_0020", "20260802_0001")
+down_revision = "20260802_0010"
 branch_labels = None
 depends_on = None
 

@@ -23,12 +23,8 @@ const PipelineDetailPage = lazyWithRetry(() => import('../../pages/PipelineDetai
 const MyProgramProgressPage = lazyWithRetry(() => import('../../pages/MyProgramProgressPage'));
 
 // Training Module - Course Cohorts (multi-class courses)
-const CohortsPage = lazyWithRetry(
-  () => import('../../pages/training/CohortsPage'),
-);
-const CohortDetailPage = lazyWithRetry(
-  () => import('../../pages/training/CohortDetailPage'),
-);
+const CohortsPage = lazyWithRetry(() => import('../../pages/training/CohortsPage'));
+const CohortDetailPage = lazyWithRetry(() => import('../../pages/training/CohortDetailPage'));
 
 // Training Module - Admin
 const TrainingAdminPage = lazyWithRetry(() =>

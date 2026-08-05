@@ -264,10 +264,11 @@ The `organizations.settings` JSON column stores email platform configuration und
 | `course_cohorts` | `idx_course_cohort_org_course` | `organization_id`, `course_id` | `20260805_0001` |
 | `course_cohort_classes` | `idx_cohort_class_start` | `organization_id`, `scheduled_start` | `20260805_0001` |
 
-> **This revision is also a merge revision.** The versions directory carried two
-> heads (`20260801_0020` storefront and `20260802_0001` dues ledger), both
-> branching off `20260801_0019`; `20260805_0001` chains off both and collapses
-> them back to a single head.
+> **`20260805_0001` chains off `20260802_0010`** (the storefront email-template
+> revision), which is the head it landed on. It was drafted as a merge of the
+> two heads that existed at the time (`20260801_0020` storefront and
+> `20260802_0001` dues ledger), but `20260802_0002` had already merged those on
+> main, so it is a plain linear revision.
 
 ---
 
