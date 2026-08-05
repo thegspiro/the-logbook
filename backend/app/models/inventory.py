@@ -411,7 +411,6 @@ class InventoryItem(Base):
         String(36),
         ForeignKey("item_variant_groups.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # Quantity (for pool items)
@@ -731,7 +730,6 @@ class IssuanceAllowance(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # What category this allowance applies to
@@ -1359,7 +1357,6 @@ class StorageArea(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Name and label (e.g., "Rack A", "Shelf 3", "Box 12")
@@ -1374,16 +1371,13 @@ class StorageArea(Base):
     )
 
     # Hierarchy: parent storage area (e.g., shelf's parent = rack)
-    parent_id = Column(
-        String(36), ForeignKey("storage_areas.id", ondelete="CASCADE"), index=True
-    )
+    parent_id = Column(String(36), ForeignKey("storage_areas.id", ondelete="CASCADE"))
 
     # Room/location this storage area belongs to (top-level only; children inherit)
     location_id = Column(
         String(36),
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # Optional: barcode or QR code for scanning
@@ -1543,7 +1537,6 @@ class NFPAItemCompliance(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # NFPA 1851 §10.1.2 — Lifecycle Dates
@@ -1965,7 +1958,6 @@ class ItemVariantGroup(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Display info
@@ -2021,7 +2013,6 @@ class EquipmentKit(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(255), nullable=False)
@@ -2174,7 +2165,6 @@ class InventoryImpactPlan(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     name = Column(String(255), nullable=False)
     description = Column(Text)

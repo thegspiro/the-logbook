@@ -220,7 +220,7 @@ class PublicPortalAccessLog(Base):
     )
 
     # Request details
-    ip_address = Column(String(45), nullable=False, index=True)  # IPv4/IPv6
+    ip_address = Column(String(45), nullable=False)  # IPv4/IPv6
     endpoint = Column(String(255), nullable=False, index=True)
     method = Column(String(10), nullable=False)  # GET, POST, etc.
     status_code = Column(Integer, nullable=False, index=True)
@@ -282,7 +282,7 @@ class PublicPortalDataWhitelist(Base):
     )
 
     # Data category (e.g., 'organization', 'events', 'personnel')
-    data_category = Column(String(50), nullable=False, index=True)
+    data_category = Column(String(50), nullable=False)
 
     # Specific field name within the category
     field_name = Column(String(100), nullable=False)

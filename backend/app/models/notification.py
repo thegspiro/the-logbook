@@ -74,7 +74,6 @@ class NotificationRule(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Rule Information
@@ -137,7 +136,6 @@ class NotificationLog(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     rule_id = Column(
         String(36),
@@ -151,7 +149,6 @@ class NotificationLog(Base):
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     recipient_email = Column(String(255))
     channel = Column(
@@ -256,7 +253,6 @@ class DepartmentMessage(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Content

@@ -771,7 +771,6 @@ class ApparatusPhoto(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # File Information
@@ -837,7 +836,6 @@ class ApparatusDocument(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # File Information
@@ -994,25 +992,21 @@ class ApparatusMaintenance(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     maintenance_type_id = Column(
         String(36),
         ForeignKey("apparatus_maintenance_types.id"),
         nullable=False,
-        index=True,
     )
     component_id = Column(
         String(36),
         ForeignKey("apparatus_components.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     service_provider_id = Column(
         String(36),
         ForeignKey("apparatus_service_providers.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # Scheduling
@@ -1128,7 +1122,6 @@ class ApparatusFuelLog(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Fuel Details
@@ -1265,13 +1258,11 @@ class ApparatusOperator(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # EVOC certification level achieved by this operator
@@ -1366,7 +1357,6 @@ class ApparatusEquipment(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Equipment Details (can be linked or standalone)
@@ -1447,11 +1437,8 @@ class ApparatusLocationHistory(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
-    location_id = Column(
-        String(36), ForeignKey("locations.id"), nullable=False, index=True
-    )
+    location_id = Column(String(36), ForeignKey("locations.id"), nullable=False)
 
     # Assignment Period
     assigned_date = Column(DateTime(timezone=True), nullable=False)
@@ -1503,11 +1490,8 @@ class ApparatusStatusHistory(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
-    status_id = Column(
-        String(36), ForeignKey("apparatus_statuses.id"), nullable=False, index=True
-    )
+    status_id = Column(String(36), ForeignKey("apparatus_statuses.id"), nullable=False)
 
     # Status Change Details
     changed_at = Column(
@@ -1563,7 +1547,6 @@ class ApparatusNFPACompliance(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # NFPA Standard
@@ -1627,7 +1610,6 @@ class ApparatusReportConfig(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Report Details
@@ -1718,7 +1700,6 @@ class ApparatusServiceProvider(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Provider Identity
@@ -1824,7 +1805,6 @@ class ApparatusComponent(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Component Identity
@@ -1927,13 +1907,11 @@ class ApparatusComponentNote(Base):
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     component_id = Column(
         String(36),
         ForeignKey("apparatus_components.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Note Details
@@ -2033,13 +2011,11 @@ class EquipmentCheckTemplate(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     apparatus_id = Column(
         String(36),
         ForeignKey("apparatus.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
     apparatus_type = Column(String(50), nullable=True)
 
@@ -2095,7 +2071,6 @@ class CheckTemplateCompartment(Base):
         String(36),
         ForeignKey("equipment_check_templates.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
@@ -2162,7 +2137,6 @@ class CheckTemplateItem(Base):
         String(36),
         ForeignKey("check_template_compartments.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     equipment_id = Column(
         String(36),
@@ -2229,13 +2203,11 @@ class TemplateChangeLog(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     template_id = Column(
         String(36),
         ForeignKey("equipment_check_templates.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),

@@ -144,7 +144,7 @@ async def salesforce_inbound_webhook(
 
     if not sobject or not records:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Payload must include 'sobject' and 'records'",
         )
 

@@ -30,6 +30,16 @@ from app.services.inventory_service import InventoryService
 # ============================================
 
 
+class _SavepointCM:
+    """Stand-in for db.begin_nested()'s async savepoint context manager."""
+
+    async def __aenter__(self):
+        return None
+
+    async def __aexit__(self, *exc):
+        return False  # don't suppress — errors propagate to the caller
+
+
 @pytest.fixture
 def mock_db():
     """Create a mock async database session."""
@@ -39,6 +49,10 @@ def mock_db():
     db.rollback = AsyncMock()
     db.refresh = AsyncMock()
     db.execute = AsyncMock()
+    # log_audit_event() opens a savepoint. Left as an AsyncMock, begin_nested()
+    # returns a coroutine that is never awaited, surfacing as a RuntimeWarning
+    # from audit.py at collection time.
+    db.begin_nested = MagicMock(side_effect=lambda: _SavepointCM())
     return db
 
 

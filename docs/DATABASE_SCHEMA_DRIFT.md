@@ -5,8 +5,8 @@ Findings from a full audit of the database schema, 2026-08-05. Companion to
 what the schema *is*. This document covers where the two ways of building that
 schema disagree.
 
-Most of what follows has been fixed — each finding records the revision that
-closed it. Three items remain open and are listed at the end.
+Every finding has been fixed; each records the revision that closed it. One
+residual difference is documented at the end as a deliberate non-change.
 
 ---
 
@@ -79,24 +79,24 @@ incomplete relative to the models.
 | Class | Finding | Count | Status |
 |---|---|---|---|
 | Durable | Column **type** differs between paths | 38 | Fixed — `20260805_0001`–`0006` |
-| Durable | Foreign key **ON DELETE** rule differs | 18 | Fixed — `20260805_0005` (17 of 18) |
+| Durable | Foreign key **ON DELETE** rule differs | 18 | Fixed — `20260805_0005`, `0008` |
 | Durable | **Enum value set** differs | 5 | Fixed — `20260805_0003`, `0006` |
 | Durable | **Server default** missing on a NOT NULL column | 283 | Fixed — models + `20260805_0007` |
-| Durable | `roles`/`user_roles` never renamed to `positions` | 2 tables | **Open** — needs a decision |
+| Durable | `roles`/`user_roles` never renamed to `positions` | 2 tables | Fixed — `20260805_0008` |
 | Self-healing | Tables only in models | 37 | Not a defect |
 | Self-healing | Columns only in models | 15 | Not a defect |
-| Model-side | **Duplicate indexes** — same column indexed twice | 136 | Open, no urgency |
-| Dead | Columns only in migrations | 2 | Open, no urgency |
+| Model-side | **Duplicate indexes** — same column indexed twice | 136 | Fixed — models + `20260805_0009` |
+| Dead | Columns only in migrations | 2 | Fixed — `20260805_0009` |
 
-After `20260805_0001`–`0007`, re-running the comparison gives **0 type
-mismatches**, **0 NOT NULL columns without a needed default**, and **1 remaining
-foreign key difference** (the deferred `issuance_allowances.role_id`, which
-depends on the roles/positions decision).
+After `20260805_0001`–`0009`, re-running the comparison gives **0 type
+mismatches**, **0 foreign key rule differences**, **0 NOT NULL columns without a
+needed default**, and **no table present in one path but not the other**.
 
 The backend suite against a model-built database went from
-**2,648 passed / 16 failed / 372 errors** to **3,026 passed / 0 failed /
-10 errors** — the 10 remaining being a pre-existing `MagicMock` leak in
-`test_openapi_contract.py`, unrelated to the schema.
+**2,648 passed / 16 failed / 372 errors** to **3,036 passed, 0 failed,
+0 errors**, with warnings down from 52 to 2 — and those two are
+`test_database_schema.py`'s own deliberate "soft warning for visibility"
+guardrails.
 
 ---
 
@@ -261,18 +261,9 @@ on a chain-built database and safe to re-run.
 invented a `'hours'` default, but the model treats the column as mandatory, and
 silently typing a requirement as "hours" is worse than rejecting the insert.
 
-One softer difference remains and is left alone by design: **146 nullable
-columns** have a server default on chain-built databases and none on model-built
-ones. A raw insert omitting them yields `NULL` rather than the migration's value
-— no failure, but `ORDER BY` on such a column sorts differently between the two.
-The models declare these nullable, meaning `NULL` is a legal value, so adding
-defaults would change their semantics rather than align them.
-
 ---
 
-## Open
-
-### A. `roles` / `user_roles` were never renamed to `positions` / `user_positions`
+### 9. `roles` / `user_roles` were never renamed to `positions` / `user_positions`
 
 The models renamed the concept and kept aliases for compatibility:
 
@@ -306,20 +297,31 @@ SHOW TABLES LIKE 'roles';       -- present => predates the rename, at risk
 SHOW TABLES LIKE 'positions';   -- present alone => built after, safe
 ```
 
-If no live install has a `roles` table, the remaining work is cleanup: drop the
-stale tables from the chain's tail and repoint `issuance_allowances.role_id`.
-If any does, it needs a data-migrating rename *before* self-heal creates the
-empty `positions` table. That question has to be answered before the right
-migration can be written, which is why `20260805_0005` skips
-`issuance_allowances.role_id` rather than guessing.
+Fixed by `20260805_0008`, which handles all three shapes a database can be in
+and was tested against each:
+
+| Shape | Meaning | What the revision does |
+|---|---|---|
+| Only `roles` | Built purely from the chain | Renames both tables in place; every position and assignment is preserved |
+| Both | Chain-built, then started against current code — repair created `positions` **empty** | Copies the rows across when `positions` is empty and `roles` is not, then drops the originals |
+| Only `positions` | Built by `create_all()` | Nothing to migrate |
+
+The middle shape is the data-loss recovery path. Without it, a database in that
+state has no member holding any position, and therefore nobody with any
+permission, with no error raised anywhere.
+
+The revision also repoints `issuance_allowances.role_id` at `positions` — the
+one foreign key `20260805_0005` deliberately skipped pending this decision.
+`validate_schema()` in `main.py` no longer spot-checks the removed `roles`
+table; it checks `positions`.
 
 Related loose end: `validate_schema()` in `main.py` still spot-checks a `roles`
 table that is no longer in `Base.metadata`. Harmless — the check skips absent
 tables — but it should go with whatever resolves this.
 
-### B. 136 duplicate indexes
+### 10. 136 duplicate indexes
 
-In the models, so it affects **every** deployment. 136 columns carry both
+In the models, so it affected **every** deployment. 136 columns carried both
 `index=True` and an identical explicit `Index(...)` in `__table_args__`,
 producing two identical single-column B-trees:
 
@@ -331,16 +333,46 @@ __table_args__ = (
 )
 ```
 
-Every write maintains both. Heaviest in `apparatus`, `facilities`, `training`
-and `inventory`. Dropping the redundant half is a pure win — no query plan
-depends on which of two identical indexes is chosen.
+Every write maintained both. Heaviest in `training` (46), `apparatus` (26) and
+`facilities` (22). No query plan can prefer one of two identical indexes, so
+dropping half is a pure win.
 
-### C. Dead columns
+The models now keep only the explicitly named index — that name is the one the
+migrations created and the one visible in `__table_args__`. `20260805_0009`
+drops the auto-generated `ix_<table>_<column>` twin from databases that have
+both, guarded so it only removes a twin when another index with the same leading
+column survives: most of these columns are foreign keys, and MySQL refuses to
+drop the last index backing one (error 1553).
+
+### 11. Dead columns
 
 Present in chain-built databases, absent from the models, never read or written:
 
 - `users.membership_id`
 - `prospective_members.active_email`
+
+Dropped by `20260805_0009`. `users.membership_id` needed care: it is the second
+column of the composite index `idx_user_org_membership_id`, and MySQL refuses to
+drop a column still inside a multi-column index (error 1072) rather than
+rebuilding the index for you, so the index is dropped first.
+
+---
+
+## Residual difference, left deliberately
+
+**146 nullable columns** have a server default on chain-built databases and none
+on model-built ones. A raw insert omitting them yields `NULL` rather than the
+migration's value — no failure, but `ORDER BY` on such a column sorts
+differently between the two. The models declare these nullable, meaning `NULL`
+is a legal value, so adding defaults would change their semantics rather than
+align them.
+
+**Index sets still differ**: 82 indexes exist only in the models and 11 only in
+the chain. These are genuinely different index sets rather than duplicates, so
+reconciling them is a performance question — which indexes are actually wanted —
+not a correctness one. A chain-built database simply lacks 82 indexes a fresh
+install has, because `create_all()` never adds indexes to tables that already
+exist.
 
 ---
 

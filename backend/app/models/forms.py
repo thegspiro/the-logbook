@@ -315,7 +315,6 @@ class FormIntegration(Base):
         String(36),
         ForeignKey("forms.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False

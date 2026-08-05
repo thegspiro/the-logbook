@@ -159,19 +159,16 @@ class MeetingAttendee(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     meeting_id = Column(
         String(36),
         ForeignKey("meetings.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Attendance
@@ -217,7 +214,6 @@ class MeetingActionItem(Base):
         String(36),
         ForeignKey("meetings.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),

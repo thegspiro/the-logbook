@@ -405,7 +405,6 @@ class ProspectActivityLog(Base):
         String(36),
         ForeignKey("prospective_members.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     action = Column(String(100), nullable=False)
     details = Column(JSON)
@@ -445,7 +444,6 @@ class ProspectDocument(Base):
         String(36),
         ForeignKey("prospective_members.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     step_id = Column(
         String(36),
@@ -493,7 +491,6 @@ class ProspectElectionPackage(Base):
         String(36),
         ForeignKey("prospective_members.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     pipeline_id = Column(
         String(36),
@@ -566,7 +563,6 @@ class ProspectInterview(Base):
         String(36),
         ForeignKey("prospective_members.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     pipeline_id = Column(
         String(36),
@@ -584,7 +580,6 @@ class ProspectInterview(Base):
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     interviewer_role = Column(String(100))  # e.g., "Membership Coordinator", "Chief"
 

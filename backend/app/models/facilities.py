@@ -165,7 +165,6 @@ class FacilityType(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
 
     name = Column(String(100), nullable=False)
@@ -214,7 +213,6 @@ class FacilityStatus(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
 
     name = Column(String(100), nullable=False)
@@ -261,7 +259,6 @@ class Facility(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Identity
@@ -438,7 +435,6 @@ class FacilityPhoto(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     file_path = Column(String(500), nullable=False)
@@ -479,7 +475,6 @@ class FacilityDocument(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     file_path = Column(String(500), nullable=False)
@@ -526,7 +521,6 @@ class FacilityMaintenanceType(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
 
     name = Column(String(200), nullable=False)
@@ -592,19 +586,16 @@ class FacilityMaintenance(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     maintenance_type_id = Column(
         String(36),
         ForeignKey("facility_maintenance_types.id"),
         nullable=False,
-        index=True,
     )
     system_id = Column(
         String(36),
         ForeignKey("facility_systems.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # Scheduling
@@ -700,7 +691,6 @@ class FacilitySystem(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # System identity
@@ -803,7 +793,6 @@ class FacilityInspection(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Inspection details
@@ -1037,7 +1026,6 @@ class FacilityUtilityAccount(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     utility_type = Column(
@@ -1106,7 +1094,6 @@ class FacilityUtilityReading(Base):
         String(36),
         ForeignKey("facility_utility_accounts.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     reading_date = Column(Date, nullable=False)
@@ -1154,7 +1141,6 @@ class FacilityAccessKey(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     key_type = Column(
@@ -1219,7 +1205,6 @@ class FacilityRoom(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(200), nullable=False)
@@ -1291,7 +1276,6 @@ class FacilityEmergencyContact(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     contact_type = Column(
@@ -1349,7 +1333,6 @@ class FacilityShutoffLocation(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     shutoff_type = Column(
@@ -1402,7 +1385,6 @@ class FacilityCapitalProject(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     project_name = Column(String(300), nullable=False)
@@ -1482,7 +1464,6 @@ class FacilityInsurancePolicy(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     policy_type = Column(
@@ -1549,7 +1530,6 @@ class FacilityOccupant(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     unit_name = Column(
@@ -1608,7 +1588,6 @@ class FacilityComplianceChecklist(Base):
         String(36),
         ForeignKey("facilities.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     checklist_name = Column(String(300), nullable=False)
@@ -1676,7 +1655,6 @@ class FacilityComplianceItem(Base):
         String(36),
         ForeignKey("facility_compliance_checklists.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     item_number = Column(Integer, nullable=True)

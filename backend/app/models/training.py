@@ -293,7 +293,6 @@ class TrainingRecord(Base):
         String(36),
         ForeignKey("training_categories.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # Training Details
@@ -335,7 +334,6 @@ class TrainingRecord(Base):
         String(36),
         ForeignKey("locations.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     location = Column(
         String(255)
@@ -568,7 +566,6 @@ class TrainingSession(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Links to Event and Course
@@ -724,7 +721,6 @@ class TrainingApproval(Base):
         String(36),
         ForeignKey("training_sessions.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     event_id = Column(
         String(36),
@@ -745,7 +741,6 @@ class TrainingApproval(Base):
     status = Column(
         Enum(ApprovalStatus, values_callable=lambda x: [e.value for e in x]),
         default=ApprovalStatus.PENDING,
-        index=True,
     )
     approved_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -961,13 +956,11 @@ class ProgramRequirement(Base):
         String(36),
         ForeignKey("training_programs.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     phase_id = Column(
         String(36),
         ForeignKey("program_phases.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )  # Null if not phase-based
     requirement_id = Column(
         String(36),
@@ -1025,7 +1018,6 @@ class ProgramMilestone(Base):
         String(36),
         ForeignKey("training_programs.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     phase_id = Column(
         String(36),
@@ -1181,7 +1173,6 @@ class RequirementProgress(Base):
         String(36),
         ForeignKey("training_requirements.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Progress Tracking
@@ -1273,7 +1264,6 @@ class RequirementProgressCredit(Base):
         String(36),
         ForeignKey("requirement_progress.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     source_type = Column(
         Enum(
@@ -1383,13 +1373,11 @@ class SkillCheckoff(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     skill_evaluation_id = Column(
         String(36),
         ForeignKey("skill_evaluations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Evaluation Details
@@ -1470,7 +1458,6 @@ class ShiftCompletionReport(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Shift details
@@ -2116,7 +2103,6 @@ class ExternalCategoryMapping(Base):
         String(36),
         ForeignKey("external_training_providers.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),
@@ -2185,7 +2171,6 @@ class ExternalUserMapping(Base):
         String(36),
         ForeignKey("external_training_providers.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),
@@ -2363,7 +2348,6 @@ class ExternalTrainingImport(Base):
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )  # Mapped internal user
 
     # Import Status
@@ -2522,13 +2506,11 @@ class ShiftAttendance(Base):
         String(36),
         ForeignKey("shifts.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Timing
@@ -2563,7 +2545,6 @@ class ShiftCall(Base):
         String(36),
         ForeignKey("shifts.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),
@@ -2574,9 +2555,7 @@ class ShiftCall(Base):
 
     # Incident Details
     incident_number = Column(String(100))
-    incident_type = Column(
-        String(100), index=True
-    )  # Structure fire, medical, MVA, etc.
+    incident_type = Column(String(100))  # Structure fire, medical, MVA, etc.
 
     # Timing
     dispatched_at = Column(DateTime(timezone=True))
@@ -2682,7 +2661,6 @@ class ShiftTemplate(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(200), nullable=False)
@@ -2752,7 +2730,6 @@ class ShiftPattern(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(200), nullable=False)
@@ -2819,19 +2796,16 @@ class ShiftAssignment(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     shift_id = Column(
         String(36),
         ForeignKey("shifts.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     position = Column(
@@ -2905,7 +2879,6 @@ class ShiftSwapRequest(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # The member requesting the swap
@@ -2975,13 +2948,11 @@ class ShiftTimeOff(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     start_date = Column(Date, nullable=False)
@@ -3038,7 +3009,6 @@ class BasicApparatus(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     unit_number = Column(String(20), nullable=False)
@@ -3173,7 +3143,6 @@ class RecertificationPathway(Base):
         String(36),
         ForeignKey("training_requirements.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )  # The certification requirement this renews
 
     # Renewal requirements
@@ -3274,7 +3243,6 @@ class RenewalTask(Base):
         String(36),
         ForeignKey("recertification_pathways.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     training_record_id = Column(
         String(36),
@@ -3406,7 +3374,6 @@ class MemberCompetency(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
@@ -3503,13 +3470,11 @@ class InstructorQualification(Base):
         String(36),
         ForeignKey("training_courses.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )  # Specific course authorization
     skill_evaluation_id = Column(
         String(36),
         ForeignKey("skill_evaluations.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )  # Specific skill they can evaluate
     category_id = Column(
         String(36),
@@ -3524,7 +3489,7 @@ class InstructorQualification(Base):
         String(50)
     )  # e.g., "Fire Instructor I", "Fire Instructor II"
     issued_date = Column(Date)
-    expiration_date = Column(Date, index=True)
+    expiration_date = Column(Date)
 
     # Status
     active = Column(Boolean, default=True, index=True)
@@ -3586,13 +3551,11 @@ class TrainingEffectivenessEvaluation(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # What was evaluated
@@ -3600,7 +3563,6 @@ class TrainingEffectivenessEvaluation(Base):
         String(36),
         ForeignKey("training_records.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
     training_session_id = Column(
         String(36),
@@ -3686,7 +3648,6 @@ class MultiAgencyTraining(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Training link
@@ -3694,7 +3655,6 @@ class MultiAgencyTraining(Base):
         String(36),
         ForeignKey("training_sessions.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
     training_record_id = Column(
         String(36),
@@ -3770,11 +3730,10 @@ class XAPIStatement(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Actor (who did it)
-    actor_email = Column(String(255), index=True)
+    actor_email = Column(String(255))
     actor_name = Column(String(255))
     user_id = Column(
         String(36),
@@ -3812,7 +3771,7 @@ class XAPIStatement(Base):
     raw_statement = Column(JSON, nullable=False)
 
     # Processing
-    processed = Column(Boolean, default=False, index=True)
+    processed = Column(Boolean, default=False)
     training_record_id = Column(
         String(36),
         ForeignKey("training_records.id", ondelete="SET NULL"),
@@ -3865,13 +3824,11 @@ class ShiftEquipmentCheck(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     shift_id = Column(
         String(36),
         ForeignKey("shifts.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
     template_id = Column(
         String(36),
@@ -3956,7 +3913,6 @@ class ShiftEquipmentCheckItem(Base):
         String(36),
         ForeignKey("shift_equipment_checks.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     template_item_id = Column(
         String(36),

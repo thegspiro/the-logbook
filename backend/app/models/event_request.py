@@ -191,7 +191,6 @@ class EventRequestActivity(Base):
         String(36),
         ForeignKey("event_requests.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     action = Column(String(100), nullable=False)
@@ -233,7 +232,6 @@ class EventRequestEmailTemplate(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(200), nullable=False)

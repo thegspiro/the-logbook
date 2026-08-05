@@ -255,7 +255,6 @@ class DocumentFolder(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Folder Information
@@ -330,13 +329,11 @@ class Document(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     folder_id = Column(
         String(36),
         ForeignKey("document_folders.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
 
     # Document Information
