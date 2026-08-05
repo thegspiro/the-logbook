@@ -105,6 +105,76 @@ def _docker_stop_rm(container: str):
     _run(["docker", "rm", "-f", container], timeout=10)
 
 
+def _docker_network_create(name: str) -> bool:
+    """Create a user-defined bridge network so containers resolve by name."""
+    _run(["docker", "network", "rm", name], timeout=30)
+    return _run(["docker", "network", "create", name], timeout=60).returncode == 0
+
+
+def _docker_network_rm(name: str):
+    """Remove a network (best-effort)."""
+    _run(["docker", "network", "rm", name], timeout=30)
+
+
+def _start_mysql(container: str, network: str, timeout: int = 180) -> bool:
+    """Start a MySQL container on `network` and block until it accepts queries.
+
+    The backend cannot serve without a database: uvicorn runs the lifespan
+    startup — which waits on MySQL and applies migrations — *before* it binds
+    its socket, so a backend container with no reachable MySQL never opens
+    port 3001 at all. Anything asserting the port is open has to supply one.
+    """
+    started = _run(
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            container,
+            "--network",
+            network,
+            "-e",
+            "MYSQL_ROOT_PASSWORD=test_root_pass",
+            "-e",
+            "MYSQL_DATABASE=test_db",
+            "-e",
+            "MYSQL_USER=test_user",
+            "-e",
+            "MYSQL_PASSWORD=test_pass",
+            # The migration chain hardcodes COLLATE utf8mb4_unicode_ci in places,
+            # and a server defaulting to another collation fails cross-table FKs
+            # with errno 150 (same reason CI aligns collation before migrating).
+            "mysql:8.0",
+            "--character-set-server=utf8mb4",
+            "--collation-server=utf8mb4_unicode_ci",
+        ],
+        timeout=120,
+    )
+    if started.returncode != 0:
+        return False
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        ping = _run(
+            [
+                "docker",
+                "exec",
+                container,
+                "mysqladmin",
+                "ping",
+                "-h",
+                "127.0.0.1",
+                "-uroot",
+                "-ptest_root_pass",
+            ],
+            timeout=20,
+        )
+        if ping.returncode == 0 and "mysqld is alive" in ping.stdout:
+            return True
+        time.sleep(3)
+    return False
+
+
 def _docker_inspect(name: str) -> dict:
     """Docker inspect returning parsed JSON for a container or image."""
     result = _run(["docker", "inspect", name])
@@ -297,14 +367,20 @@ class TestBackendContainerHealth:
     """
     Test that the backend container starts and reaches a healthy state.
 
-    Note: The full health check requires MySQL and Redis. These tests run
-    the backend in isolation to verify the container *starts* and responds
-    on port 3001 — the health endpoint may report "degraded" without
-    dependencies, but the container itself should be functional.
+    Note: Redis is genuinely optional at startup — it is connected inside an
+    `asyncio.gather(..., return_exceptions=True)`, so its absence degrades the
+    health report without blocking the boot. MySQL is not: the lifespan waits
+    for it and runs migrations before uvicorn binds. So `test_container_starts_
+    without_crash` runs the container bare (it only has to stay up), while
+    `test_container_listens_on_port` brings up a MySQL sidecar on a private
+    network, because a port that only opens after the database answers cannot
+    be asserted without one.
     """
 
     _tag = f"{_TAG_PREFIX}-backend-health"
     _container = f"{_TAG_PREFIX}-backend-health-ctr"
+    _mysql = f"{_TAG_PREFIX}-backend-health-mysql"
+    _network = f"{_TAG_PREFIX}-backend-health-net"
 
     @pytest.fixture(autouse=True)
     def _build_and_cleanup(self):
@@ -313,7 +389,11 @@ class TestBackendContainerHealth:
         if result.returncode != 0:
             pytest.skip(f"Backend build failed: {result.stderr[-500:]}")
         yield
+        # The backend container has to go first: while it is attached, the
+        # network cannot be removed and the next test's create would fail.
         _docker_stop_rm(self._container)
+        _docker_stop_rm(self._mysql)
+        _docker_network_rm(self._network)
         _docker_rm_image(self._tag)
 
     def test_container_starts_without_crash(self):
@@ -364,7 +444,21 @@ class TestBackendContainerHealth:
             )
 
     def test_container_listens_on_port(self):
-        """Container should accept TCP connections on port 3001."""
+        """Container should accept TCP connections on port 3001.
+
+        Unlike its sibling above, this one needs a real MySQL. Uvicorn runs
+        the lifespan startup before it binds, and that startup waits for the
+        database and applies the migration chain, so the port only opens once
+        a database has answered. Pointed at a `DB_HOST` that does not resolve,
+        the container sits in `_wait_for_mysql`'s backoff (40 attempts, up to
+        ~10 minutes) and never listens — which is what this test used to
+        assert against, with a 30s budget it could not meet.
+        """
+        assert _docker_network_create(self._network), "Could not create network"
+        assert _start_mysql(
+            self._mysql, self._network
+        ), "MySQL sidecar did not become ready"
+
         result = _run(
             [
                 "docker",
@@ -372,6 +466,8 @@ class TestBackendContainerHealth:
                 "-d",
                 "--name",
                 self._container,
+                "--network",
+                self._network,
                 "-p",
                 "13001:3001",
                 "-e",
@@ -383,7 +479,7 @@ class TestBackendContainerHealth:
                 "-e",
                 "ENCRYPTION_SALT=test-salt-value",
                 "-e",
-                "DB_HOST=localhost",
+                f"DB_HOST={self._mysql}",
                 "-e",
                 "DB_NAME=test_db",
                 "-e",
@@ -396,8 +492,10 @@ class TestBackendContainerHealth:
         if result.returncode != 0:
             pytest.skip(f"Container failed to start: {result.stderr}")
 
-        # Wait for the server to bind
-        deadline = time.time() + 30
+        # Generous: a cold database pays MySQL's own init plus the full
+        # migration chain before uvicorn binds. Bounded well under the
+        # module's 1800s pytest timeout so a genuine hang still fails.
+        deadline = time.time() + 420
         listening = False
         while time.time() < deadline:
             check = _run(
