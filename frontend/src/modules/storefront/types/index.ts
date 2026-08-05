@@ -69,11 +69,47 @@ export const PAYMENT_POLICY_LABELS: Record<string, string> = {
   before_vendor_order: 'Payment required before the vendor order',
 };
 
-export const PAYMENT_POLICY_HELP: Record<string, string> = {
-  none: 'Unpaid orders go to the vendor and can be collected. You chase the money separately.',
-  before_pickup: "The shirt gets ordered either way, but the member can't collect it until they've paid.",
-  before_vendor_order: "Unpaid orders are held out of the vendor order entirely — they don't get one.",
-};
+/** What each rule does to an unpaid order, as a side-by-side comparison. The
+ *  quartermaster picks this before building a catalog, so the consequences
+ *  have to be legible without reading the manual. */
+export interface PaymentPolicyOption {
+  value: StorePaymentPolicy;
+  label: string;
+  summary: string;
+  /** Does their item get ordered from the vendor? */
+  vendorOrder: string;
+  /** Can they collect it? */
+  pickup: string;
+  /** The department this suits. */
+  suits: string;
+}
+
+export const PAYMENT_POLICY_OPTIONS: PaymentPolicyOption[] = [
+  {
+    value: 'none',
+    label: 'No payment gate',
+    summary: 'Nothing is held up. You chase the money separately.',
+    vendorOrder: 'Ordered',
+    pickup: 'Can collect',
+    suits: 'Departments that trust members to settle up and would rather not block anyone.',
+  },
+  {
+    value: 'before_pickup',
+    label: 'Payment required before pickup',
+    summary: 'Their item is ordered, but it stays on your shelf until they pay.',
+    vendorOrder: 'Ordered',
+    pickup: 'Held until paid',
+    suits: 'Departments willing to front the cost, but not to hand over goods unpaid.',
+  },
+  {
+    value: 'before_vendor_order',
+    label: 'Payment required before the vendor order',
+    summary: 'They are held out of the vendor order — no payment, no item.',
+    vendorOrder: 'Not ordered',
+    pickup: 'Held until paid',
+    suits: "Departments that won't float the cost of an item a member may never pay for.",
+  },
+];
 
 export const StoreFulfillmentMethod = {
   PICKUP: 'pickup',

@@ -12,10 +12,9 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { storefrontService } from '../services/api';
 import {
   PAYMENT_METHOD_LABELS,
-  PAYMENT_POLICY_HELP,
-  PAYMENT_POLICY_LABELS,
+  PAYMENT_POLICY_OPTIONS,
   StorePaymentMethod,
-  StorePaymentPolicy,
+  type StorePaymentPolicy,
   type StoreSettings,
   type StoreSettingsUpdate,
 } from '../types';
@@ -269,24 +268,53 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
           ))}
         </div>
 
-        <div>
-          <label htmlFor="settings-payment-policy" className="form-label">
-            Unpaid orders
-          </label>
-          <select
-            id="settings-payment-policy"
-            value={form.paymentPolicy}
-            onChange={(e) => update('paymentPolicy', e.target.value)}
-            className="form-input"
-          >
-            {Object.values(StorePaymentPolicy).map((policy) => (
-              <option key={policy} value={policy}>
-                {PAYMENT_POLICY_LABELS[policy] ?? policy}
-              </option>
-            ))}
-          </select>
-          <p className="text-theme-text-muted mt-1 text-xs">{PAYMENT_POLICY_HELP[form.paymentPolicy] ?? ''}</p>
-        </div>
+        {/* Rendered as a comparison rather than a dropdown: this is chosen
+            before a catalog exists, so the consequences of each rule have to
+            be readable without going to the manual. */}
+        <fieldset>
+          <legend className="form-label">What happens to an unpaid order?</legend>
+          <p className="text-theme-text-muted mb-2 text-xs">
+            Departments differ on this and all three are normal. You can change it whenever your practice changes — it
+            applies to what happens next, and never undoes a step already taken.
+          </p>
+          <div className="space-y-2">
+            {PAYMENT_POLICY_OPTIONS.map((option) => {
+              const selected = form.paymentPolicy === option.value;
+              return (
+                <label
+                  key={option.value}
+                  className={`flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors ${
+                    selected
+                      ? 'border-blue-600 bg-blue-500/5'
+                      : 'border-theme-surface-border hover:bg-theme-surface-hover'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment-policy"
+                    value={option.value}
+                    checked={selected}
+                    onChange={() => update('paymentPolicy', option.value)}
+                    className="mt-1"
+                  />
+                  <span className="min-w-0">
+                    <span className="text-theme-text-primary block text-sm font-medium">{option.label}</span>
+                    <span className="text-theme-text-secondary block text-xs">{option.summary}</span>
+                    <span className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                      <span className="text-theme-text-muted">
+                        Vendor order: <strong className="text-theme-text-secondary">{option.vendorOrder}</strong>
+                      </span>
+                      <span className="text-theme-text-muted">
+                        Pickup: <strong className="text-theme-text-secondary">{option.pickup}</strong>
+                      </span>
+                    </span>
+                    <span className="text-theme-text-muted mt-1 block text-xs italic">{option.suits}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
 
         {accepts(StorePaymentMethod.VENMO) && (
           <div>

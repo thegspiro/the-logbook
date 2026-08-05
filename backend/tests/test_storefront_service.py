@@ -1228,12 +1228,67 @@ class TestPaymentPolicy:
             db_session, org, service, StorePaymentPolicy.BEFORE_PICKUP
         )
 
-        # The shirt exists and is on the shelf; only the handover waits.
+        # Under this rule the shirt IS ordered, so it can be marked ordered and
+        # put on the shelf. Only the handover waits.
         for status in (StoreOrderStatus.ORDERED, StoreOrderStatus.READY_FOR_PICKUP):
             moved = await service.update_order_status(
                 sam_order.id, org.id, status, None, notify_member=False
             )
             assert moved.status == status
+
+    async def test_before_vendor_order_also_blocks_marking_it_ordered(self, db_session):
+        # The item was deliberately left off the vendor sheet, so claiming it
+        # was ordered would put the record at odds with what the vendor got.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, sam_order, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+
+        with pytest.raises(ValueError, match="out of the vendor order"):
+            await service.update_order_status(
+                sam_order.id,
+                org.id,
+                StoreOrderStatus.ORDERED,
+                None,
+                notify_member=False,
+            )
+
+    async def test_before_vendor_order_still_allows_the_untouched_steps(
+        self, db_session
+    ):
+        # Nothing reversible from the member's side is blocked — an unpaid
+        # order can still be moved back to awaiting payment.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, sam_order, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+
+        moved = await service.update_order_status(
+            sam_order.id,
+            org.id,
+            StoreOrderStatus.AWAITING_PAYMENT,
+            None,
+            notify_member=False,
+        )
+        assert moved.status == StoreOrderStatus.AWAITING_PAYMENT
+
+    async def test_paying_lets_a_held_order_be_marked_ordered(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, sam_order, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+
+        await service.mark_order_paid(sam_order.id, org.id, None, notify_member=False)
+        moved = await service.update_order_status(
+            sam_order.id, org.id, StoreOrderStatus.ORDERED, None, notify_member=False
+        )
+        assert moved.status == StoreOrderStatus.ORDERED
 
     async def test_paying_releases_the_order(self, db_session):
         org = await _make_org(db_session)

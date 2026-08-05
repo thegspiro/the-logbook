@@ -125,11 +125,17 @@ Departments genuinely differ on this, so pick the one that matches yours.
 |---------|------------------------------------------|
 | **No payment gate** | Their shirt is ordered and they can collect it. You chase the money separately. This is the default and what the store did before this setting existed. |
 | **Payment required before pickup** | Their shirt *is* ordered — it's in the vendor order like everyone else's — but they cannot collect it until they've paid. |
-| **Payment required before the vendor order** | Their shirt is **not ordered at all**. They're held out of the vendor order until they pay. |
+| **Payment required before the vendor order** | Their shirt is **not ordered at all**. They're held out of the vendor order until they pay, and it cannot be marked *ordered* either — the record would otherwise claim the vendor was told about a shirt you deliberately left off the sheet. |
 
 Under the third rule, held-back orders are **shown** on the Tally, not silently
 dropped. You need to see who is being left out — and chase them — before the
 order goes in. Record their payment and they rejoin the totals immediately.
+
+The setting is presented as a comparison of all three, with what each does to
+the vendor order and to pickup side by side, because you pick it before there
+is a catalog to test it against. **Change it whenever your practice changes** —
+it governs what happens next and never undoes a step already taken, so
+switching mid-window will not un-order anything you have already sent.
 
 Under either of the last two, marking an unpaid order **fulfilled** is refused
 with the balance in the message. Bulk-fulfilling a window still works: the paid

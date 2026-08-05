@@ -71,13 +71,10 @@ _ORDER_NUMBER_RE = re.compile(r"ORD-\d{4}-\d{4,}")
 # Inbound payments that still need somebody to look at them. MATCHED is in the
 # list on purpose: it means the money is attributable but nothing has been
 # applied yet, which is exactly the queue an administrator works through.
-# Policies under which an unpaid order cannot be handed over. The stricter
-# policy implies the weaker one: an order that was never sent to the vendor
-# obviously cannot be collected either.
-_PICKUP_GATED_POLICIES = (
-    StorePaymentPolicy.BEFORE_PICKUP,
-    StorePaymentPolicy.BEFORE_VENDOR_ORDER,
-)
+# The two transitions a payment policy can block. Everything else — receiving
+# the goods, marking them ready, messaging the member — runs under every rule,
+# because none of it is irreversible from the member's side.
+_PAYMENT_GATED_STATUSES = (StoreOrderStatus.ORDERED, StoreOrderStatus.FULFILLED)
 
 _UNRESOLVED_PAYMENT_STATUSES = (
     StorePaymentEventStatus.UNMATCHED,
@@ -110,6 +107,46 @@ _STATUS_LABELS = {
 def _money(value: Any) -> Decimal:
     """Coerce to a 2-decimal Decimal; None becomes 0.00."""
     return Decimal(value or 0).quantize(_CENTS)
+
+
+def _payment_gate_error(
+    order: StoreOrder,
+    status: StoreOrderStatus,
+    policy: StorePaymentPolicy,
+) -> Optional[str]:
+    """Why this unpaid order may not advance to ``status``, or None.
+
+    Two transitions are gated, and each maps to one half of the rule the
+    department chose:
+
+    * ORDERED   — only under BEFORE_VENDOR_ORDER, where an unpaid order is
+      held out of the purchase order. Marking it ordered would claim the
+      vendor was told about an item deliberately left off the sheet.
+    * FULFILLED — under both gated policies. Handing the goods over is the
+      last irreversible step from the member's side.
+
+    Callers check :data:`_PAYMENT_GATED_STATUSES` first, so this is only asked
+    about the transitions that can be blocked.
+    """
+    if policy == StorePaymentPolicy.NONE:
+        return None
+
+    balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
+    owed = f"Order {order.order_number} still owes {balance}."
+    fix = "Record the payment, or waive the balance, first."
+
+    if status == StoreOrderStatus.ORDERED:
+        if policy != StorePaymentPolicy.BEFORE_VENDOR_ORDER:
+            return None
+        return (
+            f"{owed} This store holds unpaid orders out of the vendor order, "
+            f"so it cannot be marked ordered. {fix}"
+        )
+
+    return (
+        f"{owed} This store requires payment before pickup, so it cannot be "
+        f"handed over. {fix}"
+    )
 
 
 def _settled_clause(settled: bool):
@@ -1468,21 +1505,11 @@ class StorefrontService:
         if order.status == StoreOrderStatus.CANCELLED:
             raise ValueError("A cancelled order cannot be advanced")
 
-        if status == StoreOrderStatus.FULFILLED and not _is_settled(order):
+        if status in _PAYMENT_GATED_STATUSES and not _is_settled(order):
             settings = await self.get_settings(organization_id)
-            if settings.payment_policy in _PICKUP_GATED_POLICIES:
-                # Handing the goods over is the last irreversible step, so it
-                # is the one worth gating. Everything short of it — ordering,
-                # receiving, marking ready — still runs, because the shirt
-                # exists whether or not the member has paid yet.
-                balance = _money(
-                    Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
-                )
-                raise ValueError(
-                    f"Order {order.order_number} still owes {balance}. "
-                    "This store requires payment before pickup — record the "
-                    "payment, or waive the balance, first."
-                )
+            blocked = _payment_gate_error(order, status, settings.payment_policy)
+            if blocked:
+                raise ValueError(blocked)
 
         previous = order.status
         order.status = status

@@ -16,6 +16,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { storefrontService } from '../services/api';
 import { formatDateOnly } from '../utils/formatting';
 import {
+  PAYMENT_POLICY_OPTIONS,
   WINDOW_STATUS_BADGES,
   WINDOW_STATUS_LABELS,
   type StoreOrderWindow,
@@ -379,6 +380,19 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                     </table>
                   </div>
                 </div>
+              )}
+
+              {/* The active rule is restated here because this is where its
+                  effect shows up — a shorter purchase order than the order
+                  count implies is otherwise just confusing. */}
+              {summary.paymentPolicy !== 'none' && (
+                <p className="text-theme-text-muted mb-3 text-xs">
+                  Payment rule:{' '}
+                  <strong className="text-theme-text-secondary">
+                    {PAYMENT_POLICY_OPTIONS.find((o) => o.value === summary.paymentPolicy)?.label ??
+                      summary.paymentPolicy}
+                  </strong>
+                </p>
               )}
 
               {/* Held-back orders are shown, not silently dropped: the

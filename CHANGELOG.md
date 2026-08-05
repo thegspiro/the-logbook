@@ -82,7 +82,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   out, and chase them, before the order goes in. Bulk-fulfilling a window
   advances the settled orders and returns the rest by order number with the
   balance owed. Waiving a balance releases an order exactly as paying does, so
-  a comp or a replacement clears the gate.
+  a comp or a replacement clears the gate. Under the strictest rule an unpaid
+  order also cannot be marked *ordered*, since the record would otherwise claim
+  the vendor was told about an item deliberately left off the sheet. The
+  setting is presented as a side-by-side comparison of all three rules — it is
+  chosen before a catalog exists, so the consequences have to be readable
+  without the manual — and changing it governs future transitions only, never
+  rolling back a step already taken.
 
 **Fixed**
 

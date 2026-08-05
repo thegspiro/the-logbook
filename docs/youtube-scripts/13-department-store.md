@@ -287,8 +287,8 @@ status — visibly out of step on several rows.]**
 
 ### YOUR DEPARTMENT'S RULE ON UNPAID ORDERS (14:30 – 15:15)
 
-**[SCREEN: Settings → "Unpaid orders" dropdown, showing the three options with
-the help text changing underneath.]**
+**[SCREEN: Settings → "What happens to an unpaid order?" — three radio cards
+side by side, each showing Vendor order / Pickup and who it suits.]**
 
 > "Now — what happens to somebody who orders and doesn't pay? Departments
 > genuinely disagree here, so you pick."
@@ -298,7 +298,17 @@ the help text changing underneath.]**
 > "**No payment gate** — their shirt gets ordered, they can collect it, you
 > chase the money. **Payment before pickup** — the shirt gets ordered like
 > everyone else's, but it stays on your shelf until they pay. **Payment before
-> the vendor order** — they don't get one. They're held out entirely."
+> the vendor order** — they don't get one. They're held out entirely, and you
+> can't even mark it ordered — the record would be claiming you told the vendor
+> about a shirt you deliberately left off the sheet."
+
+**[CALLOUT: "Pick it before you build. Change it whenever."]**
+
+> "It's laid out as a comparison because you're picking this *before* you have
+> a catalog to try it on — each card tells you what happens to the vendor order,
+> what happens to pickup, and which kind of department it suits. And it's not a
+> one-way door. Change it whenever your practice changes; it governs what
+> happens next and never un-orders something you've already sent."
 
 **[SCREEN: The Tally under the strictest rule, showing "Order this from the
 vendor: 2 shirts" and a "Held back — unpaid (2 orders)" panel beneath it.]**

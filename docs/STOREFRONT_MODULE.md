@@ -201,23 +201,31 @@ Departments genuinely differ here and both directions are defensible, so the
 default is `none` — the behaviour a store already had before the setting
 existed.
 
-| Value | Vendor order | Pickup |
-|-------|--------------|--------|
-| `none` | Included | Allowed |
-| `before_pickup` | Included | **Refused** while a balance is due |
-| `before_vendor_order` | **Held back** | **Refused** |
+| Value | In the vendor order | Can be marked `ordered` | Can be handed over |
+|-------|--------------------|------------------------|--------------------|
+| `none` | Yes | Yes | Yes |
+| `before_pickup` | Yes | Yes | **Refused** while a balance is due |
+| `before_vendor_order` | **Held back** | **Refused** | **Refused** |
+
+`before_vendor_order` blocks `ORDERED` as well as `FULFILLED` because the item
+was deliberately left off the vendor sheet: marking it ordered would put the
+record at odds with what the vendor actually received.
 
 Under `before_vendor_order`, `size_totals` and `tallies` cover settled orders
 only, and the excluded ones come back as `held_totals` / `held_order_count`
 rather than disappearing — the quartermaster has to see who is being left out
 before the order goes in.
 
-The pickup gate sits on the transition to `FULFILLED` and nothing earlier.
-Ordering, receiving and marking ready all still run: the shirt exists whether
-or not the member has paid, and handing it over is the last irreversible step.
-`bulk_update_status` delegates to the same check, so fulfilling a whole window
-advances the settled orders and returns the rest by order number with the
-balance in the message.
+Only those two transitions are gated (`_PAYMENT_GATED_STATUSES`). Receiving
+goods, marking them ready, messaging the member and cancelling all still run
+under every rule, because none of it is irreversible from the member's side.
+`bulk_update_status` delegates to the same check, so advancing a whole window
+moves the settled orders and returns the rest by order number with the balance
+in the message.
+
+The policy governs future transitions only — changing it never rolls back a
+step already taken, so a department can adjust it mid-window without
+invalidating what it has already sent to the vendor.
 
 "Settled" means `payment_status` is `paid` or `waived`, or the balance is zero
 — so waiving a comp or a replacement releases the order exactly like a payment
