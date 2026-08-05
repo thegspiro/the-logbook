@@ -58,7 +58,8 @@ class TestPreview:
     async def test_missing_file_returns_error(self):
         svc = TrainingProgramService(RecordingSession([]))
         items, error = await svc.preview_registry_requirements("/nope.json", uuid4())
-        assert items is None and "not found" in error.lower()
+        assert items is None
+        assert "not found" in error.lower()
 
 
 class TestSelectiveImport:
@@ -121,7 +122,8 @@ class TestSectionCategoryLinkage:
             created_by=uuid4(),
         )
 
-        assert count == 3 and not errors
+        assert count == 3
+        assert not errors
         # Five topic-area categories were created (Airway, Cardio, Trauma,
         # Medical, Operations).
         assert cats == 5
@@ -135,7 +137,8 @@ class TestSectionCategoryLinkage:
         national = next(
             o for o in db.added if getattr(o, "registry_code", None) == "NREMT"
         )
-        assert national.category_ids and len(national.category_ids) == 5
+        assert national.category_ids
+        assert len(national.category_ids) == 5
 
     async def test_second_section_reference_reuses_created_category(self):
         # Selecting only the national component: 1 skip-check + 5 section checks.
@@ -149,7 +152,8 @@ class TestSectionCategoryLinkage:
             selected_codes=["NREMT"],
         )
 
-        assert count == 1 and cats == 5
+        assert count == 1
+        assert cats == 5
 
     async def test_preview_lists_sections(self):
         db = RecordingSession([_rows([])])

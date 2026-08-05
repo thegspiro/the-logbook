@@ -29,6 +29,7 @@ from app.api.public.finance_approvals import router as finance_approvals_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.legal import router as public_legal_router
+from app.api.public.paypal_webhook import router as paypal_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
 from app.api.public.security_txt import router as security_txt_router
@@ -2165,6 +2166,9 @@ app.include_router(
 )
 
 app.include_router(sf_webhook_router, prefix="/api", responses=public_responses.WEBHOOK)
+app.include_router(
+    paypal_webhook_router, prefix="/api", responses=public_responses.WEBHOOK
+)
 
 # Include Documenso & Cal.com inbound webhooks
 # (no auth — uses /api/public/v1/webhooks/{documenso,calcom})

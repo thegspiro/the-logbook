@@ -66,7 +66,8 @@ class TestCatalogIntegrity:
             for phase in build.phases:
                 for req in phase.requirements:
                     if req.requirement_type == "hours":
-                        assert req.required_hours and req.required_hours > 0
+                        assert req.required_hours
+                        assert req.required_hours > 0
 
     def test_orientation_has_annual_compliance_items(self):
         orientation = SAMPLE_TEMPLATES["new-member-orientation"]

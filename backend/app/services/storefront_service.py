@@ -13,12 +13,13 @@ quantities only.
 
 import csv
 import io
-from datetime import datetime, timedelta, timezone
+import re
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from loguru import logger
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -33,9 +34,13 @@ from app.models.storefront import (
     StoreOrderItem,
     StoreOrderStatus,
     StoreOrderWindow,
+    StorePaymentEvent,
+    StorePaymentEventStatus,
     StorePaymentMethod,
+    StorePaymentPolicy,
     StorePaymentStatus,
     StoreProduct,
+    StoreProductImage,
     StoreProductStatus,
     StoreProductVariant,
     StoreSettings,
@@ -46,9 +51,48 @@ from app.models.user import Organization, User
 from app.services.storefront_notification_service import StorefrontNotificationService
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.org_scoping import assert_in_org
-from app.utils.storefront_payments import build_paypal_url, build_venmo_url
+from app.utils.storefront_payments import (
+    build_payment_option,
+    build_payment_options,
+)
 
 _CENTS = Decimal("0.01")
+
+# Rows pulled per round trip when streaming a full export. Large enough
+# that a typical window is one query, small enough not to hold a whole
+# department's order history in memory at once.
+_EXPORT_PAGE_SIZE = 200
+
+# Order numbers are allocated as ORD-YYYY-NNNN. Matching a payment reference
+# looks for that exact shape rather than any digit run, so a payer typing their
+# phone number into the note cannot accidentally name an order.
+_ORDER_NUMBER_RE = re.compile(r"ORD-\d{4}-\d{4,}")
+
+# Inbound payments that still need somebody to look at them. MATCHED is in the
+# list on purpose: it means the money is attributable but nothing has been
+# applied yet, which is exactly the queue an administrator works through.
+# The transitions a payment policy can block. Everything else — messaging the
+# member, moving back to awaiting payment, cancelling — runs under every rule.
+_PAYMENT_GATED_STATUSES = (
+    StoreOrderStatus.ORDERED,
+    StoreOrderStatus.READY_FOR_PICKUP,
+    StoreOrderStatus.FULFILLED,
+)
+
+# Under BEFORE_VENDOR_ORDER the goods were never bought, so neither claim can
+# be made about them. Under BEFORE_PICKUP they exist and are on the shelf.
+_NO_GOODS_STATUSES = (StoreOrderStatus.ORDERED, StoreOrderStatus.READY_FOR_PICKUP)
+
+# Where a new store starts. Cash alone, because it is the only method that
+# works with nothing configured — ticking Venmo before entering a handle would
+# show the quartermaster a method that is switched on and does nothing.
+_DEFAULT_PAYMENT_METHODS = (StorePaymentMethod.CASH.value,)
+
+_UNRESOLVED_PAYMENT_STATUSES = (
+    StorePaymentEventStatus.UNMATCHED,
+    StorePaymentEventStatus.AMBIGUOUS,
+    StorePaymentEventStatus.MATCHED,
+)
 
 # Orders in these states are no longer claiming stock or counting against a
 # member's per-product limit.
@@ -75,6 +119,90 @@ _STATUS_LABELS = {
 def _money(value: Any) -> Decimal:
     """Coerce to a 2-decimal Decimal; None becomes 0.00."""
     return Decimal(value or 0).quantize(_CENTS)
+
+
+def _payment_gate_error(
+    order: StoreOrder,
+    status: StoreOrderStatus,
+    policy: StorePaymentPolicy,
+) -> Optional[str]:
+    """Why this unpaid order may not advance to ``status``, or None.
+
+    Two transitions are gated, and each maps to one half of the rule the
+    department chose:
+
+    * ORDERED and READY_FOR_PICKUP — only under BEFORE_VENDOR_ORDER, where
+      the item was held out of the purchase order and so does not exist.
+      Neither claim can be made about goods nobody bought, and "ready for
+      pickup" is worse than merely inaccurate: it emails the member to come
+      and collect something that was never ordered.
+    * FULFILLED — under both gated policies. Handing the goods over is the
+      last irreversible step from the member's side.
+
+    Callers check :data:`_PAYMENT_GATED_STATUSES` first, so this is only asked
+    about the transitions that can be blocked.
+    """
+    if policy == StorePaymentPolicy.NONE:
+        return None
+
+    balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
+    owed = f"Order {order.order_number} still owes {balance}."
+    fix = "Record the payment, or waive the balance, first."
+
+    if status in _NO_GOODS_STATUSES:
+        if policy != StorePaymentPolicy.BEFORE_VENDOR_ORDER:
+            return None
+        claim = (
+            "marked ordered"
+            if status == StoreOrderStatus.ORDERED
+            else "marked ready for pickup"
+        )
+        return (
+            f"{owed} This store holds unpaid orders out of the vendor order, "
+            f"so nothing was bought for it and it cannot be {claim}. {fix}"
+        )
+
+    return (
+        f"{owed} This store requires payment before pickup, so it cannot be "
+        f"handed over. {fix}"
+    )
+
+
+def _settled_clause(settled: bool):
+    """The SQL twin of :func:`_is_settled`, for filtering rollups."""
+    is_settled = or_(
+        StoreOrder.payment_status.in_(
+            [StorePaymentStatus.PAID, StorePaymentStatus.WAIVED]
+        ),
+        (StoreOrder.total - StoreOrder.amount_paid) <= 0,
+    )
+    return is_settled if settled else ~is_settled
+
+
+def _is_settled(order: StoreOrder) -> bool:
+    """True when nothing more is owed on this order."""
+    if order.payment_status in (StorePaymentStatus.PAID, StorePaymentStatus.WAIVED):
+        return True
+    return _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0)) <= 0
+
+
+def _as_enum(enum_cls, value, default, label):
+    """Coerce a caller-supplied value to its enum member.
+
+    Callers legitimately pass either form: the API hands over Pydantic-parsed
+    enums, while scripts, importers and tests naturally pass the wire strings.
+    Both are accepted, but only one is stored — a bare string survives on the
+    instance (the session does not expire on commit) and blows up later on a
+    `.value` access far from where it was set.
+    """
+    if value is None or value == "":
+        return default
+    if isinstance(value, enum_cls):
+        return value
+    try:
+        return enum_cls(str(value).lower())
+    except ValueError:
+        raise ValueError(f"Unknown {label}: {value}")
 
 
 def _utcnow() -> datetime:
@@ -118,12 +246,7 @@ class StorefrontService:
             is_enabled=False,
             store_name="Department Store",
             currency="USD",
-            accepted_payment_methods=[
-                StorePaymentMethod.VENMO.value,
-                StorePaymentMethod.PAYPAL.value,
-                StorePaymentMethod.CASH.value,
-                StorePaymentMethod.CHECK.value,
-            ],
+            accepted_payment_methods=list(_DEFAULT_PAYMENT_METHODS),
             tax_rate=Decimal("0"),
         )
         self.db.add(settings)
@@ -154,11 +277,11 @@ class StorefrontService:
             if value is None or not hasattr(settings, key):
                 continue
             if key == "accepted_payment_methods":
-                setattr(
-                    settings,
-                    key,
-                    [m.value if hasattr(m, "value") else str(m) for m in value],
-                )
+                chosen = [m.value if hasattr(m, "value") else str(m) for m in value]
+                # A store has to accept something, and cash is the one method
+                # that needs no setup to work. Un-ticking everything therefore
+                # lands back here rather than leaving a store nobody can pay.
+                setattr(settings, key, chosen or list(_DEFAULT_PAYMENT_METHODS))
             elif key == "notify_emails":
                 setattr(
                     settings, key, [str(e).strip() for e in value if str(e).strip()]
@@ -347,6 +470,105 @@ class StorefrontService:
         return "The change conflicts with an existing record"
 
     # ==================================================================
+    # Product photos
+    # ==================================================================
+
+    async def products_with_images(
+        self, organization_id: str, product_ids: Sequence[str]
+    ) -> set:
+        """Ids of products that have an uploaded photo.
+
+        Selects only the id column: the whole point of the separate table is
+        that listing a catalog never pulls image bytes through the ORM.
+        """
+        ids = [str(pid) for pid in product_ids if pid]
+        if not ids:
+            return set()
+        result = await self.db.execute(
+            select(StoreProductImage.product_id).where(
+                StoreProductImage.product_id.in_(ids),
+                StoreProductImage.organization_id == str(organization_id),
+            )
+        )
+        return set(result.scalars().all())
+
+    @staticmethod
+    def resolve_image_url(product: StoreProduct, has_image: bool) -> Optional[str]:
+        """The URL a client should render for this product.
+
+        An uploaded photo wins over an externally-hosted ``image_url``. The
+        ``v=`` cache-buster is the row's update time, so replacing the photo
+        invalidates whatever the browser cached without a no-store header.
+        """
+        if has_image:
+            updated = _as_aware(product.updated_at)
+            version = int(updated.timestamp()) if updated else 0
+            return f"/api/v1/store/products/{product.id}/image?v={version}"
+        return product.image_url
+
+    async def get_product_image(
+        self, product_id: str, organization_id: str
+    ) -> Optional[StoreProductImage]:
+        """Fetch the stored photo bytes for one product, org-scoped."""
+        result = await self.db.execute(
+            select(StoreProductImage).where(
+                StoreProductImage.product_id == str(product_id),
+                StoreProductImage.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def set_product_image(
+        self,
+        product_id: str,
+        organization_id: str,
+        data: bytes,
+        content_type: str,
+        uploaded_by: Optional[str],
+    ) -> StoreProductImage:
+        """Store (or replace) a product photo."""
+        product = await self.get_product(product_id, organization_id)
+        if not product:
+            raise ValueError("Product not found")
+
+        existing = await self.get_product_image(product_id, organization_id)
+        if existing is not None:
+            existing.data = data
+            existing.content_type = content_type
+            existing.byte_size = len(data)
+            existing.uploaded_by = uploaded_by
+            image = existing
+        else:
+            image = StoreProductImage(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                product_id=product.id,
+                data=data,
+                content_type=content_type,
+                byte_size=len(data),
+                uploaded_by=uploaded_by,
+            )
+            self.db.add(image)
+
+        # Touch the product so resolve_image_url's cache-buster advances and
+        # clients stop serving the previous photo from cache.
+        product.updated_at = _utcnow()
+        await self.db.commit()
+        await self.db.refresh(image)
+        return image
+
+    async def delete_product_image(self, product_id: str, organization_id: str) -> None:
+        """Remove a product photo, falling back to any external image_url."""
+        image = await self.get_product_image(product_id, organization_id)
+        if image is None:
+            return
+        await self.db.delete(image)
+        product = await self.get_product(product_id, organization_id)
+        if product is not None:
+            product.updated_at = _utcnow()
+        await self.db.commit()
+
+    # ==================================================================
     # Order windows
     # ==================================================================
 
@@ -445,8 +667,15 @@ class StorefrontService:
         offerings: Sequence[Dict[str, Any]],
         organization_id: str,
     ) -> None:
-        for offering in window.offerings:
-            await self.db.delete(offering)
+        # Delete by query rather than iterating window.offerings: on a window
+        # that was just flushed the collection is unloaded, and touching it
+        # under asyncio raises MissingGreenlet instead of lazy-loading.
+        await self.db.execute(
+            delete(StoreWindowProduct).where(
+                StoreWindowProduct.window_id == window.id,
+                StoreWindowProduct.organization_id == str(organization_id),
+            )
+        )
         await self.db.flush()
 
         for index, payload in enumerate(offerings):
@@ -494,8 +723,8 @@ class StorefrontService:
         await self.db.commit()
         await self.db.refresh(window)
 
-        if notify_members and window.notify_on_open:
-            settings = await self.get_settings(organization_id)
+        settings = await self.get_settings(organization_id)
+        if notify_members and window.notify_on_open and settings.send_window_opened:
             sent = await self.notifications.send_window_opened(
                 window, settings, message=message
             )
@@ -503,6 +732,86 @@ class StorefrontService:
                 window.open_notice_sent_at = _utcnow()
                 await self.db.commit()
         return window
+
+    async def record_vendor_order(
+        self,
+        window_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        vendor_name: Optional[str] = None,
+        vendor_reference: Optional[str] = None,
+        expected_delivery_date: Optional[date] = None,
+        advance_orders: bool = True,
+        notify_members: bool = True,
+        message: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Log that the bulk order has gone to the vendor, and move the orders.
+
+        This is the step between "ordering closed" and "come pick it up", and
+        it is the one members chase. Recording it does three things at once so
+        the quartermaster is not left doing them separately and forgetting the
+        third: it stamps who the order went to and when, it advances the paid
+        orders to ORDERED, and it tells the members it went.
+
+        Orders the payment policy holds back are skipped rather than advanced —
+        they were not on the sheet the vendor received, so saying they were
+        ordered would be a lie the member later discovers at pickup.
+        """
+        window = await self.get_window(window_id, organization_id)
+        if not window:
+            raise ValueError("Order window not found")
+        if window.status in (StoreWindowStatus.DRAFT, StoreWindowStatus.SCHEDULED):
+            raise ValueError("Open the window before recording a vendor order")
+        if window.status == StoreWindowStatus.CANCELLED:
+            raise ValueError("A cancelled window has nothing to order")
+
+        if vendor_name is not None:
+            window.vendor_name = vendor_name.strip() or None
+        if vendor_reference is not None:
+            window.vendor_reference = vendor_reference.strip() or None
+        if expected_delivery_date is not None:
+            window.expected_delivery_date = expected_delivery_date
+        window.vendor_ordered_at = _utcnow()
+        window.vendor_ordered_by = actor_id
+        await self.db.commit()
+        await self.db.refresh(window)
+
+        advanced = 0
+        skipped: List[Dict[str, str]] = []
+        if advance_orders:
+            orders, _ = await self.list_orders(
+                organization_id, window_id=window.id, page_size=_EXPORT_PAGE_SIZE
+            )
+            result = await self.bulk_update_status(
+                organization_id,
+                [
+                    o.id
+                    for o in orders
+                    if o.status
+                    not in (StoreOrderStatus.CANCELLED, StoreOrderStatus.FULFILLED)
+                ],
+                StoreOrderStatus.ORDERED,
+                actor_id,
+                notify_members=False,
+            )
+            advanced = result["updated"]
+            skipped = result["errors"]
+
+        notified = 0
+        settings = await self.get_settings(organization_id)
+        if notify_members and settings.send_vendor_order_updates:
+            recipients = await self._window_customer_emails(window.id, organization_id)
+            if recipients:
+                notified = await self.notifications.send_vendor_order_placed(
+                    window, settings, recipients, message=message
+                )
+
+        return {
+            "window": window,
+            "advanced": advanced,
+            "skipped": skipped,
+            "notified": notified,
+        }
 
     async def close_window(
         self,
@@ -526,8 +835,8 @@ class StorefrontService:
         await self.db.commit()
         await self.db.refresh(window)
 
-        if notify_members:
-            settings = await self.get_settings(organization_id)
+        settings = await self.get_settings(organization_id)
+        if notify_members and settings.send_window_closed:
             recipients = await self._window_customer_emails(window_id, organization_id)
             if recipients:
                 sent = await self.notifications.send_window_closed(
@@ -667,6 +976,9 @@ class StorefrontService:
             if user_id
             else {}
         )
+        products_with_images = await self.products_with_images(
+            organization_id, [product.id for product in products]
+        )
 
         offers: List[Dict[str, Any]] = []
         for product in products:
@@ -716,12 +1028,21 @@ class StorefrontService:
                     "id": product.id,
                     "name": product.name,
                     "description": product.description,
-                    "image_url": product.image_url,
+                    "image_url": self.resolve_image_url(
+                        product, product.id in products_with_images
+                    ),
                     "category": product.category,
                     "price": price,
                     "is_taxable": product.is_taxable,
                     "requires_variant": product.requires_variant,
                     "max_per_member": max_per_member,
+                    "personalization_enabled": product.personalization_enabled,
+                    "personalization_required": product.personalization_required,
+                    "personalization_label": product.personalization_label,
+                    "personalization_max_length": (
+                        product.personalization_max_length or 30
+                    ),
+                    "personalization_price": _money(product.personalization_price),
                     "available_quantity": available,
                     "is_available": available is None or available > 0,
                     "variants": variants,
@@ -889,7 +1210,17 @@ class StorefrontService:
         else:
             window = open_windows[0]
 
-        fulfillment = data.get("fulfillment_method", StoreFulfillmentMethod.PICKUP)
+        # Normalized at the boundary rather than stored as given. Comparisons
+        # below work on either form because these are (str, Enum), so an
+        # un-coerced string would pass validation and then fail much later on
+        # a `.value` access — the session keeps what was assigned
+        # (expire_on_commit is off), so the mismatch outlives the write.
+        fulfillment = _as_enum(
+            StoreFulfillmentMethod,
+            data.get("fulfillment_method"),
+            StoreFulfillmentMethod.PICKUP,
+            "delivery option",
+        )
         if (
             fulfillment == StoreFulfillmentMethod.SHIP and not settings.allow_shipping
         ) or (
@@ -897,11 +1228,12 @@ class StorefrontService:
         ):
             raise ValueError("That delivery option is not offered by this store")
 
-        payment_method = data.get("payment_method")
+        payment_method = _as_enum(
+            StorePaymentMethod, data.get("payment_method"), None, "payment method"
+        )
         accepted = settings.accepted_payment_methods or []
         if payment_method is not None:
-            method_value = getattr(payment_method, "value", payment_method)
-            if accepted and method_value not in accepted:
+            if accepted and payment_method.value not in accepted:
                 raise ValueError("That payment method is not accepted by this store")
 
         lines = await self._price_lines(
@@ -965,6 +1297,7 @@ class StorefrontService:
                     product_name=line["product_name"],
                     variant_label=line["variant_label"],
                     sku=line["sku"],
+                    personalization_text=line["personalization_text"],
                     unit_price=line["unit_price"],
                     quantity=line["quantity"],
                     line_total=line["line_total"],
@@ -1000,6 +1333,58 @@ class StorefrontService:
             )
         return full_order
 
+    async def _lock_products(
+        self, product_ids: Sequence[str], organization_id: str
+    ) -> None:
+        """Take a row lock on each product being ordered.
+
+        Availability is a read-then-write: we count what has already been
+        ordered, then insert. Without a lock two members submitting at the
+        same moment both see the last unit as free and both get it. Locking
+        the product row serializes concurrent orders for that product, so the
+        second submission's count includes the first. Ids are locked in a
+        stable order because two carts holding the same pair of products in
+        opposite orders would otherwise deadlock.
+        """
+        ordered_ids = sorted({str(pid) for pid in product_ids if pid})
+        if not ordered_ids:
+            return
+        await self.db.execute(
+            select(StoreProduct.id)
+            .where(
+                StoreProduct.id.in_(ordered_ids),
+                StoreProduct.organization_id == str(organization_id),
+            )
+            .order_by(StoreProduct.id)
+            .with_for_update()
+        )
+
+    @staticmethod
+    def _normalize_personalization(
+        product: StoreProduct, raw: Optional[str]
+    ) -> Optional[str]:
+        """Validate and clean the per-line personalization text.
+
+        Returns ``None`` when the product does not offer personalization, so a
+        client cannot smuggle arbitrary text onto a line the department never
+        agreed to customize.
+        """
+        text = (raw or "").strip()
+        if not product.personalization_enabled:
+            return None
+        if not text:
+            if product.personalization_required:
+                label = product.personalization_label or "personalization"
+                raise ValueError(f"'{product.name}' requires {label}")
+            return None
+        limit = product.personalization_max_length or 30
+        if len(text) > limit:
+            raise ValueError(
+                f"Personalization for '{product.name}' is limited to "
+                f"{limit} characters"
+            )
+        return text
+
     async def _price_lines(
         self,
         organization_id: str,
@@ -1019,25 +1404,37 @@ class StorefrontService:
         )
         offerings = {o.product_id: o for o in offering_result.scalars().all()}
 
+        # Lock first, then count: the counts below must not be able to change
+        # under a concurrent order between here and the insert.
+        await self._lock_products(
+            [item["product_id"] for item in items], organization_id
+        )
+
         window_totals = await self._ordered_quantities(window.id, organization_id)
         member_totals = await self._ordered_quantities(
             window.id, organization_id, user_id=user_id
         )
 
         # Collapse duplicate cart lines so per-product limits see the true ask.
-        merged: Dict[Tuple[str, Optional[str]], int] = {}
+        # Personalization is part of the key: two shirts with different names
+        # are different goods and must stay separate lines.
+        merged: Dict[Tuple[str, Optional[str], Optional[str]], int] = {}
         for item in items:
-            key = (str(item["product_id"]), item.get("variant_id"))
+            key = (
+                str(item["product_id"]),
+                item.get("variant_id"),
+                (item.get("personalization_text") or "").strip() or None,
+            )
             merged[key] = merged.get(key, 0) + int(item["quantity"])
 
         lines: List[Dict[str, Any]] = []
         requested_per_product: Dict[str, int] = {}
-        for (product_id, variant_id), quantity in merged.items():
+        for (product_id, _variant_id, _text), quantity in merged.items():
             requested_per_product[product_id] = (
                 requested_per_product.get(product_id, 0) + quantity
             )
 
-        for (product_id, variant_id), quantity in merged.items():
+        for (product_id, variant_id, personalization), quantity in merged.items():
             product = await self.get_product(product_id, organization_id)
             if product is None or product.status != StoreProductStatus.ACTIVE:
                 raise ValueError("One of the items is no longer available")
@@ -1067,6 +1464,12 @@ class StorefrontService:
                 else product.price
             )
             unit_price = _money(price + _money(variant.price_delta if variant else 0))
+
+            personalization_text = self._normalize_personalization(
+                product, personalization
+            )
+            if personalization_text:
+                unit_price = _money(unit_price + _money(product.personalization_price))
 
             max_per_member = (
                 offering.max_per_member
@@ -1104,6 +1507,7 @@ class StorefrontService:
                     "product_name": product.name,
                     "variant_label": variant.label if variant else None,
                     "sku": (variant.sku if variant and variant.sku else product.sku),
+                    "personalization_text": personalization_text,
                     "unit_price": unit_price,
                     "quantity": quantity,
                     "line_total": _money(unit_price * quantity),
@@ -1139,6 +1543,7 @@ class StorefrontService:
         window_id: Optional[str] = None,
         status: Optional[str] = None,
         payment_status: Optional[str] = None,
+        payment_method: Optional[str] = None,
         user_id: Optional[str] = None,
         search: Optional[str] = None,
         page: int = 1,
@@ -1151,6 +1556,11 @@ class StorefrontService:
             filters.append(StoreOrder.status == status)
         if payment_status:
             filters.append(StoreOrder.payment_status == payment_status)
+        if payment_method:
+            # "Who paid by Zelle?" is the reconciliation question this answers:
+            # every app settles separately, so the quartermaster works one
+            # payout at a time.
+            filters.append(StoreOrder.payment_method == payment_method)
         if user_id:
             filters.append(StoreOrder.user_id == str(user_id))
         if search:
@@ -1194,6 +1604,12 @@ class StorefrontService:
             raise ValueError("Order not found")
         if order.status == StoreOrderStatus.CANCELLED:
             raise ValueError("A cancelled order cannot be advanced")
+
+        if status in _PAYMENT_GATED_STATUSES and not _is_settled(order):
+            settings = await self.get_settings(organization_id)
+            blocked = _payment_gate_error(order, status, settings.payment_policy)
+            if blocked:
+                raise ValueError(blocked)
 
         previous = order.status
         order.status = status
@@ -1298,10 +1714,146 @@ class StorefrontService:
         refreshed = await self.get_order(order_id, organization_id)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
-            await self.notifications.send_payment_received(
-                refreshed, settings, amount=applied
-            )
+            if settings.send_payment_receipts:
+                await self.notifications.send_payment_received(
+                    refreshed, settings, amount=applied
+                )
         return refreshed or order
+
+    async def mark_order_paid(
+        self,
+        order_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        payment_method: Optional[StorePaymentMethod] = None,
+        reference: Optional[str] = None,
+        notify_member: bool = True,
+    ) -> StoreOrder:
+        """Settle an order's whole remaining balance in one step.
+
+        The common case by far: money arrived out-of-band (a Venmo transfer, a
+        cash handoff at drill) for exactly the amount owed, and whoever is
+        working the orders just needs to say so. Typing the amount in adds a
+        chance to fat-finger it, so this reads the balance off the order.
+        """
+        order = await self.get_order(order_id, organization_id)
+        if not order:
+            raise ValueError("Order not found")
+        if order.status == StoreOrderStatus.CANCELLED:
+            raise ValueError("A cancelled order cannot take a payment")
+
+        balance = _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0))
+        if balance <= 0:
+            # Already settled (or waived) — not an error, just nothing to do,
+            # so a bulk run over a mixed selection doesn't fail on it.
+            return order
+
+        return await self.record_payment(
+            order_id,
+            organization_id,
+            balance,
+            actor_id,
+            payment_method=payment_method or order.payment_method,
+            reference=reference,
+            mark_paid=True,
+            notify_member=notify_member,
+        )
+
+    async def waive_order_payment(
+        self,
+        order_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        reason: Optional[str] = None,
+        notify_member: bool = True,
+    ) -> StoreOrder:
+        """Comp an order — the department is not collecting on it.
+
+        Distinct from recording a payment: no money moved, so ``amount_paid``
+        stays where it is and the sales rollup still reports the order's value
+        as uncollected rather than inventing revenue.
+        """
+        order = await self.get_order(order_id, organization_id)
+        if not order:
+            raise ValueError("Order not found")
+        if order.status == StoreOrderStatus.CANCELLED:
+            raise ValueError("A cancelled order cannot be waived")
+
+        order.payment_status = StorePaymentStatus.WAIVED
+        order.paid_at = _utcnow()
+        order.payment_verified_by = actor_id
+        if order.status in (
+            StoreOrderStatus.SUBMITTED,
+            StoreOrderStatus.AWAITING_PAYMENT,
+        ):
+            order.status = StoreOrderStatus.PAID
+
+        self.db.add(
+            StoreOrderEvent(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                order_id=order.id,
+                event_type=StoreOrderEventType.PAYMENT_RECORDED,
+                message=reason or "Payment waived by the department",
+                is_member_visible=True,
+                created_by=actor_id,
+            )
+        )
+        await self.db.commit()
+
+        refreshed = await self.get_order(order_id, organization_id)
+        if refreshed and notify_member:
+            settings = await self.get_settings(organization_id)
+            if settings.send_payment_receipts:
+                await self.notifications.send_order_update(
+                    refreshed,
+                    reason or "No payment is due on this order.",
+                    settings,
+                )
+        return refreshed or order
+
+    async def bulk_mark_paid(
+        self,
+        organization_id: str,
+        order_ids: Sequence[str],
+        actor_id: Optional[str],
+        payment_method: Optional[StorePaymentMethod] = None,
+        reference: Optional[str] = None,
+        notify_members: bool = True,
+    ) -> Dict[str, Any]:
+        """Settle many orders at once — reconciling a payout statement.
+
+        Orders that already carry no balance are counted as skipped rather
+        than failing the run, so a treasurer can select a whole window
+        without first weeding out the ones already handled.
+        """
+        updated = 0
+        skipped = 0
+        errors: List[Dict[str, str]] = []
+        for order_id in order_ids:
+            try:
+                before = await self.get_order(order_id, organization_id)
+                if before is None:
+                    raise ValueError("Order not found")
+                balance = _money(
+                    Decimal(before.total or 0) - Decimal(before.amount_paid or 0)
+                )
+                if balance <= 0:
+                    skipped += 1
+                    continue
+                await self.mark_order_paid(
+                    order_id,
+                    organization_id,
+                    actor_id,
+                    payment_method=payment_method,
+                    reference=reference,
+                    notify_member=notify_members,
+                )
+                updated += 1
+            except ValueError as exc:
+                skipped += 1
+                errors.append({"order_id": str(order_id), "error": str(exc)})
+        return {"updated": updated, "skipped": skipped, "errors": errors}
 
     async def report_payment(
         self,
@@ -1392,11 +1944,12 @@ class StorefrontService:
         refreshed = await self.get_order(order_id, organization_id)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
-            await self.notifications.send_order_update(
-                refreshed,
-                reason or f"A refund of {refunded} has been recorded.",
-                settings,
-            )
+            if settings.send_payment_receipts:
+                await self.notifications.send_order_update(
+                    refreshed,
+                    reason or f"A refund of {refunded} has been recorded.",
+                    settings,
+                )
         return refreshed or order
 
     async def cancel_order(
@@ -1441,7 +1994,11 @@ class StorefrontService:
         refreshed = await self.get_order(order_id, organization_id)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
-            await self.notifications.send_order_cancelled(refreshed, reason, settings)
+            # A cancellation is a status change, and rides the same switch.
+            if settings.send_status_updates:
+                await self.notifications.send_order_cancelled(
+                    refreshed, reason, settings
+                )
         return refreshed or order
 
     async def add_order_message(
@@ -1476,6 +2033,9 @@ class StorefrontService:
 
         refreshed = await self.get_order(order_id, organization_id)
         if refreshed and is_member_visible and notify_member:
+            # Deliberately not behind a notification switch: this is a message
+            # a quartermaster typed to one member and asked to send. The
+            # switches govern the notices the module raises on its own.
             settings = await self.get_settings(organization_id)
             await self.notifications.send_order_update(refreshed, message, settings)
         return refreshed or order
@@ -1520,8 +2080,518 @@ class StorefrontService:
         return {"updated": updated, "skipped": skipped, "errors": errors}
 
     # ==================================================================
+    # External payment reconciliation
+    # ==================================================================
+
+    async def find_order_by_reference(
+        self, organization_id: str, *references: Optional[str]
+    ) -> Optional[StoreOrder]:
+        """Locate an order from whatever reference a payment carried.
+
+        Matching is on the order number only, and only when it appears as a
+        recognisable token. Fuzzy matching on payer name or amount was
+        considered and rejected: applying money to the wrong member's order is
+        worse than leaving it for a human, and two members can easily owe the
+        same amount in the same window.
+        """
+        candidates: List[str] = []
+        for reference in references:
+            if not reference:
+                continue
+            candidates.extend(_ORDER_NUMBER_RE.findall(str(reference).upper()))
+        if not candidates:
+            return None
+
+        result = await self.db.execute(
+            select(StoreOrder)
+            .options(selectinload(StoreOrder.items), selectinload(StoreOrder.window))
+            .where(
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.order_number.in_(candidates),
+            )
+            .limit(2)
+        )
+        orders = list(result.scalars().all())
+        # More than one hit means the reference named several orders; that is
+        # not something to guess at.
+        return orders[0] if len(orders) == 1 else None
+
+    async def record_external_payment(
+        self,
+        organization_id: str,
+        provider: str,
+        capture: Dict[str, Any],
+        raw_payload: Optional[Dict[str, Any]] = None,
+        auto_apply: bool = True,
+    ) -> StorePaymentEvent:
+        """Record a payment a provider reports receiving, and try to match it.
+
+        Always writes a row, whatever the outcome. A payment that cannot be
+        matched is the case that most needs to reach a person: the money has
+        left the member's account, so silently discarding the notification
+        would leave them chasing an order that still says unpaid.
+        """
+        external_id = str(capture.get("capture_id") or capture.get("event_id") or "")
+        if not external_id:
+            raise ValueError("Payment notification carried no identifier")
+
+        existing = await self.db.execute(
+            select(StorePaymentEvent).where(
+                StorePaymentEvent.organization_id == str(organization_id),
+                StorePaymentEvent.provider == provider,
+                StorePaymentEvent.external_id == external_id,
+            )
+        )
+        already = existing.scalar_one_or_none()
+        if already is not None:
+            # Providers retry until they get a 2xx, so redelivery is normal
+            # traffic rather than an error — acknowledge without re-applying.
+            return already
+
+        amount = _money(capture.get("amount"))
+        reference = (
+            capture.get("invoice_id") or capture.get("custom_id") or capture.get("note")
+        )
+
+        event = StorePaymentEvent(
+            id=generate_uuid(),
+            organization_id=str(organization_id),
+            provider=provider,
+            external_id=external_id,
+            event_id=capture.get("event_id"),
+            amount=amount,
+            currency=(capture.get("currency") or "USD")[:3],
+            payer_name=capture.get("payer_name"),
+            payer_email=capture.get("payer_email"),
+            reference=(str(reference)[:255] if reference else None),
+            raw_payload=raw_payload,
+            status=StorePaymentEventStatus.UNMATCHED,
+        )
+
+        order = await self.find_order_by_reference(
+            organization_id,
+            capture.get("invoice_id"),
+            capture.get("custom_id"),
+            capture.get("note"),
+        )
+
+        if order is None:
+            event.note = "No order number found in the payment reference."
+        else:
+            event.matched_order_id = order.id
+            balance = _money(
+                Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
+            )
+            if order.status == StoreOrderStatus.CANCELLED:
+                event.status = StorePaymentEventStatus.AMBIGUOUS
+                event.note = f"Order {order.order_number} is cancelled."
+            elif balance <= 0:
+                event.status = StorePaymentEventStatus.AMBIGUOUS
+                event.note = f"Order {order.order_number} already has no balance due."
+            elif amount != balance:
+                # A short or over payment is a conversation with the member,
+                # not something to resolve by guessing which way to round.
+                event.status = StorePaymentEventStatus.AMBIGUOUS
+                event.note = (
+                    f"Amount {amount} does not match the {balance} balance on "
+                    f"order {order.order_number}."
+                )
+            elif not auto_apply:
+                event.status = StorePaymentEventStatus.MATCHED
+                event.note = "Automatic application is turned off for this integration."
+            else:
+                event.status = StorePaymentEventStatus.MATCHED
+
+        self.db.add(event)
+        await self.db.commit()
+        await self.db.refresh(event)
+
+        if event.status == StorePaymentEventStatus.MATCHED and auto_apply and order:
+            return await self.apply_payment_event(
+                event.id, organization_id, actor_id=None
+            )
+        return event
+
+    async def apply_payment_event(
+        self,
+        event_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        order_id: Optional[str] = None,
+    ) -> StorePaymentEvent:
+        """Settle the matched order from a recorded payment.
+
+        ``order_id`` lets an administrator attach an unmatched payment to the
+        order it belongs to — the manual half of reconciliation.
+        """
+        event = await self.get_payment_event(event_id, organization_id)
+        if event is None:
+            raise ValueError("Payment not found")
+        if event.status == StorePaymentEventStatus.APPLIED:
+            return event
+
+        target_id = order_id or event.matched_order_id
+        if not target_id:
+            raise ValueError("Choose an order to apply this payment to")
+
+        order = await self.get_order(target_id, organization_id)
+        if order is None:
+            raise ValueError("Order not found")
+
+        await self.record_payment(
+            order.id,
+            organization_id,
+            _money(event.amount),
+            actor_id,
+            payment_method=(
+                StorePaymentMethod.PAYPAL
+                if event.provider == "paypal"
+                else order.payment_method
+            ),
+            reference=event.external_id,
+            mark_paid=True,
+            notify_member=True,
+        )
+
+        event.matched_order_id = order.id
+        event.status = StorePaymentEventStatus.APPLIED
+        event.resolved_at = _utcnow()
+        event.resolved_by = actor_id
+        event.note = f"Applied to order {order.order_number}."
+        await self.db.commit()
+        # Re-read rather than refresh: the caller serializes the matched order
+        # alongside the event, and refresh() would leave that relationship
+        # expired for a lazy load asyncio cannot service.
+        refreshed = await self.get_payment_event(event.id, organization_id)
+        return refreshed or event
+
+    async def ignore_payment_event(
+        self,
+        event_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        reason: Optional[str] = None,
+    ) -> StorePaymentEvent:
+        """Dismiss a payment that does not belong to any store order."""
+        event = await self.get_payment_event(event_id, organization_id)
+        if event is None:
+            raise ValueError("Payment not found")
+        if event.status == StorePaymentEventStatus.APPLIED:
+            raise ValueError("An applied payment cannot be dismissed")
+
+        event.status = StorePaymentEventStatus.IGNORED
+        event.resolved_at = _utcnow()
+        event.resolved_by = actor_id
+        if reason:
+            event.note = reason
+        await self.db.commit()
+        refreshed = await self.get_payment_event(event.id, organization_id)
+        return refreshed or event
+
+    async def get_payment_event(
+        self, event_id: str, organization_id: str
+    ) -> Optional[StorePaymentEvent]:
+        result = await self.db.execute(
+            select(StorePaymentEvent)
+            .options(selectinload(StorePaymentEvent.matched_order))
+            .where(
+                StorePaymentEvent.id == str(event_id),
+                StorePaymentEvent.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def count_unresolved_payment_events(self, organization_id: str) -> int:
+        """How many inbound payments still need somebody to look at them."""
+        result = await self.db.execute(
+            select(func.count(StorePaymentEvent.id)).where(
+                StorePaymentEvent.organization_id == str(organization_id),
+                StorePaymentEvent.status.in_(_UNRESOLVED_PAYMENT_STATUSES),
+            )
+        )
+        return int(result.scalar() or 0)
+
+    async def list_payment_events(
+        self,
+        organization_id: str,
+        status: Optional[str] = None,
+        unresolved_only: bool = False,
+        limit: int = 100,
+    ) -> List[StorePaymentEvent]:
+        filters = [StorePaymentEvent.organization_id == str(organization_id)]
+        if status:
+            try:
+                wanted = StorePaymentEventStatus(str(status).lower())
+            except ValueError:
+                raise ValueError(f"Unknown payment status: {status}")
+            filters.append(StorePaymentEvent.status == wanted)
+        elif unresolved_only:
+            filters.append(StorePaymentEvent.status.in_(_UNRESOLVED_PAYMENT_STATUSES))
+        result = await self.db.execute(
+            select(StorePaymentEvent)
+            .options(selectinload(StorePaymentEvent.matched_order))
+            .where(*filters)
+            .order_by(StorePaymentEvent.received_at.desc())
+            .limit(max(min(limit, 500), 1))
+        )
+        return list(result.scalars().all())
+
+    # ==================================================================
     # Reporting
     # ==================================================================
+
+    async def _order_rollup(
+        self,
+        organization_id: str,
+        window_ids: Optional[Sequence[str]] = None,
+    ) -> Dict[Optional[str], Dict[str, Any]]:
+        """Money and order counters per window, computed in SQL.
+
+        Aggregating in the database rather than loading orders and summing in
+        Python is not just faster: the previous page-and-sum approach silently
+        stopped at the first page, so a window with more orders than the page
+        size reported a short tally, a wrong outstanding balance, and sent the
+        department to the vendor with the wrong quantities.
+
+        ``window_ids`` of ``None`` rolls up every window (plus orphaned orders
+        under the ``None`` key); an empty sequence returns ``{}``.
+        """
+        if window_ids is not None and len(window_ids) == 0:
+            return {}
+
+        paid = Decimal("0")
+        filters = [
+            StoreOrder.organization_id == str(organization_id),
+            StoreOrder.status != StoreOrderStatus.CANCELLED,
+        ]
+        if window_ids is not None:
+            filters.append(StoreOrder.window_id.in_([str(w) for w in window_ids]))
+
+        balance = StoreOrder.total - StoreOrder.amount_paid
+        result = await self.db.execute(
+            select(
+                StoreOrder.window_id,
+                func.count(StoreOrder.id),
+                func.count(func.distinct(StoreOrder.user_id)),
+                func.coalesce(func.sum(StoreOrder.total), paid),
+                func.coalesce(func.sum(StoreOrder.amount_paid), paid),
+                func.coalesce(func.sum(case((balance > 0, balance), else_=paid)), paid),
+                func.sum(
+                    case(
+                        (
+                            StoreOrder.payment_status.in_(
+                                [
+                                    StorePaymentStatus.UNPAID,
+                                    StorePaymentStatus.PARTIAL,
+                                ]
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                func.sum(
+                    case(
+                        (
+                            StoreOrder.payment_status
+                            == StorePaymentStatus.PENDING_VERIFICATION,
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                func.sum(
+                    case(
+                        (
+                            StoreOrder.status == StoreOrderStatus.READY_FOR_PICKUP,
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+                func.sum(
+                    case(
+                        (
+                            StoreOrder.status.notin_(
+                                [
+                                    StoreOrderStatus.FULFILLED,
+                                    StoreOrderStatus.CANCELLED,
+                                ]
+                            ),
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ),
+            )
+            .where(*filters)
+            .group_by(StoreOrder.window_id)
+        )
+
+        rollups: Dict[Optional[str], Dict[str, Any]] = {}
+        for row in result.all():
+            (
+                window_id,
+                order_count,
+                member_count,
+                gross,
+                collected,
+                outstanding,
+                unpaid,
+                pending,
+                ready,
+                open_count,
+            ) = row
+            rollups[window_id] = {
+                "order_count": int(order_count or 0),
+                "member_count": int(member_count or 0),
+                "gross_sales": _money(gross),
+                "collected": _money(collected),
+                "outstanding": _money(outstanding),
+                "unpaid_order_count": int(unpaid or 0),
+                "pending_verification_count": int(pending or 0),
+                "ready_for_pickup_count": int(ready or 0),
+                "open_order_count": int(open_count or 0),
+            }
+        return rollups
+
+    @staticmethod
+    def _empty_rollup() -> Dict[str, Any]:
+        return {
+            "order_count": 0,
+            "member_count": 0,
+            "gross_sales": Decimal("0.00"),
+            "collected": Decimal("0.00"),
+            "outstanding": Decimal("0.00"),
+            "unpaid_order_count": 0,
+            "pending_verification_count": 0,
+            "ready_for_pickup_count": 0,
+            "open_order_count": 0,
+        }
+
+    async def _window_size_totals(
+        self,
+        window_id: str,
+        organization_id: str,
+        settled_only: Optional[bool] = None,
+    ) -> List[Dict[str, Any]]:
+        """How many of each size to buy — the purchase order itself.
+
+        Deliberately ignores personalization, which is what separates this from
+        ``_window_tallies``. On a personalized product every line carries a
+        different name, so the per-name sheet degenerates into one row per
+        order and answering "how many larges?" means adding them up by hand —
+        the spreadsheet this module exists to replace. The two views answer
+        different questions: this one is what the vendor gets ordered, the
+        other is what they embroider on it.
+        """
+        result = await self.db.execute(
+            select(
+                StoreOrderItem.product_id,
+                StoreOrderItem.product_name,
+                StoreOrderItem.variant_label,
+                StoreOrderItem.sku,
+                func.sum(StoreOrderItem.quantity),
+                func.coalesce(func.sum(StoreOrderItem.line_total), Decimal("0")),
+            )
+            .join(StoreOrder, StoreOrder.id == StoreOrderItem.order_id)
+            .where(
+                StoreOrder.window_id == str(window_id),
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.status != StoreOrderStatus.CANCELLED,
+                *(() if settled_only is None else (_settled_clause(settled_only),)),
+            )
+            .group_by(
+                StoreOrderItem.product_id,
+                StoreOrderItem.product_name,
+                StoreOrderItem.variant_label,
+                StoreOrderItem.sku,
+            )
+            .order_by(StoreOrderItem.product_name, StoreOrderItem.variant_label)
+        )
+        return [
+            {
+                "product_id": product_id,
+                "product_name": product_name,
+                "variant_label": variant_label,
+                "sku": sku,
+                "quantity": int(quantity or 0),
+                "line_total": _money(line_total),
+            }
+            for (
+                product_id,
+                product_name,
+                variant_label,
+                sku,
+                quantity,
+                line_total,
+            ) in result.all()
+        ]
+
+    async def _window_tallies(
+        self,
+        window_id: str,
+        organization_id: str,
+        settled_only: Optional[bool] = None,
+    ) -> List[Dict[str, Any]]:
+        """The vendor purchase-order sheet for a window, grouped in SQL.
+
+        Personalized lines are grouped separately from plain ones: the vendor
+        needs one row per distinct name to embroider, not a merged count.
+        """
+        result = await self.db.execute(
+            select(
+                StoreOrderItem.product_id,
+                StoreOrderItem.product_name,
+                StoreOrderItem.variant_label,
+                StoreOrderItem.sku,
+                StoreOrderItem.personalization_text,
+                func.sum(StoreOrderItem.quantity),
+                func.max(StoreOrderItem.unit_price),
+                func.coalesce(func.sum(StoreOrderItem.line_total), Decimal("0")),
+            )
+            .join(StoreOrder, StoreOrder.id == StoreOrderItem.order_id)
+            .where(
+                StoreOrder.window_id == str(window_id),
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.status != StoreOrderStatus.CANCELLED,
+                *(() if settled_only is None else (_settled_clause(settled_only),)),
+            )
+            .group_by(
+                StoreOrderItem.product_id,
+                StoreOrderItem.product_name,
+                StoreOrderItem.variant_label,
+                StoreOrderItem.sku,
+                StoreOrderItem.personalization_text,
+            )
+            .order_by(
+                StoreOrderItem.product_name,
+                StoreOrderItem.variant_label,
+                StoreOrderItem.personalization_text,
+            )
+        )
+        return [
+            {
+                "product_id": product_id,
+                "product_name": product_name,
+                "variant_label": variant_label,
+                "sku": sku,
+                "personalization_text": personalization_text,
+                "quantity": int(quantity or 0),
+                "unit_price": _money(unit_price),
+                "line_total": _money(line_total),
+            }
+            for (
+                product_id,
+                product_name,
+                variant_label,
+                sku,
+                personalization_text,
+                quantity,
+                unit_price,
+                line_total,
+            ) in result.all()
+        ]
 
     async def get_window_summary(
         self, window_id: str, organization_id: str
@@ -1530,59 +2600,52 @@ class StorefrontService:
         if not window:
             raise ValueError("Order window not found")
 
-        orders, _ = await self.list_orders(
-            organization_id, window_id=window_id, page=1, page_size=200
-        )
-        active = [o for o in orders if o.status != StoreOrderStatus.CANCELLED]
-
-        gross = _money(sum(Decimal(o.total or 0) for o in active))
-        collected = _money(sum(Decimal(o.amount_paid or 0) for o in active))
-
-        tallies: Dict[Tuple[Optional[str], Optional[str]], Dict[str, Any]] = {}
-        for order in active:
-            for item in order.items:
-                key = (item.product_id, item.variant_id)
-                entry = tallies.setdefault(
-                    key,
-                    {
-                        "product_id": item.product_id,
-                        "product_name": item.product_name,
-                        "variant_label": item.variant_label,
-                        "sku": item.sku,
-                        "quantity": 0,
-                        "unit_price": _money(item.unit_price),
-                        "line_total": Decimal("0.00"),
-                    },
-                )
-                entry["quantity"] += item.quantity
-                entry["line_total"] = _money(
-                    entry["line_total"] + Decimal(item.line_total or 0)
-                )
+        rollups = await self._order_rollup(organization_id, [window_id])
+        rollup = rollups.get(window.id, self._empty_rollup())
+        settings = await self.get_settings(organization_id)
+        holds_unpaid = settings.payment_policy == StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        settled_only = True if holds_unpaid else None
 
         return {
             "window_id": window.id,
             "window_name": window.name,
             "status": window.status,
-            "order_count": len(active),
-            "member_count": len({o.user_id for o in active if o.user_id}),
-            "gross_sales": gross,
-            "collected": collected,
-            "outstanding": _money(gross - collected),
-            "unpaid_order_count": sum(
-                1
-                for o in active
-                if o.payment_status
-                in (StorePaymentStatus.UNPAID, StorePaymentStatus.PARTIAL)
+            "order_count": rollup["order_count"],
+            "member_count": rollup["member_count"],
+            "gross_sales": rollup["gross_sales"],
+            "collected": rollup["collected"],
+            "outstanding": rollup["outstanding"],
+            "unpaid_order_count": rollup["unpaid_order_count"],
+            "pending_verification_count": rollup["pending_verification_count"],
+            "payment_policy": settings.payment_policy,
+            # Under BEFORE_VENDOR_ORDER the purchase order covers only settled
+            # orders, and the rest are reported separately rather than dropped:
+            # the quartermaster still has to see who is being left out, and
+            # chase them, before the order goes in.
+            "size_totals": await self._window_size_totals(
+                window.id, organization_id, settled_only=settled_only
             ),
-            "pending_verification_count": sum(
-                1
-                for o in active
-                if o.payment_status == StorePaymentStatus.PENDING_VERIFICATION
+            "held_totals": (
+                await self._window_size_totals(
+                    window.id, organization_id, settled_only=False
+                )
+                if holds_unpaid
+                else []
             ),
-            "tallies": sorted(
-                tallies.values(),
-                key=lambda row: (row["product_name"], row["variant_label"] or ""),
+            "held_order_count": (rollup["unpaid_order_count"] if holds_unpaid else 0),
+            "tallies": await self._window_tallies(
+                window.id, organization_id, settled_only=settled_only
             ),
+        }
+
+    async def get_window_rollups(
+        self, organization_id: str, window_ids: Sequence[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Counters for many windows in one query (the admin windows list)."""
+        rollups = await self._order_rollup(organization_id, window_ids)
+        return {
+            str(window_id): rollups.get(str(window_id), self._empty_rollup())
+            for window_id in window_ids
         }
 
     async def get_dashboard(self, organization_id: str) -> Dict[str, Any]:
@@ -1590,25 +2653,26 @@ class StorefrontService:
         open_windows = await self.get_open_windows(organization_id)
         active_window = open_windows[0] if open_windows else None
 
-        orders, _ = await self.list_orders(organization_id, page=1, page_size=200)
-        active = [o for o in orders if o.status != StoreOrderStatus.CANCELLED]
-
-        outstanding = _money(
-            sum(
-                Decimal(o.total or 0) - Decimal(o.amount_paid or 0)
-                for o in active
-                if Decimal(o.total or 0) > Decimal(o.amount_paid or 0)
+        org_totals = await self._order_rollup(organization_id)
+        combined = self._empty_rollup()
+        for rollup in org_totals.values():
+            for key in (
+                "order_count",
+                "unpaid_order_count",
+                "pending_verification_count",
+                "ready_for_pickup_count",
+                "open_order_count",
+            ):
+                combined[key] += rollup[key]
+            combined["outstanding"] = _money(
+                combined["outstanding"] + rollup["outstanding"]
             )
-        )
+
         collected = Decimal("0.00")
         if active_window is not None:
-            collected = _money(
-                sum(
-                    Decimal(o.amount_paid or 0)
-                    for o in active
-                    if o.window_id == active_window.id
-                )
-            )
+            collected = org_totals.get(active_window.id, self._empty_rollup())[
+                "collected"
+            ]
 
         product_count = await self.db.scalar(
             select(func.count(StoreProduct.id)).where(
@@ -1617,30 +2681,19 @@ class StorefrontService:
             )
         )
 
+        recent_orders, _ = await self.list_orders(organization_id, page=1, page_size=10)
+
         return {
             "is_enabled": settings.is_enabled,
             "active_window": active_window,
-            "open_order_count": sum(
-                1
-                for o in active
-                if o.status
-                not in (StoreOrderStatus.FULFILLED, StoreOrderStatus.CANCELLED)
-            ),
-            "awaiting_payment_count": sum(
-                1 for o in active if o.payment_status == StorePaymentStatus.UNPAID
-            ),
-            "pending_verification_count": sum(
-                1
-                for o in active
-                if o.payment_status == StorePaymentStatus.PENDING_VERIFICATION
-            ),
-            "ready_for_pickup_count": sum(
-                1 for o in active if o.status == StoreOrderStatus.READY_FOR_PICKUP
-            ),
-            "outstanding_balance": outstanding,
+            "open_order_count": combined["open_order_count"],
+            "awaiting_payment_count": combined["unpaid_order_count"],
+            "pending_verification_count": combined["pending_verification_count"],
+            "ready_for_pickup_count": combined["ready_for_pickup_count"],
+            "outstanding_balance": combined["outstanding"],
             "collected_this_window": collected,
             "active_product_count": int(product_count or 0),
-            "recent_orders": orders[:10],
+            "recent_orders": recent_orders,
         }
 
     async def export_orders_csv(
@@ -1653,14 +2706,33 @@ class StorefrontService:
 
         Written with SafeCsvWriter — member names and notes are free text and
         would otherwise execute as formulas when opened in Excel/Sheets.
+
+        Pages through the whole result set rather than taking the first page:
+        an export that silently stopped at the page size would send the
+        department to the vendor with the wrong quantities.
+
+        Every order is included, unpaid ones too, because this doubles as the
+        treasurer's record. Under a policy that holds unpaid orders back, the
+        "Held From Vendor Order" column marks the ones the on-screen tally
+        excluded — without it a quartermaster could mail this sheet to the
+        vendor and undo the very rule they set.
         """
-        orders, _ = await self.list_orders(
-            organization_id,
-            window_id=window_id,
-            status=status,
-            page=1,
-            page_size=200,
-        )
+        settings = await self.get_settings(organization_id)
+        holds_unpaid = settings.payment_policy == StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        orders: List[StoreOrder] = []
+        page = 1
+        while True:
+            batch, total = await self.list_orders(
+                organization_id,
+                window_id=window_id,
+                status=status,
+                page=page,
+                page_size=_EXPORT_PAGE_SIZE,
+            )
+            orders.extend(batch)
+            if len(orders) >= total or not batch:
+                break
+            page += 1
         output = io.StringIO()
         writer = SafeCsvWriter(output, quoting=csv.QUOTE_MINIMAL)
         writer.writerow(
@@ -1671,6 +2743,7 @@ class StorefrontService:
                 "Email",
                 "Item",
                 "Option",
+                "Personalization",
                 "SKU",
                 "Quantity",
                 "Unit Price",
@@ -1680,6 +2753,7 @@ class StorefrontService:
                 "Balance Due",
                 "Order Status",
                 "Payment Status",
+                "Held From Vendor Order",
                 "Payment Method",
                 "Payment Reference",
                 "Fulfillment",
@@ -1700,6 +2774,7 @@ class StorefrontService:
                         order.customer_email or "",
                         item.product_name,
                         item.variant_label or "",
+                        item.personalization_text or "",
                         item.sku or "",
                         item.quantity,
                         f"{_money(item.unit_price)}",
@@ -1709,6 +2784,7 @@ class StorefrontService:
                         f"{balance}",
                         order.status.value if order.status else "",
                         order.payment_status.value if order.payment_status else "",
+                        ("yes" if holds_unpaid and not _is_settled(order) else "no"),
                         order.payment_method.value if order.payment_method else "",
                         order.payment_reference or "",
                         (
@@ -1725,6 +2801,12 @@ class StorefrontService:
     # Payment instructions
     # ==================================================================
 
+    def build_payment_options(
+        self, settings: StoreSettings, balance: Decimal, reference: str
+    ) -> List[Dict[str, Any]]:
+        """Every configured way to settle, in the order the department listed."""
+        return build_payment_options(settings, balance, reference)
+
     def build_payment_instructions(
         self, order: StoreOrder, settings: StoreSettings
     ) -> Optional[Dict[str, Any]]:
@@ -1734,50 +2816,36 @@ class StorefrontService:
             return None
 
         method = order.payment_method
+        options = self.build_payment_options(settings, balance, order.order_number)
+        # The method chosen at checkout leads, but the rest stay available —
+        # see build_payment_options.
+        chosen = next(
+            (o for o in options if method and o["method"] == method.value), None
+        )
+        if chosen is not None:
+            options = [chosen] + [o for o in options if o is not chosen]
+        elif method is not None:
+            # The department may have stopped accepting this method since the
+            # order was placed. The member still owes the balance and still
+            # needs somewhere to send it, so their own method is rebuilt even
+            # though it is no longer offered to new orders.
+            chosen = build_payment_option(method, settings, balance, order.order_number)
+            if chosen is not None:
+                options = [chosen] + options
+
         payload: Dict[str, Any] = {
-            "method": method.value if method else None,
-            "label": None,
-            "payment_url": None,
-            "handle": None,
-            "instructions": settings.payment_instructions,
+            "method": (
+                chosen["method"] if chosen else (method.value if method else None)
+            ),
+            "label": chosen["label"] if chosen else None,
+            "payment_url": chosen["payment_url"] if chosen else None,
+            "handle": chosen["handle"] if chosen else None,
+            "instructions": (chosen and chosen["instructions"])
+            or settings.payment_instructions,
             "reference": order.order_number,
             "amount_due": balance,
+            "options": options,
         }
-
-        if method == StorePaymentMethod.VENMO:
-            payload["label"] = "Venmo"
-            payload["handle"] = (
-                f"@{settings.venmo_handle}" if settings.venmo_handle else None
-            )
-            payload["payment_url"] = build_venmo_url(
-                settings.venmo_handle, balance, order.order_number
-            )
-        elif method == StorePaymentMethod.PAYPAL:
-            payload["label"] = "PayPal"
-            payload["handle"] = settings.paypal_me_url or settings.paypal_email
-            payload["payment_url"] = build_paypal_url(settings.paypal_me_url, balance)
-        elif method == StorePaymentMethod.CHECK:
-            payload["label"] = "Check"
-            payload["handle"] = settings.check_payable_to
-            payload["instructions"] = (
-                settings.check_mailing_address or settings.payment_instructions
-            )
-        elif method == StorePaymentMethod.CASH:
-            payload["label"] = "Cash"
-            payload["instructions"] = (
-                settings.cash_instructions or settings.payment_instructions
-            )
-        elif method == StorePaymentMethod.PAYROLL_DEDUCTION:
-            payload["label"] = "Payroll deduction"
-            payload["instructions"] = (
-                settings.payroll_deduction_instructions or settings.payment_instructions
-            )
-        elif method == StorePaymentMethod.OTHER:
-            payload["label"] = "Other"
-            payload["instructions"] = (
-                settings.other_payment_instructions or settings.payment_instructions
-            )
-
         return payload
 
     # ==================================================================
@@ -1838,6 +2906,7 @@ class StorefrontService:
 
             if (
                 closes_at
+                and settings.send_window_closing_reminder
                 and not window.closing_reminder_sent_at
                 and settings.window_reminder_hours
                 and now

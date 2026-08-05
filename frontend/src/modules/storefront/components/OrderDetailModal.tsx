@@ -46,10 +46,15 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
 
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
+  // The member picked a method at checkout; what they actually handed over can
+  // differ — they chose Venmo and then paid cash at drill. Recording the real
+  // one is the whole point of this field.
+  const [paymentMethod, setPaymentMethod] = useState('');
   const [statusChoice, setStatusChoice] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [updateMessage, setUpdateMessage] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
+  const [waiveReason, setWaiveReason] = useState('');
 
   const load = useCallback(async () => {
     if (!orderId) return;
@@ -59,6 +64,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
       setOrder(fetched);
       setPaymentAmount(fetched.balanceDue);
       setPaymentReference(fetched.paymentReference ?? '');
+      setPaymentMethod(fetched.paymentMethod ?? '');
       setStatusChoice(fetched.status);
       setAdminNotes(fetched.adminNotes ?? '');
     } catch (err: unknown) {
@@ -83,6 +89,36 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
     }
   };
 
+  const markPaidInFull = () =>
+    withBusy(async () => {
+      if (!order) return;
+      try {
+        await storefrontService.markOrderPaid(order.id, {
+          paymentMethod: paymentMethod || undefined,
+          reference: paymentReference.trim() || undefined,
+          notifyMember: true,
+        });
+        toast.success('Marked paid in full');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not mark the order paid'));
+      }
+    });
+
+  const waivePayment = () =>
+    withBusy(async () => {
+      if (!order) return;
+      try {
+        await storefrontService.waiveOrderPayment(order.id, {
+          reason: waiveReason.trim() || undefined,
+          notifyMember: true,
+        });
+        setWaiveReason('');
+        toast.success('Payment waived');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not waive the payment'));
+      }
+    });
+
   const recordPayment = () =>
     withBusy(async () => {
       if (!order) return;
@@ -94,7 +130,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
       try {
         await storefrontService.recordPayment(order.id, {
           amount,
-          paymentMethod: order.paymentMethod ?? undefined,
+          paymentMethod: paymentMethod || undefined,
           reference: paymentReference.trim() || undefined,
           markPaid: true,
           notifyMember: true,
@@ -213,6 +249,11 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                       <td className="text-theme-text-primary py-1.5 pr-2">
                         {item.productName}
                         {item.variantLabel && <span className="text-theme-text-muted"> — {item.variantLabel}</span>}
+                        {item.personalizationText && (
+                          <div className="text-theme-text-muted text-xs italic">
+                            &ldquo;{item.personalizationText}&rdquo;
+                          </div>
+                        )}
                       </td>
                       <td className="text-theme-text-secondary px-2 py-1.5 text-center">{item.quantity}</td>
                       <td className="text-theme-text-secondary px-2 py-1.5 text-right">
@@ -267,8 +308,24 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
             <section className="card-secondary space-y-3 p-3">
               <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
                 <CircleDollarSign className="h-4 w-4" />
-                Record a payment
+                Payment
               </h3>
+
+              {Number(order.balanceDue) > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn-success btn-md"
+                    disabled={busy}
+                    onClick={() => {
+                      void markPaidInFull();
+                    }}
+                  >
+                    Mark paid in full ({formatCurrency(Number(order.balanceDue))})
+                  </button>
+                  <span className="text-theme-text-muted text-xs">or record a partial amount below</span>
+                </div>
+              )}
               <div className="flex flex-wrap items-end gap-2">
                 <div>
                   <label htmlFor="payment-amount" className="form-label-sm">
@@ -283,6 +340,24 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                     onChange={(e) => setPaymentAmount(e.target.value)}
                     className="form-input-sm w-28"
                   />
+                </div>
+                <div>
+                  <label htmlFor="payment-method" className="form-label-sm">
+                    Paid by
+                  </label>
+                  <select
+                    id="payment-method"
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="form-input-sm"
+                  >
+                    <option value="">Not recorded</option>
+                    {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="min-w-[10rem] flex-1">
                   <label htmlFor="payment-ref" className="form-label-sm">
@@ -321,6 +396,41 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                 )}
               </div>
             </section>
+
+            {order.paymentStatus !== 'waived' && Number(order.balanceDue) > 0 && (
+              <section className="card-secondary space-y-2 p-3">
+                <h3 className="text-theme-text-primary text-sm font-semibold">Waive payment</h3>
+                <p className="text-theme-text-muted text-xs">
+                  Clears the order without collecting. No money is recorded, so the window&apos;s collected total is
+                  unaffected.
+                </p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-[12rem] flex-1">
+                    <label htmlFor="waive-reason" className="form-label-sm">
+                      Reason (shown to the member)
+                    </label>
+                    <input
+                      id="waive-reason"
+                      type="text"
+                      value={waiveReason}
+                      onChange={(e) => setWaiveReason(e.target.value)}
+                      className="form-input-sm"
+                      placeholder="Comped — 25 years of service"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-secondary btn-md"
+                    disabled={busy}
+                    onClick={() => {
+                      void waivePayment();
+                    }}
+                  >
+                    Waive
+                  </button>
+                </div>
+              </section>
+            )}
 
             <section className="card-secondary space-y-3 p-3">
               <h3 className="text-theme-text-primary text-sm font-semibold">Advance the order</h3>

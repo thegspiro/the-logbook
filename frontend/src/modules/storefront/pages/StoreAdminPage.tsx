@@ -2,23 +2,24 @@
  * Store Admin Page
  *
  * Quartermaster view of the department store, tabbed: overview, order windows,
- * catalog, orders, and settings.
+ * catalog, orders, inbound payments, and settings.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { ArrowLeft, CalendarClock, Loader2, Package, Settings, ShoppingBag, Store } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Loader2, Package, Settings, ShoppingBag, Store, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '../../../utils/dateFormatting';
 import { StoreCatalogTab } from '../components/StoreCatalogTab';
 import { StoreOrdersTab } from '../components/StoreOrdersTab';
+import { StorePaymentsTab } from '../components/StorePaymentsTab';
 import { StoreSettingsTab } from '../components/StoreSettingsTab';
 import { StoreWindowsTab } from '../components/StoreWindowsTab';
 import { storefrontService } from '../services/api';
-import type { StoreDashboard } from '../types';
+import { StorePaymentStatus, type StoreDashboard } from '../types';
 
-type TabId = 'overview' | 'windows' | 'catalog' | 'orders' | 'settings';
+type TabId = 'overview' | 'windows' | 'catalog' | 'orders' | 'payments' | 'settings';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <Store className="h-4 w-4" /> },
@@ -29,6 +30,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   },
   { id: 'catalog', label: 'Catalog', icon: <Package className="h-4 w-4" /> },
   { id: 'orders', label: 'Orders', icon: <ShoppingBag className="h-4 w-4" /> },
+  { id: 'payments', label: 'Payments', icon: <Wallet className="h-4 w-4" /> },
   {
     id: 'settings',
     label: 'Settings',
@@ -40,15 +42,36 @@ const StatTile: React.FC<{
   label: string;
   value: string | number;
   tone?: string;
-}> = ({ label, value, tone }) => (
-  <div className="stat-card">
-    <p className="text-theme-text-muted text-xs tracking-wide uppercase">{label}</p>
-    <p className={`text-2xl font-bold ${tone ?? 'text-theme-text-primary'} mt-1`}>{value}</p>
-  </div>
-);
+  onClick?: (() => void) | undefined;
+}> = ({ label, value, tone, onClick }) => {
+  const body = (
+    <>
+      <p className="text-theme-text-muted text-xs tracking-wide uppercase">{label}</p>
+      <p className={`text-2xl font-bold ${tone ?? 'text-theme-text-primary'} mt-1`}>{value}</p>
+    </>
+  );
+  // Counters that name a queue of work are the natural way into that queue.
+  return onClick ? (
+    <button
+      type="button"
+      onClick={onClick}
+      className="stat-card hover:bg-theme-surface-hover text-left transition-colors"
+    >
+      {body}
+    </button>
+  ) : (
+    <div className="stat-card">{body}</div>
+  );
+};
 
 const StoreAdminPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [ordersPaymentFilter, setOrdersPaymentFilter] = useState('');
+
+  const openOrders = (paymentFilter: string) => {
+    setOrdersPaymentFilter(paymentFilter);
+    setActiveTab('orders');
+  };
   const [dashboard, setDashboard] = useState<StoreDashboard | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -129,11 +152,13 @@ const StoreAdminPage: React.FC = () => {
                   label="Awaiting payment"
                   value={dashboard.awaitingPaymentCount}
                   tone="text-amber-600 dark:text-amber-400"
+                  onClick={() => openOrders(StorePaymentStatus.UNPAID)}
                 />
                 <StatTile
                   label="To verify"
                   value={dashboard.pendingVerificationCount}
                   tone="text-amber-600 dark:text-amber-400"
+                  onClick={() => openOrders(StorePaymentStatus.PENDING_VERIFICATION)}
                 />
                 <StatTile label="Ready for pickup" value={dashboard.readyForPickupCount} />
                 <StatTile label="Outstanding balance" value={formatCurrency(Number(dashboard.outstandingBalance))} />
@@ -176,7 +201,14 @@ const StoreAdminPage: React.FC = () => {
 
         {activeTab === 'windows' && <StoreWindowsTab onChanged={() => void loadDashboard()} />}
         {activeTab === 'catalog' && <StoreCatalogTab />}
-        {activeTab === 'orders' && <StoreOrdersTab onChanged={() => void loadDashboard()} />}
+        {activeTab === 'orders' && (
+          <StoreOrdersTab
+            key={ordersPaymentFilter}
+            onChanged={() => void loadDashboard()}
+            initialPaymentFilter={ordersPaymentFilter}
+          />
+        )}
+        {activeTab === 'payments' && <StorePaymentsTab onChanged={() => void loadDashboard()} />}
         {activeTab === 'settings' && <StoreSettingsTab onChanged={() => void loadDashboard()} />}
       </div>
     </div>

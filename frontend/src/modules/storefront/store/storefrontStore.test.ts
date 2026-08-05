@@ -22,6 +22,10 @@ const offer = (overrides: Partial<StorefrontProductOffer> = {}): StorefrontProdu
   price: '45.00',
   isTaxable: false,
   requiresVariant: false,
+  personalizationEnabled: false,
+  personalizationRequired: false,
+  personalizationMaxLength: 30,
+  personalizationPrice: '0',
   isAvailable: true,
   variants: [],
   ...overrides,
@@ -129,6 +133,87 @@ describe('storefrontStore', () => {
       const { cart } = useStorefrontStore.getState();
       expect(cart).toHaveLength(1);
       expect(cart[0]?.productId).toBe('p2');
+    });
+  });
+
+  describe('personalization', () => {
+    const personalizable = () => offer({ personalizationEnabled: true, personalizationPrice: '8.00' });
+
+    it('adds the upcharge to the line price', () => {
+      useStorefrontStore.getState().addToCart(personalizable(), undefined, 1, 'SMITH');
+
+      const line = useStorefrontStore.getState().cart[0];
+      expect(line?.unitPrice).toBe(53);
+      expect(line?.personalizationText).toBe('SMITH');
+    });
+
+    it('charges nothing extra without text', () => {
+      useStorefrontStore.getState().addToCart(personalizable(), undefined, 1);
+      expect(useStorefrontStore.getState().cart[0]?.unitPrice).toBe(45);
+    });
+
+    it('keeps different names as separate lines', () => {
+      const product = personalizable();
+      useStorefrontStore.getState().addToCart(product, undefined, 1, 'SMITH');
+      useStorefrontStore.getState().addToCart(product, undefined, 1, 'JONES');
+
+      const { cart } = useStorefrontStore.getState();
+      expect(cart).toHaveLength(2);
+      expect(cart.map((l) => l.personalizationText)).toEqual(['SMITH', 'JONES']);
+    });
+
+    it('merges repeat adds of the same name', () => {
+      const product = personalizable();
+      useStorefrontStore.getState().addToCart(product, undefined, 1, 'SMITH');
+      useStorefrontStore.getState().addToCart(product, undefined, 2, 'SMITH');
+
+      const { cart } = useStorefrontStore.getState();
+      expect(cart).toHaveLength(1);
+      expect(cart[0]?.quantity).toBe(3);
+    });
+
+    it('treats blank text as no personalization', () => {
+      const product = personalizable();
+      useStorefrontStore.getState().addToCart(product, undefined, 1, '   ');
+      useStorefrontStore.getState().addToCart(product, undefined, 1);
+
+      const { cart } = useStorefrontStore.getState();
+      expect(cart).toHaveLength(1);
+      expect(cart[0]?.personalizationText).toBeUndefined();
+    });
+
+    it('removes only the matching personalized line', () => {
+      const product = personalizable();
+      useStorefrontStore.getState().addToCart(product, undefined, 1, 'SMITH');
+      useStorefrontStore.getState().addToCart(product, undefined, 1, 'JONES');
+      useStorefrontStore.getState().removeFromCart(product.id, undefined, 'SMITH');
+
+      const { cart } = useStorefrontStore.getState();
+      expect(cart).toHaveLength(1);
+      expect(cart[0]?.personalizationText).toBe('JONES');
+    });
+
+    it('sends the text through to the server', async () => {
+      useStorefrontStore.getState().addToCart(personalizable(), undefined, 1, 'SMITH');
+      mockPlaceOrder.mockResolvedValue({ id: 'o1', orderNumber: 'ORD-1' });
+
+      await useStorefrontStore.getState().placeOrder({ fulfillmentMethod: 'pickup' });
+
+      expect(mockPlaceOrder).toHaveBeenCalledWith({
+        windowId: undefined,
+        items: [
+          {
+            productId: 'p1',
+            variantId: undefined,
+            quantity: 1,
+            personalizationText: 'SMITH',
+          },
+        ],
+        paymentMethod: undefined,
+        fulfillmentMethod: 'pickup',
+        shippingAddress: undefined,
+        memberNotes: undefined,
+      });
     });
   });
 

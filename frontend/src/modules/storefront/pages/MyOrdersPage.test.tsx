@@ -59,6 +59,24 @@ const unpaidOrder = {
     handle: '@FCFD',
     reference: 'ORD-2026-0001',
     amountDue: '45.00',
+    options: [
+      {
+        method: 'venmo',
+        label: 'Venmo',
+        handle: '@FCFD',
+        paymentUrl: 'https://venmo.com/FCFD?txn=pay&amount=45.00&note=ORD-2026-0001',
+        instructions: null,
+        prefillsReference: true,
+      },
+      {
+        method: 'zelle',
+        label: 'Zelle',
+        handle: 'treasurer@fcfd.example',
+        paymentUrl: null,
+        instructions: null,
+        prefillsReference: false,
+      },
+    ],
   },
 };
 
@@ -94,10 +112,20 @@ describe('MyOrdersPage', () => {
     renderPage();
     await screen.findByRole('heading', { name: 'ORD-2026-0001' });
 
-    const payLink = screen.getByRole('link', { name: /pay now/i });
+    const payLink = screen.getByRole('link', { name: /pay/i });
     expect(payLink).toHaveAttribute('href', 'https://venmo.com/FCFD?txn=pay&amount=45.00&note=ORD-2026-0001');
     expect(payLink).toHaveAttribute('rel', expect.stringContaining('noopener'));
     expect(screen.getByText(/@FCFD/)).toBeInTheDocument();
+  });
+
+  it('offers every configured method, not only the one chosen at checkout', async () => {
+    renderPage();
+    await screen.findByRole('heading', { name: 'ORD-2026-0001' });
+
+    // Zelle has no link to open, so it appears as a handle to type.
+    expect(screen.getByText('Zelle')).toBeInTheDocument();
+    expect(screen.getByText('treasurer@fcfd.example')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /pay/i })).toHaveLength(1);
   });
 
   it('reports a payment without marking the order paid client-side', async () => {

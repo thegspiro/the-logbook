@@ -17,12 +17,15 @@ from app.models.storefront import (
     StoreFulfillmentMethod,
     StoreOrderEventType,
     StoreOrderStatus,
+    StorePaymentEventStatus,
     StorePaymentMethod,
+    StorePaymentPolicy,
     StorePaymentStatus,
     StoreProductStatus,
     StoreWindowStatus,
 )
 from app.schemas.base import UTCResponseBase
+from app.utils.storefront_payments import normalize_cashtag, normalize_zelle_handle
 
 _RESPONSE_CONFIG = ConfigDict(
     from_attributes=True,
@@ -63,9 +66,13 @@ class StoreSettingsUpdate(BaseModel):
     currency: Optional[str] = Field(None, min_length=3, max_length=3)
 
     accepted_payment_methods: Optional[List[StorePaymentMethod]] = None
+    payment_policy: Optional[StorePaymentPolicy] = None
     venmo_handle: Optional[str] = Field(None, max_length=100)
     paypal_me_url: Optional[str] = Field(None, max_length=300)
     paypal_email: Optional[str] = Field(None, max_length=255)
+    cash_app_cashtag: Optional[str] = Field(None, max_length=100)
+    zelle_handle: Optional[str] = Field(None, max_length=255)
+    zelle_instructions: Optional[str] = None
     check_payable_to: Optional[str] = Field(None, max_length=200)
     check_mailing_address: Optional[str] = None
     cash_instructions: Optional[str] = None
@@ -84,6 +91,11 @@ class StoreSettingsUpdate(BaseModel):
     send_order_confirmation: Optional[bool] = None
     send_status_updates: Optional[bool] = None
     send_payment_reminders: Optional[bool] = None
+    send_payment_receipts: Optional[bool] = None
+    send_window_opened: Optional[bool] = None
+    send_window_closing_reminder: Optional[bool] = None
+    send_window_closed: Optional[bool] = None
+    send_vendor_order_updates: Optional[bool] = None
     payment_reminder_days: Optional[int] = Field(None, ge=1, le=90)
     window_reminder_hours: Optional[int] = Field(None, ge=1, le=720)
 
@@ -103,6 +115,36 @@ class StoreSettingsUpdate(BaseModel):
         cleaned = _strip_or_none(v)
         return cleaned.lstrip("@") if cleaned else cleaned
 
+    @field_validator("cash_app_cashtag")
+    @classmethod
+    def _clean_cashtag(cls, v: Optional[str]) -> Optional[str]:
+        # Rejected here rather than silently dropped: a typo'd cashtag would
+        # otherwise just make the Cash App button vanish with no explanation.
+        cleaned = _strip_or_none(v)
+        if cleaned is None:
+            return None
+        normalized = normalize_cashtag(cleaned)
+        if not normalized:
+            raise ValueError(
+                "Enter a valid Cash App $cashtag (letters, digits and "
+                "underscores, starting with a letter)"
+            )
+        return normalized
+
+    @field_validator("zelle_handle")
+    @classmethod
+    def _clean_zelle(cls, v: Optional[str]) -> Optional[str]:
+        cleaned = _strip_or_none(v)
+        if cleaned is None:
+            return None
+        normalized = normalize_zelle_handle(cleaned)
+        if not normalized:
+            raise ValueError(
+                "Zelle is registered against an email address or a 10-digit "
+                "mobile number"
+            )
+        return normalized
+
 
 class StoreSettingsResponse(UTCResponseBase):
     """Storefront configuration as seen by administrators"""
@@ -118,9 +160,13 @@ class StoreSettingsResponse(UTCResponseBase):
     currency: str
 
     accepted_payment_methods: List[str] = Field(default_factory=list)
+    payment_policy: StorePaymentPolicy = StorePaymentPolicy.NONE
     venmo_handle: Optional[str] = None
     paypal_me_url: Optional[str] = None
     paypal_email: Optional[str] = None
+    cash_app_cashtag: Optional[str] = None
+    zelle_handle: Optional[str] = None
+    zelle_instructions: Optional[str] = None
     check_payable_to: Optional[str] = None
     check_mailing_address: Optional[str] = None
     cash_instructions: Optional[str] = None
@@ -139,6 +185,11 @@ class StoreSettingsResponse(UTCResponseBase):
     send_order_confirmation: bool
     send_status_updates: bool
     send_payment_reminders: bool
+    send_payment_receipts: bool
+    send_window_opened: bool
+    send_window_closing_reminder: bool
+    send_window_closed: bool
+    send_vendor_order_updates: bool
     payment_reminder_days: int
     window_reminder_hours: int
 
@@ -203,6 +254,11 @@ class StoreProductBase(BaseModel):
     is_taxable: bool = False
     status: StoreProductStatus = StoreProductStatus.DRAFT
     max_per_member: Optional[int] = Field(None, ge=1)
+    personalization_enabled: bool = False
+    personalization_required: bool = False
+    personalization_label: Optional[str] = Field(None, max_length=120)
+    personalization_max_length: int = Field(default=30, ge=1, le=200)
+    personalization_price: Decimal = Field(default=Decimal("0"), ge=0)
     track_stock: bool = False
     stock_quantity: Optional[int] = Field(None, ge=0)
     requires_variant: bool = False
@@ -220,6 +276,10 @@ class StoreProductCreate(StoreProductBase):
         if self.requires_variant and not self.variants:
             raise ValueError(
                 "A product that requires a variant must define at least one variant"
+            )
+        if self.personalization_required and not self.personalization_enabled:
+            raise ValueError(
+                "Personalization must be enabled before it can be required"
             )
         return self
 
@@ -240,6 +300,11 @@ class StoreProductUpdate(BaseModel):
     is_taxable: Optional[bool] = None
     status: Optional[StoreProductStatus] = None
     max_per_member: Optional[int] = Field(None, ge=1)
+    personalization_enabled: Optional[bool] = None
+    personalization_required: Optional[bool] = None
+    personalization_label: Optional[str] = Field(None, max_length=120)
+    personalization_max_length: Optional[int] = Field(None, ge=1, le=200)
+    personalization_price: Optional[Decimal] = Field(None, ge=0)
     track_stock: Optional[bool] = None
     stock_quantity: Optional[int] = Field(None, ge=0)
     requires_variant: Optional[bool] = None
@@ -266,11 +331,17 @@ class StoreProductResponse(UTCResponseBase):
     is_taxable: bool
     status: StoreProductStatus
     max_per_member: Optional[int] = None
+    personalization_enabled: bool
+    personalization_required: bool
+    personalization_label: Optional[str] = None
+    personalization_max_length: int
+    personalization_price: Decimal
     track_stock: bool
     stock_quantity: Optional[int] = None
     requires_variant: bool
     sort_order: int
     internal_notes: Optional[str] = None
+    has_image: bool = False
     variants: List[StoreProductVariantResponse] = Field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -302,6 +373,11 @@ class StorefrontProductOffer(UTCResponseBase):
     is_taxable: bool
     requires_variant: bool
     max_per_member: Optional[int] = None
+    personalization_enabled: bool = False
+    personalization_required: bool = False
+    personalization_label: Optional[str] = None
+    personalization_max_length: int = 30
+    personalization_price: Decimal = Decimal("0")
     available_quantity: Optional[int] = None
     is_available: bool
     variants: List[StorefrontVariantOption] = Field(default_factory=list)
@@ -421,6 +497,11 @@ class StoreOrderWindowResponse(UTCResponseBase):
     auto_close: bool
     expected_delivery_date: Optional[date] = None
     pickup_instructions: Optional[str] = None
+    # Stamped by record_vendor_order, never set through the window form: the
+    # date has to mean "when the order actually went out".
+    vendor_name: Optional[str] = None
+    vendor_reference: Optional[str] = None
+    vendor_ordered_at: Optional[datetime] = None
     include_all_products: bool
     notify_on_open: bool
     opened_at: Optional[datetime] = None
@@ -486,6 +567,9 @@ class StoreOrderItemInput(BaseModel):
     product_id: str = Field(..., min_length=1, max_length=36)
     variant_id: Optional[str] = Field(None, max_length=36)
     quantity: int = Field(..., ge=1, le=999)
+    # Free text the member wants embroidered/engraved on this line. The server
+    # discards it for products that do not offer personalization.
+    personalization_text: Optional[str] = Field(None, max_length=200)
 
 
 class StoreOrderCreate(BaseModel):
@@ -525,6 +609,7 @@ class StoreOrderItemResponse(UTCResponseBase):
     product_name: str
     variant_label: Optional[str] = None
     sku: Optional[str] = None
+    personalization_text: Optional[str] = None
     unit_price: Decimal
     quantity: int
     line_total: Decimal
@@ -546,6 +631,23 @@ class StoreOrderEventResponse(UTCResponseBase):
     created_at: Optional[datetime] = None
 
 
+class StorePaymentOption(UTCResponseBase):
+    """One configured way to settle an order"""
+
+    model_config = _RESPONSE_CONFIG
+
+    method: str
+    label: str
+    handle: Optional[str] = None
+    # Deep link that opens the payment app prefilled with the amount. None for
+    # methods that have no link to open (Zelle, cash, check).
+    payment_url: Optional[str] = None
+    instructions: Optional[str] = None
+    # True when the link carries the order number through, so the UI knows
+    # whether to tell the member to type the reference themselves.
+    prefills_reference: bool = False
+
+
 class StorePaymentInstructions(UTCResponseBase):
     """Where and how to send the money for one order"""
 
@@ -559,6 +661,9 @@ class StorePaymentInstructions(UTCResponseBase):
     instructions: Optional[str] = None
     reference: Optional[str] = None
     amount_due: Decimal = Decimal("0")
+    # Every method the department accepts and has configured, the one chosen at
+    # checkout first. The member is not locked into that choice.
+    options: List[StorePaymentOption] = Field(default_factory=list)
 
 
 class StoreOrderResponse(UTCResponseBase):
@@ -635,6 +740,36 @@ class StoreOrderPaymentReport(BaseModel):
     note: Optional[str] = None
 
 
+class StoreOrderMarkPaid(BaseModel):
+    """Settle an order's whole remaining balance."""
+
+    model_config = _REQUEST_CONFIG
+
+    payment_method: Optional[StorePaymentMethod] = None
+    reference: Optional[str] = Field(None, max_length=200)
+    notify_member: bool = True
+
+
+class StoreOrderWaive(BaseModel):
+    """Comp an order — no money is being collected."""
+
+    model_config = _REQUEST_CONFIG
+
+    reason: Optional[str] = None
+    notify_member: bool = True
+
+
+class StoreBulkPayment(BaseModel):
+    """Settle several orders at once (reconciling a payout statement)."""
+
+    model_config = _REQUEST_CONFIG
+
+    order_ids: List[str] = Field(..., min_length=1, max_length=500)
+    payment_method: Optional[StorePaymentMethod] = None
+    reference: Optional[str] = Field(None, max_length=200)
+    notify_members: bool = True
+
+
 class StoreOrderRefund(BaseModel):
     """Record a refund issued outside the app"""
 
@@ -677,6 +812,47 @@ class StoreOrderAdminNotes(BaseModel):
 # ============================================
 
 
+class StoreVendorOrderRequest(BaseModel):
+    """Log that the bulk order has gone to the vendor"""
+
+    model_config = _REQUEST_CONFIG
+
+    vendor_name: Optional[str] = Field(None, max_length=200)
+    vendor_reference: Optional[str] = Field(None, max_length=120)
+    expected_delivery_date: Optional[date] = None
+    # Advances every eligible order to "ordered" in the same action, so the
+    # record cannot drift from what was actually sent.
+    advance_orders: bool = True
+    notify_members: bool = True
+    message: Optional[str] = None
+
+
+class StoreVendorOrderResult(UTCResponseBase):
+    """Outcome of recording a vendor order"""
+
+    model_config = _RESPONSE_CONFIG
+
+    window: "StoreOrderWindowResponse"
+    advanced: int
+    # Orders the payment policy held back — they were not on the vendor's
+    # sheet, so they are not marked ordered either.
+    skipped: List[Dict[str, str]] = Field(default_factory=list)
+    notified: int
+
+
+class StoreWindowSizeTotal(UTCResponseBase):
+    """How many of one product/size to order — the vendor purchase order"""
+
+    model_config = _RESPONSE_CONFIG
+
+    product_id: Optional[str] = None
+    product_name: str
+    variant_label: Optional[str] = None
+    sku: Optional[str] = None
+    quantity: int
+    line_total: Decimal
+
+
 class StoreWindowProductTally(UTCResponseBase):
     """One row of the bulk-purchase sheet for a window"""
 
@@ -686,6 +862,7 @@ class StoreWindowProductTally(UTCResponseBase):
     product_name: str
     variant_label: Optional[str] = None
     sku: Optional[str] = None
+    personalization_text: Optional[str] = None
     quantity: int
     unit_price: Decimal
     line_total: Decimal
@@ -706,6 +883,14 @@ class StoreWindowSummaryResponse(UTCResponseBase):
     outstanding: Decimal
     unpaid_order_count: int
     pending_verification_count: int
+    payment_policy: StorePaymentPolicy = StorePaymentPolicy.NONE
+    # What to order from the vendor, merged across members.
+    size_totals: List[StoreWindowSizeTotal] = Field(default_factory=list)
+    # Held back because they are unpaid, when the policy requires payment
+    # before the vendor order. Empty under every other policy.
+    held_totals: List[StoreWindowSizeTotal] = Field(default_factory=list)
+    held_order_count: int = 0
+    # What to embroider on each one — one row per distinct name.
     tallies: List[StoreWindowProductTally] = Field(default_factory=list)
 
 
@@ -756,3 +941,92 @@ class StoreBulkStatusResult(UTCResponseBase):
     updated: int
     skipped: int
     errors: List[Dict[str, str]] = Field(default_factory=list)
+
+
+# ============================================
+# External payment reconciliation
+# ============================================
+
+
+class StorePaymentEventResponse(UTCResponseBase):
+    """One payment a provider reported, and what the storefront did with it"""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    provider: str
+    external_id: str
+    amount: Decimal
+    currency: str
+    payer_name: Optional[str] = None
+    payer_email: Optional[str] = None
+    reference: Optional[str] = None
+    status: StorePaymentEventStatus
+    note: Optional[str] = None
+    matched_order_id: Optional[str] = None
+    matched_order_number: Optional[str] = None
+    matched_order_member: Optional[str] = None
+    matched_order_balance: Optional[Decimal] = None
+    received_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
+
+
+class StorePaymentEventListResponse(UTCResponseBase):
+    """Inbound payments, newest first"""
+
+    model_config = _RESPONSE_CONFIG
+
+    items: List[StorePaymentEventResponse] = Field(default_factory=list)
+    unresolved_count: int = 0
+
+
+class StorePaymentEventApply(BaseModel):
+    """Settle an order from a recorded payment"""
+
+    model_config = _REQUEST_CONFIG
+
+    # Supplied when an administrator attaches a payment the matcher could not
+    # place; omitted to accept the order the matcher already found.
+    order_id: Optional[str] = None
+
+
+class StorePaymentEventIgnore(BaseModel):
+    """Dismiss a payment that does not belong to any store order"""
+
+    model_config = _REQUEST_CONFIG
+
+    reason: Optional[str] = Field(default=None, max_length=500)
+
+
+class StoreNotificationPreviewResponse(UTCResponseBase):
+    """One storefront notice, rendered against sample data for the settings screen"""
+
+    model_config = _RESPONSE_CONFIG
+
+    notice: str
+    label: str
+    # The StoreSettings field that governs this notice.
+    setting: str
+    audience: str
+    # Other emails the same switch turns off, so unticking one is not a
+    # surprise later.
+    also_governs: List[str] = Field(default_factory=list)
+    enabled: bool
+    subject: str
+    html_body: str
+    text_body: str
+
+
+class StoreNotificationTestResponse(UTCResponseBase):
+    """Result of mailing a storefront notice to the requester's own address"""
+
+    model_config = _RESPONSE_CONFIG
+
+    notice: str
+    label: str
+    sent_to: str
+    # False when email is not configured for the organization — reported
+    # rather than raised, since it is a setup gap and not a failure of the
+    # notice being tested.
+    delivered: bool
+    detail: str

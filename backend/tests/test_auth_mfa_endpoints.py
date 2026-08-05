@@ -50,7 +50,8 @@ class TestMfaEndpoints:
         ]
         # The rate-limit dependency is anonymous; assert at least one extra
         # security dependency beyond the user/db ones is present.
-        assert route is not None and len(all_calls) >= 2, all_calls
+        assert route is not None, all_calls
+        assert len(all_calls) >= 2, all_calls
 
     def test_mfa_login_route_exists(self):
         assert _route("/mfa/login", "POST") is not None

@@ -5,7 +5,7 @@ Request/response schemas for the integrations API.
 Includes per-integration-type config schemas with strict validation.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
@@ -192,6 +192,29 @@ class CalcomConfig(BaseModel):
     webhook_secret: str = ""
 
 
+class PayPalConfig(BaseModel):
+    """PayPal REST app credentials plus reconciliation behaviour.
+
+    The department connects its own PayPal *Business* account: there is no
+    platform-wide app, and no payment is ever taken on this site. PayPal
+    tells us what it received; we match it to a store order.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Sandbox first — a department should be able to prove the webhook
+    # round-trips before pointing it at real money.
+    environment: Literal["sandbox", "live"] = "sandbox"
+    client_id: str = ""
+    client_secret: str = ""
+    # From the PayPal dashboard's webhook listing. Required to verify
+    # signatures: PayPal's verify API keys the check on this id.
+    webhook_id: str = ""
+    # When off, captures are still recorded and matched but never applied —
+    # a department that wants a human to press the button keeps that.
+    auto_apply_payments: bool = True
+
+
 # Map integration_type → config schema for strict validation
 INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "slack": SlackConfig,
@@ -209,6 +232,7 @@ INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "salesforce": SalesforceConfig,
     "documenso": DocumensoConfig,
     "calcom": CalcomConfig,
+    "paypal": PayPalConfig,
 }
 
 # Fields in config that contain secrets and should be stored encrypted
@@ -228,6 +252,10 @@ SECRET_CONFIG_KEYS = frozenset(
         "webhook_secret",
     }
 )
+
+# ``client_id`` matches SECRET_CONFIG_KEYS and is therefore encrypted, which is
+# fine — but it means the connect form can never echo it back, so the UI has to
+# treat a blank submission as "leave unchanged" rather than "clear it".
 
 
 # ============================================

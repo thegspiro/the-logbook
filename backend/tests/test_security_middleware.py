@@ -411,7 +411,7 @@ class TestInputSanitizer:
     @pytest.mark.unit
     def test_sanitize_username_special_chars_rejected(self):
         """Username with special characters (other than _ and -) should raise."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="3-32 characters"):
             InputSanitizer.sanitize_username("user@name!")
 
     @pytest.mark.unit
@@ -469,13 +469,14 @@ class TestInputSanitizer:
     @pytest.mark.unit
     def test_validate_url_invalid_format(self):
         """A malformed URL should raise ValueError."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Invalid URL format"):
             InputSanitizer.validate_url("https://")
 
     @pytest.mark.unit
     def test_validate_url_javascript_protocol_rejected(self):
         """A javascript: URL (XSS vector) should be rejected."""
-        with pytest.raises(ValueError):
+        # Rejected at the protocol gate, before any format check.
+        with pytest.raises(ValueError, match="must use HTTPS"):
             InputSanitizer.validate_url("javascript:alert(1)")
 
 

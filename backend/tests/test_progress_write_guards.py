@@ -74,7 +74,8 @@ class TestMemberSelfWriteGuard:
             acting_user_id="u1",
             can_manage=False,
         )
-        assert result is None and "officer" in error
+        assert result is None
+        assert "officer" in error
 
     async def test_member_cannot_self_verify_or_waive(self):
         for status in ("verified", "waived"):
@@ -86,7 +87,8 @@ class TestMemberSelfWriteGuard:
                 acting_user_id="u1",
                 can_manage=False,
             )
-            assert result is None and "officer" in error
+            assert result is None
+            assert "officer" in error
 
     async def test_member_cannot_self_score(self):
         svc = await self._svc(_progress("u1"))
@@ -97,7 +99,8 @@ class TestMemberSelfWriteGuard:
             acting_user_id="u1",
             can_manage=False,
         )
-        assert result is None and "officer" in error
+        assert result is None
+        assert "officer" in error
 
     async def test_member_cannot_self_set_progress_value(self):
         svc = await self._svc(_progress("u1"))
@@ -108,7 +111,8 @@ class TestMemberSelfWriteGuard:
             acting_user_id="u1",
             can_manage=False,
         )
-        assert result is None and "officer" in error
+        assert result is None
+        assert "officer" in error
 
     async def test_member_may_still_mark_in_progress(self):
         # A benign, non-completing status change is still allowed for members.
@@ -121,7 +125,8 @@ class TestMemberSelfWriteGuard:
             acting_user_id="u1",
             can_manage=False,
         )
-        assert error is None and result is progress
+        assert error is None
+        assert result is progress
         assert progress.status == RequirementProgressStatus.IN_PROGRESS
 
     async def test_officer_may_complete(self):
@@ -134,7 +139,8 @@ class TestMemberSelfWriteGuard:
             acting_user_id="officer-1",
             can_manage=True,
         )
-        assert error is None and result is progress
+        assert error is None
+        assert result is progress
         assert progress.status == RequirementProgressStatus.COMPLETED
         assert progress.progress_percentage == 100.0
 

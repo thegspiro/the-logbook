@@ -32,6 +32,7 @@ services.
 | 11 | Building a Training Pipeline — Step-by-Step Setup | Training officers (first-time setup) | 12–16 min |
 | 12 | Creating, Running & Auditing Elections — The Complete Guide | Secretaries, presidents, election admins | 38–42 min |
 | 13 | Multi-Class Courses & Cohorts — Scheduling a Whole Class Series | Training officers running recruit schools / academies | 10–14 min |
+| 13 | The Department Store — Selling Merch Without Becoming a Payment Processor | Quartermasters, secretaries, treasurers, members | 17–21 min |
 
 > Scripts 9–11 form a **training-pipeline mini-series**: 11 builds a pipeline, 9
 > runs it day to day, and 10 shows the member's side. They complement Script 5
@@ -41,6 +42,11 @@ services.
 > must *accomplish* (the pipeline), 13 defines *when the classes meet* (the course
 > syllabus and its cohorts). A department running a recruit school wants both, and
 > generating a cohort wires them together.
+> Script 13 covers the Department Store end to end — setup, catalog, ordering
+> windows, what the store emails and how to preview, test and reword it, the
+> member's ordering and paying experience, and PayPal reconciliation. Chapter 6
+> overlaps Script 7's administrative material; use whichever suits the
+> playlist.
 
 > Script 12 is the canonical elections deep-dive — it supersedes the elections
 > chapters in Scripts 4 and 7 and ships with its own **edge-case shorts pack
@@ -80,6 +86,15 @@ services.
 | 12i | Investigating a Disputed Election | Script 12 |
 | 12j | Choosing a Voting Method | Script 12 |
 | 12k | The Pre-Meeting Package | Script 12 |
+| 13a | Pay Your Store Order From Your Phone | Script 13 |
+| 13b | Why There's No Zelle Button | Script 13 |
+| 13c | "I've Sent Payment" Doesn't Mean Paid | Script 13 |
+| 13d | Close a Window, Get Your Vendor Order | Script 13 |
+| 13e | Let PayPal Mark Your Orders Paid | Script 13 |
+| 13f | Paid But Not Ordered — Why Two Statuses | Script 13 |
+| 13g | Your Department's Rule on Unpaid Orders | Script 13 |
+| 13h | They Said Venmo and Paid Cash — Record It Right | Script 13 |
+| 13i | Tell the Vendor, Tell the Members, One Click | Script 13 |
 
 ---
 

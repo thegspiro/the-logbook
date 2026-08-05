@@ -59,7 +59,8 @@ class TestResetRequirement:
     async def test_missing_returns_error(self):
         svc = TrainingProgramService(RecordingSession([_one(None)]))
         prog, error = await svc.reset_requirement_progress(uuid4(), uuid4())
-        assert prog is None and error == "Requirement progress not found"
+        assert prog is None
+        assert error == "Requirement progress not found"
 
     async def test_blanks_the_row_and_recalculates(self):
         row = _progress()
@@ -69,12 +70,14 @@ class TestResetRequirement:
 
         prog, error = await svc.reset_requirement_progress(uuid4(), uuid4())
 
-        assert error is None and prog is row
+        assert error is None
+        assert prog is row
         assert row.status == RequirementProgressStatus.NOT_STARTED
         assert row.progress_value == 0.0
         assert row.progress_percentage == 0.0
         assert row.progress_notes is None
-        assert row.completed_at is None and row.verified_by is None
+        assert row.completed_at is None
+        assert row.verified_by is None
         db.commit.assert_awaited_once()
         svc._recalculate_enrollment_progress.assert_awaited_once()
 
@@ -83,7 +86,8 @@ class TestResetEnrollment:
     async def test_missing_returns_error(self):
         svc = TrainingProgramService(RecordingSession([_first(None)]))
         enr, error = await svc.reset_enrollment_progress(uuid4(), uuid4())
-        assert enr is None and error == "Enrollment not found"
+        assert enr is None
+        assert error == "Enrollment not found"
 
     async def test_blanks_all_rows_and_reanchors(self):
         enrollment = SimpleNamespace(
@@ -106,12 +110,14 @@ class TestResetEnrollment:
 
         enr, error = await svc.reset_enrollment_progress(uuid4(), uuid4())
 
-        assert error is None and enr is enrollment
+        assert error is None
+        assert enr is enrollment
         svc._safe_notify_recert_reset.assert_awaited_once()
         # Both rows blanked.
         for r in (r1, r2):
             assert r.status == RequirementProgressStatus.NOT_STARTED
-            assert r.progress_value == 0.0 and r.progress_notes is None
+            assert r.progress_value == 0.0
+            assert r.progress_notes is None
         # Enrollment restarted at the first phase.
         assert enrollment.status == EnrollmentStatus.ACTIVE
         assert enrollment.progress_percentage == 0.0

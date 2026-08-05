@@ -57,7 +57,8 @@ class TestWithdrawEnrollment:
             reason="Stepped down to EMT",
         )
 
-        assert error is None and result is enr
+        assert error is None
+        assert result is enr
         assert enr.status == EnrollmentStatus.WITHDRAWN
         assert enr.withdrawn_at is not None
         assert enr.withdrawal_reason == "Stepped down to EMT"
@@ -75,7 +76,8 @@ class TestWithdrawEnrollment:
             can_manage=True,
         )
 
-        assert error is None and result is enr
+        assert error is None
+        assert result is enr
         assert enr.status == EnrollmentStatus.WITHDRAWN
 
     async def test_other_member_denied(self):
@@ -106,7 +108,8 @@ class TestWithdrawEnrollment:
             can_manage=True,
         )
 
-        assert result is None and error == "Enrollment not found"
+        assert result is None
+        assert error == "Enrollment not found"
 
     async def test_already_withdrawn_is_idempotent(self):
         user = uuid4()
@@ -121,6 +124,7 @@ class TestWithdrawEnrollment:
             can_manage=False,
         )
 
-        assert error is None and result is enr
+        assert error is None
+        assert result is enr
         # No second write when already withdrawn.
         db.commit.assert_not_awaited()

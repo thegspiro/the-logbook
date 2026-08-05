@@ -236,7 +236,7 @@ class TestOnboardingIntegration:
 
         # Try to create duplicate with same username
         # Should raise ValueError since create_system_owner raises exceptions on error
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="already been created"):
             await service.create_system_owner(**owner_data)
 
     @pytest.mark.asyncio

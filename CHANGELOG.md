@@ -80,6 +80,269 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > timezone at generation** — not a stored UTC offset. A recruit school running
 > from September into December crosses a DST boundary; storing the offset would
 > silently move the last third of the course by an hour.
+### Storefront: an optional department store, and PayPal reconciliation (2026-08-05)
+
+**Added**
+
+- **Department Storefront module** (`/store`, `/store/orders`, `/store/admin`),
+  optional per organization. A catalog with variants and per-variant stock,
+  ordering windows, per-member limits, name embroidery, uploaded product
+  photos, an order timeline, and payment tracking. Permissions:
+  `storefront.view`, `storefront.order`, `storefront.manage`. Ten `store_*`
+  tables. See [STOREFRONT_MODULE.md](docs/STOREFRONT_MODULE.md) and [training
+  guide 18](docs/training/18-storefront.md).
+- **The platform still never takes a payment.** There is no checkout and no
+  money passes through the application; the store records what is owed and
+  makes settling it fast to record. That is a deliberate scope boundary — a
+  volunteer department generally cannot become a card processor, and holding
+  card data would pull the whole deployment into PCI scope to sell forty job
+  shirts a year.
+- **Payment buttons for every configured method**, not only the one chosen at
+  checkout. Venmo, PayPal and Cash App get prefilled deep links; Zelle gets the
+  handle to copy. A member reading this on a phone may not have the app they
+  picked a week ago, and from the department's side the money only has to
+  arrive. Orders placed on a method the department later stops accepting keep
+  their button — somebody who still owes on a Venmo order has to be able to pay
+  it.
+  - **Zelle deliberately has no link.** It runs inside each bank's own app and
+    publishes no web or deep-link scheme, so a `zelle.com` URL would send
+    members to a page that cannot pay anybody.
+  - Cash App has a link but no note field, so the order number is displayed to
+    type; Venmo carries it through, so it is not repeated there. The reference
+    is what lets a treasurer match a payment, so it is never hidden — including
+    when no method is configured at all.
+  - A method with nothing configured is **hidden**, not rendered as a dead
+    button. A link that goes nowhere tells a member the money moved when it did
+    not.
+- **PayPal integration** in the connections list (category *Payments*).
+  Connecting a department's own PayPal **Business** account lets PayPal report
+  what it received, and matching orders settle themselves. Signature
+  verification is delegated to PayPal's own
+  `/v1/notifications/verify-webhook-signature` endpoint rather than validating
+  the certificate chain locally — the vendor-supported path cannot be fooled by
+  a forged `PAYPAL-CERT-URL` header the way a hand-rolled verifier can. An
+  integration with no webhook ID rejects every delivery rather than trusting
+  it; Test Connection reports that as a warning instead of a bare success. See
+  [STOREFRONT_PAYPAL.md](docs/STOREFRONT_PAYPAL.md).
+- **A payment only auto-applies on an exact match**: the reference must name
+  exactly one order number in `ORD-YYYY-NNNN` form *and* the amount must equal
+  that order's balance exactly. Fuzzy matching on payer name or amount alone
+  was considered and rejected — two members can easily owe the same amount in
+  the same window, and crediting the wrong member's order is worse than a short
+  wait in a queue. Everything else lands in a review queue
+  (**Store Admin → Payments**) with apply and dismiss actions.
+- **Every inbound payment is recorded whether or not it matched.** The
+  unmatchable ones are the point: the money has already left the member's
+  account, so discarding the notification would leave them chasing an order
+  that still reads unpaid.
+- **Cash App and Zelle** joined Venmo and PayPal as store payment methods, with
+  handle validation at save time. A typo'd `$cashtag` would otherwise make the
+  button silently vanish with nothing telling the administrator why.
+- **A contract test** comparing every storefront response schema's serialized
+  field names against the matching TypeScript interface, in both directions.
+  This class of drift is invisible by construction — Pydantic serializes
+  whatever it has and TypeScript ignores response fields it does not know
+  about, so a field added on one side and forgotten on the other produces no
+  error anywhere and surfaces as a blank cell in front of a user.
+
+- **A payment policy per department**, because the right answer to "what
+  happens to somebody who ordered and hasn't paid" genuinely differs. *No
+  payment gate* (the default, and what the store did before) orders their item
+  and lets them collect it. *Payment before pickup* orders it like everyone
+  else's but will not hand it over. *Payment before the vendor order* holds
+  them out of the purchase order entirely. Held-back orders are reported on the
+  tally rather than dropped — the quartermaster has to see who is being left
+  out, and chase them, before the order goes in. Bulk-fulfilling a window
+  advances the settled orders and returns the rest by order number with the
+  balance owed. Waiving a balance releases an order exactly as paying does, so
+  a comp or a replacement clears the gate. Under the strictest rule an unpaid
+  order also cannot be marked *ordered*, since the record would otherwise claim
+  the vendor was told about an item deliberately left off the sheet. The
+  setting is presented as a side-by-side comparison of all three rules — it is
+  chosen before a catalog exists, so the consequences have to be readable
+  without the manual — and changing it governs future transitions only, never
+  rolling back a step already taken. The CSV export keeps every order, since it
+  doubles as the treasurer's record, but gained a **Held From Vendor Order**
+  column: without it the file read as a vendor sheet that quietly undid the
+  policy the on-screen tally was enforcing.
+
+- **The quartermaster's loop is complete end to end.** Orders can be filtered
+  by the payment method actually used — each app settles as its own payout, so
+  "show me the Zelle orders" is the question you have in front of a bank
+  statement. Recording a payment now takes the method that was really used
+  rather than the one the member picked at checkout: they chose Venmo and
+  handed over cash at drill, and leaving it as Venmo makes the treasurer's
+  reconciliation come up short with nothing to explain it.
+- **The vendor order is recorded against the window** — who it went to, their
+  reference, when, and the expected delivery date — in one action that also
+  advances every eligible order to *ordered* and emails the members that it has
+  gone in. That email is the one members chase: between "ordering closed" and
+  "come pick it up" there can be six quiet weeks. Orders the payment rule holds
+  back are skipped rather than advanced, and come back named, since they were
+  never on the sheet the vendor received.
+
+- **A new store starts on cash alone.** It used to seed Venmo, PayPal, cash
+  and check all ticked — but only cash works with nothing configured, so the
+  settings screen showed a quartermaster three methods that were switched on
+  and did nothing while members saw only one. Cash is the honest floor: no
+  setup, and it works. Everything else is ticked as it is configured, and
+  un-ticking everything normalizes back to cash rather than leaving a store
+  nobody can pay.
+
+- **Every notice the store sends now has its own switch.** The module sends
+  nine emails and only four of them were behind a setting; the rest went out
+  whenever the calling code happened to pass `notify_members=True`, so a
+  department that did not want the "ordering is open" blast had no way to say
+  so. Added `send_payment_receipts`, `send_window_opened`,
+  `send_window_closing_reminder`, `send_window_closed` and
+  `send_vendor_order_updates`, all defaulting on so nothing a department
+  receives today stops arriving. Settings → Notifications now lists all nine
+  grouped as order and window notices, each naming who receives it and when —
+  including the two that surprise people, since *status changes* also covers
+  the cancellation email and *payment receipts* covers waivers and refunds as
+  well as payments.
+  - A switch is a **ceiling, not a duplicate**. The per-send "email members"
+    box still skips an individual send and a window can still decline to
+    announce itself, but neither can send a notice the department switched
+    off. A note a quartermaster types on an order and presses send on is not
+    behind a switch — that is a message, not a notice the module raised.
+  - These bodies stay composed in code rather than joining the admin-editable
+    Email Templates screen: each is a rendered table of order lines and pay
+    buttons, not prose. What a department words itself is settings —
+    payment instructions, per-method notes, the receipt footer, a window's
+    pickup instructions, and the free-text message each announcement takes.
+
+- **Every notice can be previewed before it is switched on.** A **Preview**
+  button on each row of Settings → Notifications opens the real email —
+  subject, layout, logo and pay buttons — rendered against a sample job shirt
+  order and a sample window and shown in a sandboxed iframe at desktop or
+  phone width. It is the fastest way to answer the questions that actually
+  bite: is the cashtag right, does the Zelle handle read properly, is a method
+  ticked that was never configured. `GET
+  /store/settings/notifications/{notice}/preview`, permission
+  `storefront.manage`.
+  - **The preview runs the real `send_*` method.** The notification service
+    takes a capture list that diverts the composed message instead of
+    delivering it, so what is shown is byte-for-byte what would be sent. A
+    separately-built approximation drifts from the email, and the
+    quartermaster who approved the preview would have approved something else.
+  - **The order and window are invented; the settings are real** — payment
+    handles, instructions, receipt footer, currency, store name and branding
+    all come from the department's own saved configuration, since checking
+    those is the point. Nothing is written and no member address is resolved,
+    so a brand-new store with no members and no orders previews fine.
+  - A switched-off notice still previews, since otherwise you could not look
+    before deciding to turn it on, and the panel says it is off.
+
+- **A quartermaster can mail themselves any of the nine.** *Send this to me*
+  inside the preview delivers the same composed message to the requesting
+  user's own inbox. An iframe is not an inbox — Gmail and Outlook rewrite email
+  HTML, and whether the Venmo button taps through on a phone is a question only
+  a real message answers. `POST
+  /store/settings/notifications/{notice}/test`, permission `storefront.manage`,
+  so it needs no org-admin rights (the existing Communications test-email does,
+  and could only send a generic message or a stored template — never one of
+  these).
+  - **Only ever to the caller's own address.** There is no recipient parameter,
+    so this cannot become a way to mail the department from the settings
+    screen; the window notices do not resolve the roster either.
+  - **Marked as a test in both bodies** — `[TEST]` subject prefix and a banner
+    — because the sample announces "Order ORD-2026-0042 received", and an
+    unmarked copy in an inbox is a message somebody acts on three weeks later.
+  - Email not being configured is reported (`delivered: false`) rather than
+    raised: that is a setup gap, not a failure of the notice under test.
+  - Logged to `message_history` under the notice's own `storefront_*` type and
+    audited as `store_notification_test_sent`.
+
+- **The storefront's notices are now editable in Communications → Email
+  Templates**, as ten `EmailTemplateType.STOREFRONT_*` entries with shipped
+  defaults, variable catalogues and sample data. They were the only emails on
+  the platform a department could switch on and off but not word.
+  - **Ten templates, nine switches.** The cancellation notice gets its own
+    rather than sharing the order-update row — rewording "your order is ready"
+    must not silently change what a cancelled member reads. It still rides the
+    status-updates switch.
+  - **A department that never opens the editor sees no change.** Each `send_*`
+    builds both the message it has always composed and a context of variables;
+    the template is used only when a row exists and is active, and the coded
+    body is the fallback rather than a stub. Deactivating a template undoes an
+    edit without losing it, and *Reset to default* restores the shipped body.
+  - **Computed parts arrive as variables**, since the template system
+    substitutes `{{name}}` with no loops and a table of order lines cannot be
+    written in a body: `items_table_html`, `payment_block_html`,
+    `receipt_footer_html`, `member_notes_html`, `payment_summary_html`,
+    `balance_notice_html`, `cancellation_reason_html`, `refund_notice_html`,
+    and the three window chunks — the same `_RAW_HTML_VARIABLES` arrangement
+    property return reminders use for `items_list_html`. Removing one from a
+    body does what it looks like: drop `{{payment_block_html}}` and members
+    stop being told how to pay.
+  - The Notifications panel's **Preview** and **Send this to me** render
+    whichever version is in force, so an edit can be checked where it will be
+    read. Template lookups are cached per service instance — a reminder run
+    walks up to 200 orders and would otherwise re-read one row 200 times.
+  - Widens the `template_type` enum on `email_templates` and
+    `scheduled_emails`. Note for anyone reading a send log: cancellations
+    previously recorded as `storefront_order_update` and now record as
+    `storefront_order_cancelled`.
+  - **Storefront notices are excluded from the Schedule Email picker.** Each
+    reads entirely from an order or window that does not exist when one is
+    scheduled by hand — the recipient would get "Order&nbsp;&nbsp;received"
+    over an empty table. They are raised by the store, and now editable, but
+    never scheduled.
+  - The template cache is keyed by `(organization_id, template_type)`. Every
+    caller builds one service per org, so the notice alone would be enough
+    today — but a cache that is only correct because of how it happens to be
+    called is one refactor away from mailing one department's wording to
+    another's members.
+  - Behaviour at the awkward edges, all pinned by tests: a blank subject or an
+    empty text body falls back to the built-in one rather than sending a
+    subject-less or blank-bodied email; a misspelled variable renders as
+    nothing rather than reaching a member as `{{ordr_number}}`; deleting a
+    template restores the shipped default on the next visit to the editor,
+    while marking it inactive is the reversible undo; and editing a template
+    never switches its notice on — the switch still gates it.
+
+**Fixed**
+
+- **A held order could be marked ready for pickup.** Under *payment required
+  before the vendor order* the item was never bought, so the shelf is empty —
+  and "ready for pickup" is worse than merely inaccurate, because it emails the
+  member to come and collect something that does not exist. That transition is
+  now gated alongside *ordered* and *fulfilled*.
+- **Window rollups truncated at one page.** Order counts and sales totals were
+  summed in Python over a paged query, so any window larger than 200 orders
+  silently under-reported. Now computed in SQL.
+- **Stock could go negative under concurrency.** Two members ordering the last
+  item on a Sunday night could both pass an availability check. Orders touching
+  tracked stock now take `SELECT … FOR UPDATE` in a stable id order, which also
+  avoids deadlocking them against each other.
+- **`StoreSettings`, `StoreOrder`, `StoreProduct` and `StoreOrderWindow`**
+  omitted `createdAt`/`updatedAt` in their TypeScript interfaces while the
+  backend had always sent them. Found by the new contract test.
+- **Shift-completion tests failed on MariaDB.** They built datetimes as
+  TZ-offset string literals, a MySQL 8.0.19+ syntax MariaDB rejects with error
+  1292. Since `docker-compose.arm.yml` ships MariaDB 10.11, that is a supported
+  target, not an environment quirk.
+
+**Changed**
+
+- **CI runs backend integration and contract tests against both MySQL 8.0 and
+  MariaDB 10.11** via a service-container matrix, so a dialect difference fails
+  in CI rather than on somebody's ARM deployment.
+- **The backend lint gate covers `tests/` as well as `app/`**, and
+  `lint:backend` now runs isort alongside flake8 and black. `tests/` being out
+  of scope is how 85 flake8 violations accumulated unseen — lint-staged only
+  lints *staged* files, so a test file's problems surfaced to whoever next
+  touched it rather than whoever introduced them. All 85 are cleared: 60
+  compound assertions split (a compound assert reports the whole expression on
+  failure, so it tells you the line failed but not which half), 8 bare
+  `pytest.raises` given `match=` parameters (each could previously have passed
+  on an unrelated error raised earlier in the call), plus PT004/PT012/PT019.
+- **Frontend ESLint is at zero warnings.** Two test files reached through
+  `.parentElement` and `querySelectorAll` and now fire on the child and query
+  by role; `CourseLibraryRoute` moved out of the training module's `routes.tsx`
+  into its own file so that file exports only its route factory and Fast
+  Refresh works for the module again.
 
 ### Security: date of birth and emergency contacts are leadership-only (2026-08-04)
 

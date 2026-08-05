@@ -24,8 +24,9 @@ Welcome to the training documentation for The Logbook. These guides are designed
 | 13 | [Medical Screening](./13-medical-screening.md) | Screening requirements, records, compliance dashboard, expiring screenings, prospect screening |
 | 14 | [Elections & Voting](./14-elections.md) | Ballot items, nominations, candidates, anonymous voting, paper ballots & attestation, proxy voting, reminders & lifecycle automation, runoff elections, tie policies, vote integrity, forensics, certified results |
 | 15 | [Prospective Members Pipeline](./15-prospective-members.md) | Pipeline stages, applicant tracking, document collection, interviews, election packages, member conversion |
-| 16 | [Integrations](./16-integrations.md) | Salesforce, calendar sync, Slack/Discord/Teams, weather alerts, ePCR import, NEMSIS/NFIRS export, webhooks |
+| 16 | [Integrations](./16-integrations.md) | Salesforce, calendar sync, Slack/Discord/Teams, PayPal store reconciliation, weather alerts, ePCR import, NEMSIS/NFIRS export, webhooks |
 | 17 | [Privacy & Your Data](./17-privacy-data-rights.md) | Privacy choices/consent, personal-data export, what officers can see, records retention, anonymizing departed members, records requests |
+| 18 | [Department Store](./18-storefront.md) | Store settings, catalog & options, personalization, product photos, order windows, member ordering, payment buttons (Venmo/PayPal/Cash App/Zelle), payment rules for unpaid orders, recording payment, PayPal reconciliation, vendor order & embroidery tallies, notification switches, previews & test sends, rewording the store's emails |
 
 ---
 
@@ -40,6 +41,7 @@ Welcome to the training documentation for The Logbook. These guides are designed
 - [Shifts & Scheduling](./03-scheduling.md) - Sections 2-5 (calendar, my shifts, open shifts, assignments)
 - [Events & Meetings](./04-events-meetings.md) - Sections 1-2, 7-8 (events, RSVP, action items, voting)
 - [Inventory Management](./05-inventory.md) - Section 3 (your assignments)
+- [Department Store](./18-storefront.md) - Sections 9-10 (placing an order, paying) — if your department runs a store
 
 ### Officers and Line Officers
 All of the above, plus:
@@ -53,17 +55,19 @@ All of the above, plus:
 - [Administration & Reports](./08-admin-reports.md) - Sections 5-6 (reports, analytics)
 - [Elections & Voting](./14-elections.md) - All sections (secretary/officer responsibilities)
 - [Prospective Members Pipeline](./15-prospective-members.md) - All sections (membership coordinator responsibilities)
+- [Department Store](./18-storefront.md) - All sections (quartermaster responsibilities: catalog, windows, orders, payments)
 
 ### Treasurer / Finance Officer
 All of the above, plus:
 - [Finance](./11-finance.md) - All sections including budgets, purchase requests, expense reports, approval chains, dues
 - [Grants & Fundraising](./12-grants-fundraising.md) - All sections including applications, compliance, campaigns, donor management
+- [Department Store](./18-storefront.md) - Sections 12-14 (recording payment, PayPal reconciliation, closing a window)
 
 ### IT Manager / System Administrator
 All guides in their entirety, with special attention to:
 - [Administration & Reports](./08-admin-reports.md) - All sections, especially the first-time setup walkthrough
 - [Documents, Forms & Communications](./07-documents-forms.md) - Sections 8-10 (integrations)
-- [Integrations](./16-integrations.md) - All sections including Salesforce, webhooks, and reporting exports
+- [Integrations](./16-integrations.md) - All sections including Salesforce, PayPal, webhooks, and reporting exports
 - [Medical Screening](./13-medical-screening.md) - Compliance configuration and HIPAA considerations
 - [Privacy & Your Data](./17-privacy-data-rights.md) - All sections, especially retention configuration and the anonymization workflow
 - [Mobile & PWA Usage](./10-mobile-pwa.md) - Understand what members experience on their devices

@@ -33,6 +33,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -97,10 +98,29 @@ class StorePaymentMethod(str, enum.Enum):
 
     VENMO = "venmo"
     PAYPAL = "paypal"
+    CASH_APP = "cash_app"
+    ZELLE = "zelle"
     CASH = "cash"
     CHECK = "check"
     PAYROLL_DEDUCTION = "payroll_deduction"
     OTHER = "other"
+
+
+class StorePaymentPolicy(str, enum.Enum):
+    """When an unpaid order is allowed to move forward.
+
+    Departments genuinely differ here, and both directions are defensible: one
+    will not float a member the cost of a shirt, another would rather place one
+    clean vendor order and chase the money afterwards. Neither is the safe
+    default, so the default is NONE — the behaviour a store already had before
+    this setting existed.
+    """
+
+    NONE = "none"
+    # The shirt gets ordered either way; the member cannot collect it unpaid.
+    BEFORE_PICKUP = "before_pickup"
+    # Unpaid orders are held out of the vendor order entirely.
+    BEFORE_VENDOR_ORDER = "before_vendor_order"
 
 
 class StoreFulfillmentMethod(str, enum.Enum):
@@ -108,6 +128,17 @@ class StoreFulfillmentMethod(str, enum.Enum):
 
     PICKUP = "pickup"
     SHIP = "ship"
+
+
+class StorePaymentEventStatus(str, enum.Enum):
+    """How an externally-reported payment was reconciled."""
+
+    APPLIED = "applied"  # Matched an order and settled it
+    MATCHED = "matched"  # Matched an order but was not applied automatically
+    UNMATCHED = "unmatched"  # No order could be identified — needs a human
+    AMBIGUOUS = "ambiguous"  # Reference matched, amount did not
+    IGNORED = "ignored"  # Dismissed by an administrator
+    DUPLICATE = "duplicate"  # Provider redelivered a capture we already have
 
 
 class StoreOrderEventType(str, enum.Enum):
@@ -155,6 +186,18 @@ class StoreSettings(Base):
     venmo_handle = Column(String(100), nullable=True)
     paypal_me_url = Column(String(300), nullable=True)
     paypal_email = Column(String(255), nullable=True)
+    # See StorePaymentPolicy. Gates the vendor order and/or pickup.
+    payment_policy = Column(
+        SQLEnum(StorePaymentPolicy, values_callable=_enum_values),
+        nullable=False,
+        default=StorePaymentPolicy.NONE,
+        server_default=StorePaymentPolicy.NONE.value,
+    )
+    cash_app_cashtag = Column(String(100), nullable=True)
+    # Zelle has no deep link — this handle is shown for the member to type
+    # into their own bank's app. See utils/storefront_payments.py.
+    zelle_handle = Column(String(255), nullable=True)
+    zelle_instructions = Column(Text, nullable=True)
     check_payable_to = Column(String(200), nullable=True)
     check_mailing_address = Column(Text, nullable=True)
     cash_instructions = Column(Text, nullable=True)
@@ -172,11 +215,33 @@ class StoreSettings(Base):
     pickup_location = Column(String(300), nullable=True)
 
     # --- Notifications ----------------------------------------------------
+    # Each notice the storefront can send has exactly one switch here, so a
+    # quartermaster reading the settings screen can see the whole outbound
+    # mailing list of the module in one place. A per-send checkbox (e.g. the
+    # "email members" box on the close-window dialog) can suppress an
+    # individual send, but it can never send a notice switched off here.
     notify_emails = Column(JSON, nullable=True)  # extra admin recipients
     notify_admins_on_order = Column(Boolean, nullable=False, default=True)
     send_order_confirmation = Column(Boolean, nullable=False, default=True)
     send_status_updates = Column(Boolean, nullable=False, default=True)
     send_payment_reminders = Column(Boolean, nullable=False, default=True)
+    # Receipts for money movement the quartermaster records by hand: payment
+    # taken, payment waived, refund issued.
+    send_payment_receipts = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    send_window_opened = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    send_window_closing_reminder = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    send_window_closed = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    send_vendor_order_updates = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     payment_reminder_days = Column(Integer, nullable=False, default=3)
     window_reminder_hours = Column(Integer, nullable=False, default=48)
 
@@ -233,6 +298,17 @@ class StoreProduct(Base):
         default=StoreProductStatus.DRAFT,
     )
     max_per_member = Column(Integer, nullable=True)
+
+    # --- Personalization (embroidered name, engraved callsign, ...) --------
+    # An upcharge is common because personalizing is a per-unit vendor cost,
+    # and personalized lines can never be pooled in the vendor tally: each
+    # distinct text is its own row on the purchase order.
+    personalization_enabled = Column(Boolean, nullable=False, default=False)
+    personalization_required = Column(Boolean, nullable=False, default=False)
+    personalization_label = Column(String(120), nullable=True)
+    personalization_max_length = Column(Integer, nullable=False, default=30)
+    personalization_price = Column(Numeric(10, 2), nullable=False, default=0)
+
     track_stock = Column(Boolean, nullable=False, default=False)
     stock_quantity = Column(Integer, nullable=True)
     requires_variant = Column(Boolean, nullable=False, default=False)
@@ -254,6 +330,12 @@ class StoreProduct(Base):
 
     organization = relationship("Organization", foreign_keys=[organization_id])
     inventory_item = relationship("InventoryItem", foreign_keys=[inventory_item_id])
+    image = relationship(
+        "StoreProductImage",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
     variants = relationship(
         "StoreProductVariant",
         back_populates="product",
@@ -313,6 +395,53 @@ class StoreProductVariant(Base):
     )
 
 
+class StoreProductImage(Base):
+    """Uploaded product photo, stored out of line from the catalog row.
+
+    Kept in its own table (and served by its own endpoint) so listing the
+    catalog never drags a few hundred KB of image bytes per product through
+    the ORM -- the storefront lists every active product at once.
+    """
+
+    __tablename__ = "store_product_images"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    product_id = Column(
+        String(36),
+        ForeignKey("store_products.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    content_type = Column(String(100), nullable=False, default="image/webp")
+    # 16MB MEDIUMBLOB: MySQL's default BLOB caps at 64KB, which silently
+    # truncates an optimized product photo (a few hundred KB).
+    data = Column(LargeBinary(length=16_777_215), nullable=False)
+    byte_size = Column(Integer, nullable=False, default=0)
+
+    uploaded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    product = relationship("StoreProduct", back_populates="image")
+
+
 class StoreOrderWindow(Base):
     """A time-boxed ordering period ("order window")"""
 
@@ -341,6 +470,17 @@ class StoreOrderWindow(Base):
 
     expected_delivery_date = Column(Date, nullable=True)
     pickup_instructions = Column(Text, nullable=True)
+
+    # --- The vendor order -------------------------------------------------
+    # Filled in when the department actually places the bulk order. Without
+    # these, "has this been ordered yet?" is answered from memory, and the
+    # member asking when their shirt arrives gets a shrug.
+    vendor_name = Column(String(200), nullable=True)
+    vendor_reference = Column(String(120), nullable=True)
+    vendor_ordered_at = Column(DateTime(timezone=True), nullable=True)
+    vendor_ordered_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # When True the window offers every ACTIVE catalog product; when False only
     # the products explicitly listed in store_window_products are for sale.
@@ -549,6 +689,91 @@ class StoreOrder(Base):
     )
 
 
+class StorePaymentEvent(Base):
+    """A payment a provider says it received, and what we did about it.
+
+    Every inbound capture is recorded here whether or not it could be matched,
+    because the failures are the point: a payment that arrives with no usable
+    reference still has to reach a human, and silently dropping it would leave
+    a member marked unpaid with money gone from their account.
+
+    This is a ledger of *external* reports, deliberately separate from
+    ``store_orders.amount_paid``. Applying an event writes the payment through
+    the normal service path; this table records that it happened and why.
+    """
+
+    __tablename__ = "store_payment_events"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    provider = Column(String(30), nullable=False, default="paypal")
+    # The provider's own id for the money movement. Unique per org so a
+    # redelivered webhook is recognised rather than double-counted.
+    external_id = Column(String(120), nullable=False)
+    event_id = Column(String(120), nullable=True)
+
+    amount = Column(Numeric(10, 2), nullable=False, default=0)
+    currency = Column(String(3), nullable=False, default="USD")
+
+    payer_name = Column(String(200), nullable=True)
+    payer_email = Column(String(255), nullable=True)
+    # Whatever reference the payer or the department attached — an invoice id,
+    # a custom id, or a free-text note. This is what matching reads.
+    reference = Column(String(255), nullable=True)
+
+    status = Column(
+        SQLEnum(StorePaymentEventStatus, values_callable=_enum_values),
+        nullable=False,
+        default=StorePaymentEventStatus.UNMATCHED,
+    )
+    matched_order_id = Column(
+        String(36),
+        ForeignKey("store_orders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    note = Column(Text, nullable=True)
+    # The provider payload, kept for support: when a match goes wrong the
+    # original is the only way to work out why.
+    raw_payload = Column(JSON, nullable=True)
+
+    received_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    organization = relationship("Organization", foreign_keys=[organization_id])
+    matched_order = relationship("StoreOrder", foreign_keys=[matched_order_id])
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "provider",
+            "external_id",
+            name="uq_store_payment_events_provider_external",
+        ),
+        Index("ix_store_payment_events_org_status", "organization_id", "status"),
+    )
+
+
 class StoreOrderItem(Base):
     """A line item on an order.
 
@@ -586,6 +811,11 @@ class StoreOrderItem(Base):
     product_name = Column(String(255), nullable=False)
     variant_label = Column(String(120), nullable=True)
     sku = Column(String(100), nullable=True)
+
+    # What the member asked to have printed/embroidered on this line. Two
+    # otherwise-identical lines with different text are deliberately separate
+    # rows -- they are different physical goods.
+    personalization_text = Column(String(200), nullable=True)
 
     unit_price = Column(Numeric(10, 2), nullable=False, default=0)
     quantity = Column(Integer, nullable=False, default=1)
