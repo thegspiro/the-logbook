@@ -244,6 +244,15 @@ export interface StoreNotificationPreview {
   textBody: string;
 }
 
+/** Result of mailing a storefront notice to your own address. */
+export interface StoreNotificationTest {
+  notice: string;
+  label: string;
+  sentTo: string;
+  delivered: boolean;
+  detail: string;
+}
+
 export interface StoreSettingsUpdate {
   isEnabled?: boolean;
   storeName?: string;

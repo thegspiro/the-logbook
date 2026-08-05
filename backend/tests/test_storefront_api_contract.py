@@ -22,6 +22,7 @@ import pytest
 
 from app.schemas.storefront import (
     StoreNotificationPreviewResponse,
+    StoreNotificationTestResponse,
     StoreOrderResponse,
     StoreOrderWindowResponse,
     StorePaymentEventListResponse,
@@ -55,6 +56,7 @@ _CONTRACT = [
     (StorePaymentEventResponse, "StorePaymentEvent"),
     (StorePaymentEventListResponse, "StorePaymentEventList"),
     (StoreNotificationPreviewResponse, "StoreNotificationPreview"),
+    (StoreNotificationTestResponse, "StoreNotificationTest"),
 ]
 
 

@@ -9,7 +9,8 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, Mail, Monitor, Smartphone } from 'lucide-react';
+import { Loader2, Mail, Monitor, Send, Smartphone } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import { storefrontService } from '../services/api';
@@ -28,7 +29,26 @@ export const NotificationPreviewModal: React.FC<NotificationPreviewModalProps> =
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewport, setViewport] = useState<'desktop' | 'mobile'>('desktop');
+  const [sending, setSending] = useState(false);
   const frameRef = useRef<HTMLIFrameElement>(null);
+
+  const sendToMe = async () => {
+    setSending(true);
+    try {
+      const result = await storefrontService.sendNotificationTest(notice);
+      // A store whose email is not configured yet gets a plain answer rather
+      // than a success message for a mail that never left.
+      if (result.delivered) {
+        toast.success(result.detail);
+      } else {
+        toast.error(result.detail);
+      }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not send the test message'));
+    } finally {
+      setSending(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,11 +107,26 @@ export const NotificationPreviewModal: React.FC<NotificationPreviewModalProps> =
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-theme-text-muted text-xs">
                 Sample order and window; your own payment details, wording and branding.
               </p>
-              <div className="flex gap-1">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void sendToMe();
+                  }}
+                  disabled={sending}
+                  className="text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target flex items-center gap-1 text-xs"
+                >
+                  {sending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {sending ? 'Sending…' : 'Send this to me'}
+                </button>
                 <button
                   type="button"
                   onClick={() => setViewport('desktop')}

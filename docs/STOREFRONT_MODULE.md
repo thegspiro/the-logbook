@@ -408,13 +408,43 @@ Previewing a switched-off notice is allowed, since otherwise you could not look
 before deciding to turn it on. The preview reads **saved** settings, so reword
 the instructions and save before looking.
 
+`POST /store/settings/notifications/{notice}/test` mails the same composed
+message to the **requesting user's own address** — an iframe is not an inbox,
+and whether the Venmo button taps through on a phone can only be checked from a
+delivered message. Three constraints:
+
+- Delivery is only ever to `current_user.email`. There is no recipient
+  parameter, so this cannot become a way to mail the department from the
+  settings screen.
+- The subject is prefixed `[TEST]` and the body carries a banner, because the
+  sample announces "Order ORD-2026-0042 received" and an unmarked copy in an
+  inbox is a message somebody acts on later.
+- Email not being configured is **reported**, not raised: `delivered: false`
+  with an explanation. It is a setup gap, not a failure of the notice.
+
+Both the preview and the test send go through `storefront.manage`, so a
+quartermaster reaches them without needing org-admin rights. The test send is
+logged to `message_history` under the notice's own `storefront_*` type and
+audited as `store_notification_test_sent`.
+
 ### Wording and templates
 
 These bodies are composed in code with `wrap_email_body` — the same approach
 the scheduled inventory alerts use — and are **not** in the admin-editable
-Email Templates screen. Each one is a rendered table of order lines and pay
-buttons rather than a block of prose, so there is nothing useful to hand an
-admin a rich-text box for. What a department words itself is settings instead:
+Email Templates screen. None of the nine appears in `EmailTemplateType`, so
+`ensure_default_templates` never creates rows for them and Communications →
+Email Templates does not list them.
+
+That is a deliberate scope line, not a technical wall. The template system does
+`{{variable}}` substitution with no loops, but modules that need a table already
+work around it by rendering the table in code and injecting it through
+`_RAW_HTML_VARIABLES` — `items_list_html` for property return reminders,
+`ballot_items_html` for elections. The storefront could do the same, with the
+item table and the payment block as raw-HTML variables inside an editable prose
+shell. It has not been done: it would mean nine new enum values behind a
+migration, nine default template definitions, variable catalogues and sample
+contexts, and rewiring the notification service to render through
+`_render_with_fallback`. Until then, what a department words itself is settings:
 
 | Text | Where it appears |
 |---|---|

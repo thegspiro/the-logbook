@@ -22,6 +22,7 @@ those are what the preview exists to check. Sample data is never written to
 the database; the objects below are constructed and thrown away.
 """
 
+import html as _html
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -41,6 +42,7 @@ from app.models.storefront import (
     StoreWindowStatus,
 )
 from app.models.user import Organization
+from app.services.email_service import EmailService, wrap_email_body
 from app.services.storefront_notification_service import (
     StorefrontNotificationService,
 )
@@ -182,8 +184,10 @@ class StorefrontPreviewService:
         },
     }
 
-    async def render(self, notice: str, organization_id: str) -> Dict[str, Any]:
-        """Compose *notice* against sample data and the store's real settings."""
+    async def _compose_message(
+        self, notice: str, organization_id: str
+    ) -> Dict[str, Any]:
+        """Run the real ``send_*`` with delivery diverted, and hand back the mail."""
         entry = self.CATALOG.get(notice)
         if entry is None:
             raise PreviewNotAvailable(f"There is no '{notice}' notice to preview")
@@ -207,7 +211,17 @@ class StorefrontPreviewService:
         if not captured:
             # Defensive: every branch above composes exactly one message.
             raise PreviewNotAvailable(f"The '{notice}' notice produced no preview")
-        message = captured[0]
+        return {
+            "entry": entry,
+            "settings": settings,
+            "organization": organization,
+            "message": captured[0],
+        }
+
+    async def render(self, notice: str, organization_id: str) -> Dict[str, Any]:
+        """Compose *notice* against sample data and the store's real settings."""
+        composed = await self._compose_message(notice, organization_id)
+        entry, message = composed["entry"], composed["message"]
 
         return {
             "notice": notice,
@@ -215,10 +229,76 @@ class StorefrontPreviewService:
             "setting": entry["setting"],
             "audience": entry["audience"],
             "also_governs": entry["also_governs"],
-            "enabled": bool(getattr(settings, entry["setting"], True)),
+            "enabled": bool(getattr(composed["settings"], entry["setting"], True)),
             "subject": message["subject"],
             "html_body": message["html_body"],
             "text_body": message["text_body"],
+        }
+
+    async def send_test(
+        self, notice: str, organization_id: str, recipient: Optional[str]
+    ) -> Dict[str, Any]:
+        """Mail the previewed notice to *recipient* — the requester's own address.
+
+        An iframe is not an inbox: Gmail and Outlook rewrite email HTML, and the
+        thing worth checking (does the Venmo button actually tap through on a
+        phone?) can only be checked from a real message. Hence this, on top of
+        the preview.
+
+        The subject is prefixed ``[TEST]`` and the body carries a banner. Both
+        matter: the sample email announces "Order ORD-2026-0042 received", and
+        an unmarked copy sitting in an inbox is a message someone will later act
+        on. Delivery is only ever to the caller's own address, so this cannot be
+        turned into a way to mail arbitrary people from the department.
+        """
+        if not recipient:
+            raise PreviewNotAvailable(
+                "Your account has no email address, so there is nowhere to send it"
+            )
+
+        composed = await self._compose_message(notice, organization_id)
+        entry, message = composed["entry"], composed["message"]
+        organization = composed["organization"]
+
+        banner = (
+            '<div style="background:#fef3c7;border-left:4px solid #b45309;'
+            'padding:12px 16px;margin-bottom:16px;color:#7c2d12;">'
+            "<strong>Test message.</strong> This is the "
+            f"&ldquo;{_html.escape(entry['label'])}&rdquo; notice rendered "
+            "against a sample order, sent to you from the store settings "
+            "screen. No member received it and no order exists."
+            "</div>"
+        )
+        html_body = wrap_email_body(
+            organization,
+            message["title"],
+            banner + message["body_html"],
+            header_color=message["header_color"],
+        )
+
+        email_service = EmailService(organization=organization)
+        sent, _failed = await email_service.send_email(
+            to_emails=[recipient],
+            subject=f"[TEST] {message['subject']}",
+            html_body=html_body,
+            text_body=f"[TEST — sample data]\n\n{message['text_body']}",
+            db=self.db,
+            template_type=message["template_type"],
+        )
+
+        return {
+            "notice": notice,
+            "label": entry["label"],
+            "sent_to": recipient,
+            "delivered": bool(sent),
+            "detail": (
+                f"Test message sent to {recipient}."
+                if sent
+                else (
+                    "Email is not configured for this organization, so nothing "
+                    "was sent. The preview still shows what members would get."
+                )
+            ),
         }
 
     async def _compose(

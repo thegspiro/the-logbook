@@ -161,6 +161,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A switched-off notice still previews, since otherwise you could not look
     before deciding to turn it on, and the panel says it is off.
 
+- **A quartermaster can mail themselves any of the nine.** *Send this to me*
+  inside the preview delivers the same composed message to the requesting
+  user's own inbox. An iframe is not an inbox — Gmail and Outlook rewrite email
+  HTML, and whether the Venmo button taps through on a phone is a question only
+  a real message answers. `POST
+  /store/settings/notifications/{notice}/test`, permission `storefront.manage`,
+  so it needs no org-admin rights (the existing Communications test-email does,
+  and could only send a generic message or a stored template — never one of
+  these).
+  - **Only ever to the caller's own address.** There is no recipient parameter,
+    so this cannot become a way to mail the department from the settings
+    screen; the window notices do not resolve the roster either.
+  - **Marked as a test in both bodies** — `[TEST]` subject prefix and a banner
+    — because the sample announces "Order ORD-2026-0042 received", and an
+    unmarked copy in an inbox is a message somebody acts on three weeks later.
+  - Email not being configured is reported (`delivered: false`) rather than
+    raised: that is a setup gap, not a failure of the notice under test.
+  - Logged to `message_history` under the notice's own `storefront_*` type and
+    audited as `store_notification_test_sent`.
+
 **Fixed**
 
 - **A held order could be marked ready for pickup.** Under *payment required

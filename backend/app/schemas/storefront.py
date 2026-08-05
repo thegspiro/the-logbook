@@ -1015,3 +1015,18 @@ class StoreNotificationPreviewResponse(UTCResponseBase):
     subject: str
     html_body: str
     text_body: str
+
+
+class StoreNotificationTestResponse(UTCResponseBase):
+    """Result of mailing a storefront notice to the requester's own address"""
+
+    model_config = _RESPONSE_CONFIG
+
+    notice: str
+    label: str
+    sent_to: str
+    # False when email is not configured for the organization — reported
+    # rather than raised, since it is a setup gap and not a failure of the
+    # notice being tested.
+    delivered: bool
+    detail: str

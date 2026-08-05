@@ -51,7 +51,7 @@ the Venmo app open with an amount prefilled.]**
 
 ---
 
-## CHAPTER 2: Setup — Two Switches, Not One (2:00 – 4:15)
+## CHAPTER 2: Setup — Two Switches, Not One (2:00 – 4:45)
 
 ### ENABLING THE MODULE (2:00 – 2:45)
 
@@ -102,7 +102,7 @@ error.]**
 > "And handles get checked when you save. Mistype a cashtag and you'll hear
 > about it, rather than wondering next month why nobody used Cash App."
 
-### WHAT THE STORE EMAILS (3:30 – 4:15)
+### WHAT THE STORE EMAILS (3:30 – 4:45)
 
 **[SCREEN: Scrolling down Settings to the Notifications panel — two groups,
 nine switches, each with a line of description under it.]**
@@ -150,13 +150,29 @@ real email — logo, order table, Venmo button. Toggling to phone width.]**
 > deciding about. Nothing gets sent, nothing gets recorded, nobody gets an
 > email. Including you."
 
+**[SCREEN: Clicking "Send this to me". A toast confirms. Cut to a phone showing
+the arrived email, subject line "[TEST] Order ORD-2026-0042 received", with an
+amber banner at the top.]**
+
+> "Unless you ask. **Send this to me** puts it in your actual inbox — because a
+> preview panel isn't Gmail, and 'does the Venmo button really open Venmo on my
+> phone' is a question only a real email answers."
+
+**[CALLOUT: "Goes to you. Only you."]**
+
+> "It goes to *your* address. There's no box to type somebody else's in — this
+> isn't a way to mail the department from the settings screen. And it arrives
+> marked: bracket-TEST in the subject, a banner up top. That matters, because
+> the sample says 'Order ORD-2026-0042 received', and an unmarked copy in your
+> inbox is something you'll act on in three weeks."
+
 **[TRANSITION: The catalog]**
 
 ---
 
-## CHAPTER 3: The Catalog — Products, Sizes, Names (4:15 – 7:30)
+## CHAPTER 3: The Catalog — Products, Sizes, Names (4:45 – 7:30)
 
-### CREATING A PRODUCT (4:15 – 5:00)
+### CREATING A PRODUCT (4:45 – 5:30)
 
 **[SCREEN: Catalog tab → New item. Filling in "Department Job Shirt", $45,
 taxable, max 2 per member. Status left on Draft.]**
@@ -172,7 +188,7 @@ taxable, max 2 per member. Status left on Draft.]**
 
 > "Leave it on **Draft** while you build. Draft is invisible to members."
 
-### OPTIONS (5:00 – 6:00)
+### OPTIONS (5:30 – 6:00)
 
 **[SCREEN: Add option, adding S through 3XL, setting +3.00 on 2XL and 3XL.]**
 
@@ -582,3 +598,4 @@ station.]**
 | 13i | Tell the Vendor, Tell the Members, One Click | Chapter 8 |
 | 13j | The Nine Emails Your Store Sends | Chapter 2 |
 | 13k | Preview Your Store Email Before You Send It | Chapter 2 |
+| 13l | Mail Yourself a Test Before Anyone Else Gets It | Chapter 2 |

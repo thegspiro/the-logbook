@@ -1,12 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockPreviewNotification = vi.fn();
+const mockSendNotificationTest = vi.fn();
+const mockToastSuccess = vi.fn();
+const mockToastError = vi.fn();
 
 vi.mock('../services/api', () => ({
   storefrontService: {
     previewNotification: (...args: unknown[]) => mockPreviewNotification(...args) as unknown,
+    sendNotificationTest: (...args: unknown[]) => mockSendNotificationTest(...args) as unknown,
+  },
+}));
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: (...args: unknown[]) => mockToastSuccess(...args) as unknown,
+    error: (...args: unknown[]) => mockToastError(...args) as unknown,
   },
 }));
 
@@ -29,6 +40,13 @@ describe('NotificationPreviewModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPreviewNotification.mockResolvedValue(preview());
+    mockSendNotificationTest.mockResolvedValue({
+      notice: 'order_confirmation',
+      label: 'Order confirmation',
+      sentTo: 'quinn@example.org',
+      delivered: true,
+      detail: 'Test message sent to quinn@example.org.',
+    });
   });
 
   it('asks the backend to render the notice it was given', async () => {
@@ -87,5 +105,40 @@ describe('NotificationPreviewModal', () => {
     render(<NotificationPreviewModal notice="order_confirmation" onClose={vi.fn()} />);
 
     expect(await screen.findByText(/Could not render that notice|boom/)).toBeInTheDocument();
+  });
+
+  it('can mail the notice to the signed-in user', async () => {
+    const user = userEvent.setup();
+    render(<NotificationPreviewModal notice="order_confirmation" onClose={vi.fn()} />);
+    await screen.findByText('Order ORD-2026-0042 received');
+
+    await user.click(screen.getByRole('button', { name: /Send this to me/ }));
+
+    expect(mockSendNotificationTest).toHaveBeenCalledWith('order_confirmation');
+    await waitFor(() =>
+      expect(mockToastSuccess).toHaveBeenCalledWith('Test message sent to quinn@example.org.'),
+    );
+  });
+
+  it('says so plainly when email is not configured, rather than claiming success', async () => {
+    mockSendNotificationTest.mockResolvedValue({
+      notice: 'order_confirmation',
+      label: 'Order confirmation',
+      sentTo: 'quinn@example.org',
+      delivered: false,
+      detail: 'Email is not configured for this organization, so nothing was sent.',
+    });
+    const user = userEvent.setup();
+    render(<NotificationPreviewModal notice="order_confirmation" onClose={vi.fn()} />);
+    await screen.findByText('Order ORD-2026-0042 received');
+
+    await user.click(screen.getByRole('button', { name: /Send this to me/ }));
+
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Email is not configured for this organization, so nothing was sent.',
+      ),
+    );
+    expect(mockToastSuccess).not.toHaveBeenCalled();
   });
 });

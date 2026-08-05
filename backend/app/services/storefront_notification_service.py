@@ -332,6 +332,11 @@ class StorefrontNotificationService:
                     "html_body": wrap_email_body(
                         organization, title, body_html, header_color=header_color
                     ),
+                    # The unwrapped body too, so a caller that needs to add
+                    # something of its own (the test-send banner) can re-wrap
+                    # rather than splice into finished markup.
+                    "body_html": body_html,
+                    "header_color": header_color,
                     "text_body": text_body,
                     "template_type": template_type,
                     "bcc": bcc,

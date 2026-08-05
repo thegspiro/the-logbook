@@ -17,6 +17,7 @@ import pytest
 from app.models.storefront import StoreProduct, StoreProductStatus
 from app.models.user import Organization, User
 from app.services import storefront_notification_service as notify_module
+from app.services import storefront_preview_service as preview_module
 from app.services.storefront_preview_service import (
     PreviewNotAvailable,
     StorefrontPreviewService,
@@ -39,6 +40,7 @@ class _ExplodingEmailService:
 @pytest.fixture(autouse=True)
 def _no_delivery(monkeypatch):
     monkeypatch.setattr(notify_module, "EmailService", _ExplodingEmailService)
+    monkeypatch.setattr(preview_module, "EmailService", _ExplodingEmailService)
 
 
 async def _store(db, **overrides):
@@ -206,3 +208,135 @@ class TestPreviewingIsInert:
             "window_opened", org.id
         )
         assert "real.member@example.org" not in preview["html_body"]
+
+
+class TestSendingYourselfATest:
+    """A real inbox, because an iframe is not one.
+
+    Gmail and Outlook rewrite email HTML, and the thing worth checking — does
+    the Venmo button actually tap through on a phone — can only be checked from
+    a delivered message.
+    """
+
+    async def test_it_mails_the_previewed_notice_to_the_requester(
+        self, db_session, monkeypatch
+    ):
+        sent = []
+
+        class _Capturing(_ExplodingEmailService):
+            async def send_email(self, **kwargs):
+                sent.append(kwargs)
+                return 1, 0
+
+        monkeypatch.setattr(notify_module, "EmailService", _Capturing)
+        monkeypatch.setattr(preview_module, "EmailService", _Capturing)
+
+        org = await _store(db_session)
+        result = await StorefrontPreviewService(db_session).send_test(
+            "order_confirmation", org.id, "quinn@example.org"
+        )
+
+        assert result["delivered"] is True
+        assert result["sent_to"] == "quinn@example.org"
+        assert len(sent) == 1
+        assert sent[0]["to_emails"] == ["quinn@example.org"]
+        # Same email as the preview: the department's own payment details.
+        assert "Pay with Venmo" in sent[0]["html_body"]
+        assert "FallsChurchFire" in sent[0]["html_body"]
+
+    async def test_it_is_marked_as_a_test_in_both_bodies(self, db_session, monkeypatch):
+        """The sample announces an order number that does not exist.
+
+        An unmarked copy sitting in an inbox is a message someone acts on
+        later.
+        """
+        sent = []
+
+        class _Capturing(_ExplodingEmailService):
+            async def send_email(self, **kwargs):
+                sent.append(kwargs)
+                return 1, 0
+
+        monkeypatch.setattr(notify_module, "EmailService", _Capturing)
+        monkeypatch.setattr(preview_module, "EmailService", _Capturing)
+
+        org = await _store(db_session)
+        await StorefrontPreviewService(db_session).send_test(
+            "order_confirmation", org.id, "quinn@example.org"
+        )
+
+        assert sent[0]["subject"].startswith("[TEST] ")
+        assert "Test message." in sent[0]["html_body"]
+        assert "no order exists" in sent[0]["html_body"]
+        assert sent[0]["text_body"].startswith("[TEST")
+
+    async def test_it_never_addresses_anybody_but_the_requester(
+        self, db_session, monkeypatch
+    ):
+        """Not a way to mail the department from the settings screen."""
+        sent = []
+
+        class _Capturing(_ExplodingEmailService):
+            async def send_email(self, **kwargs):
+                sent.append(kwargs)
+                return 1, 0
+
+        monkeypatch.setattr(notify_module, "EmailService", _Capturing)
+        monkeypatch.setattr(preview_module, "EmailService", _Capturing)
+
+        org = await _store(db_session)
+        db_session.add(
+            User(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                username=f"member-{uuid.uuid4().hex[:8]}",
+                email="real.member@example.org",
+                first_name="Real",
+                last_name="Member",
+            )
+        )
+        await db_session.flush()
+
+        # window_opened would otherwise resolve the whole active roster.
+        await StorefrontPreviewService(db_session).send_test(
+            "window_opened", org.id, "quinn@example.org"
+        )
+
+        assert sent[0]["to_emails"] == ["quinn@example.org"]
+        assert not sent[0].get("bcc_emails")
+
+    async def test_an_account_with_no_address_is_refused(self, db_session):
+        org = await _store(db_session)
+        with pytest.raises(PreviewNotAvailable):
+            await StorefrontPreviewService(db_session).send_test(
+                "order_confirmation", org.id, None
+            )
+
+    async def test_an_unknown_notice_is_refused_before_anything_is_sent(
+        self, db_session
+    ):
+        org = await _store(db_session)
+        with pytest.raises(PreviewNotAvailable):
+            await StorefrontPreviewService(db_session).send_test(
+                "nonsense", org.id, "quinn@example.org"
+            )
+
+    async def test_email_being_switched_off_is_reported_not_raised(
+        self, db_session, monkeypatch
+    ):
+        """A setup gap, not a failure of the notice under test."""
+
+        class _Disabled(_ExplodingEmailService):
+            async def send_email(self, **_kwargs):
+                return 0, 1
+
+        monkeypatch.setattr(notify_module, "EmailService", _Disabled)
+        monkeypatch.setattr(preview_module, "EmailService", _Disabled)
+
+        org = await _store(db_session)
+        result = await StorefrontPreviewService(db_session).send_test(
+            "order_confirmation", org.id, "quinn@example.org"
+        )
+
+        assert result["delivered"] is False
+        assert "not configured" in result["detail"]

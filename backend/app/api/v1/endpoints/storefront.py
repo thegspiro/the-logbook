@@ -43,6 +43,7 @@ from app.schemas.storefront import (
     StoreDashboardResponse,
     StorefrontResponse,
     StoreNotificationPreviewResponse,
+    StoreNotificationTestResponse,
     StoreOrderAdminNotes,
     StoreOrderCancel,
     StoreOrderCreate,
@@ -516,6 +517,48 @@ async def preview_store_notification(
         )
     except PreviewNotAvailable as exc:
         raise HTTPException(status_code=404, detail=safe_error_detail(exc))
+
+
+@router.post(
+    "/settings/notifications/{notice}/test",
+    response_model=StoreNotificationTestResponse,
+)
+async def send_store_notification_test(
+    notice: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Mail the previewed notice to your own address.
+
+    Delivery is only ever to the requesting user's own email — this is a way to
+    see a notice in a real inbox, not a way to mail the department. The subject
+    is prefixed ``[TEST]`` and the body carries a banner, because the sample
+    message announces an order number that does not exist.
+    """
+    if not current_user.email:
+        raise HTTPException(
+            status_code=400,
+            detail="Your account has no email address, so there is nowhere to send it",
+        )
+    try:
+        result = await StorefrontPreviewService(db).send_test(
+            notice, str(current_user.organization_id), current_user.email
+        )
+    except PreviewNotAvailable as exc:
+        raise HTTPException(status_code=404, detail=safe_error_detail(exc))
+    await log_audit_event(
+        db=db,
+        event_type="store_notification_test_sent",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "notice": notice,
+            "delivered": result["delivered"],
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return result
 
 
 # ==========================================================================

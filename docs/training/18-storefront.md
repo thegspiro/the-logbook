@@ -228,6 +228,38 @@ since otherwise you could not see what you were deciding about.
 Nothing is sent and nothing is recorded. Previewing does not create an order,
 does not touch a window, and does not email anybody, including you.
 
+### Sending it to yourself
+
+Inside the preview there is **Send this to me**. An iframe is not an inbox —
+Gmail and Outlook rewrite email HTML, and whether the Venmo button actually taps
+through on a phone is a question only a real message answers. So this mails you
+the same notice, with the same sample order.
+
+It goes to **your** address and nowhere else; there is no box to type someone
+else's in. The subject arrives prefixed `[TEST]` and the body opens with a
+banner saying it is a test, because the sample announces order ORD-2026-0042 and
+an unmarked copy sitting in your inbox is a message you or somebody else acts on
+three weeks later.
+
+If your department has not finished setting up email, it will tell you that
+plainly rather than claiming to have sent something. Every test send is recorded
+in **Communications → Message History** like any other email.
+
+### Where these emails live (and don't)
+
+The store's nine notices are **not** in **Communications → Email Templates**.
+That screen edits a different set of templates — welcome messages, password
+resets, event reminders — and the storefront's are composed in code, because
+each is a table of order lines and pay buttons rather than a block of prose.
+
+So the Notifications panel *is* their home: the switches, the previews and the
+test sends are all there. What you can reword is listed above. What you cannot
+do is open one in a rich-text editor and rearrange it.
+
+They do show up in **Message History** once sent, tagged with a `storefront_`
+type, which is where you check whether a particular member's reminder actually
+went out.
+
 Everything the store sends is logged in **Communications → Message History**
 under a `storefront_` type, so "did she ever get the reminder?" is a question
 with an answer.
