@@ -428,14 +428,23 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   {getRequirementTypeLabel(requirement.requirement_type)}
                 </span>
               )}
-              <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                requirement.due_date_type === 'rolling' ? 'bg-purple-600' :
-                requirement.due_date_type === 'calendar_period' ? 'bg-blue-600' :
-                requirement.due_date_type === 'certification_period' ? 'bg-orange-600' :
-                'bg-theme-surface-hover'
-              } text-theme-text-primary`}>
-                {getDueDateTypeLabel(requirement.due_date_type)}
-              </span>
+              {/* A one-time requirement has no due-date cycle, so showing its
+                  (unused) due date type here read as a recurring schedule —
+                  "Calendar Period" implies an annual Dec 31 reset. */}
+              {requirement.frequency === 'one_time' ? (
+                <span className="text-xs font-semibold px-2 py-1 rounded bg-teal-700 text-theme-text-primary">
+                  One Time
+                </span>
+              ) : (
+                <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                  requirement.due_date_type === 'rolling' ? 'bg-purple-600' :
+                  requirement.due_date_type === 'calendar_period' ? 'bg-blue-600' :
+                  requirement.due_date_type === 'certification_period' ? 'bg-orange-600' :
+                  'bg-theme-surface-hover'
+                } text-theme-text-primary`}>
+                  {getDueDateTypeLabel(requirement.due_date_type)}
+                </span>
+              )}
               {requirement.source && requirement.source !== 'department' && (
                 <span className={`text-xs font-semibold px-2 py-1 rounded ${
                   requirement.source === 'national' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
@@ -475,7 +484,11 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
               )}
               <div className="flex items-center space-x-2 text-theme-text-secondary">
                 <Award className="w-4 h-4" aria-hidden="true" />
-                <span className="capitalize">{requirement.frequency.replace('_', ' ')}</span>
+                <span className="capitalize">
+                  {requirement.frequency === 'one_time'
+                    ? 'One time — never resets'
+                    : requirement.frequency.replace('_', ' ')}
+                </span>
               </div>
               {requirement.applies_to_all ? (
                 <div className="flex items-center space-x-2 text-theme-text-secondary">
@@ -581,8 +594,19 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   </div>
                 )}
                 <DetailRow label="Training Type" value={requirement.training_type || 'Any'} />
-                <DetailRow label="Due Date Type" value={getDueDateTypeLabel(requirement.due_date_type)} />
-                <DetailRow label="Frequency" value={requirement.frequency.replace('_', ' ')} />
+                {/* Due date type, period and year describe a recurring cycle
+                    that a one-time requirement does not have — the backend
+                    evaluates one_time over an unbounded window and ignores all
+                    three, so surfacing them only implied an annual reset. */}
+                {requirement.frequency !== 'one_time' && (
+                  <DetailRow label="Due Date Type" value={getDueDateTypeLabel(requirement.due_date_type)} />
+                )}
+                <DetailRow
+                  label="Frequency"
+                  value={requirement.frequency === 'one_time'
+                    ? 'One time — completion never expires'
+                    : requirement.frequency.replace('_', ' ')}
+                />
                 {requirement.required_hours && (
                   <DetailRow label="Required Hours" value={`${requirement.required_hours} hours`} />
                 )}
@@ -601,22 +625,22 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 {requirement.passing_score != null && (
                   <DetailRow label="Passing Score" value={`${requirement.passing_score}%`} />
                 )}
-                {requirement.year && (
+                {requirement.year && requirement.frequency !== 'one_time' && (
                   <DetailRow label="Year" value={String(requirement.year)} />
                 )}
                 {requirement.due_date && (
                   <DetailRow label="Due Date" value={requirement.due_date} />
                 )}
-                {requirement.due_date_type === 'rolling' && requirement.rolling_period_months && (
+                {requirement.frequency !== 'one_time' && requirement.due_date_type === 'rolling' && requirement.rolling_period_months && (
                   <DetailRow label="Rolling Period" value={`${requirement.rolling_period_months} months`} />
                 )}
-                {requirement.due_date_type === 'calendar_period' && (
+                {requirement.frequency !== 'one_time' && requirement.due_date_type === 'calendar_period' && (
                   <DetailRow
                     label="Period Start"
                     value={`Month ${requirement.period_start_month || 1}, Day ${requirement.period_start_day || 1}`}
                   />
                 )}
-                {requirement.due_date_type === 'calendar_period' && requirement.period_end_month && (
+                {requirement.frequency !== 'one_time' && requirement.due_date_type === 'calendar_period' && requirement.period_end_month && (
                   <DetailRow
                     label="Period End"
                     value={`Month ${requirement.period_end_month}, Day ${requirement.period_end_day || 'last'}`}
@@ -684,6 +708,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
   onSave,
 }) => {
   const seed = requirement ?? template;
+  const seedFrequency = seed?.frequency || 'annual';
   const [formData, setFormData] = useState({
     name: seed?.name || '',
     description: seed?.description || '',
@@ -696,8 +721,14 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
     checklist_items: (seed?.checklist_items || []).join('\n'),
     passing_score: seed?.passing_score || undefined,
     max_attempts: seed?.max_attempts || undefined,
-    frequency: seed?.frequency || 'annual',
-    year: seed?.year || new Date().getFullYear() as number | undefined,
+    frequency: seedFrequency,
+    // A one-time requirement has no recurring cycle, so it must never carry a
+    // year: "One time" next to "2026" reads as "only required during 2026",
+    // when in fact the completion counts permanently (the backend returns an
+    // unbounded date window for one_time and ignores `year` entirely).
+    year: seedFrequency === 'one_time'
+      ? undefined
+      : (seed?.year || new Date().getFullYear() as number | undefined),
     allows_external_credit: seed?.allows_external_credit ?? false,
     applies_to_all: seed?.applies_to_all ?? true,
     required_membership_types: seed?.required_membership_types || [] as string[],
@@ -719,6 +750,12 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
   });
 
   const [saving, setSaving] = useState(false);
+
+  // A one-time requirement never recurs, so every cycle-related control (due
+  // date type, calendar period, year) is hidden rather than shown with values
+  // the backend ignores — that pairing is what made one-time requirements read
+  // as annual.
+  const isOneTime = formData.frequency === 'one_time';
 
   const splitLines = (value: string): string[] =>
     value.split('\n').map(line => line.trim()).filter(Boolean);
@@ -767,6 +804,10 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
 
     setSaving(true);
     try {
+      // One-time requirements have no cycle to configure — the calendar period
+      // and year are meaningless for them and only make the requirement look
+      // like it repeats, so they are never persisted.
+      const usesCalendarPeriod = !isOneTime && formData.due_date_type === 'calendar_period';
       const data = {
         name: formData.name,
         ...(formData.description ? { description: formData.description } : {}),
@@ -785,18 +826,18 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
         ...(formData.requirement_type === 'knowledge_test' && formData.max_attempts
           ? { max_attempts: formData.max_attempts } : {}),
         frequency: formData.frequency,
-        ...(formData.year ? { year: formData.year } : {}),
+        ...(!isOneTime && formData.year ? { year: formData.year } : {}),
         allows_external_credit: formData.allows_external_credit,
         applies_to_all: formData.applies_to_all,
         required_membership_types: formData.required_membership_types.length > 0 ? formData.required_membership_types : undefined,
         ...(formData.due_date ? { due_date: formData.due_date } : {}),
         ...(formData.start_date ? { start_date: formData.start_date } : {}),
         due_date_type: formData.due_date_type,
-        rolling_period_months: formData.due_date_type === 'rolling' ? formData.rolling_period_months : undefined,
-        period_start_month: formData.due_date_type === 'calendar_period' ? formData.period_start_month : undefined,
-        period_start_day: formData.due_date_type === 'calendar_period' ? formData.period_start_day : undefined,
-        period_end_month: formData.due_date_type === 'calendar_period' ? formData.period_end_month : undefined,
-        period_end_day: formData.due_date_type === 'calendar_period' ? formData.period_end_day : undefined,
+        rolling_period_months: !isOneTime && formData.due_date_type === 'rolling' ? formData.rolling_period_months : undefined,
+        period_start_month: usesCalendarPeriod ? formData.period_start_month : undefined,
+        period_start_day: usesCalendarPeriod ? formData.period_start_day : undefined,
+        period_end_month: usesCalendarPeriod ? formData.period_end_month : undefined,
+        period_end_day: usesCalendarPeriod ? formData.period_end_day : undefined,
         include_current_month:
           formData.include_current_month_mode === 'inherit'
             ? null
@@ -1067,6 +1108,54 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
           <div className="space-y-4">
             <h4 className="text-theme-text-primary font-semibold border-b border-theme-surface-border pb-2">Due Date Configuration</h4>
 
+            {/* Frequency comes first: it decides whether any of the recurring
+                cycle controls below apply at all. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="req-frequency" className="block text-sm font-medium text-theme-text-secondary mb-2">Frequency</label>
+                <select
+                  id="req-frequency"
+                  value={formData.frequency}
+                  onChange={(e) => setFormData({ ...formData, frequency: e.target.value as RequirementFrequency })}
+                  className="form-input"
+                >
+                  <option value="annual">Annual</option>
+                  <option value="biannual">Biannual (Every 2 Years)</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="one_time">One Time</option>
+                </select>
+              </div>
+
+              {!isOneTime && (
+                <div>
+                  <label htmlFor="req-year" className="block text-sm font-medium text-theme-text-secondary mb-2">Year</label>
+                  <input
+                    id="req-year"
+                    type="number"
+                    value={formData.year || ''}
+                    onChange={(e) => setFormData({ ...formData, year: e.target.value ? Number(e.target.value) : undefined })}
+                    className="form-input placeholder-theme-text-muted"
+                    placeholder="e.g., 2026"
+                    min="2020"
+                    max="2100"
+                  />
+                </div>
+              )}
+            </div>
+
+            {isOneTime && (
+              <div className="flex items-start gap-2 rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-2">
+                <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-blue-700 dark:text-blue-400" aria-hidden="true" />
+                <p className="text-xs text-blue-800 dark:text-blue-300">
+                  One-time requirements never reset. Once a member completes this,
+                  they stay compliant permanently — there is no renewal cycle,
+                  compliance period, or year to configure.
+                </p>
+              </div>
+            )}
+
+            {!isOneTime && (
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-2">Due Date Type</label>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3" role="radiogroup" aria-label="Due date type">
@@ -1094,9 +1183,10 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 ))}
               </div>
             </div>
+            )}
 
             {/* Rolling period options */}
-            {formData.due_date_type === 'rolling' && (
+            {!isOneTime && formData.due_date_type === 'rolling' && (
               <div>
                 <label htmlFor="req-rolling-period" className="block text-sm font-medium text-theme-text-secondary mb-2">
                   Rolling Period (Months)
@@ -1117,7 +1207,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
             )}
 
             {/* Calendar period options */}
-            {formData.due_date_type === 'calendar_period' && (
+            {!isOneTime && formData.due_date_type === 'calendar_period' && (
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -1185,7 +1275,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
             )}
 
             {/* Fixed date option */}
-            {formData.due_date_type === 'fixed_date' && (
+            {!isOneTime && formData.due_date_type === 'fixed_date' && (
               <div>
                 <label htmlFor="req-due-date" className="block text-sm font-medium text-theme-text-secondary mb-2">Due Date</label>
                 <input
@@ -1221,40 +1311,6 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
               </p>
             </div>
 
-            {/* Frequency & Year only apply to calendar-period due dates */}
-            {formData.due_date_type === 'calendar_period' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="req-frequency" className="block text-sm font-medium text-theme-text-secondary mb-2">Frequency</label>
-                  <select
-                    id="req-frequency"
-                    value={formData.frequency}
-                    onChange={(e) => setFormData({ ...formData, frequency: e.target.value as RequirementFrequency })}
-                    className="form-input"
-                  >
-                    <option value="annual">Annual</option>
-                    <option value="biannual">Biannual (Every 2 Years)</option>
-                    <option value="quarterly">Quarterly</option>
-                    <option value="monthly">Monthly</option>
-                    <option value="one_time">One Time</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="req-year" className="block text-sm font-medium text-theme-text-secondary mb-2">Year</label>
-                  <input
-                    id="req-year"
-                    type="number"
-                    value={formData.year || ''}
-                    onChange={(e) => setFormData({ ...formData, year: e.target.value ? Number(e.target.value) : undefined })}
-                    className="form-input placeholder-theme-text-muted"
-                    placeholder="e.g., 2026"
-                    min="2020"
-                    max="2100"
-                  />
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Categories */}
@@ -1568,17 +1624,15 @@ const TemplateModal: React.FC<{
       ],
       frequency: 'one_time',
       applies_to_all: true,
-      due_date_type: 'calendar_period',
-      period_start_month: 1,
-      period_start_day: 1,
       source: 'national',
       registry_name: 'FEMA',
       registry_code: 'NIMS',
     },
     {
       name: 'New Member Orientation Checklist',
-      description: 'One-time onboarding checklist for probationary members',
+      description: 'One-time onboarding checklist for probationary members — completed once, never repeats',
       requirement_type: 'checklist',
+      training_type: 'orientation',
       checklist_items: [
         'Station tour and facility safety orientation',
         'PPE issued and fit checked',
@@ -1589,9 +1643,6 @@ const TemplateModal: React.FC<{
       frequency: 'one_time',
       applies_to_all: false,
       required_membership_types: ['probationary'],
-      due_date_type: 'calendar_period',
-      period_start_month: 1,
-      period_start_day: 1,
     },
   ];
 
