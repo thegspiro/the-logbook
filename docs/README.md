@@ -112,6 +112,18 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Scheduled send, soft delete, editing, per-org escalation rate limits
     - Data model, API endpoint reference, permissions, and migrations
 
+12. **[STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md)**
+    - Optional department store: catalog, variants, personalization, photos
+    - Ordering windows, per-member limits, stock locking, vendor tallies
+    - Payment tracking for Venmo / PayPal / Cash App / Zelle / cash / check
+    - Why the platform never takes a payment, and what that means for scope
+    - Data model, permissions, exports, and design decisions
+
+13. **[STOREFRONT_PAYPAL.md](./STOREFRONT_PAYPAL.md)**
+    - Connecting a department's own PayPal Business account
+    - Webhook setup, signature verification, and the auto-apply matching rules
+    - The review queue for payments that cannot be matched confidently
+
 10. **[PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md)**
     - Public API v1.1.0 with public form endpoints
     - Form retrieval and submission without authentication
@@ -410,6 +422,9 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Meeting minutes / templates | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md) |
 | Document management / folders | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#documents-module) |
 | Department messages / announcements | [COMMUNICATIONS_MODULE.md](./COMMUNICATIONS_MODULE.md) |
+| Department store / merch orders | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md) |
+| Store payment buttons (Venmo/Cash App/Zelle) | [STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md#payments) |
+| PayPal store reconciliation | [STOREFRONT_PAYPAL.md](./STOREFRONT_PAYPAL.md) |
 | Public API (forms, events) | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) |
 | Election security | [module-audit/elections.md](./module-audit/elections.md), [BALLOT_FORENSICS_GUIDE.md](../BALLOT_FORENSICS_GUIDE.md) |
 | Events / recurring events / RSVP | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#events-module-issues) |

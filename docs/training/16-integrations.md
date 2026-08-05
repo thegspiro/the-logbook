@@ -12,14 +12,15 @@ The Integrations module connects The Logbook to external services — calendar s
 4. [Salesforce CRM](#salesforce-crm)
 5. [Documenso — Document E-Signatures](#documenso--document-e-signatures)
 6. [Cal.com — Interview Scheduling](#calcom--interview-scheduling)
-7. [Calendar Integrations](#calendar-integrations)
-8. [Messaging Integrations](#messaging-integrations)
-9. [Weather Alerts](#weather-alerts)
-10. [EMS & Fire Reporting](#ems--fire-reporting)
-11. [Generic Webhooks](#generic-webhooks)
-12. [Training Provider Integrations](#training-provider-integrations)
-13. [Monitoring Integration Health](#monitoring-integration-health)
-14. [Troubleshooting](#troubleshooting)
+7. [PayPal — Store Payment Reconciliation](#paypal--store-payment-reconciliation)
+8. [Calendar Integrations](#calendar-integrations)
+9. [Messaging Integrations](#messaging-integrations)
+10. [Weather Alerts](#weather-alerts)
+11. [EMS & Fire Reporting](#ems--fire-reporting)
+12. [Generic Webhooks](#generic-webhooks)
+13. [Training Provider Integrations](#training-provider-integrations)
+14. [Monitoring Integration Health](#monitoring-integration-health)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -54,6 +55,7 @@ The integrations page shows:
 | **CRM** | Salesforce | Contact sync, donor management, bidirectional |
 | **Documents** | Documenso | Send documents for e-signature (open-source DocuSign alternative) |
 | **Scheduling** | Cal.com | Self-scheduling links and booking sync (open-source Calendly alternative) |
+| **Payments** | PayPal | Match incoming store payments to department store orders automatically |
 | **Data** | CSV Import/Export | Member import, training/inventory export |
 | **Data** | Generic Webhooks | HMAC-signed event notifications to any URL |
 | **Safety** | NWS Weather Alerts | Tornado, flood, fire weather alerts (free) |
@@ -208,6 +210,79 @@ Add this URL as a Cal.com webhook subscribed to the **BOOKING_CREATED** event, u
 Once Cal.com is connected, a **Meeting** pipeline stage gains a **Scheduling** option — switch it from *Manual* to *Cal.com* and paste your booking link. Applicants then see a **Schedule** button on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the connected Cal.com card with the "Bookings" button, and the Bookings panel below listing upcoming interviews with attendee, time, and status._
+
+---
+
+## PayPal — Store Payment Reconciliation
+
+**PayPal** connects your department's own PayPal **Business** account so that incoming payments are matched to [Department Store](./18-storefront.md) orders automatically, instead of somebody ticking "mark paid" for each one.
+
+**The Logbook never takes a payment.** This integration works in the opposite direction: PayPal tells The Logbook what it *received*. There is no checkout and no money passes through the application. Marking orders paid by hand still works exactly as before, and remains the only option for Venmo, Cash App, Zelle, cash and checks.
+
+> **Why only PayPal?** Venmo publishes no API for personal or peer-to-peer transfers, and Zelle runs inside each bank's own app. PayPal is the only one of the common payment apps that can report back, so it is the only one that can settle an order without a person.
+
+### Configuration
+
+| Field | Description |
+|-------|-------------|
+| **Environment** | **Sandbox** (testing) or **Live**. Defaults to sandbox. Credentials are not interchangeable between the two. |
+| **Client ID** / **Client Secret** | From a REST app at [developer.paypal.com](https://developer.paypal.com) → **Apps & Credentials**. Stored encrypted, never displayed back. Leave blank when editing to keep what is stored. |
+| **Webhook ID** | **Required.** PayPal assigns this when you add the webhook (below). Without it, incoming payments cannot be verified and are rejected. |
+| **Settle orders automatically** | On by default. See the matching rules below. |
+
+**Test Connection** verifies the credentials. It deliberately reports a *warning* rather than a plain success when the Webhook ID is missing — credentials alone reconcile nothing.
+
+### Adding the Webhook
+
+The connect dialog shows the callback URL to paste into PayPal:
+
+```
+https://your-logbook-host/api/public/v1/webhooks/paypal/{integration_id}
+```
+
+In your PayPal REST app, add a webhook at that URL and subscribe it to **Payment capture completed** (`PAYMENT.CAPTURE.COMPLETED`) — and nothing else. Other event types are acknowledged and discarded, so subscribing to more only adds noise. Copy the Webhook ID PayPal assigns back into the connect dialog.
+
+> **Security:** Every delivery is verified through PayPal's own signature-verification endpoint, rate limited per IP, replay-protected, and audit-logged. The PayPal capture ID is unique per organization, so a redelivered notification can never pay an order twice. A payment reported by one department's PayPal account can never settle another department's order.
+
+### How Payments Are Matched
+
+A payment settles an order automatically only when **both** hold:
+
+1. The payment reference contains exactly one order number in `ORD-YYYY-NNNN` form — read from PayPal's `invoice_id`, `custom_id`, or note.
+2. The amount equals that order's outstanding balance **exactly**.
+
+Anything else is recorded and left for a person under **Store Admin > Payments**:
+
+| Outcome | Meaning |
+|---------|---------|
+| Applied | Matched and settled |
+| Matched — not applied | Would have settled, but automatic settlement is turned off |
+| No order found | The reference carried no order number |
+| Needs a decision | Amount doesn't match, or the order is cancelled or already square |
+| Dismissed | An administrator decided it wasn't a store payment |
+
+Fuzzy matching on payer name or amount alone was considered and rejected: two members can easily owe the same amount in the same order window, and crediting the wrong member's order is worse than a short wait in a queue.
+
+Every inbound payment is recorded whether or not it matched. The unmatchable ones are the case that most needs a human — the money has already left the member's account, so discarding the notification would leave them chasing an order that still reads unpaid.
+
+### Getting the Order Number onto the Payment
+
+The matcher reads whatever reference the payer or the department attached:
+
+- **PayPal invoices** — put the order number in the invoice reference field. Most reliable, and the one to prefer.
+- **Payment links / checkout** — set `custom_id` to the order number.
+- **Plain "send money"** — ask the member to put the order number in the note. This works, but depends on them typing it, so expect some payments in the review queue.
+
+### Working the Review Queue
+
+**Store Admin > Payments** lists everything unresolved. For each entry:
+
+- **Apply to order** — settles the order. For an unmatched payment, enter the order to credit first. This writes through the normal payment path, so the order timeline, the member's receipt email, and the window rollups all behave as if it had been marked paid by hand.
+- **Dismiss** — for payments that aren't store orders at all (a donation, a dues payment, a refund). An applied payment cannot be dismissed.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the PayPal connect dialog showing the Environment dropdown, Client ID/Secret fields, Webhook ID field with the generated callback URL below it, and the "Settle orders automatically" checkbox._
+
+For the full store walkthrough, see [Department Store](./18-storefront.md).
 
 ---
 

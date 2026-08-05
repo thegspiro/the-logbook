@@ -7,6 +7,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Storefront: an optional department store, and PayPal reconciliation (2026-08-05)
+
+**Added**
+
+- **Department Storefront module** (`/store`, `/store/orders`, `/store/admin`),
+  optional per organization. A catalog with variants and per-variant stock,
+  ordering windows, per-member limits, name embroidery, uploaded product
+  photos, an order timeline, and payment tracking. Permissions:
+  `storefront.view`, `storefront.order`, `storefront.manage`. Ten `store_*`
+  tables. See [STOREFRONT_MODULE.md](docs/STOREFRONT_MODULE.md) and [training
+  guide 18](docs/training/18-storefront.md).
+- **The platform still never takes a payment.** There is no checkout and no
+  money passes through the application; the store records what is owed and
+  makes settling it fast to record. That is a deliberate scope boundary — a
+  volunteer department generally cannot become a card processor, and holding
+  card data would pull the whole deployment into PCI scope to sell forty job
+  shirts a year.
+- **Payment buttons for every configured method**, not only the one chosen at
+  checkout. Venmo, PayPal and Cash App get prefilled deep links; Zelle gets the
+  handle to copy. A member reading this on a phone may not have the app they
+  picked a week ago, and from the department's side the money only has to
+  arrive. Orders placed on a method the department later stops accepting keep
+  their button — somebody who still owes on a Venmo order has to be able to pay
+  it.
+  - **Zelle deliberately has no link.** It runs inside each bank's own app and
+    publishes no web or deep-link scheme, so a `zelle.com` URL would send
+    members to a page that cannot pay anybody.
+  - Cash App has a link but no note field, so the order number is displayed to
+    type; Venmo carries it through, so it is not repeated there. The reference
+    is what lets a treasurer match a payment, so it is never hidden — including
+    when no method is configured at all.
+  - A method with nothing configured is **hidden**, not rendered as a dead
+    button. A link that goes nowhere tells a member the money moved when it did
+    not.
+- **PayPal integration** in the connections list (category *Payments*).
+  Connecting a department's own PayPal **Business** account lets PayPal report
+  what it received, and matching orders settle themselves. Signature
+  verification is delegated to PayPal's own
+  `/v1/notifications/verify-webhook-signature` endpoint rather than validating
+  the certificate chain locally — the vendor-supported path cannot be fooled by
+  a forged `PAYPAL-CERT-URL` header the way a hand-rolled verifier can. An
+  integration with no webhook ID rejects every delivery rather than trusting
+  it; Test Connection reports that as a warning instead of a bare success. See
+  [STOREFRONT_PAYPAL.md](docs/STOREFRONT_PAYPAL.md).
+- **A payment only auto-applies on an exact match**: the reference must name
+  exactly one order number in `ORD-YYYY-NNNN` form *and* the amount must equal
+  that order's balance exactly. Fuzzy matching on payer name or amount alone
+  was considered and rejected — two members can easily owe the same amount in
+  the same window, and crediting the wrong member's order is worse than a short
+  wait in a queue. Everything else lands in a review queue
+  (**Store Admin → Payments**) with apply and dismiss actions.
+- **Every inbound payment is recorded whether or not it matched.** The
+  unmatchable ones are the point: the money has already left the member's
+  account, so discarding the notification would leave them chasing an order
+  that still reads unpaid.
+- **Cash App and Zelle** joined Venmo and PayPal as store payment methods, with
+  handle validation at save time. A typo'd `$cashtag` would otherwise make the
+  button silently vanish with nothing telling the administrator why.
+- **A contract test** comparing every storefront response schema's serialized
+  field names against the matching TypeScript interface, in both directions.
+  This class of drift is invisible by construction — Pydantic serializes
+  whatever it has and TypeScript ignores response fields it does not know
+  about, so a field added on one side and forgotten on the other produces no
+  error anywhere and surfaces as a blank cell in front of a user.
+
+**Fixed**
+
+- **Window rollups truncated at one page.** Order counts and sales totals were
+  summed in Python over a paged query, so any window larger than 200 orders
+  silently under-reported. Now computed in SQL.
+- **Stock could go negative under concurrency.** Two members ordering the last
+  item on a Sunday night could both pass an availability check. Orders touching
+  tracked stock now take `SELECT … FOR UPDATE` in a stable id order, which also
+  avoids deadlocking them against each other.
+- **`StoreSettings`, `StoreOrder`, `StoreProduct` and `StoreOrderWindow`**
+  omitted `createdAt`/`updatedAt` in their TypeScript interfaces while the
+  backend had always sent them. Found by the new contract test.
+- **Shift-completion tests failed on MariaDB.** They built datetimes as
+  TZ-offset string literals, a MySQL 8.0.19+ syntax MariaDB rejects with error
+  1292. Since `docker-compose.arm.yml` ships MariaDB 10.11, that is a supported
+  target, not an environment quirk.
+
+**Changed**
+
+- **CI runs backend integration and contract tests against both MySQL 8.0 and
+  MariaDB 10.11** via a service-container matrix, so a dialect difference fails
+  in CI rather than on somebody's ARM deployment.
+- **The backend lint gate covers `tests/` as well as `app/`**, and
+  `lint:backend` now runs isort alongside flake8 and black. `tests/` being out
+  of scope is how 85 flake8 violations accumulated unseen — lint-staged only
+  lints *staged* files, so a test file's problems surfaced to whoever next
+  touched it rather than whoever introduced them. All 85 are cleared: 60
+  compound assertions split (a compound assert reports the whole expression on
+  failure, so it tells you the line failed but not which half), 8 bare
+  `pytest.raises` given `match=` parameters (each could previously have passed
+  on an unrelated error raised earlier in the call), plus PT004/PT012/PT019.
+- **Frontend ESLint is at zero warnings.** Two test files reached through
+  `.parentElement` and `querySelectorAll` and now fire on the child and query
+  by role; `CourseLibraryRoute` moved out of the training module's `routes.tsx`
+  into its own file so that file exports only its route factory and Fast
+  Refresh works for the module again.
+
 ### Security: date of birth and emergency contacts are leadership-only (2026-08-04)
 
 **Security**
