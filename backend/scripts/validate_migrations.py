@@ -12,20 +12,47 @@ Usage:
     python scripts/validate_migrations.py
 """
 
+import ast
 import sys
-import os
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Tuple
 
 # Add the backend directory to the path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
 
-def parse_migration_file(filepath: Path) -> Dict[str, str]:
+def _parse_value(raw: str) -> List[str]:
+    """
+    Parse the right-hand side of a revision assignment into a list of ids.
+
+    A merge migration sets down_revision to a tuple of parents, so every
+    down_revision is normalised to a list — an empty one meaning None.
+    Trailing comments are stripped; several migrations carry them.
+    """
+    value = raw.split('#', 1)[0].strip().rstrip(',')
+
+    if not value or value == 'None':
+        return []
+
+    try:
+        parsed = ast.literal_eval(value)
+    except (ValueError, SyntaxError):
+        # Not a literal we can evaluate (e.g. a name or an expression);
+        # fall back to treating it as a bare quoted string.
+        return [value.strip("'\"")]
+
+    if isinstance(parsed, (tuple, list)):
+        return [str(p) for p in parsed if p is not None]
+    if parsed is None:
+        return []
+    return [str(parsed)]
+
+
+def parse_migration_file(filepath: Path) -> Dict[str, object]:
     """Extract revision info from a migration file."""
     revision = None
-    down_revision = None
+    down_revisions: List[str] = []
 
     with open(filepath, 'r') as f:
         content = f.read()
@@ -37,20 +64,17 @@ def parse_migration_file(filepath: Path) -> Dict[str, str]:
             # Handle both: revision = 'xxx' and revision: str = 'xxx'
             parts = line.split('=', 1)
             if len(parts) == 2:
-                revision = parts[1].strip().strip("'\"")
+                found = _parse_value(parts[1])
+                revision = found[0] if found else None
         elif line.startswith('down_revision') and '=' in line:
             parts = line.split('=', 1)
             if len(parts) == 2:
-                value = parts[1].strip()
-                if value == 'None' or value == "None":
-                    down_revision = None
-                else:
-                    down_revision = value.strip("'\"")
+                down_revisions = _parse_value(parts[1])
 
     return {
         'file': filepath.name,
         'revision': revision,
-        'down_revision': down_revision,
+        'down_revisions': down_revisions,
     }
 
 
@@ -99,11 +123,10 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
     referenced_revisions = set()
 
     for m in migrations:
-        if m['down_revision']:
-            referenced_revisions.add(m['down_revision'])
+        referenced_revisions.update(m['down_revisions'])
 
     # Find the base migration (down_revision is None)
-    base_migrations = [m for m in migrations if m['down_revision'] is None]
+    base_migrations = [m for m in migrations if not m['down_revisions']]
     if len(base_migrations) == 0:
         errors.append("No base migration found (missing initial migration with down_revision=None)")
     elif len(base_migrations) > 1:
@@ -112,8 +135,9 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
 
     # Check for orphaned references (down_revision points to non-existent revision)
     for m in migrations:
-        if m['down_revision'] and m['down_revision'] not in all_revisions:
-            errors.append(f"Orphaned migration {m['file']}: references non-existent revision '{m['down_revision']}'")
+        for parent in m['down_revisions']:
+            if parent not in all_revisions:
+                errors.append(f"Orphaned migration {m['file']}: references non-existent revision '{parent}'")
 
     # Check for multiple heads (migrations that nothing depends on)
     head_revisions = all_revisions - referenced_revisions

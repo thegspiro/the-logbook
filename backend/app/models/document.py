@@ -20,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -355,8 +356,11 @@ class Document(Base):
         nullable=False,
     )
 
-    # Rich content (for generated documents like published minutes)
-    content_html = Column(Text, nullable=True)
+    # Rich content (for generated documents like published minutes).
+    # LONGTEXT, not TEXT: a published set of minutes routinely exceeds TEXT's
+    # 64 KB ceiling. Migration 20260213_0800 created this column as LONGTEXT;
+    # the model has to match or fresh installs truncate document bodies.
+    content_html = Column(Text().with_variant(mysql.LONGTEXT(), "mysql"), nullable=True)
 
     # Source tracking (links generated docs to their origin)
     source_type = Column(String(50), nullable=True)  # e.g. "meeting_minutes"

@@ -24,10 +24,15 @@ from collections import defaultdict
 from enum import Enum
 from pathlib import Path
 
+from sqlalchemy.dialects import mysql
 from sqlalchemy.sql.expression import ClauseElement
 
 BACKEND_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(BACKEND_DIR))
+
+# MySQL 8 is the only supported database, so render every column as the type
+# it is actually created with rather than its dialect-agnostic declaration.
+MYSQL_DIALECT = mysql.dialect()
 
 OUTPUT_PATH = BACKEND_DIR.parent / "docs" / "DATABASE_SCHEMA.md"
 
@@ -89,7 +94,7 @@ def summarize(model) -> str:
 
 
 def render_type(col) -> str:
-    """Compact, readable rendering of a column type."""
+    """The type MySQL will actually create for this column."""
     # str() on an Enum column renders the backing VARCHAR, which hides the
     # allowed values — the part that actually matters when writing code
     # against the column.
@@ -97,8 +102,11 @@ def render_type(col) -> str:
     if values:
         return "ENUM(" + ", ".join(f"`{v}`" for v in values) + ")"
     try:
-        return str(col.type)
-    except Exception:  # pragma: no cover - dialect-specific types
+        # Compile against MySQL rather than str(): a column declared as
+        # Text().with_variant(LONGTEXT, "mysql") renders as plain TEXT
+        # otherwise, hiding the width the database is actually given.
+        return col.type.compile(dialect=MYSQL_DIALECT)
+    except Exception:  # pragma: no cover - types with no MySQL rendering
         return col.type.__class__.__name__
 
 

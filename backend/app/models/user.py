@@ -166,7 +166,11 @@ class Organization(Base):
     tax_id = Column(String(50))  # EIN for 501(c)(3) organizations
 
     # Logo stored as base64 or URL (MEDIUMTEXT for large base64 images)
-    logo = Column(Text().with_variant(mysql.MEDIUMTEXT(), "mysql"))
+    # LONGTEXT, not MEDIUMTEXT: the logo is stored as a base64 data URI, and
+    # migration 20260209_0600 widened this column to LONGTEXT on existing
+    # databases. The model has to match, or fresh installs silently get the
+    # narrower column that migration exists to prevent.
+    logo = Column(Text().with_variant(mysql.LONGTEXT(), "mysql"))
 
     # Legacy field - keep for compatibility
     type = Column(String(50), default="fire_department")
