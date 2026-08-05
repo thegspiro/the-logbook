@@ -439,6 +439,15 @@ embroidery name.]**
 **[SCREEN: Export to CSV, opening it in a spreadsheet with names and
 personalization.]**
 
+**[SCREEN: The CSV open in a spreadsheet, with the "Held From Vendor Order"
+column visible and two rows reading "yes".]**
+
+> "One thing on the export: it keeps **every** order, including the unpaid
+> ones, because it's your treasurer's record too. So if you're on the strict
+> rule, sort by **Held From Vendor Order** and drop the yeses before you send
+> it — otherwise you'd be mailing the vendor a sheet that undoes the rule you
+> just set."
+
 > "Export the CSV for line-level detail — names, sizes, embroidery text. That's
 > the file the vendor wants."
 

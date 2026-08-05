@@ -331,6 +331,11 @@ personalization text are free text that ends up in Excel, and a member named
 `=cmd|…` would otherwise run a formula on whoever opens the export. Paged at
 200 rows internally so a large window exports completely.
 
+Every order is included, unpaid ones too, because the file doubles as the
+treasurer's record. Under `before_vendor_order` the **Held From Vendor Order**
+column marks the rows the on-screen tally excluded — without it the export
+would read as a vendor sheet that quietly undoes the policy.
+
 ---
 
 ## Design decisions worth knowing

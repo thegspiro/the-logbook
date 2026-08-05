@@ -428,6 +428,11 @@ inside each bank. PayPal is the only one that can report back.
    is what the vendor stitches. On a personalized item the two always differ —
    ten shirts, ten names, five sizes.
 5. Export the CSV if the vendor wants it as a file rather than a screenshot.
+   It keeps **every** order, unpaid ones included, because it doubles as the
+   treasurer's record — so under the *payment before the vendor order* rule,
+   check the **Held From Vendor Order** column and drop the `yes` rows before
+   sending it. Without that step you would mail the vendor a sheet that undoes
+   the rule you set.
 6. When the goods arrive, bulk-set the window's orders to **ready for pickup**.
 7. Hand them out, mark **fulfilled**, then mark the window fulfilled.
 
@@ -442,6 +447,9 @@ payment status to find who still owes.
 
 1. Settings: tick Venmo, Cash App, Zelle and Check. Enter the handle, the
    `$cashtag`, the treasurer's Zelle email, and who checks are payable to.
+   Under **What happens to an unpaid order?**, this department picks *payment
+   required before the vendor order* — they won't front the cost of a shirt
+   somebody might never pay for.
 2. Catalog: create "Department Job Shirt", $45, taxable, max 2 per member.
    Upload a photo. Add options S–3XL, with `+3.00` on 2XL and 3XL.
 3. Enable personalization: label "Name for embroidery", max 20 characters,
@@ -464,17 +472,26 @@ payment status to find who still owes.
 
 **Closing (October 21)**
 
-9. **Close ordering** on the window. Summary reads: 14 orders, 19 items, $921.00 gross,
-   $855.00 collected, $66.00 outstanding.
-10. **Order this from the vendor**: 3 M, 6 L, 7 XL, 2 2XL, 1 3XL — 19 shirts.
-    **Line detail** lists the 11 names to embroider. Send both.
-11. Two members still owe. Sort by payment status, send a reminder.
+9. **Close ordering** on the window. Summary reads: 14 orders, 19 shirts,
+   $921.00 gross, $812.00 collected, $109.00 outstanding — 12 members paid, 2
+   have not.
+10. **Order this from the vendor**: 2 M, 6 L, 7 XL, 1 2XL, 1 3XL — **17
+    shirts**, not 19. **Line detail** lists the 9 names to embroider on them.
+    Send both.
+11. **Held back — unpaid (2 orders)** sits underneath: 1 M and 1 2XL, $109.00
+    between them. Their shirts are deliberately *not* in the 17, they are not
+    on the embroidery list, and their orders cannot be marked ordered. Chase
+    them; the moment they pay they rejoin the totals — add them to this run if
+    the vendor hasn't started, or catch them on the next one.
+12. Sort by payment status for the reminder list.
 
 **Fulfillment (November)**
 
-12. Shirts arrive. Bulk-set the window's orders to **ready for pickup** — every
-    member gets an email.
-13. Hand them out at drill, mark **fulfilled**, mark the window fulfilled.
+13. 17 shirts arrive. Bulk-set the window's orders to **ready for pickup**.
+14. Hand them out at drill and mark **fulfilled**. The bulk action moves the 12
+    paid orders and returns the 2 unpaid ones by order number with what they
+    owe — so you know exactly who to find before handing anything over.
+15. Mark the window fulfilled.
 
 ---
 

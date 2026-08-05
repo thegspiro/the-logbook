@@ -2600,7 +2600,15 @@ class StorefrontService:
         Pages through the whole result set rather than taking the first page:
         an export that silently stopped at the page size would send the
         department to the vendor with the wrong quantities.
+
+        Every order is included, unpaid ones too, because this doubles as the
+        treasurer's record. Under a policy that holds unpaid orders back, the
+        "Held From Vendor Order" column marks the ones the on-screen tally
+        excluded — without it a quartermaster could mail this sheet to the
+        vendor and undo the very rule they set.
         """
+        settings = await self.get_settings(organization_id)
+        holds_unpaid = settings.payment_policy == StorePaymentPolicy.BEFORE_VENDOR_ORDER
         orders: List[StoreOrder] = []
         page = 1
         while True:
@@ -2635,6 +2643,7 @@ class StorefrontService:
                 "Balance Due",
                 "Order Status",
                 "Payment Status",
+                "Held From Vendor Order",
                 "Payment Method",
                 "Payment Reference",
                 "Fulfillment",
@@ -2665,6 +2674,7 @@ class StorefrontService:
                         f"{balance}",
                         order.status.value if order.status else "",
                         order.payment_status.value if order.payment_status else "",
+                        ("yes" if holds_unpaid and not _is_settled(order) else "no"),
                         order.payment_method.value if order.payment_method else "",
                         order.payment_reference or "",
                         (

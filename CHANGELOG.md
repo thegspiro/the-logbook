@@ -88,7 +88,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setting is presented as a side-by-side comparison of all three rules — it is
   chosen before a catalog exists, so the consequences have to be readable
   without the manual — and changing it governs future transitions only, never
-  rolling back a step already taken.
+  rolling back a step already taken. The CSV export keeps every order, since it
+  doubles as the treasurer's record, but gained a **Held From Vendor Order**
+  column: without it the file read as a vendor sheet that quietly undid the
+  policy the on-screen tally was enforcing.
 
 **Fixed**
 

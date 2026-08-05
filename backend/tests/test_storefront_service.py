@@ -1410,3 +1410,37 @@ class TestPaymentPolicy:
         assert result["skipped"] == 1
         assert result["errors"][0]["order_id"] == sam_order.id
         assert "payment before pickup" in result["errors"][0]["error"]
+
+    async def test_the_export_marks_orders_held_from_the_vendor_order(self, db_session):
+        # The CSV doubles as the treasurer's record, so it keeps every order —
+        # but it must not read as a vendor sheet that quietly undoes the rule.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, _, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+
+        csv_text = await service.export_orders_csv(org.id, window_id=window.id)
+        header = csv_text.splitlines()[0].split(",")
+        held_col = header.index("Held From Vendor Order")
+        rows = [line.split(",") for line in csv_text.splitlines()[1:]]
+
+        assert [r[held_col] for r in rows].count("yes") == 1
+        assert [r[held_col] for r in rows].count("no") == 1
+
+    async def test_no_gate_marks_nothing_as_held(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, _, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.NONE
+        )
+
+        csv_text = await service.export_orders_csv(org.id, window_id=window.id)
+        header = csv_text.splitlines()[0].split(",")
+        held_col = header.index("Held From Vendor Order")
+        rows = [line.split(",") for line in csv_text.splitlines()[1:]]
+
+        # Nothing is held under this rule, so the whole sheet goes to the vendor.
+        assert {r[held_col] for r in rows} == {"no"}

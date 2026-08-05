@@ -113,9 +113,10 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Data model, API endpoint reference, permissions, and migrations
 
 12. **[STOREFRONT_MODULE.md](./STOREFRONT_MODULE.md)**
-    - Optional department store: catalog, variants, personalization, photos
+    - Optional department store: catalog, options, personalization, photos
     - Ordering windows, per-member limits, stock locking, vendor tallies
     - Payment tracking for Venmo / PayPal / Cash App / Zelle / cash / check
+    - Per-department rules for what an unpaid order may do
     - Why the platform never takes a payment, and what that means for scope
     - Data model, permissions, exports, and design decisions
 

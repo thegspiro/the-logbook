@@ -105,7 +105,7 @@ Reports catalog with member, training, event, and compliance report categories.
 
 | Module | Description |
 |--------|-------------|
-| **Department Storefront** | Optional store for member merchandise: catalog, sizes, name embroidery, ordering windows, and payment tracking (Venmo/PayPal/Cash App/Zelle). The platform never takes a payment — it records what is owed and settles it. |
+| **Department Storefront** | Optional store for member merchandise: catalog, sizes, name embroidery, ordering windows, and payment tracking (Venmo/PayPal/Cash App/Zelle), with a per-department rule for whether an unpaid order reaches the vendor or can be collected. The platform never takes a payment — it records what is owed and settles it. |
 | **Module Configuration** | Priority-based module overview system |
 | **Navigation Options** | Configurable top and side navigation layouts |
 | Vehicle/Apparatus Management | Vehicle and apparatus tracking |
