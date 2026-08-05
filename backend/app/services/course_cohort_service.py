@@ -517,8 +517,8 @@ class CourseCohortService:
         """
         from app.schemas.training_program import (
             ProgramBuildPhaseInput,
-            ProgramBuildRequirementInput,
             ProgramBuildRequest,
+            ProgramBuildRequirementInput,
             TrainingProgramCreate,
         )
         from app.services.training_program_service import TrainingProgramService

@@ -396,3 +396,92 @@ export const COUNTRY_RISK_LEVEL_COLORS: Record<string, string> = {
   high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
   critical: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
 };
+
+
+// ============================================
+// Multi-Class Courses (Syllabus & Cohorts)
+// ============================================
+
+/** Lifecycle of one scheduled run of a multi-class course. */
+export const CohortStatus = {
+  DRAFT: 'draft',
+  SCHEDULED: 'scheduled',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+} as const;
+export type CohortStatus = (typeof CohortStatus)[keyof typeof CohortStatus];
+
+export const COHORT_STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  scheduled: 'Scheduled',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+export const COHORT_STATUS_COLORS: Record<string, string> = {
+  draft: 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20',
+  scheduled: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+  in_progress: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  completed: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20',
+  cancelled: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+};
+
+/** Status of a single scheduled class within a cohort. */
+export const CohortClassStatus = {
+  SCHEDULED: 'scheduled',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+} as const;
+export type CohortClassStatus =
+  (typeof CohortClassStatus)[keyof typeof CohortClassStatus];
+
+export const COHORT_CLASS_STATUS_COLORS: Record<string, string> = {
+  scheduled: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
+  completed: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  cancelled: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+};
+
+/** Status of a member on a cohort roster. */
+export const CohortMemberStatus = {
+  ACTIVE: 'active',
+  WITHDRAWN: 'withdrawn',
+  COMPLETED: 'completed',
+} as const;
+export type CohortMemberStatus =
+  (typeof CohortMemberStatus)[keyof typeof CohortMemberStatus];
+
+export const COHORT_MEMBER_STATUS_COLORS: Record<string, string> = {
+  active: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  withdrawn: 'bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20',
+  completed: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20',
+};
+
+/**
+ * How a computed class date is adjusted when it lands on a day the course
+ * does not meet.
+ */
+export const DateRollPolicy = {
+  NONE: 'none',
+  NEXT_BUSINESS_DAY: 'next_business_day',
+  NEXT_MEETING_DAY: 'next_meeting_day',
+} as const;
+export type DateRollPolicy = (typeof DateRollPolicy)[keyof typeof DateRollPolicy];
+
+export const DATE_ROLL_POLICY_LABELS: Record<string, string> = {
+  none: 'Keep the computed date',
+  next_business_day: 'Move weekends to the next weekday',
+  next_meeting_day: 'Move to the next meeting day',
+};
+
+/** Weekday numbers used by meeting patterns (0 = Monday, matching Python). */
+export const MEETING_WEEKDAYS: { value: number; label: string; short: string }[] = [
+  { value: 0, label: 'Monday', short: 'Mon' },
+  { value: 1, label: 'Tuesday', short: 'Tue' },
+  { value: 2, label: 'Wednesday', short: 'Wed' },
+  { value: 3, label: 'Thursday', short: 'Thu' },
+  { value: 4, label: 'Friday', short: 'Fri' },
+  { value: 5, label: 'Saturday', short: 'Sat' },
+  { value: 6, label: 'Sunday', short: 'Sun' },
+];

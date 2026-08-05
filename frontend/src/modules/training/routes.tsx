@@ -33,6 +33,14 @@ const MyProgramProgressPage = lazyWithRetry(
   () => import('../../pages/MyProgramProgressPage'),
 );
 
+// Training Module - Course Cohorts (multi-class courses)
+const CohortsPage = lazyWithRetry(
+  () => import('../../pages/training/CohortsPage'),
+);
+const CohortDetailPage = lazyWithRetry(
+  () => import('../../pages/training/CohortDetailPage'),
+);
+
 // Training Module - Admin
 const TrainingAdminPage = lazyWithRetry(() =>
   import('../../pages/TrainingAdminPage').then((m) => ({
@@ -107,6 +115,24 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/my-progress/:enrollmentId"
         element={<MyProgramProgressPage />}
+      />
+
+      {/* Course Cohorts — scheduled runs of a multi-class course */}
+      <Route
+        path="/training/cohorts"
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <CohortsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/training/cohorts/:cohortId"
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <CohortDetailPage />
+          </ProtectedRoute>
+        }
       />
 
       {/* Training Module - Admin Hub */}

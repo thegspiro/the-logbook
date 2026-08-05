@@ -9,24 +9,25 @@ The Training Programs module provides a comprehensive system for managing member
 1. [Core Concepts](#core-concepts)
 2. [User Roles](#user-roles)
 3. [Features](#features)
-4. [External Training Integration](#external-training-integration)
-5. [Training Categories](#training-categories)
-6. [Training Requirements](#training-requirements)
-7. [Due Date Types](#due-date-types)
-8. [Training Programs](#training-programs)
-9. [Enrollment & Progress](#enrollment--progress)
-10. [Member Experience](#member-experience)
-11. [Training Officer Workflow](#training-officer-workflow)
-12. [API Reference](#api-reference)
-13. [Database Schema](#database-schema)
-14. [Self-Reported Training](#self-reported-training)
-15. [Shift Completion Reports](#shift-completion-reports)
-16. [Member Training Page](#member-training-page-my-training)
-17. [Member Visibility Configuration](#member-visibility-configuration)
-18. [Training Reports](#training-reports)
-19. [Cross-Module Integration Points](#cross-module-integration-points)
-20. [Edge Cases & Special Handling](#edge-cases--special-handling)
-21. [Recently Implemented Features](#recently-implemented-features)
+4. [Multi-Class Courses & Cohorts](#multi-class-courses--cohorts)
+5. [External Training Integration](#external-training-integration)
+6. [Training Categories](#training-categories)
+7. [Training Requirements](#training-requirements)
+8. [Due Date Types](#due-date-types)
+9. [Training Programs](#training-programs)
+10. [Enrollment & Progress](#enrollment--progress)
+11. [Member Experience](#member-experience)
+12. [Training Officer Workflow](#training-officer-workflow)
+13. [API Reference](#api-reference)
+14. [Database Schema](#database-schema)
+15. [Self-Reported Training](#self-reported-training)
+16. [Shift Completion Reports](#shift-completion-reports)
+17. [Member Training Page](#member-training-page-my-training)
+18. [Member Visibility Configuration](#member-visibility-configuration)
+19. [Training Reports](#training-reports)
+20. [Cross-Module Integration Points](#cross-module-integration-points)
+21. [Edge Cases & Special Handling](#edge-cases--special-handling)
+22. [Recently Implemented Features](#recently-implemented-features)
 
 ---
 
@@ -240,6 +241,74 @@ certification-grade — for example, an informal recruit-school drill: attendanc
 creates the training record and hours (counting toward general compliance), but the
 session no longer feeds the linked pipeline/certificate requirements, keeping ineligible
 hours off the member's certificate progress.
+
+#### Multi-Class Courses & Cohorts
+
+A recruit school is one *course* made of many *classes*. Rather than creating
+fifteen training sessions by hand for every intake, describe the course once and
+generate each run from it.
+
+**1. Build the syllabus** (Training → Setup → Course Library → **Manage
+classes**). Each class links to a catalog course — that is what carries its
+credit hours, certification settings, and category tagging — and is timed
+*relative to the course start* rather than on a calendar date:
+
+| Field | Meaning |
+|-------|---------|
+| `day_offset` | Days after the course start. 0 is the first day. |
+| `start_time` | Local wall clock, e.g. `19:00`. |
+| `duration_minutes` | How long the class runs. |
+| `section_name` | Optional grouping; becomes a pipeline phase when one is generated. |
+
+The builder shows the gap between consecutive classes the way officers describe
+them — "next day", "2 days later" — and **Fill from pattern** derives every
+offset from a weekly cadence ("fifteen classes, Tuesdays and Thursdays" →
+offsets 1, 3, 8, 10, …). Offsets stay editable afterwards. A course can create a
+missing catalog course inline, so building a syllabus from scratch never means
+leaving the page.
+
+**2. Generate a cohort** (Training → Records → **Course Cohorts** → New cohort).
+The wizard runs Course → Schedule → **Preview** → Roster → Generate:
+
+- **Schedule** sets the start date, the meeting days, and what happens when a
+  class lands on a day the department does not train: keep the date, move
+  weekends to the next weekday, or move to the next meeting day. Blackout dates
+  (holidays, department closures) are skipped the same way — US federal holidays
+  falling inside the course span are offered as one-click suggestions.
+- **Preview** is the safety step. It lists every computed date with any warning
+  attached — a date that had to move, an archived catalog course, a room already
+  booked — and lets the officer edit any individual date/time or skip a class,
+  all before a single event is created.
+- **Roster** picks the members. They are enrolled in the pipeline and RSVP'd to
+  every class, so it lands on their calendar immediately.
+
+Generating creates **one Event + one linked TrainingSession per class**, all in a
+single transaction. Attendance then flows through the machinery that already
+exists: QR check-in → `TrainingRecord` → session approval → requirement
+progress. Optionally the wizard also **builds the matching pipeline** (phases
+from the syllabus sections, one `courses` requirement per class), so credit
+tracking works with no extra setup.
+
+**3. Run the cohort.** The cohort detail page is the management surface —
+class timeline with live sign-up and attendance counts, plus the roster with
+each member's progress:
+
+| Action | Effect |
+|--------|--------|
+| **Reschedule** a class | Moves the class *and* its calendar event; RSVPs are preserved. |
+| **Cancel** a class | Cancels the event rather than deleting it, so anyone signed up sees the cancellation. The class stays on the cohort for the record. |
+| **Add class** | An ad-hoc class (make-up session, add-on) that was never on the syllabus; the roster is invited automatically. |
+| **Shift remaining** | Slides every upcoming class by N days. Classes that already happened keep their dates — their attendance records are anchored to them. |
+| **Create missing events** | Repairs a class whose event failed to create or was deleted. Idempotent: a class that already has an event is skipped, so this can never duplicate a class. |
+
+> **Timezone note.** Class times are stored as local wall clock and resolved
+> against the organization timezone at generation. A cohort spanning a DST
+> change therefore still meets at 19:00 on both sides of it.
+
+Endpoints: `/training/courses/{course_id}/classes` (syllabus CRUD, reorder,
+autofill) and `/training/cohorts` (preview, create, regenerate, shift, cancel,
+per-class reschedule/cancel, roster add/remove). All gated on `training.manage`
+except the syllabus read and a roster member's view of their own cohort.
 
 #### Atomic Program Build
 - Create-pipeline wizard builds a program with all phases, requirements, and milestones in one transaction — a failure can't leave a half-built program behind
@@ -1377,6 +1446,51 @@ Content-Type: application/json
 - training_type, duration_hours, credit_hours
 - prerequisites, expiration_months
 - **category_ids** (JSONB array of category UUIDs)
+- **program_id** (pipeline this course's cohorts enrol members in; set when a
+  cohort generates one)
+
+#### `course_classes`
+One row of a multi-class course's syllabus (see [Multi-Class Courses](#multi-class-courses--cohorts)).
+- id, organization_id, course_id (the container course)
+- **class_course_id** (the catalog course taught — required)
+- sequence, section_name, title, description
+- **day_offset** (days from the cohort start), **start_time** (local `HH:MM`),
+  duration_minutes
+- credit_hours, instructor_id, instructor, location_id, location
+- category_id, requirement_id, phase_id (pipeline linkage copied onto sessions)
+- is_required, counts_toward_certification, active
+- Unique on (course_id, sequence)
+
+#### `course_cohorts`
+- id, organization_id, course_id, name, code, description
+- start_date, status (draft, scheduled, in_progress, completed, cancelled)
+- program_id
+- meeting_days (JSON), default_start_time, default_duration_minutes
+- **date_roll_policy** (none, next_business_day, next_meeting_day),
+  **blackout_dates** (JSON array of ISO dates)
+- location_id, location, requires_rsvp, auto_create_records
+- generated_at, generated_by
+
+#### `course_cohort_classes`
+A syllabus row materialized onto real dates. This row is the stable identity of
+"class 7 of the fall recruit school"; the Event and TrainingSession are its
+current realization, which is what makes rescheduling and idempotent
+regeneration possible.
+- id, organization_id, cohort_id, course_class_id (null for ad-hoc classes)
+- sequence, title, description
+- scheduled_start, scheduled_end (**UTC**)
+- event_id (unique, SET NULL), training_session_id
+- status (scheduled, completed, cancelled), cancellation_reason
+- class_course_id, credit_hours, instructor_id, location_id, category_id,
+  requirement_id, phase_id
+- Unique on (cohort_id, sequence) and **(cohort_id, course_class_id)** — the
+  latter is the idempotency key that makes regeneration safe
+
+#### `course_cohort_members`
+- id, organization_id, cohort_id, user_id
+- enrollment_id (the ProgramEnrollment tracking their pipeline progress)
+- status (active, withdrawn, completed), withdrawn_at, added_at, added_by
+- Unique on (cohort_id, user_id)
 
 #### `program_requirements`
 - id, program_id, phase_id, requirement_id
@@ -1804,6 +1918,14 @@ Navigate to **Reports** page and use the **Reporting Period** section above the 
 The Training Programs module connects with several other modules:
 
 ### Events Module
+
+**Cohort generation is the bulk path into this module.** Generating a cohort of
+a multi-class course creates one Event + one linked TrainingSession per class in
+a single transaction (see [Multi-Class Courses & Cohorts](#multi-class-courses--cohorts)).
+Rescheduling a class updates its event; cancelling one cancels the event rather
+than deleting it. The cohort class row — not the event — is the stable identity,
+so an event deleted through the events UI leaves a repairable gap rather than
+erasing the cohort's record of the class.
 
 Training sessions can be linked to events via the `training_session.event_id` foreign key. When a training session is created from an event:
 - Event RSVP data pre-populates the session attendee list

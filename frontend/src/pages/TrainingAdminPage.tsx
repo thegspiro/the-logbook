@@ -73,6 +73,7 @@ const ComplianceOfficerDashboard = lazyWithRetry(
   () => import("./ComplianceOfficerDashboard"),
 );
 const CourseLibraryPage = lazyWithRetry(() => import("./CourseLibraryPage"));
+const CohortsPage = lazyWithRetry(() => import("./training/CohortsPage"));
 const MemberTrainingStatusPage = lazyWithRetry(
   () => import("./MemberTrainingStatusPage"),
 );
@@ -121,6 +122,7 @@ const pages: PageDef[] = [
     tabs: [
       { id: "submissions", label: "Submissions" },
       { id: "sessions", label: "Sessions" },
+      { id: "cohorts", label: "Course Cohorts" },
       { id: "shift-reports", label: "Shift Reports" },
       { id: "member-status", label: "Monthly Status" },
     ],
@@ -194,6 +196,7 @@ const legacyTabMap: Record<string, { page: PageId; tab: string }> = {
   waivers: { page: "dashboard", tab: "waivers" },
   submissions: { page: "records", tab: "submissions" },
   sessions: { page: "records", tab: "sessions" },
+  cohorts: { page: "records", tab: "cohorts" },
   "shift-reports": { page: "records", tab: "shift-reports" },
   "member-status": { page: "records", tab: "member-status" },
   requirements: { page: "setup", tab: "requirements" },
@@ -251,6 +254,7 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
   if (page === "records") {
     if (tab === "submissions") return <ReviewSubmissionsPage />;
     if (tab === "sessions") return <CreateTrainingSessionPage />;
+    if (tab === "cohorts") return <CohortsPage embedded />;
     if (tab === "shift-reports") return <ShiftReportPage />;
     if (tab === "member-status") return <MemberTrainingStatusPage />;
   }
