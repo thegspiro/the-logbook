@@ -573,7 +573,7 @@ docker-compose ps
 - **Editable preview**: `POST /training/cohorts/preview` is read-only and returns every computed date plus per-class warnings (weekend/blackout moves, archived courses, room conflicts) before anything is created
 - **Cohort management**: reschedule a class (the event moves with it), cancel one (the event is cancelled, not deleted), add an ad-hoc make-up class, shift remaining classes by N days, and repair missing events idempotently
 - **New API surface**: `/api/v1/training/courses/{id}/classes` and `/api/v1/training/cohorts`, all `training.manage` except the syllabus read and a roster member's view of their own cohort
-- **Migration** `20260805_0001` — also a merge revision, collapsing the two heads that had accumulated on `20260801_0019`
+- **Migration** `20260805_0001` — four new tables plus a nullable `training_courses.program_id`, chaining off `20260802_0010`
 
 **New Documentation**:
 - Updated [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md) — *Multi-Class Courses & Cohorts* feature section, the four new tables in the schema reference, an events cross-integration note, and an *Edge Cases & Things That Surprise People* table
@@ -584,7 +584,7 @@ docker-compose ps
 - Updated [wiki/Database-Schema.md](../wiki/Database-Schema.md) — table catalog rows and a 2026-08-05 schema-change section
 - Updated [wiki/Module-Events.md](../wiki/Module-Events.md), [wiki/Configuration-Modules.md](../wiki/Configuration-Modules.md), [wiki/Home.md](../wiki/Home.md), [wiki/Quick-Reference.md](../wiki/Quick-Reference.md)
 - Updated [APPLICATION_PAGES.md](../APPLICATION_PAGES.md) and [ARCHITECTURE.md](../ARCHITECTURE.md) — routes, admin tab, model/table/service inventories, entity tree
-- Updated [docs/youtube-scripts/](./youtube-scripts/) — new Script 13, plus beats added to Scripts 5, 9, 11 and the member guide
+- Updated [docs/youtube-scripts/](./youtube-scripts/) — new Script 14, plus beats added to Scripts 5, 9, 11 and the member guide
 - Updated [CHANGELOG.md](../CHANGELOG.md) — full feature changelog
 
 ---

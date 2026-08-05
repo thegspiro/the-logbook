@@ -16,25 +16,33 @@
 
 ## Current Head
 
-> **Update (2026-08-05):** The chain had drifted to **two heads** again —
-> `20260801_0020` (storefront tables) and `20260802_0001` (dues payments
-> ledger), both branching off `20260801_0019`. **`20260805_0001`**
-> (`20260805_0001_add_course_syllabus_and_cohorts.py`) is a **merge revision**
-> that chains off both:
+> **Update (2026-08-05):** The current head is **`20260805_0001`**
+> (`20260805_0001_add_course_syllabus_and_cohorts.py`), chaining linearly off
+> `20260802_0010` (storefront email templates). **New migrations must set
+> `down_revision = "20260805_0001"`.**
 >
-> ```python
-> revision = "20260805_0001"
-> down_revision = ("20260801_0020", "20260802_0001")
-> ```
+> Recent order: `20260801_0020` (storefront tables) and `20260802_0001` (dues
+> payments ledger) both branched off `20260801_0019`; **`20260802_0002`** is the
+> merge revision that reconciled them, and the storefront chain then continued
+> `20260802_0003` → … → `20260802_0010` before `20260805_0001` landed on top.
 >
-> The chain is back to a **single head at `20260805_0001`**, and new migrations
-> must set `down_revision = "20260805_0001"`.
+> **A merge revision written on a feature branch goes stale the moment main
+> merges the same fork itself.** `20260805_0001` was authored as a second merge
+> of `(20260801_0020, 20260802_0001)` while those really were the two heads. By
+> the time it merged, main had already reconciled them via `20260802_0002` and
+> added eight more revisions, so the tuple parent re-forked the graph — and
+> because `backend/main.py` resolves multiple heads by picking the
+> lexicographically largest, startup would have upgraded to `20260805_0001` and
+> silently skipped `20260802_0003`…`20260802_0010`. Re-parenting it onto the
+> real head fixed both. **Re-check `alembic heads` after merging main into a
+> branch, not just when writing the migration** — a merge revision is only
+> correct against the heads that exist at merge time.
 >
 > This is the third time the chain has forked (see the 2026-05 and 2026-06 notes
 > below). The pattern is always the same — two branches opened the same day off
-> a shared parent — and the fix is always the same: the next migration takes a
-> tuple `down_revision`. **Run `alembic heads` before writing a migration**
-> rather than assuming the documented head is current.
+> a shared parent — and the fix is always the same: one migration takes a tuple
+> `down_revision`. **Run `alembic heads` before writing a migration** rather
+> than assuming the documented head is current.
 
 > **Update (2026-07-29):** The chain is **linear with a single head**. The
 > current head is **`20260729_0001`**

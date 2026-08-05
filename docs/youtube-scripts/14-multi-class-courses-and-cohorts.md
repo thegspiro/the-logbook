@@ -1,4 +1,4 @@
-# Script 13: Multi-Class Courses & Cohorts — Scheduling a Whole Class Series
+# Script 14: Multi-Class Courses & Cohorts — Scheduling a Whole Class Series
 
 **Video Type:** Focused Tutorial (Short/Medium-Form)
 **Estimated Length:** 10–14 minutes
