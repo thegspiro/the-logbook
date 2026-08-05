@@ -382,6 +382,32 @@ plus any addresses in `notify_emails`. Order emails carry the same payment
 buttons as the web page. Store-wide announcements go out BCC, so one member's
 address is never disclosed to the rest of the department.
 
+### Previewing a notice
+
+`GET /store/settings/notifications/{notice}/preview` (permission
+`storefront.manage`) renders any of the nine against a sample order or window
+and returns the subject, HTML and plain-text bodies, who receives it, whether
+it is currently switched on, and the other emails the same switch governs. The
+settings screen puts a **Preview** button on each row and shows the result in a
+sandboxed iframe.
+
+Two properties are load-bearing:
+
+- **It runs the real `send_*` method.** `StorefrontNotificationService` takes a
+  `capture` list that diverts the composed message instead of delivering it, so
+  the preview is byte-for-byte what would be sent. A separately-built "roughly
+  what it looks like" renderer drifts from the email, and the quartermaster who
+  approved the preview would have approved something else.
+- **The order and window are invented; the settings are real.** Payment
+  handles, per-method instructions, the receipt footer, currency, store name
+  and branding all come from the department's saved configuration — checking
+  those is the point. Nothing is written to the database and no member address
+  is resolved, so a store with no members and no orders still previews.
+
+Previewing a switched-off notice is allowed, since otherwise you could not look
+before deciding to turn it on. The preview reads **saved** settings, so reword
+the instructions and save before looking.
+
 ### Wording and templates
 
 These bodies are composed in code with `wrap_email_body` — the same approach

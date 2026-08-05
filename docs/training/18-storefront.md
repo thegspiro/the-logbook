@@ -206,6 +206,28 @@ instructions ride along with every announcement about it, and the open / close
 / vendor-order actions each take a free-text message for that send only. The
 layout, your logo and your colours come from the organization's email branding.
 
+### Seeing one before you send it
+
+Every switch has a **Preview** button beside it. It opens the actual email —
+subject line, layout, your logo, and the pay buttons exactly as a member's
+phone will show them — built against a sample job shirt order and a sample
+window.
+
+The sample order is invented. Everything a department controls is not: the
+Venmo handle, the cash instructions, the receipt footer, the store name and
+your branding all come from your own saved settings. That makes the preview the
+fastest way to answer the questions that actually bite — *is my cashtag
+right? does the Zelle handle read properly? did I leave a method ticked that I
+never configured?* A method you do not accept simply is not there.
+
+Two things to know. The preview reads **saved** settings, so reword the
+instructions and hit Save before you look. And you can preview a notice that is
+switched off — the panel says so at the top of the preview — which is the point,
+since otherwise you could not see what you were deciding about.
+
+Nothing is sent and nothing is recorded. Previewing does not create an order,
+does not touch a window, and does not email anybody, including you.
+
 Everything the store sends is logged in **Communications → Message History**
 under a `storefront_` type, so "did she ever get the reminder?" is a question
 with an answer.

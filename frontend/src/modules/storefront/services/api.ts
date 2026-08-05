@@ -7,6 +7,7 @@
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
   StoreDashboard,
+  StoreNotificationPreview,
   StoreOrder,
   StoreOrderListResponse,
   StoreOrderWindow,
@@ -104,6 +105,13 @@ export const storefrontService = {
 
   async updateSettings(payload: StoreSettingsUpdate): Promise<StoreSettings> {
     const response = await api.put<StoreSettings>('/store/settings', payload);
+    return response.data;
+  },
+
+  async previewNotification(notice: string): Promise<StoreNotificationPreview> {
+    const response = await api.get<StoreNotificationPreview>(
+      `/store/settings/notifications/${notice}/preview`,
+    );
     return response.data;
   },
 

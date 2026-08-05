@@ -229,6 +229,21 @@ export interface StoreSettings {
   updatedAt?: string | null;
 }
 
+/** One storefront notice rendered for the settings screen. */
+export interface StoreNotificationPreview {
+  notice: string;
+  label: string;
+  /** The StoreSettings field that governs this notice. */
+  setting: string;
+  audience: string;
+  /** Other emails the same switch turns off. */
+  alsoGoverns: string[];
+  enabled: boolean;
+  subject: string;
+  htmlBody: string;
+  textBody: string;
+}
+
 export interface StoreSettingsUpdate {
   isEnabled?: boolean;
   storeName?: string;

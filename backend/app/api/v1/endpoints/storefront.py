@@ -42,6 +42,7 @@ from app.schemas.storefront import (
     StoreBulkStatusUpdate,
     StoreDashboardResponse,
     StorefrontResponse,
+    StoreNotificationPreviewResponse,
     StoreOrderAdminNotes,
     StoreOrderCancel,
     StoreOrderCreate,
@@ -71,6 +72,10 @@ from app.schemas.storefront import (
     StoreWindowCloseRequest,
     StoreWindowOpenRequest,
     StoreWindowSummaryResponse,
+)
+from app.services.storefront_preview_service import (
+    PreviewNotAvailable,
+    StorefrontPreviewService,
 )
 from app.services.storefront_service import StorefrontService
 from app.utils.image_processing import optimize_image
@@ -487,6 +492,30 @@ async def update_store_settings(
         username=current_user.username,
     )
     return settings
+
+
+@router.get(
+    "/settings/notifications/{notice}/preview",
+    response_model=StoreNotificationPreviewResponse,
+)
+async def preview_store_notification(
+    notice: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Render one of the store's notices against a sample order or window.
+
+    The sample data is invented and never written; the payment handles,
+    instructions, receipt footer and branding are the department's real saved
+    settings, since checking those is the point of looking. Save the settings
+    first — the preview reads what is stored, not what is typed on screen.
+    """
+    try:
+        return await StorefrontPreviewService(db).render(
+            notice, str(current_user.organization_id)
+        )
+    except PreviewNotAvailable as exc:
+        raise HTTPException(status_code=404, detail=safe_error_detail(exc))
 
 
 # ==========================================================================

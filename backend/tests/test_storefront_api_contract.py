@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from app.schemas.storefront import (
+    StoreNotificationPreviewResponse,
     StoreOrderResponse,
     StoreOrderWindowResponse,
     StorePaymentEventListResponse,
@@ -53,6 +54,7 @@ _CONTRACT = [
     (StorePaymentOption, "StorePaymentOption"),
     (StorePaymentEventResponse, "StorePaymentEvent"),
     (StorePaymentEventListResponse, "StorePaymentEventList"),
+    (StoreNotificationPreviewResponse, "StoreNotificationPreview"),
 ]
 
 

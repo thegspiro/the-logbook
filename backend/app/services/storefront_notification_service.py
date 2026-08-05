@@ -96,8 +96,19 @@ def _cell(content: str, align: str = "left", bold: bool = False) -> str:
 class StorefrontNotificationService:
     """Sends the storefront's member- and admin-facing email."""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(
+        self, db: AsyncSession, capture: Optional[List[Dict[str, Any]]] = None
+    ):
+        """*capture* diverts composed messages into a list instead of sending.
+
+        This is how the settings screen previews a notice. Rendering the
+        preview through the real ``send_*`` method — rather than a parallel
+        "what it would look like" builder — is the point: a preview that is
+        assembled separately drifts from the email, and a quartermaster who
+        approved the preview would be approving something else.
+        """
         self.db = db
+        self._capture = capture
 
     # ------------------------------------------------------------------
     # Recipients
@@ -313,6 +324,20 @@ class StorefrontNotificationService:
         addresses = [address for address in recipients if address]
         if not addresses:
             return 0
+        if self._capture is not None:
+            self._capture.append(
+                {
+                    "subject": subject,
+                    "title": title,
+                    "html_body": wrap_email_body(
+                        organization, title, body_html, header_color=header_color
+                    ),
+                    "text_body": text_body,
+                    "template_type": template_type,
+                    "bcc": bcc,
+                }
+            )
+            return len(addresses)
         try:
             email_service = EmailService(organization=organization)
             html_body = wrap_email_body(
@@ -394,9 +419,13 @@ class StorefrontNotificationService:
         order: StoreOrder,
         settings: Optional[StoreSettings],
         organization: Optional[Organization] = None,
+        recipients: Optional[List[str]] = None,
     ) -> int:
         """Heads-up to the quartermaster that an order landed."""
-        recipients = await self.get_admin_recipients(order.organization_id, settings)
+        if recipients is None:
+            recipients = await self.get_admin_recipients(
+                order.organization_id, settings
+            )
         if not recipients:
             return 0
         org = organization or await self._get_organization(order.organization_id)

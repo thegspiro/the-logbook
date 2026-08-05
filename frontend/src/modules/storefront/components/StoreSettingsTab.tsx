@@ -6,10 +6,11 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Eye, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { storefrontService } from '../services/api';
+import { NotificationPreviewModal } from './NotificationPreviewModal';
 import {
   PAYMENT_METHOD_LABELS,
   PAYMENT_POLICY_OPTIONS,
@@ -119,7 +120,8 @@ type NoticeKey =
 
 interface NoticeGroup {
   title: string;
-  notices: { key: NoticeKey; label: string; detail: string }[];
+  /** `notice` is the backend preview key for this switch. */
+  notices: { key: NoticeKey; notice: string; label: string; detail: string }[];
 }
 
 /**
@@ -133,27 +135,32 @@ const NOTICE_GROUPS: NoticeGroup[] = [
     notices: [
       {
         key: 'sendOrderConfirmation',
+        notice: 'order_confirmation',
         label: 'Order confirmation',
         detail: 'To the member the moment they order — their receipt and how to pay.',
       },
       {
         key: 'sendStatusUpdates',
+        notice: 'status_change',
         label: 'Status changes',
         detail:
           'To the member when their order becomes ordered, ready for pickup, picked up, or cancelled.',
       },
       {
         key: 'sendPaymentReceipts',
+        notice: 'payment_receipt',
         label: 'Payment receipts',
         detail: 'To the member when you record a payment, waive one, or record a refund.',
       },
       {
         key: 'sendPaymentReminders',
+        notice: 'payment_reminder',
         label: 'Payment reminders',
         detail: 'To members still carrying a balance, on the schedule below.',
       },
       {
         key: 'notifyAdminsOnOrder',
+        notice: 'admin_new_order',
         label: 'New order alert',
         detail: 'To store managers and the extra addresses below, each time an order lands.',
       },
@@ -164,22 +171,26 @@ const NOTICE_GROUPS: NoticeGroup[] = [
     notices: [
       {
         key: 'sendWindowOpened',
+        notice: 'window_opened',
         label: 'Ordering is open',
         detail:
           'To every active member when a window opens. An individual window can still opt out of its own announcement.',
       },
       {
         key: 'sendWindowClosingReminder',
+        notice: 'window_closing',
         label: 'Last call',
         detail: 'To every active member before a window closes, on the schedule below.',
       },
       {
         key: 'sendWindowClosed',
+        notice: 'window_closed',
         label: 'Ordering has closed',
         detail: 'To everyone who ordered in that window.',
       },
       {
         key: 'sendVendorOrderUpdates',
+        notice: 'vendor_order_placed',
         label: 'Order placed with the vendor',
         detail:
           'To everyone who ordered, when you record the vendor order — the update members chase.',
@@ -192,6 +203,7 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
   const [form, setForm] = useState<FormState | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [previewNotice, setPreviewNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -688,27 +700,40 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
                 {group.title}
               </legend>
               {group.notices.map((notice) => (
-                <label
+                <div
                   key={notice.key}
-                  htmlFor={`settings-notice-${notice.key}`}
-                  className="border-theme-surface-border flex cursor-pointer items-start gap-3 rounded-md border p-3"
+                  className="border-theme-surface-border flex items-start gap-3 rounded-md border p-3"
                 >
-                  <input
-                    id={`settings-notice-${notice.key}`}
-                    type="checkbox"
-                    className="form-checkbox mt-0.5"
-                    checked={form[notice.key]}
-                    onChange={(e) => update(notice.key, e.target.checked)}
-                  />
-                  <span>
-                    <span className="text-theme-text-primary block text-sm font-medium">
-                      {notice.label}
+                  <label
+                    htmlFor={`settings-notice-${notice.key}`}
+                    className="flex flex-1 cursor-pointer items-start gap-3"
+                  >
+                    <input
+                      id={`settings-notice-${notice.key}`}
+                      type="checkbox"
+                      className="form-checkbox mt-0.5"
+                      checked={form[notice.key]}
+                      onChange={(e) => update(notice.key, e.target.checked)}
+                    />
+                    <span>
+                      <span className="text-theme-text-primary block text-sm font-medium">
+                        {notice.label}
+                      </span>
+                      <span className="text-theme-text-secondary block text-xs">
+                        {notice.detail}
+                      </span>
                     </span>
-                    <span className="text-theme-text-secondary block text-xs">
-                      {notice.detail}
-                    </span>
-                  </span>
-                </label>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewNotice(notice.notice)}
+                    className="text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target flex shrink-0 items-center gap-1 text-xs"
+                  >
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                    Preview
+                    <span className="sr-only"> the {notice.label} email</span>
+                  </button>
+                </div>
               ))}
             </fieldset>
           ))}
@@ -798,6 +823,13 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
           {saving ? 'Saving…' : 'Save settings'}
         </button>
       </div>
+
+      {previewNotice && (
+        <NotificationPreviewModal
+          notice={previewNotice}
+          onClose={() => setPreviewNotice(null)}
+        />
+      )}
     </div>
   );
 };

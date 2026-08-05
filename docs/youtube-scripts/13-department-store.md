@@ -51,7 +51,7 @@ the Venmo app open with an amount prefilled.]**
 
 ---
 
-## CHAPTER 2: Setup — Two Switches, Not One (2:00 – 4:00)
+## CHAPTER 2: Setup — Two Switches, Not One (2:00 – 4:15)
 
 ### ENABLING THE MODULE (2:00 – 2:45)
 
@@ -102,7 +102,7 @@ error.]**
 > "And handles get checked when you save. Mistype a cashtag and you'll hear
 > about it, rather than wondering next month why nobody used Cash App."
 
-### WHAT THE STORE EMAILS (3:30 – 4:00)
+### WHAT THE STORE EMAILS (3:30 – 4:15)
 
 **[SCREEN: Scrolling down Settings to the Notifications panel — two groups,
 nine switches, each with a line of description under it.]**
@@ -129,13 +129,34 @@ nine switches, each with a line of description under it.]**
 > Your logo and colours come from your org's email branding, same as everything
 > else on the platform."
 
+**[SCREEN: Clicking Preview on "Order confirmation". A modal opens showing the
+real email — logo, order table, Venmo button. Toggling to phone width.]**
+
+**[CALLOUT: "Preview shows YOUR settings, not a mock-up."]**
+
+> "And you don't have to guess. Every one of them has a **Preview** — that's the
+> actual email, with your logo, your handle, your wording, on a sample order.
+> Flip it to phone width, because that's where it'll be read."
+
+> "This is the fastest way to catch the stuff that bites. Is my cashtag right?
+> Does the Zelle handle read properly? Did I leave a method ticked I never
+> filled in? A method you don't accept just isn't there."
+
+**[CALLOUT: "Save first — it reads what's stored."]**
+
+> "Two gotchas. It reads *saved* settings, so hit Save before you look. And you
+> can preview something that's switched off — it'll tell you so at the top —
+> which is the whole point, because otherwise you couldn't see what you were
+> deciding about. Nothing gets sent, nothing gets recorded, nobody gets an
+> email. Including you."
+
 **[TRANSITION: The catalog]**
 
 ---
 
-## CHAPTER 3: The Catalog — Products, Sizes, Names (4:00 – 7:30)
+## CHAPTER 3: The Catalog — Products, Sizes, Names (4:15 – 7:30)
 
-### CREATING A PRODUCT (4:00 – 5:00)
+### CREATING A PRODUCT (4:15 – 5:00)
 
 **[SCREEN: Catalog tab → New item. Filling in "Department Job Shirt", $45,
 taxable, max 2 per member. Status left on Draft.]**
@@ -560,3 +581,4 @@ station.]**
 | 13h | They Said Venmo and Paid Cash — Record It Right | Chapter 6 |
 | 13i | Tell the Vendor, Tell the Members, One Click | Chapter 8 |
 | 13j | The Nine Emails Your Store Sends | Chapter 2 |
+| 13k | Preview Your Store Email Before You Send It | Chapter 2 |

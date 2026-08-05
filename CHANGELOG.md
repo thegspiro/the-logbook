@@ -139,6 +139,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     payment instructions, per-method notes, the receipt footer, a window's
     pickup instructions, and the free-text message each announcement takes.
 
+- **Every notice can be previewed before it is switched on.** A **Preview**
+  button on each row of Settings → Notifications opens the real email —
+  subject, layout, logo and pay buttons — rendered against a sample job shirt
+  order and a sample window and shown in a sandboxed iframe at desktop or
+  phone width. It is the fastest way to answer the questions that actually
+  bite: is the cashtag right, does the Zelle handle read properly, is a method
+  ticked that was never configured. `GET
+  /store/settings/notifications/{notice}/preview`, permission
+  `storefront.manage`.
+  - **The preview runs the real `send_*` method.** The notification service
+    takes a capture list that diverts the composed message instead of
+    delivering it, so what is shown is byte-for-byte what would be sent. A
+    separately-built approximation drifts from the email, and the
+    quartermaster who approved the preview would have approved something else.
+  - **The order and window are invented; the settings are real** — payment
+    handles, instructions, receipt footer, currency, store name and branding
+    all come from the department's own saved configuration, since checking
+    those is the point. Nothing is written and no member address is resolved,
+    so a brand-new store with no members and no orders previews fine.
+  - A switched-off notice still previews, since otherwise you could not look
+    before deciding to turn it on, and the panel says it is off.
+
 **Fixed**
 
 - **A held order could be marked ready for pickup.** Under *payment required

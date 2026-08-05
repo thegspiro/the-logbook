@@ -996,3 +996,22 @@ class StorePaymentEventIgnore(BaseModel):
     model_config = _REQUEST_CONFIG
 
     reason: Optional[str] = Field(default=None, max_length=500)
+
+
+class StoreNotificationPreviewResponse(UTCResponseBase):
+    """One storefront notice, rendered against sample data for the settings screen"""
+
+    model_config = _RESPONSE_CONFIG
+
+    notice: str
+    label: str
+    # The StoreSettings field that governs this notice.
+    setting: str
+    audience: str
+    # Other emails the same switch turns off, so unticking one is not a
+    # surprise later.
+    also_governs: List[str] = Field(default_factory=list)
+    enabled: bool
+    subject: str
+    html_body: str
+    text_body: str
