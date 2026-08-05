@@ -19,7 +19,7 @@ been through a review pass.
 | # | Feature | Code | Prefix | Status |
 |---|---------|------|--------|--------|
 | A1 | Storefront & payments | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF | ✅ |
-| A2 | Auth & session lifecycle | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py` | AUTH | ⬜ |
+| A2 | Auth & session lifecycle | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py` | AUTH | ✅ |
 | A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | ⬜ |
 | A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | ⬜ |
 | A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | ⬜ |
@@ -120,4 +120,33 @@ Established before the first iteration, so any later failure is attributable:
   payment. 6 future-development items recorded, incl. no reconciliation backfill
   if PayPal's verify API is down, and payments SoD (same shape as FIN-4/AH-4).
   See storefront.md. Next: A2 auth & session lifecycle.
+- **A2 auth & session lifecycle ✅** — the security surface here was already
+  covered by the [July red-team review](../security/RED_TEAM_REVIEW_2026-07.md),
+  so this pass re-verified a sample of its fixes rather than re-deriving them
+  (M1 forced-Secure cookies, M2 refresh grace window, M3 dummy-verify on all
+  three enumeration branches incl. the subtle locked-account one, H3 TOTP replay
+  + lockout, H5 `get_client_ip`) — **all intact and matching their claims** —
+  and applied the broader lens. Verified: 25/25 endpoints correctly gated (the
+  10 public ones are public by necessity), every credential-guessing path rate
+  limited, reset tokens SHA-256 hashed at rest, no dead endpoints, no TODOs.
+  **2 fixes applied:** AUTH-1 (MED: six sites recorded `request.client.host` —
+  the *proxy's* IP behind the production nginx — into session rows and
+  login/password-reset audit events, so the session list and reset forensics
+  carried one identical internal IP for every user; the tell was that
+  `mfa_login` already used `get_client_ip` for the same parameter while `login`
+  computed it for rate limiting and then didn't use it), AUTH-3 (LOW: the
+  `log_audit_event` docstring example taught the same wrong pattern — the likely
+  origin of the class). **1 flagged:** AUTH-2 (MED: `ConsentService.has_consent`
+  has **zero callers** — members can refuse photo use, public-roster listing and
+  SMS, the choice is stored and audit-logged, and nothing checks it; the
+  `SMS_NOTIFICATIONS` case cites TCPA, which carries statutory damages per
+  message. Not auto-fixed: "never asked" counts as refused, so wiring it in as
+  documented would immediately stop SMS to every existing member — needs a
+  backfill decision).
+  **New cross-cutting pattern AXC-1** with 28 sites still open across 7 files —
+  see [CROSS-CUTTING.md](./CROSS-CUTTING.md). The elections instance is **HIGH**:
+  per-vote IPs feed the ballot fraud detection documented in
+  `BALLOT_FORENSICS_GUIDE.md`, so behind the proxy `unique_ip_count` collapses to
+  1 and every election permanently trips the suspicious-IP threshold.
+  See auth-session.md. Next: A3 scheduled tasks & cron.
 </content>

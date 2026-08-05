@@ -700,8 +700,13 @@ async def log_event(
             event_category="auth",
             severity="INFO",
             user_id=user.id,
-            ip_address=request.client.host,
+            ip_address=get_client_ip(request),
         )
+
+    Always resolve the IP with ``get_client_ip`` (app.core.security_middleware)
+    rather than ``request.client.host``: behind the production nginx proxy the
+    peer address is the proxy, so the raw value records one internal IP for
+    every user and the audit trail carries no usable attribution.
     """
     return await audit_logger.create_log_entry(
         db=db,

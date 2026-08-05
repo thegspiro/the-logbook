@@ -27,6 +27,7 @@ without the loop to do exactly one feature and stop.
 | [`PROGRESS.md`](./PROGRESS.md) | The tracker: feature inventory, rotation order, status, running log |
 | [`CHECKLIST.md`](./CHECKLIST.md) | What each iteration checks — the six dimensions plus the project-specific pitfalls |
 | [`_TEMPLATE.md`](./_TEMPLATE.md) | The shape of a per-feature findings file |
+| [`CROSS-CUTTING.md`](./CROSS-CUTTING.md) | Patterns spanning features (`AXC-n`), so one sweep closes the class |
 
 Each completed feature gets `docs/app-review/<feature>.md`.
 
