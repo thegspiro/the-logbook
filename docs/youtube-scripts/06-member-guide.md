@@ -236,6 +236,16 @@ Administrative]**
 
 ## CHAPTER 5: Scheduling & Shift Swaps (12:00 – 15:00)
 
+**[SCREEN: The Events calendar showing a run of training events titled
+"Recruit School — Fall 2026: …"]**
+
+> "One thing you might notice: if you've been signed up for a multi-class
+> course — a recruit school, a multi-night refresher — you won't have to hunt
+> for the dates. Every class is already on your calendar, you're already on the
+> list, and you check into each one with the QR code the same as any other
+> event. Miss one and it's just that class you make up, not the whole course."
+
+
 ### VIEWING YOUR SCHEDULE (12:00 – 12:45)
 
 **[SCREEN: Navigate to Scheduling (SchedulingPage)]**

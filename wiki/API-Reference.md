@@ -447,6 +447,88 @@ POST   /api/v1/training/skills-testing/tests/{id}/complete             # Complet
 
 ---
 
+## Training — Multi-Class Courses & Cohorts *(2026-08-05)*
+
+A course can carry an ordered **syllabus** of classes; a **cohort** is one
+scheduled run of that course. Syllabus routes hang off the existing course
+paths; cohort routes live under `/api/v1/training/cohorts`.
+
+```
+GET    /api/v1/training/courses/{course_id}/classes                     # List the syllabus, in order (authenticated)
+POST   /api/v1/training/courses/{course_id}/classes                     # Add a class (training.manage)
+PATCH  /api/v1/training/courses/{course_id}/classes/{class_id}          # Update one class (training.manage)
+DELETE /api/v1/training/courses/{course_id}/classes/{class_id}          # Remove a class (training.manage)
+POST   /api/v1/training/courses/{course_id}/classes/reorder             # Set the order — must list every class exactly once (training.manage)
+POST   /api/v1/training/courses/{course_id}/classes/autofill            # Recompute every day_offset from a meeting pattern (training.manage)
+POST   /api/v1/training/cohorts/preview                                 # Compute the dates a cohort would get — read-only (training.manage)
+GET    /api/v1/training/cohorts                                         # List cohorts, filterable by course_id / status (training.manage)
+GET    /api/v1/training/cohorts/mine                                    # Cohorts the caller is on the roster for (authenticated)
+POST   /api/v1/training/cohorts                                         # Generate a cohort (training.manage)
+GET    /api/v1/training/cohorts/{cohort_id}                             # Cohort with class timeline + roster (officer, or a roster member)
+PATCH  /api/v1/training/cohorts/{cohort_id}                             # Update cohort details (training.manage)
+POST   /api/v1/training/cohorts/{cohort_id}/regenerate                  # Create events for classes that have none (training.manage)
+POST   /api/v1/training/cohorts/{cohort_id}/shift                       # Shift upcoming classes by N days (training.manage)
+POST   /api/v1/training/cohorts/{cohort_id}/cancel                      # Cancel the cohort and its remaining classes (training.manage)
+POST   /api/v1/training/cohorts/{cohort_id}/classes                     # Add an ad-hoc class (training.manage)
+PATCH  /api/v1/training/cohorts/{cohort_id}/classes/{cohort_class_id}   # Reschedule one class (training.manage)
+POST   /api/v1/training/cohorts/{cohort_id}/classes/{cohort_class_id}/cancel  # Cancel one class (training.manage)
+POST   /api/v1/training/cohorts/{cohort_id}/members                     # Add roster members (training.manage)
+DELETE /api/v1/training/cohorts/{cohort_id}/members/{user_id}           # Withdraw a member (training.manage)
+```
+
+- **`POST .../courses/{id}/classes`** — `class_course_id` is **required**: every
+  class teaches a real catalog course, which is what supplies its credit hours,
+  certification settings and categories. Title, credit hours and instructor
+  default from that course when omitted. Timing is *relative* — `day_offset`
+  (days from the cohort start, 0-based) plus a local `start_time` (`"HH:MM"`)
+  and `duration_minutes`. A course cannot list itself as one of its classes,
+  and a syllabus is capped at 200.
+- **`POST .../classes/reorder`** — changes `sequence` only, **not** `day_offset`.
+  Ordering and timing are independent; re-space with `/autofill` or by editing
+  offsets. The body must list every class in the course exactly once.
+- **`POST .../classes/autofill`** — `{meeting_days: [1, 3], start_weekday: 0}`
+  ("Tuesdays and Thursdays, course starts on a Monday") rewrites every class's
+  `day_offset` in sequence order: 1, 3, 8, 10, … Times and durations are only
+  overwritten when defaults are supplied.
+- **`POST /cohorts/preview`** — the safety step. Read-only; creates nothing.
+  Returns every class with its resolved UTC `scheduled_start`/`scheduled_end`
+  plus per-class `warnings` (a date moved off a weekend or blackout day, an
+  archived catalog course, a room already booked), and
+  `suggested_blackout_dates` (US federal holidays inside the course span).
+  Times are resolved as **local wall clock against the organization timezone**,
+  so a course spanning a DST change keeps the same clock time throughout.
+- **`POST /cohorts`** — the consequential call. In one transaction it creates
+  one `Event` + one linked `TrainingSession` **per class**, optionally builds a
+  matching pipeline (`generate_program`), enrolls `member_user_ids` in it, and
+  RSVPs them to every class. `classes` carries the officer's edits from the
+  preview (`scheduled_start`/`scheduled_end` overrides and `skip`). A class
+  whose session fails (room conflict) does not fail the generation — the class
+  is created without an event and the reason comes back in the response's
+  warnings, to be repaired with `/regenerate`.
+- **`POST /cohorts/{id}/regenerate`** — creates events only for classes whose
+  `event_id` is NULL. Safe to run repeatedly: the
+  `(cohort_id, course_class_id)` unique constraint means it can never duplicate
+  a class, and it never moves an existing one.
+- **`PATCH /cohorts/{id}/classes/{class_id}`** — moves the cohort class *and*
+  its linked event; RSVPs are preserved. Rejected for a cancelled class.
+- **`POST .../classes/{class_id}/cancel`** — **cancels** the event rather than
+  deleting it, so members who RSVP'd see a cancellation instead of the class
+  silently disappearing. The class stays on the cohort for the record.
+- **`POST /cohorts/{id}/shift`** — moves only classes that have not started
+  (or, with `from_sequence`, from that position onward). Cancelled classes never
+  move, and classes that already ran keep their dates because attendance is
+  anchored to them. `days` may be negative; zero is rejected.
+- **`POST /cohorts/{id}/members`** — a member added mid-run is RSVP'd only to
+  classes **still to come**; past classes are never backfilled. A member who
+  fails the pipeline's eligibility rules is still added to the roster, with the
+  reason returned in `warnings` rather than failing the request.
+- **`DELETE /cohorts/{id}/members/{user_id}`** — soft withdrawal. The
+  enrollment, training records, and any class already checked into are kept;
+  RSVPs on classes still to come are removed so the course leaves their
+  calendar.
+
+---
+
 ## Member Dues — Payment Ledger *(2026-08-02)*
 
 Each payment against a member's dues is its own row. The dues record's

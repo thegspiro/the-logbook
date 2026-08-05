@@ -6,7 +6,7 @@ import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import type { SkillTemplate, SkillTemplateCreate, SkillTemplateListItem, SkillTemplateUpdate, SkillTest, SkillTestCreate, SkillTestListItem, SkillTestUpdate, SkillTestingSummary } from '../types/skillsTesting';
-import type { BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberPeriodStatusResponse, MemberProgramProgress, ProgramBuildRequest, ProgramEnrollment, ProgramEnrollmentCreate, ProgramEnrollmentWithUser, ProgramMilestone, ProgramMilestoneCreate, ProgramMilestoneUpdate, ProgramPhase, ProgramPhaseCreate, ProgramPhaseUpdate, MemberEligibility, ProgramRequirement, ProgramRequirementCreate, ProgramRequirementUpdate, ProgramWithDetails, SampleTemplateSummary, RegistryImportResult, RegistryInfo, RegistryRequirementPreview, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingProgramUpdate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
+import type { CohortAdHocClassCreate, CohortClassReschedule, CohortMemberAdd, CohortOperationResult, CohortSchedulePreviewRequest, CohortSchedulePreviewResponse, CohortShiftRequest, CourseClass, CourseClassAutofill, CourseClassCreate, CourseClassUpdate, CourseCohort, CourseCohortClass, CourseCohortCreate, CourseCohortDetail, CourseCohortUpdate, BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberPeriodStatusResponse, MemberProgramProgress, ProgramBuildRequest, ProgramEnrollment, ProgramEnrollmentCreate, ProgramEnrollmentWithUser, ProgramMilestone, ProgramMilestoneCreate, ProgramMilestoneUpdate, ProgramPhase, ProgramPhaseCreate, ProgramPhaseUpdate, MemberEligibility, ProgramRequirement, ProgramRequirementCreate, ProgramRequirementUpdate, ProgramWithDetails, SampleTemplateSummary, RegistryImportResult, RegistryInfo, RegistryRequirementPreview, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingProgramUpdate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
 import type { TrainingSessionResponse, TrainingSessionCreate, RecurringTrainingSessionCreate } from './adminServices';
 
@@ -1489,3 +1489,192 @@ export const complianceConfigService = {
   },
 };
 
+
+// ============================================
+// Multi-Class Courses: Syllabus & Cohorts
+// ============================================
+
+/**
+ * The syllabus of a multi-class course — the ordered classes that make up
+ * something like a recruit school, each timed relative to the course start.
+ */
+export const courseSyllabusService = {
+  async getClasses(courseId: string): Promise<CourseClass[]> {
+    const response = await api.get<CourseClass[]>(
+      `/training/courses/${courseId}/classes`,
+    );
+    return response.data;
+  },
+
+  async addClass(courseId: string, data: CourseClassCreate): Promise<CourseClass> {
+    const response = await api.post<CourseClass>(
+      `/training/courses/${courseId}/classes`,
+      data,
+    );
+    return response.data;
+  },
+
+  async updateClass(
+    courseId: string,
+    classId: string,
+    updates: CourseClassUpdate,
+  ): Promise<CourseClass> {
+    const response = await api.patch<CourseClass>(
+      `/training/courses/${courseId}/classes/${classId}`,
+      updates,
+    );
+    return response.data;
+  },
+
+  async deleteClass(courseId: string, classId: string): Promise<void> {
+    await api.delete(`/training/courses/${courseId}/classes/${classId}`);
+  },
+
+  async reorderClasses(courseId: string, classIds: string[]): Promise<CourseClass[]> {
+    const response = await api.post<CourseClass[]>(
+      `/training/courses/${courseId}/classes/reorder`,
+      { class_ids: classIds },
+    );
+    return response.data;
+  },
+
+  /** Recompute every class's day offset from a weekly meeting pattern. */
+  async autofillOffsets(
+    courseId: string,
+    data: CourseClassAutofill,
+  ): Promise<CourseClass[]> {
+    const response = await api.post<CourseClass[]>(
+      `/training/courses/${courseId}/classes/autofill`,
+      data,
+    );
+    return response.data;
+  },
+};
+
+/** One scheduled run of a multi-class course, and its ongoing management. */
+export const courseCohortService = {
+  /** Compute the dates a cohort would get — creates nothing. */
+  async previewSchedule(
+    data: CohortSchedulePreviewRequest,
+  ): Promise<CohortSchedulePreviewResponse> {
+    const response = await api.post<CohortSchedulePreviewResponse>(
+      '/training/cohorts/preview',
+      data,
+    );
+    return response.data;
+  },
+
+  async getCohorts(params?: {
+    course_id?: string;
+    status?: string;
+  }): Promise<CourseCohort[]> {
+    const response = await api.get<CourseCohort[]>('/training/cohorts', { params });
+    return response.data;
+  },
+
+  /** Cohorts the signed-in member is on the roster for. */
+  async getMyCohorts(): Promise<CourseCohort[]> {
+    const response = await api.get<CourseCohort[]>('/training/cohorts/mine');
+    return response.data;
+  },
+
+  async getCohort(cohortId: string): Promise<CourseCohortDetail> {
+    const response = await api.get<CourseCohortDetail>(
+      `/training/cohorts/${cohortId}`,
+    );
+    return response.data;
+  },
+
+  async createCohort(data: CourseCohortCreate): Promise<CourseCohortDetail> {
+    const response = await api.post<CourseCohortDetail>('/training/cohorts', data);
+    return response.data;
+  },
+
+  async updateCohort(
+    cohortId: string,
+    updates: CourseCohortUpdate,
+  ): Promise<CourseCohort> {
+    const response = await api.patch<CourseCohort>(
+      `/training/cohorts/${cohortId}`,
+      updates,
+    );
+    return response.data;
+  },
+
+  /** Create events for classes that have none. Safe to run repeatedly. */
+  async regenerate(cohortId: string): Promise<CohortOperationResult> {
+    const response = await api.post<CohortOperationResult>(
+      `/training/cohorts/${cohortId}/regenerate`,
+    );
+    return response.data;
+  },
+
+  async shiftClasses(
+    cohortId: string,
+    data: CohortShiftRequest,
+  ): Promise<CohortOperationResult> {
+    const response = await api.post<CohortOperationResult>(
+      `/training/cohorts/${cohortId}/shift`,
+      data,
+    );
+    return response.data;
+  },
+
+  async cancelCohort(cohortId: string, reason: string): Promise<CourseCohort> {
+    const response = await api.post<CourseCohort>(
+      `/training/cohorts/${cohortId}/cancel`,
+      { reason },
+    );
+    return response.data;
+  },
+
+  async addClass(
+    cohortId: string,
+    data: CohortAdHocClassCreate,
+  ): Promise<CourseCohortClass> {
+    const response = await api.post<CourseCohortClass>(
+      `/training/cohorts/${cohortId}/classes`,
+      data,
+    );
+    return response.data;
+  },
+
+  async rescheduleClass(
+    cohortId: string,
+    cohortClassId: string,
+    data: CohortClassReschedule,
+  ): Promise<CourseCohortClass> {
+    const response = await api.patch<CourseCohortClass>(
+      `/training/cohorts/${cohortId}/classes/${cohortClassId}`,
+      data,
+    );
+    return response.data;
+  },
+
+  async cancelClass(
+    cohortId: string,
+    cohortClassId: string,
+    reason: string,
+  ): Promise<CourseCohortClass> {
+    const response = await api.post<CourseCohortClass>(
+      `/training/cohorts/${cohortId}/classes/${cohortClassId}/cancel`,
+      { reason },
+    );
+    return response.data;
+  },
+
+  async addMembers(
+    cohortId: string,
+    data: CohortMemberAdd,
+  ): Promise<CohortOperationResult> {
+    const response = await api.post<CohortOperationResult>(
+      `/training/cohorts/${cohortId}/members`,
+      data,
+    );
+    return response.data;
+  },
+
+  async removeMember(cohortId: string, userId: string): Promise<void> {
+    await api.delete(`/training/cohorts/${cohortId}/members/${userId}`);
+  },
+};

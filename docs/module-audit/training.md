@@ -12,6 +12,21 @@ audited separately under #22.)
 enrollment/session isolation. `training_program_service.py` (4,027 L) got
 invariant-focused (not line-by-line) coverage.
 
+> **Coverage note (2026-08-05):** This audit predates the multi-class course
+> feature. `course_syllabus.py` and `course_cohorts.py` (2 endpoint files, 20
+> endpoints) and their two services (`course_syllabus_service.py`,
+> `course_cohort_service.py`) are **not covered by the findings below** and
+> should be read in the next iteration. Written to the module's existing
+> conventions — `training.manage` on every write, `assert_in_org` on every
+> client-supplied FK, `organization_id` on every by-id query, `safe_error_detail`
+> on every handler, audit events on the consequential operations — but that is a
+> claim by the author, not an audit result. Two areas worth a reader's attention:
+> generation writes across four tables plus Events, TrainingSessions,
+> EventRSVPs and ProgramEnrollments in one transaction (a wide blast radius for
+> an org-scoping miss), and `GET /training/cohorts/{id}` is the module's only
+> endpoint that grants a non-officer read based on **roster membership** rather
+> than a permission.
+
 ## Verified good ✅
 - **Auth coverage:** all 154 endpoints authed (`training.manage`/`.view_all`/
   `events.manage`/`system.admin`).

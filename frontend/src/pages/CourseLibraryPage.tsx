@@ -11,8 +11,10 @@ import {
   Award,
   Filter,
   ChevronDown,
+  ListOrdered,
 } from 'lucide-react';
 import { trainingService } from '../services/api';
+import { CourseSyllabusBuilder } from '../components/training/CourseSyllabusBuilder';
 import { SkeletonCardGrid } from '../components/ux/Skeleton';
 import { Pagination } from '../components/ux/Pagination';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
@@ -31,7 +33,7 @@ interface CourseFormModalProps {
   course?: TrainingCourse | null; // null = create mode
   categories: TrainingCategory[];
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (course?: TrainingCourse) => void;
 }
 
 const TRAINING_TYPES: { value: TrainingType; label: string }[] = [
@@ -122,14 +124,15 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
     };
 
     try {
+      let saved: TrainingCourse;
       if (isEdit && course) {
-        await trainingService.updateCourse(course.id, payload as TrainingCourseUpdate);
+        saved = await trainingService.updateCourse(course.id, payload as TrainingCourseUpdate);
         toast.success('Course updated successfully');
       } else {
-        await trainingService.createCourse(payload as TrainingCourseCreate);
+        saved = await trainingService.createCourse(payload as TrainingCourseCreate);
         toast.success('Course created successfully');
       }
-      onSuccess();
+      onSuccess(saved);
       onClose();
     } catch (err: unknown) {
       const msg =
@@ -398,6 +401,22 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
   const [showModal, setShowModal] = useState(false);
   const [editCourse, setEditCourse] = useState<TrainingCourse | null>(null);
 
+  // Syllabus panel — the classes that make up a multi-class course
+  const [syllabusCourse, setSyllabusCourse] = useState<TrainingCourse | null>(null);
+  // Resolver for the syllabus builder's inline "create a course" action, so
+  // an officer can add a missing subject without leaving the builder.
+  const [pendingCourseResolver, setPendingCourseResolver] = useState<
+    ((course: TrainingCourse | null) => void) | null
+  >(null);
+
+  const requestNewCourse = (): Promise<TrainingCourse | null> => {
+    setEditCourse(null);
+    setShowModal(true);
+    return new Promise<TrainingCourse | null>((resolve) => {
+      setPendingCourseResolver(() => resolve);
+    });
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -588,6 +607,14 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
                   </div>
                   <div className="flex items-center space-x-1">
                     <button
+                      onClick={() => setSyllabusCourse(course)}
+                      className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded-sm"
+                      aria-label={`Manage classes for ${course.name}`}
+                      title="Manage classes"
+                    >
+                      <ListOrdered className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => { setEditCourse(course); setShowModal(true); }}
                       className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded-sm"
                       aria-label={`Edit ${course.name}`}
@@ -672,9 +699,54 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
         isOpen={showModal}
         course={editCourse}
         categories={categories}
-        onClose={() => { setShowModal(false); setEditCourse(null); }}
-        onSuccess={() => { void loadData(); }}
+        onClose={() => {
+          setShowModal(false);
+          setEditCourse(null);
+          // A dismissed modal must still settle the builder's promise.
+          pendingCourseResolver?.(null);
+          setPendingCourseResolver(null);
+        }}
+        onSuccess={(saved) => {
+          void loadData();
+          if (saved) pendingCourseResolver?.(saved);
+          setPendingCourseResolver(null);
+        }}
       />
+
+      {syllabusCourse && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Classes for ${syllabusCourse.name}`}
+        >
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-theme-surface-modal">
+            <div className="flex items-center justify-between border-b border-theme-surface-border p-6">
+              <div>
+                <h2 className="text-xl font-bold text-theme-text-primary">
+                  {syllabusCourse.name}
+                </h2>
+                <p className="text-sm text-theme-text-muted">
+                  Classes that make up this course
+                </p>
+              </div>
+              <button
+                onClick={() => { setSyllabusCourse(null); void loadData(); }}
+                className="text-theme-text-muted hover:text-theme-text-primary"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="modal-body">
+              <CourseSyllabusBuilder
+                course={syllabusCourse}
+                onCreateCourse={requestNewCourse}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

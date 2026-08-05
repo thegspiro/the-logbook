@@ -128,6 +128,12 @@ GET    /api/v1/training/courses                            # List courses
 GET    /api/v1/training/courses/{id}                       # Get single course
 POST   /api/v1/training/courses                            # Create course
 PATCH  /api/v1/training/courses/{id}                       # Update course
+GET    /api/v1/training/courses/{id}/classes               # List a course's syllabus, in order (authenticated)
+POST   /api/v1/training/courses/{id}/classes               # Add a class to the syllabus (training.manage)
+PATCH  /api/v1/training/courses/{id}/classes/{class_id}    # Update one syllabus class (training.manage)
+DELETE /api/v1/training/courses/{id}/classes/{class_id}    # Remove a class; generated cohorts keep their copy
+POST   /api/v1/training/courses/{id}/classes/reorder       # Set the syllabus order (order only, not the dates)
+POST   /api/v1/training/courses/{id}/classes/autofill      # Recompute every day offset from a meeting pattern
 GET    /api/v1/training/stats/user/{user_id}               # User training stats
 GET    /api/v1/training/reports/user/{user_id}             # User training report
 GET    /api/v1/training/requirements/progress/{user_id}    # User requirement progress
@@ -178,6 +184,29 @@ POST   /api/v1/training/sessions                           # Create session
 POST   /api/v1/training/sessions/{id}/finalize             # Finalize session
 GET    /api/v1/training/sessions/approve/{token}           # Get approval by token
 POST   /api/v1/training/sessions/approve/{token}           # Submit approval by token
+```
+
+### Course Cohorts
+
+One scheduled run of a multi-class course. Every route is `training.manage`
+except `GET /{cohort_id}` and `/mine`, which a roster member may read for their
+own cohort.
+
+```
+POST   /api/v1/training/cohorts/preview                    # Compute the dates a cohort would get — creates nothing
+GET    /api/v1/training/cohorts                            # List cohorts (filter by course_id, status)
+GET    /api/v1/training/cohorts/mine                       # Cohorts the signed-in member is on the roster for
+POST   /api/v1/training/cohorts                            # Generate: N events + N sessions + roster enrollment + RSVPs, in one transaction
+GET    /api/v1/training/cohorts/{id}                       # Cohort with its class timeline and roster
+PATCH  /api/v1/training/cohorts/{id}                       # Update cohort details (not the schedule)
+POST   /api/v1/training/cohorts/{id}/regenerate            # Create events for classes that have none; idempotent
+POST   /api/v1/training/cohorts/{id}/shift                 # Shift upcoming classes by N days
+POST   /api/v1/training/cohorts/{id}/cancel                # Cancel the cohort and its remaining classes
+POST   /api/v1/training/cohorts/{id}/classes               # Add an ad-hoc class (make-up session)
+PATCH  /api/v1/training/cohorts/{id}/classes/{class_id}    # Reschedule one class; the linked event moves with it
+POST   /api/v1/training/cohorts/{id}/classes/{class_id}/cancel  # Cancel one class (cancels the event, never deletes it)
+POST   /api/v1/training/cohorts/{id}/members               # Add roster members (enrolled + invited to remaining classes)
+DELETE /api/v1/training/cohorts/{id}/members/{user_id}     # Withdraw a member; clears their upcoming RSVPs
 ```
 
 ### Self-Reported Training (Submissions)
@@ -386,7 +415,11 @@ GET    /api/v1/compliance/incomplete-records                # List incomplete re
 | Table | Model | Description |
 |-------|-------|-------------|
 | `training_categories` | TrainingCategory | Course categories (EMS, Fire, Hazmat, etc.) with custom colors and optional `registry_code` for NREMT NCCR linkage *(2026-04-11)* |
-| `training_courses` | TrainingCourse | Course definitions with hours, certification flag, expiration months |
+| `training_courses` | TrainingCourse | Course definitions with hours, certification flag, expiration months. `program_id` (nullable) records the pipeline this course's cohorts enrol into *(2026-08-05)* |
+| `course_classes` | CourseClass | Syllabus of a multi-class course: ordered classes, each linked to a catalog course (`class_course_id`, NOT NULL) and timed by `day_offset` + local `start_time` rather than a calendar date. Unique on (`course_id`, `sequence`) *(2026-08-05)* |
+| `course_cohorts` | CourseCohort | One scheduled run of a multi-class course: start date, meeting days, date-roll policy, blackout dates, linked pipeline *(2026-08-05)* |
+| `course_cohort_classes` | CourseCohortClass | A syllabus row materialized onto real UTC dates, linked to its `event_id` (`SET NULL`, unique) and `training_session_id`. Unique on (`cohort_id`, `course_class_id`) — the idempotency key that makes regeneration safe *(2026-08-05)* |
+| `course_cohort_members` | CourseCohortMember | Cohort roster; `enrollment_id` ties each member to the ProgramEnrollment tracking their progress. Unique on (`cohort_id`, `user_id`) *(2026-08-05)* |
 | `training_records` | TrainingRecord | Individual training completions with rank/station snapshots |
 | `training_requirements` | TrainingRequirement | Requirement definitions with type, frequency, role targeting |
 | `training_sessions` | TrainingSession | Scheduled training events with instructor assignment and location |
@@ -415,7 +448,10 @@ GET    /api/v1/compliance/incomplete-records                # List incomplete re
 
 ```
 Organization (1) ─┬─< TrainingCategory (many)
-                   ├─< TrainingCourse (many) ─< TrainingRecord (many)
+                   ├─< TrainingCourse (many) ─┬─< TrainingRecord (many)
+                   │                           └─< CourseClass (many, the syllabus)
+                   ├─< CourseCohort (many) ─┬─< CourseCohortClass (many)
+                   │                        └─< CourseCohortMember (many)
                    ├─< TrainingRequirement (many)
                    ├─< TrainingProgram (many) ─< ProgramPhase ─< ProgramRequirement
                    │                           └─< ProgramEnrollment ─< RequirementProgress
@@ -424,6 +460,7 @@ Organization (1) ─┬─< TrainingCategory (many)
                    └─< ExternalTrainingProvider (many) ─< ExternalTrainingSyncLog
 
 User (1) ─┬─< TrainingRecord (many)
+           ├─< CourseCohortMember (many)
            ├─< ProgramEnrollment (many)
            ├─< SkillTest (as candidate or examiner)
            └─< RequirementProgress (many)
@@ -431,6 +468,10 @@ User (1) ─┬─< TrainingRecord (many)
 TrainingSession ─── Event (via event_id FK)
 TrainingSession ─── Location (via location)
 TrainingRecord ─── TrainingCourse (via course_id FK)
+CourseClass ─── TrainingCourse (via class_course_id FK — the course this class teaches)
+CourseCohortClass ─── Event + TrainingSession (SET NULL: the cohort class is the
+                      stable identity, the event is its current realization)
+CourseCohortMember ─── ProgramEnrollment (via enrollment_id FK)
 MemberLeaveOfAbsence ──auto-link──> TrainingWaiver (unless exempt_from_training_waiver)
 ```
 
@@ -500,6 +541,10 @@ A candidate **fails** if ANY of the following are true:
 | Source | Target | Connection | Mechanism |
 |--------|--------|------------|-----------|
 | Events | Training | Event attendance → Training session/records | `training_session.event_id` FK |
+| Course Cohorts | Events | Generating a cohort creates one Event per syllabus class, in one transaction | `course_cohort_classes.event_id` (`SET NULL`) |
+| Course Cohorts | Training Sessions | Each generated event carries a linked session with the class's credit hours and pipeline linkage | `course_cohort_classes.training_session_id` |
+| Course Cohorts | Training Pipelines | The roster is enrolled in the cohort's program; a generated pipeline mirrors the syllabus (phases = sections, one `courses` requirement per class) | `course_cohort_members.enrollment_id`, `training_courses.program_id` |
+| Course Cohorts | Events (RSVP) | Roster members are RSVP'd to every class so it lands on their calendar; a late joiner gets only the classes still to come | `event_rsvps` written at generation / add-member |
 | Events | Training | RSVP / self-check-in to a session in a phase ahead of the member's current phase → soft override warning | Pipeline phase gate |
 | Training Sessions | Training Pipelines | Approved session advances its linked requirement (or the program's requirements in the session's category) | `training_session.program_id` / `requirement_id` / `category_id` |
 | Skills Testing | Training Pipelines | Passing a skills test linked to a requirement completes that pipeline requirement | Requirement linkage |
@@ -1144,3 +1189,95 @@ gate is a nudge for self-service actions, not a hard block.
 ---
 
 **See also:** [Compliance Module](Module-Compliance) | [Scheduling Module](Module-Scheduling)
+
+---
+
+## Multi-Class Courses & Cohorts (2026-08-05)
+
+A recruit school is one *course* made of many *classes*. Before this, describing
+one meant creating fifteen training sessions by hand and repeating that work for
+every intake — the existing recurring-session path did not help, because
+recruit-school classes are different subjects on an irregular cadence, not the
+same class repeating.
+
+### Building a syllabus
+
+**Course Library → Manage classes.** A class links to a catalog course — that
+link is what supplies its credit hours, certification settings and category
+tagging — and is timed *relative to the course start* rather than on a calendar
+date:
+
+| Field | Meaning |
+|-------|---------|
+| `day_offset` | Days after the course start; 0 is the first day |
+| `start_time` | Local wall clock, e.g. `19:00` |
+| `duration_minutes` | Length of the class |
+| `section_name` | Optional grouping; becomes a pipeline phase when one is generated |
+| `counts_toward_certification` | Off for an informal drill: hours still count, the certificate doesn't advance |
+
+The builder shows the gap between consecutive classes the way officers describe
+them ("next day", "2 days later"), and **Fill from pattern** derives every offset
+from a weekly cadence — fifteen classes on Tue/Thu becomes offsets 1, 3, 8,
+10, … Because a class *must* link to a catalog course, the builder can create
+one inline; without that, building a fifteen-class syllabus would mean leaving
+the page fifteen times.
+
+### Generating a cohort
+
+**Training → Records → Course Cohorts → New cohort.** The wizard runs Course →
+Schedule → **Preview** → Roster → Generate.
+
+Preview is the point of the wizard. Generating drops N events onto the
+department calendar and RSVPs the roster to each, so the officer first sees
+every computed date, every date that had to move around a weekend or blackout
+day, any archived catalog course, and any room already booked — and can edit or
+skip any individual class before anything is created. US federal holidays inside
+the course span are offered as one-click blackout dates.
+
+Generation creates **one Event + one linked TrainingSession per class**, all
+under one transaction. Attendance then rides the existing chain: QR check-in →
+`TrainingRecord` → session approval → requirement progress. Optionally the
+wizard also builds the matching pipeline (phases from the syllabus sections, one
+`courses` requirement per class), recording it on `training_courses.program_id`
+so later cohorts of the same course reuse it.
+
+### Running a cohort
+
+| Action | Effect |
+|--------|--------|
+| Reschedule a class | Moves the class *and* its event; RSVPs are preserved |
+| Cancel a class | Cancels the event rather than deleting it, so anyone signed up sees the change; the class stays on the cohort for the record |
+| Add class | An ad-hoc make-up session that was never on the syllabus; the roster is invited automatically |
+| Shift remaining | Slides upcoming classes by N days; past and cancelled classes are left alone |
+| Create missing events | Repairs a class whose event failed to create or was deleted. Idempotent — it only fills gaps |
+
+### Two design points worth knowing
+
+**The cohort class row is the stable identity, not the event.** The Event and
+TrainingSession are its current realization. That separation is what lets a
+class be rescheduled or cancelled without losing the cohort's record of it, and
+what makes regeneration idempotent: `uq_cohort_class_source` on (`cohort_id`,
+`course_class_id`) means re-running generation can never duplicate a class, and
+`event_id` is `SET NULL` rather than `CASCADE` so an event deleted through the
+Events UI leaves a repairable gap rather than erasing the class.
+
+**Class times are local wall clock**, resolved against the organization timezone
+at generation — not a stored UTC offset. A recruit school running from September
+into December crosses a DST boundary; storing an offset would silently move the
+last third of the course by an hour.
+
+### Edge cases
+
+The syllabus is a **template**; a cohort is a **materialized copy**. Nearly every
+surprise comes from that distinction. The full table lives in
+[docs/TRAINING_PROGRAMS.md](../docs/TRAINING_PROGRAMS.md#edge-cases--things-that-surprise-people);
+the ones that come up most:
+
+- **Reordering changes the order, not the dates.** `sequence` and `day_offset`
+  are independent. Re-space with Fill from pattern or by editing offsets.
+- **Editing the syllabus does not change a running cohort** — deliberately, so
+  an in-flight school is never re-scheduled underneath its students.
+- **A second cohort of the same course reuses the pipeline**, and a member
+  already enrolled keeps their existing progress.
+- **Adding a member mid-course invites them only to classes still to come**;
+  withdrawing one clears their upcoming RSVPs but keeps their records.

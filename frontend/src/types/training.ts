@@ -206,10 +206,294 @@ export interface TrainingCourse {
   max_participants?: number;
   materials_required?: string[];
   category_ids?: string[];  // Categories this course belongs to
+  program_id?: string;      // Pipeline this course's cohorts enroll members in
   active: boolean;
   created_at: string;
   updated_at: string;
   created_by?: string;
+}
+
+// ==================== Multi-Class Courses (Syllabus & Cohorts) ====================
+
+// Status enums come from the canonical source in constants/enums.ts
+import type {
+  CohortClassStatus,
+  CohortMemberStatus,
+  CohortStatus,
+  DateRollPolicy,
+} from '../constants/enums';
+export type { CohortClassStatus, CohortMemberStatus, CohortStatus, DateRollPolicy };
+
+/**
+ * One class on a multi-class course's syllabus — e.g. one of the fifteen
+ * subjects that make up a recruit school.
+ *
+ * A class is described *relative* to the course start (`day_offset` plus a local
+ * wall-clock `start_time`); it becomes a real dated event only when a cohort is
+ * generated from the course.
+ */
+export interface CourseClass {
+  id: string;
+  organization_id: string;
+  course_id: string;
+  class_course_id: string;   // Catalog course taught in this class (required)
+  sequence: number;
+  section_name?: string;     // Groups classes into pipeline phases
+  title?: string;            // Display override; defaults to the course name
+  description?: string;
+  day_offset: number;        // Days from the cohort start date
+  start_time?: string;       // Local wall clock, "HH:MM"
+  duration_minutes: number;
+  credit_hours?: number;
+  instructor_id?: string;
+  instructor?: string;
+  location_id?: string;
+  location?: string;
+  category_id?: string;
+  requirement_id?: string;
+  phase_id?: string;
+  is_required: boolean;
+  counts_toward_certification: boolean;
+  active: boolean;
+  created_at: string;
+  updated_at?: string;
+  created_by?: string;
+  // Resolved from the linked catalog course for display
+  class_course_name?: string;
+  class_course_code?: string;
+  class_course_active?: boolean;
+}
+
+export interface CourseClassCreate {
+  class_course_id: string;
+  sequence?: number | undefined;
+  section_name?: string | undefined;
+  title?: string | undefined;
+  description?: string | undefined;
+  day_offset?: number | undefined;
+  start_time?: string | undefined;
+  duration_minutes?: number | undefined;
+  credit_hours?: number | undefined;
+  instructor_id?: string | undefined;
+  instructor?: string | undefined;
+  location_id?: string | undefined;
+  location?: string | undefined;
+  category_id?: string | undefined;
+  requirement_id?: string | undefined;
+  phase_id?: string | undefined;
+  is_required?: boolean | undefined;
+  counts_toward_certification?: boolean | undefined;
+}
+
+export type CourseClassUpdate = Partial<CourseClassCreate> & { active?: boolean };
+
+export interface CourseClassAutofill {
+  meeting_days: number[];    // Weekday numbers, 0 = Monday
+  start_weekday?: number | undefined;
+  default_start_time?: string | undefined;
+  default_duration_minutes?: number | undefined;
+}
+
+export interface CohortScheduleConfig {
+  meeting_days?: number[] | undefined;
+  default_start_time?: string | undefined;
+  default_duration_minutes?: number | undefined;
+  date_roll_policy?: DateRollPolicy | undefined;
+  blackout_dates?: string[] | undefined; // ISO dates the schedule must skip
+}
+
+export interface CohortSchedulePreviewRequest extends CohortScheduleConfig {
+  course_id: string;
+  start_date: string;
+}
+
+/** One computed class in a schedule preview — nothing is created yet. */
+export interface PreviewClass {
+  course_class_id: string;
+  sequence: number;
+  title: string;
+  class_course_name?: string;
+  section_name?: string;
+  scheduled_start: string;
+  scheduled_end: string;
+  credit_hours?: number;
+  instructor?: string;
+  warnings: string[];
+}
+
+export interface CohortSchedulePreviewResponse {
+  course_id: string;
+  course_name: string;
+  start_date: string;
+  timezone: string;
+  classes: PreviewClass[];
+  suggested_blackout_dates: string[];
+  warnings: string[];
+}
+
+/** An officer's edit to one previewed class, applied at generation. */
+export interface CohortClassOverride {
+  course_class_id: string;
+  scheduled_start?: string | undefined;
+  scheduled_end?: string | undefined;
+  instructor_id?: string | undefined;
+  location_id?: string | undefined;
+  skip?: boolean | undefined;
+}
+
+/** One scheduled run of a multi-class course. */
+export interface CourseCohort {
+  id: string;
+  organization_id: string;
+  course_id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  start_date: string;
+  status: CohortStatus;
+  program_id?: string;
+  meeting_days?: number[];
+  default_start_time?: string;
+  default_duration_minutes?: number;
+  date_roll_policy: DateRollPolicy;
+  blackout_dates?: string[];
+  location_id?: string;
+  location?: string;
+  requires_rsvp: boolean;
+  auto_create_records: boolean;
+  generated_at?: string;
+  generated_by?: string;
+  notes?: string;
+  created_at: string;
+  updated_at?: string;
+  created_by?: string;
+  course_name?: string;
+  program_name?: string;
+  class_count: number;
+  member_count: number;
+  end_date?: string;
+}
+
+/** A syllabus row materialized onto real dates, backed by an event. */
+export interface CourseCohortClass {
+  id: string;
+  organization_id: string;
+  cohort_id: string;
+  course_class_id?: string;  // Absent for ad-hoc classes
+  sequence: number;
+  title: string;
+  description?: string;
+  scheduled_start: string;
+  scheduled_end: string;
+  event_id?: string;
+  training_session_id?: string;
+  status: CohortClassStatus;
+  class_course_id?: string;
+  credit_hours?: number;
+  instructor_id?: string;
+  instructor?: string;
+  location_id?: string;
+  location?: string;
+  category_id?: string;
+  requirement_id?: string;
+  phase_id?: string;
+  counts_toward_certification: boolean;
+  cancellation_reason?: string;
+  created_at: string;
+  updated_at?: string;
+  class_course_name?: string;
+  rsvp_count?: number;
+  checked_in_count?: number;
+}
+
+export interface CourseCohortMember {
+  id: string;
+  organization_id: string;
+  cohort_id: string;
+  user_id: string;
+  enrollment_id?: string;
+  status: CohortMemberStatus;
+  notes?: string;
+  withdrawn_at?: string;
+  added_at?: string;
+  full_name?: string;
+  email?: string;
+  progress_percentage?: number;
+}
+
+export interface CourseCohortDetail extends CourseCohort {
+  classes: CourseCohortClass[];
+  members: CourseCohortMember[];
+}
+
+export interface CourseCohortCreate extends CohortScheduleConfig {
+  course_id: string;
+  name: string;
+  code?: string | undefined;
+  description?: string | undefined;
+  start_date: string;
+  program_id?: string | undefined;
+  generate_program?: boolean | undefined;
+  classes?: CohortClassOverride[] | undefined;
+  member_user_ids?: string[] | undefined;
+  location_id?: string | undefined;
+  location?: string | undefined;
+  requires_rsvp?: boolean | undefined;
+  auto_create_records?: boolean | undefined;
+  notes?: string | undefined;
+}
+
+export interface CourseCohortUpdate {
+  name?: string | undefined;
+  code?: string | undefined;
+  description?: string | undefined;
+  status?: CohortStatus | undefined;
+  location_id?: string | undefined;
+  location?: string | undefined;
+  notes?: string | undefined;
+  blackout_dates?: string[] | undefined;
+}
+
+export interface CohortClassReschedule {
+  scheduled_start: string;
+  scheduled_end: string;
+  instructor_id?: string | undefined;
+  location_id?: string | undefined;
+}
+
+export interface CohortAdHocClassCreate {
+  title: string;
+  description?: string | undefined;
+  class_course_id: string;
+  scheduled_start: string;
+  scheduled_end: string;
+  credit_hours?: number | undefined;
+  instructor_id?: string | undefined;
+  instructor?: string | undefined;
+  location_id?: string | undefined;
+  location?: string | undefined;
+  category_id?: string | undefined;
+  requirement_id?: string | undefined;
+  phase_id?: string | undefined;
+  counts_toward_certification?: boolean | undefined;
+  invite_roster?: boolean | undefined;
+}
+
+export interface CohortShiftRequest {
+  days: number;
+  from_sequence?: number | undefined;
+}
+
+export interface CohortMemberAdd {
+  user_ids: string[];
+  enroll_in_program?: boolean | undefined;
+  invite_to_events?: boolean | undefined;
+}
+
+export interface CohortOperationResult {
+  success_count: number;
+  errors: string[];
+  warnings: string[];
 }
 
 export interface TrainingCourseCreate {

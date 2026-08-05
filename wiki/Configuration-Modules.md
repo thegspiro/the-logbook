@@ -39,7 +39,7 @@ Navigate to **Settings > Modules** to enable or disable modules at any time. Cha
 
 | Module | Description | Dependencies |
 |--------|-------------|-------------|
-| **[Training](Module-Training)** | Training records, requirements, programs, compliance | — |
+| **[Training](Module-Training)** | Training records, requirements, programs, multi-class courses and cohorts, compliance | — |
 | **[Compliance](Module-Compliance)** | Compliance matrix, competency tracking, cert alerts | Training |
 | **[Scheduling](Module-Scheduling)** | Shift scheduling, signup, swap/time-off requests | — |
 | **[Events](Module-Events)** | Event management, QR check-in, reminders | — |
@@ -57,7 +57,7 @@ Navigate to **Settings > Modules** to enable or disable modules at any time. Cha
 Some modules provide enhanced functionality when used together:
 
 - **Scheduling + Apparatus**: Shifts can be linked to vehicles
-- **Training + Events**: Events generate training sessions for attendance credit
+- **Training + Events**: Events generate training sessions for attendance credit; a course cohort generates the events too — one per class of a multi-class course, with the roster RSVP'd
 - **Training + Scheduling**: Shift reports auto-credit training programs
 - **Compliance + Training**: Compliance draws from training data
 - **Elections + Prospective Members**: Pipeline stages can trigger election packages

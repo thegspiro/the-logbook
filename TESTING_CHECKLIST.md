@@ -186,6 +186,25 @@
 | TRN-15 | Withdraw member from program | Enrollment status → Withdrawn |
 | TRN-16 | Create training session with date/time/instructor | Session appears on calendar |
 | TRN-17 | Record session attendance | Attendees logged with hours |
+| TRN-17a | Build a course syllabus: add 3 classes, each linked to a catalog course | Classes listed in order with day offsets; gap labels read "Course start" / "Next day" / "N days later" |
+| TRN-17b | Syllabus: create a catalog course inline from the class form | New course is created and auto-selected without leaving the builder |
+| TRN-17c | Syllabus: Fill from pattern (Tue + Thu, start Monday) | Every class's day offset is rewritten to 1, 3, 8, 10, … in sequence order |
+| TRN-17d | Syllabus: reorder two classes | Order changes; **day offsets do not** — a class now earlier than the one above it reads "N days earlier" |
+| TRN-17e | Cohort preview with a class landing on a Saturday, roll policy = next weekday | Date moves to Monday and the class carries a weekend warning; nothing is created |
+| TRN-17f | Cohort preview spanning a US federal holiday | Holiday appears in the suggested blackout chips; ticking it and recalculating moves the affected class |
+| TRN-17g | Generate a cohort with 3 classes and 2 members | 3 events + 3 training sessions created; both members enrolled in the pipeline and RSVP'd to all 3 classes |
+| TRN-17h | Generate a cohort spanning a DST change (Sept → Dec, 19:00 classes) | Every class starts at 19:00 local on both sides of the transition |
+| TRN-17i | Edit a date in the cohort preview, then generate | The generated event uses the edited date, not the computed one |
+| TRN-17j | Skip a class in the preview, then generate | Skipped class is not created; remaining cohort classes are numbered 1..N with no gaps |
+| TRN-17k | Delete one generated event, then click "Create missing events" | Exactly one event is recreated; running it again creates nothing |
+| TRN-17l | Reschedule a cohort class | Class and its event both move; existing RSVPs are preserved |
+| TRN-17m | Cancel a cohort class | Event is **cancelled, not deleted**; class stays listed with its reason |
+| TRN-17n | Shift remaining by 7 days | Only classes that haven't started move; past and cancelled classes are unchanged |
+| TRN-17o | Add a member to a cohort that is half-way through | Member is RSVP'd only to classes still to come; past classes are not backfilled |
+| TRN-17p | Withdraw a cohort member | Status → Withdrawn; upcoming RSVPs removed; records and attended classes retained |
+| TRN-17q | Class with "Counts toward certification" off, attended and approved | Training record and hours created; the linked certificate requirement does **not** advance |
+| TRN-17r | Generate a cohort for a course with no classes | Rejected with a clear message; nothing is created |
+| TRN-17s | Cross-org: request another organization's cohort by id | 404, no data leaked |
 | TRN-18 | Training waiver request and approval | Waiver granted, requirement marked exempt |
 | TRN-19 | External training import and mapping | External records mapped to internal courses |
 | TRN-20 | Certification expiration alert (90/60/30/7 day) | Tiered alerts sent to members and training officers |

@@ -29,6 +29,8 @@ export {
   trainingSubmissionService,
   trainingModuleConfigService,
   skillsTestingService,
+  courseSyllabusService,
+  courseCohortService,
 } from './trainingServices';
 export type { IntegrationConfig } from './trainingServices';
 

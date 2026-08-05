@@ -127,12 +127,15 @@ named FK. Sourced from a full per-table audit of every model file.
 | Table | Natural key / seed | Remap / hazards |
 |---|---|---|
 | `training_categories` | — | self-ref `parent_category_id`; null `created_by` |
-| `training_courses` | — | JSON `prerequisites`, `category_ids` remap |
+| `training_courses` | — | JSON `prerequisites`, `category_ids` remap; FK `program_id` remap *(2026-08-05)* |
+| `course_classes` | parent `course_id` | *(2026-08-05)* **Include with the course** — a multi-class course is not portable without its syllabus. FKs `class_course_id` (required), `instructor_id`, `location_id`, `category_id`, `requirement_id`, `phase_id` remap; **scrub `instructor_id`** (a user of the source department) |
+
 | `training_requirements` | — | JSON `required_courses`, `required_skills`, `category_ids` remap |
 | `training_programs` | `is_template` | JSON `prerequisite_program_ids` remap |
 | `program_phases` | parent `program_id` | JSON `prerequisite_phase_ids` remap |
 | `program_requirements` | parent `program_id` | FKs `phase_id`, `requirement_id` remap |
 | `program_milestones` | parent `program_id` | FK `phase_id` remap |
+| `course_cohorts`, `course_cohort_classes`, `course_cohort_members` | — | *(2026-08-05)* **Excluded — operational, not template.** A cohort is one department's dated run of a course, carrying real event/session ids, a roster of real members, and attendance. A template ships the *syllabus*; the receiving department generates its own cohorts from it |
 | `skill_evaluations` | — | **`allowed_evaluators` JSON may embed user_ids → scrub**; `required_for_programs` remap |
 | `skill_templates` | — | null `created_by`; JSON structural only |
 | `training_module_configs` | one-per-org | JSON `manual_entry_apparatus_ids` remap |

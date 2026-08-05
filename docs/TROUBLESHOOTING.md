@@ -2214,6 +2214,23 @@ Only explicitly named users can evaluate.
 - `GET /api/v1/training-sessions/calendar` — returns all training sessions with their linked Event data (dates, times, locations)
 - Supports `start_after`, `start_before`, and `training_type` filters
 
+**Generating a Cohort — Conflicts Are Per-Class, Not All-or-Nothing** *(2026-08-05)*:
+- Generating a course cohort creates one event per class, so a room conflict on
+  class 3 of 15 does **not** fail the whole generation. The other 14 are created,
+  class 3 is created **without an event**, and the reason comes back as a warning
+  on the response.
+- The cohort detail page marks that class **No event**. Free up the room (or
+  reschedule the class), then click **Create missing events** — it only fills
+  gaps, and the `(cohort_id, course_class_id)` unique constraint means it can
+  never duplicate a class no matter how often you run it.
+- The **preview** step catches most of this first: it runs the same overlap check
+  for any class that has its own `location_id` and reports conflicts before
+  anything is created. A cohort-wide room (rather than a per-class one) is not
+  covered by the preview — that conflict surfaces at generation, as a per-class
+  warning.
+- Rescheduling a cohort class updates its existing event, which is subject to the
+  same double-booking rules as any other event edit.
+
 **Hall Coordinator Separation**:
 - Hall coordinators who manage facility bookings can use `GET /api/v1/events?exclude_event_types=training` to see only non-training events
 - Double-booking prevention still applies across ALL event types — training sessions booked at a location will block other events from booking the same slot

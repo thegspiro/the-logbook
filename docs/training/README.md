@@ -10,7 +10,7 @@ Welcome to the training documentation for The Logbook. These guides are designed
 |---|-------|-------------|
 | 0 | [Getting Started](./00-getting-started.md) | First login, navigation, dashboard, account settings |
 | 1 | [Membership Management](./01-membership.md) | Member directory, profiles, prospective pipeline, status management, leave of absence, tiers |
-| 2 | [Training & Certification](./02-training.md) | Courses, programs/pipelines, enrollment, progress tracking, phases & advancement, knowledge-test scoring, member progression view, requirements, submissions, compliance, external integrations, manual shift reports, program export/import, NREMT linkage |
+| 2 | [Training & Certification](./02-training.md) | Courses, multi-class course syllabi & cohorts, programs/pipelines, enrollment, progress tracking, phases & advancement, knowledge-test scoring, member progression view, requirements, submissions, compliance, external integrations, manual shift reports, program export/import, NREMT linkage |
 | 3 | [Shifts & Scheduling](./03-scheduling.md) | Calendar, assignments, attendance, call/run logging, time-off, swaps, templates, platoon rotations, compliance, shift settings |
 | 4 | [Events & Meetings](./04-events-meetings.md) | Events, QR check-in, meetings, minutes, action items, elections, public outreach pipeline |
 | 5 | [Inventory Management](./05-inventory.md) | Items (individual & pool), variant groups, equipment kits, member size preferences, issuance allowances, equipment request fulfillment, reorder requests, categories, assignments, checkout, batch operations, scanning, label printing, NFPA 1851 lifecycle, departure clearance |
@@ -37,7 +37,7 @@ Welcome to the training documentation for The Logbook. These guides are designed
 - [Privacy & Your Data](./17-privacy-data-rights.md) - Sections 1-4 (your privacy choices, downloading your data, what officers can see)
 - [Mobile & PWA Usage](./10-mobile-pwa.md) - Installing the app on your phone, QR scanning, mobile tips
 - [Membership Management](./01-membership.md) - Sections 1-2 (directory, profiles)
-- [Training & Certification](./02-training.md) - Sections 1-4 (My Training, submitting, courses, programs)
+- [Training & Certification](./02-training.md) - Sections 1-3, 5 (My Training, submitting, courses, programs)
 - [Shifts & Scheduling](./03-scheduling.md) - Sections 2-5 (calendar, my shifts, open shifts, assignments)
 - [Events & Meetings](./04-events-meetings.md) - Sections 1-2, 7-8 (events, RSVP, action items, voting)
 - [Inventory Management](./05-inventory.md) - Section 3 (your assignments)
@@ -45,7 +45,7 @@ Welcome to the training documentation for The Logbook. These guides are designed
 
 ### Officers and Line Officers
 All of the above, plus:
-- [Training & Certification](./02-training.md) - Sections 5-12 (officer dashboard, reviews, compliance, integrations)
+- [Training & Certification](./02-training.md) - Sections 4, 6-13 (multi-class courses & cohorts, officer dashboard, reviews, compliance, integrations)
 - [Skills Testing](./09-skills-testing.md) - Template creation, test administration, scoring, results
 - [Shifts & Scheduling](./03-scheduling.md) - All sections including templates, platoon rotations, and reports
 - [Events & Meetings](./04-events-meetings.md) - Sections 3-6, 9-10 (QR setup, creating events, templates, minutes, outreach pipeline)
@@ -113,6 +113,8 @@ Not all modules are enabled by default. Your department administrator controls w
 | Apparatus, Inventory, Communications, Elections | **On** (Recommended, enabled by default) |
 | Training, Facilities, Prospective Pipeline, Admin Hours | **Off** (Optional, enable in Settings > Modules) |
 | Finance, Grants, Medical Screening, Incidents, HR, Public Info | **Off** (Optional, enable in Settings > Modules) |
+
+> **Note (2026-08-05):** **[Training & Certification](./02-training.md)** gains a new section, *Multi-Class Courses & Cohorts*, covering the workflow for a course made up of many classes — a recruit school, a multi-night refresher. An officer describes the course once as an ordered syllabus, timing each class relative to the course start ("class B the day after A, class C two days later") rather than on a calendar date, then generates a **cohort** for each intake: every class becomes a real training event with a linked session, the roster is enrolled in the pipeline and RSVP'd to each class, and attendance flows through the existing QR check-in and credit machinery. An editable preview shows every computed date — and flags anything moved off a weekend or holiday, an archived course, or a double-booked room — before a single event is created. The section closes with an Edge Cases table covering the distinctions that trip people up: reordering classes changes the order but not the dates, editing a syllabus deliberately does not re-schedule a cohort already in progress, and a cohort differs from a recurring session in that it runs an ordered series of *different* classes rather than repeating the same one.
 
 > **Note (2026-07-31):** New lesson — **[Privacy & Your Data](./17-privacy-data-rights.md)**.
 > Members can now manage **privacy choices** (photo use, public roster listing,

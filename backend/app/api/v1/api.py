@@ -17,6 +17,8 @@ from app.api.v1.endpoints import (
     calcom_sync,
     compliance_config,
     compliance_officer,
+    course_cohorts,
+    course_syllabus,
     dashboard,
     documents,
     elections,
@@ -95,6 +97,15 @@ api_router.include_router(
 )
 api_router.include_router(
     training_sessions.router, prefix="/training/sessions", tags=["training-sessions"]
+)
+# Syllabus routes hang off the existing course paths
+# (/training/courses/{id}/classes), so they are mounted on the same prefix as
+# the course CRUD in training.py rather than getting a prefix of their own.
+api_router.include_router(
+    course_syllabus.router, prefix="/training/courses", tags=["course-syllabus"]
+)
+api_router.include_router(
+    course_cohorts.router, prefix="/training/cohorts", tags=["course-cohorts"]
 )
 api_router.include_router(elections.router, prefix="/elections", tags=["elections"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
@@ -222,6 +233,7 @@ async def api_root():
             "locations": "/api/v1/locations",
             "training_courses": "/api/v1/training/courses",
             "training_sessions": "/api/v1/training/sessions",
+            "training_cohorts": "/api/v1/training/cohorts",
             "training_programs": "/api/v1/training/programs",
             "training_external": "/api/v1/training/external",
             "elections": "/api/v1/elections",

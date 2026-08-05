@@ -141,8 +141,9 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Point-based scoring with configurable criterion weights
     - Data model, integration points, API endpoints, implementation phases
 
-10. **[TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md)** (Updated 2026-02-14)
+10. **[TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md)** (Updated 2026-08-05)
     - Complete Training module documentation
+    - Multi-class courses: syllabus, cohorts, schedule generation, edge cases
     - Pipeline programs, requirements, phases, enrollments, progress tracking
     - Self-reported training with configurable approval workflow
     - Shift completion reports with auto-pipeline progress updates
@@ -415,6 +416,8 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Cert expiration alerts | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-certification-expiration-alert-pipeline) |
 | Competency matrix dashboard | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-using-the-competency-matrix-dashboard) |
 | Training calendar / booking | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-calendar-integration--double-booking-prevention) |
+| Recruit school / multi-class course | [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md#multi-class-courses--cohorts) and [Training Guide](./training/02-training.md#multi-class-courses--cohorts) |
+| Cohort vs. recurring session | [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md#edge-cases--things-that-surprise-people) |
 | Voting attendance requirements | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#voting-member-blocked-due-to-meeting-attendance) |
 | Training exemptions by tier | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-life-member-still-showing-pending-requirements) |
 | Drop notifications / CC config | [DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md) |
@@ -561,6 +564,30 @@ docker-compose ps
 ---
 
 ## 🔄 Recent Updates
+
+### 2026-08-05 - Multi-Class Courses & Cohorts
+
+**What Changed**:
+- **Course syllabus**: A `TrainingCourse` can carry an ordered list of classes (`course_classes`), each linked to a catalog course and timed *relative to the course start* (`day_offset` + a local `start_time`) rather than on a calendar date — so one outline schedules every intake. Meeting-pattern autofill derives the offsets from a cadence like Tue/Thu
+- **Cohorts**: `course_cohorts` / `course_cohort_classes` / `course_cohort_members` — one scheduled run of a multi-class course. Generating creates **one Event + one linked TrainingSession per class** in a single transaction, builds or reuses the matching pipeline, enrolls the roster and RSVPs them to every class
+- **Editable preview**: `POST /training/cohorts/preview` is read-only and returns every computed date plus per-class warnings (weekend/blackout moves, archived courses, room conflicts) before anything is created
+- **Cohort management**: reschedule a class (the event moves with it), cancel one (the event is cancelled, not deleted), add an ad-hoc make-up class, shift remaining classes by N days, and repair missing events idempotently
+- **New API surface**: `/api/v1/training/courses/{id}/classes` and `/api/v1/training/cohorts`, all `training.manage` except the syllabus read and a roster member's view of their own cohort
+- **Migration** `20260805_0001` — also a merge revision, collapsing the two heads that had accumulated on `20260801_0019`
+
+**New Documentation**:
+- Updated [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md) — *Multi-Class Courses & Cohorts* feature section, the four new tables in the schema reference, an events cross-integration note, and an *Edge Cases & Things That Surprise People* table
+- Updated [docs/training/02-training.md](./training/02-training.md) — end-user section with the syllabus builder walkthrough, the cohort wizard, running a cohort, a cohort-vs-recurring-session comparison, and an Edge Cases table
+- Updated [docs/training/04-events-meetings.md](./training/04-events-meetings.md) — cross-reference from event-linked training sessions to bulk cohort generation
+- Updated [wiki/Module-Training.md](../wiki/Module-Training.md) — key features, pages, admin tabs, API endpoints, database tables, relationships, cross-module connections, and a dated deep-dive section
+- Updated [wiki/API-Reference.md](../wiki/API-Reference.md) — full endpoint block with generation side effects and idempotency semantics
+- Updated [wiki/Database-Schema.md](../wiki/Database-Schema.md) — table catalog rows and a 2026-08-05 schema-change section
+- Updated [wiki/Module-Events.md](../wiki/Module-Events.md), [wiki/Configuration-Modules.md](../wiki/Configuration-Modules.md), [wiki/Home.md](../wiki/Home.md), [wiki/Quick-Reference.md](../wiki/Quick-Reference.md)
+- Updated [APPLICATION_PAGES.md](../APPLICATION_PAGES.md) and [ARCHITECTURE.md](../ARCHITECTURE.md) — routes, admin tab, model/table/service inventories, entity tree
+- Updated [docs/youtube-scripts/](./youtube-scripts/) — new Script 13, plus beats added to Scripts 5, 9, 11 and the member guide
+- Updated [CHANGELOG.md](../CHANGELOG.md) — full feature changelog
+
+---
 
 ### 2026-02-26 - Public Outreach Request Pipeline
 

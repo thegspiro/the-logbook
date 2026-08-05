@@ -593,6 +593,9 @@ class TrainingProgramService:
                     passing_score=req_input.passing_score,
                     max_attempts=req_input.max_attempts,
                     checklist_items=checklist,
+                    required_courses=(
+                        getattr(req_input, "required_courses", None) or None
+                    ),
                     is_editable=True,
                     allows_external_credit=getattr(
                         req_input, "allows_external_credit", False

@@ -41,7 +41,11 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 |-------|-------------|
 | `training_records` | Individual training completions (with `rank_at_completion`, `station_at_completion`) |
 | `training_categories` | Course categories with optional `registry_code` for NREMT NCCR linkage *(2026-04-11)* |
-| `training_courses` | Course definitions and categories |
+| `training_courses` | Course definitions and categories. `program_id` (String(36), nullable, FK `training_programs` `SET NULL`) records the pipeline this course's cohorts enrol into *(2026-08-05)* |
+| `course_classes` | Syllabus of a multi-class course — ordered classes, each with a required `class_course_id` (FK `training_courses`, `CASCADE`: the column is NOT NULL so `SET NULL` is illegal) and *relative* timing (`day_offset`, local `start_time`, `duration_minutes`). Unique `uq_course_class_sequence` on (`course_id`, `sequence`) *(2026-08-05)* |
+| `course_cohorts` | One scheduled run of a multi-class course: `start_date`, `meeting_days` (JSON), `date_roll_policy` (enum), `blackout_dates` (JSON), `program_id` *(2026-08-05)* |
+| `course_cohort_classes` | A syllabus row materialized onto real UTC datetimes. `event_id` is `SET NULL` + unique (deleting an event must not erase the cohort's record of the class) and `course_class_id` is nullable (ad-hoc classes, and syllabus rows deleted later). Unique `uq_cohort_class_source` on (`cohort_id`, `course_class_id`) is the idempotency key for regeneration *(2026-08-05)* |
+| `course_cohort_members` | Cohort roster; `enrollment_id` (FK `program_enrollments`, `SET NULL`) ties a member to the ProgramEnrollment tracking their progress. Unique `uq_cohort_member_user` on (`cohort_id`, `user_id`) *(2026-08-05)* |
 | `training_requirements` | Department training requirements (hours, shifts, calls, certs). `include_current_month` (Bool, nullable) is a per-requirement evaluation-period override — `NULL` inherits the org default, `true`/`false` explicit *(2026-05-29)* |
 | `training_programs` | Structured multi-phase training curricula |
 | `program_phases` | Phases within a training program |
@@ -232,6 +236,38 @@ The `organizations.settings` JSON column stores email platform configuration und
 | `microsoft_client_secret` | string (encrypted) | microsoft | Azure AD Client Secret |
 | `cloudflare_account_id` | string | cloudflare | Cloudflare Account ID (32-char hex) |
 | `cloudflare_api_token` | string (encrypted) | cloudflare | Cloudflare API token with email sending permission |
+
+---
+
+## Recent Schema Changes (2026-08-05)
+
+### New Tables
+
+| Table | Migration | Description |
+|-------|-----------|-------------|
+| `course_classes` | `20260805_0001` | Multi-class course syllabus. `class_course_id` NOT NULL (`CASCADE`, since `SET NULL` on a NOT NULL column is MySQL error 1830); unique `uq_course_class_sequence` on (`course_id`, `sequence`) |
+| `course_cohorts` | `20260805_0001` | One scheduled run of a multi-class course; enums `cohortstatus` and `daterollpolicy` |
+| `course_cohort_classes` | `20260805_0001` | Materialized class with UTC `scheduled_start`/`scheduled_end`; `event_id` unique + `SET NULL`; unique `uq_cohort_class_source` on (`cohort_id`, `course_class_id`); enum `cohortclassstatus` |
+| `course_cohort_members` | `20260805_0001` | Cohort roster; unique `uq_cohort_member_user` on (`cohort_id`, `user_id`); enum `cohortmemberstatus` |
+
+### New Columns
+
+| Table | Column | Type | Migration | Description |
+|-------|--------|------|-----------|-------------|
+| `training_courses` | `program_id` | String(36), nullable, FK `training_programs` `SET NULL` | `20260805_0001` | Pipeline this course's cohorts enrol into; set by the first cohort that generates one, so later cohorts reuse it |
+
+### New Indexes
+
+| Table | Index | Columns | Migration |
+|-------|-------|---------|-----------|
+| `course_classes` | `idx_course_class_org_course` | `organization_id`, `course_id` | `20260805_0001` |
+| `course_cohorts` | `idx_course_cohort_org_course` | `organization_id`, `course_id` | `20260805_0001` |
+| `course_cohort_classes` | `idx_cohort_class_start` | `organization_id`, `scheduled_start` | `20260805_0001` |
+
+> **This revision is also a merge revision.** The versions directory carried two
+> heads (`20260801_0020` storefront and `20260802_0001` dues ledger), both
+> branching off `20260801_0019`; `20260805_0001` chains off both and collapses
+> them back to a single head.
 
 ---
 

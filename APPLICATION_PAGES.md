@@ -198,6 +198,8 @@ Requires `events.manage` permission. Tab-based admin interface.
 | `/training/courses` | Course Library | Authenticated |
 | `/training/programs` | Training Programs | Authenticated |
 | `/training/programs/:programId` | Program Detail | Authenticated |
+| `/training/cohorts` | Course Cohorts | `training.manage` |
+| `/training/cohorts/:cohortId` | Cohort Detail (class timeline + roster) | `training.manage` |
 
 ### Training Admin Hub (`/training/admin`)
 
@@ -210,6 +212,7 @@ Requires `training.manage` permission. Tab-based admin interface.
 | `submissions` | Review Submissions |
 | `requirements` | Requirements |
 | `sessions` | Create Session |
+| `cohorts` | Course Cohorts |
 | `compliance` | Compliance Matrix |
 | `expiring-certs` | Expiring Certs |
 | `pipelines` | Pipelines |

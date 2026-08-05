@@ -1,7 +1,7 @@
 # Script 9: Training Pipelines — An Officer's Guide
 
 **Video Type:** Feature Deep Dive (Medium-Form)
-**Estimated Length:** 20–25 minutes
+**Estimated Length:** 21–26 minutes
 **Target Audience:** Training Officers, Recruit/Field Training Officers, Compliance Officers
 **Roles Covered:** training_officer, safety_officer
 **Chapters:** 8 (each designed as a standalone clip)
@@ -49,7 +49,7 @@ with a phase timeline, an enrolled-members list, and progress bars.]**
 
 ---
 
-## CHAPTER 2: Enrolling Members (2:30 – 5:30)
+## CHAPTER 2: Enrolling Members (2:30 – 6:15)
 
 ### THE ENROLLMENTS TAB (2:30 – 3:15)
 
@@ -86,13 +86,33 @@ Eligible / Enrolled / Prerequisite / In another program.]**
 > reported, so you never get a silent half-enrollment. Each member starts at the
 > first phase with a fresh progress record."
 
+### ENROLLING BY GENERATING A COHORT (5:30 – 6:15)
+
+> "There's a third way people end up in a pipeline, and it's the one to reach
+> for when the program is delivered as a scheduled class series."
+
+**[SCREEN: Training > Records > Course Cohorts > New cohort, stepping through
+to the Roster step.]**
+
+> "If your recruit school is set up as a multi-class course, generating a
+> cohort enrolls the roster for you — as a side effect of scheduling the
+> classes. Same pipeline, same fresh progress records, except you also just
+> put fifteen training events on everybody's calendar."
+
+**[CALLOUT: "Generate a cohort → classes scheduled AND roster enrolled"]**
+
+> "One thing to watch: if a recruit is already enrolled in that pipeline — say
+> they're repeating the school — they keep the progress they already had. That's
+> usually what you want. If it isn't, reset their enrollment with Start new
+> cycle."
+
 **[TRANSITION: How progress updates]**
 
 ---
 
-## CHAPTER 3: How Progress Updates — The Feeds (5:30 – 9:30)
+## CHAPTER 3: How Progress Updates — The Feeds (6:15 – 10:15)
 
-### THE BIG IDEA (5:30 – 6:15)
+### THE BIG IDEA (6:15 – 7:00)
 
 **[SCREEN: A single requirement's progress bar ticking up, with small labels:
 "shift report", "session", "skills test", "import".]**
@@ -100,7 +120,7 @@ Eligible / Enrolled / Prerequisite / In another program.]**
 > "This is the heart of it. A requirement's progress can advance from six
 > different places, and they all feed the same progress bar. Let's walk them."
 
-### THE SIX FEEDS (6:15 – 8:00)
+### THE SIX FEEDS (7:00 – 8:45)
 
 **[CALLOUT: The six feeds appearing one at a time]**
 
@@ -124,7 +144,7 @@ Eligible / Enrolled / Prerequisite / In another program.]**
 > "**Six — your manual entry.** And of course you can always log hours or mark a
 > requirement complete by hand from a member's progress detail."
 
-### TWO GUARANTEES (8:00 – 9:30)
+### TWO GUARANTEES (8:45 – 10:15)
 
 **[SCREEN: A member's progress detail; hover on a requirement to show it's
 officer-verified.]**
@@ -147,9 +167,9 @@ officer-verified.]**
 
 ---
 
-## CHAPTER 4: Phases & Advancement (9:30 – 12:00)
+## CHAPTER 4: Phases & Advancement (10:15 – 12:45)
 
-### HOW PHASES WORK (9:30 – 10:30)
+### HOW PHASES WORK (10:15 – 11:15)
 
 **[SCREEN: A phased program's timeline — Orientation & Safety → Fireground Skills
 → Fire Attack & Live-Fire → Certification — with a member marked on phase 2.]**
@@ -159,7 +179,7 @@ officer-verified.]**
 > done, the system **auto-advances** them to the next phase — and rolls their
 > overall percentage forward."
 
-### MANUAL-ADVANCE GATES (10:30 – 11:15)
+### MANUAL-ADVANCE GATES (11:15 – 12:00)
 
 **[SCREEN: The phase editor showing a "require officer approval to advance"
 toggle on the Certification phase.]**
@@ -169,7 +189,7 @@ toggle on the Certification phase.]**
 > advance**, and auto-advance stops there. The member waits on the doorstep until
 > *you* move them forward — a deliberate checkpoint for the moments that matter."
 
-### ADVANCING A MEMBER (11:15 – 12:00)
+### ADVANCING A MEMBER (12:00 – 12:45)
 
 **[SCREEN: On a member's progress, click "Advance" on a gated phase; show the
 optional force override.]**
@@ -183,16 +203,16 @@ optional force override.]**
 
 ---
 
-## CHAPTER 5: Recertification Cycles (12:00 – 14:30)
+## CHAPTER 5: Recertification Cycles (12:45 – 15:15)
 
-### THE PROBLEM (12:00 – 12:45)
+### THE PROBLEM (12:45 – 13:30)
 
 > "Some certifications expire. NREMT recertifies every two years. When that clock
 > resets, a member's accumulated progress needs to clear so a fresh cycle can
 > start — but you don't want to rebuild the pipeline every two years. The recert
 > cycle handles it."
 
-### AUTOMATIC RESET (12:45 – 13:45)
+### AUTOMATIC RESET (13:30 – 14:30)
 
 **[SCREEN: The pipeline's Edit dialog → enable "Recertification cycle", set a
 cycle length in months, optionally a calendar anchor.]**
@@ -209,7 +229,7 @@ cycle length in months, optionally a calendar anchor.]**
 > "A daily sweep at 5 AM resets every past-due enrollment across the department,
 > so members no one is actively watching still start their new cycle on time."
 
-### MANUAL RESET (13:45 – 14:30)
+### MANUAL RESET (14:30 – 15:15)
 
 **[SCREEN: A member's progress modal → "Reset" on one requirement, and "Start
 new cycle" for the whole enrollment.]**
@@ -227,9 +247,9 @@ new cycle" for the whole enrollment.]**
 
 ---
 
-## CHAPTER 6: Safeguards & Fixing Mistakes (14:30 – 18:00)
+## CHAPTER 6: Safeguards & Fixing Mistakes (15:15 – 18:45)
 
-### THE SAFEGUARDS, RECAPPED (14:30 – 15:30)
+### THE SAFEGUARDS, RECAPPED (15:15 – 16:15)
 
 **[CALLOUT: Three shields appearing — "Officer-only completion", "No
 self-approval", "No accidental resurrection"]**
@@ -241,7 +261,7 @@ self-approval", "No accidental resurrection"]**
 > silently flipped back to 'completed' if some late credit pushes them to a
 > hundred percent."
 
-### VOIDING A RECORD (15:30 – 16:30)
+### VOIDING A RECORD (16:15 – 17:15)
 
 **[SCREEN: A member's training history → the "Void" action on a record entered
 in error.]**
@@ -252,7 +272,7 @@ in error.]**
 > right back off. Because compliance only counts completed records, a voided one
 > stops counting immediately. You don't touch anyone's progress by hand."
 
-### REVERSING AN APPROVAL (16:30 – 17:30)
+### REVERSING AN APPROVAL (17:15 – 18:15)
 
 **[SCREEN: An already-approved submission → the "Reverse Approval" action.]**
 
@@ -262,7 +282,7 @@ in error.]**
 > review** so you can re-decide. Reject it, or re-approve it with corrected hours.
 > Either way, the requirement math fixes itself."
 
-### WHY THIS MATTERS (17:30 – 18:00)
+### WHY THIS MATTERS (18:15 – 18:45)
 
 **[CALLOUT: "Every fix is one click and fully audited"]**
 
@@ -274,9 +294,9 @@ in error.]**
 
 ---
 
-## CHAPTER 7: Staying Ahead of Trouble — Alerts (18:00 – 20:00)
+## CHAPTER 7: Staying Ahead of Trouble — Alerts (18:45 – 20:45)
 
-### FALLING-BEHIND ALERTS (18:00 – 19:00)
+### FALLING-BEHIND ALERTS (18:45 – 19:45)
 
 **[SCREEN: A notification: "Recruit Jane Doe is falling behind in Recruit School
 — 20% complete, deadline in 5 days".]**
@@ -288,7 +308,7 @@ in error.]**
 
 **[CALLOUT: "Alerts go to the member AND their officers"]**
 
-### SMART, NOT NOISY (19:00 – 20:00)
+### SMART, NOT NOISY (19:45 – 20:45)
 
 > "And it's tuned to not become noise. A member who stays behind isn't re-alerted
 > every single week — there's a cooldown. Pace is measured from their current
@@ -300,9 +320,9 @@ in error.]**
 
 ---
 
-## CHAPTER 8: Your Pipeline Routine & Wrap-Up (20:00 – 22:00)
+## CHAPTER 8: Your Pipeline Routine & Wrap-Up (20:45 – 22:45)
 
-### THE WEEKLY RHYTHM (20:00 – 21:15)
+### THE WEEKLY RHYTHM (20:45 – 22:00)
 
 **[CALLOUT: Routine steps appearing one at a time]**
 
@@ -322,7 +342,7 @@ in error.]**
 > "**Each cycle:** Let the automatic recert reset do its job, and spot-check that
 > members starting a new cycle look right."
 
-### WRAP-UP (21:15 – 22:00)
+### WRAP-UP (22:00 – 22:45)
 
 > "A pipeline turns a messy, multi-month process into something you can see at a
 > glance and correct in a click. Set it up once, let the feeds do the tracking,
@@ -341,9 +361,10 @@ in error.]**
 | Clip | Timecode | Standalone Title |
 |------|----------|-----------------|
 | What a Pipeline Is | 0:00–2:30 | "Training Pipelines Explained in 3 Minutes" |
-| Enrolling Members | 2:30–5:30 | "Enrolling Members in a Training Pipeline" |
-| The Six Progress Feeds | 5:30–9:30 | "How Pipeline Progress Updates Automatically" |
-| Phases & Advancement | 9:30–12:00 | "Phases, Auto-Advance, and Officer Gates" |
-| Recertification Cycles | 12:00–14:30 | "Setting Up Automatic Recert Cycles" |
-| Fixing Mistakes | 15:30–17:30 | "Void a Record & Reverse an Approval" |
-| Falling-Behind Alerts | 18:00–20:00 | "Automatic Alerts for Members Behind Schedule" |
+| Enrolling Members | 2:30–6:15 | "Enrolling Members in a Training Pipeline" |
+| Enrolling via a Cohort | 5:30–6:15 | "Enroll a Whole Recruit Class by Scheduling It" |
+| The Six Progress Feeds | 6:15–10:15 | "How Pipeline Progress Updates Automatically" |
+| Phases & Advancement | 10:15–12:45 | "Phases, Auto-Advance, and Officer Gates" |
+| Recertification Cycles | 12:45–15:15 | "Setting Up Automatic Recert Cycles" |
+| Fixing Mistakes | 16:15–18:15 | "Void a Record & Reverse an Approval" |
+| Falling-Behind Alerts | 18:45–20:45 | "Automatic Alerts for Members Behind Schedule" |
