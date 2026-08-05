@@ -6,7 +6,10 @@ they're told to pay — no database needed, since the inputs are already-loaded
 model objects and the tallies the service computed from them.
 """
 
+import asyncio
 from decimal import Decimal
+
+from sqlalchemy.dialects import mysql
 
 from app.models.storefront import (
     StoreOrder,
@@ -232,3 +235,37 @@ class TestPaymentInstructions:
         )
         assert payload is not None
         assert payload["payment_url"] is None
+
+
+class TestOrderLocking:
+    """The lock is what makes the availability check safe under concurrency."""
+
+    def _compiled_lock_sql(self, product_ids):
+        captured = {}
+
+        class _FakeSession:
+            async def execute(self, statement):
+                captured["sql"] = str(statement.compile(dialect=mysql.dialect()))
+                return None
+
+        service = StorefrontService(_FakeSession())
+        asyncio.run(service._lock_products(product_ids, "org1"))
+        return captured.get("sql", "")
+
+    def test_takes_a_row_lock(self):
+        sql = self._compiled_lock_sql(["p2", "p1"])
+        assert "FOR UPDATE" in sql
+
+    def test_locks_in_a_stable_order(self):
+        # Two carts holding the same products in opposite orders must take the
+        # locks in the same sequence or they can deadlock against each other.
+        sql = self._compiled_lock_sql(["p2", "p1"])
+        assert "ORDER BY store_products.id" in sql
+
+    def test_scopes_the_lock_to_the_organization(self):
+        sql = self._compiled_lock_sql(["p1"])
+        assert "organization_id" in sql
+
+    def test_no_query_without_ids(self):
+        assert self._compiled_lock_sql([]) == ""
+        assert self._compiled_lock_sql([None]) == ""

@@ -15,7 +15,7 @@ Covers:
 """
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 from sqlalchemy import text
@@ -760,7 +760,12 @@ async def setup_shift_with_crew(db_session: AsyncSession):
             "id": shift_id,
             "org": org_id,
             "sd": str(today),
-            "st": f"{today}T08:00:00+00:00",
+            # Bind a datetime object, not a hand-built ISO string: an offset
+            # suffix ("+00:00") in a DATETIME literal is a MySQL 8.0.19+
+            # extension that MariaDB rejects with error 1292, and the project
+            # ships MariaDB for ARM (docker-compose.arm.yml). The driver
+            # renders a datetime to the plain literal both engines accept.
+            "st": datetime.combine(today, time(8, 0), tzinfo=timezone.utc),
             "off": officer_id,
         },
     )

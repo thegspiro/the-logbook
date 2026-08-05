@@ -7,11 +7,16 @@
 import { createApiClient } from '../../../utils/createApiClient';
 import type {
   StoreDashboard,
+  StoreNotificationPreview,
+  StoreNotificationTest,
   StoreOrder,
   StoreOrderListResponse,
   StoreOrderWindow,
   StoreOrderWindowInput,
+  StorePaymentEvent,
+  StorePaymentEventList,
   StorePermissions,
+  StoreVendorOrderResult,
   StoreProduct,
   StoreProductInput,
   StoreSettings,
@@ -26,6 +31,7 @@ export interface OrderItemInput {
   productId: string;
   variantId?: string | undefined;
   quantity: number;
+  personalizationText?: string | undefined;
 }
 
 export interface PlaceOrderInput {
@@ -103,6 +109,21 @@ export const storefrontService = {
     return response.data;
   },
 
+  async previewNotification(notice: string): Promise<StoreNotificationPreview> {
+    const response = await api.get<StoreNotificationPreview>(
+      `/store/settings/notifications/${notice}/preview`,
+    );
+    return response.data;
+  },
+
+  /** Sends the notice to the signed-in user's own address; no other recipient. */
+  async sendNotificationTest(notice: string): Promise<StoreNotificationTest> {
+    const response = await api.post<StoreNotificationTest>(
+      `/store/settings/notifications/${notice}/test`,
+    );
+    return response.data;
+  },
+
   // --- Catalog ---
 
   async getProducts(params?: {
@@ -132,6 +153,19 @@ export const storefrontService = {
 
   async archiveProduct(productId: string): Promise<void> {
     await api.delete(`/store/products/${productId}`);
+  },
+
+  async uploadProductImage(productId: string, file: File): Promise<StoreProduct> {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await api.post<StoreProduct>(`/store/products/${productId}/image`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async deleteProductImage(productId: string): Promise<void> {
+    await api.delete(`/store/products/${productId}/image`);
   },
 
   // --- Order windows ---
@@ -190,6 +224,21 @@ export const storefrontService = {
     await api.delete(`/store/windows/${windowId}`);
   },
 
+  async recordVendorOrder(
+    windowId: string,
+    payload: {
+      vendorName?: string | undefined;
+      vendorReference?: string | undefined;
+      expectedDeliveryDate?: string | undefined;
+      advanceOrders: boolean;
+      notifyMembers: boolean;
+      message?: string | undefined;
+    }
+  ): Promise<StoreVendorOrderResult> {
+    const response = await api.post<StoreVendorOrderResult>(`/store/windows/${windowId}/vendor-order`, payload);
+    return response.data;
+  },
+
   async getWindowSummary(windowId: string): Promise<StoreWindowSummary> {
     const response = await api.get<StoreWindowSummary>(`/store/windows/${windowId}/summary`);
     return response.data;
@@ -206,6 +255,7 @@ export const storefrontService = {
     windowId?: string | undefined;
     status?: string | undefined;
     paymentStatus?: string | undefined;
+    paymentMethod?: string | undefined;
     search?: string | undefined;
     page?: number;
     pageSize?: number;
@@ -215,6 +265,7 @@ export const storefrontService = {
         window_id: params?.windowId,
         status: params?.status,
         payment_status: params?.paymentStatus,
+        payment_method: params?.paymentMethod,
         search: params?.search,
         page: params?.page ?? 1,
         page_size: params?.pageSize ?? 25,
@@ -251,6 +302,36 @@ export const storefrontService = {
     }
   ): Promise<StoreOrder> {
     const response = await api.post<StoreOrder>(`/store/orders/${orderId}/payments`, payload);
+    return response.data;
+  },
+
+  async markOrderPaid(
+    orderId: string,
+    payload: {
+      paymentMethod?: string | undefined;
+      reference?: string | undefined;
+      notifyMember: boolean;
+    }
+  ): Promise<StoreOrder> {
+    const response = await api.post<StoreOrder>(`/store/orders/${orderId}/mark-paid`, payload);
+    return response.data;
+  },
+
+  async waiveOrderPayment(
+    orderId: string,
+    payload: { reason?: string | undefined; notifyMember: boolean }
+  ): Promise<StoreOrder> {
+    const response = await api.post<StoreOrder>(`/store/orders/${orderId}/waive`, payload);
+    return response.data;
+  },
+
+  async bulkMarkPaid(payload: {
+    orderIds: string[];
+    paymentMethod?: string | undefined;
+    reference?: string | undefined;
+    notifyMembers: boolean;
+  }): Promise<{ updated: number; skipped: number }> {
+    const response = await api.post<{ updated: number; skipped: number }>('/store/orders/bulk-payment', payload);
     return response.data;
   },
 
@@ -298,6 +379,32 @@ export const storefrontService = {
     notifyMembers: boolean;
   }): Promise<{ updated: number; skipped: number }> {
     const response = await api.post<{ updated: number; skipped: number }>('/store/orders/bulk-status', payload);
+    return response.data;
+  },
+
+  // ---- External payment reconciliation ----
+
+  async listPaymentEvents(params?: {
+    status?: string | undefined;
+    unresolvedOnly?: boolean | undefined;
+  }): Promise<StorePaymentEventList> {
+    const response = await api.get<StorePaymentEventList>('/store/payments', {
+      params: { status: params?.status, unresolved_only: params?.unresolvedOnly },
+    });
+    return response.data;
+  },
+
+  async applyPaymentEvent(eventId: string, orderId?: string): Promise<StorePaymentEvent> {
+    const response = await api.post<StorePaymentEvent>(`/store/payments/${eventId}/apply`, {
+      orderId,
+    });
+    return response.data;
+  },
+
+  async ignorePaymentEvent(eventId: string, reason?: string): Promise<StorePaymentEvent> {
+    const response = await api.post<StorePaymentEvent>(`/store/payments/${eventId}/ignore`, {
+      reason,
+    });
     return response.data;
   },
 

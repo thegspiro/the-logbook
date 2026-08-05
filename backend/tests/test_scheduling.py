@@ -373,11 +373,13 @@ class TestShiftCRUD:
         assert token1b == token1
 
         token2 = await svc.rotate_calendar_token(uuid.UUID(user_id), uuid.UUID(org_id))
-        assert token2 and token2 != token1
+        assert token2
+        assert token2 != token1
 
         # The new token resolves to the owning member; the old one no longer does.
         owner = await svc.get_user_by_calendar_token(token2)
-        assert owner is not None and str(owner.id) == user_id
+        assert owner is not None
+        assert str(owner.id) == user_id
         assert await svc.get_user_by_calendar_token(token1) is None
 
     @pytest.mark.asyncio

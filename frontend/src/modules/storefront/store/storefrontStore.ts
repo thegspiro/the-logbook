@@ -24,9 +24,19 @@ interface StorefrontState {
 
   loadStorefront: (windowId?: string) => Promise<void>;
   loadMyOrders: () => Promise<void>;
-  addToCart: (offer: StorefrontProductOffer, variantId: string | undefined, quantity: number) => void;
-  updateCartQuantity: (productId: string, variantId: string | undefined, quantity: number) => void;
-  removeFromCart: (productId: string, variantId: string | undefined) => void;
+  addToCart: (
+    offer: StorefrontProductOffer,
+    variantId: string | undefined,
+    quantity: number,
+    personalizationText?: string
+  ) => void;
+  updateCartQuantity: (
+    productId: string,
+    variantId: string | undefined,
+    quantity: number,
+    personalizationText?: string
+  ) => void;
+  removeFromCart: (productId: string, variantId: string | undefined, personalizationText?: string) => void;
   clearCart: () => void;
   placeOrder: (payload: {
     paymentMethod?: string | undefined;
@@ -37,8 +47,13 @@ interface StorefrontState {
   reset: () => void;
 }
 
-const sameLine = (line: CartLine, productId: string, variantId: string | undefined) =>
-  line.productId === productId && (line.variantId ?? '') === (variantId ?? '');
+/** Two cart lines are the same line only if product, variant AND
+ *  personalization all match — a shirt reading "SMITH" is not the same
+ *  physical good as one reading "JONES". */
+const sameLine = (line: CartLine, productId: string, variantId: string | undefined, personalizationText?: string) =>
+  line.productId === productId &&
+  (line.variantId ?? '') === (variantId ?? '') &&
+  (line.personalizationText ?? '') === (personalizationText ?? '');
 
 export const useStorefrontStore = create<StorefrontState>((set, get) => ({
   storefront: null,
@@ -74,16 +89,20 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
     }
   },
 
-  addToCart: (offer, variantId, quantity) => {
+  addToCart: (offer, variantId, quantity, personalizationText) => {
     if (quantity <= 0) return;
     const variant = variantId ? offer.variants.find((v) => v.id === variantId) : undefined;
-    const unitPrice = Number(variant ? variant.price : offer.price);
+    const text = personalizationText?.trim() || undefined;
+    const basePrice = Number(variant ? variant.price : offer.price);
+    // Personalizing costs the department extra per unit, so it is priced per
+    // line. The server recomputes this at submit; this is only the preview.
+    const unitPrice = text ? basePrice + Number(offer.personalizationPrice ?? 0) : basePrice;
 
-    const existing = get().cart.find((line) => sameLine(line, offer.id, variantId));
+    const existing = get().cart.find((line) => sameLine(line, offer.id, variantId, text));
     if (existing) {
       set({
         cart: get().cart.map((line) =>
-          sameLine(line, offer.id, variantId) ? { ...line, quantity: line.quantity + quantity } : line
+          sameLine(line, offer.id, variantId, text) ? { ...line, quantity: line.quantity + quantity } : line
         ),
       });
       return;
@@ -94,6 +113,7 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
       variantId,
       productName: offer.name,
       variantLabel: variant?.label,
+      personalizationText: text,
       unitPrice,
       quantity,
       isTaxable: offer.isTaxable,
@@ -101,19 +121,21 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
     set({ cart: [...get().cart, line] });
   },
 
-  updateCartQuantity: (productId, variantId, quantity) => {
+  updateCartQuantity: (productId, variantId, quantity, personalizationText) => {
     if (quantity <= 0) {
-      get().removeFromCart(productId, variantId);
+      get().removeFromCart(productId, variantId, personalizationText);
       return;
     }
     set({
-      cart: get().cart.map((line) => (sameLine(line, productId, variantId) ? { ...line, quantity } : line)),
+      cart: get().cart.map((line) =>
+        sameLine(line, productId, variantId, personalizationText) ? { ...line, quantity } : line
+      ),
     });
   },
 
-  removeFromCart: (productId, variantId) => {
+  removeFromCart: (productId, variantId, personalizationText) => {
     set({
-      cart: get().cart.filter((line) => !sameLine(line, productId, variantId)),
+      cart: get().cart.filter((line) => !sameLine(line, productId, variantId, personalizationText)),
     });
   },
 
@@ -132,6 +154,7 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
           productId: line.productId,
           variantId: line.variantId,
           quantity: line.quantity,
+          personalizationText: line.personalizationText,
         })),
         paymentMethod: payload.paymentMethod,
         fulfillmentMethod: payload.fulfillmentMethod,

@@ -6,11 +6,19 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Eye, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { storefrontService } from '../services/api';
-import { PAYMENT_METHOD_LABELS, StorePaymentMethod, type StoreSettings, type StoreSettingsUpdate } from '../types';
+import { NotificationPreviewModal } from './NotificationPreviewModal';
+import {
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_POLICY_OPTIONS,
+  StorePaymentMethod,
+  type StorePaymentPolicy,
+  type StoreSettings,
+  type StoreSettingsUpdate,
+} from '../types';
 
 interface StoreSettingsTabProps {
   onChanged: () => void;
@@ -22,9 +30,13 @@ interface FormState {
   tagline: string;
   description: string;
   acceptedPaymentMethods: string[];
+  paymentPolicy: string;
   venmoHandle: string;
   paypalMeUrl: string;
   paypalEmail: string;
+  cashAppCashtag: string;
+  zelleHandle: string;
+  zelleInstructions: string;
   checkPayableTo: string;
   checkMailingAddress: string;
   cashInstructions: string;
@@ -41,6 +53,11 @@ interface FormState {
   sendOrderConfirmation: boolean;
   sendStatusUpdates: boolean;
   sendPaymentReminders: boolean;
+  sendPaymentReceipts: boolean;
+  sendWindowOpened: boolean;
+  sendWindowClosingReminder: boolean;
+  sendWindowClosed: boolean;
+  sendVendorOrderUpdates: boolean;
   paymentReminderDays: string;
   windowReminderHours: string;
   termsText: string;
@@ -53,9 +70,13 @@ const toForm = (settings: StoreSettings): FormState => ({
   tagline: settings.tagline ?? '',
   description: settings.description ?? '',
   acceptedPaymentMethods: settings.acceptedPaymentMethods,
+  paymentPolicy: settings.paymentPolicy ?? 'none',
   venmoHandle: settings.venmoHandle ?? '',
   paypalMeUrl: settings.paypalMeUrl ?? '',
   paypalEmail: settings.paypalEmail ?? '',
+  cashAppCashtag: settings.cashAppCashtag ?? '',
+  zelleHandle: settings.zelleHandle ?? '',
+  zelleInstructions: settings.zelleInstructions ?? '',
   checkPayableTo: settings.checkPayableTo ?? '',
   checkMailingAddress: settings.checkMailingAddress ?? '',
   cashInstructions: settings.cashInstructions ?? '',
@@ -74,16 +95,115 @@ const toForm = (settings: StoreSettings): FormState => ({
   sendOrderConfirmation: settings.sendOrderConfirmation,
   sendStatusUpdates: settings.sendStatusUpdates,
   sendPaymentReminders: settings.sendPaymentReminders,
+  sendPaymentReceipts: settings.sendPaymentReceipts,
+  sendWindowOpened: settings.sendWindowOpened,
+  sendWindowClosingReminder: settings.sendWindowClosingReminder,
+  sendWindowClosed: settings.sendWindowClosed,
+  sendVendorOrderUpdates: settings.sendVendorOrderUpdates,
   paymentReminderDays: String(settings.paymentReminderDays),
   windowReminderHours: String(settings.windowReminderHours),
   termsText: settings.termsText ?? '',
   receiptFooter: settings.receiptFooter ?? '',
 });
 
+/** The FormState keys that are notification switches. */
+type NoticeKey =
+  | 'sendOrderConfirmation'
+  | 'sendStatusUpdates'
+  | 'sendPaymentReceipts'
+  | 'sendPaymentReminders'
+  | 'notifyAdminsOnOrder'
+  | 'sendWindowOpened'
+  | 'sendWindowClosingReminder'
+  | 'sendWindowClosed'
+  | 'sendVendorOrderUpdates';
+
+interface NoticeGroup {
+  title: string;
+  /** `notice` is the backend preview key for this switch. */
+  notices: { key: NoticeKey; notice: string; label: string; detail: string }[];
+}
+
+/**
+ * Each switch names the notice it controls and says who receives it, because
+ * "status updates" on its own does not tell a quartermaster whether unticking
+ * it also stops the cancellation email. (It does.)
+ */
+const NOTICE_GROUPS: NoticeGroup[] = [
+  {
+    title: 'Order notices',
+    notices: [
+      {
+        key: 'sendOrderConfirmation',
+        notice: 'order_confirmation',
+        label: 'Order confirmation',
+        detail: 'To the member the moment they order — their receipt and how to pay.',
+      },
+      {
+        key: 'sendStatusUpdates',
+        notice: 'status_change',
+        label: 'Status changes',
+        detail:
+          'To the member when their order becomes ordered, ready for pickup, picked up, or cancelled.',
+      },
+      {
+        key: 'sendPaymentReceipts',
+        notice: 'payment_receipt',
+        label: 'Payment receipts',
+        detail: 'To the member when you record a payment, waive one, or record a refund.',
+      },
+      {
+        key: 'sendPaymentReminders',
+        notice: 'payment_reminder',
+        label: 'Payment reminders',
+        detail: 'To members still carrying a balance, on the schedule below.',
+      },
+      {
+        key: 'notifyAdminsOnOrder',
+        notice: 'admin_new_order',
+        label: 'New order alert',
+        detail: 'To store managers and the extra addresses below, each time an order lands.',
+      },
+    ],
+  },
+  {
+    title: 'Order window notices',
+    notices: [
+      {
+        key: 'sendWindowOpened',
+        notice: 'window_opened',
+        label: 'Ordering is open',
+        detail:
+          'To every active member when a window opens. An individual window can still opt out of its own announcement.',
+      },
+      {
+        key: 'sendWindowClosingReminder',
+        notice: 'window_closing',
+        label: 'Last call',
+        detail: 'To every active member before a window closes, on the schedule below.',
+      },
+      {
+        key: 'sendWindowClosed',
+        notice: 'window_closed',
+        label: 'Ordering has closed',
+        detail: 'To everyone who ordered in that window.',
+      },
+      {
+        key: 'sendVendorOrderUpdates',
+        notice: 'vendor_order_placed',
+        label: 'Order placed with the vendor',
+        detail:
+          'To everyone who ordered, when you record the vendor order — the update members chase.',
+      },
+    ],
+  },
+];
+
 export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged }) => {
   const [form, setForm] = useState<FormState | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [previewNotice, setPreviewNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,9 +243,13 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
       tagline: form.tagline.trim() || undefined,
       description: form.description.trim() || undefined,
       acceptedPaymentMethods: form.acceptedPaymentMethods,
+      paymentPolicy: form.paymentPolicy as StorePaymentPolicy,
       venmoHandle: form.venmoHandle.trim() || undefined,
       paypalMeUrl: form.paypalMeUrl.trim() || undefined,
       paypalEmail: form.paypalEmail.trim() || undefined,
+      cashAppCashtag: form.cashAppCashtag.trim() || undefined,
+      zelleHandle: form.zelleHandle.trim() || undefined,
+      zelleInstructions: form.zelleInstructions.trim() || undefined,
       checkPayableTo: form.checkPayableTo.trim() || undefined,
       checkMailingAddress: form.checkMailingAddress.trim() || undefined,
       cashInstructions: form.cashInstructions.trim() || undefined,
@@ -145,6 +269,11 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
       sendOrderConfirmation: form.sendOrderConfirmation,
       sendStatusUpdates: form.sendStatusUpdates,
       sendPaymentReminders: form.sendPaymentReminders,
+      sendPaymentReceipts: form.sendPaymentReceipts,
+      sendWindowOpened: form.sendWindowOpened,
+      sendWindowClosingReminder: form.sendWindowClosingReminder,
+      sendWindowClosed: form.sendWindowClosed,
+      sendVendorOrderUpdates: form.sendVendorOrderUpdates,
       paymentReminderDays: Number(form.paymentReminderDays || 3),
       windowReminderHours: Number(form.windowReminderHours || 48),
       termsText: form.termsText.trim() || undefined,
@@ -249,6 +378,54 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
           ))}
         </div>
 
+        {/* Rendered as a comparison rather than a dropdown: this is chosen
+            before a catalog exists, so the consequences of each rule have to
+            be readable without going to the manual. */}
+        <fieldset>
+          <legend className="form-label">What happens to an unpaid order?</legend>
+          <p className="text-theme-text-muted mb-2 text-xs">
+            Departments differ on this and all three are normal. You can change it whenever your practice changes — it
+            applies to what happens next, and never undoes a step already taken.
+          </p>
+          <div className="space-y-2">
+            {PAYMENT_POLICY_OPTIONS.map((option) => {
+              const selected = form.paymentPolicy === option.value;
+              return (
+                <label
+                  key={option.value}
+                  className={`flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors ${
+                    selected
+                      ? 'border-blue-600 bg-blue-500/5'
+                      : 'border-theme-surface-border hover:bg-theme-surface-hover'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment-policy"
+                    value={option.value}
+                    checked={selected}
+                    onChange={() => update('paymentPolicy', option.value)}
+                    className="mt-1"
+                  />
+                  <span className="min-w-0">
+                    <span className="text-theme-text-primary block text-sm font-medium">{option.label}</span>
+                    <span className="text-theme-text-secondary block text-xs">{option.summary}</span>
+                    <span className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                      <span className="text-theme-text-muted">
+                        Vendor order: <strong className="text-theme-text-secondary">{option.vendorOrder}</strong>
+                      </span>
+                      <span className="text-theme-text-muted">
+                        Pickup: <strong className="text-theme-text-secondary">{option.pickup}</strong>
+                      </span>
+                    </span>
+                    <span className="text-theme-text-muted mt-1 block text-xs italic">{option.suits}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
         {accepts(StorePaymentMethod.VENMO) && (
           <div>
             <label htmlFor="settings-venmo" className="form-label">
@@ -290,6 +467,60 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
                 value={form.paypalEmail}
                 onChange={(e) => update('paypalEmail', e.target.value)}
                 className="form-input"
+              />
+            </div>
+          </div>
+        )}
+
+        {accepts(StorePaymentMethod.CASH_APP) && (
+          <div>
+            <label htmlFor="settings-cashapp" className="form-label">
+              Cash App $cashtag
+            </label>
+            <input
+              id="settings-cashapp"
+              type="text"
+              value={form.cashAppCashtag}
+              onChange={(e) => update('cashAppCashtag', e.target.value)}
+              className="form-input"
+              placeholder="$FallsChurchFire"
+            />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Cash App has no note field, so members are shown the order number to type in themselves.
+            </p>
+          </div>
+        )}
+
+        {accepts(StorePaymentMethod.ZELLE) && (
+          <div className="form-grid-2">
+            <div>
+              <label htmlFor="settings-zelle" className="form-label">
+                Zelle email or phone
+              </label>
+              <input
+                id="settings-zelle"
+                type="text"
+                value={form.zelleHandle}
+                onChange={(e) => update('zelleHandle', e.target.value)}
+                className="form-input"
+                placeholder="treasurer@yourdept.org"
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Zelle runs inside each member&apos;s own banking app, so there is no link to open — they are shown this
+                handle to enter.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="settings-zelle-notes" className="form-label">
+                Zelle instructions
+              </label>
+              <textarea
+                id="settings-zelle-notes"
+                rows={2}
+                value={form.zelleInstructions}
+                onChange={(e) => update('zelleInstructions', e.target.value)}
+                className="form-input"
+                placeholder='Look for "Falls Church Fire Dept" when confirming the recipient.'
               />
             </div>
           </div>
@@ -453,45 +684,61 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
       </section>
 
       <section className="card space-y-4 p-4">
-        <h2 className="text-theme-text-primary text-sm font-semibold">Notifications</h2>
-        <div className="flex flex-wrap gap-4">
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox"
-              checked={form.sendOrderConfirmation}
-              onChange={(e) => update('sendOrderConfirmation', e.target.checked)}
-            />
-            Order confirmations
-          </label>
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox"
-              checked={form.sendStatusUpdates}
-              onChange={(e) => update('sendStatusUpdates', e.target.checked)}
-            />
-            Status updates
-          </label>
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox"
-              checked={form.sendPaymentReminders}
-              onChange={(e) => update('sendPaymentReminders', e.target.checked)}
-            />
-            Payment reminders
-          </label>
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox"
-              checked={form.notifyAdminsOnOrder}
-              onChange={(e) => update('notifyAdminsOnOrder', e.target.checked)}
-            />
-            Notify admins on new orders
-          </label>
+        <div>
+          <h2 className="text-theme-text-primary text-sm font-semibold">Notifications</h2>
+          <p className="text-theme-text-secondary mt-1 text-xs">
+            Every email the store can send is listed here. Unticking one stops it for the
+            whole department; the &ldquo;email members&rdquo; box on an individual action can
+            still skip a single send.
+          </p>
         </div>
+
+        <div className="space-y-4">
+          {NOTICE_GROUPS.map((group) => (
+            <fieldset key={group.title} className="space-y-2">
+              <legend className="text-theme-text-primary text-xs font-semibold tracking-wide uppercase">
+                {group.title}
+              </legend>
+              {group.notices.map((notice) => (
+                <div
+                  key={notice.key}
+                  className="border-theme-surface-border flex items-start gap-3 rounded-md border p-3"
+                >
+                  <label
+                    htmlFor={`settings-notice-${notice.key}`}
+                    className="flex flex-1 cursor-pointer items-start gap-3"
+                  >
+                    <input
+                      id={`settings-notice-${notice.key}`}
+                      type="checkbox"
+                      className="form-checkbox mt-0.5"
+                      checked={form[notice.key]}
+                      onChange={(e) => update(notice.key, e.target.checked)}
+                    />
+                    <span>
+                      <span className="text-theme-text-primary block text-sm font-medium">
+                        {notice.label}
+                      </span>
+                      <span className="text-theme-text-secondary block text-xs">
+                        {notice.detail}
+                      </span>
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewNotice(notice.notice)}
+                    className="text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target flex shrink-0 items-center gap-1 text-xs"
+                  >
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                    Preview
+                    <span className="sr-only"> the {notice.label} email</span>
+                  </button>
+                </div>
+              ))}
+            </fieldset>
+          ))}
+        </div>
+
         <div className="form-grid-2">
           <div>
             <label htmlFor="settings-reminder-days" className="form-label">
@@ -576,6 +823,13 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
           {saving ? 'Saving…' : 'Save settings'}
         </button>
       </div>
+
+      {previewNotice && (
+        <NotificationPreviewModal
+          notice={previewNotice}
+          onClose={() => setPreviewNotice(null)}
+        />
+      )}
     </div>
   );
 };

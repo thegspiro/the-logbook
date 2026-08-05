@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings as app_settings
 from app.models.email_template import EmailTemplate, EmailTemplateType
+from app.services import email_templates_storefront as _storefront_templates
 
 # Default CSS styles shared across all email templates.
 # Colour contrast ratios meet WCAG 2.1 AA (4.5:1 for normal text):
@@ -357,6 +358,11 @@ def _sample(*dicts: Dict[str, str]) -> Dict[str, str]:
         merged.update(d)
     return merged
 
+
+# The storefront's notices keep their variable catalogue, sample data and
+# default bodies in their own module — ten more entries inline here would
+# bury the rest.
+TEMPLATE_VARIABLES.update(_storefront_templates.TEMPLATE_VARIABLES)
 
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     "welcome": _sample(
@@ -738,6 +744,12 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         }
     ),
 }
+
+# Storefront samples merge in with organization fields, the same as every
+# entry above — the preview would otherwise show a bare {{organization_name}}.
+SAMPLE_CONTEXT.update(
+    {key: _sample(value) for key, value in _storefront_templates.SAMPLE_CONTEXT.items()}
+)
 
 # Default welcome email HTML body
 DEFAULT_WELCOME_HTML = """<div class="container">
@@ -2414,7 +2426,7 @@ class EmailTemplateService:
         "ballot_recipients_html",
         "skipped_voters_html",
         "custom_message_html",
-    }
+    } | _storefront_templates.RAW_HTML_VARIABLES
 
     def _replace_variables(self, text: str, context: Dict[str, Any]) -> str:
         """Replace {{variable_name}} placeholders with context values.
@@ -2689,6 +2701,10 @@ class EmailTemplateService:
                 "BCC'd automatically."
             ),
         },
+        # The storefront's ten live in their own module; see
+        # email_templates_storefront.py for why they need raw-HTML
+        # variables where other templates need none.
+        *_storefront_templates.DEFAULT_TEMPLATE_DEFS,
     ]
 
     async def ensure_default_templates(

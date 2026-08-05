@@ -15,7 +15,9 @@ Permissions
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends
+from fastapi import File as FastAPIFile
+from fastapi import HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,35 +37,78 @@ from app.models.storefront import (
 )
 from app.models.user import User
 from app.schemas.storefront import (
+    StoreBulkPayment,
     StoreBulkStatusResult,
     StoreBulkStatusUpdate,
     StoreDashboardResponse,
     StorefrontResponse,
+    StoreNotificationPreviewResponse,
+    StoreNotificationTestResponse,
     StoreOrderAdminNotes,
     StoreOrderCancel,
     StoreOrderCreate,
     StoreOrderListResponse,
+    StoreOrderMarkPaid,
     StoreOrderMessage,
     StoreOrderPaymentRecord,
     StoreOrderPaymentReport,
     StoreOrderRefund,
     StoreOrderResponse,
     StoreOrderStatusUpdate,
+    StoreOrderWaive,
     StoreOrderWindowCreate,
     StoreOrderWindowResponse,
     StoreOrderWindowUpdate,
+    StorePaymentEventApply,
+    StorePaymentEventIgnore,
+    StorePaymentEventListResponse,
+    StorePaymentEventResponse,
     StoreProductCreate,
     StoreProductResponse,
     StoreProductUpdate,
     StoreSettingsResponse,
     StoreSettingsUpdate,
+    StoreVendorOrderRequest,
+    StoreVendorOrderResult,
     StoreWindowCloseRequest,
     StoreWindowOpenRequest,
     StoreWindowSummaryResponse,
 )
+from app.services.storefront_preview_service import (
+    PreviewNotAvailable,
+    StorefrontPreviewService,
+)
 from app.services.storefront_service import StorefrontService
+from app.utils.image_processing import optimize_image
 
 router = APIRouter()
+
+# Product photos are re-encoded before storage, so this bounds the *upload*,
+# not what ends up in the database.
+_MAX_IMAGE_BYTES = 5 * 1024 * 1024
+_ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp"}
+
+
+def _detect_image_mime(contents: bytes) -> str:
+    """Identify an image by magic bytes.
+
+    A client-supplied Content-Type is not evidence of anything; sniffing the
+    header is what stops a renamed executable from being stored and served
+    back to members.
+    """
+    try:
+        import magic
+
+        return magic.from_buffer(contents, mime=True)
+    except Exception:
+        # libmagic is optional in some deployments; fall back to signatures.
+        if contents[:8] == b"\x89PNG\r\n\x1a\n":
+            return "image/png"
+        if contents[:2] == b"\xff\xd8":
+            return "image/jpeg"
+        if contents[:4] == b"RIFF" and contents[8:12] == b"WEBP":
+            return "image/webp"
+        return "unknown"
 
 
 # ==========================================================================
@@ -194,8 +239,10 @@ def _window_summary(window: StoreOrderWindow) -> Dict[str, Any]:
     }
 
 
-def _product_payload(product: StoreProduct) -> Dict[str, Any]:
+def _product_payload(product: StoreProduct, has_image: bool = False) -> Dict[str, Any]:
     return {
+        "image_url": StorefrontService.resolve_image_url(product, has_image),
+        "has_image": has_image,
         **{
             field: getattr(product, field)
             for field in (
@@ -204,7 +251,6 @@ def _product_payload(product: StoreProduct) -> Dict[str, Any]:
                 "name",
                 "sku",
                 "description",
-                "image_url",
                 "category",
                 "inventory_item_id",
                 "price",
@@ -215,6 +261,11 @@ def _product_payload(product: StoreProduct) -> Dict[str, Any]:
                 "track_stock",
                 "stock_quantity",
                 "requires_variant",
+                "personalization_enabled",
+                "personalization_required",
+                "personalization_label",
+                "personalization_max_length",
+                "personalization_price",
                 "sort_order",
                 "internal_notes",
                 "created_at",
@@ -444,6 +495,72 @@ async def update_store_settings(
     return settings
 
 
+@router.get(
+    "/settings/notifications/{notice}/preview",
+    response_model=StoreNotificationPreviewResponse,
+)
+async def preview_store_notification(
+    notice: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Render one of the store's notices against a sample order or window.
+
+    The sample data is invented and never written; the payment handles,
+    instructions, receipt footer and branding are the department's real saved
+    settings, since checking those is the point of looking. Save the settings
+    first — the preview reads what is stored, not what is typed on screen.
+    """
+    try:
+        return await StorefrontPreviewService(db).render(
+            notice, str(current_user.organization_id)
+        )
+    except PreviewNotAvailable as exc:
+        raise HTTPException(status_code=404, detail=safe_error_detail(exc))
+
+
+@router.post(
+    "/settings/notifications/{notice}/test",
+    response_model=StoreNotificationTestResponse,
+)
+async def send_store_notification_test(
+    notice: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Mail the previewed notice to your own address.
+
+    Delivery is only ever to the requesting user's own email — this is a way to
+    see a notice in a real inbox, not a way to mail the department. The subject
+    is prefixed ``[TEST]`` and the body carries a banner, because the sample
+    message announces an order number that does not exist.
+    """
+    if not current_user.email:
+        raise HTTPException(
+            status_code=400,
+            detail="Your account has no email address, so there is nowhere to send it",
+        )
+    try:
+        result = await StorefrontPreviewService(db).send_test(
+            notice, str(current_user.organization_id), current_user.email
+        )
+    except PreviewNotAvailable as exc:
+        raise HTTPException(status_code=404, detail=safe_error_detail(exc))
+    await log_audit_event(
+        db=db,
+        event_type="store_notification_test_sent",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "notice": notice,
+            "delivered": result["delivered"],
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return result
+
+
 # ==========================================================================
 # Catalog
 # ==========================================================================
@@ -465,7 +582,12 @@ async def list_products(
         search=search,
         include_archived=include_archived,
     )
-    return [_product_payload(product) for product in products]
+    with_images = await service.products_with_images(
+        str(current_user.organization_id), [product.id for product in products]
+    )
+    return [
+        _product_payload(product, product.id in with_images) for product in products
+    ]
 
 
 @router.post(
@@ -488,7 +610,14 @@ async def create_product(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))
-    return _product_payload(product)
+    return _product_payload(
+        product,
+        bool(
+            await service.products_with_images(
+                str(current_user.organization_id), [product.id]
+            )
+        ),
+    )
 
 
 @router.get("/products/{product_id}", response_model=StoreProductResponse)
@@ -502,7 +631,14 @@ async def get_product(
     product = await service.get_product(product_id, str(current_user.organization_id))
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return _product_payload(product)
+    return _product_payload(
+        product,
+        bool(
+            await service.products_with_images(
+                str(current_user.organization_id), [product.id]
+            )
+        ),
+    )
 
 
 @router.put("/products/{product_id}", response_model=StoreProductResponse)
@@ -522,7 +658,14 @@ async def update_product(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))
-    return _product_payload(product)
+    return _product_payload(
+        product,
+        bool(
+            await service.products_with_images(
+                str(current_user.organization_id), [product.id]
+            )
+        ),
+    )
 
 
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -537,6 +680,99 @@ async def archive_product(
         await service.archive_product(product_id, str(current_user.organization_id))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=safe_error_detail(exc))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ==========================================================================
+# Product photos
+# ==========================================================================
+
+
+@router.post("/products/{product_id}/image", response_model=StoreProductResponse)
+async def upload_product_image(
+    product_id: str,
+    file: UploadFile = FastAPIFile(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Attach a photo to a catalog item.
+
+    The upload is re-encoded to WebP, which strips EXIF (including any GPS
+    tag on a phone photo) and bounds the stored size — the bytes are served
+    back to every member browsing the store.
+    """
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty")
+    if len(contents) > _MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Images must be {_MAX_IMAGE_BYTES // (1024 * 1024)}MB or smaller",
+        )
+    if _detect_image_mime(contents) not in _ALLOWED_IMAGE_MIMES:
+        raise HTTPException(
+            status_code=400, detail="Invalid image type. Allowed: JPEG, PNG, WebP"
+        )
+
+    try:
+        optimized = optimize_image(
+            contents, max_size=(1200, 1200), quality=82, output_format="WEBP"
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+
+    service = StorefrontService(db)
+    try:
+        await service.set_product_image(
+            product_id,
+            str(current_user.organization_id),
+            optimized,
+            "image/webp",
+            str(current_user.id),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=safe_error_detail(exc))
+
+    product = await service.get_product(product_id, str(current_user.organization_id))
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return _product_payload(product, True)
+
+
+@router.get("/products/{product_id}/image")
+async def get_product_image(
+    product_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.view")),
+) -> Any:
+    """Serve a product photo.
+
+    Cached immutably: the URL carries a ``v=`` stamp from the product's
+    update time, so a replaced photo arrives under a different URL rather
+    than needing a revalidation round trip per image per page load.
+    """
+    service = StorefrontService(db)
+    image = await service.get_product_image(
+        product_id, str(current_user.organization_id)
+    )
+    if image is None:
+        raise HTTPException(status_code=404, detail="No image for this product")
+    return Response(
+        content=image.data,
+        media_type=image.content_type or "image/webp",
+        headers={"Cache-Control": "private, max-age=31536000, immutable"},
+    )
+
+
+@router.delete("/products/{product_id}/image", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_product_image(
+    product_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Response:
+    """Remove a product photo."""
+    service = StorefrontService(db)
+    await service.delete_product_image(product_id, str(current_user.organization_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -556,20 +792,20 @@ async def list_windows(
     windows = await service.list_windows(
         str(current_user.organization_id), status=status_filter
     )
-    payloads = []
-    for window in windows:
-        summary = await service.get_window_summary(
-            window.id, str(current_user.organization_id)
+    # One grouped query for every window's counters. Calling get_window_summary
+    # per window loaded every order of every window to render a few numbers.
+    rollups = await service.get_window_rollups(
+        str(current_user.organization_id), [window.id for window in windows]
+    )
+    return [
+        _window_payload(
+            window,
+            order_count=rollups[window.id]["order_count"],
+            total_sales=rollups[window.id]["gross_sales"],
+            outstanding=rollups[window.id]["outstanding"],
         )
-        payloads.append(
-            _window_payload(
-                window,
-                order_count=summary["order_count"],
-                total_sales=summary["gross_sales"],
-                outstanding=summary["outstanding"],
-            )
-        )
-    return payloads
+        for window in windows
+    ]
 
 
 @router.post(
@@ -759,6 +995,48 @@ async def delete_window(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post("/windows/{window_id}/vendor-order", response_model=StoreVendorOrderResult)
+async def record_vendor_order(
+    window_id: str,
+    payload: StoreVendorOrderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Log that the bulk order went to the vendor, and advance the orders."""
+    service = StorefrontService(db)
+    try:
+        result = await service.record_vendor_order(
+            window_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            vendor_name=payload.vendor_name,
+            vendor_reference=payload.vendor_reference,
+            expected_delivery_date=payload.expected_delivery_date,
+            advance_orders=payload.advance_orders,
+            notify_members=payload.notify_members,
+            message=payload.message,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+
+    await log_audit_event(
+        db=db,
+        event_type="store_vendor_order_recorded",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "window_id": window_id,
+            "vendor_name": payload.vendor_name,
+            "vendor_reference": payload.vendor_reference,
+            "orders_advanced": result["advanced"],
+            "orders_skipped": len(result["skipped"]),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return result
+
+
 @router.get("/windows/{window_id}/summary", response_model=StoreWindowSummaryResponse)
 async def get_window_summary(
     window_id: str,
@@ -805,6 +1083,7 @@ async def list_orders(
     window_id: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
     payment_status: Optional[str] = Query(None),
+    payment_method: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=200),
@@ -818,6 +1097,7 @@ async def list_orders(
         window_id=window_id,
         status=status_filter,
         payment_status=payment_status,
+        payment_method=payment_method,
         search=search,
         page=page,
         page_size=page_size,
@@ -940,6 +1220,118 @@ async def record_payment(
     )
     settings = await service.get_settings(str(current_user.organization_id))
     return _order_payload(order, service, settings, include_internal=True)
+
+
+@router.post("/orders/{order_id}/mark-paid", response_model=StoreOrderResponse)
+async def mark_order_paid(
+    order_id: str,
+    payload: StoreOrderMarkPaid,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Settle an order's whole remaining balance in one step.
+
+    The department collects out-of-band (Venmo, cash at drill), so this — not
+    a gateway callback — is how an order becomes paid.
+    """
+    service = StorefrontService(db)
+    try:
+        order = await service.mark_order_paid(
+            order_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            payment_method=payload.payment_method,
+            reference=payload.reference,
+            notify_member=payload.notify_member,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    await log_audit_event(
+        db=db,
+        event_type="store_order_marked_paid",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "order_id": str(order_id),
+            "order_number": order.order_number,
+            "total": str(order.total),
+            "reference": payload.reference,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    settings = await service.get_settings(str(current_user.organization_id))
+    return _order_payload(order, service, settings, include_internal=True)
+
+
+@router.post("/orders/{order_id}/waive", response_model=StoreOrderResponse)
+async def waive_order_payment(
+    order_id: str,
+    payload: StoreOrderWaive,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Comp an order — the department is not collecting on it."""
+    service = StorefrontService(db)
+    try:
+        order = await service.waive_order_payment(
+            order_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            reason=payload.reason,
+            notify_member=payload.notify_member,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    await log_audit_event(
+        db=db,
+        event_type="store_order_payment_waived",
+        event_category="storefront",
+        severity="warning",
+        event_data={
+            "order_id": str(order_id),
+            "order_number": order.order_number,
+            "total": str(order.total),
+            "reason": payload.reason,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    settings = await service.get_settings(str(current_user.organization_id))
+    return _order_payload(order, service, settings, include_internal=True)
+
+
+@router.post("/orders/bulk-payment", response_model=StoreBulkStatusResult)
+async def bulk_mark_orders_paid(
+    payload: StoreBulkPayment,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Settle many orders at once — reconciling a payout statement."""
+    service = StorefrontService(db)
+    result = await service.bulk_mark_paid(
+        str(current_user.organization_id),
+        payload.order_ids,
+        str(current_user.id),
+        payment_method=payload.payment_method,
+        reference=payload.reference,
+        notify_members=payload.notify_members,
+    )
+    await log_audit_event(
+        db=db,
+        event_type="store_orders_bulk_marked_paid",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "requested": len(payload.order_ids),
+            "updated": result["updated"],
+            "skipped": result["skipped"],
+            "reference": payload.reference,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return result
 
 
 @router.post("/orders/{order_id}/refund", response_model=StoreOrderResponse)
@@ -1073,3 +1465,133 @@ async def get_store_permissions(
         "can_order": user_has_permission(current_user, "storefront.order"),
         "can_manage": user_has_permission(current_user, "storefront.manage"),
     }
+
+
+# ==========================================================================
+# External payment reconciliation
+# ==========================================================================
+
+
+def _payment_event_payload(event: Any) -> Dict[str, Any]:
+    """Shape one inbound payment, with enough of the order to act on it."""
+    order = getattr(event, "matched_order", None)
+    balance: Optional[Decimal] = None
+    if order is not None:
+        balance = max(
+            Decimal(order.total or 0) - Decimal(order.amount_paid or 0), Decimal("0")
+        )
+    return {
+        "id": event.id,
+        "provider": event.provider,
+        "external_id": event.external_id,
+        "amount": event.amount,
+        "currency": event.currency,
+        "payer_name": event.payer_name,
+        "payer_email": event.payer_email,
+        "reference": event.reference,
+        "status": event.status,
+        "note": event.note,
+        "matched_order_id": event.matched_order_id,
+        "matched_order_number": order.order_number if order else None,
+        "matched_order_member": order.customer_name if order else None,
+        "matched_order_balance": balance,
+        "received_at": event.received_at,
+        "resolved_at": event.resolved_at,
+    }
+
+
+@router.get("/payments", response_model=StorePaymentEventListResponse)
+async def list_payment_events(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    unresolved_only: bool = Query(False),
+    limit: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Inbound payments a connected provider reported, newest first."""
+    service = StorefrontService(db)
+    org_id = str(current_user.organization_id)
+    events = await service.list_payment_events(
+        org_id,
+        status=status_filter,
+        unresolved_only=unresolved_only,
+        limit=limit,
+    )
+    # Counted independently of the current filter so the review badge does not
+    # disappear the moment somebody filters the list to something else.
+    unresolved = await service.count_unresolved_payment_events(org_id)
+    return {
+        "items": [_payment_event_payload(event) for event in events],
+        "unresolved_count": unresolved,
+    }
+
+
+@router.post("/payments/{event_id}/apply", response_model=StorePaymentEventResponse)
+async def apply_payment_event(
+    event_id: str,
+    payload: StorePaymentEventApply,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Settle an order from a recorded payment."""
+    service = StorefrontService(db)
+    try:
+        event = await service.apply_payment_event(
+            event_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            order_id=payload.order_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+
+    await log_audit_event(
+        db=db,
+        event_type="store_payment_applied",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "payment_event_id": event_id,
+            "provider": event.provider,
+            "order_id": event.matched_order_id,
+            "amount": str(event.amount),
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    return _payment_event_payload(event)
+
+
+@router.post("/payments/{event_id}/ignore", response_model=StorePaymentEventResponse)
+async def ignore_payment_event(
+    event_id: str,
+    payload: StorePaymentEventIgnore,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Dismiss a payment that does not belong to any store order."""
+    service = StorefrontService(db)
+    try:
+        event = await service.ignore_payment_event(
+            event_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+
+    await log_audit_event(
+        db=db,
+        event_type="store_payment_ignored",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "payment_event_id": event_id,
+            "provider": event.provider,
+            "reason": payload.reason,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    return _payment_event_payload(event)

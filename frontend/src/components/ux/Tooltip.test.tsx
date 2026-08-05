@@ -18,7 +18,9 @@ describe('Tooltip', () => {
       </Tooltip>
     );
 
-    fireEvent.touchStart(screen.getByText('x').parentElement as HTMLElement);
+    // Fired on the child: the handlers live on Tooltip's wrapper and React
+    // delegates, which is exactly how a real tap reaches them.
+    fireEvent.touchStart(screen.getByText('x'));
     // Shown right away — the hover delay is bypassed for touch.
     expect(screen.getByRole('tooltip')).toHaveTextContent('Delete item');
 
@@ -36,7 +38,7 @@ describe('Tooltip', () => {
       </Tooltip>
     );
     const btn = screen.getByText('edit');
-    fireEvent.touchStart(btn.parentElement as HTMLElement);
+    fireEvent.touchStart(btn);
     fireEvent.click(btn);
     expect(onClick).toHaveBeenCalledTimes(1);
   });
@@ -47,8 +49,9 @@ describe('Tooltip', () => {
         <button>i</button>
       </Tooltip>
     );
-    const wrapper = screen.getByText('i').parentElement as HTMLElement;
-    fireEvent.mouseEnter(wrapper);
+    // mouseOver, not mouseEnter: React derives onMouseEnter from the native
+    // mouseover it delegates, so this is the event a real pointer produces.
+    fireEvent.mouseOver(screen.getByText('i'));
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     act(() => {
       vi.advanceTimersByTime(300);

@@ -76,13 +76,15 @@ class TestRequirementConfigWarning:
                 requirement_type=RequirementType.COURSES, required_courses=[]
             )
         )
-        assert msg is not None and "course" in msg.lower()
+        assert msg is not None
+        assert "course" in msg.lower()
 
     def test_hours_without_target_warns(self):
         msg = requirement_config_warning(
             SimpleNamespace(requirement_type=RequirementType.HOURS, required_hours=0)
         )
-        assert msg is not None and "hours" in msg.lower()
+        assert msg is not None
+        assert "hours" in msg.lower()
 
     def test_properly_configured_courses_has_no_warning(self):
         assert (

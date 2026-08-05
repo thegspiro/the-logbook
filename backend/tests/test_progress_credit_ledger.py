@@ -113,7 +113,8 @@ class TestApplyCredit:
             source_id="r-1",
             units=0.0,
         )
-        assert result is None and error is None
+        assert result is None
+        assert error is None
         svc.update_requirement_progress.assert_not_awaited()
 
     async def test_missing_progress_returns_error(self):
@@ -126,7 +127,8 @@ class TestApplyCredit:
             source_id="r-1",
             units=2.0,
         )
-        assert result is None and "not found" in error
+        assert result is None
+        assert "not found" in error
         svc.update_requirement_progress.assert_not_awaited()
 
     async def test_notes_and_in_progress_pass_through(self):

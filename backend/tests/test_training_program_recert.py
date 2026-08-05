@@ -223,7 +223,8 @@ class TestRunDueRecertResets:
 
         count, error = await svc.run_due_recert_resets(uuid4())
 
-        assert error is None and count == 2
+        assert error is None
+        assert count == 2
         assert e1.status == EnrollmentStatus.ACTIVE
         assert e2.progress_percentage == 0.0
         db.commit.assert_awaited_once()
@@ -248,7 +249,8 @@ class TestRunDueRecertResets:
 
         count, error = await svc.run_due_recert_resets(uuid4())
 
-        assert error is None and count == 0
+        assert error is None
+        assert count == 0
         assert withdrawn.status == EnrollmentStatus.WITHDRAWN
         db.commit.assert_not_awaited()
 
@@ -258,7 +260,8 @@ class TestRunDueRecertResets:
 
         count, error = await svc.run_due_recert_resets(uuid4())
 
-        assert error is None and count == 0
+        assert error is None
+        assert count == 0
         db.commit.assert_not_awaited()
 
     async def test_reset_now_matches_current_datetime(self):
@@ -267,7 +270,8 @@ class TestRunDueRecertResets:
         prog = _program()
         base = datetime.now(timezone.utc).date()
         nxt = TrainingProgramService._compute_next_recert_date(prog, base)
-        assert nxt is not None and nxt > base
+        assert nxt is not None
+        assert nxt > base
 
 
 class TestNotifyRecertReset:

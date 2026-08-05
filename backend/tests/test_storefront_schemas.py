@@ -160,3 +160,43 @@ class TestSettingsValidation:
             exclude_unset=True
         )
         assert payload == {"is_enabled": True}
+
+    def test_cashtag_is_normalized(self):
+        settings = StoreSettingsUpdate.model_validate({"cashAppCashtag": " $Dept "})
+        assert settings.cash_app_cashtag == "Dept"
+
+    def test_a_malformed_cashtag_is_rejected_not_dropped(self):
+        # Silently dropping it would make the Cash App button vanish with no
+        # explanation to the administrator who typed it.
+        with pytest.raises(ValidationError, match="cashtag"):
+            StoreSettingsUpdate.model_validate({"cashAppCashtag": "$1nope"})
+
+    def test_zelle_phone_is_normalized(self):
+        settings = StoreSettingsUpdate.model_validate({"zelleHandle": "703-555-1234"})
+        assert settings.zelle_handle == "(703) 555-1234"
+
+    def test_zelle_email_is_lowercased(self):
+        settings = StoreSettingsUpdate.model_validate(
+            {"zelleHandle": "Treasurer@Example.ORG"}
+        )
+        assert settings.zelle_handle == "treasurer@example.org"
+
+    def test_a_zelle_handle_that_is_neither_is_rejected(self):
+        with pytest.raises(ValidationError, match="email address"):
+            StoreSettingsUpdate.model_validate({"zelleHandle": "ask the chief"})
+
+    def test_blank_handles_stay_none(self):
+        settings = StoreSettingsUpdate.model_validate(
+            {"cashAppCashtag": "   ", "zelleHandle": ""}
+        )
+        assert settings.cash_app_cashtag is None
+        assert settings.zelle_handle is None
+
+    def test_the_new_methods_are_accepted(self):
+        settings = StoreSettingsUpdate.model_validate(
+            {"acceptedPaymentMethods": ["cash_app", "zelle"]}
+        )
+        assert [m.value for m in settings.accepted_payment_methods or []] == [
+            "cash_app",
+            "zelle",
+        ]

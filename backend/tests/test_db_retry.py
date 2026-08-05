@@ -90,8 +90,8 @@ class TestWithDbRetry:
         exc = _make_operational_error(2003, "Can't connect")
         fn = AsyncMock(side_effect=exc)
 
-        with pytest.raises(OperationalError):
-            with patch("app.utils.db_retry.asyncio.sleep", new_callable=AsyncMock):
+        with patch("app.utils.db_retry.asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(OperationalError):
                 await with_db_retry(fn, max_retries=2, base_delay=0.01)
 
         # 1 initial + 2 retries = 3 total attempts

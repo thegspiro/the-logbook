@@ -45,7 +45,8 @@ class TestSendIntegrationNotification:
         sender.assert_awaited_once()
         args, kwargs = sender.call_args
         assert args[0] == "https://hook.example/x"
-        assert kwargs["embeds"] and kwargs["content"]
+        assert kwargs["embeds"]
+        assert kwargs["content"]
 
     async def test_slack_shift_calls_sender_with_blocks(self, monkeypatch):
         sender = AsyncMock(return_value=True)

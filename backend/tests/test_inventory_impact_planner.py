@@ -309,7 +309,8 @@ class TestAnalyzeImpact:
             contact_visibility={},
         )
         m = result["members"][0]
-        assert m["email"] is None and m["phone"] is None
+        assert m["email"] is None
+        assert m["phone"] is None
 
     @pytest.mark.asyncio
     async def test_no_size_field_skips_breakdown(self, service, mock_db):
@@ -656,7 +657,7 @@ class TestCreateReorderFromPlan:
             _scalars_result(users),
             _scalars_result(prefs),
         ]
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="stock category before"):
             await service.create_reorder_from_plan(
                 organization_id=org_id,
                 filters={"size_field": "shirt"},
@@ -732,7 +733,7 @@ class TestBulkIssueFromPlan:
 
     @pytest.mark.asyncio
     async def test_requires_size_and_stock(self, service, mock_db):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="before bulk issuing"):
             await service.bulk_issue_from_plan(
                 organization_id=str(uuid4()),
                 filters={"size_field": "shirt"},  # missing stock_category_id
@@ -780,7 +781,7 @@ class TestRequestMemberSizes:
 
     @pytest.mark.asyncio
     async def test_requires_size_field(self, service, mock_db):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Select a size field"):
             await service.request_member_sizes(organization_id=str(uuid4()), filters={})
 
 

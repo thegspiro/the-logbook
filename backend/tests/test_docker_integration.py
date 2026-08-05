@@ -222,8 +222,10 @@ class TestBackendImageBuild:
             info = _docker_inspect(tag)
             config = info.get("Config", {})
             user = config.get("User", "")
-            assert (
-                user and user != "root" and user != "0"
+            assert user not in (
+                "",
+                "root",
+                "0",
             ), f"Production image should run as non-root user, got: '{user}'"
         finally:
             _docker_rm_image(tag)
@@ -305,7 +307,7 @@ class TestBackendContainerHealth:
     _container = f"{_TAG_PREFIX}-backend-health-ctr"
 
     @pytest.fixture(autouse=True)
-    def build_and_cleanup(self):
+    def _build_and_cleanup(self):
         """Build the image once, clean up container after each test."""
         result = _docker_build(BACKEND_DIR, target="production", tag=self._tag)
         if result.returncode != 0:
@@ -426,7 +428,7 @@ class TestFrontendContainerHealth:
     _container = f"{_TAG_PREFIX}-frontend-health-ctr"
 
     @pytest.fixture(autouse=True)
-    def build_and_cleanup(self):
+    def _build_and_cleanup(self):
         result = _docker_build(FRONTEND_DIR, target="production", tag=self._tag)
         if result.returncode != 0:
             pytest.skip(f"Frontend build failed: {result.stderr[-500:]}")

@@ -46,12 +46,70 @@ export type StorePaymentStatus = (typeof StorePaymentStatus)[keyof typeof StoreP
 export const StorePaymentMethod = {
   VENMO: 'venmo',
   PAYPAL: 'paypal',
+  CASH_APP: 'cash_app',
+  ZELLE: 'zelle',
   CASH: 'cash',
   CHECK: 'check',
   PAYROLL_DEDUCTION: 'payroll_deduction',
   OTHER: 'other',
 } as const;
 export type StorePaymentMethod = (typeof StorePaymentMethod)[keyof typeof StorePaymentMethod];
+
+/** When an unpaid order is allowed to move forward. */
+export const StorePaymentPolicy = {
+  NONE: 'none',
+  BEFORE_PICKUP: 'before_pickup',
+  BEFORE_VENDOR_ORDER: 'before_vendor_order',
+} as const;
+export type StorePaymentPolicy = (typeof StorePaymentPolicy)[keyof typeof StorePaymentPolicy];
+
+export const PAYMENT_POLICY_LABELS: Record<string, string> = {
+  none: 'No payment gate',
+  before_pickup: 'Payment required before pickup',
+  before_vendor_order: 'Payment required before the vendor order',
+};
+
+/** What each rule does to an unpaid order, as a side-by-side comparison. The
+ *  quartermaster picks this before building a catalog, so the consequences
+ *  have to be legible without reading the manual. */
+export interface PaymentPolicyOption {
+  value: StorePaymentPolicy;
+  label: string;
+  summary: string;
+  /** Does their item get ordered from the vendor? */
+  vendorOrder: string;
+  /** Can they collect it? */
+  pickup: string;
+  /** The department this suits. */
+  suits: string;
+}
+
+export const PAYMENT_POLICY_OPTIONS: PaymentPolicyOption[] = [
+  {
+    value: 'none',
+    label: 'No payment gate',
+    summary: 'Nothing is held up. You chase the money separately.',
+    vendorOrder: 'Ordered',
+    pickup: 'Can collect',
+    suits: 'Departments that trust members to settle up and would rather not block anyone.',
+  },
+  {
+    value: 'before_pickup',
+    label: 'Payment required before pickup',
+    summary: 'Their item is ordered, but it stays on your shelf until they pay.',
+    vendorOrder: 'Ordered',
+    pickup: 'Held until paid',
+    suits: 'Departments willing to front the cost, but not to hand over goods unpaid.',
+  },
+  {
+    value: 'before_vendor_order',
+    label: 'Payment required before the vendor order',
+    summary: 'They are held out of the vendor order — no payment, no item.',
+    vendorOrder: 'Not ordered',
+    pickup: 'Held until paid',
+    suits: "Departments that won't float the cost of an item a member may never pay for.",
+  },
+];
 
 export const StoreFulfillmentMethod = {
   PICKUP: 'pickup',
@@ -62,6 +120,8 @@ export type StoreFulfillmentMethod = (typeof StoreFulfillmentMethod)[keyof typeo
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   venmo: 'Venmo',
   paypal: 'PayPal',
+  cash_app: 'Cash App',
+  zelle: 'Zelle',
   cash: 'Cash',
   check: 'Check',
   payroll_deduction: 'Payroll deduction',
@@ -133,9 +193,13 @@ export interface StoreSettings {
   description?: string | null;
   currency: string;
   acceptedPaymentMethods: string[];
+  paymentPolicy: StorePaymentPolicy;
   venmoHandle?: string | null;
   paypalMeUrl?: string | null;
   paypalEmail?: string | null;
+  cashAppCashtag?: string | null;
+  zelleHandle?: string | null;
+  zelleInstructions?: string | null;
   checkPayableTo?: string | null;
   checkMailingAddress?: string | null;
   cashInstructions?: string | null;
@@ -152,10 +216,41 @@ export interface StoreSettings {
   sendOrderConfirmation: boolean;
   sendStatusUpdates: boolean;
   sendPaymentReminders: boolean;
+  sendPaymentReceipts: boolean;
+  sendWindowOpened: boolean;
+  sendWindowClosingReminder: boolean;
+  sendWindowClosed: boolean;
+  sendVendorOrderUpdates: boolean;
   paymentReminderDays: number;
   windowReminderHours: number;
   termsText?: string | null;
   receiptFooter?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+/** One storefront notice rendered for the settings screen. */
+export interface StoreNotificationPreview {
+  notice: string;
+  label: string;
+  /** The StoreSettings field that governs this notice. */
+  setting: string;
+  audience: string;
+  /** Other emails the same switch turns off. */
+  alsoGoverns: string[];
+  enabled: boolean;
+  subject: string;
+  htmlBody: string;
+  textBody: string;
+}
+
+/** Result of mailing a storefront notice to your own address. */
+export interface StoreNotificationTest {
+  notice: string;
+  label: string;
+  sentTo: string;
+  delivered: boolean;
+  detail: string;
 }
 
 export interface StoreSettingsUpdate {
@@ -164,9 +259,13 @@ export interface StoreSettingsUpdate {
   tagline?: string | undefined;
   description?: string | undefined;
   acceptedPaymentMethods?: string[];
+  paymentPolicy?: StorePaymentPolicy | undefined;
   venmoHandle?: string | undefined;
   paypalMeUrl?: string | undefined;
   paypalEmail?: string | undefined;
+  cashAppCashtag?: string | undefined;
+  zelleHandle?: string | undefined;
+  zelleInstructions?: string | undefined;
   checkPayableTo?: string | undefined;
   checkMailingAddress?: string | undefined;
   cashInstructions?: string | undefined;
@@ -183,6 +282,11 @@ export interface StoreSettingsUpdate {
   sendOrderConfirmation?: boolean;
   sendStatusUpdates?: boolean;
   sendPaymentReminders?: boolean;
+  sendPaymentReceipts?: boolean;
+  sendWindowOpened?: boolean;
+  sendWindowClosingReminder?: boolean;
+  sendWindowClosed?: boolean;
+  sendVendorOrderUpdates?: boolean;
   paymentReminderDays?: number;
   windowReminderHours?: number;
   termsText?: string | undefined;
@@ -227,9 +331,17 @@ export interface StoreProduct {
   trackStock: boolean;
   stockQuantity?: number | null;
   requiresVariant: boolean;
+  personalizationEnabled: boolean;
+  personalizationRequired: boolean;
+  personalizationLabel?: string | null;
+  personalizationMaxLength: number;
+  personalizationPrice: string;
   sortOrder: number;
   internalNotes?: string | null;
+  hasImage: boolean;
   variants: StoreProductVariant[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface StoreProductInput {
@@ -246,6 +358,11 @@ export interface StoreProductInput {
   trackStock: boolean;
   stockQuantity?: number | undefined;
   requiresVariant: boolean;
+  personalizationEnabled: boolean;
+  personalizationRequired: boolean;
+  personalizationLabel?: string | undefined;
+  personalizationMaxLength: number;
+  personalizationPrice: number;
   sortOrder: number;
   internalNotes?: string | undefined;
   variants: StoreProductVariantInput[];
@@ -272,6 +389,9 @@ export interface StoreOrderWindow {
   autoOpen: boolean;
   autoClose: boolean;
   expectedDeliveryDate?: string | null;
+  vendorName?: string | null;
+  vendorReference?: string | null;
+  vendorOrderedAt?: string | null;
   pickupInstructions?: string | null;
   includeAllProducts: boolean;
   notifyOnOpen: boolean;
@@ -283,6 +403,8 @@ export interface StoreOrderWindow {
   totalSales: string;
   outstandingBalance: string;
   offerings: StoreWindowOffering[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface StoreOrderWindowInput {
@@ -317,6 +439,11 @@ export interface StorefrontProductOffer {
   isTaxable: boolean;
   requiresVariant: boolean;
   maxPerMember?: number | null;
+  personalizationEnabled: boolean;
+  personalizationRequired: boolean;
+  personalizationLabel?: string | null;
+  personalizationMaxLength: number;
+  personalizationPrice: string;
   availableQuantity?: number | null;
   isAvailable: boolean;
   variants: StorefrontVariantOption[];
@@ -357,6 +484,7 @@ export interface StoreOrderItem {
   productName: string;
   variantLabel?: string | null;
   sku?: string | null;
+  personalizationText?: string | null;
   unitPrice: string;
   quantity: number;
   lineTotal: string;
@@ -374,6 +502,19 @@ export interface StoreOrderEvent {
   createdAt?: string | null;
 }
 
+/** One configured way to settle an order. */
+export interface StorePaymentOption {
+  method: string;
+  label: string;
+  handle?: string | null;
+  /** Null for methods with nothing to open — Zelle, cash, check. */
+  paymentUrl?: string | null;
+  instructions?: string | null;
+  /** True when the link carries the order number, so the member does not
+   *  have to type it into the payment app themselves. */
+  prefillsReference: boolean;
+}
+
 export interface StorePaymentInstructions {
   method?: string | null;
   label?: string | null;
@@ -382,6 +523,9 @@ export interface StorePaymentInstructions {
   instructions?: string | null;
   reference?: string | null;
   amountDue: string;
+  /** Every method the department accepts and has configured, the one chosen
+   *  at checkout first. The member is not locked into that choice. */
+  options?: StorePaymentOption[];
 }
 
 export interface StoreOrder {
@@ -418,6 +562,8 @@ export interface StoreOrder {
   items: StoreOrderItem[];
   events: StoreOrderEvent[];
   paymentInstructions?: StorePaymentInstructions | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface StoreOrderListResponse {
@@ -432,9 +578,31 @@ export interface StoreWindowProductTally {
   productName: string;
   variantLabel?: string | null;
   sku?: string | null;
+  personalizationText?: string | null;
   quantity: number;
   unitPrice: string;
   lineTotal: string;
+}
+
+/** One line of the vendor purchase order — merged across members, so a
+ *  personalized item still answers "how many larges?". */
+export interface StoreWindowSizeTotal {
+  productId?: string | null;
+  productName: string;
+  variantLabel?: string | null;
+  sku?: string | null;
+  quantity: number;
+  lineTotal: string;
+}
+
+/** Outcome of logging a bulk order with the vendor. */
+export interface StoreVendorOrderResult {
+  window: StoreOrderWindow;
+  advanced: number;
+  /** Orders the payment rule held back — not on the vendor's sheet, so not
+   *  marked ordered either. */
+  skipped: { order_id: string; error: string }[];
+  notified: number;
 }
 
 export interface StoreWindowSummary {
@@ -448,6 +616,12 @@ export interface StoreWindowSummary {
   outstanding: string;
   unpaidOrderCount: number;
   pendingVerificationCount: number;
+  paymentPolicy: StorePaymentPolicy;
+  sizeTotals: StoreWindowSizeTotal[];
+  /** Held out of the vendor order because they are unpaid. Empty unless the
+   *  policy requires payment before the vendor order. */
+  heldTotals: StoreWindowSizeTotal[];
+  heldOrderCount: number;
   tallies: StoreWindowProductTally[];
 }
 
@@ -476,7 +650,46 @@ export interface CartLine {
   variantId?: string | undefined;
   productName: string;
   variantLabel?: string | undefined;
+  /** Free text to embroider/engrave. Part of the line identity: two shirts
+   *  with different names are different goods, never merged into one line. */
+  personalizationText?: string | undefined;
   unitPrice: number;
   quantity: number;
   isTaxable: boolean;
+}
+
+/** How an externally-reported payment was reconciled against store orders. */
+export const StorePaymentEventStatus = {
+  APPLIED: 'applied',
+  MATCHED: 'matched',
+  UNMATCHED: 'unmatched',
+  AMBIGUOUS: 'ambiguous',
+  IGNORED: 'ignored',
+  DUPLICATE: 'duplicate',
+} as const;
+export type StorePaymentEventStatus = (typeof StorePaymentEventStatus)[keyof typeof StorePaymentEventStatus];
+
+/** One payment a connected provider reported receiving. */
+export interface StorePaymentEvent {
+  id: string;
+  provider: string;
+  externalId: string;
+  amount: string;
+  currency: string;
+  payerName?: string | null;
+  payerEmail?: string | null;
+  reference?: string | null;
+  status: StorePaymentEventStatus;
+  note?: string | null;
+  matchedOrderId?: string | null;
+  matchedOrderNumber?: string | null;
+  matchedOrderMember?: string | null;
+  matchedOrderBalance?: string | null;
+  receivedAt?: string | null;
+  resolvedAt?: string | null;
+}
+
+export interface StorePaymentEventList {
+  items: StorePaymentEvent[];
+  unresolvedCount: number;
 }

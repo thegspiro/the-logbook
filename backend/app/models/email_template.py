@@ -45,6 +45,21 @@ class EmailTemplateType(str, enum.Enum):
     SHIFT_DECLINE = "shift_decline"
     SHIFT_ASSIGNMENT = "shift_assignment"
     SHIFT_REMINDER = "shift_reminder"
+    # Department storefront. The values match the ``template_type`` strings the
+    # storefront has always written to message_history, so a department's send
+    # log stays continuous across the move into this system. The one exception
+    # is the cancellation notice, which used to share the order-update type;
+    # sharing it here would mean editing one and silently changing the other.
+    STOREFRONT_ORDER_CONFIRMATION = "storefront_order_confirmation"
+    STOREFRONT_NEW_ORDER_ADMIN = "storefront_new_order_admin"
+    STOREFRONT_ORDER_UPDATE = "storefront_order_update"
+    STOREFRONT_ORDER_CANCELLED = "storefront_order_cancelled"
+    STOREFRONT_PAYMENT_REMINDER = "storefront_payment_reminder"
+    STOREFRONT_PAYMENT_RECEIVED = "storefront_payment_received"
+    STOREFRONT_WINDOW_OPEN = "storefront_window_open"
+    STOREFRONT_WINDOW_CLOSING = "storefront_window_closing"
+    STOREFRONT_WINDOW_CLOSED = "storefront_window_closed"
+    STOREFRONT_VENDOR_ORDER_PLACED = "storefront_vendor_order_placed"
     CUSTOM = "custom"
 
 

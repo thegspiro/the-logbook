@@ -476,7 +476,8 @@ class TestCategoryDelete:
 
         ok, err = await svc.delete_category(uuid.UUID(cat.id), uuid.UUID(org_id))
         assert ok is False
-        assert err is not None and "active items" in err
+        assert err is not None
+        assert "active items" in err
 
     @pytest.mark.asyncio
     async def test_delete_succeeds_without_active_items(

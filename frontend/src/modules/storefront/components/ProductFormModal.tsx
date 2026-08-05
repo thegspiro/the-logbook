@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -33,6 +33,11 @@ interface FormState {
   trackStock: boolean;
   stockQuantity: string;
   requiresVariant: boolean;
+  personalizationEnabled: boolean;
+  personalizationRequired: boolean;
+  personalizationLabel: string;
+  personalizationMaxLength: string;
+  personalizationPrice: string;
   sortOrder: string;
   internalNotes: string;
 }
@@ -51,6 +56,11 @@ const emptyForm: FormState = {
   trackStock: false,
   stockQuantity: '',
   requiresVariant: false,
+  personalizationEnabled: false,
+  personalizationRequired: false,
+  personalizationLabel: '',
+  personalizationMaxLength: '30',
+  personalizationPrice: '0',
   sortOrder: '0',
   internalNotes: '',
 };
@@ -68,6 +78,35 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
   const [form, setForm] = useState<FormState>(emptyForm);
   const [variants, setVariants] = useState<VariantRow[]>([]);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (file: File) => {
+    if (!product) return;
+    setUploading(true);
+    try {
+      await storefrontService.uploadProductImage(product.id, file);
+      toast.success('Photo uploaded');
+      onSaved();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not upload the photo'));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    if (!product) return;
+    setUploading(true);
+    try {
+      await storefrontService.deleteProductImage(product.id);
+      toast.success('Photo removed');
+      onSaved();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not remove the photo'));
+    } finally {
+      setUploading(false);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -86,6 +125,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
         trackStock: product.trackStock,
         stockQuantity: product.stockQuantity != null ? String(product.stockQuantity) : '',
         requiresVariant: product.requiresVariant,
+        personalizationEnabled: product.personalizationEnabled,
+        personalizationRequired: product.personalizationRequired,
+        personalizationLabel: product.personalizationLabel ?? '',
+        personalizationMaxLength: String(product.personalizationMaxLength ?? 30),
+        personalizationPrice: String(product.personalizationPrice ?? '0'),
         sortOrder: String(product.sortOrder),
         internalNotes: product.internalNotes ?? '',
       });
@@ -152,6 +196,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
       trackStock: form.trackStock,
       stockQuantity: form.stockQuantity ? Number(form.stockQuantity) : undefined,
       requiresVariant: form.requiresVariant,
+      personalizationEnabled: form.personalizationEnabled,
+      personalizationRequired: form.personalizationEnabled && form.personalizationRequired,
+      personalizationLabel: form.personalizationLabel.trim() || undefined,
+      personalizationMaxLength: Number(form.personalizationMaxLength || 30),
+      personalizationPrice: Number(form.personalizationPrice || 0),
       sortOrder: Number(form.sortOrder || 0),
       internalNotes: form.internalNotes.trim() || undefined,
       variants: variantPayload,
@@ -381,6 +430,128 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
             Requires an option (size/color)
           </label>
         </div>
+
+        <section className="border-theme-surface-border rounded-lg border p-3">
+          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="form-checkbox"
+              checked={form.personalizationEnabled}
+              onChange={(e) => update('personalizationEnabled', e.target.checked)}
+            />
+            Members can personalize this item (name, callsign, …)
+          </label>
+
+          {form.personalizationEnabled && (
+            <div className="mt-3 space-y-3">
+              <div className="form-grid-2">
+                <div>
+                  <label htmlFor="product-pers-label" className="form-label">
+                    Prompt shown to the member
+                  </label>
+                  <input
+                    id="product-pers-label"
+                    type="text"
+                    value={form.personalizationLabel}
+                    onChange={(e) => update('personalizationLabel', e.target.value)}
+                    className="form-input"
+                    placeholder="Name to embroider"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="product-pers-price" className="form-label">
+                    Upcharge per unit
+                  </label>
+                  <input
+                    id="product-pers-price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.personalizationPrice}
+                    onChange={(e) => update('personalizationPrice', e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+              </div>
+              <div className="form-grid-2">
+                <div>
+                  <label htmlFor="product-pers-max" className="form-label">
+                    Maximum characters
+                  </label>
+                  <input
+                    id="product-pers-max"
+                    type="number"
+                    min="1"
+                    max="200"
+                    value={form.personalizationMaxLength}
+                    onChange={(e) => update('personalizationMaxLength', e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+                <label className="text-theme-text-secondary flex items-end gap-2 pb-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={form.personalizationRequired}
+                    onChange={(e) => update('personalizationRequired', e.target.checked)}
+                  />
+                  Required — the member must enter text
+                </label>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {product && (
+          <section className="border-theme-surface-border rounded-lg border p-3">
+            <h3 className="text-theme-text-primary mb-2 text-sm font-semibold">Photo</h3>
+            <div className="flex items-center gap-4">
+              {product.imageUrl ? (
+                <img
+                  src={product.imageUrl}
+                  alt={product.name}
+                  className="bg-theme-surface-secondary h-20 w-20 rounded-lg object-cover"
+                />
+              ) : (
+                <div className="bg-theme-surface-secondary flex h-20 w-20 items-center justify-center rounded-lg">
+                  <ImageIcon className="text-theme-text-muted h-6 w-6" />
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                <label htmlFor="product-photo" className="btn-secondary btn-sm cursor-pointer">
+                  {uploading ? 'Uploading…' : 'Upload photo'}
+                  <input
+                    id="product-photo"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    disabled={uploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void handleUpload(file);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                {product.hasImage && (
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    disabled={uploading}
+                    onClick={() => {
+                      void handleRemoveImage();
+                    }}
+                  >
+                    Remove photo
+                  </button>
+                )}
+                <p className="text-theme-text-muted text-xs">
+                  JPEG, PNG or WebP up to 5MB. Re-encoded to WebP on upload.
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
 
         <div>
           <div className="mb-2 flex items-center justify-between">
