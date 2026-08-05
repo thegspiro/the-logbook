@@ -236,6 +236,14 @@ class TrainingCourse(Base):
         JSON
     )  # List of TrainingCategory IDs this course counts towards
 
+    # Multi-class courses (e.g. a recruit school) carry a syllabus of
+    # CourseClass rows and generate cohorts against this pipeline.
+    program_id = Column(
+        String(36),
+        ForeignKey("training_programs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # Status
     active = Column(Boolean, default=True, index=True)
 
@@ -251,6 +259,14 @@ class TrainingCourse(Base):
     # Relationships
     training_records = relationship(
         "TrainingRecord", back_populates="course", cascade="all, delete-orphan"
+    )
+    classes = relationship(
+        "CourseClass",
+        foreign_keys="CourseClass.course_id",
+        back_populates="course",
+        cascade="all, delete-orphan",
+        order_by="CourseClass.sequence",
+        lazy="select",
     )
 
     __table_args__ = (Index("idx_course_org_code", "organization_id", "code"),)
@@ -685,6 +701,419 @@ class TrainingSession(Base):
 
     def __repr__(self):
         return f"<TrainingSession(course_name={self.course_name}, event_id={self.event_id})>"
+
+
+class CohortStatus(str, enum.Enum):
+    """Lifecycle of a course cohort (one scheduled run of a multi-class course)"""
+
+    DRAFT = "draft"
+    SCHEDULED = "scheduled"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class CohortClassStatus(str, enum.Enum):
+    """Status of a single scheduled class within a cohort"""
+
+    SCHEDULED = "scheduled"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class CohortMemberStatus(str, enum.Enum):
+    """Status of a member on a cohort roster"""
+
+    ACTIVE = "active"
+    WITHDRAWN = "withdrawn"
+    COMPLETED = "completed"
+
+
+class DateRollPolicy(str, enum.Enum):
+    """How a computed class date is adjusted when it lands on a skipped day"""
+
+    NONE = "none"
+    NEXT_BUSINESS_DAY = "next_business_day"
+    NEXT_MEETING_DAY = "next_meeting_day"
+
+
+class CourseClass(Base):
+    """
+    Course Class model — one row of a multi-class course's syllabus.
+
+    A recruit school is a single TrainingCourse whose syllabus is fifteen of
+    these. A class is described *relative* to the course start (``day_offset``
+    + local ``start_time``); it becomes a real dated event only when a cohort
+    is generated from the course.
+    """
+
+    __tablename__ = "course_classes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # The container course this syllabus belongs to (e.g. "Recruit School")
+    course_id = Column(
+        String(36),
+        ForeignKey("training_courses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # The catalog course actually taught in this class (e.g. "SCBA Operations").
+    # Required, so every class carries its own credit hours, certification
+    # settings, and category tagging. CASCADE rather than SET NULL because the
+    # column is NOT NULL and MySQL rejects SET NULL on NOT NULL (error 1830);
+    # in practice courses are only ever soft-deleted (active=False).
+    class_course_id = Column(
+        String(36),
+        ForeignKey("training_courses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    sequence = Column(Integer, nullable=False)
+    section_name = Column(String(255))  # groups classes into program phases
+    title = Column(String(255))  # display override; defaults to the course name
+    description = Column(Text)
+
+    # Relative schedule. ``start_time`` is a local wall-clock "HH:MM" resolved
+    # against the organization timezone at generation time, so a cohort that
+    # spans a DST transition still meets at the same clock time.
+    day_offset = Column(Integer, nullable=False, default=0)
+    start_time = Column(String(5))
+    duration_minutes = Column(Integer, nullable=False, default=60)
+
+    credit_hours = Column(Float)  # override; defaults to the course's value
+    instructor_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    instructor = Column(String(255))  # free-text fallback, matches TrainingSession
+    location_id = Column(
+        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+    )
+    location = Column(String(300))
+
+    # Pipeline linkage copied onto every generated session
+    category_id = Column(
+        String(36),
+        ForeignKey("training_categories.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    requirement_id = Column(
+        String(36),
+        ForeignKey("training_requirements.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    phase_id = Column(
+        String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True
+    )
+
+    is_required = Column(Boolean, default=True, nullable=False)
+    counts_toward_certification = Column(Boolean, default=True, nullable=False)
+    active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    course = relationship(
+        "TrainingCourse",
+        foreign_keys=[course_id],
+        back_populates="classes",
+        lazy="select",
+    )
+    class_course = relationship(
+        "TrainingCourse", foreign_keys=[class_course_id], lazy="select"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("course_id", "sequence", name="uq_course_class_sequence"),
+        Index("idx_course_class_org_course", "organization_id", "course_id"),
+    )
+
+    def __repr__(self):
+        return f"<CourseClass(course_id={self.course_id}, sequence={self.sequence})>"
+
+
+class CourseCohort(Base):
+    """
+    Course Cohort model — one scheduled run of a multi-class course.
+
+    "Recruit School — Fall 2026" starting 2026-09-08. Generating a cohort turns
+    each syllabus row into a real Event + TrainingSession, enrolls the roster in
+    the linked training program, and RSVPs them to every class.
+    """
+
+    __tablename__ = "course_cohorts"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    course_id = Column(
+        String(36),
+        ForeignKey("training_courses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    name = Column(String(255), nullable=False)
+    code = Column(String(50))
+    description = Column(Text)
+    start_date = Column(Date, nullable=False)
+    status = Column(
+        Enum(CohortStatus, values_callable=lambda x: [e.value for e in x]),
+        default=CohortStatus.DRAFT,
+        nullable=False,
+        index=True,
+    )
+
+    # Pipeline the roster is enrolled in (may be generated alongside the cohort)
+    program_id = Column(
+        String(36),
+        ForeignKey("training_programs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Schedule configuration. ``meeting_days`` is a list of weekday numbers
+    # (0=Monday) used both for meeting-pattern autofill and for the
+    # NEXT_MEETING_DAY roll policy.
+    meeting_days = Column(JSON)
+    default_start_time = Column(String(5))
+    default_duration_minutes = Column(Integer)
+    date_roll_policy = Column(
+        Enum(DateRollPolicy, values_callable=lambda x: [e.value for e in x]),
+        default=DateRollPolicy.NONE,
+        nullable=False,
+    )
+    # ISO date strings the schedule must skip (holidays, department blackouts).
+    # There is no holiday model in the platform, so these live on the cohort and
+    # are pre-filled from the US federal holiday helper in the wizard.
+    blackout_dates = Column(JSON)
+
+    location_id = Column(
+        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+    )
+    location = Column(String(300))
+    requires_rsvp = Column(Boolean, default=True, nullable=False)
+    auto_create_records = Column(Boolean, default=True, nullable=False)
+
+    generated_at = Column(DateTime(timezone=True))
+    generated_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    notes = Column(Text)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    course = relationship("TrainingCourse", foreign_keys=[course_id], lazy="select")
+    classes = relationship(
+        "CourseCohortClass",
+        back_populates="cohort",
+        cascade="all, delete-orphan",
+        order_by="CourseCohortClass.sequence",
+        lazy="select",
+    )
+    members = relationship(
+        "CourseCohortMember",
+        back_populates="cohort",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+
+    __table_args__ = (
+        Index("idx_course_cohort_org_course", "organization_id", "course_id"),
+    )
+
+    def __repr__(self):
+        return f"<CourseCohort(name={self.name}, start_date={self.start_date})>"
+
+
+class CourseCohortClass(Base):
+    """
+    Course Cohort Class model — a syllabus row materialized onto real dates.
+
+    This row is the stable identity of "class 7 of the fall recruit school";
+    the Event and TrainingSession are its current realization. Keeping them
+    separate is what makes rescheduling, cancelling, and idempotent
+    regeneration possible.
+    """
+
+    __tablename__ = "course_cohort_classes"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    cohort_id = Column(
+        String(36),
+        ForeignKey("course_cohorts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # Nullable so ad-hoc classes added mid-cohort have no syllabus row, and so
+    # deleting a syllabus row later does not destroy cohort history.
+    course_class_id = Column(
+        String(36), ForeignKey("course_classes.id", ondelete="SET NULL"), nullable=True
+    )
+
+    sequence = Column(Integer, nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text)
+
+    # Stored as UTC, like every other datetime in the platform
+    scheduled_start = Column(DateTime(timezone=True), nullable=False)
+    scheduled_end = Column(DateTime(timezone=True), nullable=False)
+
+    # SET NULL rather than CASCADE: deleting an event through the events UI must
+    # not silently erase the cohort's record of the class. It leaves a visibly
+    # unlinked row the officer can regenerate.
+    event_id = Column(
+        String(36),
+        ForeignKey("events.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+    )
+    training_session_id = Column(
+        String(36),
+        ForeignKey("training_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    status = Column(
+        Enum(CohortClassStatus, values_callable=lambda x: [e.value for e in x]),
+        default=CohortClassStatus.SCHEDULED,
+        nullable=False,
+        index=True,
+    )
+
+    class_course_id = Column(
+        String(36),
+        ForeignKey("training_courses.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    credit_hours = Column(Float)
+    instructor_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    instructor = Column(String(255))
+    location_id = Column(
+        String(36), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+    )
+    location = Column(String(300))
+    category_id = Column(
+        String(36),
+        ForeignKey("training_categories.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    requirement_id = Column(
+        String(36),
+        ForeignKey("training_requirements.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    phase_id = Column(
+        String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True
+    )
+    cancellation_reason = Column(Text)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    cohort = relationship("CourseCohort", back_populates="classes", lazy="select")
+
+    __table_args__ = (
+        UniqueConstraint("cohort_id", "sequence", name="uq_cohort_class_sequence"),
+        # The idempotency key: a syllabus row can only be materialized once per
+        # cohort, so re-running generation can never duplicate a class.
+        UniqueConstraint("cohort_id", "course_class_id", name="uq_cohort_class_source"),
+        Index("idx_cohort_class_start", "organization_id", "scheduled_start"),
+    )
+
+    def __repr__(self):
+        return f"<CourseCohortClass(title={self.title}, start={self.scheduled_start})>"
+
+
+class CourseCohortMember(Base):
+    """
+    Course Cohort Member model — the roster of one cohort.
+
+    Links a member to the cohort and to the ProgramEnrollment that tracks their
+    pipeline progress, so a student's classes and their credit are one record.
+    """
+
+    __tablename__ = "course_cohort_members"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    cohort_id = Column(
+        String(36),
+        ForeignKey("course_cohorts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    enrollment_id = Column(
+        String(36),
+        ForeignKey("program_enrollments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    status = Column(
+        Enum(CohortMemberStatus, values_callable=lambda x: [e.value for e in x]),
+        default=CohortMemberStatus.ACTIVE,
+        nullable=False,
+    )
+    notes = Column(Text)
+    withdrawn_at = Column(DateTime(timezone=True))
+
+    added_at = Column(DateTime(timezone=True), server_default=func.now())
+    added_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    cohort = relationship("CourseCohort", back_populates="members", lazy="select")
+
+    __table_args__ = (
+        UniqueConstraint("cohort_id", "user_id", name="uq_cohort_member_user"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<CourseCohortMember(cohort_id={self.cohort_id}, user_id={self.user_id})>"
+        )
 
 
 class ApprovalStatus(str, enum.Enum):

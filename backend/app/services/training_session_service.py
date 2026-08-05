@@ -49,9 +49,16 @@ class TrainingSessionService:
         session_data: TrainingSessionCreate,
         organization_id: UUID,
         created_by: UUID,
+        commit: bool = True,
     ) -> Tuple[Optional[TrainingSession], Optional[str]]:
         """
         Create a training session (Event + TrainingSession link)
+
+        Args:
+            commit: when False the rows are flushed but not committed, so a
+                caller creating several sessions (course cohort generation)
+                can wrap them all in one transaction and roll the whole batch
+                back on failure rather than leaving a half-built cohort.
 
         Returns: (training_session, error_message)
         """
@@ -167,6 +174,9 @@ class TrainingSessionService:
             training_type=TrainingType(session_data.training_type),
             credit_hours=session_data.credit_hours,
             instructor=session_data.instructor,
+            instructor_id=(
+                str(session_data.instructor_id) if session_data.instructor_id else None
+            ),
             issues_certification=session_data.issues_certification,
             certification_number_prefix=session_data.certification_number_prefix,
             issuing_agency=session_data.issuing_agency,
@@ -179,6 +189,10 @@ class TrainingSessionService:
         )
 
         self.db.add(training_session)
+        if not commit:
+            await self.db.flush()
+            return training_session, None
+
         await self.db.commit()
         await self.db.refresh(training_session)
 

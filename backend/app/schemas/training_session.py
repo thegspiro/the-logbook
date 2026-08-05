@@ -75,6 +75,9 @@ class TrainingSessionCreate(BaseModel):
     )
     credit_hours: float = Field(..., ge=0)
     instructor: Optional[str] = Field(None, max_length=255)
+    instructor_id: Optional[UUID] = Field(
+        None, description="Member teaching this session (enables qualification checks)"
+    )
 
     @field_validator("training_type")
     @classmethod
