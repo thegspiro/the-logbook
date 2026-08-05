@@ -181,6 +181,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Logged to `message_history` under the notice's own `storefront_*` type and
     audited as `store_notification_test_sent`.
 
+- **The storefront's notices are now editable in Communications → Email
+  Templates**, as ten `EmailTemplateType.STOREFRONT_*` entries with shipped
+  defaults, variable catalogues and sample data. They were the only emails on
+  the platform a department could switch on and off but not word.
+  - **Ten templates, nine switches.** The cancellation notice gets its own
+    rather than sharing the order-update row — rewording "your order is ready"
+    must not silently change what a cancelled member reads. It still rides the
+    status-updates switch.
+  - **A department that never opens the editor sees no change.** Each `send_*`
+    builds both the message it has always composed and a context of variables;
+    the template is used only when a row exists and is active, and the coded
+    body is the fallback rather than a stub. Deactivating a template undoes an
+    edit without losing it, and *Reset to default* restores the shipped body.
+  - **Computed parts arrive as variables**, since the template system
+    substitutes `{{name}}` with no loops and a table of order lines cannot be
+    written in a body: `items_table_html`, `payment_block_html`,
+    `receipt_footer_html`, `member_notes_html`, `payment_summary_html`,
+    `balance_notice_html`, `cancellation_reason_html`, `refund_notice_html`,
+    and the three window chunks — the same `_RAW_HTML_VARIABLES` arrangement
+    property return reminders use for `items_list_html`. Removing one from a
+    body does what it looks like: drop `{{payment_block_html}}` and members
+    stop being told how to pay.
+  - The Notifications panel's **Preview** and **Send this to me** render
+    whichever version is in force, so an edit can be checked where it will be
+    read. Template lookups are cached per service instance — a reminder run
+    walks up to 200 orders and would otherwise re-read one row 200 times.
+  - Widens the `template_type` enum on `email_templates` and
+    `scheduled_emails`. Note for anyone reading a send log: cancellations
+    previously recorded as `storefront_order_update` and now record as
+    `storefront_order_cancelled`.
+
 **Fixed**
 
 - **A held order could be marked ready for pickup.** Under *payment required

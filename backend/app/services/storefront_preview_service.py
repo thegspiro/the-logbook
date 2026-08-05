@@ -23,6 +23,7 @@ the database; the objects below are constructed and thrown away.
 """
 
 import html as _html
+import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -42,7 +43,7 @@ from app.models.storefront import (
     StoreWindowStatus,
 )
 from app.models.user import Organization
-from app.services.email_service import EmailService, wrap_email_body
+from app.services.email_service import EmailService
 from app.services.storefront_notification_service import (
     StorefrontNotificationService,
 )
@@ -269,12 +270,17 @@ class StorefrontPreviewService:
             "screen. No member received it and no order exists."
             "</div>"
         )
-        html_body = wrap_email_body(
-            organization,
-            message["title"],
-            banner + message["body_html"],
-            header_color=message["header_color"],
+        # Slipped in after <body> rather than composed into the message: the
+        # notice may have come from an admin-edited template, whose markup is
+        # theirs to arrange and not ours to splice into.
+        html_body, substitutions = re.subn(
+            r"(<body[^>]*>)",
+            lambda m: m.group(1) + banner,
+            message["html_body"],
+            count=1,
         )
+        if not substitutions:
+            html_body = banner + message["html_body"]
 
         email_service = EmailService(organization=organization)
         sent, _failed = await email_service.send_email(

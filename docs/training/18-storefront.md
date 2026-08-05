@@ -199,12 +199,13 @@ box — opening a window, closing one, recording the vendor order — can still
 skip a single send, and an individual window can decline to announce itself.
 Neither can send a notice you have switched off here.
 
-What the emails say is yours to shape too, through settings rather than a
-template editor: the payment instructions and per-method notes appear under the
-pay buttons, the receipt footer closes the confirmation, a window's pickup
-instructions ride along with every announcement about it, and the open / close
-/ vendor-order actions each take a free-text message for that send only. The
-layout, your logo and your colours come from the organization's email branding.
+Some of what the emails say is set here rather than in the template: the payment
+instructions and per-method notes appear under the pay buttons, the receipt
+footer closes the confirmation, a window's pickup instructions ride along with
+every announcement about it, and the open / close / vendor-order actions each
+take a free-text message for that send only. The prose around them is editable
+too — see "Rewriting one properly" below. The layout, your logo and your colours
+come from the organization's email branding.
 
 ### Seeing one before you send it
 
@@ -245,20 +246,43 @@ If your department has not finished setting up email, it will tell you that
 plainly rather than claiming to have sent something. Every test send is recorded
 in **Communications → Message History** like any other email.
 
-### Where these emails live (and don't)
+### Rewriting one properly
 
-The store's nine notices are **not** in **Communications → Email Templates**.
-That screen edits a different set of templates — welcome messages, password
-resets, event reminders — and the storefront's are composed in code, because
-each is a table of order lines and pay buttons rather than a block of prose.
+The switches, previews and test sends live in the Notifications panel. The
+*words* live in **Communications → Email Templates**, alongside your welcome
+message and password reset. Look for the ten entries beginning **Store —**.
 
-So the Notifications panel *is* their home: the switches, the previews and the
-test sends are all there. What you can reword is listed above. What you cannot
-do is open one in a rich-text editor and rearrange it.
+Ten, not nine, because the cancellation notice gets its own template even
+though it shares the "status changes" switch. One switch, two emails to word:
+"your order is ready" and "your order is cancelled" should not read the same.
 
-They do show up in **Message History** once sent, tagged with a `storefront_`
-type, which is where you check whether a particular member's reminder actually
-went out.
+Edit the subject and the body like any other template. The parts that cannot
+be typed out — the table of items, the pay buttons — are variables the store
+fills in:
+
+| Variable | What appears there |
+|---|---|
+| `{{items_table_html}}` | The ordered items, with sizes, embroidery text and prices |
+| `{{payment_block_html}}` | Balance due, a pay button per method you accept, your payment instructions |
+| `{{receipt_footer_html}}` | Your receipt footer |
+| `{{window_extra_html}}` | Whatever that notice adds — the closing time, the vendor, the delivery date |
+| `{{order_number}}`, `{{first_name}}`, `{{balance_due}}`, `{{window_name}}` | Exactly what they say |
+
+The editor lists every variable available for the template you have open, and
+its preview fills them with sample data.
+
+Two things worth knowing. **Deleting a variable really deletes it** — take
+`{{payment_block_html}}` out of the confirmation and members are no longer told
+how to pay. **Reset to default** puts the original wording back, and switching
+a template to inactive does the same thing without losing your edit.
+
+Until you touch them, nothing changes: a department that never opens this
+screen keeps receiving the wording the store has always sent. And whichever
+version is in force, the Notifications panel's **Preview** and **Send this to
+me** show you *that* one — so edit here, then go look.
+
+Every send is recorded in **Message History** with a `storefront_` type, which
+is where you check whether a particular member's reminder actually went out.
 
 Everything the store sends is logged in **Communications → Message History**
 under a `storefront_` type, so "did she ever get the reminder?" is a question

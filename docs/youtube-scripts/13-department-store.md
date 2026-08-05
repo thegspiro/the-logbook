@@ -1,7 +1,7 @@
 # Script 13: The Department Store — Selling Merch Without Becoming a Payment Processor
 
 **Video Type:** Feature Deep Dive (Medium-Form)
-**Estimated Length:** 16–20 minutes
+**Estimated Length:** 17–21 minutes
 **Target Audience:** Quartermasters, secretaries, treasurers, and any member ordering from the store
 **Roles Covered:** quartermaster, secretary, treasurer, member (baseline)
 **Chapters:** 8 (each designed as a standalone clip)
@@ -51,7 +51,7 @@ the Venmo app open with an amount prefilled.]**
 
 ---
 
-## CHAPTER 2: Setup — Two Switches, Not One (2:00 – 4:45)
+## CHAPTER 2: Setup — Two Switches, Not One (2:00 – 5:15)
 
 ### ENABLING THE MODULE (2:00 – 2:45)
 
@@ -102,7 +102,7 @@ error.]**
 > "And handles get checked when you save. Mistype a cashtag and you'll hear
 > about it, rather than wondering next month why nobody used Cash App."
 
-### WHAT THE STORE EMAILS (3:30 – 4:45)
+### WHAT THE STORE EMAILS (3:30 – 5:15)
 
 **[SCREEN: Scrolling down Settings to the Notifications panel — two groups,
 nine switches, each with a line of description under it.]**
@@ -166,13 +166,44 @@ amber banner at the top.]**
 > the sample says 'Order ORD-2026-0042 received', and an unmarked copy in your
 > inbox is something you'll act on in three weeks."
 
+**[SCREEN: Communications → Email Templates, scrolling to ten entries beginning
+"Store —". Opening "Store — Order Placed With the Vendor" and rewriting the
+first line.]**
+
+> "And if you don't like how one of them is worded — rewrite it. They're in
+> **Communications, Email Templates**, right alongside your welcome email. Ten
+> of them, all starting with 'Store'."
+
+**[CALLOUT: "Ten templates, nine switches. Cancellation gets its own words."]**
+
+> "Ten, not nine — cancellation gets its own template even though it shares the
+> status-changes switch. 'Your order's ready' and 'your order's cancelled'
+> shouldn't read the same."
+
+**[SCREEN: The variable list in the editor sidebar, then dragging
+{{items_table_html}} into the body.]**
+
+> "The bits you can't type — the item table, the pay buttons — are variables the
+> store fills in. The editor lists what's available for whichever template
+> you've got open."
+
+**[CALLOUT: "Delete a variable, delete that part of the email."]**
+
+> "Two gotchas. Deleting a variable really deletes it: take the payment block
+> out of the confirmation and nobody gets told how to pay. And **Reset to
+> default** puts the original back if you've painted yourself into a corner."
+
+> "Until you touch these, nothing changes — you keep getting the wording the
+> store's always sent. And whichever version's live, that Preview button back in
+> Settings shows you *that* one. So edit here, then go look."
+
 **[TRANSITION: The catalog]**
 
 ---
 
-## CHAPTER 3: The Catalog — Products, Sizes, Names (4:45 – 7:30)
+## CHAPTER 3: The Catalog — Products, Sizes, Names (5:15 – 8:00)
 
-### CREATING A PRODUCT (4:45 – 5:30)
+### CREATING A PRODUCT (5:15 – 6:00)
 
 **[SCREEN: Catalog tab → New item. Filling in "Department Job Shirt", $45,
 taxable, max 2 per member. Status left on Draft.]**
@@ -188,7 +219,7 @@ taxable, max 2 per member. Status left on Draft.]**
 
 > "Leave it on **Draft** while you build. Draft is invisible to members."
 
-### OPTIONS (5:30 – 6:00)
+### OPTIONS (6:00 – 6:30)
 
 **[SCREEN: Add option, adding S through 3XL, setting +3.00 on 2XL and 3XL.]**
 
@@ -198,7 +229,7 @@ taxable, max 2 per member. Status left on Draft.]**
 > delta**. Plus three dollars on 2XL, because your vendor charges you plus
 > three."
 
-### PERSONALIZATION (6:00 – 7:00)
+### PERSONALIZATION (6:30 – 7:30)
 
 **[SCREEN: Enabling personalization — label "Name for embroidery", max 20
 characters, $8.00 surcharge. Then the member view showing the text box.]**
@@ -216,7 +247,7 @@ lines rather than one line of quantity 2.]**
 > never merge into one line of quantity two — they're physically different
 > items, and your vendor needs them listed separately."
 
-### PHOTOS (7:00 – 7:30)
+### PHOTOS (7:30 – 8:00)
 
 **[SCREEN: Uploading a job shirt photo, seeing it appear in the grid.]**
 
@@ -599,3 +630,4 @@ station.]**
 | 13j | The Nine Emails Your Store Sends | Chapter 2 |
 | 13k | Preview Your Store Email Before You Send It | Chapter 2 |
 | 13l | Mail Yourself a Test Before Anyone Else Gets It | Chapter 2 |
+| 13m | Rewrite What Your Store Emails Say | Chapter 2 |

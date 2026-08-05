@@ -429,22 +429,48 @@ audited as `store_notification_test_sent`.
 
 ### Wording and templates
 
-These bodies are composed in code with `wrap_email_body` — the same approach
-the scheduled inventory alerts use — and are **not** in the admin-editable
-Email Templates screen. None of the nine appears in `EmailTemplateType`, so
-`ensure_default_templates` never creates rows for them and Communications →
-Email Templates does not list them.
+Every notice is editable in **Communications → Email Templates**, as
+`EmailTemplateType.STOREFRONT_*`. The defaults live in
+`app/services/email_templates_storefront.py` and are registered into the
+template service's `_DEFAULT_TEMPLATE_DEFS`, `TEMPLATE_VARIABLES`,
+`SAMPLE_CONTEXT` and `_RAW_HTML_VARIABLES`.
 
-That is a deliberate scope line, not a technical wall. The template system does
-`{{variable}}` substitution with no loops, but modules that need a table already
-work around it by rendering the table in code and injecting it through
-`_RAW_HTML_VARIABLES` — `items_list_html` for property return reminders,
-`ballot_items_html` for elections. The storefront could do the same, with the
-item table and the payment block as raw-HTML variables inside an editable prose
-shell. It has not been done: it would mean nine new enum values behind a
-migration, nine default template definitions, variable catalogues and sample
-contexts, and rewiring the notification service to render through
-`_render_with_fallback`. Until then, what a department words itself is settings:
+Ten types, one more than the nine switches: the **cancellation notice has its
+own** rather than sharing the order-update row, so rewording a status change
+cannot silently change what a cancelled member reads. (It still rides the
+status-updates switch — one switch, two templates.)
+
+**How a notice is composed.** Each `send_*` builds two things: the message as
+this module has always composed it, and a *context* of variables. If the org
+has an active template row for that type, the template is rendered against the
+context and the coded message is unused; otherwise the coded message goes out.
+So a department that never opens the editor receives exactly what it received
+before templates existed — the fallback is not a stub, it is the original
+email. An inactive template falls back the same way, which is how you undo an
+edit without deleting it.
+
+**Why the computed parts are variables.** The template system substitutes
+`{{name}}` with no loops or conditionals, so a table of order lines cannot be
+written in a template body. The service renders those parts and injects them
+through `_RAW_HTML_VARIABLES` — the arrangement property return reminders use
+for `items_list_html` and elections use for `ballot_items_html`:
+
+| Variable | What the service puts there |
+|---|---|
+| `items_table_html` | The ordered items, with sizes, embroidery text and prices |
+| `payment_block_html` | Balance due, a pay button per configured method, your payment instructions |
+| `receipt_footer_html` | The receipt footer from store settings |
+| `member_notes_html` | Anything the member typed in the notes box |
+| `payment_summary_html` / `balance_notice_html` | What was received; then either paid-in-full or the remaining balance with pay buttons |
+| `cancellation_reason_html` / `refund_notice_html` | The reason given; a refund note only when money had been paid |
+| `window_description_html` / `window_extra_html` / `pickup_instructions_html` | The window's description; whatever that notice adds (deadline, vendor, delivery date); its pickup instructions |
+
+Removing one of these from a body does what it looks like: drop
+`{{payment_block_html}}` from the confirmation and members stop being told how
+to pay. **Reset to default** restores the shipped body.
+
+Settings still carry the wording that is per-department rather than per-notice,
+and reach every template through those variables:
 
 | Text | Where it appears |
 |---|---|
@@ -458,6 +484,9 @@ Header, logo and colours come from the organization's email branding, shared
 with the rest of the platform. Every send is logged to `message_history` under
 a `storefront_*` type, so Communications → Message History is the record of
 what actually went out.
+
+**Template lookups are cached per service instance.** A payment-reminder run
+walks up to 200 orders; without the cache each would re-read the same row.
 
 ---
 

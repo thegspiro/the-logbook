@@ -5,11 +5,23 @@ Builds and sends the storefront's outbound email: order confirmations, order
 updates, payment reminders and receipts, and the order-window announcements
 (open / closing soon / closed).
 
-Emails are composed inline with ``wrap_email_body`` — the same approach the
-scheduled inventory alerts use — rather than through the customizable
-``EmailTemplate`` system, because each of these bodies is a rendered table of
-order lines rather than a fixed block of prose an admin would edit. The parts a
-department *does* want to word itself are settings, not templates:
+Every notice is editable in Communications → Email Templates. Each ``send_*``
+below builds two things: the message as this module has always composed it
+(inline HTML through ``wrap_email_body``), and a *context* of variables. If the
+organization has a template row for that notice, the template is rendered
+against the context and the coded message is unused; otherwise the coded
+message goes out. A department that never opens that screen therefore receives
+exactly what it received before templates existed.
+
+The context carries computed parts as ready-made HTML — ``items_table_html``,
+``payment_block_html`` and friends, registered in ``_RAW_HTML_VARIABLES``.
+That is the same arrangement property return reminders use for
+``items_list_html``: the template system substitutes ``{{name}}`` and has no
+loops, so a table of order lines cannot be expressed in a template body and is
+injected into one instead. See ``email_templates_storefront`` for the default
+bodies and the full variable list.
+
+Settings still carry the wording that is per-department rather than per-notice:
 ``payment_instructions``, ``receipt_footer``, the window's
 ``pickup_instructions``, and the free-text message each announcement accepts.
 
@@ -50,6 +62,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
+from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.models.storefront import (
     StoreOrder,
     StoreOrderWindow,
@@ -58,6 +71,7 @@ from app.models.storefront import (
 )
 from app.models.user import Organization, User, UserStatus
 from app.services.email_service import EmailService, wrap_email_body
+from app.services.email_template_service import EmailTemplateService
 from app.utils.storefront_payments import build_payment_options
 
 # Colors used for the email header banner, by notice kind.
@@ -109,6 +123,7 @@ class StorefrontNotificationService:
         """
         self.db = db
         self._capture = capture
+        self._templates: Dict[str, Optional[EmailTemplate]] = {}
 
     # ------------------------------------------------------------------
     # Recipients
@@ -304,9 +319,89 @@ class StorefrontNotificationService:
             )
         return "".join(parts) or None
 
+    def _order_context(
+        self, order: StoreOrder, settings: Optional[StoreSettings], currency: str
+    ) -> Dict[str, Any]:
+        """The variables every order notice's template can use.
+
+        Computed parts arrive as ready-made HTML (see
+        ``email_templates_storefront``) because the template system has no
+        loops: an item table cannot be expressed in ``{{variable}}`` syntax.
+        """
+        balance = Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
+        store_name = (settings.store_name if settings else None) or "Department Store"
+        return {
+            "order_number": order.order_number or "",
+            "customer_name": order.customer_name or "",
+            "first_name": (order.customer_name or "").split(" ")[0],
+            "store_name": store_name,
+            "order_total": _money(order.total, currency),
+            "balance_due": _money(balance, currency),
+            "items_table_html": self._items_table(order, currency),
+            "payment_block_html": self._payment_block(order, settings, currency),
+        }
+
+    def _window_context(
+        self, window: StoreOrderWindow, settings: Optional[StoreSettings], extra: str
+    ) -> Dict[str, Any]:
+        """The variables every window notice's template can use."""
+        store_name = (settings.store_name if settings else None) or "Department Store"
+        description = ""
+        if window.description:
+            description = (
+                '<p style="white-space:pre-line;">'
+                f"{_html.escape(window.description)}</p>"
+            )
+        pickup = ""
+        if window.pickup_instructions:
+            pickup = (
+                '<p style="white-space:pre-line;color:#6b7280;">'
+                f"{_html.escape(window.pickup_instructions)}</p>"
+            )
+        return {
+            "window_name": window.name or "",
+            "store_name": store_name,
+            "window_description_html": description,
+            "window_extra_html": extra,
+            "pickup_instructions_html": pickup,
+        }
+
     # ------------------------------------------------------------------
     # Delivery
     # ------------------------------------------------------------------
+
+    async def _load_template(
+        self, organization_id: Optional[str], template_type: str
+    ) -> Optional[EmailTemplate]:
+        """The org's edited version of this notice, if it has one.
+
+        Cached per service instance: a payment-reminder run walks up to 200
+        orders, and each would otherwise re-read the same row.
+        """
+        if not organization_id:
+            return None
+        if template_type in self._templates:
+            return self._templates[template_type]
+
+        template: Optional[EmailTemplate] = None
+        try:
+            # The notice keys double as EmailTemplateType values; anything the
+            # enum does not know has no template and takes the coded body.
+            enum_type = EmailTemplateType(template_type)
+            service = EmailTemplateService(self.db)
+            template = await service.get_template(organization_id, enum_type)
+        except ValueError:
+            self._templates[template_type] = None
+            return None
+        except Exception as exc:
+            # A template that will not load must not stop the notice: the
+            # coded body below is a complete email on its own.
+            logger.warning(
+                f"Storefront template '{template_type}' failed to load, "
+                f"using the built-in body: {exc}"
+            )
+        self._templates[template_type] = template
+        return template
 
     async def _send(
         self,
@@ -317,37 +412,53 @@ class StorefrontNotificationService:
         body_html: str,
         text_body: str,
         template_type: str,
+        context: Optional[Dict[str, Any]] = None,
         header_color: str = _HEADER_BLUE,
         bcc: bool = False,
     ) -> int:
-        """Send one composed notice; returns the number of successful sends."""
+        """Compose one notice and send it; returns successful send count.
+
+        *subject*, *title*, *body_html* and *text_body* are the built-in
+        message. If the organization has edited this notice in Email
+        Templates, that template is rendered against *context* instead and
+        these become the fallback — so a department that has never opened that
+        screen receives exactly what this module has always sent.
+        """
         addresses = [address for address in recipients if address]
         if not addresses:
             return 0
+
+        template = await self._load_template(
+            str(organization.id) if organization else None, template_type
+        )
+        if template is not None:
+            rendered_subject, html_body, rendered_text = (
+                EmailTemplateService.render_static(
+                    template, dict(context or {}), organization=organization
+                )
+            )
+            subject = rendered_subject or subject
+            text_body = rendered_text or text_body
+        else:
+            html_body = wrap_email_body(
+                organization, title, body_html, header_color=header_color
+            )
+
         if self._capture is not None:
             self._capture.append(
                 {
                     "subject": subject,
                     "title": title,
-                    "html_body": wrap_email_body(
-                        organization, title, body_html, header_color=header_color
-                    ),
-                    # The unwrapped body too, so a caller that needs to add
-                    # something of its own (the test-send banner) can re-wrap
-                    # rather than splice into finished markup.
-                    "body_html": body_html,
-                    "header_color": header_color,
+                    "html_body": html_body,
                     "text_body": text_body,
                     "template_type": template_type,
+                    "templated": template is not None,
                     "bcc": bcc,
                 }
             )
             return len(addresses)
         try:
             email_service = EmailService(organization=organization)
-            html_body = wrap_email_body(
-                organization, title, body_html, header_color=header_color
-            )
             if bcc:
                 # Store-wide announcements go out BCC so one member's email
                 # address is never disclosed to the rest of the department.
@@ -392,6 +503,13 @@ class StorefrontNotificationService:
         currency = (settings.currency if settings else None) or "USD"
         store_name = (settings.store_name if settings else None) or "Department Store"
 
+        receipt_footer = ""
+        if settings and settings.receipt_footer:
+            receipt_footer = (
+                '<p style="color:#6b7280;white-space:pre-line;">'
+                f"{_html.escape(settings.receipt_footer)}</p>"
+            )
+
         body = (
             f"<p>Hi {_html.escape((order.customer_name or '').split(' ')[0])},</p>"
             f"<p>Thanks for your order from the {_html.escape(store_name)}. "
@@ -399,12 +517,11 @@ class StorefrontNotificationService:
             "</p>"
             f"{self._items_table(order, currency)}"
             f"{self._payment_block(order, settings, currency)}"
+            f"{receipt_footer}"
         )
-        if settings and settings.receipt_footer:
-            body += (
-                '<p style="color:#6b7280;white-space:pre-line;">'
-                f"{_html.escape(settings.receipt_footer)}</p>"
-            )
+
+        context = self._order_context(order, settings, currency)
+        context["receipt_footer_html"] = receipt_footer
 
         return await self._send(
             org,
@@ -417,6 +534,7 @@ class StorefrontNotificationService:
                 f"Total {_money(order.total, currency)}."
             ),
             "storefront_order_confirmation",
+            context=context,
         )
 
     async def send_admin_new_order(
@@ -436,17 +554,23 @@ class StorefrontNotificationService:
         org = organization or await self._get_organization(order.organization_id)
         currency = (settings.currency if settings else None) or "USD"
 
-        body = (
-            f"<p><strong>{_html.escape(order.customer_name or '')}</strong> placed "
-            f"order <strong>{_html.escape(order.order_number)}</strong>.</p>"
-            f"{self._items_table(order, currency)}"
-        )
+        member_notes = ""
         if order.member_notes:
-            body += (
+            member_notes = (
                 "<p><strong>Member notes:</strong><br>"
                 f'<span style="white-space:pre-line;">'
                 f"{_html.escape(order.member_notes)}</span></p>"
             )
+
+        body = (
+            f"<p><strong>{_html.escape(order.customer_name or '')}</strong> placed "
+            f"order <strong>{_html.escape(order.order_number)}</strong>.</p>"
+            f"{self._items_table(order, currency)}"
+            f"{member_notes}"
+        )
+
+        context = self._order_context(order, settings, currency)
+        context["member_notes_html"] = member_notes
 
         return await self._send(
             org,
@@ -459,6 +583,7 @@ class StorefrontNotificationService:
                 f"for {_money(order.total, currency)}."
             ),
             "storefront_new_order_admin",
+            context=context,
         )
 
     async def send_order_update(
@@ -490,6 +615,25 @@ class StorefrontNotificationService:
         if status_label:
             subject = f"Order {order.order_number}: {status_label}"
 
+        context = self._order_context(order, settings, currency)
+        context.update(
+            {
+                "update_message": message,
+                "status_label_suffix": f" — {status_label}" if status_label else "",
+                "status_subject_suffix": (
+                    f": {status_label}" if status_label else " update"
+                ),
+                # A settled order is not asked to pay again, so the block is
+                # empty rather than absent — a template referencing it renders
+                # nothing instead of a stray {{placeholder}}.
+                "payment_block_html": (
+                    self._payment_block(order, settings, currency)
+                    if balance > 0
+                    else ""
+                ),
+            }
+        )
+
         return await self._send(
             org,
             [order.customer_email],
@@ -498,6 +642,7 @@ class StorefrontNotificationService:
             body,
             f"Order {order.order_number}: {message}",
             "storefront_order_update",
+            context=context,
         )
 
     async def send_payment_reminder(
@@ -531,6 +676,7 @@ class StorefrontNotificationService:
                 f"{_money(balance, currency)}."
             ),
             "storefront_payment_reminder",
+            context=self._order_context(order, settings, currency),
             header_color=_HEADER_AMBER,
         )
 
@@ -549,29 +695,38 @@ class StorefrontNotificationService:
         balance = Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
 
         method_label = _METHOD_LABELS.get(order.payment_method or "", "")
-        body = (
+        summary = (
             "<p>We received "
             f"<strong>{_money(amount if amount is not None else order.amount_paid, currency)}</strong>"
             + (f" via {_html.escape(method_label)}" if method_label else "")
             + f" for order <strong>{_html.escape(order.order_number)}</strong>.</p>"
         )
         if balance > 0:
-            body += (
+            balance_notice = (
                 "<p>Remaining balance: "
                 f"<strong>{_money(balance, currency)}</strong>.</p>"
                 f"{self._payment_block(order, settings, currency)}"
             )
         else:
-            body += "<p>Your order is paid in full. Thank you!</p>"
+            balance_notice = "<p>Your order is paid in full. Thank you!</p>"
+
+        context = self._order_context(order, settings, currency)
+        context.update(
+            {
+                "payment_summary_html": summary,
+                "balance_notice_html": balance_notice,
+            }
+        )
 
         return await self._send(
             org,
             [order.customer_email],
             f"Payment received — order {order.order_number}",
             "Payment Received",
-            body,
+            summary + balance_notice,
             f"Payment received for order {order.order_number}.",
             "storefront_payment_received",
+            context=context,
             header_color=_HEADER_GREEN,
         )
 
@@ -586,17 +741,31 @@ class StorefrontNotificationService:
         if not order.customer_email:
             return 0
         org = organization or await self._get_organization(order.organization_id)
-        body = (
-            f"<p>Your order <strong>{_html.escape(order.order_number)}</strong> "
-            "has been cancelled.</p>"
-        )
+        currency = (settings.currency if settings else None) or "USD"
+
+        reason_html = ""
         if reason:
-            body += f'<p style="white-space:pre-line;">{_html.escape(reason)}</p>'
+            reason_html = f'<p style="white-space:pre-line;">{_html.escape(reason)}</p>'
+        refund_html = ""
         if Decimal(order.amount_paid or 0) > 0:
-            body += (
+            refund_html = (
                 "<p>A refund of the amount already paid will be arranged by the "
                 "department.</p>"
             )
+
+        body = (
+            f"<p>Your order <strong>{_html.escape(order.order_number)}</strong> "
+            "has been cancelled.</p>"
+            f"{reason_html}{refund_html}"
+        )
+
+        context = self._order_context(order, settings, currency)
+        context.update(
+            {
+                "cancellation_reason_html": reason_html,
+                "refund_notice_html": refund_html,
+            }
+        )
 
         return await self._send(
             org,
@@ -605,7 +774,11 @@ class StorefrontNotificationService:
             "Order Cancelled",
             body,
             f"Order {order.order_number} was cancelled.",
-            "storefront_order_update",
+            # Its own type since the move into Email Templates: sharing the
+            # order-update row would mean rewording one and silently changing
+            # the other.
+            "storefront_order_cancelled",
+            context=context,
             header_color=_HEADER_RED,
         )
 
@@ -676,6 +849,7 @@ class StorefrontNotificationService:
             body,
             f"Store orders are open for {window.name}.",
             "storefront_window_open",
+            context=self._window_context(window, settings, extra),
             header_color=_HEADER_GREEN,
             bcc=True,
         )
@@ -712,6 +886,7 @@ class StorefrontNotificationService:
             body,
             f"The {window.name} order window closes soon.",
             "storefront_window_closing",
+            context=self._window_context(window, settings, extra),
             header_color=_HEADER_AMBER,
             bcc=True,
         )
@@ -750,6 +925,7 @@ class StorefrontNotificationService:
             body,
             f"The {window.name} order window has closed.",
             "storefront_window_closed",
+            context=self._window_context(window, settings, extra),
             bcc=True,
         )
 
@@ -796,6 +972,7 @@ class StorefrontNotificationService:
             body,
             f"The {window.name} order has been placed with the vendor.",
             "storefront_vendor_order_placed",
+            context=self._window_context(window, settings, extra),
             bcc=True,
         )
 
