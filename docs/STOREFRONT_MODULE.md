@@ -174,8 +174,17 @@ A member with a balance due sees a button for every method the department both
 | Check | Payee and mailing address | No |
 | Cash / payroll deduction / other | Free-text instructions | No |
 
-A method with nothing configured is **hidden**, not rendered as a dead button.
-A link that goes nowhere tells a member the money moved when it did not.
+A method appears only when it is **both** in `accepted_payment_methods` **and**
+configured with a usable handle. Either alone hides it: a method with nothing
+configured would be a dead button, and a link that goes nowhere tells a member
+the money moved when it did not; a configured method the department has not
+ticked is one it does not take.
+
+The same list is enforced at checkout (`create_order` raises for a method not
+in `accepted_payment_methods`), so hiding the button is not the only thing
+standing in the way. An empty list is treated as "not set up yet" and does not
+block ordering — the member sees no buttons and the order number to quote,
+which is recoverable in a way a refused order is not.
 
 **Zelle deliberately has no link.** It runs inside each bank's own app and
 publishes no web or deep-link scheme, so the most that can honestly be offered

@@ -107,6 +107,13 @@ configured** — see [Paying](#paying-member-view).
 Cash App and Zelle handles are **validated when you save**. If you mistype a
 `$cashtag`, you get an error rather than a silently missing button.
 
+Un-ticking a method takes it off the member's screen immediately and blocks it
+at checkout — a crafted request cannot slip past the buttons. The one
+exception: a member who **already** placed an order on that method keeps their
+button, because they still owe you and still need a way to pay. If you have
+closed the account entirely, clear the handle as well and the button goes for
+everyone.
+
 ### Pricing
 
 | Field | Notes |

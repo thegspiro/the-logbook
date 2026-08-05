@@ -204,3 +204,44 @@ class TestRetiredMethodStillPayable:
             "cash_app",
             "zelle",
         }
+
+
+class TestOnlyAcceptedMethodsAreOffered:
+    """A department must never be shown paying by a method it does not take."""
+
+    def test_a_configured_method_that_is_not_accepted_stays_hidden(self):
+        # The handle is still on file — the department used to take Cash App,
+        # or filled it in speculatively — but they have not ticked it, so it
+        # is not on offer.
+        settings = _settings(accepted_payment_methods=["venmo"])
+        assert settings.cash_app_cashtag  # configured...
+        labels = [
+            o["label"]
+            for o in build_payment_options(settings, Decimal("45.00"), "ORD-1")
+        ]
+        assert labels == ["Venmo"]  # ...but not offered
+
+    def test_ticking_it_is_what_puts_it_on_offer(self):
+        settings = _settings(accepted_payment_methods=["venmo", "cash_app"])
+        labels = [
+            o["label"]
+            for o in build_payment_options(settings, Decimal("45.00"), "ORD-1")
+        ]
+        assert labels == ["Venmo", "Cash App"]
+
+    def test_both_conditions_are_required(self):
+        # Ticked without a handle is just as hidden as configured without a
+        # tick. The member sees a method only when both are true.
+        for accepted, cashtag in (
+            (["venmo", "cash_app"], None),
+            (["venmo"], "FallsChurchFire"),
+            (["venmo"], None),
+        ):
+            settings = _settings(
+                accepted_payment_methods=accepted, cash_app_cashtag=cashtag
+            )
+            labels = [
+                o["label"]
+                for o in build_payment_options(settings, Decimal("45.00"), "ORD-1")
+            ]
+            assert "Cash App" not in labels

@@ -1695,3 +1695,80 @@ class TestQuartermasterWorkflow:
             notify_member=False,
         )
         assert moved.status == StoreOrderStatus.READY_FOR_PICKUP
+
+
+class TestAcceptedMethodsAtCheckout:
+    """The buttons are the UI half; this is the half a crafted request meets."""
+
+    async def _store(self, db_session, org, service, accepted):
+        await service.update_settings(
+            org.id,
+            {
+                "is_enabled": True,
+                "allow_pickup": True,
+                "accepted_payment_methods": accepted,
+                "venmo_handle": "FallsChurchFire",
+                "cash_app_cashtag": "FallsChurchFire",
+            },
+        )
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+        return product
+
+    async def test_an_unaccepted_method_is_refused_at_checkout(self, db_session):
+        # Cash App is configured but not ticked, so it is not on offer — and
+        # hiding the button is not the only thing standing in the way.
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        product = await self._store(db_session, org, service, ["venmo"])
+
+        with pytest.raises(ValueError, match="not accepted by this store"):
+            await service.create_order(
+                org.id,
+                member,
+                {
+                    "items": [{"product_id": product.id, "quantity": 1}],
+                    "fulfillment_method": "pickup",
+                    "payment_method": StorePaymentMethod.CASH_APP,
+                },
+            )
+
+    async def test_an_accepted_method_goes_through(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        product = await self._store(db_session, org, service, ["venmo", "cash_app"])
+
+        order = await service.create_order(
+            org.id,
+            member,
+            {
+                "items": [{"product_id": product.id, "quantity": 1}],
+                "fulfillment_method": "pickup",
+                "payment_method": StorePaymentMethod.CASH_APP,
+            },
+        )
+        assert order.payment_method == StorePaymentMethod.CASH_APP
+
+    async def test_a_store_that_has_ticked_nothing_does_not_block_ordering(
+        self, db_session
+    ):
+        # Mid-setup, with no methods chosen yet, an order should not be
+        # rejected — the member is shown no buttons and told the reference to
+        # quote, which is recoverable. Refusing the order is not.
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        product = await self._store(db_session, org, service, [])
+
+        order = await service.create_order(
+            org.id,
+            member,
+            {
+                "items": [{"product_id": product.id, "quantity": 1}],
+                "fulfillment_method": "pickup",
+                "payment_method": StorePaymentMethod.VENMO,
+            },
+        )
+        assert order.order_number
