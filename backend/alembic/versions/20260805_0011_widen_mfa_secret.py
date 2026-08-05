@@ -21,8 +21,8 @@ Widening is non-destructive. Secrets already truncated stay truncated — they
 were unrecoverable the moment they were written — so affected members must
 re-enrol in MFA.
 
-Revision ID: 20260805_0002
-Revises: 20260805_0001
+Revision ID: 20260805_0011
+Revises: 20260805_0010
 Create Date: 2026-08-05 00:00:00.000000
 
 """
@@ -32,8 +32,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260805_0002"
-down_revision = "20260805_0001"
+revision = "20260805_0011"
+down_revision = "20260805_0010"
 branch_labels = None
 depends_on = None
 

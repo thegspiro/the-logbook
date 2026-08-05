@@ -78,7 +78,7 @@ incomplete relative to the models.
 
 | Class | Finding | Count | Status |
 |---|---|---|---|
-| Durable | Column **type** differs between paths | 38 | Fixed — `20260805_0001`–`0006` |
+| Durable | Column **type** differs between paths | 38 | Fixed — `20260805_0010`, `0011`, `0003`–`0006` |
 | Durable | Foreign key **ON DELETE** rule differs | 18 | Fixed — `20260805_0005`, `0008` |
 | Durable | **Enum value set** differs | 5 | Fixed — `20260805_0003`, `0006` |
 | Durable | **Server default** missing on a NOT NULL column | 283 | Fixed — models + `20260805_0007` |
@@ -88,7 +88,7 @@ incomplete relative to the models.
 | Model-side | **Duplicate indexes** — same column indexed twice | 136 | Fixed — models + `20260805_0009` |
 | Dead | Columns only in migrations | 2 | Fixed — `20260805_0009` |
 
-After `20260805_0001`–`0009`, re-running the comparison gives **0 type
+After `20260805_0010`, `0011` and `0003`–`0009`, re-running the comparison gives **0 type
 mismatches**, **0 foreign key rule differences**, **0 NOT NULL columns without a
 needed default**, and **no table present in one path but not the other**.
 
@@ -119,7 +119,7 @@ Since the model is what a fresh install gets, new deployments had the narrow
 column and a document body over 64 KB failed to save.
 
 Fixed on both sides: the model now declares
-`Text().with_variant(mysql.LONGTEXT(), "mysql")`, and `20260805_0001` widens
+`Text().with_variant(mysql.LONGTEXT(), "mysql")`, and `20260805_0010` widens
 databases that were built from the model.
 
 ### 2. `organizations.logo` was `MEDIUMTEXT` in the model, `LONGTEXT` in the migration
@@ -131,7 +131,7 @@ that guarantee did not hold. Same fix, same revision as #1.
 > Both of these were originally reported as needing only a model change. That
 > was wrong: databases built by `create_all()` — every install created since the
 > fast path landed — already had the *narrow* column and needed the ALTER too.
-> `20260805_0001` covers them.
+> `20260805_0010` covers them.
 
 ### 3. `users.mfa_secret` was `VARCHAR(32)` on migration-built databases
 
@@ -147,7 +147,7 @@ A raw TOTP secret fits in 32 characters; the **encrypted** ciphertext does not.
 On any database built from the chain, enrolling in MFA truncated the ciphertext
 so it could never be decrypted — with no error at write time.
 
-Fixed by `20260805_0002`. Secrets already truncated stay unrecoverable, so
+Fixed by `20260805_0011`. Secrets already truncated stay unrecoverable, so
 affected members must re-enrol.
 
 ### 4. Enum value sets rejected values the models consider legal

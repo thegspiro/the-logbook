@@ -16,10 +16,24 @@
 
 ## Current Head
 
-> **Update (2026-08-05):** The current head is **`20260805_0001`**
-> (`20260805_0001_add_course_syllabus_and_cohorts.py`), chaining linearly off
-> `20260802_0010` (storefront email templates). **New migrations must set
-> `down_revision = "20260805_0001"`.**
+> **Update (2026-08-05):** The current head is **`20260805_0009`**
+> (`20260805_0009_drop_redundant_indexes_and_dead_columns.py`). **New migrations
+> must set `down_revision = "20260805_0009"`.**
+>
+> Past `20260802_0010` (storefront email templates) the chain runs
+> `20260805_0001` (course syllabus and cohorts) → `0002` (merge) → `0010` →
+> `0011` → `0003` → … → `0009`. The two out-of-sequence ids are deliberate:
+> `0010` and `0011` were authored on a branch that claimed `0001` and `0002`
+> while the cohort branch already held them, and renumbering those two — rather
+> than the seven downstream — kept every id already cited in the wiki, the
+> CHANGELOG and `docs/` pointing at the revision it was written about.
+>
+> **A date-sequence id is not reserved by writing it.** Two branches pick the
+> same number independently and neither notices until both are on main, where
+> Alembic warns "present more than once", keeps one of each pair, and drops the
+> other from the graph. That left three heads and a silently skipped revision.
+> `tests/test_alembic_migrations.py` now fails on a duplicate id, so this
+> surfaces in CI rather than in a deployment.
 >
 > Recent order: `20260801_0020` (storefront tables) and `20260802_0001` (dues
 > payments ledger) both branched off `20260801_0019`; **`20260802_0002`** is the
