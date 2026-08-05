@@ -103,9 +103,15 @@ describe('StoreSettingsTab notification switches', () => {
     mockGetSettings.mockResolvedValue(settings({ sendWindowOpened: false }));
     render(<StoreSettingsTab onChanged={vi.fn()} />);
 
-    const opened = await screen.findByLabelText(/Ordering is open/);
+    // By role, not by label: each notice's Preview button is also named for
+    // its notice, so a bare label query matches the switch and the button.
+    const opened = await screen.findByRole('checkbox', {
+      name: /Ordering is open/,
+    });
     expect(opened).not.toBeChecked();
-    expect(screen.getByLabelText(/Ordering has closed/)).toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: /Ordering has closed/ }),
+    ).toBeChecked();
   });
 
   it('offers a preview of every notice, keyed to the right one', async () => {
@@ -138,7 +144,9 @@ describe('StoreSettingsTab notification switches', () => {
     const user = userEvent.setup();
     render(<StoreSettingsTab onChanged={vi.fn()} />);
 
-    const vendor = await screen.findByLabelText(/Order placed with the vendor/);
+    const vendor = await screen.findByRole('checkbox', {
+      name: /Order placed with the vendor/,
+    });
     await user.click(vendor);
     await user.click(screen.getByRole('button', { name: /save/i }));
 
