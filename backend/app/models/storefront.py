@@ -449,6 +449,17 @@ class StoreOrderWindow(Base):
     expected_delivery_date = Column(Date, nullable=True)
     pickup_instructions = Column(Text, nullable=True)
 
+    # --- The vendor order -------------------------------------------------
+    # Filled in when the department actually places the bulk order. Without
+    # these, "has this been ordered yet?" is answered from memory, and the
+    # member asking when their shirt arrives gets a shrug.
+    vendor_name = Column(String(200), nullable=True)
+    vendor_reference = Column(String(120), nullable=True)
+    vendor_ordered_at = Column(DateTime(timezone=True), nullable=True)
+    vendor_ordered_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     # When True the window offers every ACTIVE catalog product; when False only
     # the products explicitly listed in store_window_products are for sale.
     include_all_products = Column(Boolean, nullable=False, default=True)

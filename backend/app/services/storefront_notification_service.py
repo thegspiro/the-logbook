@@ -690,6 +690,52 @@ class StorefrontNotificationService:
             bcc=True,
         )
 
+    async def send_vendor_order_placed(
+        self,
+        window: StoreOrderWindow,
+        settings: Optional[StoreSettings],
+        recipients: List[str],
+        organization: Optional[Organization] = None,
+        message: Optional[str] = None,
+    ) -> int:
+        """Tell everyone who ordered that the bulk order is now with the vendor.
+
+        This is the update members actually chase. Between "ordering closed"
+        and "come pick it up" there can be six quiet weeks, and without a note
+        the quartermaster fields the same question a dozen times.
+        """
+        org = organization or await self._get_organization(window.organization_id)
+        extra = ""
+        if window.vendor_name:
+            extra += f"<p>Ordered from <strong>{_html.escape(window.vendor_name)}</strong>.</p>"
+        if window.expected_delivery_date:
+            extra += (
+                "<p>Expected delivery: "
+                f'<strong>{window.expected_delivery_date.strftime("%B %d, %Y")}'
+                "</strong>. We will let you know when it arrives.</p>"
+            )
+        else:
+            extra += "<p>We will let you know as soon as it arrives.</p>"
+        if message:
+            extra += f'<p style="white-space:pre-line;">{_html.escape(message)}</p>'
+
+        body = self._window_body(
+            window,
+            settings,
+            "Your order has been placed with the vendor.",
+            extra,
+        )
+        return await self._send(
+            org,
+            recipients,
+            f"Order placed with the vendor — {window.name}",
+            "Order Placed",
+            body,
+            f"The {window.name} order has been placed with the vendor.",
+            "storefront_vendor_order_placed",
+            bcc=True,
+        )
+
     async def summarize(self, sent: int, kind: str) -> Dict[str, Any]:
         """Small helper so callers can log a consistent result shape."""
         return {"notification": kind, "sent": sent}

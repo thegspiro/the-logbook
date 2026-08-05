@@ -14,7 +14,7 @@ quantities only.
 import csv
 import io
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -71,10 +71,17 @@ _ORDER_NUMBER_RE = re.compile(r"ORD-\d{4}-\d{4,}")
 # Inbound payments that still need somebody to look at them. MATCHED is in the
 # list on purpose: it means the money is attributable but nothing has been
 # applied yet, which is exactly the queue an administrator works through.
-# The two transitions a payment policy can block. Everything else — receiving
-# the goods, marking them ready, messaging the member — runs under every rule,
-# because none of it is irreversible from the member's side.
-_PAYMENT_GATED_STATUSES = (StoreOrderStatus.ORDERED, StoreOrderStatus.FULFILLED)
+# The transitions a payment policy can block. Everything else — messaging the
+# member, moving back to awaiting payment, cancelling — runs under every rule.
+_PAYMENT_GATED_STATUSES = (
+    StoreOrderStatus.ORDERED,
+    StoreOrderStatus.READY_FOR_PICKUP,
+    StoreOrderStatus.FULFILLED,
+)
+
+# Under BEFORE_VENDOR_ORDER the goods were never bought, so neither claim can
+# be made about them. Under BEFORE_PICKUP they exist and are on the shelf.
+_NO_GOODS_STATUSES = (StoreOrderStatus.ORDERED, StoreOrderStatus.READY_FOR_PICKUP)
 
 _UNRESOLVED_PAYMENT_STATUSES = (
     StorePaymentEventStatus.UNMATCHED,
@@ -119,9 +126,11 @@ def _payment_gate_error(
     Two transitions are gated, and each maps to one half of the rule the
     department chose:
 
-    * ORDERED   — only under BEFORE_VENDOR_ORDER, where an unpaid order is
-      held out of the purchase order. Marking it ordered would claim the
-      vendor was told about an item deliberately left off the sheet.
+    * ORDERED and READY_FOR_PICKUP — only under BEFORE_VENDOR_ORDER, where
+      the item was held out of the purchase order and so does not exist.
+      Neither claim can be made about goods nobody bought, and "ready for
+      pickup" is worse than merely inaccurate: it emails the member to come
+      and collect something that was never ordered.
     * FULFILLED — under both gated policies. Handing the goods over is the
       last irreversible step from the member's side.
 
@@ -135,12 +144,17 @@ def _payment_gate_error(
     owed = f"Order {order.order_number} still owes {balance}."
     fix = "Record the payment, or waive the balance, first."
 
-    if status == StoreOrderStatus.ORDERED:
+    if status in _NO_GOODS_STATUSES:
         if policy != StorePaymentPolicy.BEFORE_VENDOR_ORDER:
             return None
+        claim = (
+            "marked ordered"
+            if status == StoreOrderStatus.ORDERED
+            else "marked ready for pickup"
+        )
         return (
             f"{owed} This store holds unpaid orders out of the vendor order, "
-            f"so it cannot be marked ordered. {fix}"
+            f"so nothing was bought for it and it cannot be {claim}. {fix}"
         )
 
     return (
@@ -718,6 +732,86 @@ class StorefrontService:
                 window.open_notice_sent_at = _utcnow()
                 await self.db.commit()
         return window
+
+    async def record_vendor_order(
+        self,
+        window_id: str,
+        organization_id: str,
+        actor_id: Optional[str],
+        vendor_name: Optional[str] = None,
+        vendor_reference: Optional[str] = None,
+        expected_delivery_date: Optional[date] = None,
+        advance_orders: bool = True,
+        notify_members: bool = True,
+        message: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Log that the bulk order has gone to the vendor, and move the orders.
+
+        This is the step between "ordering closed" and "come pick it up", and
+        it is the one members chase. Recording it does three things at once so
+        the quartermaster is not left doing them separately and forgetting the
+        third: it stamps who the order went to and when, it advances the paid
+        orders to ORDERED, and it tells the members it went.
+
+        Orders the payment policy holds back are skipped rather than advanced —
+        they were not on the sheet the vendor received, so saying they were
+        ordered would be a lie the member later discovers at pickup.
+        """
+        window = await self.get_window(window_id, organization_id)
+        if not window:
+            raise ValueError("Order window not found")
+        if window.status in (StoreWindowStatus.DRAFT, StoreWindowStatus.SCHEDULED):
+            raise ValueError("Open the window before recording a vendor order")
+        if window.status == StoreWindowStatus.CANCELLED:
+            raise ValueError("A cancelled window has nothing to order")
+
+        if vendor_name is not None:
+            window.vendor_name = vendor_name.strip() or None
+        if vendor_reference is not None:
+            window.vendor_reference = vendor_reference.strip() or None
+        if expected_delivery_date is not None:
+            window.expected_delivery_date = expected_delivery_date
+        window.vendor_ordered_at = _utcnow()
+        window.vendor_ordered_by = actor_id
+        await self.db.commit()
+        await self.db.refresh(window)
+
+        advanced = 0
+        skipped: List[Dict[str, str]] = []
+        if advance_orders:
+            orders, _ = await self.list_orders(
+                organization_id, window_id=window.id, page_size=_EXPORT_PAGE_SIZE
+            )
+            result = await self.bulk_update_status(
+                organization_id,
+                [
+                    o.id
+                    for o in orders
+                    if o.status
+                    not in (StoreOrderStatus.CANCELLED, StoreOrderStatus.FULFILLED)
+                ],
+                StoreOrderStatus.ORDERED,
+                actor_id,
+                notify_members=False,
+            )
+            advanced = result["updated"]
+            skipped = result["errors"]
+
+        notified = 0
+        if notify_members:
+            settings = await self.get_settings(organization_id)
+            recipients = await self._window_customer_emails(window.id, organization_id)
+            if recipients:
+                notified = await self.notifications.send_vendor_order_placed(
+                    window, settings, recipients, message=message
+                )
+
+        return {
+            "window": window,
+            "advanced": advanced,
+            "skipped": skipped,
+            "notified": notified,
+        }
 
     async def close_window(
         self,
@@ -1449,6 +1543,7 @@ class StorefrontService:
         window_id: Optional[str] = None,
         status: Optional[str] = None,
         payment_status: Optional[str] = None,
+        payment_method: Optional[str] = None,
         user_id: Optional[str] = None,
         search: Optional[str] = None,
         page: int = 1,
@@ -1461,6 +1556,11 @@ class StorefrontService:
             filters.append(StoreOrder.status == status)
         if payment_status:
             filters.append(StoreOrder.payment_status == payment_status)
+        if payment_method:
+            # "Who paid by Zelle?" is the reconciliation question this answers:
+            # every app settles separately, so the quartermaster works one
+            # payout at a time.
+            filters.append(StoreOrder.payment_method == payment_method)
         if user_id:
             filters.append(StoreOrder.user_id == str(user_id))
         if search:

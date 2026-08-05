@@ -355,6 +355,9 @@ export interface StoreOrderWindow {
   autoOpen: boolean;
   autoClose: boolean;
   expectedDeliveryDate?: string | null;
+  vendorName?: string | null;
+  vendorReference?: string | null;
+  vendorOrderedAt?: string | null;
   pickupInstructions?: string | null;
   includeAllProducts: boolean;
   notifyOnOpen: boolean;
@@ -556,6 +559,16 @@ export interface StoreWindowSizeTotal {
   sku?: string | null;
   quantity: number;
   lineTotal: string;
+}
+
+/** Outcome of logging a bulk order with the vendor. */
+export interface StoreVendorOrderResult {
+  window: StoreOrderWindow;
+  advanced: number;
+  /** Orders the payment rule held back — not on the vendor's sheet, so not
+   *  marked ordered either. */
+  skipped: { order_id: string; error: string }[];
+  notified: number;
 }
 
 export interface StoreWindowSummary {

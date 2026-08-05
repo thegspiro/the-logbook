@@ -46,6 +46,10 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
 
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
+  // The member picked a method at checkout; what they actually handed over can
+  // differ — they chose Venmo and then paid cash at drill. Recording the real
+  // one is the whole point of this field.
+  const [paymentMethod, setPaymentMethod] = useState('');
   const [statusChoice, setStatusChoice] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [updateMessage, setUpdateMessage] = useState('');
@@ -60,6 +64,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
       setOrder(fetched);
       setPaymentAmount(fetched.balanceDue);
       setPaymentReference(fetched.paymentReference ?? '');
+      setPaymentMethod(fetched.paymentMethod ?? '');
       setStatusChoice(fetched.status);
       setAdminNotes(fetched.adminNotes ?? '');
     } catch (err: unknown) {
@@ -89,7 +94,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
       if (!order) return;
       try {
         await storefrontService.markOrderPaid(order.id, {
-          paymentMethod: order.paymentMethod ?? undefined,
+          paymentMethod: paymentMethod || undefined,
           reference: paymentReference.trim() || undefined,
           notifyMember: true,
         });
@@ -125,7 +130,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
       try {
         await storefrontService.recordPayment(order.id, {
           amount,
-          paymentMethod: order.paymentMethod ?? undefined,
+          paymentMethod: paymentMethod || undefined,
           reference: paymentReference.trim() || undefined,
           markPaid: true,
           notifyMember: true,
@@ -335,6 +340,24 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                     onChange={(e) => setPaymentAmount(e.target.value)}
                     className="form-input-sm w-28"
                   />
+                </div>
+                <div>
+                  <label htmlFor="payment-method" className="form-label-sm">
+                    Paid by
+                  </label>
+                  <select
+                    id="payment-method"
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="form-input-sm"
+                  >
+                    <option value="">Not recorded</option>
+                    {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="min-w-[10rem] flex-1">
                   <label htmlFor="payment-ref" className="form-label-sm">

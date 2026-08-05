@@ -325,7 +325,28 @@ with order numbers and balances.]**
 > the unpaid ones come back named with what they owe. Waiving works too — comp
 > somebody a replacement and it clears the gate the same as paying."
 
-### RECORDING MONEY (15:15 – 15:45)
+### RECORD HOW THEY *ACTUALLY* PAID (15:15 – 15:45)
+
+**[SCREEN: An order detail with the "Paid by" dropdown open — it reads Venmo,
+being changed to Cash.]**
+
+> "Casey picked Venmo at checkout. Then she handed you a twenty at drill. The
+> **Paid by** dropdown is where you say so."
+
+**[CALLOUT: "Wrong method = treasurer short, nobody knows why."]**
+
+> "Leave it on Venmo and your treasurer reconciles the Venmo payout, comes up
+> one payment short, and has nothing to go on. Thirty seconds here saves an
+> evening later."
+
+**[SCREEN: The Orders tab, filtering by payment method — Zelle — showing just
+those orders.]**
+
+> "And that's what makes the **method filter** work. Each app pays out
+> separately, so when you're sat in front of a Zelle statement you want the
+> Zelle orders and nothing else."
+
+### RECORDING MONEY (15:45 – 16:15)
 
 **[SCREEN: Clicking Mark paid on a row; the balance clears in place.]**
 
@@ -429,7 +450,32 @@ embroidery name.]**
 > personalized item they never look the same. Nineteen shirts, eleven names,
 > five sizes."
 
-### CHASING AND FULFILLING (19:00 – 19:40)
+### TELL THE VENDOR, THEN TELL THE MEMBERS (19:00 – 19:30)
+
+**[SCREEN: Record vendor order — Galls, PO-8842, expected 14 November, "Email
+everyone who ordered" ticked.]**
+
+> "You place the order with your vendor. Then come back and **record** it —
+> who, their reference, when you expect it."
+
+**[CALLOUT: "One action: stamped, advanced, announced."]**
+
+> "One click does three things. It stamps the window so 'has this been ordered
+> yet?' comes off the record instead of somebody's memory. It marks every
+> eligible order **ordered**. And it emails everyone that it's gone in, with
+> the expected date."
+
+**[SCREEN: The result toast — "4 orders marked ordered · 1 held back,
+unpaid".]**
+
+> "Held-back orders get skipped, not advanced — they weren't on the sheet the
+> vendor got. That last line tells you who to chase."
+
+> "That email is the one members actually want. Six quiet weeks between
+> 'ordering closed' and 'come get it' is six weeks of people asking you in the
+> bay."
+
+### CHASING AND FULFILLING (19:30 – 19:50)
 
 **[SCREEN: Sorting Orders by payment status to show the two unpaid.]**
 
@@ -478,3 +524,5 @@ station.]**
 | 13e | Let PayPal Mark Your Orders Paid | Chapter 7 |
 | 13f | Paid But Not Ordered — Why Two Statuses | Chapter 6 |
 | 13g | Your Department's Rule on Unpaid Orders | Chapter 6 |
+| 13h | They Said Venmo and Paid Cash — Record It Right | Chapter 6 |
+| 13i | Tell the Vendor, Tell the Members, One Click | Chapter 8 |

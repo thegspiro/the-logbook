@@ -66,6 +66,8 @@ from app.schemas.storefront import (
     StoreProductUpdate,
     StoreSettingsResponse,
     StoreSettingsUpdate,
+    StoreVendorOrderRequest,
+    StoreVendorOrderResult,
     StoreWindowCloseRequest,
     StoreWindowOpenRequest,
     StoreWindowSummaryResponse,
@@ -921,6 +923,48 @@ async def delete_window(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post("/windows/{window_id}/vendor-order", response_model=StoreVendorOrderResult)
+async def record_vendor_order(
+    window_id: str,
+    payload: StoreVendorOrderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("storefront.manage")),
+) -> Any:
+    """Log that the bulk order went to the vendor, and advance the orders."""
+    service = StorefrontService(db)
+    try:
+        result = await service.record_vendor_order(
+            window_id,
+            str(current_user.organization_id),
+            str(current_user.id),
+            vendor_name=payload.vendor_name,
+            vendor_reference=payload.vendor_reference,
+            expected_delivery_date=payload.expected_delivery_date,
+            advance_orders=payload.advance_orders,
+            notify_members=payload.notify_members,
+            message=payload.message,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+
+    await log_audit_event(
+        db=db,
+        event_type="store_vendor_order_recorded",
+        event_category="storefront",
+        severity="info",
+        event_data={
+            "window_id": window_id,
+            "vendor_name": payload.vendor_name,
+            "vendor_reference": payload.vendor_reference,
+            "orders_advanced": result["advanced"],
+            "orders_skipped": len(result["skipped"]),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return result
+
+
 @router.get("/windows/{window_id}/summary", response_model=StoreWindowSummaryResponse)
 async def get_window_summary(
     window_id: str,
@@ -967,6 +1011,7 @@ async def list_orders(
     window_id: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
     payment_status: Optional[str] = Query(None),
+    payment_method: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=200),
@@ -980,6 +1025,7 @@ async def list_orders(
         window_id=window_id,
         status=status_filter,
         payment_status=payment_status,
+        payment_method=payment_method,
         search=search,
         page=page,
         page_size=page_size,

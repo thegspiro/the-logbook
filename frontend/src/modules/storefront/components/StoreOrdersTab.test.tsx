@@ -111,7 +111,7 @@ describe('StoreOrdersTab payment handling', () => {
     await screen.findByText(/ORD-2026-0001/);
 
     await user.click(screen.getByLabelText(/select order ORD-2026-0001/i));
-    await user.selectOptions(screen.getByLabelText(/payment method/i), 'venmo');
+    await user.selectOptions(screen.getByLabelText(/payment method for selected/i), 'venmo');
     await user.type(screen.getByLabelText(/payment reference/i), 'statement-2026-08');
     await user.click(screen.getByRole('button', { name: /mark selected paid/i }));
 

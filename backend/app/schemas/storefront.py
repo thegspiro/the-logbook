@@ -487,6 +487,11 @@ class StoreOrderWindowResponse(UTCResponseBase):
     auto_close: bool
     expected_delivery_date: Optional[date] = None
     pickup_instructions: Optional[str] = None
+    # Stamped by record_vendor_order, never set through the window form: the
+    # date has to mean "when the order actually went out".
+    vendor_name: Optional[str] = None
+    vendor_reference: Optional[str] = None
+    vendor_ordered_at: Optional[datetime] = None
     include_all_products: bool
     notify_on_open: bool
     opened_at: Optional[datetime] = None
@@ -795,6 +800,34 @@ class StoreOrderAdminNotes(BaseModel):
 # ============================================
 # Reporting
 # ============================================
+
+
+class StoreVendorOrderRequest(BaseModel):
+    """Log that the bulk order has gone to the vendor"""
+
+    model_config = _REQUEST_CONFIG
+
+    vendor_name: Optional[str] = Field(None, max_length=200)
+    vendor_reference: Optional[str] = Field(None, max_length=120)
+    expected_delivery_date: Optional[date] = None
+    # Advances every eligible order to "ordered" in the same action, so the
+    # record cannot drift from what was actually sent.
+    advance_orders: bool = True
+    notify_members: bool = True
+    message: Optional[str] = None
+
+
+class StoreVendorOrderResult(UTCResponseBase):
+    """Outcome of recording a vendor order"""
+
+    model_config = _RESPONSE_CONFIG
+
+    window: "StoreOrderWindowResponse"
+    advanced: int
+    # Orders the payment policy held back — they were not on the vendor's
+    # sheet, so they are not marked ordered either.
+    skipped: List[Dict[str, str]] = Field(default_factory=list)
+    notified: int
 
 
 class StoreWindowSizeTotal(UTCResponseBase):

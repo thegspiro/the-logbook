@@ -43,6 +43,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({ onChanged, initi
   const [windowFilter, setWindowFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [paymentFilter, setPaymentFilter] = useState(initialPaymentFilter ?? '');
+  const [methodFilter, setMethodFilter] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<string>(StoreOrderStatus.READY_FOR_PICKUP);
@@ -60,6 +61,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({ onChanged, initi
         windowId: windowFilter || undefined,
         status: statusFilter || undefined,
         paymentStatus: paymentFilter || undefined,
+        paymentMethod: methodFilter || undefined,
         search: search.trim() || undefined,
         page,
         pageSize: DEFAULT_PAGE_SIZE,
@@ -71,7 +73,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({ onChanged, initi
     } finally {
       setLoading(false);
     }
-  }, [page, paymentFilter, search, statusFilter, windowFilter]);
+  }, [methodFilter, page, paymentFilter, search, statusFilter, windowFilter]);
 
   useEffect(() => {
     void load();
@@ -256,6 +258,27 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({ onChanged, initi
               </option>
             ))}
           </select>
+          {/* Every app settles separately, so reconciling a Zelle batch means
+              seeing only the Zelle orders. */}
+          <label htmlFor="order-method-filter" className="sr-only">
+            Filter by payment method
+          </label>
+          <select
+            id="order-method-filter"
+            value={methodFilter}
+            onChange={(e) => {
+              setMethodFilter(e.target.value);
+              setPage(1);
+            }}
+            className="form-input"
+          >
+            <option value="">All methods</option>
+            {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
         </div>
         <button
           type="button"
@@ -276,7 +299,7 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({ onChanged, initi
           {/* Payment first: reconciling a Venmo/PayPal payout against a
               window is the job this screen exists for. */}
           <label htmlFor="bulk-payment-method" className="sr-only">
-            Payment method
+            Payment method for selected orders
           </label>
           <select
             id="bulk-payment-method"

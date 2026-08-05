@@ -201,24 +201,26 @@ Departments genuinely differ here and both directions are defensible, so the
 default is `none` — the behaviour a store already had before the setting
 existed.
 
-| Value | In the vendor order | Can be marked `ordered` | Can be handed over |
-|-------|--------------------|------------------------|--------------------|
+| Value | In the vendor order | `ordered` / `ready_for_pickup` | `fulfilled` |
+|-------|--------------------|-------------------------------|-------------|
 | `none` | Yes | Yes | Yes |
 | `before_pickup` | Yes | Yes | **Refused** while a balance is due |
 | `before_vendor_order` | **Held back** | **Refused** | **Refused** |
 
-`before_vendor_order` blocks `ORDERED` as well as `FULFILLED` because the item
-was deliberately left off the vendor sheet: marking it ordered would put the
-record at odds with what the vendor actually received.
+`before_vendor_order` blocks `ORDERED` and `READY_FOR_PICKUP` as well as
+`FULFILLED`, because the item was deliberately left off the vendor sheet and so
+does not exist. Neither claim can be made about goods nobody bought — and
+"ready for pickup" is worse than merely inaccurate, since it emails the member
+to come and collect something that was never ordered.
 
 Under `before_vendor_order`, `size_totals` and `tallies` cover settled orders
 only, and the excluded ones come back as `held_totals` / `held_order_count`
 rather than disappearing — the quartermaster has to see who is being left out
 before the order goes in.
 
-Only those two transitions are gated (`_PAYMENT_GATED_STATUSES`). Receiving
-goods, marking them ready, messaging the member and cancelling all still run
-under every rule, because none of it is irreversible from the member's side.
+Only those transitions are gated (`_PAYMENT_GATED_STATUSES`). Messaging the
+member, moving an order back to awaiting payment, and cancelling all still run
+under every rule.
 `bulk_update_status` delegates to the same check, so advancing a whole window
 moves the settled orders and returns the rest by order number with the balance
 in the message.
@@ -231,6 +233,22 @@ invalidating what it has already sent to the vendor.
 — so waiving a comp or a replacement releases the order exactly like a payment
 does.
 
+### The vendor order
+
+`POST /store/windows/{id}/vendor-order` records that the bulk order has gone
+out, and is the step between "ordering closed" and "come pick it up" — the one
+members chase. It does three things in one call so they cannot drift apart:
+
+1. Stamps `vendor_name`, `vendor_reference`, `vendor_ordered_at` and
+   `vendor_ordered_by` on the window, plus `expected_delivery_date` if given.
+2. Advances every eligible order to `ORDERED`.
+3. Emails everyone who ordered, with the vendor and expected date.
+
+Orders the payment policy holds back are skipped, not advanced, and come back
+in `skipped` with the balance in the message. They were not on the sheet the
+vendor received, so recording them as ordered would be a lie the member
+discovers at pickup.
+
 ### Recording money
 
 | Action | Endpoint | Effect |
@@ -240,6 +258,13 @@ does.
 | Waive | `POST /store/orders/{id}/waive` | Clears the balance without money changing hands |
 | Refund | `POST /store/orders/{id}/refund` | Records a refund |
 | Bulk mark paid | `POST /store/orders/bulk-payment` | Several orders at once |
+
+Every one of these takes the **payment method actually used**, which need not
+be the one the member chose at checkout — they picked Venmo and then handed
+over cash at drill. Recording the real method is what keeps a treasurer's
+Venmo reconciliation from coming up one short with no explanation.
+`GET /store/orders?payment_method=zelle` narrows the list the same way, since
+each app settles as its own payout.
 
 Mark-paid reads the balance off the order rather than asking for it. Typing the
 amount is the common case by far and adds a chance to fat-finger it.

@@ -27,9 +27,10 @@ settling up fast to record and hard to lose track of.
 11. [Working the Orders](#working-the-orders)
 12. [Recording Payment](#recording-payment)
 13. [Automatic PayPal Reconciliation](#automatic-paypal-reconciliation)
-14. [Closing a Window and Ordering from the Vendor](#closing-a-window-and-ordering-from-the-vendor)
-15. [Realistic Example: A Fall Job-Shirt Window](#realistic-example-a-fall-job-shirt-window)
-16. [Troubleshooting](#troubleshooting)
+14. [Telling the Vendor, and Telling the Members](#telling-the-vendor-and-telling-the-members)
+15. [Closing a Window and Ordering from the Vendor](#closing-a-window-and-ordering-from-the-vendor)
+16. [Realistic Example: A Fall Job-Shirt Window](#realistic-example-a-fall-job-shirt-window)
+17. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -325,6 +326,11 @@ Somebody confirms the money actually arrived.
 
 **Store Admin > Orders tab.** Filter by window, status, or payment status.
 
+Filters: window, order status, payment status, and **payment method**. That
+last one is how you reconcile — each app pays out separately, so "show me
+everyone who paid by Zelle" is the question you actually have in front of a
+bank statement.
+
 | Action | What it does |
 |--------|--------------|
 | Set status | Move through submitted → ordered → ready for pickup → fulfilled |
@@ -359,6 +365,17 @@ other.
 The common case is **Mark paid**: money arrived out of band for exactly what was
 owed, and you just need to say so. It reads the balance off the order, so there
 is no amount to mistype.
+
+### Record how they *actually* paid
+
+The **Paid by** dropdown on an order defaults to the method the member chose at
+checkout — but change it if they paid another way. Casey picked Venmo and then
+handed you cash at drill; record it as **cash**.
+
+This matters more than it looks. If you leave it as Venmo, your treasurer
+reconciles the Venmo payout, comes up one payment short, and has no way to
+find out why. The **Reference** box next to it takes whatever identifies the
+payment — a Venmo transaction, a check number, or just "handed over at drill".
 
 Use **Record payment** when somebody pays part of it, or when you need the
 amount on record to differ from the balance.
@@ -411,6 +428,34 @@ inside each bank. PayPal is the only one that can report back.
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Payments tab showing an unmatched
 > payment with payer name, amount, and the Apply / Dismiss actions._
+
+---
+
+## Telling the Vendor, and Telling the Members
+
+Once you have the tally, place the order with your vendor — then come back and
+hit **Record vendor order** on the window.
+
+| Field | Why |
+|-------|-----|
+| Vendor | Who it went to |
+| PO / reference | Their order number, for when you have to chase it |
+| Expected delivery | Goes in the email to members |
+
+Recording it does three things in one action, so they cannot drift apart:
+
+1. Stamps who, what reference, and when — so "has this been ordered yet?" is
+   answered from the record instead of from memory.
+2. Marks every eligible order **ordered**.
+3. Emails everyone who ordered, with the vendor and the expected date.
+
+That email is the one members actually want. Between "ordering closed" and
+"come pick it up" there can be six quiet weeks, and without it you field the
+same question a dozen times.
+
+Orders your payment rule holds back are **skipped**, not marked ordered — they
+were not on the sheet the vendor received. The result tells you how many moved
+and how many were held, so you know who to chase.
 
 ---
 
@@ -487,7 +532,9 @@ payment status to find who still owes.
 
 **Fulfillment (November)**
 
-13. 17 shirts arrive. Bulk-set the window's orders to **ready for pickup**.
+13. 17 shirts arrive. Bulk-set the window's orders to **ready for pickup** —
+    the 2 held-back orders are skipped, because there is no shirt on the shelf
+    for them to be ready for.
 14. Hand them out at drill and mark **fulfilled**. The bulk action moves the 12
     paid orders and returns the 2 unpaid ones by order number with what they
     owe — so you know exactly who to find before handing anything over.
@@ -521,6 +568,16 @@ rejoin the totals; if you want them ordered anyway, switch the rule to
 Under either payment rule, an order with a balance due cannot be handed over.
 The error names the amount owed. Record the payment, or waive the balance if
 the department is comping it.
+
+**I can't mark a held order ready for pickup either.**
+Under *payment required before the vendor order* their item was never bought,
+so it cannot be on the shelf. Marking it ready would email them to come and
+collect something that does not exist. Take their payment and it unblocks.
+
+**The treasurer's Venmo total doesn't match the store.**
+Check the **Paid by** column. If somebody paid cash or by check and it was
+recorded as Venmo, the store and the payout will disagree by exactly that
+amount. Open the order and correct the method.
 
 **A member paid but their order still says unpaid.**
 Paying happens outside The Logbook, so nothing changes until someone records

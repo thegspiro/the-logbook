@@ -93,8 +93,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   column: without it the file read as a vendor sheet that quietly undid the
   policy the on-screen tally was enforcing.
 
+- **The quartermaster's loop is complete end to end.** Orders can be filtered
+  by the payment method actually used — each app settles as its own payout, so
+  "show me the Zelle orders" is the question you have in front of a bank
+  statement. Recording a payment now takes the method that was really used
+  rather than the one the member picked at checkout: they chose Venmo and
+  handed over cash at drill, and leaving it as Venmo makes the treasurer's
+  reconciliation come up short with nothing to explain it.
+- **The vendor order is recorded against the window** — who it went to, their
+  reference, when, and the expected delivery date — in one action that also
+  advances every eligible order to *ordered* and emails the members that it has
+  gone in. That email is the one members chase: between "ordering closed" and
+  "come pick it up" there can be six quiet weeks. Orders the payment rule holds
+  back are skipped rather than advanced, and come back named, since they were
+  never on the sheet the vendor received.
+
 **Fixed**
 
+- **A held order could be marked ready for pickup.** Under *payment required
+  before the vendor order* the item was never bought, so the shelf is empty —
+  and "ready for pickup" is worse than merely inaccurate, because it emails the
+  member to come and collect something that does not exist. That transition is
+  now gated alongside *ordered* and *fulfilled*.
 - **Window rollups truncated at one page.** Order counts and sales totals were
   summed in Python over a paged query, so any window larger than 200 orders
   silently under-reported. Now computed in SQL.

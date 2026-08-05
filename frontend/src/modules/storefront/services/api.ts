@@ -14,6 +14,7 @@ import type {
   StorePaymentEvent,
   StorePaymentEventList,
   StorePermissions,
+  StoreVendorOrderResult,
   StoreProduct,
   StoreProductInput,
   StoreSettings,
@@ -206,6 +207,21 @@ export const storefrontService = {
     await api.delete(`/store/windows/${windowId}`);
   },
 
+  async recordVendorOrder(
+    windowId: string,
+    payload: {
+      vendorName?: string | undefined;
+      vendorReference?: string | undefined;
+      expectedDeliveryDate?: string | undefined;
+      advanceOrders: boolean;
+      notifyMembers: boolean;
+      message?: string | undefined;
+    }
+  ): Promise<StoreVendorOrderResult> {
+    const response = await api.post<StoreVendorOrderResult>(`/store/windows/${windowId}/vendor-order`, payload);
+    return response.data;
+  },
+
   async getWindowSummary(windowId: string): Promise<StoreWindowSummary> {
     const response = await api.get<StoreWindowSummary>(`/store/windows/${windowId}/summary`);
     return response.data;
@@ -222,6 +238,7 @@ export const storefrontService = {
     windowId?: string | undefined;
     status?: string | undefined;
     paymentStatus?: string | undefined;
+    paymentMethod?: string | undefined;
     search?: string | undefined;
     page?: number;
     pageSize?: number;
@@ -231,6 +248,7 @@ export const storefrontService = {
         window_id: params?.windowId,
         status: params?.status,
         payment_status: params?.paymentStatus,
+        payment_method: params?.paymentMethod,
         search: params?.search,
         page: params?.page ?? 1,
         page_size: params?.pageSize ?? 25,

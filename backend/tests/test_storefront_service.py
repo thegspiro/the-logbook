@@ -9,7 +9,7 @@ the schema has to exist for any of this to run.
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -1444,3 +1444,254 @@ class TestPaymentPolicy:
 
         # Nothing is held under this rule, so the whole sheet goes to the vendor.
         assert {r[held_col] for r in rows} == {"no"}
+
+
+class TestQuartermasterWorkflow:
+    """The four things the job actually consists of."""
+
+    async def _window_with_mixed_payments(self, db_session, org, service, policy):
+        await service.update_settings(
+            org.id,
+            {
+                "payment_policy": policy,
+                # A department that takes cash and Zelle at drill as well as
+                # the apps — which is most of them.
+                "accepted_payment_methods": ["venmo", "cash", "zelle"],
+                "venmo_handle": "ScenarioFD",
+                "zelle_handle": "treasurer@example.org",
+            },
+        )
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        window = await _make_open_window(db_session, org)
+
+        placed = {}
+        for name, method, pay in (
+            ("cash", StorePaymentMethod.CASH, True),
+            ("zelle", StorePaymentMethod.ZELLE, True),
+            ("venmo", StorePaymentMethod.VENMO, False),
+        ):
+            member = await _make_member(db_session, org, first=name)
+            order = await service.create_order(
+                org.id,
+                member,
+                {
+                    "items": [{"product_id": product.id, "quantity": 1}],
+                    "fulfillment_method": "pickup",
+                    "payment_method": method,
+                },
+            )
+            if pay:
+                await service.mark_order_paid(
+                    order.id, org.id, None, payment_method=method, notify_member=False
+                )
+            placed[name] = order
+        return window, placed
+
+    # -- See all orders, and how each was paid -----------------------------
+
+    async def test_orders_can_be_filtered_by_how_they_were_paid(self, db_session):
+        # "Who paid by Zelle?" — every app settles separately, so the
+        # quartermaster reconciles one payout at a time.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, placed = await self._window_with_mixed_payments(
+            db_session, org, service, StorePaymentPolicy.NONE
+        )
+
+        zelle, total = await service.list_orders(
+            org.id, window_id=window.id, payment_method="zelle"
+        )
+        assert total == 1
+        assert zelle[0].id == placed["zelle"].id
+
+        everything, all_total = await service.list_orders(org.id, window_id=window.id)
+        assert all_total == 3
+        assert len(everything) == 3
+
+    async def test_the_method_filter_composes_with_payment_status(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, _ = await self._window_with_mixed_payments(
+            db_session, org, service, StorePaymentPolicy.NONE
+        )
+
+        _, unpaid_venmo = await service.list_orders(
+            org.id,
+            window_id=window.id,
+            payment_method="venmo",
+            payment_status="unpaid",
+        )
+        assert unpaid_venmo == 1
+
+    # -- Record payment, in the method actually used -----------------------
+
+    async def test_payment_can_be_recorded_under_a_different_method(self, db_session):
+        # She chose Venmo at checkout and then handed over cash at drill. The
+        # record has to say cash, or the treasurer's Venmo reconciliation is
+        # short by one and nobody knows why.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, placed = await self._window_with_mixed_payments(
+            db_session, org, service, StorePaymentPolicy.NONE
+        )
+
+        settled = await service.mark_order_paid(
+            placed["venmo"].id,
+            org.id,
+            None,
+            payment_method=StorePaymentMethod.CASH,
+            reference="handed over at drill",
+            notify_member=False,
+        )
+
+        assert settled.payment_status == StorePaymentStatus.PAID
+        assert settled.payment_method == StorePaymentMethod.CASH
+        assert settled.payment_reference == "handed over at drill"
+
+    # -- Tell the vendor, and record that you did --------------------------
+
+    async def test_recording_the_vendor_order_stamps_and_advances(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, _ = await self._window_with_mixed_payments(
+            db_session, org, service, StorePaymentPolicy.NONE
+        )
+        await service.close_window(window.id, org.id, notify_members=False)
+
+        result = await service.record_vendor_order(
+            window.id,
+            org.id,
+            None,
+            vendor_name="Galls",
+            vendor_reference="PO-8842",
+            expected_delivery_date=date(2026, 11, 14),
+            notify_members=False,
+        )
+
+        assert result["window"].vendor_name == "Galls"
+        assert result["window"].vendor_reference == "PO-8842"
+        assert result["window"].vendor_ordered_at is not None
+        assert result["window"].expected_delivery_date == date(2026, 11, 14)
+        # Under no gate, everything that was ordered gets marked ordered.
+        assert result["advanced"] == 3
+        assert result["skipped"] == []
+
+    async def test_the_vendor_order_skips_what_the_payment_rule_held_back(
+        self, db_session
+    ):
+        # The unpaid order was not on the sheet the vendor received, so saying
+        # it was ordered would be a lie the member discovers at pickup.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, placed = await self._window_with_mixed_payments(
+            db_session, org, service, StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+        await service.close_window(window.id, org.id, notify_members=False)
+
+        result = await service.record_vendor_order(
+            window.id, org.id, None, vendor_name="Galls", notify_members=False
+        )
+
+        assert result["advanced"] == 2
+        assert len(result["skipped"]) == 1
+        assert result["skipped"][0]["order_id"] == placed["venmo"].id
+
+        held = await service.get_order(placed["venmo"].id, org.id)
+        assert held is not None
+        assert held.status != StoreOrderStatus.ORDERED
+
+    async def test_a_draft_window_has_nothing_to_order(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window = await _make_open_window(
+            db_session, org, status=StoreWindowStatus.DRAFT
+        )
+
+        with pytest.raises(ValueError, match="Open the window"):
+            await service.record_vendor_order(window.id, org.id, None)
+
+    async def test_recording_a_vendor_order_is_org_scoped(self, db_session):
+        org_a = await _make_org(db_session, "Org A")
+        org_b = await _make_org(db_session, "Org B")
+        service = StorefrontService(db_session)
+        await _enable_store(service, org_a)
+        window, _ = await self._window_with_mixed_payments(
+            db_session, org_a, service, StorePaymentPolicy.NONE
+        )
+
+        with pytest.raises(ValueError, match="not found"):
+            await service.record_vendor_order(window.id, org_b.id, None)
+
+    # -- Then pickup --------------------------------------------------------
+
+    async def test_the_window_walks_from_vendor_order_to_collected(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, placed = await self._window_with_mixed_payments(
+            db_session, org, service, StorePaymentPolicy.NONE
+        )
+        await service.close_window(window.id, org.id, notify_members=False)
+        await service.record_vendor_order(
+            window.id, org.id, None, vendor_name="Galls", notify_members=False
+        )
+
+        ids = [o.id for o in placed.values()]
+        ready = await service.bulk_update_status(
+            org.id, ids, StoreOrderStatus.READY_FOR_PICKUP, None, notify_members=False
+        )
+        assert ready["updated"] == 3
+
+        done = await service.bulk_update_status(
+            org.id, ids, StoreOrderStatus.FULFILLED, None, notify_members=False
+        )
+        assert done["updated"] == 3
+
+        collected = await service.get_order(placed["cash"].id, org.id)
+        assert collected is not None
+        assert collected.status == StoreOrderStatus.FULFILLED
+        assert collected.fulfilled_at is not None
+
+    async def test_a_held_order_cannot_be_marked_ready_for_pickup(self, db_session):
+        # Worse than merely inaccurate: "ready for pickup" emails the member to
+        # come and collect a shirt that was never bought.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, placed = await self._window_with_mixed_payments(
+            db_session, org, service, StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+
+        with pytest.raises(ValueError, match="ready for pickup"):
+            await service.update_order_status(
+                placed["venmo"].id,
+                org.id,
+                StoreOrderStatus.READY_FOR_PICKUP,
+                None,
+                notify_member=False,
+            )
+
+    async def test_before_pickup_still_shelves_an_unpaid_order(self, db_session):
+        # Under the weaker rule the goods do exist, so they reach the shelf —
+        # only the handover waits.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, placed = await self._window_with_mixed_payments(
+            db_session, org, service, StorePaymentPolicy.BEFORE_PICKUP
+        )
+
+        moved = await service.update_order_status(
+            placed["venmo"].id,
+            org.id,
+            StoreOrderStatus.READY_FOR_PICKUP,
+            None,
+            notify_member=False,
+        )
+        assert moved.status == StoreOrderStatus.READY_FOR_PICKUP

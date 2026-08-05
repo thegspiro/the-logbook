@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { CalendarClock, CheckCircle2, ClipboardList, Loader2, Lock, Pencil, Play, Plus } from 'lucide-react';
+import { CalendarClock, CheckCircle2, ClipboardList, Loader2, Lock, Pencil, Play, Plus, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux/EmptyState';
@@ -44,6 +44,11 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
   const [notifyMembers, setNotifyMembers] = useState(true);
   const [transitionMessage, setTransitionMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [vendorFor, setVendorFor] = useState<StoreOrderWindow | null>(null);
+  const [vendorName, setVendorName] = useState('');
+  const [vendorReference, setVendorReference] = useState('');
+  const [expectedDelivery, setExpectedDelivery] = useState('');
+  const [vendorNotify, setVendorNotify] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,6 +111,34 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
     },
     [load, onChanged]
   );
+
+  const recordVendorOrder = useCallback(async () => {
+    if (!vendorFor) return;
+    setBusy(true);
+    try {
+      const result = await storefrontService.recordVendorOrder(vendorFor.id, {
+        vendorName: vendorName.trim() || undefined,
+        vendorReference: vendorReference.trim() || undefined,
+        expectedDeliveryDate: expectedDelivery || undefined,
+        advanceOrders: true,
+        notifyMembers: vendorNotify,
+      });
+      // Held-back orders come back named rather than failing the whole action,
+      // so the quartermaster learns who still owes without losing the rest.
+      if (result.skipped.length > 0) {
+        toast.success(`${result.advanced} order(s) marked ordered · ${result.skipped.length} held back, unpaid`);
+      } else {
+        toast.success(`${result.advanced} order(s) marked ordered`);
+      }
+      setVendorFor(null);
+      void load();
+      onChanged();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not record the vendor order'));
+    } finally {
+      setBusy(false);
+    }
+  }, [expectedDelivery, load, onChanged, vendorFor, vendorName, vendorNotify, vendorReference]);
 
   const showSummary = useCallback(async (windowId: string) => {
     try {
@@ -182,6 +215,22 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                         Open
                       </button>
                     )}
+                  {(windowItem.status === 'closed' || windowItem.status === 'open') && (
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => {
+                        setVendorFor(windowItem);
+                        setVendorName(windowItem.vendorName ?? '');
+                        setVendorReference(windowItem.vendorReference ?? '');
+                        setExpectedDelivery(windowItem.expectedDeliveryDate ?? '');
+                        setVendorNotify(true);
+                      }}
+                    >
+                      <Truck className="h-3.5 w-3.5" />
+                      {windowItem.vendorOrderedAt ? 'Vendor order' : 'Record vendor order'}
+                    </button>
+                  )}
                   {windowItem.status === 'open' && (
                     <button
                       type="button"
@@ -296,6 +345,90 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
               className="form-input"
             />
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={vendorFor !== null}
+        onClose={() => setVendorFor(null)}
+        title={vendorFor?.vendorOrderedAt ? 'Vendor order' : 'Record vendor order'}
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn-secondary btn-md" onClick={() => setVendorFor(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary btn-md"
+              disabled={busy}
+              onClick={() => {
+                void recordVendorOrder();
+              }}
+            >
+              {busy ? 'Working…' : 'Record it'}
+            </button>
+          </div>
+        }
+      >
+        <div className="modal-body space-y-3">
+          <p className="text-theme-text-secondary text-sm">
+            Logs who the bulk order went to and when, marks every eligible order <strong>ordered</strong>, and — if you
+            want — tells the members it has been placed.
+          </p>
+          {vendorFor?.vendorOrderedAt && (
+            <p className="alert-info text-xs">
+              Already recorded {formatDateTime(vendorFor.vendorOrderedAt, tz)}. Saving again updates the details and
+              re-stamps the date.
+            </p>
+          )}
+          <div className="form-grid-2">
+            <div>
+              <label htmlFor="vendor-name" className="form-label">
+                Vendor
+              </label>
+              <input
+                id="vendor-name"
+                type="text"
+                value={vendorName}
+                onChange={(e) => setVendorName(e.target.value)}
+                className="form-input"
+                placeholder="Galls, Lion, the local embroidery shop…"
+              />
+            </div>
+            <div>
+              <label htmlFor="vendor-ref" className="form-label">
+                PO / reference
+              </label>
+              <input
+                id="vendor-ref"
+                type="text"
+                value={vendorReference}
+                onChange={(e) => setVendorReference(e.target.value)}
+                className="form-input"
+                placeholder="Their order number"
+              />
+            </div>
+          </div>
+          <div>
+            <label htmlFor="vendor-delivery" className="form-label">
+              Expected delivery
+            </label>
+            <input
+              id="vendor-delivery"
+              type="date"
+              value={expectedDelivery}
+              onChange={(e) => setExpectedDelivery(e.target.value)}
+              className="form-input"
+            />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Goes in the email, which is what stops members asking every week.
+            </p>
+          </div>
+          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={vendorNotify} onChange={(e) => setVendorNotify(e.target.checked)} />
+            Email everyone who ordered
+          </label>
         </div>
       </Modal>
 

@@ -84,6 +84,8 @@ services.
 | 13e | Let PayPal Mark Your Orders Paid | Script 13 |
 | 13f | Paid But Not Ordered — Why Two Statuses | Script 13 |
 | 13g | Your Department's Rule on Unpaid Orders | Script 13 |
+| 13h | They Said Venmo and Paid Cash — Record It Right | Script 13 |
+| 13i | Tell the Vendor, Tell the Members, One Click | Script 13 |
 
 ---
 
