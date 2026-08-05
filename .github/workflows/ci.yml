@@ -414,6 +414,39 @@ jobs:
       - name: Run database migrations
         run: alembic upgrade head
 
+      - name: Repair schema to model shape (mirrors production startup)
+        # Same step, same reason as backend-test-integration — and this job
+        # needs it more, because it boots the real app and asserts on what
+        # every public endpoint returns.
+        #
+        # 37 tables exist in the models with no migration that creates them
+        # (`integrations`, `approval_step_records`, `positions`,
+        # `skill_templates`, …); they materialize from startup's
+        # create_all(checkfirst=True). Without this step the contract suite
+        # ran against a database missing them, and every public endpoint that
+        # reads one answered 500 "Internal server error" instead of its
+        # documented 404 — the four inbound webhooks (documenso, calcom,
+        # salesforce, paypal) on `integrations`, and the three finance
+        # approval-token routes on `approval_step_records`. Seven failures,
+        # one missing step: the endpoints were fine, the schema was not.
+        run: |
+          python - <<'PYEOF'
+          from sqlalchemy import create_engine
+          from sqlalchemy.pool import NullPool
+
+          from app.core.config import settings
+          from main import _add_missing_model_columns, _import_all_models
+
+          _import_all_models()
+          from app.core.database import Base
+
+          engine = create_engine(settings.SYNC_DATABASE_URL, poolclass=NullPool)
+          with engine.begin() as conn:
+              Base.metadata.create_all(conn, checkfirst=True)
+          _add_missing_model_columns(engine)
+          print("Schema repair complete")
+          PYEOF
+
       # Schemathesis generates requests from the OpenAPI schema and asserts
       # every response matches what the endpoint declares. The suite drives a
       # real server (see the module docstring for why the ASGI transport does
