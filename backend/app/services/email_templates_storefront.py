@@ -77,14 +77,11 @@ ORDER_CONFIRMATION_HTML = _shell(
         {{payment_block_html}}
         {{receipt_footer_html}}""",
 )
-ORDER_CONFIRMATION_TEXT = (
-    """Hi {{first_name}},
+ORDER_CONFIRMATION_TEXT = """Hi {{first_name}},
 
 Thanks for your order from the {{store_name}}.
 Order {{order_number}} received. Total {{order_total}}.
-"""
-    + _FOOTER_TEXT
-)
+""" + _FOOTER_TEXT
 
 NEW_ORDER_ADMIN_SUBJECT = "New store order {{order_number}}"
 NEW_ORDER_ADMIN_HTML = _shell(
@@ -96,8 +93,7 @@ NEW_ORDER_ADMIN_HTML = _shell(
 )
 NEW_ORDER_ADMIN_TEXT = (
     """{{customer_name}} placed order {{order_number}} for {{order_total}}.
-"""
-    + _FOOTER_TEXT
+""" + _FOOTER_TEXT
 )
 
 ORDER_UPDATE_SUBJECT = "Order {{order_number}}{{status_subject_suffix}}"
@@ -107,11 +103,8 @@ ORDER_UPDATE_HTML = _shell(
         <p style="white-space:pre-line;">{{update_message}}</p>
         {{payment_block_html}}""",
 )
-ORDER_UPDATE_TEXT = (
-    """Order {{order_number}}: {{update_message}}
-"""
-    + _FOOTER_TEXT
-)
+ORDER_UPDATE_TEXT = """Order {{order_number}}: {{update_message}}
+""" + _FOOTER_TEXT
 
 ORDER_CANCELLED_SUBJECT = "Order {{order_number}} cancelled"
 ORDER_CANCELLED_HTML = _shell(
@@ -121,11 +114,8 @@ ORDER_CANCELLED_HTML = _shell(
         {{refund_notice_html}}""",
     header_color=_RED,
 )
-ORDER_CANCELLED_TEXT = (
-    """Order {{order_number}} was cancelled.
-"""
-    + _FOOTER_TEXT
-)
+ORDER_CANCELLED_TEXT = """Order {{order_number}} was cancelled.
+""" + _FOOTER_TEXT
 
 PAYMENT_REMINDER_SUBJECT = "Payment reminder — order {{order_number}}"
 PAYMENT_REMINDER_HTML = _shell(
@@ -136,11 +126,8 @@ PAYMENT_REMINDER_HTML = _shell(
         {{payment_block_html}}""",
     header_color=_AMBER,
 )
-PAYMENT_REMINDER_TEXT = (
-    """Order {{order_number}} has a balance of {{balance_due}}.
-"""
-    + _FOOTER_TEXT
-)
+PAYMENT_REMINDER_TEXT = """Order {{order_number}} has a balance of {{balance_due}}.
+""" + _FOOTER_TEXT
 
 PAYMENT_RECEIVED_SUBJECT = "Payment received — order {{order_number}}"
 PAYMENT_RECEIVED_HTML = _shell(
@@ -149,11 +136,8 @@ PAYMENT_RECEIVED_HTML = _shell(
         {{balance_notice_html}}""",
     header_color=_GREEN,
 )
-PAYMENT_RECEIVED_TEXT = (
-    """Payment received for order {{order_number}}.
-"""
-    + _FOOTER_TEXT
-)
+PAYMENT_RECEIVED_TEXT = """Payment received for order {{order_number}}.
+""" + _FOOTER_TEXT
 
 
 # ----------------------------------------------------------------------
@@ -179,11 +163,8 @@ WINDOW_OPEN_HTML = _shell(
     _window_body("The department store is now taking orders."),
     header_color=_GREEN,
 )
-WINDOW_OPEN_TEXT = (
-    """Store orders are open for {{window_name}}.
-"""
-    + _FOOTER_TEXT
-)
+WINDOW_OPEN_TEXT = """Store orders are open for {{window_name}}.
+""" + _FOOTER_TEXT
 
 WINDOW_CLOSING_SUBJECT = "Last call — {{window_name}} closes soon"
 WINDOW_CLOSING_HTML = _shell(
@@ -191,33 +172,24 @@ WINDOW_CLOSING_HTML = _shell(
     _window_body("Last call — the store order window closes soon."),
     header_color=_AMBER,
 )
-WINDOW_CLOSING_TEXT = (
-    """The {{window_name}} order window closes soon.
-"""
-    + _FOOTER_TEXT
-)
+WINDOW_CLOSING_TEXT = """The {{window_name}} order window closes soon.
+""" + _FOOTER_TEXT
 
 WINDOW_CLOSED_SUBJECT = "Ordering closed — {{window_name}}"
 WINDOW_CLOSED_HTML = _shell(
     "Order Window Closed",
     _window_body("Ordering has closed and the department is placing the order."),
 )
-WINDOW_CLOSED_TEXT = (
-    """The {{window_name}} order window has closed.
-"""
-    + _FOOTER_TEXT
-)
+WINDOW_CLOSED_TEXT = """The {{window_name}} order window has closed.
+""" + _FOOTER_TEXT
 
 VENDOR_ORDER_PLACED_SUBJECT = "Order placed with the vendor — {{window_name}}"
 VENDOR_ORDER_PLACED_HTML = _shell(
     "Order Placed",
     _window_body("Your order has been placed with the vendor."),
 )
-VENDOR_ORDER_PLACED_TEXT = (
-    """The {{window_name}} order has been placed with the vendor.
-"""
-    + _FOOTER_TEXT
-)
+VENDOR_ORDER_PLACED_TEXT = """The {{window_name}} order has been placed with the vendor.
+""" + _FOOTER_TEXT
 
 
 # ----------------------------------------------------------------------

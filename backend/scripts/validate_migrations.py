@@ -30,9 +30,9 @@ def _parse_value(raw: str) -> List[str]:
     down_revision is normalised to a list — an empty one meaning None.
     Trailing comments are stripped; several migrations carry them.
     """
-    value = raw.split('#', 1)[0].strip().rstrip(',')
+    value = raw.split("#", 1)[0].strip().rstrip(",")
 
-    if not value or value == 'None':
+    if not value or value == "None":
         return []
 
     try:
@@ -54,27 +54,27 @@ def parse_migration_file(filepath: Path) -> Dict[str, object]:
     revision = None
     down_revisions: List[str] = []
 
-    with open(filepath, 'r') as f:
+    with open(filepath, "r") as f:
         content = f.read()
 
     # Parse revision
-    for line in content.split('\n'):
+    for line in content.split("\n"):
         line = line.strip()
-        if line.startswith('revision') and '=' in line:
+        if line.startswith("revision") and "=" in line:
             # Handle both: revision = 'xxx' and revision: str = 'xxx'
-            parts = line.split('=', 1)
+            parts = line.split("=", 1)
             if len(parts) == 2:
                 found = _parse_value(parts[1])
                 revision = found[0] if found else None
-        elif line.startswith('down_revision') and '=' in line:
-            parts = line.split('=', 1)
+        elif line.startswith("down_revision") and "=" in line:
+            parts = line.split("=", 1)
             if len(parts) == 2:
                 down_revisions = _parse_value(parts[1])
 
     return {
-        'file': filepath.name,
-        'revision': revision,
-        'down_revisions': down_revisions,
+        "file": filepath.name,
+        "revision": revision,
+        "down_revisions": down_revisions,
     }
 
 
@@ -89,8 +89,8 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
     warnings = []
 
     # Find all migration files
-    migration_files = list(versions_dir.glob('*.py'))
-    migration_files = [f for f in migration_files if not f.name.startswith('__')]
+    migration_files = list(versions_dir.glob("*.py"))
+    migration_files = [f for f in migration_files if not f.name.startswith("__")]
 
     if not migration_files:
         errors.append("No migration files found!")
@@ -101,7 +101,7 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
     for filepath in migration_files:
         try:
             info = parse_migration_file(filepath)
-            if info['revision']:
+            if info["revision"]:
                 migrations.append(info)
         except Exception as e:
             errors.append(f"Failed to parse {filepath.name}: {e}")
@@ -109,10 +109,10 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
     # Check for duplicate revision IDs
     revision_ids: Dict[str, List[str]] = {}
     for m in migrations:
-        rev = m['revision']
+        rev = m["revision"]
         if rev not in revision_ids:
             revision_ids[rev] = []
-        revision_ids[rev].append(m['file'])
+        revision_ids[rev].append(m["file"])
 
     for rev, files in revision_ids.items():
         if len(files) > 1:
@@ -123,28 +123,32 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
     referenced_revisions = set()
 
     for m in migrations:
-        referenced_revisions.update(m['down_revisions'])
+        referenced_revisions.update(m["down_revisions"])
 
     # Find the base migration (down_revision is None)
-    base_migrations = [m for m in migrations if not m['down_revisions']]
+    base_migrations = [m for m in migrations if not m["down_revisions"]]
     if len(base_migrations) == 0:
-        errors.append("No base migration found (missing initial migration with down_revision=None)")
+        errors.append(
+            "No base migration found (missing initial migration with down_revision=None)"
+        )
     elif len(base_migrations) > 1:
-        files = [m['file'] for m in base_migrations]
+        files = [m["file"] for m in base_migrations]
         errors.append(f"Multiple base migrations found: {', '.join(files)}")
 
     # Check for orphaned references (down_revision points to non-existent revision)
     for m in migrations:
-        for parent in m['down_revisions']:
+        for parent in m["down_revisions"]:
             if parent not in all_revisions:
-                errors.append(f"Orphaned migration {m['file']}: references non-existent revision '{parent}'")
+                errors.append(
+                    f"Orphaned migration {m['file']}: references non-existent revision '{parent}'"
+                )
 
     # Check for multiple heads (migrations that nothing depends on)
     head_revisions = all_revisions - referenced_revisions
     if len(head_revisions) > 1:
         head_files = []
         for m in migrations:
-            if m['revision'] in head_revisions:
+            if m["revision"] in head_revisions:
                 head_files.append(f"{m['file']} ({m['revision']})")
         warnings.append(f"Multiple heads detected (branching): {', '.join(head_files)}")
 
@@ -153,7 +157,9 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
     print("ALEMBIC MIGRATION VALIDATION REPORT")
     print("=" * 60)
     print(f"\nMigrations found: {len(migrations)}")
-    print(f"Base migration: {base_migrations[0]['file'] if base_migrations else 'NONE'}")
+    print(
+        f"Base migration: {base_migrations[0]['file'] if base_migrations else 'NONE'}"
+    )
     print(f"Head revisions: {len(head_revisions)}")
 
     if warnings:
@@ -180,7 +186,7 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
 
 def main():
     """Main entry point."""
-    versions_dir = backend_dir / 'alembic' / 'versions'
+    versions_dir = backend_dir / "alembic" / "versions"
 
     if not versions_dir.exists():
         print(f"Error: Versions directory not found: {versions_dir}")
@@ -190,5 +196,5 @@ def main():
     sys.exit(0 if is_valid else 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
