@@ -15,6 +15,7 @@ from decimal import Decimal
 import pytest
 
 from app.models.storefront import (
+    StoreFulfillmentMethod,
     StoreOrderStatus,
     StoreOrderWindow,
     StorePaymentMethod,
@@ -966,3 +967,171 @@ class TestProductImages:
         assert (
             service.resolve_image_url(product, False) == "https://example.org/shirt.png"
         )
+
+
+class TestVendorOrderTotals:
+    """The quartermaster's actual question: how many of each size do I buy?"""
+
+    async def _window_with_personalized_orders(self, db_session, org, service):
+        """Five members, one personalized shirt each, three distinct sizes."""
+        product = await _make_product(
+            db_session,
+            org,
+            price=Decimal("45.00"),
+            personalization_enabled=True,
+            personalization_required=True,
+            requires_variant=True,
+        )
+        sizes = {}
+        for label in ("M", "L", "XL"):
+            variant = StoreProductVariant(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                product_id=product.id,
+                label=label,
+                price_delta=Decimal("0.00"),
+            )
+            db_session.add(variant)
+            sizes[label] = variant
+        await db_session.flush()
+        window = await _make_open_window(db_session, org)
+
+        for name, size, qty in [
+            ("RIVERA", "L", 1),
+            ("OKAFOR", "XL", 2),
+            ("NGUYEN", "M", 1),
+            ("FONTAINE", "L", 1),
+            ("BRENNAN", "XL", 1),
+        ]:
+            member = await _make_member(db_session, org)
+            await service.create_order(
+                org.id,
+                member,
+                {
+                    "items": [
+                        {
+                            "product_id": product.id,
+                            "variant_id": sizes[size].id,
+                            "quantity": qty,
+                            "personalization_text": name,
+                        }
+                    ],
+                    "fulfillment_method": "pickup",
+                    "payment_method": StorePaymentMethod.VENMO,
+                },
+            )
+        return product, window
+
+    async def test_size_totals_merge_across_members(self, db_session):
+        # Every line has a different name, so the per-name sheet cannot answer
+        # "how many larges?" — that is what size_totals is for.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, window = await self._window_with_personalized_orders(
+            db_session, org, service
+        )
+
+        summary = await service.get_window_summary(window.id, org.id)
+        totals = {
+            row["variant_label"]: row["quantity"] for row in summary["size_totals"]
+        }
+
+        assert totals == {"M": 1, "L": 2, "XL": 3}
+        assert sum(totals.values()) == 6
+
+    async def test_line_detail_still_lists_every_name(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, window = await self._window_with_personalized_orders(
+            db_session, org, service
+        )
+
+        summary = await service.get_window_summary(window.id, org.id)
+        names = {row["personalization_text"] for row in summary["tallies"]}
+
+        # The embroidery list is the other half of the vendor hand-off.
+        assert names == {"RIVERA", "OKAFOR", "NGUYEN", "FONTAINE", "BRENNAN"}
+        assert len(summary["tallies"]) == 5
+
+    async def test_cancelled_orders_drop_out_of_the_vendor_order(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, window = await self._window_with_personalized_orders(
+            db_session, org, service
+        )
+
+        orders, _ = await service.list_orders(org.id, window_id=window.id)
+        target = next(o for o in orders if o.items[0].personalization_text == "OKAFOR")
+        await service.update_order_status(
+            target.id, org.id, StoreOrderStatus.CANCELLED, None, notify_member=False
+        )
+
+        summary = await service.get_window_summary(window.id, org.id)
+        totals = {
+            row["variant_label"]: row["quantity"] for row in summary["size_totals"]
+        }
+
+        # OKAFOR's two XLs are gone; nobody should be buying shirts for a
+        # cancelled order.
+        assert totals == {"M": 1, "L": 2, "XL": 1}
+
+    async def test_size_totals_do_not_leak_across_organizations(self, db_session):
+        org_a = await _make_org(db_session, "Org A")
+        org_b = await _make_org(db_session, "Org B")
+        service = StorefrontService(db_session)
+        await _enable_store(service, org_a)
+        _, window = await self._window_with_personalized_orders(
+            db_session, org_a, service
+        )
+
+        with pytest.raises(ValueError, match="not found"):
+            await service.get_window_summary(window.id, org_b.id)
+
+
+class TestOrderInputCoercion:
+    async def test_string_fulfillment_method_is_stored_as_the_enum(self, db_session):
+        # Scripts and importers pass the wire string; the API passes the enum.
+        # Storing the string unconverted survives the commit (the session does
+        # not expire on commit) and then fails on a later `.value` access.
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+
+        order = await service.create_order(
+            org.id,
+            member,
+            {
+                "items": [{"product_id": product.id, "quantity": 1}],
+                "fulfillment_method": "pickup",
+                "payment_method": "venmo",
+            },
+        )
+
+        assert order.fulfillment_method is StoreFulfillmentMethod.PICKUP
+        assert order.payment_method is StorePaymentMethod.VENMO
+        # The failure this guards against surfaced here, not at the write.
+        assert await service.export_orders_csv(org.id)
+
+    async def test_an_unknown_fulfillment_method_is_refused(self, db_session):
+        org = await _make_org(db_session)
+        member = await _make_member(db_session, org)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        product = await _make_product(db_session, org)
+        await _make_open_window(db_session, org)
+
+        with pytest.raises(ValueError, match="Unknown delivery option"):
+            await service.create_order(
+                org.id,
+                member,
+                {
+                    "items": [{"product_id": product.id, "quantity": 1}],
+                    "fulfillment_method": "teleport",
+                },
+            )

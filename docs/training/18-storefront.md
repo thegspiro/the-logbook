@@ -385,12 +385,17 @@ inside each bank. PayPal is the only one that can report back.
 ## Closing a Window and Ordering from the Vendor
 
 1. **Close ordering** — no new orders; existing ones keep moving.
-2. Open the window's **Tally** — order count, distinct members, gross sales,
-   collected, outstanding, and a per-item, per-option tally.
-3. That tally is your vendor order: *"14 job shirts — 3 M, 6 L, 4 XL, 1 2XL."*
-4. Export the CSV for line-level detail including names and personalization.
-5. When the goods arrive, bulk-set the window's orders to **ready for pickup**.
-6. Hand them out, mark **fulfilled**, then mark the window fulfilled.
+2. Open the window's **Tally**. It shows the money — order count, members,
+   gross, collected, outstanding — then two tables.
+3. **Order this from the vendor** is the purchase order: quantity per size,
+   merged across every member. *"10 job shirts — 3 M, 2 L, 3 XL, 1 2XL, 1 3XL."*
+   This is what you send the vendor.
+4. **Line detail** below it breaks the same shirts out by embroidery name. That
+   is what the vendor stitches. On a personalized item the two always differ —
+   ten shirts, ten names, five sizes.
+5. Export the CSV if the vendor wants it as a file rather than a screenshot.
+6. When the goods arrive, bulk-set the window's orders to **ready for pickup**.
+7. Hand them out, mark **fulfilled**, then mark the window fulfilled.
 
 The outstanding-balance figure is your chase list. Sort the Orders tab by
 payment status to find who still owes.
@@ -427,7 +432,8 @@ payment status to find who still owes.
 
 9. **Close ordering** on the window. Summary reads: 14 orders, 19 items, $921.00 gross,
    $855.00 collected, $66.00 outstanding.
-10. Tally: 3 M, 6 L, 7 XL, 2 2XL, 1 3XL. Place that order with the vendor.
+10. **Order this from the vendor**: 3 M, 6 L, 7 XL, 2 2XL, 1 3XL — 19 shirts.
+    **Line detail** lists the 11 names to embroider. Send both.
 11. Two members still owe. Sort by payment status, send a reminder.
 
 **Fulfillment (November)**

@@ -794,6 +794,19 @@ class StoreOrderAdminNotes(BaseModel):
 # ============================================
 
 
+class StoreWindowSizeTotal(UTCResponseBase):
+    """How many of one product/size to order — the vendor purchase order"""
+
+    model_config = _RESPONSE_CONFIG
+
+    product_id: Optional[str] = None
+    product_name: str
+    variant_label: Optional[str] = None
+    sku: Optional[str] = None
+    quantity: int
+    line_total: Decimal
+
+
 class StoreWindowProductTally(UTCResponseBase):
     """One row of the bulk-purchase sheet for a window"""
 
@@ -824,6 +837,9 @@ class StoreWindowSummaryResponse(UTCResponseBase):
     outstanding: Decimal
     unpaid_order_count: int
     pending_verification_count: int
+    # What to order from the vendor, merged across members.
+    size_totals: List[StoreWindowSizeTotal] = Field(default_factory=list)
+    # What to embroider on each one — one row per distinct name.
     tallies: List[StoreWindowProductTally] = Field(default_factory=list)
 
 

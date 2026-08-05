@@ -372,11 +372,22 @@ per-size tally.]**
 > "Close ordering and open the Tally. Fourteen orders, nineteen items, nine
 > twenty-one gross, eight fifty-five collected, sixty-six outstanding."
 
-**[SCREEN: Zoom on the tally: 3 M, 6 L, 7 XL, 2 2XL, 1 3XL.]**
+**[SCREEN: Zoom on "Order this from the vendor": 3 M, 6 L, 7 XL, 2 2XL,
+1 3XL, total 19.]**
 
 > "And here's the number you actually came for: three medium, six large, seven
 > XL, two 2XL, one 3XL. **That's your vendor order.** No spreadsheet, no
 > counting twice."
+
+**[SCREEN: Scroll to "Line detail" — the same nineteen shirts, one row per
+embroidery name.]**
+
+**[CALLOUT: "Two tables. Buy this / stitch that."]**
+
+> "Underneath it, the same shirts broken out by name — that's what the vendor
+> embroiders. Two tables because they answer different questions, and on a
+> personalized item they never look the same. Nineteen shirts, eleven names,
+> five sizes."
 
 ### CHASING AND FULFILLING (19:00 – 19:40)
 

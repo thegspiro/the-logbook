@@ -121,8 +121,18 @@ uniforms only" window works without archiving everything else.
 
 Closing a window is what turns a pile of orders into a purchase order. The
 window summary (`GET /store/windows/{id}/summary`) rolls up order count,
-distinct members, gross sales, collected, outstanding, and a per-product,
-per-variant tally — the numbers you hand the vendor.
+distinct members, gross sales, collected, and outstanding, plus **two**
+separate breakdowns:
+
+- `size_totals` — quantity per product and option, merged across members. This
+  is the purchase order.
+- `tallies` — the same lines split out by personalization text. This is the
+  embroidery list.
+
+They are separate because on a personalized product every line carries a
+different name, so a single personalization-aware grouping degenerates into one
+row per order and cannot answer "how many larges?" — the spreadsheet this
+module exists to replace.
 
 Those rollups are computed in SQL (`GROUP BY` with `func.sum` and `case`), not
 by summing in Python over a page of results. An earlier version paged at 200

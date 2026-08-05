@@ -337,6 +337,51 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                 </div>
               </div>
 
+              {/* What to buy, merged across members. On a personalized item
+                  every detail row below is unique, so without this the
+                  quartermaster would be adding up sizes by hand. */}
+              {summary.sizeTotals.length > 0 && (
+                <div className="mb-5">
+                  <h4 className="text-theme-text-primary mb-1 text-sm font-semibold">Order this from the vendor</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-theme-text-muted text-left">
+                          <th className="py-1 pr-2 font-medium">Item</th>
+                          <th className="px-2 py-1 font-medium">Option</th>
+                          <th className="px-2 py-1 font-medium">SKU</th>
+                          <th className="py-1 pl-2 text-center font-medium">Qty</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summary.sizeTotals.map((row) => (
+                          <tr
+                            key={`${row.productId ?? 'x'}-${row.variantLabel ?? ''}`}
+                            className="border-theme-surface-border border-t"
+                          >
+                            <td className="text-theme-text-primary py-1.5 pr-2">{row.productName}</td>
+                            <td className="text-theme-text-secondary px-2 py-1.5">{row.variantLabel ?? '—'}</td>
+                            <td className="text-theme-text-muted px-2 py-1.5 font-mono text-xs">{row.sku ?? '—'}</td>
+                            <td className="text-theme-text-primary py-1.5 pl-2 text-center font-semibold">
+                              {row.quantity}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-theme-surface-border border-t-2">
+                          <td className="text-theme-text-muted py-1.5 pr-2 text-xs uppercase" colSpan={3}>
+                            Total units
+                          </td>
+                          <td className="text-theme-text-primary py-1.5 pl-2 text-center font-semibold">
+                            {summary.sizeTotals.reduce((sum, row) => sum + row.quantity, 0)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <h4 className="text-theme-text-primary mb-1 text-sm font-semibold">Line detail</h4>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>

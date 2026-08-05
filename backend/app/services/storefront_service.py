@@ -103,6 +103,25 @@ def _money(value: Any) -> Decimal:
     return Decimal(value or 0).quantize(_CENTS)
 
 
+def _as_enum(enum_cls, value, default, label):
+    """Coerce a caller-supplied value to its enum member.
+
+    Callers legitimately pass either form: the API hands over Pydantic-parsed
+    enums, while scripts, importers and tests naturally pass the wire strings.
+    Both are accepted, but only one is stored — a bare string survives on the
+    instance (the session does not expire on commit) and blows up later on a
+    `.value` access far from where it was set.
+    """
+    if value is None or value == "":
+        return default
+    if isinstance(value, enum_cls):
+        return value
+    try:
+        return enum_cls(str(value).lower())
+    except ValueError:
+        raise ValueError(f"Unknown {label}: {value}")
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -1033,7 +1052,17 @@ class StorefrontService:
         else:
             window = open_windows[0]
 
-        fulfillment = data.get("fulfillment_method", StoreFulfillmentMethod.PICKUP)
+        # Normalized at the boundary rather than stored as given. Comparisons
+        # below work on either form because these are (str, Enum), so an
+        # un-coerced string would pass validation and then fail much later on
+        # a `.value` access — the session keeps what was assigned
+        # (expire_on_commit is off), so the mismatch outlives the write.
+        fulfillment = _as_enum(
+            StoreFulfillmentMethod,
+            data.get("fulfillment_method"),
+            StoreFulfillmentMethod.PICKUP,
+            "delivery option",
+        )
         if (
             fulfillment == StoreFulfillmentMethod.SHIP and not settings.allow_shipping
         ) or (
@@ -1041,11 +1070,12 @@ class StorefrontService:
         ):
             raise ValueError("That delivery option is not offered by this store")
 
-        payment_method = data.get("payment_method")
+        payment_method = _as_enum(
+            StorePaymentMethod, data.get("payment_method"), None, "payment method"
+        )
         accepted = settings.accepted_payment_methods or []
         if payment_method is not None:
-            method_value = getattr(payment_method, "value", payment_method)
-            if accepted and method_value not in accepted:
+            if accepted and payment_method.value not in accepted:
                 raise ValueError("That payment method is not accepted by this store")
 
         lines = await self._price_lines(
@@ -2259,6 +2289,61 @@ class StorefrontService:
             "open_order_count": 0,
         }
 
+    async def _window_size_totals(
+        self, window_id: str, organization_id: str
+    ) -> List[Dict[str, Any]]:
+        """How many of each size to buy — the purchase order itself.
+
+        Deliberately ignores personalization, which is what separates this from
+        ``_window_tallies``. On a personalized product every line carries a
+        different name, so the per-name sheet degenerates into one row per
+        order and answering "how many larges?" means adding them up by hand —
+        the spreadsheet this module exists to replace. The two views answer
+        different questions: this one is what the vendor gets ordered, the
+        other is what they embroider on it.
+        """
+        result = await self.db.execute(
+            select(
+                StoreOrderItem.product_id,
+                StoreOrderItem.product_name,
+                StoreOrderItem.variant_label,
+                StoreOrderItem.sku,
+                func.sum(StoreOrderItem.quantity),
+                func.coalesce(func.sum(StoreOrderItem.line_total), Decimal("0")),
+            )
+            .join(StoreOrder, StoreOrder.id == StoreOrderItem.order_id)
+            .where(
+                StoreOrder.window_id == str(window_id),
+                StoreOrder.organization_id == str(organization_id),
+                StoreOrder.status != StoreOrderStatus.CANCELLED,
+            )
+            .group_by(
+                StoreOrderItem.product_id,
+                StoreOrderItem.product_name,
+                StoreOrderItem.variant_label,
+                StoreOrderItem.sku,
+            )
+            .order_by(StoreOrderItem.product_name, StoreOrderItem.variant_label)
+        )
+        return [
+            {
+                "product_id": product_id,
+                "product_name": product_name,
+                "variant_label": variant_label,
+                "sku": sku,
+                "quantity": int(quantity or 0),
+                "line_total": _money(line_total),
+            }
+            for (
+                product_id,
+                product_name,
+                variant_label,
+                sku,
+                quantity,
+                line_total,
+            ) in result.all()
+        ]
+
     async def _window_tallies(
         self, window_id: str, organization_id: str
     ) -> List[Dict[str, Any]]:
@@ -2341,6 +2426,7 @@ class StorefrontService:
             "outstanding": rollup["outstanding"],
             "unpaid_order_count": rollup["unpaid_order_count"],
             "pending_verification_count": rollup["pending_verification_count"],
+            "size_totals": await self._window_size_totals(window.id, organization_id),
             "tallies": await self._window_tallies(window.id, organization_id),
         }
 

@@ -489,6 +489,17 @@ export interface StoreWindowProductTally {
   lineTotal: string;
 }
 
+/** One line of the vendor purchase order — merged across members, so a
+ *  personalized item still answers "how many larges?". */
+export interface StoreWindowSizeTotal {
+  productId?: string | null;
+  productName: string;
+  variantLabel?: string | null;
+  sku?: string | null;
+  quantity: number;
+  lineTotal: string;
+}
+
 export interface StoreWindowSummary {
   windowId: string;
   windowName: string;
@@ -500,6 +511,7 @@ export interface StoreWindowSummary {
   outstanding: string;
   unpaidOrderCount: number;
   pendingVerificationCount: number;
+  sizeTotals: StoreWindowSizeTotal[];
   tallies: StoreWindowProductTally[];
 }
 
