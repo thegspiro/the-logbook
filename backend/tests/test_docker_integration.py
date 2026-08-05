@@ -175,6 +175,37 @@ def _start_mysql(container: str, network: str, timeout: int = 180) -> bool:
     return False
 
 
+def _start_upstream_stub(container: str, network: str, alias: str) -> bool:
+    """Run a placeholder under `alias` so nginx's upstream name resolves.
+
+    nginx resolves every host named in a `proxy_pass` while parsing its config
+    and refuses to start if one is unknown — "host not found in upstream". The
+    frontend image proxies /api to `backend:3001`, so it cannot boot anywhere
+    that name does not resolve, which is every one of these tests until one
+    stands there. None of them call /api; they need the name to exist, not to
+    answer, so a stock nginx:alpine — this image's own base, so already pulled
+    — is enough.
+    """
+    return (
+        _run(
+            [
+                "docker",
+                "run",
+                "-d",
+                "--name",
+                container,
+                "--network",
+                network,
+                "--network-alias",
+                alias,
+                "nginx:alpine",
+            ],
+            timeout=120,
+        ).returncode
+        == 0
+    )
+
+
 def _docker_inspect(name: str) -> dict:
     """Docker inspect returning parsed JSON for a container or image."""
     result = _run(["docker", "inspect", name])
@@ -520,18 +551,35 @@ class TestBackendContainerHealth:
 
 
 class TestFrontendContainerHealth:
-    """Test that the frontend container starts and serves content."""
+    """Test that the frontend container starts and serves content.
+
+    Every test here runs on a private network with a stub answering to
+    `backend`, because nginx will not start while the host named in its /api
+    `proxy_pass` is unresolvable. The tests themselves only touch static
+    routes — index.html and the image's own healthcheck on `/` — so the stub
+    never has to serve anything.
+    """
 
     _tag = f"{_TAG_PREFIX}-frontend-health"
     _container = f"{_TAG_PREFIX}-frontend-health-ctr"
+    _peer = f"{_TAG_PREFIX}-frontend-health-upstream"
+    _network = f"{_TAG_PREFIX}-frontend-health-net"
 
     @pytest.fixture(autouse=True)
     def _build_and_cleanup(self):
         result = _docker_build(FRONTEND_DIR, target="production", tag=self._tag)
         if result.returncode != 0:
             pytest.skip(f"Frontend build failed: {result.stderr[-500:]}")
+        assert _docker_network_create(self._network), "Could not create network"
+        assert _start_upstream_stub(
+            self._peer, self._network, "backend"
+        ), "Upstream stub did not start"
         yield
+        # Attached containers first — a network with members cannot be removed,
+        # and the next test's create would then fail.
         _docker_stop_rm(self._container)
+        _docker_stop_rm(self._peer)
+        _docker_network_rm(self._network)
         _docker_rm_image(self._tag)
 
     def test_container_starts_without_crash(self):
@@ -542,6 +590,8 @@ class TestFrontendContainerHealth:
                 "-d",
                 "--name",
                 self._container,
+                "--network",
+                self._network,
                 self._tag,
             ]
         )
@@ -569,6 +619,8 @@ class TestFrontendContainerHealth:
                 "-d",
                 "--name",
                 self._container,
+                "--network",
+                self._network,
                 self._tag,
             ]
         )
@@ -608,6 +660,8 @@ class TestFrontendContainerHealth:
                 "-d",
                 "--name",
                 self._container,
+                "--network",
+                self._network,
                 "--health-interval=5s",
                 "--health-timeout=3s",
                 "--health-start-period=5s",
