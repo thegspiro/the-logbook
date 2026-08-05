@@ -215,11 +215,33 @@ class StoreSettings(Base):
     pickup_location = Column(String(300), nullable=True)
 
     # --- Notifications ----------------------------------------------------
+    # Each notice the storefront can send has exactly one switch here, so a
+    # quartermaster reading the settings screen can see the whole outbound
+    # mailing list of the module in one place. A per-send checkbox (e.g. the
+    # "email members" box on the close-window dialog) can suppress an
+    # individual send, but it can never send a notice switched off here.
     notify_emails = Column(JSON, nullable=True)  # extra admin recipients
     notify_admins_on_order = Column(Boolean, nullable=False, default=True)
     send_order_confirmation = Column(Boolean, nullable=False, default=True)
     send_status_updates = Column(Boolean, nullable=False, default=True)
     send_payment_reminders = Column(Boolean, nullable=False, default=True)
+    # Receipts for money movement the quartermaster records by hand: payment
+    # taken, payment waived, refund issued.
+    send_payment_receipts = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    send_window_opened = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    send_window_closing_reminder = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    send_window_closed = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    send_vendor_order_updates = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     payment_reminder_days = Column(Integer, nullable=False, default=3)
     window_reminder_hours = Column(Integer, nullable=False, default=48)
 

@@ -350,17 +350,58 @@ listed separately.
 
 ## Notifications
 
-Email via `storefront_notification_service.py`. Configurable per organization:
+Email via `storefront_notification_service.py`. Every notice the module sends
+is switched by exactly one setting, so the Notifications panel is a complete
+list of the store's outbound mail:
 
-- Order confirmation to the member
-- New-order notice to administrators
-- Status-change updates
-- Payment reminders (after N days)
-- Window-closing reminder (N hours before)
+| Notice | Goes to | Setting |
+|---|---|---|
+| Order confirmation — receipt and how to pay | The member, on submit | `send_order_confirmation` |
+| Status change — ordered, ready, picked up, cancelled | The member | `send_status_updates` |
+| Payment receipt — payment recorded, waived, or refunded | The member | `send_payment_receipts` |
+| Payment reminder | Members with a balance, after N days | `send_payment_reminders` |
+| New-order alert | Store managers + `notify_emails` | `notify_admins_on_order` |
+| Ordering is open | Every active member | `send_window_opened` |
+| Last call — closing soon | Every active member, N hours before | `send_window_closing_reminder` |
+| Ordering has closed | Everyone who ordered in that window | `send_window_closed` |
+| Order placed with the vendor | Everyone who ordered in that window | `send_vendor_order_updates` |
+
+All nine default to on, which is the behaviour the module had before the
+switches existed.
+
+The switch is an upper bound, not a duplicate of the per-send checkbox. An
+action that offers "email members" (open, close, record vendor order) can skip
+an individual send, and a window can opt out of its own opening announcement
+via `notify_on_open` — but neither can send a notice the department has
+switched off. The one message not behind a switch is the note a quartermaster
+types on an order and presses send on: that is a message, not a notice the
+module raised on its own.
 
 Administrator recipients resolve from position slugs (`ADMIN_NOTIFY_ROLE_SLUGS`)
 plus any addresses in `notify_emails`. Order emails carry the same payment
-buttons as the web page.
+buttons as the web page. Store-wide announcements go out BCC, so one member's
+address is never disclosed to the rest of the department.
+
+### Wording and templates
+
+These bodies are composed in code with `wrap_email_body` — the same approach
+the scheduled inventory alerts use — and are **not** in the admin-editable
+Email Templates screen. Each one is a rendered table of order lines and pay
+buttons rather than a block of prose, so there is nothing useful to hand an
+admin a rich-text box for. What a department words itself is settings instead:
+
+| Text | Where it appears |
+|---|---|
+| `payment_instructions` | Below the pay buttons on every order email |
+| Per-method instructions (`cash_instructions`, `zelle_instructions`, …) | Beside that method wherever it is offered |
+| `receipt_footer` | Foot of the order confirmation |
+| A window's `pickup_instructions` | Every window announcement |
+| The free-text message on open / close / vendor-order | That send only |
+
+Header, logo and colours come from the organization's email branding, shared
+with the rest of the platform. Every send is logged to `message_history` under
+a `storefront_*` type, so Communications → Message History is the record of
+what actually went out.
 
 ---
 

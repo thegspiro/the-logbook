@@ -116,6 +116,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   un-ticking everything normalizes back to cash rather than leaving a store
   nobody can pay.
 
+- **Every notice the store sends now has its own switch.** The module sends
+  nine emails and only four of them were behind a setting; the rest went out
+  whenever the calling code happened to pass `notify_members=True`, so a
+  department that did not want the "ordering is open" blast had no way to say
+  so. Added `send_payment_receipts`, `send_window_opened`,
+  `send_window_closing_reminder`, `send_window_closed` and
+  `send_vendor_order_updates`, all defaulting on so nothing a department
+  receives today stops arriving. Settings → Notifications now lists all nine
+  grouped as order and window notices, each naming who receives it and when —
+  including the two that surprise people, since *status changes* also covers
+  the cancellation email and *payment receipts* covers waivers and refunds as
+  well as payments.
+  - A switch is a **ceiling, not a duplicate**. The per-send "email members"
+    box still skips an individual send and a window can still decline to
+    announce itself, but neither can send a notice the department switched
+    off. A note a quartermaster types on an order and presses send on is not
+    behind a switch — that is a message, not a notice the module raised.
+  - These bodies stay composed in code rather than joining the admin-editable
+    Email Templates screen: each is a rendered table of order lines and pay
+    buttons, not prose. What a department words itself is settings —
+    payment instructions, per-method notes, the receipt footer, a window's
+    pickup instructions, and the free-text message each announcement takes.
+
 **Fixed**
 
 - **A held order could be marked ready for pickup.** Under *payment required

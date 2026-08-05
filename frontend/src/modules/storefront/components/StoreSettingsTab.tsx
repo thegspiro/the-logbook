@@ -52,6 +52,11 @@ interface FormState {
   sendOrderConfirmation: boolean;
   sendStatusUpdates: boolean;
   sendPaymentReminders: boolean;
+  sendPaymentReceipts: boolean;
+  sendWindowOpened: boolean;
+  sendWindowClosingReminder: boolean;
+  sendWindowClosed: boolean;
+  sendVendorOrderUpdates: boolean;
   paymentReminderDays: string;
   windowReminderHours: string;
   termsText: string;
@@ -89,11 +94,99 @@ const toForm = (settings: StoreSettings): FormState => ({
   sendOrderConfirmation: settings.sendOrderConfirmation,
   sendStatusUpdates: settings.sendStatusUpdates,
   sendPaymentReminders: settings.sendPaymentReminders,
+  sendPaymentReceipts: settings.sendPaymentReceipts,
+  sendWindowOpened: settings.sendWindowOpened,
+  sendWindowClosingReminder: settings.sendWindowClosingReminder,
+  sendWindowClosed: settings.sendWindowClosed,
+  sendVendorOrderUpdates: settings.sendVendorOrderUpdates,
   paymentReminderDays: String(settings.paymentReminderDays),
   windowReminderHours: String(settings.windowReminderHours),
   termsText: settings.termsText ?? '',
   receiptFooter: settings.receiptFooter ?? '',
 });
+
+/** The FormState keys that are notification switches. */
+type NoticeKey =
+  | 'sendOrderConfirmation'
+  | 'sendStatusUpdates'
+  | 'sendPaymentReceipts'
+  | 'sendPaymentReminders'
+  | 'notifyAdminsOnOrder'
+  | 'sendWindowOpened'
+  | 'sendWindowClosingReminder'
+  | 'sendWindowClosed'
+  | 'sendVendorOrderUpdates';
+
+interface NoticeGroup {
+  title: string;
+  notices: { key: NoticeKey; label: string; detail: string }[];
+}
+
+/**
+ * Each switch names the notice it controls and says who receives it, because
+ * "status updates" on its own does not tell a quartermaster whether unticking
+ * it also stops the cancellation email. (It does.)
+ */
+const NOTICE_GROUPS: NoticeGroup[] = [
+  {
+    title: 'Order notices',
+    notices: [
+      {
+        key: 'sendOrderConfirmation',
+        label: 'Order confirmation',
+        detail: 'To the member the moment they order — their receipt and how to pay.',
+      },
+      {
+        key: 'sendStatusUpdates',
+        label: 'Status changes',
+        detail:
+          'To the member when their order becomes ordered, ready for pickup, picked up, or cancelled.',
+      },
+      {
+        key: 'sendPaymentReceipts',
+        label: 'Payment receipts',
+        detail: 'To the member when you record a payment, waive one, or record a refund.',
+      },
+      {
+        key: 'sendPaymentReminders',
+        label: 'Payment reminders',
+        detail: 'To members still carrying a balance, on the schedule below.',
+      },
+      {
+        key: 'notifyAdminsOnOrder',
+        label: 'New order alert',
+        detail: 'To store managers and the extra addresses below, each time an order lands.',
+      },
+    ],
+  },
+  {
+    title: 'Order window notices',
+    notices: [
+      {
+        key: 'sendWindowOpened',
+        label: 'Ordering is open',
+        detail:
+          'To every active member when a window opens. An individual window can still opt out of its own announcement.',
+      },
+      {
+        key: 'sendWindowClosingReminder',
+        label: 'Last call',
+        detail: 'To every active member before a window closes, on the schedule below.',
+      },
+      {
+        key: 'sendWindowClosed',
+        label: 'Ordering has closed',
+        detail: 'To everyone who ordered in that window.',
+      },
+      {
+        key: 'sendVendorOrderUpdates',
+        label: 'Order placed with the vendor',
+        detail:
+          'To everyone who ordered, when you record the vendor order — the update members chase.',
+      },
+    ],
+  },
+];
 
 export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged }) => {
   const [form, setForm] = useState<FormState | null>(null);
@@ -164,6 +257,11 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
       sendOrderConfirmation: form.sendOrderConfirmation,
       sendStatusUpdates: form.sendStatusUpdates,
       sendPaymentReminders: form.sendPaymentReminders,
+      sendPaymentReceipts: form.sendPaymentReceipts,
+      sendWindowOpened: form.sendWindowOpened,
+      sendWindowClosingReminder: form.sendWindowClosingReminder,
+      sendWindowClosed: form.sendWindowClosed,
+      sendVendorOrderUpdates: form.sendVendorOrderUpdates,
       paymentReminderDays: Number(form.paymentReminderDays || 3),
       windowReminderHours: Number(form.windowReminderHours || 48),
       termsText: form.termsText.trim() || undefined,
@@ -574,45 +672,48 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
       </section>
 
       <section className="card space-y-4 p-4">
-        <h2 className="text-theme-text-primary text-sm font-semibold">Notifications</h2>
-        <div className="flex flex-wrap gap-4">
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox"
-              checked={form.sendOrderConfirmation}
-              onChange={(e) => update('sendOrderConfirmation', e.target.checked)}
-            />
-            Order confirmations
-          </label>
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox"
-              checked={form.sendStatusUpdates}
-              onChange={(e) => update('sendStatusUpdates', e.target.checked)}
-            />
-            Status updates
-          </label>
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox"
-              checked={form.sendPaymentReminders}
-              onChange={(e) => update('sendPaymentReminders', e.target.checked)}
-            />
-            Payment reminders
-          </label>
-          <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox"
-              checked={form.notifyAdminsOnOrder}
-              onChange={(e) => update('notifyAdminsOnOrder', e.target.checked)}
-            />
-            Notify admins on new orders
-          </label>
+        <div>
+          <h2 className="text-theme-text-primary text-sm font-semibold">Notifications</h2>
+          <p className="text-theme-text-secondary mt-1 text-xs">
+            Every email the store can send is listed here. Unticking one stops it for the
+            whole department; the &ldquo;email members&rdquo; box on an individual action can
+            still skip a single send.
+          </p>
         </div>
+
+        <div className="space-y-4">
+          {NOTICE_GROUPS.map((group) => (
+            <fieldset key={group.title} className="space-y-2">
+              <legend className="text-theme-text-primary text-xs font-semibold tracking-wide uppercase">
+                {group.title}
+              </legend>
+              {group.notices.map((notice) => (
+                <label
+                  key={notice.key}
+                  htmlFor={`settings-notice-${notice.key}`}
+                  className="border-theme-surface-border flex cursor-pointer items-start gap-3 rounded-md border p-3"
+                >
+                  <input
+                    id={`settings-notice-${notice.key}`}
+                    type="checkbox"
+                    className="form-checkbox mt-0.5"
+                    checked={form[notice.key]}
+                    onChange={(e) => update(notice.key, e.target.checked)}
+                  />
+                  <span>
+                    <span className="text-theme-text-primary block text-sm font-medium">
+                      {notice.label}
+                    </span>
+                    <span className="text-theme-text-secondary block text-xs">
+                      {notice.detail}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          ))}
+        </div>
+
         <div className="form-grid-2">
           <div>
             <label htmlFor="settings-reminder-days" className="form-label">

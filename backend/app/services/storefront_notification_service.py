@@ -8,7 +8,36 @@ updates, payment reminders and receipts, and the order-window announcements
 Emails are composed inline with ``wrap_email_body`` — the same approach the
 scheduled inventory alerts use — rather than through the customizable
 ``EmailTemplate`` system, because each of these bodies is a rendered table of
-order lines rather than a fixed block of prose an admin would edit.
+order lines rather than a fixed block of prose an admin would edit. The parts a
+department *does* want to word itself are settings, not templates:
+``payment_instructions``, ``receipt_footer``, the window's
+``pickup_instructions``, and the free-text message each announcement accepts.
+
+Whether a notice goes out at all is decided by the caller, not here. Every
+method below is switched by exactly one ``StoreSettings`` flag, checked in
+``StorefrontService``:
+
+===========================  =================================================
+Notice                       Switch
+===========================  =================================================
+send_order_confirmation      ``send_order_confirmation``
+send_admin_new_order         ``notify_admins_on_order``
+send_order_update (status)   ``send_status_updates``
+send_order_cancelled         ``send_status_updates``
+send_order_update (waive,    ``send_payment_receipts``
+refund)
+send_payment_received        ``send_payment_receipts``
+send_payment_reminder        ``send_payment_reminders``
+send_window_opened           ``send_window_opened`` (+ the window's own
+                             ``notify_on_open``)
+send_window_closing_soon     ``send_window_closing_reminder``
+send_window_closed           ``send_window_closed``
+send_vendor_order_placed     ``send_vendor_order_updates``
+===========================  =================================================
+
+The one exception is ``send_order_update`` raised by ``add_order_message``,
+which is a message a quartermaster typed and asked to send rather than a notice
+the module raised on its own.
 """
 
 import html as _html

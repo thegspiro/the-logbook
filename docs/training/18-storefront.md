@@ -166,9 +166,49 @@ putting it in the member's hands that waits.
 
 ### Notifications
 
-Order confirmations, new-order notices to administrators, status updates,
-payment reminders (after N days), and a window-closing reminder (N hours
-before). Extra recipients go in **Notify emails**.
+The **Notifications** panel lists every email the store can send, in two
+groups, each with a line saying who receives it. Untick one and the department
+stops sending it; all nine start switched on.
+
+**Order notices**
+
+| Switch | Who gets it, and when |
+|---|---|
+| Order confirmation | The member, the moment they order — their receipt and how to pay |
+| Status changes | The member, when their order becomes ordered, ready for pickup, picked up, or cancelled |
+| Payment receipts | The member, when you record a payment, waive one, or record a refund |
+| Payment reminders | Members still carrying a balance, after N days |
+| New order alert | You and the addresses in **Extra notification recipients**, each time an order lands |
+
+**Order window notices**
+
+| Switch | Who gets it, and when |
+|---|---|
+| Ordering is open | Every active member when a window opens |
+| Last call | Every active member, N hours before the window closes |
+| Ordering has closed | Everyone who ordered in that window |
+| Order placed with the vendor | Everyone who ordered, when you record the vendor order |
+
+Two of these catch people out. **Status changes** also covers the cancellation
+email — untick it and a member whose order you cancel hears nothing. And
+**Payment receipts** covers refunds and waivers as well as payments, because
+all three are money moving on someone's order.
+
+A switch is a ceiling, not a duplicate. Actions that offer an "email members"
+box — opening a window, closing one, recording the vendor order — can still
+skip a single send, and an individual window can decline to announce itself.
+Neither can send a notice you have switched off here.
+
+What the emails say is yours to shape too, through settings rather than a
+template editor: the payment instructions and per-method notes appear under the
+pay buttons, the receipt footer closes the confirmation, a window's pickup
+instructions ride along with every announcement about it, and the open / close
+/ vendor-order actions each take a free-text message for that send only. The
+layout, your logo and your colours come from the organization's email branding.
+
+Everything the store sends is logged in **Communications → Message History**
+under a `storefront_` type, so "did she ever get the reminder?" is a question
+with an answer.
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Settings tab showing the payment
 > method checkboxes with the Venmo, PayPal, Cash App and Zelle fields revealed

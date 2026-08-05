@@ -91,6 +91,11 @@ class StoreSettingsUpdate(BaseModel):
     send_order_confirmation: Optional[bool] = None
     send_status_updates: Optional[bool] = None
     send_payment_reminders: Optional[bool] = None
+    send_payment_receipts: Optional[bool] = None
+    send_window_opened: Optional[bool] = None
+    send_window_closing_reminder: Optional[bool] = None
+    send_window_closed: Optional[bool] = None
+    send_vendor_order_updates: Optional[bool] = None
     payment_reminder_days: Optional[int] = Field(None, ge=1, le=90)
     window_reminder_hours: Optional[int] = Field(None, ge=1, le=720)
 
@@ -180,6 +185,11 @@ class StoreSettingsResponse(UTCResponseBase):
     send_order_confirmation: bool
     send_status_updates: bool
     send_payment_reminders: bool
+    send_payment_receipts: bool
+    send_window_opened: bool
+    send_window_closing_reminder: bool
+    send_window_closed: bool
+    send_vendor_order_updates: bool
     payment_reminder_days: int
     window_reminder_hours: int
 

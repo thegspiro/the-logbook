@@ -216,6 +216,11 @@ export interface StoreSettings {
   sendOrderConfirmation: boolean;
   sendStatusUpdates: boolean;
   sendPaymentReminders: boolean;
+  sendPaymentReceipts: boolean;
+  sendWindowOpened: boolean;
+  sendWindowClosingReminder: boolean;
+  sendWindowClosed: boolean;
+  sendVendorOrderUpdates: boolean;
   paymentReminderDays: number;
   windowReminderHours: number;
   termsText?: string | null;
@@ -253,6 +258,11 @@ export interface StoreSettingsUpdate {
   sendOrderConfirmation?: boolean;
   sendStatusUpdates?: boolean;
   sendPaymentReminders?: boolean;
+  sendPaymentReceipts?: boolean;
+  sendWindowOpened?: boolean;
+  sendWindowClosingReminder?: boolean;
+  sendWindowClosed?: boolean;
+  sendVendorOrderUpdates?: boolean;
   paymentReminderDays?: number;
   windowReminderHours?: number;
   termsText?: string | undefined;

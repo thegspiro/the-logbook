@@ -723,8 +723,8 @@ class StorefrontService:
         await self.db.commit()
         await self.db.refresh(window)
 
-        if notify_members and window.notify_on_open:
-            settings = await self.get_settings(organization_id)
+        settings = await self.get_settings(organization_id)
+        if notify_members and window.notify_on_open and settings.send_window_opened:
             sent = await self.notifications.send_window_opened(
                 window, settings, message=message
             )
@@ -798,8 +798,8 @@ class StorefrontService:
             skipped = result["errors"]
 
         notified = 0
-        if notify_members:
-            settings = await self.get_settings(organization_id)
+        settings = await self.get_settings(organization_id)
+        if notify_members and settings.send_vendor_order_updates:
             recipients = await self._window_customer_emails(window.id, organization_id)
             if recipients:
                 notified = await self.notifications.send_vendor_order_placed(
@@ -835,8 +835,8 @@ class StorefrontService:
         await self.db.commit()
         await self.db.refresh(window)
 
-        if notify_members:
-            settings = await self.get_settings(organization_id)
+        settings = await self.get_settings(organization_id)
+        if notify_members and settings.send_window_closed:
             recipients = await self._window_customer_emails(window_id, organization_id)
             if recipients:
                 sent = await self.notifications.send_window_closed(
@@ -1714,9 +1714,10 @@ class StorefrontService:
         refreshed = await self.get_order(order_id, organization_id)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
-            await self.notifications.send_payment_received(
-                refreshed, settings, amount=applied
-            )
+            if settings.send_payment_receipts:
+                await self.notifications.send_payment_received(
+                    refreshed, settings, amount=applied
+                )
         return refreshed or order
 
     async def mark_order_paid(
@@ -1803,11 +1804,12 @@ class StorefrontService:
         refreshed = await self.get_order(order_id, organization_id)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
-            await self.notifications.send_order_update(
-                refreshed,
-                reason or "No payment is due on this order.",
-                settings,
-            )
+            if settings.send_payment_receipts:
+                await self.notifications.send_order_update(
+                    refreshed,
+                    reason or "No payment is due on this order.",
+                    settings,
+                )
         return refreshed or order
 
     async def bulk_mark_paid(
@@ -1942,11 +1944,12 @@ class StorefrontService:
         refreshed = await self.get_order(order_id, organization_id)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
-            await self.notifications.send_order_update(
-                refreshed,
-                reason or f"A refund of {refunded} has been recorded.",
-                settings,
-            )
+            if settings.send_payment_receipts:
+                await self.notifications.send_order_update(
+                    refreshed,
+                    reason or f"A refund of {refunded} has been recorded.",
+                    settings,
+                )
         return refreshed or order
 
     async def cancel_order(
@@ -1991,7 +1994,11 @@ class StorefrontService:
         refreshed = await self.get_order(order_id, organization_id)
         if refreshed and notify_member:
             settings = await self.get_settings(organization_id)
-            await self.notifications.send_order_cancelled(refreshed, reason, settings)
+            # A cancellation is a status change, and rides the same switch.
+            if settings.send_status_updates:
+                await self.notifications.send_order_cancelled(
+                    refreshed, reason, settings
+                )
         return refreshed or order
 
     async def add_order_message(
@@ -2026,6 +2033,9 @@ class StorefrontService:
 
         refreshed = await self.get_order(order_id, organization_id)
         if refreshed and is_member_visible and notify_member:
+            # Deliberately not behind a notification switch: this is a message
+            # a quartermaster typed to one member and asked to send. The
+            # switches govern the notices the module raises on its own.
             settings = await self.get_settings(organization_id)
             await self.notifications.send_order_update(refreshed, message, settings)
         return refreshed or order
@@ -2896,6 +2906,7 @@ class StorefrontService:
 
             if (
                 closes_at
+                and settings.send_window_closing_reminder
                 and not window.closing_reminder_sent_at
                 and settings.window_reminder_hours
                 and now

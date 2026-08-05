@@ -74,7 +74,7 @@ members" toggle.]**
 > close between windows, or rebuild the catalog, and still work the orders
 > already placed. Members see nothing; you keep everything."
 
-### PAYMENT METHODS (2:45 – 4:00)
+### PAYMENT METHODS (2:45 – 3:30)
 
 **[SCREEN: The Settings tab, ticking Venmo, PayPal, Cash App, Zelle and Check.
 Each tick reveals its fields.]**
@@ -101,6 +101,33 @@ error.]**
 
 > "And handles get checked when you save. Mistype a cashtag and you'll hear
 > about it, rather than wondering next month why nobody used Cash App."
+
+### WHAT THE STORE EMAILS (3:30 – 4:00)
+
+**[SCREEN: Scrolling down Settings to the Notifications panel — two groups,
+nine switches, each with a line of description under it.]**
+
+> "Scroll down and there's every email this thing can send. Nine of them, all
+> on to start with, each one telling you who gets it and when."
+
+**[CALLOUT: "Two that catch people out."]**
+
+> "Two are worth reading twice. **Status changes** also covers the cancellation
+> email — turn it off and somebody whose order you cancel just never hears.
+> And **payment receipts** covers refunds and waivers, not only payments,
+> because all three are money moving on someone's order."
+
+**[SCREEN: Unticking "Ordering is open", then opening a window and showing the
+"email members" box still present but ineffective.]**
+
+> "These are ceilings, not duplicates. The 'email members' box on an individual
+> action can still skip one send — but it can't send something you've switched
+> off here."
+
+> "What they *say* is yours too. Payment instructions, the receipt footer, a
+> window's pickup instructions, and a free-text message on each announcement.
+> Your logo and colours come from your org's email branding, same as everything
+> else on the platform."
 
 **[TRANSITION: The catalog]**
 
@@ -532,3 +559,4 @@ station.]**
 | 13g | Your Department's Rule on Unpaid Orders | Chapter 6 |
 | 13h | They Said Venmo and Paid Cash — Record It Right | Chapter 6 |
 | 13i | Tell the Vendor, Tell the Members, One Click | Chapter 8 |
+| 13j | The Nine Emails Your Store Sends | Chapter 2 |
