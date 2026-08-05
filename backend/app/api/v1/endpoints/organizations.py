@@ -4,7 +4,7 @@ Organizations API Endpoints
 Endpoints for organization settings management.
 """
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from loguru import logger
 from sqlalchemy import func, select
@@ -39,6 +39,12 @@ from app.services.org_template_service import OrgTemplateService
 from app.services.organization_service import OrganizationService
 
 router = APIRouter()
+
+# Setup checklist items with no measurable completion signal — they ask the
+# admin to look something over, and only the admin can say they did. Every
+# other item derives completion from entity counts and must not be hand-waved
+# complete, so acknowledgment is restricted to this set.
+REVIEW_CHECKLIST_KEYS = {"org_settings", "modules"}
 
 
 @router.get("/settings", response_model=OrganizationSettingsResponse)
@@ -499,10 +505,13 @@ async def get_setup_checklist(
     **Authentication required**
     """
     from app.models.apparatus import Apparatus
+    from app.models.document import Document, DocumentStatus
+    from app.models.event import Event
     from app.models.forms import Form
     from app.models.inventory import InventoryCategory
     from app.models.location import Location
     from app.models.membership_pipeline import MembershipPipeline
+    from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import (
         BasicApparatus,
         ShiftTemplate,
@@ -516,6 +525,31 @@ async def get_setup_checklist(
     member_count = (
         await db.execute(
             select(func.count()).select_from(User).where(User.organization_id == org_id)
+        )
+    ).scalar() or 0
+
+    # Members who have actually signed in at least once. Adding a member row is
+    # not the same as that member having working access, and the gap between the
+    # two is the most common "we set it up but nobody uses it" failure.
+    signed_in_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.organization_id == org_id,
+                User.last_login_at.isnot(None),
+            )
+        )
+    ).scalar() or 0
+
+    mfa_user_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.organization_id == org_id,
+                User.mfa_enabled == True,  # noqa: E712
+            )
         )
     ).scalar() or 0
 
@@ -628,11 +662,46 @@ async def get_setup_checklist(
     except Exception as e:
         logger.warning(f"Failed to query pipeline count for setup checklist: {e}")
 
+    document_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(Document)
+            .where(
+                Document.organization_id == org_id,
+                Document.status == DocumentStatus.ACTIVE,
+            )
+        )
+    ).scalar() or 0
+
+    event_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(Event)
+            .where(Event.organization_id == org_id)
+        )
+    ).scalar() or 0
+
+    # A configured email service is not a working one — SMTP hosts reject,
+    # API keys expire, and departments discover it when the first reminder
+    # never arrives. Count messages the mailer confirmed it delivered.
+    delivered_email_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(NotificationLog)
+            .where(
+                NotificationLog.organization_id == org_id,
+                NotificationLog.channel == NotificationChannel.EMAIL,
+                NotificationLog.delivered == True,  # noqa: E712
+            )
+        )
+    ).scalar() or 0
+
     # Get organization settings for email/module info
     org_service = OrganizationService(db)
     settings = await org_service.get_organization_settings(current_user.organization_id)
     enabled_modules = settings.modules.get_enabled_modules()
     email_configured = settings.email_service.enabled
+    acknowledged = set(settings.setup.acknowledged)
 
     # Build the checklist items
     items = [
@@ -686,9 +755,10 @@ async def get_setup_checklist(
             description="Verify department contact info, membership ID format, and contact visibility preferences.",
             path="/settings",
             category="essential",
-            is_complete=True,
+            is_complete="org_settings" in acknowledged,
             count=0,
             required=True,
+            kind="review",
         ),
         SetupChecklistItem(
             key="modules",
@@ -696,8 +766,49 @@ async def get_setup_checklist(
             description="Enable the modules your department needs: training, scheduling, inventory, forms, and more.",
             path="/settings?tab=modules",
             category="essential",
-            is_complete=len(enabled_modules) > 5,
-            count=len(enabled_modules) - 5,
+            is_complete="modules" in acknowledged,
+            count=len(enabled_modules),
+            required=True,
+            kind="review",
+        ),
+        SetupChecklistItem(
+            key="members_signed_in",
+            title="Get Members Signed In",
+            description="Send member logins and confirm they can sign in. Adding a member to the roster does not give them access on its own.",
+            path="/members/admin",
+            category="essential",
+            is_complete=signed_in_count > 1,
+            count=signed_in_count,
+            required=True,
+        ),
+        SetupChecklistItem(
+            key="documents",
+            title="Upload SOPs & Policies",
+            description="Add your standard operating procedures, bylaws, and policy documents so members can find them in one place.",
+            path="/documents",
+            category="essential",
+            is_complete=document_count > 0,
+            count=document_count,
+            required=True,
+        ),
+        SetupChecklistItem(
+            key="events",
+            title="Schedule Your First Event",
+            description="Create a drill, business meeting, or training so members have something to RSVP to and check in against.",
+            path="/events",
+            category="essential",
+            is_complete=event_count > 0,
+            count=event_count,
+            required=True,
+        ),
+        SetupChecklistItem(
+            key="mfa",
+            title="Enable Multi-Factor Authentication",
+            description="Turn on MFA for administrators. This system holds protected health information, and admin accounts are the highest-value target.",
+            path="/account?tab=security",
+            category="essential",
+            is_complete=mfa_user_count > 0,
+            count=mfa_user_count,
             required=True,
         ),
     ]
@@ -775,12 +886,17 @@ async def get_setup_checklist(
         items.append(
             SetupChecklistItem(
                 key="email",
-                title="Configure Email Notifications",
-                description="Set up SMTP/email service so the system can send notifications, reminders, and alerts.",
+                title="Configure & Verify Email Delivery",
+                description=(
+                    "Set up your email service, then send a test message to confirm it "
+                    "actually delivers before members start relying on reminders."
+                    if not email_configured
+                    else "Email is configured. Send a test message to confirm it delivers."
+                ),
                 path="/settings",
                 category="notifications",
-                is_complete=email_configured,
-                count=1 if email_configured else 0,
+                is_complete=email_configured and delivered_email_count > 0,
+                count=delivered_email_count,
                 required=False,
             )
         )
@@ -821,6 +937,51 @@ async def get_setup_checklist(
         total_count=len(items),
         enabled_modules=enabled_modules,
     )
+
+
+@router.post("/setup-checklist/{item_key}/acknowledge")
+async def acknowledge_setup_checklist_item(
+    item_key: str,
+    acknowledged: bool = True,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("settings.manage")),
+):
+    """
+    Mark a review-type setup checklist item as reviewed (or clear that mark).
+
+    Only items with `kind == "review"` can be acknowledged. Items whose
+    completion is derived from entity counts must be completed by doing the
+    work, not by asserting it was done.
+
+    **Requires `settings.manage`**
+    """
+    if item_key not in REVIEW_CHECKLIST_KEYS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"'{item_key}' is not a review checklist item. "
+                "Only review items can be acknowledged."
+            ),
+        )
+
+    org_service = OrganizationService(db)
+    settings = await org_service.get_organization_settings(current_user.organization_id)
+
+    keys = set(settings.setup.acknowledged)
+    if acknowledged:
+        keys.add(item_key)
+    else:
+        keys.discard(item_key)
+
+    updated = await org_service.update_organization_settings(
+        current_user.organization_id,
+        {"setup": {"acknowledged": sorted(keys)}},
+    )
+
+    return {
+        "item_key": item_key,
+        "acknowledged": item_key in updated.setup.acknowledged,
+    }
 
 
 @router.get("/address")

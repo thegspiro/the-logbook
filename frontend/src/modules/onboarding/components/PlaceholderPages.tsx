@@ -1,45 +1,5 @@
 import React from 'react';
 import { useNavigate } from 'react-router';
-import { useOnboardingStore } from '../store';
-
-/**
- * File Storage Config Placeholder Component
- * Skips detailed configuration for now - can be configured later in settings
- */
-export const FileStorageConfigPlaceholder: React.FC = () => {
-  const navigate = useNavigate();
-  const storedPlatform = useOnboardingStore(state => state.fileStoragePlatform);
-  const platform = storedPlatform || 'local';
-
-  // Auto-redirect after a brief moment to show the user what happened
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      void navigate('/onboarding/authentication');
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [navigate]);
-
-  return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
-      <div className="card max-w-2xl p-8 text-center w-full">
-        <div className="text-green-700 dark:text-green-400 text-5xl mb-4">{'\u2713'}</div>
-        <h2 className="text-3xl font-bold text-theme-text-primary mb-4">
-          File Storage Selected
-        </h2>
-        <p className="text-theme-text-secondary mb-2">
-          You selected: <span className="text-theme-text-primary font-semibold capitalize">{platform.replace('_', ' ')}</span>
-        </p>
-        <p className="text-theme-text-muted text-sm mb-6">
-          {'Detailed configuration can be done later in Settings \u2192 File Storage.'}
-        </p>
-        <div className="flex items-center justify-center gap-2 text-theme-text-muted">
-          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-theme-surface-border border-t-transparent"></span>
-          <span>Continuing to authentication...</span>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 /**
  * Security Check Placeholder Component

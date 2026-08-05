@@ -1005,7 +1005,7 @@ const PositionSetup: React.FC = () => {
 
           {/* Progress */}
           <div className="card mt-8 p-6">
-            <ProgressIndicator currentStep={9} totalSteps={10} />
+            <ProgressIndicator step="positions" />
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </div>
         </div>

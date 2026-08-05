@@ -454,7 +454,6 @@ class TestColumnConstraints:
             "facility_statuses",
             "facility_maintenance_types",
             "onboarding_status",
-            "onboarding_checklist",
             "evoc_levels",
             "message_history",
             # Pre-auth / IP-only alerts (e.g. login brute force) are
@@ -854,7 +853,6 @@ class TestMultiTenancyIsolation:
         "sessions",  # Scoped via user_id
         "password_history",  # Scoped via user_id
         "onboarding_status",  # System-wide
-        "onboarding_checklist",  # System-wide
         "onboarding_sessions",  # System-wide
         "audit_logs",  # Global audit trail
         "audit_log_checkpoints",  # Global audit
@@ -923,7 +921,6 @@ class TestSchemaCrossReferences:
             "error_logs",  # Loose coupling for error tracking
             "integrations",  # Standalone config table
             "onboarding_status",  # System singleton
-            "onboarding_checklist",  # System-wide checklist
             "onboarding_sessions",  # Temporary session storage
             "security_alerts",  # Append-only, references user by string ID
             "audit_ship_state",  # Singleton watermark for off-host shipping

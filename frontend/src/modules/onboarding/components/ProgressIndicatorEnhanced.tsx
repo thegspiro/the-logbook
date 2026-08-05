@@ -1,33 +1,46 @@
 import React from 'react';
 import { Check, ChevronRight } from 'lucide-react';
 
+/**
+ * The onboarding flow in order, matching routes.tsx.
+ *
+ * Pages name their step with a key instead of a hardcoded number. When this
+ * list held numbers that each page repeated, the two drifted: NavigationChoice
+ * passed currentStep={2} against a list whose second entry was "Organization
+ * Setup", so the wizard's own progress bar mislabeled the step the user was
+ * looking at. A key can't drift — inserting a step here renumbers everything.
+ */
+const ONBOARDING_STEPS = [
+  { key: 'organization', name: 'Organization Setup', shortName: 'Organization' },
+  { key: 'stations', name: 'Stations', shortName: 'Stations' },
+  { key: 'apparatus', name: 'Apparatus', shortName: 'Apparatus' },
+  { key: 'navigation', name: 'Navigation Choice', shortName: 'Navigation' },
+  { key: 'email_platform', name: 'Email Platform', shortName: 'Email' },
+  { key: 'email_config', name: 'Email Configuration', shortName: 'Config' },
+  { key: 'file_storage', name: 'File Storage', shortName: 'Storage' },
+  { key: 'authentication', name: 'Authentication', shortName: 'Auth' },
+  { key: 'system_owner', name: 'System Owner', shortName: 'Owner' },
+  { key: 'it_team', name: 'IT Team Backup', shortName: 'IT Backup' },
+  { key: 'positions', name: 'Positions', shortName: 'Positions' },
+  { key: 'modules', name: 'Module Selection', shortName: 'Modules' },
+] as const;
+
+export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number]['key'];
+
 interface ProgressIndicatorProps {
-  currentStep: number;
-  totalSteps: number;
+  step: OnboardingStepKey;
   className?: string;
 }
 
-// Define all onboarding steps with their names
-const ONBOARDING_STEPS = [
-  { id: 1, name: 'Welcome', shortName: 'Welcome' },
-  { id: 2, name: 'Organization Setup', shortName: 'Organization' },
-  { id: 3, name: 'Navigation Choice', shortName: 'Navigation' },
-  { id: 4, name: 'Email Platform', shortName: 'Email' },
-  { id: 5, name: 'Email Configuration', shortName: 'Config' },
-  { id: 6, name: 'File Storage', shortName: 'Storage' },
-  { id: 7, name: 'Authentication', shortName: 'Auth' },
-  { id: 8, name: 'IT Team Backup', shortName: 'IT Backup' },
-  { id: 9, name: 'Module Selection', shortName: 'Modules' },
-  { id: 10, name: 'Admin User Creation', shortName: 'Admin User' },
-];
-
 const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
-  currentStep,
-  totalSteps,
+  step,
   className = '',
 }) => {
+  const stepIndex = ONBOARDING_STEPS.findIndex(s => s.key === step);
+  const currentStep = stepIndex + 1;
+  const totalSteps = ONBOARDING_STEPS.length;
   const percentage = Math.round((currentStep / totalSteps) * 100);
-  const currentStepInfo = ONBOARDING_STEPS[currentStep - 1];
+  const currentStepInfo = ONBOARDING_STEPS[stepIndex];
 
   return (
     <div className={`max-w-2xl mx-auto w-full ${className}`}>
@@ -55,12 +68,13 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
       {/* Breadcrumb-Style Step Indicators (Mobile: Scrollable, Desktop: All visible) */}
       <div className="overflow-x-auto pb-2 -mx-2 px-2 scrollbar-thin scrollbar-thumb-theme-surface-hover scrollbar-track-theme-surface">
         <div className="flex items-center space-x-1 min-w-max">
-          {ONBOARDING_STEPS.map((step, index) => {
-            const isCompleted = step.id < currentStep;
-            const isCurrent = step.id === currentStep;
+          {ONBOARDING_STEPS.map((listStep, index) => {
+            const stepNumber = index + 1;
+            const isCompleted = stepNumber < currentStep;
+            const isCurrent = stepNumber === currentStep;
 
             return (
-              <React.Fragment key={step.id}>
+              <React.Fragment key={listStep.key}>
                 {/* Step Indicator */}
                 <div
                   className={`flex items-center space-x-2 px-3 py-1.5 rounded-md transition-all ${
@@ -84,7 +98,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                     {isCompleted ? (
                       <Check className="w-3 h-3" aria-hidden="true" />
                     ) : (
-                      step.id
+                      stepNumber
                     )}
                   </div>
 
@@ -94,8 +108,8 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                       isCurrent ? 'text-theme-text-primary' : ''
                     }`}
                   >
-                    <span className="hidden sm:inline">{step.name}</span>
-                    <span className="sm:hidden">{step.shortName}</span>
+                    <span className="hidden sm:inline">{listStep.name}</span>
+                    <span className="sm:hidden">{listStep.shortName}</span>
                   </span>
                 </div>
 

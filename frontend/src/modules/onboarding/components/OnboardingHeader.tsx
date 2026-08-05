@@ -6,12 +6,15 @@ interface OnboardingHeaderProps {
   departmentName: string;
   logoPreview?: string | null;
   icon?: React.ReactNode;
+  /** Line under the department name. The final step overrides the default. */
+  subtitle?: string;
 }
 
 const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
   departmentName,
   logoPreview,
   icon = <Shield aria-hidden="true" className="w-6 h-6 text-white" />,
+  subtitle = 'Setup in Progress',
 }) => {
   const { theme, setTheme } = useTheme();
 
@@ -43,7 +46,7 @@ const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
         )}
         <div className="flex-1 min-w-0">
           <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
-          <p className="text-theme-text-muted text-sm">Setup in Progress</p>
+          <p className="text-theme-text-muted text-sm">{subtitle}</p>
         </div>
         <button
           onClick={cycleTheme}

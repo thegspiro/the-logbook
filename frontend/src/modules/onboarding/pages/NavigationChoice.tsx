@@ -81,7 +81,7 @@ const NavigationChoice: React.FC = () => {
         <div className="max-w-4xl w-full">
           {/* Navigation Buttons */}
           <div className="flex justify-between items-center mb-6">
-            <BackButton to="/onboarding/start" />
+            <BackButton to="/onboarding/apparatus" />
             <ResetProgressButton />
           </div>
 
@@ -315,7 +315,7 @@ const NavigationChoice: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <ProgressIndicator currentStep={2} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
+          <ProgressIndicator step="navigation" className="mt-6 pt-6 border-t border-theme-nav-border" />
 
           {/* Auto-save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />

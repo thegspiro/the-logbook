@@ -22,6 +22,31 @@ export interface OnboardingError {
   recovered: boolean;
 }
 
+/**
+ * Draft rows for the stations and apparatus steps. `id` is a client-side key
+ * for list rendering only — the server assigns the real record ids.
+ */
+export interface OnboardingStationDraft {
+  id: string;
+  name: string;
+  stationNumber: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  phone: string;
+  email: string;
+}
+
+export interface OnboardingApparatusDraft {
+  id: string;
+  unitNumber: string;
+  name: string;
+  apparatusType: string;
+  minStaffing: number;
+  positions: string[];
+}
+
 export interface OnboardingState {
   // Department Information
   departmentName: string;
@@ -57,6 +82,10 @@ export interface OnboardingState {
   secondaryAdminEmail: string;
 
   // Position Configuration
+  // Stations & Apparatus (collected right after organization setup)
+  stations: OnboardingStationDraft[];
+  apparatus: OnboardingApparatusDraft[];
+
   positionsConfig: Record<string, {
     id: string;
     name: string;
@@ -117,6 +146,10 @@ export interface OnboardingActions {
   setBackupPhone: (phone: string) => void;
   setSecondaryAdminEmail: (email: string) => void;
 
+  // Station & Apparatus Actions
+  setStations: (stations: OnboardingStationDraft[]) => void;
+  setApparatus: (apparatus: OnboardingApparatusDraft[]) => void;
+
   // Position Actions
   setPositionsConfig: (positions: OnboardingState['positionsConfig']) => void;
   // Module Actions
@@ -163,6 +196,8 @@ const initialState: OnboardingState = {
   backupEmail: '',
   backupPhone: '',
   secondaryAdminEmail: '',
+  stations: [],
+  apparatus: [],
   positionsConfig: null,
   selectedModules: [],
   moduleStatuses: {},
@@ -278,6 +313,17 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
 
       setSecondaryAdminEmail: (email) => {
         set({ secondaryAdminEmail: email });
+        get().triggerAutoSave();
+      },
+
+      // Station & Apparatus Actions
+      setStations: (stations) => {
+        set({ stations });
+        get().triggerAutoSave();
+      },
+
+      setApparatus: (apparatus) => {
+        set({ apparatus });
         get().triggerAutoSave();
       },
 
@@ -433,6 +479,8 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         systemOwnerLastName: state.systemOwnerLastName,
         systemOwnerEmail: state.systemOwnerEmail,
         itTeamConfigured: state.itTeamConfigured,
+        stations: state.stations,
+        apparatus: state.apparatus,
         positionsConfig: state.positionsConfig,
         selectedModules: state.selectedModules,
         moduleStatuses: state.moduleStatuses,

@@ -421,6 +421,23 @@ export const organizationService = {
     return response.data;
   },
 
+  /**
+   * Mark a review-type checklist item as reviewed (or clear that mark).
+   * Rejected by the backend for 'auto' items, which must be completed by
+   * doing the underlying work.
+   */
+  async acknowledgeSetupChecklistItem(
+    itemKey: string,
+    acknowledged = true
+  ): Promise<{ item_key: string; acknowledged: boolean }> {
+    const response = await api.post<{ item_key: string; acknowledged: boolean }>(
+      `/organization/setup-checklist/${itemKey}/acknowledge`,
+      null,
+      { params: { acknowledged } }
+    );
+    return response.data;
+  },
+
   async updateSettings(updates: Record<string, unknown>): Promise<Record<string, unknown>> {
     const response = await api.patch<Record<string, unknown>>('/organization/settings', updates);
     return response.data;
@@ -451,6 +468,12 @@ export interface SetupChecklistItem {
   is_complete: boolean;
   count: number;
   required: boolean;
+  /**
+   * 'auto' items derive completion from real entity counts and can only be
+   * completed by doing the work. 'review' items have no measurable signal and
+   * are completed by the admin acknowledging them.
+   */
+  kind: 'auto' | 'review';
 }
 
 export interface SetupChecklistResponse {

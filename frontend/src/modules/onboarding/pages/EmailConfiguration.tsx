@@ -750,7 +750,7 @@ const EmailConfiguration: React.FC = () => {
           </div>
 
           {/* Progress Indicator */}
-          <ProgressIndicator currentStep={4} totalSteps={10} className="mt-6 pt-6 border-t border-theme-nav-border" />
+          <ProgressIndicator step="email_config" className="mt-6 pt-6 border-t border-theme-nav-border" />
 
           {/* Auto-Save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />

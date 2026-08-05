@@ -23,6 +23,7 @@ from app.schemas.organization import (
     MembershipIdSettings,
     ModuleSettings,
     OrganizationSettings,
+    SetupProgressSettings,
     decrypt_settings_secrets,
     encrypt_settings_secrets,
 )
@@ -256,6 +257,14 @@ class OrganizationService:
             else DepartmentEmailSettings()
         )
 
+        # Parse department setup checklist acknowledgment state
+        setup = settings_dict.get("setup", {})
+        setup_settings = SetupProgressSettings(
+            acknowledged=[
+                key for key in setup.get("acknowledged", []) if isinstance(key, str)
+            ]
+        )
+
         # Collect extra/custom settings (e.g. station_mode) that aren't
         # covered by a dedicated sub-schema so they round-trip through the API.
         known_keys = {
@@ -269,6 +278,7 @@ class OrganizationService:
             "membership_tiers",
             "membership_id",
             "department_email",
+            "setup",
         }
         extra_settings = {k: v for k, v in settings_dict.items() if k not in known_keys}
 
@@ -280,6 +290,7 @@ class OrganizationService:
             modules=module_settings,
             membership_id=membership_id_settings,
             department_email=dept_email_settings,
+            setup=setup_settings,
             **extra_settings,
         )
 

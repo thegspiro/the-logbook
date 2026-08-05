@@ -374,46 +374,61 @@ Content-Type: application/json
 
 **Automatic Actions:**
 - Onboarding marked as complete
-- Post-onboarding checklist created (10 items)
+- Default seed data created for the organization
 - Audit log entry created
 - System now allows normal operation
 
-### Get Post-Onboarding Checklist
+### Department Setup Checklist
+
+Remaining setup work lives on the department setup checklist, not in the
+onboarding module. It derives completion from live data — member counts,
+apparatus counts, whether anyone has actually signed in — rather than a static
+list seeded at completion, so it stays accurate as the department works
+through it.
 
 ```bash
-GET /api/v1/onboarding/checklist
-```
-
-**Response:**
-```json
-[
-  {
-    "id": "uuid-here",
-    "title": "Set up TLS/HTTPS certificates",
-    "description": "Enable HTTPS for secure communication",
-    "category": "security",
-    "priority": "critical",
-    "is_completed": false,
-    "completed_at": null,
-    "documentation_link": "https://docs.the-logbook.org/security/tls",
-    "estimated_time_minutes": 60
-  },
-  ...
-]
-```
-
-### Mark Checklist Item Complete
-
-```bash
-PATCH /api/v1/onboarding/checklist/{item_id}/complete
+GET /api/v1/organization/setup-checklist
 ```
 
 **Response:**
 ```json
 {
-  "message": "Checklist item marked as complete",
-  "item_id": "uuid-here",
-  "title": "Set up TLS/HTTPS certificates"
+  "items": [
+    {
+      "key": "members",
+      "title": "Add Department Members",
+      "description": "Import or manually add your department roster.",
+      "path": "/members/admin",
+      "category": "essential",
+      "is_complete": false,
+      "count": 1,
+      "required": true,
+      "kind": "auto"
+    }
+  ],
+  "completed_count": 0,
+  "total_count": 10,
+  "enabled_modules": ["members", "events", "documents"]
+}
+```
+
+Items are either `kind: "auto"` (completion derived from entity counts) or
+`kind: "review"` (no measurable signal — the admin confirms they looked).
+
+### Acknowledge a Review Item
+
+Only `review` items can be acknowledged; `auto` items are completed by doing
+the work.
+
+```bash
+POST /api/v1/organization/setup-checklist/{item_key}/acknowledge?acknowledged=true
+```
+
+**Response:**
+```json
+{
+  "item_key": "org_settings",
+  "acknowledged": true
 }
 ```
 
