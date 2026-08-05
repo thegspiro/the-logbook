@@ -106,6 +106,23 @@ class StorePaymentMethod(str, enum.Enum):
     OTHER = "other"
 
 
+class StorePaymentPolicy(str, enum.Enum):
+    """When an unpaid order is allowed to move forward.
+
+    Departments genuinely differ here, and both directions are defensible: one
+    will not float a member the cost of a shirt, another would rather place one
+    clean vendor order and chase the money afterwards. Neither is the safe
+    default, so the default is NONE — the behaviour a store already had before
+    this setting existed.
+    """
+
+    NONE = "none"
+    # The shirt gets ordered either way; the member cannot collect it unpaid.
+    BEFORE_PICKUP = "before_pickup"
+    # Unpaid orders are held out of the vendor order entirely.
+    BEFORE_VENDOR_ORDER = "before_vendor_order"
+
+
 class StoreFulfillmentMethod(str, enum.Enum):
     """How the member receives the goods"""
 
@@ -169,6 +186,13 @@ class StoreSettings(Base):
     venmo_handle = Column(String(100), nullable=True)
     paypal_me_url = Column(String(300), nullable=True)
     paypal_email = Column(String(255), nullable=True)
+    # See StorePaymentPolicy. Gates the vendor order and/or pickup.
+    payment_policy = Column(
+        SQLEnum(StorePaymentPolicy, values_callable=_enum_values),
+        nullable=False,
+        default=StorePaymentPolicy.NONE,
+        server_default=StorePaymentPolicy.NONE.value,
+    )
     cash_app_cashtag = Column(String(100), nullable=True)
     # Zelle has no deep link — this handle is shown for the member to type
     # into their own bank's app. See utils/storefront_payments.py.

@@ -72,6 +72,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   about, so a field added on one side and forgotten on the other produces no
   error anywhere and surfaces as a blank cell in front of a user.
 
+- **A payment policy per department**, because the right answer to "what
+  happens to somebody who ordered and hasn't paid" genuinely differs. *No
+  payment gate* (the default, and what the store did before) orders their item
+  and lets them collect it. *Payment before pickup* orders it like everyone
+  else's but will not hand it over. *Payment before the vendor order* holds
+  them out of the purchase order entirely. Held-back orders are reported on the
+  tally rather than dropped — the quartermaster has to see who is being left
+  out, and chase them, before the order goes in. Bulk-fulfilling a window
+  advances the settled orders and returns the rest by order number with the
+  balance owed. Waiving a balance releases an order exactly as paying does, so
+  a comp or a replacement clears the gate.
+
 **Fixed**
 
 - **Window rollups truncated at one page.** Order counts and sales totals were

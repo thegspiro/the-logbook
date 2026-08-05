@@ -285,7 +285,37 @@ status — visibly out of step on several rows.]**
 > can be on the shelf ready for pickup while they still owe. Both happen
 > constantly, which is exactly why these aren't one field."
 
-### RECORDING MONEY (14:30 – 15:15)
+### YOUR DEPARTMENT'S RULE ON UNPAID ORDERS (14:30 – 15:15)
+
+**[SCREEN: Settings → "Unpaid orders" dropdown, showing the three options with
+the help text changing underneath.]**
+
+> "Now — what happens to somebody who orders and doesn't pay? Departments
+> genuinely disagree here, so you pick."
+
+**[CALLOUT: "No gate / Pay before pickup / Pay before the vendor order"]**
+
+> "**No payment gate** — their shirt gets ordered, they can collect it, you
+> chase the money. **Payment before pickup** — the shirt gets ordered like
+> everyone else's, but it stays on your shelf until they pay. **Payment before
+> the vendor order** — they don't get one. They're held out entirely."
+
+**[SCREEN: The Tally under the strictest rule, showing "Order this from the
+vendor: 2 shirts" and a "Held back — unpaid (2 orders)" panel beneath it.]**
+
+> "And notice under that last one — the held-back orders are still **shown**.
+> They're not quietly dropped. You need to see who you're leaving out so you
+> can go chase them before the order goes in. Take their money and they rejoin
+> the totals on the spot."
+
+**[SCREEN: Bulk-fulfilling a window; a result showing 12 updated, 2 skipped
+with order numbers and balances.]**
+
+> "Same when you hand out. Bulk-fulfil the window, the paid ones go through,
+> the unpaid ones come back named with what they owe. Waiving works too — comp
+> somebody a replacement and it clears the gate the same as paying."
+
+### RECORDING MONEY (15:15 – 15:45)
 
 **[SCREEN: Clicking Mark paid on a row; the balance clears in place.]**
 
@@ -428,3 +458,4 @@ station.]**
 | 13d | Close a Window, Get Your Vendor Order | Chapter 8 |
 | 13e | Let PayPal Mark Your Orders Paid | Chapter 7 |
 | 13f | Paid But Not Ordered — Why Two Statuses | Chapter 6 |
+| 13g | Your Department's Rule on Unpaid Orders | Chapter 6 |

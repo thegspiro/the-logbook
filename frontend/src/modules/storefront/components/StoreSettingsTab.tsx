@@ -10,7 +10,15 @@ import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { storefrontService } from '../services/api';
-import { PAYMENT_METHOD_LABELS, StorePaymentMethod, type StoreSettings, type StoreSettingsUpdate } from '../types';
+import {
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_POLICY_HELP,
+  PAYMENT_POLICY_LABELS,
+  StorePaymentMethod,
+  StorePaymentPolicy,
+  type StoreSettings,
+  type StoreSettingsUpdate,
+} from '../types';
 
 interface StoreSettingsTabProps {
   onChanged: () => void;
@@ -22,6 +30,7 @@ interface FormState {
   tagline: string;
   description: string;
   acceptedPaymentMethods: string[];
+  paymentPolicy: string;
   venmoHandle: string;
   paypalMeUrl: string;
   paypalEmail: string;
@@ -56,6 +65,7 @@ const toForm = (settings: StoreSettings): FormState => ({
   tagline: settings.tagline ?? '',
   description: settings.description ?? '',
   acceptedPaymentMethods: settings.acceptedPaymentMethods,
+  paymentPolicy: settings.paymentPolicy ?? 'none',
   venmoHandle: settings.venmoHandle ?? '',
   paypalMeUrl: settings.paypalMeUrl ?? '',
   paypalEmail: settings.paypalEmail ?? '',
@@ -129,6 +139,7 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
       tagline: form.tagline.trim() || undefined,
       description: form.description.trim() || undefined,
       acceptedPaymentMethods: form.acceptedPaymentMethods,
+      paymentPolicy: form.paymentPolicy as StorePaymentPolicy,
       venmoHandle: form.venmoHandle.trim() || undefined,
       paypalMeUrl: form.paypalMeUrl.trim() || undefined,
       paypalEmail: form.paypalEmail.trim() || undefined,
@@ -256,6 +267,25 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
               {PAYMENT_METHOD_LABELS[method] ?? method}
             </label>
           ))}
+        </div>
+
+        <div>
+          <label htmlFor="settings-payment-policy" className="form-label">
+            Unpaid orders
+          </label>
+          <select
+            id="settings-payment-policy"
+            value={form.paymentPolicy}
+            onChange={(e) => update('paymentPolicy', e.target.value)}
+            className="form-input"
+          >
+            {Object.values(StorePaymentPolicy).map((policy) => (
+              <option key={policy} value={policy}>
+                {PAYMENT_POLICY_LABELS[policy] ?? policy}
+              </option>
+            ))}
+          </select>
+          <p className="text-theme-text-muted mt-1 text-xs">{PAYMENT_POLICY_HELP[form.paymentPolicy] ?? ''}</p>
         </div>
 
         {accepts(StorePaymentMethod.VENMO) && (

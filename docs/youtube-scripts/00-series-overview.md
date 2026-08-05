@@ -83,6 +83,7 @@ services.
 | 13d | Close a Window, Get Your Vendor Order | Script 13 |
 | 13e | Let PayPal Mark Your Orders Paid | Script 13 |
 | 13f | Paid But Not Ordered — Why Two Statuses | Script 13 |
+| 13g | Your Department's Rule on Unpaid Orders | Script 13 |
 
 ---
 

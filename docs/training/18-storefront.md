@@ -113,7 +113,33 @@ Cash App and Zelle handles are **validated when you save**. If you mistype a
 | Tax rate | Entered as a percentage; stored as a fraction |
 | Flat shipping rate | Applied to orders that ship |
 | Allow pickup / Allow shipping | Leave at least one on — with both off, every order is rejected |
+| Unpaid orders | Your department's payment rule — see below |
 | Pickup location | Where members collect |
+
+### Unpaid orders — your department's rule
+
+Departments genuinely differ on this, so pick the one that matches yours.
+**Unpaid orders** in Settings offers three:
+
+| Setting | What happens to a member who hasn't paid |
+|---------|------------------------------------------|
+| **No payment gate** | Their shirt is ordered and they can collect it. You chase the money separately. This is the default and what the store did before this setting existed. |
+| **Payment required before pickup** | Their shirt *is* ordered — it's in the vendor order like everyone else's — but they cannot collect it until they've paid. |
+| **Payment required before the vendor order** | Their shirt is **not ordered at all**. They're held out of the vendor order until they pay. |
+
+Under the third rule, held-back orders are **shown** on the Tally, not silently
+dropped. You need to see who is being left out — and chase them — before the
+order goes in. Record their payment and they rejoin the totals immediately.
+
+Under either of the last two, marking an unpaid order **fulfilled** is refused
+with the balance in the message. Bulk-fulfilling a window still works: the paid
+orders go through and the unpaid ones come back listed by order number, so you
+know exactly who to go find. Recording the payment *or* waiving the balance
+both release it — a comp or a replacement clears the gate without money moving.
+
+Every step short of the handover still runs under all three rules. The shirt
+gets ordered, received, and marked ready for pickup regardless; it is only
+putting it in the member's hands that waits.
 
 ### Notifications
 
@@ -389,7 +415,9 @@ inside each bank. PayPal is the only one that can report back.
    gross, collected, outstanding — then two tables.
 3. **Order this from the vendor** is the purchase order: quantity per size,
    merged across every member. *"10 job shirts — 3 M, 2 L, 3 XL, 1 2XL, 1 3XL."*
-   This is what you send the vendor.
+   This is what you send the vendor. If your rule is *payment before the vendor
+   order*, unpaid members are excluded here and listed under **Held back**
+   instead.
 4. **Line detail** below it breaks the same shirts out by embroidery name. That
    is what the vendor stitches. On a personalized item the two always differ —
    ten shirts, ten names, five sizes.
@@ -459,6 +487,17 @@ goes nowhere. Check the handle saved without an error.
 **There's no Zelle button.**
 There is never a Zelle button. Zelle runs inside each bank's app and has no web
 link — members get the handle to copy instead.
+
+**An unpaid member's shirt isn't in the vendor order.**
+That is the *payment required before the vendor order* rule doing its job. They
+are listed under **Held back** on the Tally. Record their payment and they
+rejoin the totals; if you want them ordered anyway, switch the rule to
+*payment required before pickup*.
+
+**I can't mark an order fulfilled.**
+Under either payment rule, an order with a balance due cannot be handed over.
+The error names the amount owed. Record the payment, or waive the balance if
+the department is comping it.
 
 **A member paid but their order still says unpaid.**
 Paying happens outside The Logbook, so nothing changes until someone records

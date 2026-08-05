@@ -194,6 +194,35 @@ Where the link cannot carry the order number, the member is shown the reference
 to type. That reference is what lets a treasurer match the payment, so it is
 never hidden — including when no method is configured at all.
 
+### Payment policy
+
+`StoreSettings.payment_policy` decides what an unpaid order is allowed to do.
+Departments genuinely differ here and both directions are defensible, so the
+default is `none` — the behaviour a store already had before the setting
+existed.
+
+| Value | Vendor order | Pickup |
+|-------|--------------|--------|
+| `none` | Included | Allowed |
+| `before_pickup` | Included | **Refused** while a balance is due |
+| `before_vendor_order` | **Held back** | **Refused** |
+
+Under `before_vendor_order`, `size_totals` and `tallies` cover settled orders
+only, and the excluded ones come back as `held_totals` / `held_order_count`
+rather than disappearing — the quartermaster has to see who is being left out
+before the order goes in.
+
+The pickup gate sits on the transition to `FULFILLED` and nothing earlier.
+Ordering, receiving and marking ready all still run: the shirt exists whether
+or not the member has paid, and handing it over is the last irreversible step.
+`bulk_update_status` delegates to the same check, so fulfilling a whole window
+advances the settled orders and returns the rest by order number with the
+balance in the message.
+
+"Settled" means `payment_status` is `paid` or `waived`, or the balance is zero
+— so waiving a comp or a replacement releases the order exactly like a payment
+does.
+
 ### Recording money
 
 | Action | Endpoint | Effect |

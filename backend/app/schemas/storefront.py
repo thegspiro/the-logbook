@@ -19,6 +19,7 @@ from app.models.storefront import (
     StoreOrderStatus,
     StorePaymentEventStatus,
     StorePaymentMethod,
+    StorePaymentPolicy,
     StorePaymentStatus,
     StoreProductStatus,
     StoreWindowStatus,
@@ -65,6 +66,7 @@ class StoreSettingsUpdate(BaseModel):
     currency: Optional[str] = Field(None, min_length=3, max_length=3)
 
     accepted_payment_methods: Optional[List[StorePaymentMethod]] = None
+    payment_policy: Optional[StorePaymentPolicy] = None
     venmo_handle: Optional[str] = Field(None, max_length=100)
     paypal_me_url: Optional[str] = Field(None, max_length=300)
     paypal_email: Optional[str] = Field(None, max_length=255)
@@ -153,6 +155,7 @@ class StoreSettingsResponse(UTCResponseBase):
     currency: str
 
     accepted_payment_methods: List[str] = Field(default_factory=list)
+    payment_policy: StorePaymentPolicy = StorePaymentPolicy.NONE
     venmo_handle: Optional[str] = None
     paypal_me_url: Optional[str] = None
     paypal_email: Optional[str] = None
@@ -837,8 +840,13 @@ class StoreWindowSummaryResponse(UTCResponseBase):
     outstanding: Decimal
     unpaid_order_count: int
     pending_verification_count: int
+    payment_policy: StorePaymentPolicy = StorePaymentPolicy.NONE
     # What to order from the vendor, merged across members.
     size_totals: List[StoreWindowSizeTotal] = Field(default_factory=list)
+    # Held back because they are unpaid, when the policy requires payment
+    # before the vendor order. Empty under every other policy.
+    held_totals: List[StoreWindowSizeTotal] = Field(default_factory=list)
+    held_order_count: int = 0
     # What to embroider on each one — one row per distinct name.
     tallies: List[StoreWindowProductTally] = Field(default_factory=list)
 

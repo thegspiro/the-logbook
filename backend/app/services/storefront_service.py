@@ -37,6 +37,7 @@ from app.models.storefront import (
     StorePaymentEvent,
     StorePaymentEventStatus,
     StorePaymentMethod,
+    StorePaymentPolicy,
     StorePaymentStatus,
     StoreProduct,
     StoreProductImage,
@@ -70,6 +71,14 @@ _ORDER_NUMBER_RE = re.compile(r"ORD-\d{4}-\d{4,}")
 # Inbound payments that still need somebody to look at them. MATCHED is in the
 # list on purpose: it means the money is attributable but nothing has been
 # applied yet, which is exactly the queue an administrator works through.
+# Policies under which an unpaid order cannot be handed over. The stricter
+# policy implies the weaker one: an order that was never sent to the vendor
+# obviously cannot be collected either.
+_PICKUP_GATED_POLICIES = (
+    StorePaymentPolicy.BEFORE_PICKUP,
+    StorePaymentPolicy.BEFORE_VENDOR_ORDER,
+)
+
 _UNRESOLVED_PAYMENT_STATUSES = (
     StorePaymentEventStatus.UNMATCHED,
     StorePaymentEventStatus.AMBIGUOUS,
@@ -101,6 +110,24 @@ _STATUS_LABELS = {
 def _money(value: Any) -> Decimal:
     """Coerce to a 2-decimal Decimal; None becomes 0.00."""
     return Decimal(value or 0).quantize(_CENTS)
+
+
+def _settled_clause(settled: bool):
+    """The SQL twin of :func:`_is_settled`, for filtering rollups."""
+    is_settled = or_(
+        StoreOrder.payment_status.in_(
+            [StorePaymentStatus.PAID, StorePaymentStatus.WAIVED]
+        ),
+        (StoreOrder.total - StoreOrder.amount_paid) <= 0,
+    )
+    return is_settled if settled else ~is_settled
+
+
+def _is_settled(order: StoreOrder) -> bool:
+    """True when nothing more is owed on this order."""
+    if order.payment_status in (StorePaymentStatus.PAID, StorePaymentStatus.WAIVED):
+        return True
+    return _money(Decimal(order.total or 0) - Decimal(order.amount_paid or 0)) <= 0
 
 
 def _as_enum(enum_cls, value, default, label):
@@ -1441,6 +1468,22 @@ class StorefrontService:
         if order.status == StoreOrderStatus.CANCELLED:
             raise ValueError("A cancelled order cannot be advanced")
 
+        if status == StoreOrderStatus.FULFILLED and not _is_settled(order):
+            settings = await self.get_settings(organization_id)
+            if settings.payment_policy in _PICKUP_GATED_POLICIES:
+                # Handing the goods over is the last irreversible step, so it
+                # is the one worth gating. Everything short of it — ordering,
+                # receiving, marking ready — still runs, because the shirt
+                # exists whether or not the member has paid yet.
+                balance = _money(
+                    Decimal(order.total or 0) - Decimal(order.amount_paid or 0)
+                )
+                raise ValueError(
+                    f"Order {order.order_number} still owes {balance}. "
+                    "This store requires payment before pickup — record the "
+                    "payment, or waive the balance, first."
+                )
+
         previous = order.status
         order.status = status
         if status == StoreOrderStatus.FULFILLED:
@@ -2290,7 +2333,10 @@ class StorefrontService:
         }
 
     async def _window_size_totals(
-        self, window_id: str, organization_id: str
+        self,
+        window_id: str,
+        organization_id: str,
+        settled_only: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
         """How many of each size to buy — the purchase order itself.
 
@@ -2316,6 +2362,7 @@ class StorefrontService:
                 StoreOrder.window_id == str(window_id),
                 StoreOrder.organization_id == str(organization_id),
                 StoreOrder.status != StoreOrderStatus.CANCELLED,
+                *(() if settled_only is None else (_settled_clause(settled_only),)),
             )
             .group_by(
                 StoreOrderItem.product_id,
@@ -2345,7 +2392,10 @@ class StorefrontService:
         ]
 
     async def _window_tallies(
-        self, window_id: str, organization_id: str
+        self,
+        window_id: str,
+        organization_id: str,
+        settled_only: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
         """The vendor purchase-order sheet for a window, grouped in SQL.
 
@@ -2368,6 +2418,7 @@ class StorefrontService:
                 StoreOrder.window_id == str(window_id),
                 StoreOrder.organization_id == str(organization_id),
                 StoreOrder.status != StoreOrderStatus.CANCELLED,
+                *(() if settled_only is None else (_settled_clause(settled_only),)),
             )
             .group_by(
                 StoreOrderItem.product_id,
@@ -2414,6 +2465,9 @@ class StorefrontService:
 
         rollups = await self._order_rollup(organization_id, [window_id])
         rollup = rollups.get(window.id, self._empty_rollup())
+        settings = await self.get_settings(organization_id)
+        holds_unpaid = settings.payment_policy == StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        settled_only = True if holds_unpaid else None
 
         return {
             "window_id": window.id,
@@ -2426,8 +2480,25 @@ class StorefrontService:
             "outstanding": rollup["outstanding"],
             "unpaid_order_count": rollup["unpaid_order_count"],
             "pending_verification_count": rollup["pending_verification_count"],
-            "size_totals": await self._window_size_totals(window.id, organization_id),
-            "tallies": await self._window_tallies(window.id, organization_id),
+            "payment_policy": settings.payment_policy,
+            # Under BEFORE_VENDOR_ORDER the purchase order covers only settled
+            # orders, and the rest are reported separately rather than dropped:
+            # the quartermaster still has to see who is being left out, and
+            # chase them, before the order goes in.
+            "size_totals": await self._window_size_totals(
+                window.id, organization_id, settled_only=settled_only
+            ),
+            "held_totals": (
+                await self._window_size_totals(
+                    window.id, organization_id, settled_only=False
+                )
+                if holds_unpaid
+                else []
+            ),
+            "held_order_count": (rollup["unpaid_order_count"] if holds_unpaid else 0),
+            "tallies": await self._window_tallies(
+                window.id, organization_id, settled_only=settled_only
+            ),
         }
 
     async def get_window_rollups(

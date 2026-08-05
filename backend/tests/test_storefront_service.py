@@ -19,6 +19,7 @@ from app.models.storefront import (
     StoreOrderStatus,
     StoreOrderWindow,
     StorePaymentMethod,
+    StorePaymentPolicy,
     StorePaymentStatus,
     StoreProduct,
     StoreProductStatus,
@@ -1135,3 +1136,222 @@ class TestOrderInputCoercion:
                     "fulfillment_method": "teleport",
                 },
             )
+
+
+class TestPaymentPolicy:
+    """Sam ordered two XL job shirts and hasn't paid. What happens to him?"""
+
+    async def _sam_and_a_paid_member(self, db_session, org, service, policy):
+        await service.update_settings(org.id, {"payment_policy": policy})
+        product = await _make_product(db_session, org, price=Decimal("45.00"))
+        window = await _make_open_window(db_session, org)
+
+        paid_member = await _make_member(db_session, org, first="Pat")
+        paid_order = await service.create_order(
+            org.id, paid_member, _cart(product.id, 1)
+        )
+        await service.mark_order_paid(paid_order.id, org.id, None, notify_member=False)
+
+        sam = await _make_member(db_session, org, first="Sam")
+        sam_order = await service.create_order(org.id, sam, _cart(product.id, 2))
+        return window, sam_order, paid_order
+
+    # -- No gate: the store behaves exactly as it did before this setting ---
+
+    async def test_no_gate_sends_everything_to_the_vendor(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, _, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.NONE
+        )
+
+        summary = await service.get_window_summary(window.id, org.id)
+        assert sum(row["quantity"] for row in summary["size_totals"]) == 3
+        assert summary["held_totals"] == []
+        assert summary["held_order_count"] == 0
+
+    async def test_no_gate_lets_an_unpaid_order_be_collected(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, sam_order, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.NONE
+        )
+
+        done = await service.update_order_status(
+            sam_order.id,
+            org.id,
+            StoreOrderStatus.FULFILLED,
+            None,
+            notify_member=False,
+        )
+        assert done.status == StoreOrderStatus.FULFILLED
+
+    # -- Order it anyway, but he can't collect it --------------------------
+
+    async def test_before_pickup_still_orders_sams_shirts(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, _, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_PICKUP
+        )
+
+        # The shirt gets made either way under this policy.
+        summary = await service.get_window_summary(window.id, org.id)
+        assert sum(row["quantity"] for row in summary["size_totals"]) == 3
+        assert summary["held_totals"] == []
+
+    async def test_before_pickup_blocks_handing_it_over(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, sam_order, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_PICKUP
+        )
+
+        with pytest.raises(ValueError, match="payment before pickup"):
+            await service.update_order_status(
+                sam_order.id,
+                org.id,
+                StoreOrderStatus.FULFILLED,
+                None,
+                notify_member=False,
+            )
+
+    async def test_before_pickup_allows_every_step_short_of_handover(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, sam_order, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_PICKUP
+        )
+
+        # The shirt exists and is on the shelf; only the handover waits.
+        for status in (StoreOrderStatus.ORDERED, StoreOrderStatus.READY_FOR_PICKUP):
+            moved = await service.update_order_status(
+                sam_order.id, org.id, status, None, notify_member=False
+            )
+            assert moved.status == status
+
+    async def test_paying_releases_the_order(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, sam_order, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_PICKUP
+        )
+
+        await service.mark_order_paid(sam_order.id, org.id, None, notify_member=False)
+        done = await service.update_order_status(
+            sam_order.id,
+            org.id,
+            StoreOrderStatus.FULFILLED,
+            None,
+            notify_member=False,
+        )
+        assert done.status == StoreOrderStatus.FULFILLED
+
+    async def test_waiving_the_balance_also_releases_it(self, db_session):
+        # A comp or a replacement clears the gate without money moving.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, sam_order, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_PICKUP
+        )
+
+        await service.waive_order_payment(sam_order.id, org.id, None, reason="Comp")
+        done = await service.update_order_status(
+            sam_order.id,
+            org.id,
+            StoreOrderStatus.FULFILLED,
+            None,
+            notify_member=False,
+        )
+        assert done.status == StoreOrderStatus.FULFILLED
+
+    # -- Sam gets nothing ---------------------------------------------------
+
+    async def test_before_vendor_order_holds_sam_out_of_the_purchase_order(
+        self, db_session
+    ):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, _, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+
+        summary = await service.get_window_summary(window.id, org.id)
+        # Only the member who paid gets a shirt ordered.
+        assert sum(row["quantity"] for row in summary["size_totals"]) == 1
+        # Sam's two are reported, not silently dropped — somebody has to chase
+        # him before the order goes in.
+        assert sum(row["quantity"] for row in summary["held_totals"]) == 2
+        assert summary["held_order_count"] == 1
+
+    async def test_held_orders_rejoin_the_purchase_order_once_paid(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, sam_order, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+
+        await service.mark_order_paid(sam_order.id, org.id, None, notify_member=False)
+
+        summary = await service.get_window_summary(window.id, org.id)
+        assert sum(row["quantity"] for row in summary["size_totals"]) == 3
+        assert summary["held_totals"] == []
+        assert summary["held_order_count"] == 0
+
+    async def test_the_embroidery_list_matches_the_purchase_order(self, db_session):
+        # The two hand-offs have to agree: no name on the stitching sheet for a
+        # shirt that was never ordered.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, _, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+
+        summary = await service.get_window_summary(window.id, org.id)
+        ordered = sum(row["quantity"] for row in summary["size_totals"])
+        stitched = sum(row["quantity"] for row in summary["tallies"])
+        assert ordered == stitched == 1
+
+    async def test_the_policy_is_reported_with_the_summary(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        window, _, _ = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_VENDOR_ORDER
+        )
+
+        summary = await service.get_window_summary(window.id, org.id)
+        assert summary["payment_policy"] == StorePaymentPolicy.BEFORE_VENDOR_ORDER
+
+    async def test_bulk_fulfill_reports_who_was_held_back(self, db_session):
+        # Marking a whole window collected is one click; the ones that cannot
+        # go have to come back named, not be silently skipped.
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        await _enable_store(service, org)
+        _, sam_order, paid_order = await self._sam_and_a_paid_member(
+            db_session, org, service, StorePaymentPolicy.BEFORE_PICKUP
+        )
+
+        result = await service.bulk_update_status(
+            org.id,
+            [paid_order.id, sam_order.id],
+            StoreOrderStatus.FULFILLED,
+            None,
+            notify_members=False,
+        )
+
+        assert result["updated"] == 1
+        assert result["skipped"] == 1
+        assert result["errors"][0]["order_id"] == sam_order.id
+        assert "payment before pickup" in result["errors"][0]["error"]

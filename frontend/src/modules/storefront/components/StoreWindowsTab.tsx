@@ -381,6 +381,28 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged }) =
                 </div>
               )}
 
+              {/* Held-back orders are shown, not silently dropped: the
+                  quartermaster has to know who is being left out of the vendor
+                  order — and chase them — before it goes in. */}
+              {summary.heldTotals.length > 0 && (
+                <div className="alert-warning mb-5">
+                  <p className="text-sm font-semibold">
+                    Held back — unpaid ({summary.heldOrderCount} {summary.heldOrderCount === 1 ? 'order' : 'orders'})
+                  </p>
+                  <p className="mt-0.5 text-xs">
+                    This store requires payment before the vendor order, so these are not in the totals above. Record
+                    their payment to include them.
+                  </p>
+                  <ul className="mt-2 space-y-0.5 text-xs">
+                    {summary.heldTotals.map((row) => (
+                      <li key={`held-${row.productId ?? 'x'}-${row.variantLabel ?? ''}`}>
+                        {row.productName} · {row.variantLabel ?? '—'} · x{row.quantity}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <h4 className="text-theme-text-primary mb-1 text-sm font-semibold">Line detail</h4>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

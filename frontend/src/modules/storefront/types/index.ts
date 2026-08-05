@@ -55,6 +55,26 @@ export const StorePaymentMethod = {
 } as const;
 export type StorePaymentMethod = (typeof StorePaymentMethod)[keyof typeof StorePaymentMethod];
 
+/** When an unpaid order is allowed to move forward. */
+export const StorePaymentPolicy = {
+  NONE: 'none',
+  BEFORE_PICKUP: 'before_pickup',
+  BEFORE_VENDOR_ORDER: 'before_vendor_order',
+} as const;
+export type StorePaymentPolicy = (typeof StorePaymentPolicy)[keyof typeof StorePaymentPolicy];
+
+export const PAYMENT_POLICY_LABELS: Record<string, string> = {
+  none: 'No payment gate',
+  before_pickup: 'Payment required before pickup',
+  before_vendor_order: 'Payment required before the vendor order',
+};
+
+export const PAYMENT_POLICY_HELP: Record<string, string> = {
+  none: 'Unpaid orders go to the vendor and can be collected. You chase the money separately.',
+  before_pickup: "The shirt gets ordered either way, but the member can't collect it until they've paid.",
+  before_vendor_order: "Unpaid orders are held out of the vendor order entirely — they don't get one.",
+};
+
 export const StoreFulfillmentMethod = {
   PICKUP: 'pickup',
   SHIP: 'ship',
@@ -137,6 +157,7 @@ export interface StoreSettings {
   description?: string | null;
   currency: string;
   acceptedPaymentMethods: string[];
+  paymentPolicy: StorePaymentPolicy;
   venmoHandle?: string | null;
   paypalMeUrl?: string | null;
   paypalEmail?: string | null;
@@ -173,6 +194,7 @@ export interface StoreSettingsUpdate {
   tagline?: string | undefined;
   description?: string | undefined;
   acceptedPaymentMethods?: string[];
+  paymentPolicy?: StorePaymentPolicy | undefined;
   venmoHandle?: string | undefined;
   paypalMeUrl?: string | undefined;
   paypalEmail?: string | undefined;
@@ -511,7 +533,12 @@ export interface StoreWindowSummary {
   outstanding: string;
   unpaidOrderCount: number;
   pendingVerificationCount: number;
+  paymentPolicy: StorePaymentPolicy;
   sizeTotals: StoreWindowSizeTotal[];
+  /** Held out of the vendor order because they are unpaid. Empty unless the
+   *  policy requires payment before the vendor order. */
+  heldTotals: StoreWindowSizeTotal[];
+  heldOrderCount: number;
   tallies: StoreWindowProductTally[];
 }
 
