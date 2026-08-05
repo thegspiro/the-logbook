@@ -271,6 +271,62 @@ describe('ImportMembers', () => {
     expect(mockCreateMember).not.toHaveBeenCalled();
   });
 
+  it('matches headers exported with spaces, underscores or mixed case', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('First Name,LAST_NAME,E-Mail,Membership Number\nJohn,Doe,john@example.com,FF-001');
+
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith('File validated successfully! Found 1 members to import.');
+    });
+    expect(mockToastError).not.toHaveBeenCalled();
+    expect(screen.getByText('FF-001')).toBeInTheDocument();
+  });
+
+  // Regression: Excel rewrites the template's ISO dates into the workstation's
+  // locale format on save, which the API's `date` fields reject with a 422.
+  it('converts locale-formatted dates to the ISO form the API accepts', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv(
+      'firstName,lastName,email,dateOfBirth,joinDate\nJohn,Doe,john@example.com,3/15/1985,1/5/2020'
+    );
+
+    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText('Import All Members'));
+
+    await waitFor(() => {
+      expect(mockCreateMember).toHaveBeenCalledWith(
+        expect.objectContaining({ date_of_birth: '1985-03-15', hire_date: '2020-01-05' })
+      );
+    });
+  });
+
+  it('passes ISO dates through unchanged', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,dateOfBirth\nJohn,Doe,john@example.com,1985-03-15');
+
+    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText('Import All Members'));
+
+    await waitFor(() => {
+      expect(mockCreateMember).toHaveBeenCalledWith(
+        expect.objectContaining({ date_of_birth: '1985-03-15' })
+      );
+    });
+  });
+
+  it('reports an unparseable date against its row instead of sending it', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,dateOfBirth\nJohn,Doe,john@example.com,March 15 1985');
+
+    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText('Import All Members'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/dateOfBirth "March 15 1985" is not a recognized date/)).toBeInTheDocument();
+    });
+    expect(mockCreateMember).not.toHaveBeenCalled();
+  });
+
   it('ignores trailing blank lines when counting members', async () => {
     renderWithRouter(<ImportMembers />);
     await uploadCsv('firstName,lastName,email\nJohn,Doe,john@example.com\n\n');
