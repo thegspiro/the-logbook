@@ -397,6 +397,7 @@ export interface CourseCohortClass {
   category_id?: string;
   requirement_id?: string;
   phase_id?: string;
+  counts_toward_certification: boolean;
   cancellation_reason?: string;
   created_at: string;
   updated_at?: string;
@@ -474,6 +475,7 @@ export interface CohortAdHocClassCreate {
   category_id?: string | undefined;
   requirement_id?: string | undefined;
   phase_id?: string | undefined;
+  counts_toward_certification?: boolean | undefined;
   invite_roster?: boolean | undefined;
 }
 

@@ -17,7 +17,7 @@ The Events module manages department events with QR code check-in, recurring eve
 - **Post-Event Validation** — Organizers receive notifications to review/finalize attendance
 - **Past Events Tab** — Managers can browse historical events (hidden from regular members by default)
 - **Attendee Management** — Add/remove attendees directly from event detail page
-- **Training Integration** — Events can generate training sessions for attendance credit
+- **Training Integration** — Events can generate training sessions for attendance credit. *(2026-08-05)* The reverse now exists too: generating a **course cohort** creates one event per class of a multi-class course (a recruit school's fifteen subjects), each with its linked training session and the roster already RSVP'd — see [Module-Training](Module-Training#multi-class-courses--cohorts-2026-08-05)
 - **Custom Event Categories** — *(2026-03-04)* Define organization-specific event categories with color badges, filterable on the Events page and selectable in the Event form. Configured in Events Settings > Custom Event Categories
 
 ---

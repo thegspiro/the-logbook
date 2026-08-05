@@ -140,6 +140,8 @@ Training-type events can be linked to a **Training Session** for automatic recor
 3. Finalize the session to trigger the approval workflow.
 4. Attendees automatically receive training records once approved.
 
+**The reverse also works, in bulk.** If the training is a multi-class course — a recruit school, a five-night refresher — generate a **course cohort** instead and the platform creates the events *and* their linked training sessions for you, one per class, with the roster already RSVP'd to each. See [Multi-Class Courses & Cohorts](02-training.md#multi-class-courses--cohorts) in the training guide.
+
 ---
 
 ## Event Templates and Recurring Events

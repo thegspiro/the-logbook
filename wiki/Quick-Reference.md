@@ -209,6 +209,21 @@ curl -X POST http://localhost:3001/api/v1/training/records/bulk \
 # Up to 500 records per request with duplicate detection
 ```
 
+### Generate a Course Cohort
+- **UI**: Training > Records > Course Cohorts > New cohort (build the course's
+  syllabus first under Training > Setup > Course Library > Manage classes)
+```bash
+# Preview first — read-only, creates nothing
+curl -X POST http://localhost:3001/api/v1/training/cohorts/preview \
+  -H "Content-Type: application/json" \
+  -d '{"course_id": "<uuid>", "start_date": "2026-09-08", "date_roll_policy": "next_business_day"}'
+
+# Then generate: one event + one training session per class, in one transaction
+curl -X POST http://localhost:3001/api/v1/training/cohorts \
+  -H "Content-Type: application/json" \
+  -d '{"course_id": "<uuid>", "name": "Recruit School — Fall 2026", "start_date": "2026-09-08", "member_user_ids": ["<uuid>"]}'
+```
+
 ### Process Certification Alerts
 ```bash
 # Run daily alert processing (90/60/30/7-day tiers + expired escalation)

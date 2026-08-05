@@ -554,7 +554,7 @@ export const CohortDetailPage: React.FC = () => {
       <ConfirmDialog
         isOpen={removeTarget !== null}
         title="Remove from this cohort?"
-        message={`${removeTarget?.name ?? 'This member'} will be withdrawn from the roster. Their pipeline enrollment and any credit already earned are kept.`}
+        message={`${removeTarget?.name ?? 'This member'} will be withdrawn from the roster and taken off the classes still to come. Their pipeline enrollment, training records, and any class they already attended are kept.`}
         confirmLabel="Remove"
         variant="warning"
         loading={busy}

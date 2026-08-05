@@ -9,32 +9,33 @@ The Training module tracks courses, certifications, training requirements, progr
 1. [My Training Dashboard](#my-training-dashboard)
 2. [Submitting Training Records](#submitting-training-records)
 3. [Course Library](#course-library)
-4. [Training Programs](#training-programs)
-5. [Training Pipelines](#training-pipelines)
-6. [Training Requirements](#training-requirements)
-7. [Officer Dashboard](#officer-dashboard)
-8. [Reviewing Submissions](#reviewing-submissions)
-9. [Finalizing a Training Session](#finalizing-a-training-session)
-10. [Compliance Matrix](#compliance-matrix)
-11. [Evaluation Period (Current vs. Prior Month)](#evaluation-period-current-vs-prior-month)
-12. [Expiring Certifications](#expiring-certifications)
-13. [Waiver Management](#waiver-management)
-14. [Compliance Summary](#compliance-summary)
-15. [Shift Completion Reports](#shift-completion-reports)
-16. [Manual Shift Report Entry](#manual-shift-report-entry)
-17. [Officer Training Record Exports](#officer-training-record-exports)
-18. [External Training Integrations](#external-training-integrations)
-19. [Historical Import](#historical-import)
-20. [Competency Matrix](#competency-matrix)
-21. [Recertification Tracking](#recertification-tracking)
-22. [Instructor Management](#instructor-management)
-23. [Training Effectiveness Scoring](#training-effectiveness-scoring)
-24. [Multi-Agency Training](#multi-agency-training)
-25. [xAPI (Tin Can) Integration](#xapi-tin-can-integration)
-26. [Compliance Officer Dashboard](#compliance-officer-dashboard)
-27. [Training Record Attachments](#training-record-attachments)
-28. [Troubleshooting](#troubleshooting)
-29. [Skills Testing](#skills-testing)
+4. [Multi-Class Courses & Cohorts](#multi-class-courses--cohorts)
+5. [Training Programs](#training-programs)
+6. [Training Pipelines](#training-pipelines)
+7. [Training Requirements](#training-requirements)
+8. [Officer Dashboard](#officer-dashboard)
+9. [Reviewing Submissions](#reviewing-submissions)
+10. [Finalizing a Training Session](#finalizing-a-training-session)
+11. [Compliance Matrix](#compliance-matrix)
+12. [Evaluation Period (Current vs. Prior Month)](#evaluation-period-current-vs-prior-month)
+13. [Expiring Certifications](#expiring-certifications)
+14. [Waiver Management](#waiver-management)
+15. [Compliance Summary](#compliance-summary)
+16. [Shift Completion Reports](#shift-completion-reports)
+17. [Manual Shift Report Entry](#manual-shift-report-entry)
+18. [Officer Training Record Exports](#officer-training-record-exports)
+19. [External Training Integrations](#external-training-integrations)
+20. [Historical Import](#historical-import)
+21. [Competency Matrix](#competency-matrix)
+22. [Recertification Tracking](#recertification-tracking)
+23. [Instructor Management](#instructor-management)
+24. [Training Effectiveness Scoring](#training-effectiveness-scoring)
+25. [Multi-Agency Training](#multi-agency-training)
+26. [xAPI (Tin Can) Integration](#xapi-tin-can-integration)
+27. [Compliance Officer Dashboard](#compliance-officer-dashboard)
+28. [Training Record Attachments](#training-record-attachments)
+29. [Troubleshooting](#troubleshooting)
+30. [Skills Testing](#skills-testing)
 
 ---
 
@@ -111,6 +112,116 @@ The library shows all courses created by your department, organized by category.
 > _[Screenshot of the Course Library page showing course cards organized by category, with each card displaying the course name, category badge, hours, and a brief description]_
 
 **Officers** can create new courses from the **Training Admin > Officer Dashboard** or directly from the course management area.
+
+Courses that are made up of several classes — a recruit school, a five-night EMT refresher — show a class count and a **Manage classes** action. See [Multi-Class Courses & Cohorts](#multi-class-courses--cohorts).
+
+---
+
+## Multi-Class Courses & Cohorts
+
+A recruit school is one *course* made up of many *classes*. Instead of creating fifteen training sessions by hand every time a new class starts, you describe the course once and generate each intake from it.
+
+There are two pieces:
+
+- A **syllabus** — the ordered list of classes, written once. It has no dates on it, only "how long after the course starts".
+- A **cohort** — one run of that course, e.g. "Recruit School — Fall 2026". Generating a cohort turns the syllabus into real, dated training events.
+
+### Building a Course Syllabus
+
+**Required Permission:** `training.manage`
+
+1. Navigate to **Training > Setup > Course Library**.
+2. Find the course (create it first if it doesn't exist — this is the *container* course, e.g. "Recruit School").
+3. Click **Manage classes**.
+4. Click **Add class** and fill in:
+   - **Course taught** — the catalog course this class covers, e.g. "SCBA Operations". This is required: it's what supplies the class's credit hours, certification settings and categories. If it doesn't exist yet, click **+** to create it without leaving the builder.
+   - **Title** *(optional)* — defaults to the course name. Use it when the same course appears twice ("SCBA — night evolution").
+   - **Section** *(optional)* — groups classes, e.g. "Orientation & Safety". Sections become phases if you generate a pipeline.
+   - **Day** — how many days after the course start this class happens. Day 1 is the first day.
+   - **Start time** and **Duration**.
+   - **Credit hours** *(optional)* — defaults to the catalog course's value.
+   - **Counts toward certification requirements** — leave on for classes delivered the way a certifying body accepts. Turn it off for an informal in-house drill: attendance still earns hours, but the class won't advance a certificate.
+5. Repeat for each class. Use the up/down arrows to reorder.
+
+Each class shows the gap since the one before it — **"Next day"**, **"2 days later"** — which is how most officers describe a schedule out loud.
+
+> **Hint:** If your course meets on a regular cadence, don't count days by hand. Click **Fill from pattern**, pick the meeting days (e.g. Tuesday and Thursday), say which weekday the course starts on, and every class is spaced out for you. You can still adjust individual days afterwards.
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Course Syllabus Builder showing an ordered list of recruit-school classes, each with its day number, gap label ("Next day", "2 days later"), start time and credit hours, with the "Fill from pattern" weekday selector expanded above]_
+
+### Generating a Cohort
+
+**Required Permission:** `training.manage`
+
+1. Navigate to **Training > Records > Course Cohorts**.
+2. Click **New cohort**. The wizard has five steps.
+3. **Course** — pick the course and name the cohort (e.g. "Recruit School — Fall 2026").
+4. **Schedule** — set the start date. Optionally choose the meeting days, a default start time, and what should happen when a class lands on a day you don't train:
+   - *Keep the computed date* — leave it where it falls.
+   - *Move weekends to the next weekday*.
+   - *Move to the next meeting day* — uses the meeting days you selected.
+5. **Preview** — this is the important step. Every class is listed with the date it will actually get. Anything that had to move (a weekend, a holiday) is flagged, along with archived courses and rooms already booked. You can:
+   - Change any individual date and time.
+   - Tick **Skip this class** to leave one out of this intake.
+   - Tick any of the suggested holidays to skip them, then **Recalculate**.
+6. **Roster** — select the members taking the course. They're enrolled in the pipeline and added to every class on their calendar.
+7. **Generate** — optionally tick **Build a matching pipeline** if the course doesn't have one yet, then confirm.
+
+Generating creates **one training event per class**, each with a linked training session. Students see the classes on their calendar, sign in and out with the QR code as usual, and the hours flow into their program.
+
+> **Screenshot placeholder:**
+> _[Screenshot of the cohort wizard on the Preview step, showing a numbered list of computed class dates with a quarter-hour date/time picker on each row, an amber warning on one class reading "Moved from 2026-09-12 to 2026-09-14 — 2026-09-12 is a weekend", and a row of suggested holiday blackout dates above]_
+
+### Running a Cohort
+
+Open a cohort to see its **Classes** timeline and its **Roster**.
+
+The class timeline shows each class with its date, instructor, how many members are signed up, and how many actually attended. From here you can:
+
+| Action | What it does |
+|--------|--------------|
+| **Reschedule** | Moves the class and its calendar event together. Everyone who signed up stays signed up. |
+| **Cancel class** | Cancels the event rather than deleting it, so anyone signed up sees the cancellation. The class stays listed for the record. |
+| **Add class** | Adds a make-up session or an extra class that was never on the syllabus. The roster is invited automatically. |
+| **Shift remaining** | Pushes every class that hasn't happened yet back (or forward) by a number of days. Classes that already ran keep their dates. |
+| **Create missing events** | Appears if a class has no event — because scheduling it failed, or someone deleted the event. Safe to click any time; it only fills gaps. |
+
+The **Roster** tab lists each member with their progress through the pipeline, a link to their full progression, and a **Remove** action.
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Cohort Detail page's Classes tab, showing a numbered class timeline with dates, credit hours, "12 signed up / 11 attended" counts, an Event link on each row, and the Reschedule / Cancel actions on the right]_
+
+### Cohorts vs. Recurring Sessions
+
+These solve different problems, and it's easy to reach for the wrong one:
+
+- A **recurring training session** repeats **the same class** on a fixed cadence — a monthly CPR refresher. See [Recurring Training Sessions](#recurring-training-sessions-2026-03-15).
+- A **cohort** runs **an ordered series of different classes**, once — a recruit school covering orientation, then SCBA, then ladders.
+
+If each meeting covers a different subject, you want a cohort.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| You reorder classes but the dates don't change | Order and timing are separate settings. Moving a class up the list does not move it earlier in the calendar — the builder will show it as "2 days earlier" to make that visible. Use **Fill from pattern**, or edit the day numbers, to re-space. |
+| You fix the syllabus while a cohort is running | The running cohort does not change — on purpose, so a class in progress is never re-scheduled underneath the students. Your fix applies to the next cohort; edit the current one from its detail page. |
+| You delete a class from the syllabus | Cohorts already generated keep their copy of that class. Nothing is unscheduled and nobody loses credit. |
+| You skip a class during preview | The cohort numbers its classes 1, 2, 3… with no gaps, so cohort class 4 may be syllabus class 5. |
+| One class can't be scheduled (room double-booked) | Only that class fails. The rest generate, the cohort lists the class with a **No event** badge, and you'll see the reason. Free up the room, then click **Create missing events**. |
+| Someone deletes a generated event | The cohort still lists the class as **No event**. **Create missing events** rebuilds it. |
+| The course runs across a daylight-saving change | A 19:00 class stays at 19:00 all the way through. |
+| Two classes land on the same day | Weekend and holiday skipping moves each class independently, so two can end up on the same date. The preview shows it — adjust a day number before generating. |
+| A blackout date is skipped even with weekend-moving off | Correct. "Keep the computed date" only governs weekends; a blackout date always applies. |
+| You run a second cohort of the same course | It reuses the pipeline the first one built. A member who was already enrolled keeps their existing progress — right for someone repeating the course, surprising if you expected a fresh start. Use **Start new cycle** on their enrollment to reset. |
+| A member can't be enrolled (missing a prerequisite) | They're still added to the roster and you'll see the reason. You know your department better than the rules do. |
+| You add a member half-way through | They're added to the classes still to come, not the ones that already ran. |
+| You remove a member | Their records and any class they already attended are kept. Upcoming classes come off their calendar. |
+| **Shift remaining** doesn't move everything | It only moves classes that haven't started, and never moves cancelled ones. |
+| A class shouldn't count toward a certificate | Turn off **Counts toward certification requirements** on that class. Members still get the hours. |
+| The course has no classes yet | Generation is refused with a clear message. Build the syllabus first. |
+| A course is capped at 200 classes | Past that it's a data-entry mistake rather than a course. |
 
 ---
 
@@ -1283,6 +1394,8 @@ The training module has several boundary behaviors that affect how submissions a
 ## Recurring Training Sessions (2026-03-15)
 
 Training sessions can now recur on a schedule, just like events. This eliminates the need to manually create individual sessions for ongoing training activities like weekly drills, monthly CPR refreshers, or quarterly hazmat reviews.
+
+> **Recurring session or cohort?** A recurring session repeats **the same class** — the same subject, the same credit hours, over and over. If instead you have an ordered series of **different** classes that runs once (a recruit school: orientation, then SCBA, then ladders), you want a course cohort. See [Multi-Class Courses & Cohorts](#multi-class-courses--cohorts).
 
 ### Creating a Recurring Training Session
 

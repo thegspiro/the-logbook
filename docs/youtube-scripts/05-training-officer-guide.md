@@ -465,7 +465,7 @@ the CSV and PDF buttons]**
 
 ---
 
-## CHAPTER 7: Integrating Training with Events & Wrap-Up (19:00 – 22:00)
+## CHAPTER 7: Integrating Training with Events & Wrap-Up (19:00 – 26:00)
 
 ### TRAINING EVENTS (19:00 – 20:00)
 
@@ -483,7 +483,87 @@ the CSV and PDF buttons]**
 
 **[CALLOUT: "Event attendance → automatic training credit"]**
 
-### EXTERNAL TRAINING (20:00 – 20:30)
+### MULTI-CLASS COURSES & COHORTS (20:00 – 21:30)
+
+> "That works beautifully for a single class. But what about a recruit school?
+> Fifteen classes, over two months, every one a different subject. Are you
+> going to build fifteen events by hand — and then do it again next spring?"
+
+**[SCREEN: Navigate to Training > Setup > Course Library, hover the "Manage
+classes" icon on a course card named "Recruit School"]**
+
+> "You don't have to. A course can carry its own class list. Click Manage
+> classes on any course and you get a syllabus — every subject the course
+> covers, in order."
+
+**[SCREEN: Course Syllabus Builder (CourseSyllabusBuilder) showing an ordered
+list of classes with day numbers and gap labels]**
+
+> "Here's the part that makes it reusable: you don't put dates on these
+> classes. You say how far apart they are. Orientation is day one. SCBA is the
+> next day. Ladders is two days after that. Notice the builder even says it
+> that way — 'Next day,' 'Two days later' — because that's how you'd describe
+> it to somebody standing in front of you."
+
+**[CALLOUT: "No dates on the syllabus — only spacing"]**
+
+> "And if your school meets on a regular cadence, don't count days at all.
+> Fill from pattern — Tuesdays and Thursdays — and it spaces every class out
+> for you."
+
+**[SCREEN: Click "Fill from pattern", select Tue and Thu, click Apply]**
+
+> "Now the payoff. When a new class of recruits starts, go to Records, Course
+> Cohorts, New cohort. Pick the course, pick a start date."
+
+**[SCREEN: Navigate to Training > Records > Course Cohorts > New cohort, select
+the course, set a start date, click Next]**
+
+> "And stop right here, because this next screen is the one that saves you.
+> Before anything is created, you see every single date the system worked out.
+> This one got moved — it would have landed on a Saturday. This one's flagged
+> because the classroom is already booked. And Labor Day is sitting right in
+> the middle of your course, so it's offered to you as a day to skip."
+
+**[SCREEN: The Preview step, scrolling the computed class list, pointing at an
+amber warning and the suggested holiday chips]**
+
+**[CALLOUT: "Preview shows every date — before a single event exists"]**
+
+> "You can move any individual class, or skip one entirely. Then pick your
+> recruits, and generate."
+
+**[SCREEN: Roster step selecting members, then the Generate button; cut to the
+Cohort Detail page with the full class timeline]**
+
+> "Fifteen training events, on the calendar, each with its own training
+> session. Your recruits see the whole schedule, they check in with the QR code
+> the same as always, and the hours flow into their pipeline automatically. One
+> screen instead of an afternoon."
+
+### WHEN PLANS CHANGE (21:30 – 22:00)
+
+> "And they will. Your SCBA instructor calls out. Weather kills a live-fire
+> night. Somebody joins two weeks late."
+
+**[SCREEN: Cohort Detail page, click Reschedule on one class, then show the
+Shift remaining control]**
+
+> "Reschedule one class and its calendar event moves with it — nobody loses
+> their spot. Cancel one and everybody signed up sees a cancellation, not a
+> class that quietly vanished. Add a make-up session. Or push everything that
+> hasn't happened yet back a week, in one click."
+
+**[CALLOUT: "Reschedule · Cancel · Add class · Shift remaining"]**
+
+> "One thing worth knowing: editing the course's syllabus does not change a
+> school that's already running. That's on purpose — you don't want a recruit
+> class re-scheduled underneath the recruits. Fix the syllabus and it applies
+> to the next intake."
+
+**[TRANSITION: External training]**
+
+### EXTERNAL TRAINING (22:00 – 22:30)
 
 **[SCREEN: Navigate to External Training page (ExternalTrainingPage)]**
 
@@ -492,7 +572,7 @@ the CSV and PDF buttons]**
 > these for your approval, and they count toward their compliance requirements
 > just like internal training."
 
-### SHIFT COMPLETION REPORTS & SKILL SCORING (20:30 – 22:00)
+### SHIFT COMPLETION REPORTS & SKILL SCORING (22:30 – 24:00)
 
 > "After each shift, officers file shift completion reports on their trainees.
 > Let me show you the workflow."
@@ -520,7 +600,7 @@ the demonstrated checkbox, and comment field._
 **[SCREENSHOT NEEDED]:** _The apparatus skills settings panel showing
 green and amber linkage tags on skills._
 
-### BATCH REVIEW (22:00 – 23:00)
+### BATCH REVIEW (24:00 – 25:00)
 
 > "When you have a pile of pending reports — say, after a busy weekend — you
 > can batch-review them."
@@ -539,7 +619,7 @@ action buttons visible._
 
 **[SCREEN: Show the Flagged tab with a few flagged reports]**
 
-### TRAINING OFFICER'S WORKFLOW (23:00 – 24:00)
+### TRAINING OFFICER'S WORKFLOW (25:00 – 25:30)
 
 > "Let me summarize the Training Officer's workflow."
 
@@ -563,7 +643,7 @@ action buttons visible._
 > "**Quarterly:** Generate compliance reports for the Chief and officers.
 > Review and update training requirements if state mandates have changed."
 
-### WRAP-UP (21:30 – 22:00)
+### WRAP-UP (25:30 – 26:00)
 
 > "The Training Officer role is about keeping the department ready. The Logbook
 > automates the tracking, the reminders, and the reporting — so you can focus
@@ -586,6 +666,8 @@ action buttons visible._
 | Bulk Recording Training | 9:30–11:00 | "Recording Training for Multiple Members at Once" |
 | Skills Testing Walkthrough | 12:00–16:00 | "Running a Skills Test in The Logbook" |
 | Compliance Reporting | 16:00–19:00 | "Generating Compliance Reports" |
-| Shift Reports & Skill Scoring | 20:30–22:00 | "Filing Shift Reports with 1-5 Skill Scoring" |
-| Batch Review | 22:00–23:00 | "Batch Reviewing Shift Reports" |
-| Training Officer Workflow | 23:00–24:00 | "The Training Officer's Weekly Routine" |
+| Multi-Class Courses & Cohorts | 20:00–21:30 | "Schedule a Whole Recruit School in One Shot" |
+| When Plans Change | 21:30–22:00 | "Rescheduling a Class Series Without Touching 15 Events" |
+| Shift Reports & Skill Scoring | 22:30–24:00 | "Filing Shift Reports with 1-5 Skill Scoring" |
+| Batch Review | 24:00–25:00 | "Batch Reviewing Shift Reports" |
+| Training Officer Workflow | 25:00–25:30 | "The Training Officer's Weekly Routine" |

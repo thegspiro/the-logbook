@@ -72,6 +72,7 @@ class RecordingSession:
         self._results = list(results or [])
         self.statements = []
         self.added = []
+        self.deleted = []
         self.commit = AsyncMock()
         self.refresh = AsyncMock()
         self.flush = AsyncMock()
@@ -79,6 +80,9 @@ class RecordingSession:
 
     def add(self, obj):
         self.added.append(obj)
+
+    async def delete(self, obj):
+        self.deleted.append(obj)
 
     async def execute(self, statement, *args, **kwargs):
         self.statements.append(statement)
@@ -457,6 +461,57 @@ class TestCreateCohort:
         assert classes[0].sequence == 1
         assert classes[0].course_class_id == keep.id
 
+    async def test_certification_flag_reaches_the_generated_session(self):
+        """A syllabus class marked credit-only must not advance a certificate.
+
+        The flag is the whole point for a recruit school: an informal in-house
+        drill still earns hours, but should not count toward a certificate the
+        certifying body would not accept it for.
+        """
+        course = _course()
+        klass = _klass(1, course.id, 0)
+        klass.counts_toward_certification = False
+        db = self._db_for_generation(course, [(klass, _course("SCBA"))])
+        patcher, session_service = _patch_session_service()
+        svc = CourseCohortService(db)
+
+        with patcher:
+            await svc.create_cohort(
+                CourseCohortCreate(
+                    course_id=course.id, name="Fall", start_date=date(2026, 9, 8)
+                ),
+                ORG,
+                ACTOR,
+            )
+
+        assert db.added_of(CourseCohortClass)[0].counts_toward_certification is False
+        payload = session_service.create_training_session.await_args_list[0].kwargs[
+            "session_data"
+        ]
+        assert payload.counts_toward_certification is False
+
+    async def test_certification_flag_defaults_to_counting(self):
+        course = _course()
+        db = self._db_for_generation(
+            course, [(_klass(1, course.id, 0), _course("SCBA"))]
+        )
+        patcher, session_service = _patch_session_service()
+        svc = CourseCohortService(db)
+
+        with patcher:
+            await svc.create_cohort(
+                CourseCohortCreate(
+                    course_id=course.id, name="Fall", start_date=date(2026, 9, 8)
+                ),
+                ORG,
+                ACTOR,
+            )
+
+        payload = session_service.create_training_session.await_args_list[0].kwargs[
+            "session_data"
+        ]
+        assert payload.counts_toward_certification is True
+
     async def test_a_failing_class_is_reported_not_fatal(self):
         course = _course()
         db = self._db_for_generation(
@@ -724,6 +779,40 @@ class TestRosterManagement:
         assert member.status == CohortMemberStatus.WITHDRAWN
         assert member.withdrawn_at is not None
 
+    async def test_withdrawal_clears_upcoming_classes_from_the_calendar(self):
+        """A withdrawn member must not stay on the attendee list.
+
+        Left in place, the remaining classes keep showing on their calendar and
+        they count as an expected no-show for every one of them.
+        """
+        member = CourseCohortMember(
+            id=str(uuid4()),
+            organization_id=str(ORG),
+            cohort_id=str(uuid4()),
+            user_id=str(uuid4()),
+            status=CohortMemberStatus.ACTIVE,
+        )
+        future_rsvp = EventRSVP(
+            id=str(uuid4()),
+            organization_id=str(ORG),
+            event_id="evt-future",
+            user_id=member.user_id,
+        )
+        db = RecordingSession(
+            [_one(member), _scalars(["evt-future"]), _scalars([future_rsvp])]
+        )
+        svc = CourseCohortService(db)
+
+        await svc.remove_member(member.cohort_id, member.user_id, ORG)
+
+        assert member.status == CohortMemberStatus.WITHDRAWN
+        assert db.deleted == [future_rsvp]
+        # The RSVP query must exclude anyone who already checked in — that is a
+        # training record, not a calendar entry.
+        assert "checked_in" in str(db.statements[2]).lower()
+        # ...and must only look at classes that have not started.
+        assert "scheduled_start >" in str(db.statements[1]).lower()
+
     async def test_remove_unknown_member_raises(self):
         db = RecordingSession([_one(None)])
         svc = CourseCohortService(db)
@@ -753,6 +842,88 @@ class TestRosterManagement:
 
         assert added == 0
         assert db.added_of(CourseCohortMember) == []
+
+    async def test_a_late_joiner_is_only_invited_to_classes_still_to_come(self):
+        """Adding a member mid-course must not backfill past classes.
+
+        RSVPing them to classes that already ran would put those sessions on
+        their calendar and list them as an expected attendee for training they
+        could not have made.
+        """
+        cohort = _cohort(str(uuid4()))
+        user_id = uuid4()
+        db = RecordingSession(
+            [
+                _one(cohort),
+                _scalar(0),
+                _scalars([MagicMock(id=str(user_id), username="dana")]),
+                _scalars([]),  # nobody on the roster yet
+                _scalars([]),  # the future-only class query
+                _scalar(1),
+            ]
+        )
+        svc = CourseCohortService(db)
+
+        await svc.add_members(
+            cohort.id,
+            CohortMemberAdd(user_ids=[user_id], enroll_in_program=False),
+            ORG,
+            ACTOR,
+        )
+
+        # The class query must carry a lower bound on scheduled_start; without
+        # it every past class would be swept in.
+        class_queries = [
+            q
+            for q in (str(st).lower() for st in db.statements)
+            if "course_cohort_classes" in q
+        ]
+        assert class_queries, "no query against the cohort's classes was issued"
+        assert any("scheduled_start >" in q for q in class_queries)
+
+    async def test_generation_invites_the_roster_to_every_class(self):
+        """Generation is the opposite case — no future filter.
+
+        A cohort entered after the fact (back-dated for the record) must still
+        record its full roster against every class.
+        """
+        course = _course()
+        klass = _klass(1, course.id, 0)
+        user_id = uuid4()
+        db = RecordingSession(
+            [
+                _one(course),
+                _rows([(klass, _course("SCBA"))]),
+                _one("America/New_York"),
+                _scalars([MagicMock(id=str(user_id), username="dana")]),
+                _scalars([]),
+                _scalars([_cohort_class(_cohort(course.id), 1)]),
+                _rows([]),
+            ]
+        )
+        patcher, _ = _patch_session_service()
+        svc = CourseCohortService(db)
+
+        with patcher:
+            await svc.create_cohort(
+                CourseCohortCreate(
+                    course_id=course.id,
+                    name="Backfilled 2025",
+                    start_date=date(2025, 9, 8),
+                    member_user_ids=[user_id],
+                ),
+                ORG,
+                ACTOR,
+            )
+
+        class_queries = [
+            q
+            for q in (str(st).lower() for st in db.statements)
+            if "course_cohort_classes" in q
+        ]
+        assert class_queries, "no query against the cohort's classes was issued"
+        assert not any("scheduled_start >" in q for q in class_queries)
+        assert len(db.added_of(EventRSVP)) == 1
 
     async def test_a_member_from_another_org_is_reported_not_added(self):
         cohort = _cohort(str(uuid4()))

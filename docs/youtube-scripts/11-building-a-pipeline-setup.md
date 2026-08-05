@@ -216,7 +216,7 @@ enrollment option.]**
 
 ---
 
-## CHAPTER 8: Publish, Enroll, and You're Live (11:45 – 14:00)
+## CHAPTER 8: Publish, Enroll, and You're Live (11:45 – 14:30)
 
 ### SAVING THE BUILD (11:45 – 12:15)
 
@@ -240,7 +240,27 @@ select the recruit class → Enroll.]**
 > class, enroll them all in one action, and every one of them starts at phase one
 > with a fresh progress record."
 
-### YOU'RE LIVE (13:15 – 14:00)
+### OR: LET A COHORT DO IT (13:15 – 13:45)
+
+**[SCREEN: Cut to Training > Records > Course Cohorts > New cohort, moving
+quickly through Course → Schedule → Preview → Roster → Generate.]**
+
+> "One alternative worth knowing about. If this program is delivered as a
+> scheduled class series — a recruit school with fifteen classes on a calendar
+> — you don't have to enroll people here at all."
+
+> "Build the course's class list once under Course Library, then generate a
+> **cohort** for each intake. Pick your recruits on the roster step, and
+> generating schedules every class *and* enrolls them in this pipeline in the
+> same action."
+
+**[CALLOUT: "Pipeline = what they must achieve · Cohort = when the classes are"]**
+
+> "Think of it this way: the pipeline is what a recruit has to accomplish. The
+> cohort is when the classes actually meet. Most departments want both, and the
+> cohort wires them together for you."
+
+### YOU'RE LIVE (13:45 – 14:30)
 
 **[SCREEN: The Enrollments tab now populated with recruits at 0%, ready to
 climb.]**

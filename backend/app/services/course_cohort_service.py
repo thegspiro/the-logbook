@@ -72,6 +72,17 @@ from app.utils.scheduling_dates import (
 MAX_GENERATED_CLASSES = 200
 
 
+def _counts_toward_certification(value: Optional[bool]) -> bool:
+    """Resolve the certification flag, treating an unset value as "counts".
+
+    SQLAlchemy column defaults are applied at INSERT, so a row that has not
+    been flushed yet reads ``None`` rather than the column's ``True``. Copying
+    that ``None`` straight onto the session payload would fail validation, so
+    the default is applied here instead of relying on the column.
+    """
+    return True if value is None else bool(value)
+
+
 class CourseCohortService:
     """Service for generating and managing course cohorts"""
 
@@ -184,9 +195,12 @@ class CourseCohortService:
                     "reactivate it or pick another course."
                 )
 
-            location_id = course_class.location_id or request.__dict__.get(
-                "location_id"
-            )
+            # Only classes with a room of their own can be conflict-checked
+            # here — the preview request carries no cohort-level location. A
+            # clash on a cohort-wide room surfaces at generation, where
+            # create_training_session runs the same check and reports it as a
+            # per-class warning.
+            location_id = course_class.location_id
             if location_id:
                 overlapping = await location_service.check_overlapping_events(
                     location_id=location_id,
@@ -400,6 +414,9 @@ class CourseCohortService:
                 category_id=course_class.category_id,
                 requirement_id=requirement_id,
                 phase_id=phase_id,
+                counts_toward_certification=_counts_toward_certification(
+                    course_class.counts_toward_certification
+                ),
                 cohort=cohort,
             )
             self.db.add(cohort_class)
@@ -425,6 +442,7 @@ class CourseCohortService:
             actor_id=created_by,
             enroll_in_program=True,
             invite_to_events=True,
+            future_only=False,
         )
         warnings.extend(member_warnings)
 
@@ -486,6 +504,9 @@ class CourseCohortService:
             instructor_id=cohort_class.instructor_id,
             expiration_months=(
                 class_course.expiration_months if class_course else None
+            ),
+            counts_toward_certification=_counts_toward_certification(
+                cohort_class.counts_toward_certification
             ),
             auto_create_records=cohort.auto_create_records,
         )
@@ -820,6 +841,9 @@ class CourseCohortService:
             category_id=str(data.category_id) if data.category_id else None,
             requirement_id=str(data.requirement_id) if data.requirement_id else None,
             phase_id=str(data.phase_id) if data.phase_id else None,
+            counts_toward_certification=_counts_toward_certification(
+                data.counts_toward_certification
+            ),
         )
         self.db.add(cohort_class)
         await self.db.flush()
@@ -978,6 +1002,7 @@ class CourseCohortService:
             actor_id=actor_id,
             enroll_in_program=data.enroll_in_program,
             invite_to_events=data.invite_to_events,
+            future_only=True,
         )
         await self.db.commit()
 
@@ -996,6 +1021,7 @@ class CourseCohortService:
         actor_id: UUID,
         enroll_in_program: bool,
         invite_to_events: bool,
+        future_only: bool,
     ) -> List[str]:
         """Roster addition shared by generation and later add-member calls.
 
@@ -1060,12 +1086,22 @@ class CourseCohortService:
         await self.db.flush()
 
         if added and invite_to_events:
-            class_result = await self.db.execute(
-                select(CourseCohortClass).where(
-                    CourseCohortClass.cohort_id == cohort.id,
-                    CourseCohortClass.status != CohortClassStatus.CANCELLED,
-                )
+            query = select(CourseCohortClass).where(
+                CourseCohortClass.cohort_id == cohort.id,
+                CourseCohortClass.status != CohortClassStatus.CANCELLED,
             )
+            if future_only:
+                # A member joining mid-run must not be RSVP'd to classes that
+                # already happened: those would land on their calendar as
+                # sessions they were expected at, and would show them as a
+                # no-show on training they could not have made. Generation
+                # passes future_only=False so a deliberately back-dated cohort
+                # still records its full roster.
+                query = query.where(
+                    CourseCohortClass.scheduled_start > datetime.now(timezone.utc)
+                )
+
+            class_result = await self.db.execute(query)
             await self._rsvp_users_to_classes(
                 user_ids=added,
                 cohort_classes=list(class_result.scalars().all()),
@@ -1182,10 +1218,14 @@ class CourseCohortService:
     async def remove_member(
         self, cohort_id: UUID, user_id: UUID, organization_id: UUID
     ) -> None:
-        """Withdraw a member from the roster.
+        """Withdraw a member from the roster and clear their upcoming classes.
 
-        Soft by design: the enrollment and any attendance already earned stay
-        put, matching how program withdrawal behaves elsewhere in the module.
+        Soft on history, clean on the calendar. The enrollment, the training
+        records, and any class they already checked into stay put — matching
+        how program withdrawal behaves elsewhere in the module. But their RSVPs
+        on classes that have not started are removed: a withdrawn member left
+        on the attendee list keeps the course on their calendar and counts them
+        as an expected no-show for every remaining class.
         """
         result = await self.db.execute(
             select(CourseCohortMember).where(
@@ -1200,6 +1240,29 @@ class CourseCohortService:
 
         member.status = CohortMemberStatus.WITHDRAWN
         member.withdrawn_at = datetime.now(timezone.utc)
+
+        upcoming = await self.db.execute(
+            select(CourseCohortClass.event_id).where(
+                CourseCohortClass.cohort_id == str(cohort_id),
+                CourseCohortClass.organization_id == str(organization_id),
+                CourseCohortClass.event_id.isnot(None),
+                CourseCohortClass.scheduled_start > datetime.now(timezone.utc),
+            )
+        )
+        event_ids = [e for e in upcoming.scalars().all() if e]
+        if event_ids:
+            rsvps = await self.db.execute(
+                select(EventRSVP).where(
+                    EventRSVP.event_id.in_(event_ids),
+                    EventRSVP.user_id == str(user_id),
+                    # Never touch an RSVP that already recorded attendance —
+                    # that is a training record, not a calendar entry.
+                    EventRSVP.checked_in.is_(False),
+                )
+            )
+            for rsvp in rsvps.scalars().all():
+                await self.db.delete(rsvp)
+
         await self.db.commit()
 
     # ── reads ────────────────────────────────────────────────────────

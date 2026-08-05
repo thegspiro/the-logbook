@@ -122,6 +122,7 @@ def _class_response(
         category_id=row.category_id,
         requirement_id=row.requirement_id,
         phase_id=row.phase_id,
+        counts_toward_certification=row.counts_toward_certification,
         cancellation_reason=row.cancellation_reason,
         created_at=row.created_at,
         updated_at=row.updated_at,

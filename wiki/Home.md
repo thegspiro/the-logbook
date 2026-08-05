@@ -124,6 +124,23 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### August 2026 — Schedule a Whole Multi-Class Course at Once
+
+- **A course can now describe its own classes.** A recruit school is one course
+  made of fifteen subjects, so you write that outline once: each class in order,
+  with how many days after the start it happens and what time it runs. "Class B
+  is the day after A, class C two days later" is exactly how you enter it.
+- **Starting a new intake generates the whole schedule.** Pick the course and a
+  start date, and every class becomes a real training event on the department
+  calendar — students see the dates, sign in and out with the QR code, and the
+  hours count toward their program automatically.
+- **You see the dates before anything is created.** The preview lists every
+  computed date, flags anything that landed on a weekend or a holiday, warns if
+  a room is already booked, and lets you move or skip any single class first.
+- **Plans change, and the schedule keeps up.** Reschedule one class, cancel one
+  (everyone signed up sees the cancellation), add a make-up session, or push
+  everything still to come back a week — without touching fifteen events by hand.
+
 ### August 2026 — Date of Birth & Emergency Contacts Are Leadership-Only
 
 - **Only leadership can see a member's date of birth and emergency contacts** —

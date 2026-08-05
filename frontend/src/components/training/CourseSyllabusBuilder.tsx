@@ -107,6 +107,9 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
   const [creditHours, setCreditHours] = useState(
     initial?.credit_hours != null ? String(initial.credit_hours) : '',
   );
+  const [countsTowardCert, setCountsTowardCert] = useState(
+    initial?.counts_toward_certification ?? true,
+  );
 
   const selectedCourse = courses.find((c) => c.id === classCourseId);
 
@@ -132,6 +135,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
       start_time: startTime || undefined,
       duration_minutes: Number(durationMinutes) || 60,
       credit_hours: creditHours ? Number(creditHours) : undefined,
+      counts_toward_certification: countsTowardCert,
     });
   };
 
@@ -285,6 +289,25 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
           />
         </div>
       </div>
+
+      <label className="flex items-start gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={countsTowardCert}
+          onChange={(e) => setCountsTowardCert(e.target.checked)}
+          className="mt-1"
+        />
+        <span>
+          <span className="font-medium text-theme-text-primary">
+            Counts toward certification requirements
+          </span>
+          <span className="block text-theme-text-muted">
+            Leave on for classes delivered the way a certifying body accepts.
+            Turn it off for an informal in-house drill: attendance still earns
+            hours, but the class won&rsquo;t advance a certificate.
+          </span>
+        </span>
+      </label>
 
       <div className="flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="btn-icon px-4">

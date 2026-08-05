@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training: a course can carry a syllabus, and a cohort runs it (2026-08-05)
+
+**Added**
+
+- **A course now has classes.** `course_classes` (migration `20260805_0001`) is
+  the syllabus of a multi-class course — the fifteen subjects that make up a
+  recruit school. Each row links to a catalog course (`class_course_id`, NOT
+  NULL: that link is what carries the class's credit hours, certification
+  settings and category tagging) and is timed *relative to the course start* —
+  `day_offset` plus a local `start_time` — rather than pinned to a calendar
+  date. That is the whole point: the same outline schedules a spring and a fall
+  intake without being retyped. Unique on (`course_id`, `sequence`).
+- **A cohort is one run of that course.** `course_cohorts` +
+  `course_cohort_classes` + `course_cohort_members`. Generating a cohort walks
+  the syllabus, resolves every offset into a real UTC datetime, and creates
+  **one Event and one linked TrainingSession per class** — not one session for
+  the whole course. That is deliberate: attendance, sign-in/out, credit hours
+  and pipeline progress in this platform all hang off a single event, so a
+  fifteen-class school has to be fifteen events for a student to check into
+  class 7 and be credited for class 7. Generation runs in one transaction
+  (`create_training_session` gained `commit=False`), so a failure part-way
+  cannot leave seven of fifteen classes on the department calendar with no
+  cohort to manage them.
+- **The cohort class row is the stable identity**, not the event. The Event and
+  TrainingSession are its current realization. That separation is what lets a
+  class be rescheduled or cancelled without losing the cohort's record of it,
+  and what makes regeneration idempotent — `uq_cohort_class_source` on
+  (`cohort_id`, `course_class_id`) means re-running generation can never
+  duplicate a class, and `event_id` is `SET NULL` (not `CASCADE`) so an event
+  deleted through the events UI leaves a repairable gap rather than erasing the
+  class.
+- **Endpoints** — `/api/v1/training/courses/{course_id}/classes` (list, add,
+  patch, delete, `/reorder`, `/autofill`) and `/api/v1/training/cohorts`
+  (`/preview`, create, list, `/mine`, detail, `/regenerate`, `/shift`,
+  `/cancel`, per-class reschedule/cancel, `/members`). All `training.manage`
+  except the syllabus read and a roster member's view of their own cohort.
+  Deliberately **not** `events.manage`: generating events is incidental to
+  running a course, and the rest of the training module gates on
+  `training.manage`, so requiring the events scope would lock training officers
+  out of their own feature.
+- **Preview before anything exists.** `POST /training/cohorts/preview` is
+  read-only and returns every computed date with per-class warnings — a date
+  moved off a weekend or blackout day, an archived catalog course, a room
+  already booked. Generating drops N events onto the department calendar and
+  RSVPs the whole roster to each, which is not an action to discover the
+  problems with afterwards.
+- **Officer-facing UI** — a syllabus builder inside the Course Library (with
+  inline catalog-course creation, since a class *must* link to one), a
+  five-step cohort wizard whose preview step is editable per class, a "Course
+  Cohorts" tab under Training → Records, and a cohort detail page carrying the
+  operations a live recruit school needs: reschedule one class (the event moves
+  with it), cancel one (the event is cancelled, not deleted, so anyone signed
+  up sees the change), add an ad-hoc make-up class, or shift everything still
+  to come by N days. Routes `/training/cohorts` and
+  `/training/cohorts/:cohortId`.
+
+**Changed**
+
+- `TrainingSessionCreate` accepts `instructor_id`. The column existed on
+  `TrainingSession` but no request could set it, so every session carried only
+  the legacy free-text instructor name.
+- `ProgramBuildRequirementInput` accepts `required_courses`, so a generated
+  pipeline can express "did this member complete SCBA Operations?" and be
+  measured by the existing course-completion evaluator rather than needing
+  bespoke logic.
+- `training_courses` gained a nullable `program_id`. The first cohort that
+  builds a pipeline records it there, so later cohorts of the same course reuse
+  that pipeline instead of building a duplicate.
+
+> **Class times are local wall clock, resolved against the organization
+> timezone at generation** — not a stored UTC offset. A recruit school running
+> from September into December crosses a DST boundary; storing the offset would
+> silently move the last third of the course by an hour.
+
 ### Security: date of birth and emergency contacts are leadership-only (2026-08-04)
 
 **Security**

@@ -209,7 +209,7 @@ These endpoints bridge data across modules:
 | `user.py` | Organization, User (+ `oauth_provider`, `oauth_subject`), Role, Session, MemberLeaveOfAbsence | organizations, users, roles, sessions, user_roles, member_leaves_of_absence |
 | `event.py` | Event, EventRSVP, EventExternalAttendee | events, event_attendees, event_external_attendees |
 | `event_request.py` | EventRequest, EventRequestActivity, EventRequestEmailTemplate | event_requests, event_request_activities, event_request_email_templates |
-| `training.py` | TrainingCategory (+ `registry_code`), TrainingCourse, TrainingRecord, TrainingRequirement (+ `include_current_month`), TrainingSession, TrainingApproval, TrainingProgram, ProgramPhase, ProgramRequirement, ProgramMilestone, ProgramEnrollment, RequirementProgress, SkillEvaluation, SkillCheckoff, ExternalTrainingProvider, ExternalCategoryMapping, ExternalUserMapping, ExternalTrainingSyncLog, ExternalTrainingImport (+ `credit_hours`), Shift, ShiftAttendance, ShiftCall, ShiftCompletionReport | training_categories, training_courses, training_records, training_requirements, training_sessions, training_approvals, training_programs, program_phases, program_requirements, program_milestones, program_enrollments, requirement_progress, skill_evaluations, skill_checkoffs, external_training_providers, external_category_mappings, external_user_mappings, external_training_sync_logs, external_training_imports, shifts, shift_attendance, shift_calls, shift_completion_reports |
+| `training.py` | TrainingCategory (+ `registry_code`), TrainingCourse (+ `program_id`), CourseClass, CourseCohort, CourseCohortClass, CourseCohortMember, TrainingRecord, TrainingRequirement (+ `include_current_month`), TrainingSession, TrainingApproval, TrainingProgram, ProgramPhase, ProgramRequirement, ProgramMilestone, ProgramEnrollment, RequirementProgress, SkillEvaluation, SkillCheckoff, ExternalTrainingProvider, ExternalCategoryMapping, ExternalUserMapping, ExternalTrainingSyncLog, ExternalTrainingImport (+ `credit_hours`), Shift, ShiftAttendance, ShiftCall, ShiftCompletionReport | training_categories, training_courses, course_classes, course_cohorts, course_cohort_classes, course_cohort_members, training_records, training_requirements, training_sessions, training_approvals, training_programs, program_phases, program_requirements, program_milestones, program_enrollments, requirement_progress, skill_evaluations, skill_checkoffs, external_training_providers, external_category_mappings, external_user_mappings, external_training_sync_logs, external_training_imports, shifts, shift_attendance, shift_calls, shift_completion_reports |
 | `skills_testing.py` | SkillTemplate, SkillTest | skill_templates, skill_tests |
 | `election.py` | Election, Candidate, Vote, VotingToken | elections, candidates, ballots, voting_tokens |
 | `inventory.py` | InventoryCategory, InventoryItem, ItemAssignment, CheckOutRecord, MaintenanceRecord, StorageArea, InventoryNotificationQueue (+ `attempt_count`, `last_attempt_at`) | inventory_categories, inventory_items, item_assignments, inventory_checkouts, maintenance_records, storage_areas, inventory_notification_queue |
@@ -265,6 +265,9 @@ Organization ─┬─< User ─┬─< EventRSVP
               ├─< TrainingProgram ─< ProgramPhase ─< ProgramRequirement
               │                    └─< ProgramEnrollment ─< RequirementProgress
               │
+              ├─< CourseClass (course syllabus) ──> TrainingCourse (class taught)
+              ├─< CourseCohort ─┬─< CourseCohortClass ─── Event + TrainingSession
+              │                 └─< CourseCohortMember ─── ProgramEnrollment
               ├─< TrainingSession ─< TrainingApproval
               │
               ├─< TrainingRequirement
@@ -377,7 +380,9 @@ All services in `backend/app/services/`:
 | `event_service.py` | EventService | Event, EventRSVP, EventExternalAttendee | create_event, update_event, create_rsvp, check_in, self_check_in, get_stats, manage_external_attendees |
 | `training_service.py` | TrainingService | TrainingRecord, TrainingCourse, TrainingRequirement | create_record, get_user_stats, get_compliance_summary, get_competency_matrix, get_expiring_certifications |
 | `training_program_service.py` | TrainingProgramService | TrainingProgram, ProgramPhase, ProgramEnrollment | create_program, create_phase, enroll_member, update_progress, duplicate_program |
-| `training_session_service.py` | TrainingSessionService | TrainingSession, TrainingApproval | create_session, finalize_session, get_approval, submit_approval |
+| `training_session_service.py` | TrainingSessionService | TrainingSession, TrainingApproval | create_session (`commit=False` lets a caller batch), finalize_session, get_approval, submit_approval |
+| `course_syllabus_service.py` | CourseSyllabusService | CourseClass, TrainingCourse | list_classes, add_class, update_class, delete_class, reorder_classes, autofill_offsets |
+| `course_cohort_service.py` | CourseCohortService | CourseCohort, CourseCohortClass, CourseCohortMember | preview_schedule, create_cohort, regenerate_missing, reschedule_class, cancel_class, add_ad_hoc_class, shift_remaining, add_members, remove_member |
 | `training_submission_service.py` | TrainingSubmissionService | TrainingSubmission | create_submission, review_submission, get_pending |
 | `training_waiver_service.py` | TrainingWaiverService | TrainingWaiver | create_waiver, list_waivers, update_waiver |
 | `training_compliance.py` | TrainingComplianceService | TrainingRecord, TrainingRequirement | get_compliance_matrix, get_expiring_certs |
@@ -810,7 +815,7 @@ Creates axios instances with:
 | `member.ts` | Member, MemberStatus, MemberLeave, MembershipTier |
 | `role.ts` | Role, Permission, PermissionCategory |
 | `event.ts` | Event, EventRSVP, EventTemplate, EventSettings, ExternalAttendee |
-| `training.ts` | TrainingRecord, TrainingCourse, TrainingRequirement, TrainingSession, TrainingProgram, ProgramPhase, ProgramEnrollment, RecertificationPathway, CompetencyMatrix, InstructorQualification, TrainingEffectivenessEvaluation, MultiAgencyTraining, XAPIStatement, ComplianceForecast, ISOReadiness, ComplianceAttestation, AnnualComplianceReport, ShiftCompletionReport, ShiftCompletionReportCreate, TraineeShiftStats, MonthlyShiftData, OfficerShiftAnalytics, OfficerAnalyticsTrainee, SkillObservation, TaskPerformed |
+| `training.ts` | TrainingRecord, TrainingCourse, CourseClass, CourseCohort, CourseCohortClass, CourseCohortMember, CohortSchedulePreviewResponse, TrainingRequirement, TrainingSession, TrainingProgram, ProgramPhase, ProgramEnrollment, RecertificationPathway, CompetencyMatrix, InstructorQualification, TrainingEffectivenessEvaluation, MultiAgencyTraining, XAPIStatement, ComplianceForecast, ISOReadiness, ComplianceAttestation, AnnualComplianceReport, ShiftCompletionReport, ShiftCompletionReportCreate, TraineeShiftStats, MonthlyShiftData, OfficerShiftAnalytics, OfficerAnalyticsTrainee, SkillObservation, TaskPerformed |
 | `scanner.ts` | MemberIdPayload, isMemberIdPayload |
 | `scheduling.ts` | Shift, ShiftTemplate, ShiftPattern, ShiftAssignment, SwapRequest, TimeOff |
 | `election.ts` | Election, Candidate, Vote, ElectionResults, BallotItem, ElectionReportResponse, VoteReceiptResponse |
@@ -1141,6 +1146,7 @@ Both layouts read from `localStorage.getItem('navigationLayout')`.
 | Training → My Training | `/training/my-training` | `training` |
 | Training → Submit Training | `/training/submit` | `training` |
 | Training → Course Library | `/training/courses` | `training` |
+| Training → Course Cohorts | `/training/cohorts` | `training` |
 | Training → Programs | `/training/programs` | `training` |
 | Training → Skills Testing | `/training/skills-testing` | `training` |
 | Admin Hours | `/admin-hours` | — |

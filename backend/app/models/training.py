@@ -1035,6 +1035,11 @@ class CourseCohortClass(Base):
     phase_id = Column(
         String(36), ForeignKey("program_phases.id", ondelete="SET NULL"), nullable=True
     )
+    # Copied from the syllabus row onto the generated TrainingSession. Recruit
+    # schools are exactly where this matters: an informal in-house drill still
+    # earns hours but should not advance a certificate a certifying body would
+    # not accept it for.
+    counts_toward_certification = Column(Boolean, default=True, nullable=False)
     cancellation_reason = Column(Text)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

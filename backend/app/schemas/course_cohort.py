@@ -343,6 +343,7 @@ class CourseCohortClassResponse(UTCResponseBase):
     category_id: Optional[UUID] = None
     requirement_id: Optional[UUID] = None
     phase_id: Optional[UUID] = None
+    counts_toward_certification: bool = True
     cancellation_reason: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -458,6 +459,7 @@ class CohortAdHocClassCreate(BaseModel):
     category_id: Optional[UUID] = None
     requirement_id: Optional[UUID] = None
     phase_id: Optional[UUID] = None
+    counts_toward_certification: bool = True
     invite_roster: bool = True
 
     @model_validator(mode="after")

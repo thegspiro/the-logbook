@@ -310,6 +310,41 @@ autofill) and `/training/cohorts` (preview, create, regenerate, shift, cancel,
 per-class reschedule/cancel, roster add/remove). All gated on `training.manage`
 except the syllabus read and a roster member's view of their own cohort.
 
+##### Edge Cases & Things That Surprise People
+
+The syllabus is a **template**; a cohort is a **materialized copy**. Almost
+every confusion below comes from that one distinction.
+
+| Scenario | Behavior |
+|----------|----------|
+| **You reorder the classes but the dates don't change** | Order (`sequence`) and timing (`day_offset`) are independent. Moving class 3 to the top does not move it to day 1 — it still happens on whatever day its offset says. The builder makes this visible: a class scheduled before the one above it reads *"2 days earlier"* instead of *"2 days later"*. To re-space after reordering, edit the day offsets or run **Fill from pattern**. |
+| **You fix the syllabus and a running cohort doesn't change** | Correct and deliberate. A cohort is materialized at generation, so an in-flight recruit school is never silently re-scheduled underneath the students. The fix reaches the *next* cohort; to change the current one, edit its classes on the cohort detail page. |
+| **You delete a class from the syllabus** | Running cohorts keep their copy of it (`course_class_id` becomes NULL) — it simply becomes a class that belongs only to that cohort. Nothing is unscheduled, and nobody loses credit. |
+| **You skip a class in the preview** | The cohort renumbers contiguously. Skip syllabus class 4 and the cohort's class 4 is syllabus class 5. Cohort sequence numbers are per-cohort; they are not syllabus positions. |
+| **One class fails to schedule (room double-booked)** | Only that class fails. Generation continues, the cohort class row is created with no event, and the failure comes back as a warning. Resolve the conflict, then **Create missing events** — which only fills gaps and can never duplicate a class. |
+| **You click "Create missing events" twice** | Nothing happens the second time. It only touches classes whose `event_id` is NULL. |
+| **Someone deletes a generated event in the Events UI** | The cohort still lists the class, now marked **No event**. **Create missing events** rebuilds it. The link is `SET NULL`, not `CASCADE`, precisely so this is recoverable rather than silent data loss. |
+| **The course spans a DST change** | A 19:00 class stays at 19:00 local on both sides. Times are stored as local wall clock and resolved against the organization timezone at generation, not as a fixed UTC offset. |
+| **Two classes roll onto the same day** | Weekend and blackout rolling moves each class forward independently, so two can land on the same date. The preview shows the collision — adjust an offset before generating. |
+| **A blackout date is skipped even with the roll policy off** | Yes. "Keep the computed date" governs weekends; a blackout date is an explicit *not this day* and always applies. |
+| **You generate a second cohort of the same course** | It reuses the pipeline the first cohort built (recorded on `training_courses.program_id`) rather than creating a duplicate. A member already enrolled keeps that enrollment **and their existing progress** — right for someone repeating a course, surprising if you expected a clean slate. Use **Start new cycle** on their enrollment to reset. |
+| **A member can't be enrolled (unmet prerequisite)** | They are still added to the roster and the reason comes back as a warning. The officer knows their department better than the eligibility rules do; losing an entire generation over one member would be worse. |
+| **You add a member half-way through the course** | They are RSVP'd only to classes that **have not started**. Past classes are never backfilled — that would put finished sessions on their calendar and list them as an expected no-show for training they could not have attended. |
+| **You withdraw a member** | Their enrollment, training records, and any class they already checked into are kept. Their RSVPs on classes still to come are removed, so the course drops off their calendar and they stop counting as an expected attendee. |
+| **"Shift remaining" doesn't move everything** | By default it moves only classes that haven't started — past classes are anchored to their attendance records. Cancelled classes never move. Set a starting position explicitly to shift from a specific class onward. |
+| **A cancelled class is still listed** | Cancelling cancels the *event* rather than deleting it, so anyone who signed up sees a cancellation rather than a class silently vanishing. The class stays on the cohort for the record. |
+| **A class's catalog course was archived** | The preview warns, but generation still proceeds — archiving is a soft delete and the officer may well intend it. Reactivate the course or point the class at a different one. |
+| **Some classes shouldn't count toward a certificate** | Set **Counts toward certification requirements** off on that syllabus class. Attendance still creates the training record and hours (counting toward general compliance), but the class won't advance the linked certificate requirements — the standard use for an informal in-house drill inside an otherwise certification-grade school. |
+| **The syllabus is very long** | A course is capped at 200 classes, and a cohort at 200 generated classes. Past that it's a data-entry mistake, not a course. |
+| **A student wants to see their own schedule** | Roster members can read their own cohort (`GET /training/cohorts/{id}`, and `GET /training/cohorts/mine` for the list). Everything else needs `training.manage`. |
+| **Generating a cohort for a course with no classes** | Rejected with a clear error before anything is written. Build the syllabus first. |
+
+> **Cohort vs. recurring session — which do I want?** A *recurring training
+> session* repeats **the same class** on a fixed cadence (monthly CPR refresher).
+> A *cohort* runs **an ordered series of different classes** exactly once
+> (recruit school: orientation, then SCBA, then ladders). If each meeting covers
+> a different subject, you want a cohort.
+
 #### Atomic Program Build
 - Create-pipeline wizard builds a program with all phases, requirements, and milestones in one transaction — a failure can't leave a half-built program behind
 

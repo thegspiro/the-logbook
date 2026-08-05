@@ -16,6 +16,26 @@
 
 ## Current Head
 
+> **Update (2026-08-05):** The chain had drifted to **two heads** again —
+> `20260801_0020` (storefront tables) and `20260802_0001` (dues payments
+> ledger), both branching off `20260801_0019`. **`20260805_0001`**
+> (`20260805_0001_add_course_syllabus_and_cohorts.py`) is a **merge revision**
+> that chains off both:
+>
+> ```python
+> revision = "20260805_0001"
+> down_revision = ("20260801_0020", "20260802_0001")
+> ```
+>
+> The chain is back to a **single head at `20260805_0001`**, and new migrations
+> must set `down_revision = "20260805_0001"`.
+>
+> This is the third time the chain has forked (see the 2026-05 and 2026-06 notes
+> below). The pattern is always the same — two branches opened the same day off
+> a shared parent — and the fix is always the same: the next migration takes a
+> tuple `down_revision`. **Run `alembic heads` before writing a migration**
+> rather than assuming the documented head is current.
+
 > **Update (2026-07-29):** The chain is **linear with a single head**. The
 > current head is **`20260729_0001`**
 > (`20260729_0001_widen_public_portal_api_key_prefix.py`). **New migrations must

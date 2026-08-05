@@ -330,6 +330,12 @@ def upgrade() -> None:
             sa.ForeignKey("program_phases.id", ondelete="SET NULL"),
             nullable=True,
         ),
+        sa.Column(
+            "counts_toward_certification",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.true(),
+        ),
         sa.Column("cancellation_reason", sa.Text(), nullable=True),
         *_timestamps(),
         sa.UniqueConstraint("cohort_id", "sequence", name="uq_cohort_class_sequence"),
