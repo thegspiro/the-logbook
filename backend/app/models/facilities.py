@@ -186,7 +186,6 @@ class FacilityType(Base):
     facilities = relationship("Facility", back_populates="facility_type")
 
     __table_args__ = (
-        Index("idx_facility_types_org", "organization_id"),
         Index("idx_facility_types_org_name", "organization_id", "name", unique=True),
     )
 
@@ -234,7 +233,6 @@ class FacilityStatus(Base):
     facilities = relationship("Facility", back_populates="status_record")
 
     __table_args__ = (
-        Index("idx_facility_statuses_org", "organization_id"),
         Index("idx_facility_statuses_org_name", "organization_id", "name", unique=True),
     )
 
@@ -392,7 +390,6 @@ class Facility(Base):
     )
 
     __table_args__ = (
-        Index("idx_facilities_org", "organization_id"),
         Index(
             "idx_facilities_org_number",
             "organization_id",
@@ -551,7 +548,6 @@ class FacilityMaintenanceType(Base):
     )
 
     __table_args__ = (
-        Index("idx_facility_maint_types_org", "organization_id"),
         Index(
             "idx_facility_maint_types_org_name", "organization_id", "name", unique=True
         ),
@@ -760,7 +756,6 @@ class FacilitySystem(Base):
     maintenance_records = relationship("FacilityMaintenance", back_populates="system")
 
     __table_args__ = (
-        Index("idx_facility_systems_facility", "facility_id"),
         Index("idx_facility_systems_type", "facility_id", "system_type"),
         Index("idx_facility_systems_condition", "condition"),
     )
@@ -1065,7 +1060,6 @@ class FacilityUtilityAccount(Base):
     )
 
     __table_args__ = (
-        Index("idx_facility_utility_facility", "facility_id"),
         Index("idx_facility_utility_type", "facility_id", "utility_type"),
     )
 
@@ -1246,7 +1240,6 @@ class FacilityRoom(Base):
     facility = relationship("Facility", back_populates="rooms")
 
     __table_args__ = (
-        Index("idx_facility_rooms_facility", "facility_id"),
         Index("idx_facility_rooms_type", "room_type"),
         Index("idx_facility_rooms_floor", "facility_id", "floor"),
     )

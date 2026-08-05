@@ -89,7 +89,6 @@ class AdminHoursCategory(Base):
     )
 
     __table_args__ = (
-        Index("ix_admin_hours_categories_org_id", "organization_id"),
         Index("ix_admin_hours_categories_active", "organization_id", "is_active"),
     )
 
@@ -177,8 +176,6 @@ class AdminHoursEntry(Base):
     source_event = relationship("Event", foreign_keys=[source_event_id])
 
     __table_args__ = (
-        Index("ix_admin_hours_entries_org_id", "organization_id"),
-        Index("ix_admin_hours_entries_user_id", "user_id"),
         Index("ix_admin_hours_entries_category_id", "category_id"),
         Index("ix_admin_hours_entries_status", "organization_id", "status"),
         Index(
@@ -250,11 +247,5 @@ class EventHourMapping(Base):
             "custom_category",
             "admin_hours_category_id",
             name="uq_event_hour_mappings_source_target",
-        ),
-        Index("ix_event_hour_mappings_org_id", "organization_id"),
-        Index(
-            "ix_event_hour_mappings_org_event_type",
-            "organization_id",
-            "event_type",
         ),
     )

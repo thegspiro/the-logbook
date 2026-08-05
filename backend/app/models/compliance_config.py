@@ -15,6 +15,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -264,7 +265,6 @@ class ComplianceReport(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # -- Report metadata --
@@ -324,3 +324,14 @@ class ComplianceReport(Base):
     generation_duration_ms = Column(Integer, nullable=True)
 
     error_message = Column(Text, nullable=True)
+
+    __table_args__ = (
+        # Reports are listed per organization for a given reporting period.
+        Index(
+            "idx_compliance_reports_org_period",
+            "organization_id",
+            "period_year",
+            "period_month",
+        ),
+        Index("idx_compliance_reports_status", "status"),
+    )

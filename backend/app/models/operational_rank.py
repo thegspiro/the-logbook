@@ -12,7 +12,6 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
-    Index,
     Integer,
     String,
     Text,
@@ -64,7 +63,6 @@ class OperationalRank(Base):
 
     __table_args__ = (
         UniqueConstraint("organization_id", "rank_code", name="uq_ranks_org_code"),
-        Index("ix_operational_ranks_org", "organization_id"),
     )
 
     def __repr__(self):

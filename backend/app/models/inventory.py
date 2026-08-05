@@ -247,7 +247,6 @@ class InventoryCategory(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Category Information
@@ -315,7 +314,6 @@ class InventoryItem(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     category_id = Column(
         String(36),
@@ -516,7 +514,6 @@ class InventoryLot(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     inventory_item_id = Column(
         String(36),
@@ -571,7 +568,6 @@ class ItemAssignment(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Assignment Details
@@ -579,7 +575,6 @@ class ItemAssignment(Base):
         String(36),
         ForeignKey("inventory_items.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     user_id = Column(
         String(36),
@@ -627,6 +622,7 @@ class ItemAssignment(Base):
         Index("idx_item_assignments_org_item", "organization_id", "item_id"),
         Index("idx_item_assignments_org_user", "organization_id", "user_id"),
         Index("idx_item_assignments_org_active", "organization_id", "is_active"),
+        Index("idx_item_assignments_item_active", "item_id", "is_active"),
     )
 
 
@@ -647,7 +643,6 @@ class ItemIssuance(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Which pool item and who received the issuance
@@ -765,7 +760,6 @@ class IssuanceAllowance(Base):
             "role_id",
             name="uq_allowance_org_cat_role",
         ),
-        Index("idx_allowances_org", "organization_id"),
     )
 
 
@@ -784,7 +778,6 @@ class CheckOutRecord(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Checkout Details
@@ -839,7 +832,12 @@ class CheckOutRecord(Base):
     __table_args__ = (
         Index("idx_checkout_records_org_item", "organization_id", "item_id"),
         Index("idx_checkout_records_org_user", "organization_id", "user_id"),
-        Index("idx_checkout_records_org_returned", "organization_id", "is_returned"),
+        Index(
+            "idx_checkout_records_org_returned_expected",
+            "organization_id",
+            "is_returned",
+            "expected_return_at",
+        ),
         Index("idx_checkout_records_org_overdue", "organization_id", "is_overdue"),
     )
 
@@ -858,7 +856,6 @@ class MaintenanceRecord(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Maintenance Details
@@ -1088,7 +1085,6 @@ class DepartureClearanceItem(Base):
     resolved_by_user = relationship("User", foreign_keys=[resolved_by])
 
     __table_args__ = (
-        Index("idx_clearance_item_clearance", "clearance_id"),
         Index("idx_clearance_item_disposition", "clearance_id", "disposition"),
         Index("idx_clearance_item_org", "organization_id"),
     )
@@ -1144,9 +1140,7 @@ class InventoryNotificationQueue(Base):
     performed_by = Column(String(36), ForeignKey("users.id"))
 
     # Processing state
-    processed = Column(
-        Boolean, default=False, nullable=False, index=True, server_default="0"
-    )
+    processed = Column(Boolean, default=False, nullable=False, server_default="0")
     processed_at = Column(DateTime(timezone=True))
     # Circuit-breaker fields: track delivery attempts so a persistently
     # failing email destination (e.g. expired SMTP creds) eventually stops
@@ -1247,7 +1241,6 @@ class EquipmentRequest(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Requester
@@ -1255,7 +1248,6 @@ class EquipmentRequest(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # What they're requesting
@@ -1444,7 +1436,6 @@ class WriteOffRequest(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # The item being written off
@@ -1577,7 +1568,6 @@ class NFPAItemCompliance(Base):
     item = relationship("InventoryItem", foreign_keys=[item_id])
 
     __table_args__ = (
-        Index("idx_nfpa_compliance_org", "organization_id"),
         Index("idx_nfpa_compliance_ensemble", "organization_id", "ensemble_id"),
         Index(
             "idx_nfpa_compliance_retirement",
@@ -1683,7 +1673,6 @@ class NFPAExposureRecord(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Exposure details
@@ -1757,7 +1746,6 @@ class ReturnRequest(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Who is requesting the return
@@ -1765,7 +1753,6 @@ class ReturnRequest(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # What they want to return
@@ -1867,7 +1854,6 @@ class ReorderRequest(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # What to reorder
@@ -1993,7 +1979,6 @@ class ItemVariantGroup(Base):
     category = relationship("InventoryCategory", foreign_keys=[category_id])
 
     __table_args__ = (
-        Index("idx_variant_groups_org", "organization_id"),
         Index("idx_variant_groups_org_active", "organization_id", "active"),
     )
 
@@ -2039,10 +2024,7 @@ class EquipmentKit(Base):
         cascade="all, delete-orphan",
     )
 
-    __table_args__ = (
-        Index("idx_kits_org", "organization_id"),
-        Index("idx_kits_org_active", "organization_id", "active"),
-    )
+    __table_args__ = (Index("idx_kits_org_active", "organization_id", "active"),)
 
 
 class EquipmentKitItem(Base):

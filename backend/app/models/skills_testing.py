@@ -75,7 +75,6 @@ class SkillTemplate(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Template Details
@@ -145,13 +144,11 @@ class SkillTest(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     template_id = Column(
         String(36),
         ForeignKey("skill_templates.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     candidate_id = Column(
         String(36),

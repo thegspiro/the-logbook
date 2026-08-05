@@ -203,7 +203,6 @@ class PublicPortalAccessLog(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     config_id = Column(
         String(36),
@@ -273,7 +272,6 @@ class PublicPortalDataWhitelist(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     config_id = Column(
         String(36),

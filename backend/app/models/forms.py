@@ -104,7 +104,6 @@ class Form(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Form Information
@@ -186,7 +185,6 @@ class FormField(Base):
         String(36),
         ForeignKey("forms.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Field Configuration
@@ -249,7 +247,6 @@ class FormSubmission(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     form_id = Column(
         String(36),
@@ -347,5 +344,4 @@ class FormIntegration(Base):
 
     __table_args__ = (
         UniqueConstraint("form_id", "target_module", name="uq_form_integration_target"),
-        Index("idx_form_integrations_form", "form_id"),
     )

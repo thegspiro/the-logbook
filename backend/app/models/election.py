@@ -380,7 +380,6 @@ class VotingToken(Base):
 
     __table_args__ = (
         Index("ix_voting_tokens_election_id", "election_id"),
-        Index("ix_voting_tokens_token", "token"),
         Index("ix_voting_tokens_voter_hash", "voter_hash"),
         Index("ix_voting_tokens_organization_id", "organization_id"),
     )
@@ -485,6 +484,7 @@ class Vote(Base):
         Index("ix_votes_voter_id", "voter_id"),
         Index("ix_votes_voter_hash", "voter_hash"),
         Index("ix_votes_deleted_at", "deleted_at"),
+        Index("ix_votes_is_proxy_vote", "is_proxy_vote"),
     )
 
 
@@ -550,7 +550,6 @@ class ManualBallotAttestation(Base):
         String(36),
         ForeignKey("manual_ballot_batches.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     organization_id = Column(
         String(36),

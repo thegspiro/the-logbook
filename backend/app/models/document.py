@@ -382,9 +382,10 @@ class Document(Base):
     uploader = relationship("User", foreign_keys=[uploaded_by])
 
     __table_args__ = (
-        Index("idx_documents_org", "organization_id"),
         Index("idx_documents_folder", "folder_id"),
         Index("idx_documents_org_status", "organization_id", "status"),
+        # Resolves a generated document back to the record that produced it.
+        Index("ix_documents_source", "source_type", "source_id"),
     )
 
     def __repr__(self):

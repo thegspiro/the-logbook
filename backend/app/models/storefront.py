@@ -288,7 +288,6 @@ class StoreProduct(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(255), nullable=False)
@@ -393,7 +392,6 @@ class StoreProductVariant(Base):
         String(36),
         ForeignKey("store_products.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     label = Column(String(120), nullable=False)
@@ -482,7 +480,6 @@ class StoreOrderWindow(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     name = Column(String(200), nullable=False)
@@ -573,7 +570,6 @@ class StoreWindowProduct(Base):
         String(36),
         ForeignKey("store_order_windows.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     product_id = Column(
         String(36),
@@ -611,7 +607,6 @@ class StoreOrder(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     window_id = Column(
         String(36),
@@ -749,7 +744,6 @@ class StorePaymentEvent(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     provider = Column(

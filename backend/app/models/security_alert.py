@@ -52,7 +52,6 @@ class SecurityAlertRecord(Base):
     alert_type = Column(
         Enum(AlertType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        index=True,
     )
     threat_level = Column(
         Enum(ThreatLevel, values_callable=lambda x: [e.value for e in x]),
@@ -72,7 +71,7 @@ class SecurityAlertRecord(Base):
     # acknowledge/resolve) their own org's alerts. Nullable: pre-auth / IP-only
     # alerts (e.g. brute force against the login page) have no owning tenant and
     # are platform-level, not shown in any single org's view.
-    organization_id = Column(String(36), index=True, nullable=True)
+    organization_id = Column(String(36), nullable=True)
 
     details = Column(JSON, nullable=False, default=dict)
 

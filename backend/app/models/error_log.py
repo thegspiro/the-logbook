@@ -17,7 +17,7 @@ class ErrorLog(Base):
     __tablename__ = "error_logs"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    organization_id = Column(String(36), nullable=False, index=True)
+    organization_id = Column(String(36), nullable=False)
     error_type = Column(String(50), nullable=False)
     error_message = Column(Text, nullable=False)
     user_message = Column(Text, nullable=True)

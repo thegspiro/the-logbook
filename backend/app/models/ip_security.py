@@ -78,7 +78,6 @@ class IPException(Base):
     exception_type = Column(
         Enum(IPExceptionType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
-        index=True,
     )
 
     # Reason and documentation (required - user must justify the request)
@@ -255,8 +254,8 @@ class BlockedAccessAttempt(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
 
     # Request information
-    ip_address = Column(String(45), nullable=False, index=True)
-    country_code = Column(String(2), index=True)
+    ip_address = Column(String(45), nullable=False)
+    country_code = Column(String(2))
     country_name = Column(String(100))
 
     # Associated user (if authenticated)
@@ -318,10 +317,7 @@ class CountryBlockRule(Base):
     blocked_attempts_count = Column(Integer, default=0)
     last_blocked_at = Column(DateTime(timezone=True))
 
-    __table_args__ = (
-        Index("idx_country_rule_code", "country_code"),
-        Index("idx_country_rule_blocked", "is_blocked"),
-    )
+    __table_args__ = (Index("idx_country_rule_blocked", "is_blocked"),)
 
     def __repr__(self):
         return f"<CountryBlockRule(country={self.country_code}, blocked={self.is_blocked})>"

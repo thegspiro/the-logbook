@@ -216,7 +216,6 @@ class ApparatusType(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
 
     # Type Details
@@ -288,7 +287,6 @@ class ApparatusStatus(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
 
     # Status Details
@@ -370,7 +368,6 @@ class Apparatus(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # ===========================================
@@ -676,7 +673,6 @@ class ApparatusCustomField(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     # Field Definition
@@ -802,7 +798,6 @@ class ApparatusPhoto(Base):
     apparatus = relationship("Apparatus", back_populates="photos")
 
     __table_args__ = (
-        Index("idx_apparatus_photos_apparatus", "apparatus_id"),
         Index("idx_apparatus_photos_is_primary", "apparatus_id", "is_primary"),
     )
 
@@ -865,7 +860,6 @@ class ApparatusDocument(Base):
     apparatus = relationship("Apparatus", back_populates="documents")
 
     __table_args__ = (
-        Index("idx_apparatus_documents_apparatus", "apparatus_id"),
         Index("idx_apparatus_documents_type", "apparatus_id", "document_type"),
         Index("idx_apparatus_documents_expiration", "expiration_date"),
     )
@@ -896,7 +890,6 @@ class ApparatusMaintenanceType(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
 
     # Type Details
@@ -1185,7 +1178,6 @@ class EvocLevel(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
 
     level_number = Column(Integer, nullable=False)
@@ -1315,7 +1307,6 @@ class ApparatusOperator(Base):
     evoc_level = relationship("EvocLevel", foreign_keys=[evoc_level_id])
 
     __table_args__ = (
-        Index("idx_apparatus_operators_apparatus", "apparatus_id"),
         Index("idx_apparatus_operators_user", "user_id"),
         Index(
             "idx_apparatus_operators_apparatus_user",
@@ -1765,7 +1756,6 @@ class ApparatusServiceProvider(Base):
     )
 
     __table_args__ = (
-        Index("idx_service_providers_org", "organization_id"),
         Index("idx_service_providers_org_name", "organization_id", "name"),
         Index("idx_service_providers_preferred", "organization_id", "is_preferred"),
         Index("idx_service_providers_active", "organization_id", "is_active"),
@@ -1871,7 +1861,6 @@ class ApparatusComponent(Base):
     )
 
     __table_args__ = (
-        Index("idx_apparatus_components_apparatus", "apparatus_id"),
         Index("idx_apparatus_components_type", "apparatus_id", "component_type"),
         Index("idx_apparatus_components_condition", "condition"),
     )

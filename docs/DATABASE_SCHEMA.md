@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**232 tables · 3989 columns · 727 foreign keys**
+**232 tables · 3989 columns · 730 foreign keys**
 
 ---
 
@@ -538,7 +538,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_admin_hours_categories_active` (`organization_id`, `is_active`)
-- `ix_admin_hours_categories_org_id` (`organization_id`)
 
 ### `admin_hours_entries`
 
@@ -569,11 +568,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_admin_hours_entries_category_id` (`category_id`)
-- `ix_admin_hours_entries_org_id` (`organization_id`)
 - `ix_admin_hours_entries_source_rsvp` (`source_rsvp_id`, `category_id`)
 - `ix_admin_hours_entries_status` (`organization_id`, `status`)
 - `ix_admin_hours_entries_user_active` (`user_id`, `status`)
-- `ix_admin_hours_entries_user_id` (`user_id`)
 
 ### `event_hour_mappings`
 
@@ -584,7 +581,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
 | `event_type` | VARCHAR(50) | yes |  |  |  |
 | `custom_category` | VARCHAR(100) | yes |  |  |  |
 | `admin_hours_category_id` | VARCHAR(36) | no | FK |  | → `admin_hours_categories.id` ON DELETE CASCADE |
@@ -593,11 +590,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
-
-**Indexes**
-
-- `ix_event_hour_mappings_org_event_type` (`organization_id`, `event_type`)
-- `ix_event_hour_mappings_org_id` (`organization_id`)
 
 **Constraints**
 
@@ -627,7 +619,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_analytics_created` (`created_at`)
-- `ix_analytics_events_organization_id` (`organization_id`)
 - `ix_analytics_org_event` (`organization_id`, `event_id`)
 
 ### `saved_reports`
@@ -759,7 +750,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - UNIQUE `idx_apparatus_org_unit` (`organization_id`, `unit_number`)
 - UNIQUE `idx_apparatus_vin` (`organization_id`, `vin`)
 - `ix_apparatus_apparatus_type_id` (`apparatus_type_id`)
-- `ix_apparatus_organization_id` (`organization_id`)
 - `ix_apparatus_primary_station_id` (`primary_station_id`)
 - `ix_apparatus_status_id` (`status_id`)
 
@@ -837,7 +827,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_apparatus_components_apparatus` (`apparatus_id`)
 - `idx_apparatus_components_condition` (`condition`)
 - `idx_apparatus_components_type` (`apparatus_id`, `component_type`)
 - `ix_apparatus_components_organization_id` (`organization_id`)
@@ -878,7 +867,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_apparatus_custom_fields_org_active` (`organization_id`, `is_active`)
 - UNIQUE `idx_apparatus_custom_fields_org_key` (`organization_id`, `field_key`)
-- `ix_apparatus_custom_fields_organization_id` (`organization_id`)
 
 ### `apparatus_documents`
 
@@ -905,7 +893,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_apparatus_documents_apparatus` (`apparatus_id`)
 - `idx_apparatus_documents_expiration` (`expiration_date`)
 - `idx_apparatus_documents_type` (`apparatus_id`, `document_type`)
 - `ix_apparatus_documents_organization_id` (`organization_id`)
@@ -1084,7 +1071,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_apparatus_maint_types_category` (`category`)
 - `idx_apparatus_maint_types_is_system` (`is_system`)
 - UNIQUE `idx_apparatus_maint_types_org_code` (`organization_id`, `code`)
-- `ix_apparatus_maintenance_types_organization_id` (`organization_id`)
 
 ### `apparatus_nfpa_compliance`
 
@@ -1150,7 +1136,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_apparatus_operators_active` (`is_active`)
-- `idx_apparatus_operators_apparatus` (`apparatus_id`)
 - UNIQUE `idx_apparatus_operators_apparatus_user` (`apparatus_id`, `user_id`)
 - `idx_apparatus_operators_evoc` (`evoc_level_id`)
 - `idx_apparatus_operators_user` (`user_id`)
@@ -1181,7 +1166,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_apparatus_photos_apparatus` (`apparatus_id`)
 - `idx_apparatus_photos_is_primary` (`apparatus_id`, `is_primary`)
 - `ix_apparatus_photos_organization_id` (`organization_id`)
 
@@ -1266,7 +1250,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_service_providers_active` (`organization_id`, `is_active`)
-- `idx_service_providers_org` (`organization_id`)
 - `idx_service_providers_org_name` (`organization_id`, `name`)
 - `idx_service_providers_preferred` (`organization_id`, `is_preferred`)
 
@@ -1330,7 +1313,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_apparatus_statuses_is_available` (`is_available`)
 - `idx_apparatus_statuses_is_system` (`is_system`)
 - UNIQUE `idx_apparatus_statuses_org_code` (`organization_id`, `code`)
-- `ix_apparatus_statuses_organization_id` (`organization_id`)
 
 ### `apparatus_types`
 
@@ -1360,7 +1342,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_apparatus_types_category` (`category`)
 - `idx_apparatus_types_is_system` (`is_system`)
 - UNIQUE `idx_apparatus_types_org_code` (`organization_id`, `code`)
-- `ix_apparatus_types_organization_id` (`organization_id`)
 
 ### `check_template_compartments`
 
@@ -1480,7 +1461,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_evoc_levels_active` (`is_active`)
 - UNIQUE `idx_evoc_levels_org_code` (`organization_id`, `code`)
 - UNIQUE `idx_evoc_levels_org_level` (`organization_id`, `level_number`)
-- `ix_evoc_levels_organization_id` (`organization_id`)
 
 ### `template_change_logs`
 
@@ -1654,7 +1634,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `period_label` | VARCHAR(50) | no |  |  |  |
 | `period_year` | INTEGER | no |  |  |  |
 | `period_month` | INTEGER | yes |  |  |  |
-| `status` | VARCHAR(20) | no |  | `pending` |  |
+| `status` | VARCHAR(20) | no | IDX | `pending` |  |
 | `report_data` | JSON | yes |  |  |  |
 | `summary` | JSON | yes |  |  |  |
 | `emailed_to` | JSON | yes |  |  |  |
@@ -1666,7 +1646,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `ix_compliance_reports_organization_id` (`organization_id`)
+- `idx_compliance_reports_org_period` (`organization_id`, `period_year`, `period_month`)
+- `idx_compliance_reports_status` (`status`)
 
 ## Consent
 
@@ -1688,7 +1669,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `idx_user_consent_unique` (`user_id`, `consent_type`)
 - `ix_user_consents_organization_id` (`organization_id`)
-- `ix_user_consents_user_id` (`user_id`)
 
 ## Documents
 
@@ -1743,7 +1723,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `document_type` | ENUM(`uploaded`, `generated`) | yes |  | `'uploaded'` |  |
 | `status` | ENUM(`active`, `archived`) | no |  | `active` |  |
 | `content_html` | LONGTEXT | yes |  |  |  |
-| `source_type` | VARCHAR(50) | yes |  |  |  |
+| `source_type` | VARCHAR(50) | yes | IDX |  |  |
 | `source_id` | VARCHAR(36) | yes |  |  |  |
 | `version` | INTEGER | yes |  | `1` |  |
 | `tags` | TEXT | yes |  |  |  |
@@ -1754,8 +1734,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_documents_folder` (`folder_id`)
-- `idx_documents_org` (`organization_id`)
 - `idx_documents_org_status` (`organization_id`, `status`)
+- `ix_documents_source` (`source_type`, `source_id`)
 
 ## Elections
 
@@ -1862,14 +1842,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `batch_id` | VARCHAR(36) | no | FK, IDX |  | → `manual_ballot_batches.id` ON DELETE CASCADE |
+| `batch_id` | VARCHAR(36) | no | FK |  | → `manual_ballot_batches.id` ON DELETE CASCADE |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `attested_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `attested_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
 
-- `ix_manual_ballot_attestations_batch_id` (`batch_id`)
 - `ix_manual_ballot_attestations_organization_id` (`organization_id`)
 
 **Constraints**
@@ -1923,7 +1902,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_manual` | BOOL | no |  | `0` |  |
 | `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `manual_batch_id` | VARCHAR(36) | yes | IDX |  |  |
-| `is_proxy_vote` | BOOL | no |  | `0` |  |
+| `is_proxy_vote` | BOOL | no | IDX | `0` |  |
 | `proxy_voter_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `proxy_authorization_id` | VARCHAR(36) | yes |  |  |  |
 | `proxy_delegating_user_id` | VARCHAR(36) | yes |  |  |  |
@@ -1938,6 +1917,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_votes_candidate_id` (`candidate_id`)
 - `ix_votes_deleted_at` (`deleted_at`)
 - `ix_votes_election_id` (`election_id`)
+- `ix_votes_is_proxy_vote` (`is_proxy_vote`)
 - `ix_votes_manual_batch_id` (`manual_batch_id`)
 - `ix_votes_voter_hash` (`voter_hash`)
 - `ix_votes_voter_id` (`voter_id`)
@@ -1957,7 +1937,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `election_id` | VARCHAR(36) | no | FK, IDX |  | → `elections.id` ON DELETE CASCADE |
-| `token` | VARCHAR(128) | no | UQ, IDX |  |  |
+| `token` | VARCHAR(128) | no | UQ |  |  |
 | `voter_hash` | VARCHAR(64) | no | IDX |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `expires_at` | DATETIME | no |  |  |  |
@@ -1974,7 +1954,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_voting_tokens_election_id` (`election_id`)
 - `ix_voting_tokens_organization_id` (`organization_id`)
-- `ix_voting_tokens_token` (`token`)
 - `ix_voting_tokens_voter_hash` (`voter_hash`)
 
 **Constraints**
@@ -2034,7 +2013,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_email_template_org_type` (`organization_id`, `template_type`)
-- `ix_email_templates_organization_id` (`organization_id`)
 
 ### `message_history`
 
@@ -2090,7 +2068,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_scheduled_email_org` (`organization_id`, `status`)
 - `idx_scheduled_email_status` (`status`, `scheduled_at`)
-- `ix_scheduled_emails_organization_id` (`organization_id`)
 
 ## Error Logging
 
@@ -2117,7 +2094,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_error_logs_created` (`created_at`)
 - `ix_error_logs_org_type` (`organization_id`, `error_type`)
-- `ix_error_logs_organization_id` (`organization_id`)
 
 ## Event Requests
 
@@ -2213,7 +2189,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_event_request_org_status` (`organization_id`, `status`)
 - `idx_event_request_org_type` (`organization_id`, `outreach_type`)
-- `ix_event_requests_organization_id` (`organization_id`)
 - `ix_event_requests_status` (`status`)
 - UNIQUE `ix_event_requests_status_token` (`status_token`)
 
@@ -2281,7 +2256,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `ix_event_rsvps_event_id` (`event_id`)
 - UNIQUE `ix_event_rsvps_event_user` (`event_id`, `user_id`)
 - `ix_event_rsvps_organization_id` (`organization_id`)
 - `ix_event_rsvps_user_id` (`user_id`)
@@ -2466,7 +2440,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_facilities_archived` (`is_archived`)
-- `idx_facilities_org` (`organization_id`)
 - UNIQUE `idx_facilities_org_number` (`organization_id`, `facility_number`)
 - `idx_facilities_org_status` (`organization_id`, `status_id`)
 - `idx_facilities_org_type` (`organization_id`, `facility_type_id`)
@@ -2808,7 +2781,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_facility_maint_types_org` (`organization_id`)
 - UNIQUE `idx_facility_maint_types_org_name` (`organization_id`, `name`)
 
 ### `facility_occupants`
@@ -2893,7 +2865,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_facility_rooms_facility` (`facility_id`)
 - `idx_facility_rooms_floor` (`facility_id`, `floor`)
 - `idx_facility_rooms_type` (`room_type`)
 - `ix_facility_rooms_organization_id` (`organization_id`)
@@ -2945,7 +2916,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_facility_statuses_org` (`organization_id`)
 - UNIQUE `idx_facility_statuses_org_name` (`organization_id`, `name`)
 
 ### `facility_systems`
@@ -2989,7 +2959,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_facility_systems_condition` (`condition`)
-- `idx_facility_systems_facility` (`facility_id`)
 - `idx_facility_systems_type` (`facility_id`, `system_type`)
 - `ix_facility_systems_organization_id` (`organization_id`)
 
@@ -3013,7 +2982,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_facility_types_org` (`organization_id`)
 - UNIQUE `idx_facility_types_org_name` (`organization_id`, `name`)
 
 ### `facility_utility_accounts`
@@ -3043,7 +3011,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_facility_utility_facility` (`facility_id`)
 - `idx_facility_utility_type` (`facility_id`, `utility_type`)
 - `ix_facility_utility_accounts_organization_id` (`organization_id`)
 
@@ -3127,7 +3094,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_approval_chains_org_applies` (`organization_id`, `applies_to`)
-- `ix_approval_chains_org_id` (`organization_id`)
 
 ### `approval_step_records`
 
@@ -3147,7 +3113,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `acted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `acted_at` | DATETIME | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
-| `approval_token` | VARCHAR(255) | yes | UQ, IDX |  |  |
+| `approval_token` | VARCHAR(255) | yes | UQ |  |  |
 | `token_expires_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
@@ -3155,7 +3121,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_approval_step_records_assigned` (`assigned_to`, `status`)
 - `ix_approval_step_records_entity` (`entity_type`, `entity_id`)
-- `ix_approval_step_records_token` (`approval_token`)
 
 **Constraints**
 
@@ -3207,7 +3172,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `ix_budgets_org_fy` (`organization_id`, `fiscal_year_id`)
 - `ix_budgets_org_fy_cat` (`organization_id`, `fiscal_year_id`, `category_id`)
 
 ### `check_requests`
@@ -3241,7 +3205,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `ix_check_requests_org_id` (`organization_id`)
 - `ix_check_requests_org_status` (`organization_id`, `status`)
 
 **Constraints**
@@ -3356,7 +3319,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `ix_expense_reports_org_id` (`organization_id`)
 - `ix_expense_reports_org_status` (`organization_id`, `status`)
 
 **Constraints**
@@ -3427,7 +3389,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `ix_fiscal_years_org_id` (`organization_id`)
 - `ix_fiscal_years_org_status` (`organization_id`, `status`)
 
 ### `member_dues`
@@ -3500,7 +3461,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_purchase_requests_org_fy` (`organization_id`, `fiscal_year_id`)
-- `ix_purchase_requests_org_id` (`organization_id`)
 - `ix_purchase_requests_org_status` (`organization_id`, `status`)
 
 **Constraints**
@@ -3542,7 +3502,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_form_fields_form_order` (`form_id`, `sort_order`)
-- `ix_form_fields_form_id` (`form_id`)
 
 ### `form_integrations`
 
@@ -3553,7 +3512,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `form_id` | VARCHAR(36) | no | FK, IDX |  | → `forms.id` ON DELETE CASCADE |
+| `form_id` | VARCHAR(36) | no | FK |  | → `forms.id` ON DELETE CASCADE |
 | `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
 | `target_module` | ENUM(`membership`, `inventory`, `events`) | no |  |  |  |
 | `integration_type` | ENUM(`membership_interest`, `equipment_assignment`, `event_registration`, `event_request`) | no |  |  |  |
@@ -3561,10 +3520,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_active` | BOOL | yes |  | `True` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-
-**Indexes**
-
-- `idx_form_integrations_form` (`form_id`)
 
 **Constraints**
 
@@ -3599,7 +3554,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_form_submissions_org_form` (`organization_id`, `form_id`)
 - `idx_form_submissions_org_user` (`organization_id`, `submitted_by`)
 - `ix_form_submissions_form_id` (`form_id`)
-- `ix_form_submissions_organization_id` (`organization_id`)
 - `ix_form_submissions_submitted_by` (`submitted_by`)
 
 ### `forms`
@@ -3637,7 +3591,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_forms_org_template` (`organization_id`, `is_template`)
 - `ix_forms_integration_type` (`integration_type`)
 - `ix_forms_is_template` (`is_template`)
-- `ix_forms_organization_id` (`organization_id`)
 - UNIQUE `ix_forms_public_slug` (`public_slug`)
 - `ix_forms_status` (`status`)
 
@@ -3684,7 +3637,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_donations_date` (`donation_date`)
 - `idx_donations_donor` (`donor_id`)
 - `idx_donations_method` (`organization_id`, `payment_method`)
-- `idx_donations_org` (`organization_id`)
 - `idx_donations_status` (`organization_id`, `payment_status`)
 
 ### `donors`
@@ -3726,7 +3678,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_donors_email` (`organization_id`, `email`)
 - `idx_donors_name` (`organization_id`, `last_name`, `first_name`)
-- `idx_donors_org` (`organization_id`)
 - `idx_donors_type` (`organization_id`, `donor_type`)
 - `idx_donors_user` (`user_id`)
 
@@ -3764,7 +3715,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_fundraising_campaigns_dates` (`start_date`, `end_date`)
-- `idx_fundraising_campaigns_org` (`organization_id`)
 - `idx_fundraising_campaigns_status` (`organization_id`, `status`)
 - `idx_fundraising_campaigns_type` (`organization_id`, `campaign_type`)
 
@@ -3803,7 +3753,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_fundraising_events_campaign` (`campaign_id`)
 - `idx_fundraising_events_date` (`event_date`)
-- `idx_fundraising_events_org` (`organization_id`)
 - `idx_fundraising_events_status` (`organization_id`, `status`)
 
 ### `grant_applications`
@@ -4045,7 +3994,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_pledges_campaign` (`campaign_id`)
 - `idx_pledges_donor` (`donor_id`)
 - `idx_pledges_due_date` (`due_date`)
-- `idx_pledges_org` (`organization_id`)
 - `idx_pledges_status` (`organization_id`, `status`)
 
 ## IP Security
@@ -4077,8 +4025,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_blocked_user` (`user_id`)
 - `ix_blocked_access_attempts_block_reason` (`block_reason`)
 - `ix_blocked_access_attempts_blocked_at` (`blocked_at`)
-- `ix_blocked_access_attempts_country_code` (`country_code`)
-- `ix_blocked_access_attempts_ip_address` (`ip_address`)
 
 ### `country_block_rules`
 
@@ -4089,7 +4035,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `country_code` | VARCHAR(2) | no | UQ, IDX |  |  |
+| `country_code` | VARCHAR(2) | no | UQ |  |  |
 | `country_name` | VARCHAR(100) | yes |  |  |  |
 | `is_blocked` | BOOL | yes | IDX | `True` |  |
 | `reason` | TEXT | no |  |  |  |
@@ -4104,7 +4050,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_country_rule_blocked` (`is_blocked`)
-- `idx_country_rule_code` (`country_code`)
 
 **Constraints**
 
@@ -4179,7 +4124,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_ip_exception_type_status` (`exception_type`, `approval_status`)
 - `idx_ip_exception_user` (`user_id`)
 - `idx_ip_exception_valid_until` (`valid_until`)
-- `ix_ip_exceptions_exception_type` (`exception_type`)
 
 ## Integrations
 
@@ -4209,7 +4153,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - UNIQUE `ix_integrations_org_type` (`organization_id`, `integration_type`)
-- `ix_integrations_organization_id` (`organization_id`)
 
 ## Inventory
 
@@ -4243,13 +4186,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_checkout_records_org_item` (`organization_id`, `item_id`)
 - `idx_checkout_records_org_overdue` (`organization_id`, `is_overdue`)
-- `idx_checkout_records_org_returned` (`organization_id`, `is_returned`)
+- `idx_checkout_records_org_returned_expected` (`organization_id`, `is_returned`, `expected_return_at`)
 - `idx_checkout_records_org_user` (`organization_id`, `user_id`)
 - `ix_checkout_records_checked_in_at` (`checked_in_at`)
 - `ix_checkout_records_is_overdue` (`is_overdue`)
 - `ix_checkout_records_is_returned` (`is_returned`)
 - `ix_checkout_records_item_id` (`item_id`)
-- `ix_checkout_records_organization_id` (`organization_id`)
 - `ix_checkout_records_user_id` (`user_id`)
 
 ### `departure_clearance_items`
@@ -4281,7 +4223,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_clearance_item_clearance` (`clearance_id`)
 - `idx_clearance_item_disposition` (`clearance_id`, `disposition`)
 - `idx_clearance_item_org` (`organization_id`)
 
@@ -4359,7 +4300,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_kits_org` (`organization_id`)
 - `idx_kits_org_active` (`organization_id`, `active`)
 
 ### `equipment_requests`
@@ -4395,8 +4335,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_equip_requests_org_status` (`organization_id`, `status`)
 - `idx_equip_requests_requester` (`requester_id`, `status`)
-- `ix_equipment_requests_organization_id` (`organization_id`)
-- `ix_equipment_requests_requester_id` (`requester_id`)
 - `ix_equipment_requests_status` (`status`)
 
 ### `inventory_categories`
@@ -4429,7 +4367,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_inventory_categories_org_active` (`organization_id`, `active`)
 - `idx_inventory_categories_org_type` (`organization_id`, `item_type`)
 - `ix_inventory_categories_active` (`active`)
-- `ix_inventory_categories_organization_id` (`organization_id`)
 
 ### `inventory_impact_plans`
 
@@ -4527,7 +4464,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_inventory_items_condition` (`condition`)
 - `ix_inventory_items_location_id` (`location_id`)
 - `ix_inventory_items_name` (`name`)
-- `ix_inventory_items_organization_id` (`organization_id`)
 - `ix_inventory_items_serial_number` (`serial_number`)
 - `ix_inventory_items_status` (`status`)
 - `ix_inventory_items_storage_area_id` (`storage_area_id`)
@@ -4562,7 +4498,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_inventory_lots_org_exp` (`organization_id`, `expiration_date`)
 - `ix_inventory_lots_inventory_item_id` (`inventory_item_id`)
-- `ix_inventory_lots_organization_id` (`organization_id`)
 
 ### `inventory_notification_queue`
 
@@ -4592,7 +4527,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_inv_notif_queue_org_user` (`organization_id`, `user_id`)
 - `idx_inv_notif_queue_pending` (`processed`, `created_at`)
-- `ix_inventory_notification_queue_processed` (`processed`)
 
 ### `inventory_write_offs`
 
@@ -4625,7 +4559,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_write_off_item` (`item_id`)
 - `idx_write_off_org_status` (`organization_id`, `status`)
-- `ix_inventory_write_offs_organization_id` (`organization_id`)
 - `ix_inventory_write_offs_status` (`status`)
 
 ### `issuance_allowances`
@@ -4637,7 +4570,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
 | `category_id` | VARCHAR(36) | no | FK, IDX |  | → `inventory_categories.id` ON DELETE CASCADE |
 | `role_id` | VARCHAR(36) | yes | FK |  | → `positions.id` ON DELETE CASCADE |
 | `max_quantity` | INTEGER | no |  |  |  |
@@ -4649,7 +4582,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_allowances_org` (`organization_id`)
 - `ix_issuance_allowances_category_id` (`category_id`)
 
 **Constraints**
@@ -4683,12 +4615,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
+- `idx_item_assignments_item_active` (`item_id`, `is_active`)
 - `idx_item_assignments_org_active` (`organization_id`, `is_active`)
 - `idx_item_assignments_org_item` (`organization_id`, `item_id`)
 - `idx_item_assignments_org_user` (`organization_id`, `user_id`)
 - `ix_item_assignments_is_active` (`is_active`)
-- `ix_item_assignments_item_id` (`item_id`)
-- `ix_item_assignments_organization_id` (`organization_id`)
 - `ix_item_assignments_user_id` (`user_id`)
 
 ### `item_issuances`
@@ -4725,7 +4656,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_item_issuances_org_user` (`organization_id`, `user_id`)
 - `ix_item_issuances_is_returned` (`is_returned`)
 - `ix_item_issuances_item_id` (`item_id`)
-- `ix_item_issuances_organization_id` (`organization_id`)
 - `ix_item_issuances_user_id` (`user_id`)
 
 ### `item_variant_groups`
@@ -4751,7 +4681,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_variant_groups_org` (`organization_id`)
 - `idx_variant_groups_org_active` (`organization_id`, `active`)
 - `ix_item_variant_groups_active` (`active`)
 
@@ -4798,7 +4727,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_maintenance_records_is_completed` (`is_completed`)
 - `ix_maintenance_records_item_id` (`item_id`)
 - `ix_maintenance_records_next_due_date` (`next_due_date`)
-- `ix_maintenance_records_organization_id` (`organization_id`)
 - `ix_maintenance_records_scheduled_date` (`scheduled_date`)
 
 ### `member_size_preferences`
@@ -4859,7 +4787,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_nfpa_exposure_org_date` (`organization_id`, `exposure_date`)
 - `idx_nfpa_exposure_org_item` (`organization_id`, `item_id`)
 - `ix_nfpa_exposure_records_item_id` (`item_id`)
-- `ix_nfpa_exposure_records_organization_id` (`organization_id`)
 
 ### `nfpa_inspection_details`
 
@@ -4925,7 +4852,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_nfpa_compliance_ensemble` (`organization_id`, `ensemble_id`)
-- `idx_nfpa_compliance_org` (`organization_id`)
 - `idx_nfpa_compliance_retirement` (`organization_id`, `expected_retirement_date`)
 - `ix_nfpa_item_compliance_ensemble_id` (`ensemble_id`)
 - UNIQUE `ix_nfpa_item_compliance_item_id` (`item_id`)
@@ -4990,7 +4916,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_reorder_item` (`item_id`)
 - `idx_reorder_org_status` (`organization_id`, `status`)
-- `ix_reorder_requests_organization_id` (`organization_id`)
 - `ix_reorder_requests_status` (`status`)
 
 ### `return_requests`
@@ -5024,8 +4949,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_return_requests_org_status` (`organization_id`, `status`)
 - `idx_return_requests_requester` (`requester_id`, `status`)
-- `ix_return_requests_organization_id` (`organization_id`)
-- `ix_return_requests_requester_id` (`requester_id`)
 - `ix_return_requests_status` (`status`)
 
 ### `storage_areas`
@@ -5085,7 +5008,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_active` | BOOL | no | IDX | `1` |  |
 | `display_code` | VARCHAR(12) | yes | UQ, UQ-IDX |  |  |
 | `facility_id` | VARCHAR(36) | yes | FK, IDX |  | → `facilities.id` ON DELETE SET NULL |
-| `facility_room_id` | VARCHAR(36) | yes | FK, UQ, IDX |  | → `facility_rooms.id` ON DELETE SET NULL |
+| `facility_room_id` | VARCHAR(36) | yes | FK, UQ |  | → `facility_rooms.id` ON DELETE SET NULL |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -5094,7 +5017,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `ix_locations_display_code` (`display_code`)
 - `ix_locations_facility_id` (`facility_id`)
-- `ix_locations_facility_room_id` (`facility_room_id`)
 - `ix_locations_is_active` (`is_active`)
 - `ix_locations_name` (`name`)
 - `ix_locations_organization_id` (`organization_id`)
@@ -5135,7 +5057,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_screening_rec_expiration` (`organization_id`, `expiration_date`)
-- `idx_screening_rec_org` (`organization_id`)
 - `idx_screening_rec_prospect` (`prospect_id`)
 - `idx_screening_rec_status` (`organization_id`, `status`)
 - `idx_screening_rec_user` (`user_id`)
@@ -5162,7 +5083,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_screening_req_org` (`organization_id`)
 - `idx_screening_req_org_type` (`organization_id`, `screening_type`)
 
 ## Meeting Minutes
@@ -5331,7 +5251,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_action_items_assigned` (`assigned_to`, `status`)
 - `idx_action_items_meeting` (`meeting_id`)
 - `idx_action_items_org_status` (`organization_id`, `status`)
-- `ix_meeting_action_items_organization_id` (`organization_id`)
 
 ### `meeting_attendees`
 
@@ -5395,7 +5314,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_meetings_event_id` (`event_id`)
 - `ix_meetings_location_id` (`location_id`)
 - `ix_meetings_meeting_date` (`meeting_date`)
-- `ix_meetings_organization_id` (`organization_id`)
 
 ## Membership Pipeline
 
@@ -5429,7 +5347,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_pipeline_step_order` (`pipeline_id`, `sort_order`)
 - `ix_membership_pipeline_steps_email_template_id` (`email_template_id`)
-- `ix_membership_pipeline_steps_pipeline_id` (`pipeline_id`)
 
 ### `membership_pipelines`
 
@@ -5461,7 +5378,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_membership_pipelines_created_by` (`created_by`)
 - `ix_membership_pipelines_is_active` (`is_active`)
 - `ix_membership_pipelines_is_template` (`is_template`)
-- `ix_membership_pipelines_organization_id` (`organization_id`)
 
 ### `prospect_activity_log`
 
@@ -5551,7 +5467,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `idx_prospect_event_link_unique` (`prospect_id`, `event_id`)
 - `ix_prospect_event_links_event_id` (`event_id`)
-- `ix_prospect_event_links_prospect_id` (`prospect_id`)
 
 ### `prospect_interviews`
 
@@ -5577,7 +5492,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_interview_interviewer` (`interviewer_id`)
-- `idx_interview_prospect` (`prospect_id`)
 - `idx_interview_prospect_interviewer` (`prospect_id`, `interviewer_id`)
 
 ### `prospect_step_progress`
@@ -5602,7 +5516,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - UNIQUE `idx_step_progress_prospect_step` (`prospect_id`, `step_id`)
-- `ix_prospect_step_progress_prospect_id` (`prospect_id`)
 - `ix_prospect_step_progress_step_id` (`step_id`)
 
 ### `prospective_members`
@@ -5647,7 +5560,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_prospect_org_email` (`organization_id`, `email`)
 - `idx_prospect_org_pipeline` (`organization_id`, `pipeline_id`)
 - `idx_prospect_org_status` (`organization_id`, `status`)
-- `ix_prospective_members_organization_id` (`organization_id`)
 - `ix_prospective_members_pipeline_id` (`pipeline_id`)
 - `ix_prospective_members_status` (`status`)
 - UNIQUE `ix_prospective_members_status_token` (`status_token`)
@@ -5663,14 +5575,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `message_id` | VARCHAR(36) | no | FK, IDX |  | → `department_messages.id` ON DELETE CASCADE |
+| `message_id` | VARCHAR(36) | no | FK |  | → `department_messages.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `read_at` | DATETIME | yes |  | `now()` |  |
 | `acknowledged_at` | DATETIME | yes |  |  |  |
 
 **Indexes**
 
-- `idx_dept_msg_read_msg` (`message_id`)
 - `idx_dept_msg_read_user` (`user_id`)
 
 **Constraints**
@@ -5707,8 +5618,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_dept_msg_org` (`organization_id`)
-- `idx_dept_msg_org_active` (`organization_id`, `is_active`)
 - `idx_dept_msg_org_active_expires` (`organization_id`, `is_active`, `expires_at`)
 - `idx_dept_msg_org_pinned` (`organization_id`, `is_pinned`)
 - `idx_dept_msg_scheduled_at` (`scheduled_at`)
@@ -5743,7 +5652,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_notif_logs_org` (`organization_id`)
 - `idx_notif_logs_org_sent` (`organization_id`, `sent_at`)
 - `idx_notif_logs_recipient` (`recipient_id`)
 - `ix_notification_logs_category` (`category`)
@@ -5773,7 +5681,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_notif_rules_org` (`organization_id`)
 - `idx_notif_rules_org_enabled` (`organization_id`, `enabled`)
 - `idx_notif_rules_org_trigger` (`organization_id`, `trigger`)
 
@@ -5863,7 +5770,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
 | `rank_code` | VARCHAR(100) | no |  |  |  |
 | `display_name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
@@ -5872,10 +5779,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `eligible_positions` | JSON | yes |  | `list()` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
-
-**Indexes**
-
-- `ix_operational_ranks_org` (`organization_id`)
 
 **Constraints**
 
@@ -5914,7 +5817,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_access_log_timestamp` (`timestamp`)
 - `ix_public_portal_access_log_api_key_id` (`api_key_id`)
 - `ix_public_portal_access_log_endpoint` (`endpoint`)
-- `ix_public_portal_access_log_organization_id` (`organization_id`)
 - `ix_public_portal_access_log_status_code` (`status_code`)
 
 ### `public_portal_api_keys`
@@ -5989,7 +5891,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_whitelist_category` (`data_category`)
 - `idx_whitelist_enabled` (`is_enabled`)
 - UNIQUE `idx_whitelist_unique` (`organization_id`, `data_category`, `field_name`)
-- `ix_public_portal_data_whitelist_organization_id` (`organization_id`)
 
 ## Security Alerts
 
@@ -6023,8 +5924,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_security_alert_org_timestamp` (`organization_id`, `timestamp`)
 - `idx_security_alert_timestamp` (`timestamp`)
 - `idx_security_alert_type_level` (`alert_type`, `threat_level`)
-- `ix_security_alerts_alert_type` (`alert_type`)
-- `ix_security_alerts_organization_id` (`organization_id`)
 - `ix_security_alerts_threat_level` (`threat_level`)
 - `ix_security_alerts_user_id` (`user_id`)
 
@@ -6060,7 +5959,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_skill_template_category` (`organization_id`, `category`)
 - `idx_skill_template_org_status` (`organization_id`, `status`)
-- `ix_skill_templates_organization_id` (`organization_id`)
 - `ix_skill_templates_requirement_id` (`requirement_id`)
 
 ### `skill_tests`
@@ -6094,9 +5992,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_skill_test_org_status` (`organization_id`, `status`)
 - `idx_skill_test_template_candidate` (`template_id`, `candidate_id`)
 - `ix_skill_tests_candidate_id` (`candidate_id`)
-- `ix_skill_tests_organization_id` (`organization_id`)
 - `ix_skill_tests_requirement_id` (`requirement_id`)
-- `ix_skill_tests_template_id` (`template_id`)
 
 ## Storefront
 
@@ -6193,7 +6089,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_store_order_windows_org_status` (`organization_id`, `status`)
-- `ix_store_order_windows_organization_id` (`organization_id`)
 
 ### `store_orders`
 
@@ -6242,7 +6137,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_store_orders_org_payment` (`organization_id`, `payment_status`)
 - `ix_store_orders_org_status` (`organization_id`, `status`)
 - `ix_store_orders_org_window` (`organization_id`, `window_id`)
-- `ix_store_orders_organization_id` (`organization_id`)
 - `ix_store_orders_user_id` (`user_id`)
 - `ix_store_orders_window_id` (`window_id`)
 
@@ -6282,7 +6176,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_store_payment_events_matched_order_id` (`matched_order_id`)
 - `ix_store_payment_events_org_status` (`organization_id`, `status`)
-- `ix_store_payment_events_organization_id` (`organization_id`)
 
 **Constraints**
 
@@ -6321,7 +6214,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `product_id` | VARCHAR(36) | no | FK, IDX |  | → `store_products.id` ON DELETE CASCADE |
+| `product_id` | VARCHAR(36) | no | FK |  | → `store_products.id` ON DELETE CASCADE |
 | `label` | VARCHAR(120) | no |  |  |  |
 | `sku` | VARCHAR(100) | yes |  |  |  |
 | `price_delta` | NUMERIC(10, 2) | no |  | `0` |  |
@@ -6334,7 +6227,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_store_product_variants_organization_id` (`organization_id`)
-- `ix_store_product_variants_product_id` (`product_id`)
 
 **Constraints**
 
@@ -6378,7 +6270,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_store_products_org_status` (`organization_id`, `status`)
-- `ix_store_products_organization_id` (`organization_id`)
 
 **Constraints**
 
@@ -6449,7 +6340,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `window_id` | VARCHAR(36) | no | FK, IDX |  | → `store_order_windows.id` ON DELETE CASCADE |
+| `window_id` | VARCHAR(36) | no | FK |  | → `store_order_windows.id` ON DELETE CASCADE |
 | `product_id` | VARCHAR(36) | no | FK, IDX |  | → `store_products.id` ON DELETE CASCADE |
 | `price_override` | NUMERIC(10, 2) | yes |  |  |  |
 | `quantity_limit` | INTEGER | yes |  |  |  |
@@ -6461,7 +6352,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `ix_store_window_products_organization_id` (`organization_id`)
 - `ix_store_window_products_product_id` (`product_id`)
-- `ix_store_window_products_window_id` (`window_id`)
 
 **Constraints**
 
@@ -6516,7 +6406,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_competency_matrix_org` (`organization_id`, `position`)
 - `ix_competency_matrices_active` (`active`)
-- `ix_competency_matrices_organization_id` (`organization_id`)
 - `ix_competency_matrices_position` (`position`)
 - `ix_competency_matrices_role_id` (`role_id`)
 
@@ -6544,7 +6433,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_ext_mapping_external` (`provider_id`, `external_category_id`)
-- `idx_ext_mapping_provider` (`provider_id`)
 - `ix_external_category_mappings_organization_id` (`organization_id`)
 
 ### `external_training_imports`
@@ -6588,7 +6476,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_ext_import_user` (`user_id`)
 - `ix_external_training_imports_import_status` (`import_status`)
 - `ix_external_training_imports_organization_id` (`organization_id`)
-- `ix_external_training_imports_provider_id` (`provider_id`)
 - `ix_external_training_imports_sync_log_id` (`sync_log_id`)
 - `ix_external_training_imports_training_record_id` (`training_record_id`)
 
@@ -6630,7 +6517,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_ext_provider_org` (`organization_id`, `active`)
 - `idx_ext_provider_type` (`provider_type`)
 - `ix_external_training_providers_active` (`active`)
-- `ix_external_training_providers_organization_id` (`organization_id`)
 
 ### `external_training_sync_logs`
 
@@ -6664,7 +6550,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_sync_log_date` (`started_at`)
 - `idx_sync_log_provider` (`provider_id`, `status`)
 - `ix_external_training_sync_logs_organization_id` (`organization_id`)
-- `ix_external_training_sync_logs_provider_id` (`provider_id`)
 - `ix_external_training_sync_logs_status` (`status`)
 
 ### `external_user_mappings`
@@ -6693,7 +6578,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_ext_user_external` (`provider_id`, `external_user_id`)
 - `idx_ext_user_internal` (`internal_user_id`)
-- `idx_ext_user_provider` (`provider_id`)
 - `ix_external_user_mappings_organization_id` (`organization_id`)
 
 ### `instructor_qualifications`
@@ -6732,7 +6616,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_instructor_qual_user` (`user_id`, `active`)
 - `ix_instructor_qualifications_active` (`active`)
 - `ix_instructor_qualifications_organization_id` (`organization_id`)
-- `ix_instructor_qualifications_user_id` (`user_id`)
 
 ### `member_competencies`
 
@@ -6765,7 +6648,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_member_comp_org` (`organization_id`)
 - `idx_member_comp_user` (`user_id`, `skill_evaluation_id`)
 - `ix_member_competencies_skill_evaluation_id` (`skill_evaluation_id`)
-- `ix_member_competencies_user_id` (`user_id`)
 
 ### `multi_agency_trainings`
 
@@ -6838,9 +6720,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_enrollment_user` (`user_id`, `status`)
 - `ix_program_enrollments_next_recert_reset_at` (`next_recert_reset_at`)
 - `ix_program_enrollments_organization_id` (`organization_id`)
-- `ix_program_enrollments_program_id` (`program_id`)
 - `ix_program_enrollments_status` (`status`)
-- `ix_program_enrollments_user_id` (`user_id`)
 
 ### `program_milestones`
 
@@ -6875,7 +6755,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `program_id` | VARCHAR(36) | no | FK, IDX |  | → `training_programs.id` ON DELETE CASCADE |
+| `program_id` | VARCHAR(36) | no | FK |  | → `training_programs.id` ON DELETE CASCADE |
 | `phase_number` | INTEGER | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
@@ -6884,11 +6764,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `time_limit_days` | INTEGER | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
-
-**Indexes**
-
-- `idx_phase_program` (`program_id`, `phase_number`)
-- `ix_program_phases_program_id` (`program_id`)
 
 **Constraints**
 
@@ -6955,7 +6830,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_recert_pathway_org` (`organization_id`, `active`)
 - `idx_recert_pathway_source` (`source_requirement_id`)
 - `ix_recertification_pathways_active` (`active`)
-- `ix_recertification_pathways_organization_id` (`organization_id`)
 
 ### `renewal_tasks`
 
@@ -6991,7 +6865,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_renewal_task_user` (`user_id`, `status`)
 - `ix_renewal_tasks_organization_id` (`organization_id`)
 - `ix_renewal_tasks_status` (`status`)
-- `ix_renewal_tasks_user_id` (`user_id`)
 
 ### `requirement_progress`
 
@@ -7020,7 +6893,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_progress_enrollment` (`enrollment_id`, `status`)
 - `idx_progress_requirement` (`requirement_id`)
-- `ix_requirement_progress_enrollment_id` (`enrollment_id`)
 - `ix_requirement_progress_status` (`status`)
 
 ### `requirement_progress_credits`
@@ -7032,16 +6904,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `progress_id` | VARCHAR(36) | no | FK, IDX |  | → `requirement_progress.id` ON DELETE CASCADE |
+| `progress_id` | VARCHAR(36) | no | FK |  | → `requirement_progress.id` ON DELETE CASCADE |
 | `source_type` | ENUM(`training_session`, `shift_report`, `external_import`, `officer_apply`) | no |  |  |  |
 | `source_id` | VARCHAR(64) | no |  |  |  |
 | `units` | FLOAT | no |  | `0.0` |  |
 | `applied_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
-
-**Indexes**
-
-- `idx_progress_credit_progress` (`progress_id`)
 
 **Constraints**
 
@@ -7100,7 +6968,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_shift_assign_org` (`organization_id`)
-- `idx_shift_assign_shift` (`shift_id`)
 - `idx_shift_assign_shift_status` (`shift_id`, `assignment_status`)
 - `idx_shift_assign_user` (`user_id`)
 
@@ -7202,8 +7069,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_shift_report_org_date` (`organization_id`, `shift_date`)
 - `idx_shift_report_review` (`organization_id`, `review_status`)
 - `idx_shift_report_trainee` (`trainee_id`, `shift_date`)
-- `ix_shift_completion_reports_organization_id` (`organization_id`)
-- `ix_shift_completion_reports_trainee_id` (`trainee_id`)
 
 **Constraints**
 
@@ -7273,9 +7138,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_shift_equip_check_org` (`organization_id`)
 - `idx_shift_equip_check_org_date` (`organization_id`, `checked_at`)
-- `idx_shift_equip_check_shift` (`shift_id`)
 - `idx_shift_equip_check_shift_timing` (`shift_id`, `check_timing`)
 - `idx_shift_equip_check_shift_tmpl` (`shift_id`, `template_id`)
 - `idx_shift_equip_check_template` (`template_id`)
@@ -7438,7 +7301,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_shift_date` (`organization_id`, `shift_date`)
-- `ix_shifts_organization_id` (`organization_id`)
 - `ix_shifts_shift_date` (`shift_date`)
 
 ### `skill_checkoffs`
@@ -7456,7 +7318,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `evaluator_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `status` | VARCHAR(20) | no |  |  |  |
 | `session_id` | VARCHAR(36) | yes | FK, IDX |  | → `training_sessions.id` ON DELETE SET NULL |
-| `apparatus_id` | VARCHAR(36) | yes | IDX |  |  |
+| `apparatus_id` | VARCHAR(36) | yes | FK, IDX |  | → `apparatus.id` ON DELETE SET NULL |
 | `conditions` | JSON | yes |  |  |  |
 | `evaluation_results` | JSON | yes |  |  |  |
 | `score` | FLOAT | yes |  |  |  |
@@ -7498,7 +7360,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_skill_org_category` (`organization_id`, `category`)
 - `ix_skill_evaluations_active` (`active`)
-- `ix_skill_evaluations_organization_id` (`organization_id`)
 
 ### `training_approvals`
 
@@ -7529,7 +7390,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_approval_deadline` (`approval_deadline`)
 - `idx_approval_session` (`training_session_id`)
 - `idx_approval_status` (`status`)
-- `idx_approval_token` (`approval_token`)
 - UNIQUE `ix_training_approvals_approval_token` (`approval_token`)
 - `ix_training_approvals_event_id` (`event_id`)
 - `ix_training_approvals_organization_id` (`organization_id`)
@@ -7561,8 +7421,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_category_org_code` (`organization_id`, `code`)
 - `idx_category_parent` (`parent_category_id`)
+- `idx_category_registry_code` (`organization_id`, `registry_code`)
 - `ix_training_categories_active` (`active`)
-- `ix_training_categories_organization_id` (`organization_id`)
 
 ### `training_courses`
 
@@ -7595,7 +7455,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_course_org_code` (`organization_id`, `code`)
 - `ix_training_courses_active` (`active`)
-- `ix_training_courses_organization_id` (`organization_id`)
 
 ### `training_effectiveness_evaluations`
 
@@ -7726,7 +7585,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_program_org_active` (`organization_id`, `active`)
 - `idx_program_position` (`target_position`)
 - `ix_training_programs_active` (`active`)
-- `ix_training_programs_organization_id` (`organization_id`)
 
 ### `training_records`
 
@@ -7758,7 +7616,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `instructor` | VARCHAR(255) | yes |  |  |  |
 | `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE SET NULL |
 | `location` | VARCHAR(255) | yes |  |  |  |
-| `apparatus_id` | VARCHAR(36) | yes | IDX |  |  |
+| `apparatus_id` | VARCHAR(36) | yes | FK, IDX |  | → `apparatus.id` ON DELETE SET NULL |
 | `rank_at_completion` | VARCHAR(100) | yes |  |  |  |
 | `station_at_completion` | VARCHAR(100) | yes |  |  |  |
 | `external_provider_id` | VARCHAR(36) | yes | FK, IDX |  | → `external_training_providers.id` ON DELETE SET NULL |
@@ -7784,10 +7642,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_record_user_status` (`user_id`, `status`)
 - `ix_training_records_apparatus_id` (`apparatus_id`)
 - `ix_training_records_course_id` (`course_id`)
-- `ix_training_records_external_provider_id` (`external_provider_id`)
 - `ix_training_records_organization_id` (`organization_id`)
 - `ix_training_records_status` (`status`)
-- `ix_training_records_user_id` (`user_id`)
 
 ### `training_requirements`
 
@@ -7844,8 +7700,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_requirement_due` (`due_date`)
 - `idx_requirement_org_source` (`organization_id`, `source`)
 - `idx_requirement_type` (`requirement_type`)
+- `idx_requirement_year` (`organization_id`, `year`)
 - `ix_training_requirements_active` (`active`)
-- `ix_training_requirements_organization_id` (`organization_id`)
 
 ### `training_sessions`
 
@@ -7870,7 +7726,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `instructor` | VARCHAR(255) | yes |  |  |  |
 | `instructor_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `co_instructors` | JSON | yes |  |  |  |
-| `apparatus_id` | VARCHAR(36) | yes | IDX |  |  |
+| `apparatus_id` | VARCHAR(36) | yes | FK, IDX |  | → `apparatus.id` ON DELETE SET NULL |
 | `issues_certification` | BOOL | yes |  | `False` |  |
 | `certification_number_prefix` | VARCHAR(50) | yes |  |  |  |
 | `issuing_agency` | VARCHAR(255) | yes |  |  |  |
@@ -7888,7 +7744,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
-- `idx_training_session_event` (`event_id`)
 - `idx_training_session_org` (`organization_id`)
 - `ix_training_sessions_apparatus_id` (`apparatus_id`)
 - `ix_training_sessions_category_id` (`category_id`)
@@ -7934,9 +7789,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_submission_date` (`completion_date`)
 - `idx_submission_org_status` (`organization_id`, `status`)
 - `idx_submission_user` (`submitted_by`, `status`)
-- `ix_training_submissions_organization_id` (`organization_id`)
 - `ix_training_submissions_status` (`status`)
-- `ix_training_submissions_submitted_by` (`submitted_by`)
 
 ### `training_waivers`
 
@@ -7964,7 +7817,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_training_waivers_dates` (`start_date`, `end_date`)
 - `idx_training_waivers_org_user` (`organization_id`, `user_id`)
-- `ix_training_waivers_organization_id` (`organization_id`)
 - `ix_training_waivers_user_id` (`user_id`)
 
 ### `xapi_statements`
@@ -8041,7 +7893,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_member_leave_dates` (`start_date`, `end_date`)
 - `idx_member_leave_org_user` (`organization_id`, `user_id`)
-- `ix_member_leaves_of_absence_organization_id` (`organization_id`)
 - `ix_member_leaves_of_absence_user_id` (`user_id`)
 
 ### `organizations`
@@ -8113,7 +7964,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_password_history_user_created` (`user_id`, `created_at`)
-- `ix_password_history_user_id` (`user_id`)
 
 ### `positions`
 
@@ -8138,7 +7988,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - UNIQUE `idx_position_org_slug` (`organization_id`, `slug`)
-- `ix_positions_organization_id` (`organization_id`)
 
 ### `prospects`
 
@@ -8170,7 +8019,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_prospect_org_email` (`organization_id`, `email`)
 - `idx_prospect_org_status` (`organization_id`, `status`)
-- `ix_prospects_organization_id` (`organization_id`)
 
 ### `sessions`
 
@@ -8291,7 +8139,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_users_calendar_feed_token` (`calendar_feed_token`)
 - `ix_users_email` (`email`)
 - `ix_users_oauth_subject` (`oauth_subject`)
-- `ix_users_organization_id` (`organization_id`)
 - `ix_users_password_reset_token` (`password_reset_token`)
 - `ix_users_status` (`status`)
 
@@ -8765,6 +8612,28 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `voting_tokens` | `organization_id` | CASCADE | no |
 | `xapi_statements` | `organization_id` | CASCADE | no |
 
+### → `apparatus` (17 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_component_notes` | `apparatus_id` | CASCADE | no |
+| `apparatus_components` | `apparatus_id` | CASCADE | no |
+| `apparatus_documents` | `apparatus_id` | CASCADE | no |
+| `apparatus_equipment` | `apparatus_id` | CASCADE | no |
+| `apparatus_fuel_logs` | `apparatus_id` | CASCADE | no |
+| `apparatus_location_history` | `apparatus_id` | CASCADE | no |
+| `apparatus_maintenance` | `apparatus_id` | CASCADE | no |
+| `apparatus_nfpa_compliance` | `apparatus_id` | CASCADE | no |
+| `apparatus_operators` | `apparatus_id` | CASCADE | no |
+| `apparatus_photos` | `apparatus_id` | CASCADE | no |
+| `apparatus_status_history` | `apparatus_id` | CASCADE | no |
+| `equipment_check_templates` | `apparatus_id` | CASCADE | yes |
+| `purchase_requests` | `apparatus_id` | SET NULL | yes |
+| `shift_equipment_checks` | `apparatus_id` | SET NULL | yes |
+| `skill_checkoffs` | `apparatus_id` | SET NULL | yes |
+| `training_records` | `apparatus_id` | SET NULL | yes |
+| `training_sessions` | `apparatus_id` | SET NULL | yes |
+
 ### → `facilities` (17 references)
 
 | From table | Column | On delete | Nullable |
@@ -8807,25 +8676,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `reorder_requests` | `item_id` | SET NULL | yes |
 | `return_requests` | `item_id` | CASCADE | no |
 | `store_products` | `inventory_item_id` | SET NULL | yes |
-
-### → `apparatus` (14 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `apparatus_component_notes` | `apparatus_id` | CASCADE | no |
-| `apparatus_components` | `apparatus_id` | CASCADE | no |
-| `apparatus_documents` | `apparatus_id` | CASCADE | no |
-| `apparatus_equipment` | `apparatus_id` | CASCADE | no |
-| `apparatus_fuel_logs` | `apparatus_id` | CASCADE | no |
-| `apparatus_location_history` | `apparatus_id` | CASCADE | no |
-| `apparatus_maintenance` | `apparatus_id` | CASCADE | no |
-| `apparatus_nfpa_compliance` | `apparatus_id` | CASCADE | no |
-| `apparatus_operators` | `apparatus_id` | CASCADE | no |
-| `apparatus_photos` | `apparatus_id` | CASCADE | no |
-| `apparatus_status_history` | `apparatus_id` | CASCADE | no |
-| `equipment_check_templates` | `apparatus_id` | CASCADE | yes |
-| `purchase_requests` | `apparatus_id` | SET NULL | yes |
-| `shift_equipment_checks` | `apparatus_id` | SET NULL | yes |
 
 ### → `events` (13 references)
 
