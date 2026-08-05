@@ -175,11 +175,16 @@ class StoreSettings(Base):
         index=True,
     )
 
-    is_enabled = Column(Boolean, nullable=False, default=False)
-    store_name = Column(String(200), nullable=False, default="Department Store")
+    is_enabled = Column(Boolean, nullable=False, default=False, server_default="0")
+    store_name = Column(
+        String(200),
+        nullable=False,
+        default="Department Store",
+        server_default="Department Store",
+    )
     tagline = Column(String(300), nullable=True)
     description = Column(Text, nullable=True)
-    currency = Column(String(3), nullable=False, default="USD")
+    currency = Column(String(3), nullable=False, default="USD", server_default="USD")
 
     # --- Payment configuration -------------------------------------------
     accepted_payment_methods = Column(JSON, nullable=True)  # list[StorePaymentMethod]
@@ -208,10 +213,10 @@ class StoreSettings(Base):
     # --- Pricing ----------------------------------------------------------
     # Stored as a fraction (0.0600 == 6%), not a percentage, so line math is a
     # plain multiply with no /100 rounding step.
-    tax_rate = Column(Numeric(6, 4), nullable=False, default=0)
+    tax_rate = Column(Numeric(6, 4), nullable=False, default=0, server_default="0")
     shipping_flat_rate = Column(Numeric(10, 2), nullable=True)
-    allow_pickup = Column(Boolean, nullable=False, default=True)
-    allow_shipping = Column(Boolean, nullable=False, default=False)
+    allow_pickup = Column(Boolean, nullable=False, default=True, server_default="1")
+    allow_shipping = Column(Boolean, nullable=False, default=False, server_default="0")
     pickup_location = Column(String(300), nullable=True)
 
     # --- Notifications ----------------------------------------------------
@@ -221,10 +226,18 @@ class StoreSettings(Base):
     # "email members" box on the close-window dialog) can suppress an
     # individual send, but it can never send a notice switched off here.
     notify_emails = Column(JSON, nullable=True)  # extra admin recipients
-    notify_admins_on_order = Column(Boolean, nullable=False, default=True)
-    send_order_confirmation = Column(Boolean, nullable=False, default=True)
-    send_status_updates = Column(Boolean, nullable=False, default=True)
-    send_payment_reminders = Column(Boolean, nullable=False, default=True)
+    notify_admins_on_order = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    send_order_confirmation = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    send_status_updates = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    send_payment_reminders = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     # Receipts for money movement the quartermaster records by hand: payment
     # taken, payment waived, refund issued.
     send_payment_receipts = Column(
@@ -242,8 +255,12 @@ class StoreSettings(Base):
     send_vendor_order_updates = Column(
         Boolean, nullable=False, default=True, server_default="1"
     )
-    payment_reminder_days = Column(Integer, nullable=False, default=3)
-    window_reminder_hours = Column(Integer, nullable=False, default=48)
+    payment_reminder_days = Column(
+        Integer, nullable=False, default=3, server_default="3"
+    )
+    window_reminder_hours = Column(
+        Integer, nullable=False, default=48, server_default="48"
+    )
 
     terms_text = Column(Text, nullable=True)
     receipt_footer = Column(Text, nullable=True)
@@ -288,14 +305,15 @@ class StoreProduct(Base):
         nullable=True,
     )
 
-    price = Column(Numeric(10, 2), nullable=False, default=0)
+    price = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
     cost = Column(Numeric(10, 2), nullable=True)
-    is_taxable = Column(Boolean, nullable=False, default=False)
+    is_taxable = Column(Boolean, nullable=False, default=False, server_default="0")
 
     status = Column(
         SQLEnum(StoreProductStatus, values_callable=_enum_values),
         nullable=False,
         default=StoreProductStatus.DRAFT,
+        server_default="draft",
     )
     max_per_member = Column(Integer, nullable=True)
 
@@ -303,16 +321,26 @@ class StoreProduct(Base):
     # An upcharge is common because personalizing is a per-unit vendor cost,
     # and personalized lines can never be pooled in the vendor tally: each
     # distinct text is its own row on the purchase order.
-    personalization_enabled = Column(Boolean, nullable=False, default=False)
-    personalization_required = Column(Boolean, nullable=False, default=False)
+    personalization_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    personalization_required = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     personalization_label = Column(String(120), nullable=True)
-    personalization_max_length = Column(Integer, nullable=False, default=30)
-    personalization_price = Column(Numeric(10, 2), nullable=False, default=0)
+    personalization_max_length = Column(
+        Integer, nullable=False, default=30, server_default="30"
+    )
+    personalization_price = Column(
+        Numeric(10, 2), nullable=False, default=0, server_default="0"
+    )
 
-    track_stock = Column(Boolean, nullable=False, default=False)
+    track_stock = Column(Boolean, nullable=False, default=False, server_default="0")
     stock_quantity = Column(Integer, nullable=True)
-    requires_variant = Column(Boolean, nullable=False, default=False)
-    sort_order = Column(Integer, nullable=False, default=0)
+    requires_variant = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
     internal_notes = Column(Text, nullable=True)
 
     created_by = Column(
@@ -371,10 +399,10 @@ class StoreProductVariant(Base):
     label = Column(String(120), nullable=False)
     sku = Column(String(100), nullable=True)
     # Added to the parent product price; negative values discount the variant.
-    price_delta = Column(Numeric(10, 2), nullable=False, default=0)
+    price_delta = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
     stock_quantity = Column(Integer, nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True)
-    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True, server_default="1")
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
 
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -420,11 +448,13 @@ class StoreProductImage(Base):
         index=True,
     )
 
-    content_type = Column(String(100), nullable=False, default="image/webp")
+    content_type = Column(
+        String(100), nullable=False, default="image/webp", server_default="image/webp"
+    )
     # 16MB MEDIUMBLOB: MySQL's default BLOB caps at 64KB, which silently
     # truncates an optimized product photo (a few hundred KB).
     data = Column(LargeBinary(length=16_777_215), nullable=False)
-    byte_size = Column(Integer, nullable=False, default=0)
+    byte_size = Column(Integer, nullable=False, default=0, server_default="0")
 
     uploaded_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -461,12 +491,13 @@ class StoreOrderWindow(Base):
         SQLEnum(StoreWindowStatus, values_callable=_enum_values),
         nullable=False,
         default=StoreWindowStatus.DRAFT,
+        server_default="draft",
     )
 
     opens_at = Column(DateTime(timezone=True), nullable=True)
     closes_at = Column(DateTime(timezone=True), nullable=True)
-    auto_open = Column(Boolean, nullable=False, default=True)
-    auto_close = Column(Boolean, nullable=False, default=True)
+    auto_open = Column(Boolean, nullable=False, default=True, server_default="1")
+    auto_close = Column(Boolean, nullable=False, default=True, server_default="1")
 
     expected_delivery_date = Column(Date, nullable=True)
     pickup_instructions = Column(Text, nullable=True)
@@ -484,9 +515,11 @@ class StoreOrderWindow(Base):
 
     # When True the window offers every ACTIVE catalog product; when False only
     # the products explicitly listed in store_window_products are for sale.
-    include_all_products = Column(Boolean, nullable=False, default=True)
+    include_all_products = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
 
-    notify_on_open = Column(Boolean, nullable=False, default=True)
+    notify_on_open = Column(Boolean, nullable=False, default=True, server_default="1")
     open_notice_sent_at = Column(DateTime(timezone=True), nullable=True)
     closing_reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
     close_notice_sent_at = Column(DateTime(timezone=True), nullable=True)
@@ -552,7 +585,7 @@ class StoreWindowProduct(Base):
     price_override = Column(Numeric(10, 2), nullable=True)
     quantity_limit = Column(Integer, nullable=True)  # total units for the window
     max_per_member = Column(Integer, nullable=True)
-    sort_order = Column(Integer, nullable=False, default=0)
+    sort_order = Column(Integer, nullable=False, default=0, server_default="0")
 
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -605,23 +638,29 @@ class StoreOrder(Base):
         SQLEnum(StoreOrderStatus, values_callable=_enum_values),
         nullable=False,
         default=StoreOrderStatus.SUBMITTED,
+        server_default="submitted",
     )
     payment_status = Column(
         SQLEnum(StorePaymentStatus, values_callable=_enum_values),
         nullable=False,
         default=StorePaymentStatus.UNPAID,
+        server_default="unpaid",
     )
     payment_method = Column(
         SQLEnum(StorePaymentMethod, values_callable=_enum_values),
         nullable=True,
     )
 
-    subtotal = Column(Numeric(10, 2), nullable=False, default=0)
-    tax_amount = Column(Numeric(10, 2), nullable=False, default=0)
-    shipping_amount = Column(Numeric(10, 2), nullable=False, default=0)
-    discount_amount = Column(Numeric(10, 2), nullable=False, default=0)
-    total = Column(Numeric(10, 2), nullable=False, default=0)
-    amount_paid = Column(Numeric(10, 2), nullable=False, default=0)
+    subtotal = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
+    tax_amount = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
+    shipping_amount = Column(
+        Numeric(10, 2), nullable=False, default=0, server_default="0"
+    )
+    discount_amount = Column(
+        Numeric(10, 2), nullable=False, default=0, server_default="0"
+    )
+    total = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
+    amount_paid = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
 
     payment_reference = Column(String(200), nullable=True)
     payment_reported_at = Column(DateTime(timezone=True), nullable=True)
@@ -634,6 +673,7 @@ class StoreOrder(Base):
         SQLEnum(StoreFulfillmentMethod, values_callable=_enum_values),
         nullable=False,
         default=StoreFulfillmentMethod.PICKUP,
+        server_default="pickup",
     )
     shipping_address = Column(Text, nullable=True)
 
@@ -712,14 +752,16 @@ class StorePaymentEvent(Base):
         index=True,
     )
 
-    provider = Column(String(30), nullable=False, default="paypal")
+    provider = Column(
+        String(30), nullable=False, default="paypal", server_default="paypal"
+    )
     # The provider's own id for the money movement. Unique per org so a
     # redelivered webhook is recognised rather than double-counted.
     external_id = Column(String(120), nullable=False)
     event_id = Column(String(120), nullable=True)
 
-    amount = Column(Numeric(10, 2), nullable=False, default=0)
-    currency = Column(String(3), nullable=False, default="USD")
+    amount = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
+    currency = Column(String(3), nullable=False, default="USD", server_default="USD")
 
     payer_name = Column(String(200), nullable=True)
     payer_email = Column(String(255), nullable=True)
@@ -731,6 +773,7 @@ class StorePaymentEvent(Base):
         SQLEnum(StorePaymentEventStatus, values_callable=_enum_values),
         nullable=False,
         default=StorePaymentEventStatus.UNMATCHED,
+        server_default="unmatched",
     )
     matched_order_id = Column(
         String(36),
@@ -817,10 +860,10 @@ class StoreOrderItem(Base):
     # rows -- they are different physical goods.
     personalization_text = Column(String(200), nullable=True)
 
-    unit_price = Column(Numeric(10, 2), nullable=False, default=0)
-    quantity = Column(Integer, nullable=False, default=1)
-    line_total = Column(Numeric(10, 2), nullable=False, default=0)
-    fulfilled_quantity = Column(Integer, nullable=False, default=0)
+    unit_price = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
+    quantity = Column(Integer, nullable=False, default=1, server_default="1")
+    line_total = Column(Numeric(10, 2), nullable=False, default=0, server_default="0")
+    fulfilled_quantity = Column(Integer, nullable=False, default=0, server_default="0")
 
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -858,8 +901,10 @@ class StoreOrderEvent(Base):
     to_status = Column(String(50), nullable=True)
     message = Column(Text, nullable=True)
     # Internal notes stay off the member's timeline.
-    is_member_visible = Column(Boolean, nullable=False, default=True)
-    notified = Column(Boolean, nullable=False, default=False)
+    is_member_visible = Column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
+    notified = Column(Boolean, nullable=False, default=False, server_default="0")
 
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

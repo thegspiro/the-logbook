@@ -175,8 +175,8 @@ class FacilityType(Base):
         default=FacilityCategory.OTHER,
     )
 
-    is_system = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_system = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -222,10 +222,10 @@ class FacilityStatus(Base):
     color = Column(String(7), nullable=True)  # Hex color for UI
 
     is_operational = Column(
-        Boolean, default=True, nullable=False
+        Boolean, default=True, nullable=False, server_default="1"
     )  # Is the facility usable?
-    is_system = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_system = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -295,7 +295,9 @@ class Facility(Base):
     lot_size_acres = Column(Numeric(10, 2), nullable=True)
 
     # Ownership
-    is_owned = Column(Boolean, default=True, nullable=False)  # vs leased
+    is_owned = Column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )  # vs leased
     lease_expiration = Column(Date, nullable=True)
     property_tax_id = Column(String(100), nullable=True)
 
@@ -319,7 +321,7 @@ class Facility(Base):
     )
 
     # Archive (soft-delete)
-    is_archived = Column(Boolean, default=False, nullable=False)
+    is_archived = Column(Boolean, default=False, nullable=False, server_default="0")
     archived_at = Column(DateTime(timezone=True), nullable=True)
     archived_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -443,7 +445,7 @@ class FacilityPhoto(Base):
     file_name = Column(String(200), nullable=False)
     mime_type = Column(String(100), nullable=True)
     caption = Column(String(500), nullable=True)
-    is_primary = Column(Boolean, default=False, nullable=False)
+    is_primary = Column(Boolean, default=False, nullable=False, server_default="0")
 
     uploaded_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -541,8 +543,8 @@ class FacilityMaintenanceType(Base):
         nullable=True,
     )
 
-    is_system = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_system = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -617,8 +619,8 @@ class FacilityMaintenance(Base):
     performed_by = Column(String(200), nullable=True)  # External contractor name
 
     # Status
-    is_completed = Column(Boolean, default=False, nullable=False)
-    is_overdue = Column(Boolean, default=False, nullable=False)
+    is_completed = Column(Boolean, default=False, nullable=False, server_default="0")
+    is_overdue = Column(Boolean, default=False, nullable=False, server_default="0")
 
     # Details
     description = Column(Text, nullable=True)
@@ -639,7 +641,7 @@ class FacilityMaintenance(Base):
     attachments = Column(JSON, nullable=True)  # [{file_path, file_name, mime_type}]
 
     # Historic entry support
-    is_historic = Column(Boolean, default=False, nullable=False)
+    is_historic = Column(Boolean, default=False, nullable=False, server_default="0")
     occurred_date = Column(Date, nullable=True)
     historic_source = Column(String(200), nullable=True)
 
@@ -746,7 +748,7 @@ class FacilitySystem(Base):
 
     # Display
     sort_order = Column(Integer, default=0)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Archive (soft-delete)
     archived_at = Column(DateTime(timezone=True), nullable=True)
@@ -829,7 +831,9 @@ class FacilityInspection(Base):
     findings = Column(Text, nullable=True)
     corrective_actions = Column(Text, nullable=True)
     corrective_action_deadline = Column(Date, nullable=True)
-    corrective_action_completed = Column(Boolean, default=False, nullable=False)
+    corrective_action_completed = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     corrective_action_completed_date = Column(Date, nullable=True)
 
     # Attachments (inspection reports, certificates)
@@ -1054,7 +1058,7 @@ class FacilityUtilityAccount(Base):
     )
 
     notes = Column(Text, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -1168,7 +1172,7 @@ class FacilityAccessKey(Base):
     issued_date = Column(Date, nullable=True)
     returned_date = Column(Date, nullable=True)
 
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
     notes = Column(Text, nullable=True)
 
     created_by = Column(
@@ -1231,6 +1235,7 @@ class FacilityRoom(Base):
         Enum(ZoneClassification, values_callable=lambda x: [e.value for e in x]),
         default=ZoneClassification.UNCLASSIFIED,
         nullable=False,
+        server_default="unclassified",
     )
 
     square_footage = Column(Integer, nullable=True)
@@ -1239,7 +1244,7 @@ class FacilityRoom(Base):
     equipment = Column(Text, nullable=True)  # Notable equipment in this room
 
     sort_order = Column(Integer, default=0)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -1300,9 +1305,11 @@ class FacilityEmergencyContact(Base):
     email = Column(String(200), nullable=True)
     service_contract_number = Column(String(100), nullable=True)
 
-    priority = Column(Integer, default=1, nullable=False)  # 1 = primary, 2 = secondary
+    priority = Column(
+        Integer, default=1, nullable=False, server_default="1"
+    )  # 1 = primary, 2 = secondary
     notes = Column(Text, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -1498,7 +1505,7 @@ class FacilityInsurancePolicy(Base):
 
     notes = Column(Text, nullable=True)
     attachments = Column(JSON, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -1554,7 +1561,7 @@ class FacilityOccupant(Base):
 
     effective_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     notes = Column(Text, nullable=True)
 
@@ -1617,7 +1624,7 @@ class FacilityComplianceChecklist(Base):
     completed_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    is_completed = Column(Boolean, default=False, nullable=False)
+    is_completed = Column(Boolean, default=False, nullable=False, server_default="0")
 
     notes = Column(Text, nullable=True)
 
@@ -1679,7 +1686,9 @@ class FacilityComplianceItem(Base):
     findings = Column(Text, nullable=True)
     corrective_action = Column(Text, nullable=True)
     corrective_action_deadline = Column(Date, nullable=True)
-    corrective_action_completed = Column(Boolean, default=False, nullable=False)
+    corrective_action_completed = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     notes = Column(Text, nullable=True)
 

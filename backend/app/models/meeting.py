@@ -77,6 +77,7 @@ class Meeting(Base):
         Enum(MeetingType, values_callable=lambda x: [e.value for e in x]),
         default=MeetingType.BUSINESS,
         nullable=False,
+        server_default="business",
     )
     meeting_date = Column(Date, nullable=False, index=True)
     start_time = Column(Time)
@@ -103,6 +104,7 @@ class Meeting(Base):
         Enum(MeetingStatus, values_callable=lambda x: [e.value for e in x]),
         default=MeetingStatus.DRAFT,
         nullable=False,
+        server_default="draft",
     )
 
     # Minutes Content
@@ -232,6 +234,7 @@ class MeetingActionItem(Base):
         Enum(ActionItemStatus, values_callable=lambda x: [e.value for e in x]),
         default=ActionItemStatus.OPEN,
         nullable=False,
+        server_default="open",
     )
     priority = Column(Integer, default=0)  # 0=normal, 1=high, 2=urgent
 

@@ -174,6 +174,7 @@ class MembershipPipelineStep(Base):
         Enum(PipelineStepType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=PipelineStepType.CHECKBOX,
+        server_default="checkbox",
     )
     action_type = Column(
         Enum(ActionType, values_callable=lambda x: [e.value for e in x]),
@@ -181,7 +182,7 @@ class MembershipPipelineStep(Base):
     )
     is_first_step = Column(Boolean, default=False)
     is_final_step = Column(Boolean, default=False)
-    sort_order = Column(Integer, default=0, nullable=False)
+    sort_order = Column(Integer, default=0, nullable=False, server_default="0")
     email_template_id = Column(
         String(36),
         ForeignKey("email_templates.id", ondelete="SET NULL"),
@@ -272,6 +273,7 @@ class ProspectiveMember(Base):
         default=ProspectStatus.ACTIVE,
         nullable=False,
         index=True,
+        server_default="active",
     )
 
     # Extensible data (from form submissions, custom fields, etc.)
@@ -361,6 +363,7 @@ class ProspectStepProgress(Base):
         Enum(StepProgressStatus, values_callable=lambda x: [e.value for e in x]),
         default=StepProgressStatus.PENDING,
         nullable=False,
+        server_default="pending",
     )
     completed_at = Column(DateTime(timezone=True))
     completed_by = Column(
@@ -509,7 +512,7 @@ class ProspectElectionPackage(Base):
     )
 
     status = Column(
-        String(20), default="draft", nullable=False
+        String(20), default="draft", nullable=False, server_default="draft"
     )  # draft, ready, submitted, voted
     applicant_snapshot = Column(JSON, default=dict)
     coordinator_notes = Column(Text)

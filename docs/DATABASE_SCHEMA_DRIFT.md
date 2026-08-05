@@ -6,7 +6,7 @@ what the schema *is*. This document covers where the two ways of building that
 schema disagree.
 
 Most of what follows has been fixed — each finding records the revision that
-closed it. Two items remain open and are listed at the end.
+closed it. Three items remain open and are listed at the end.
 
 ---
 
@@ -81,16 +81,22 @@ incomplete relative to the models.
 | Durable | Column **type** differs between paths | 38 | Fixed — `20260805_0001`–`0006` |
 | Durable | Foreign key **ON DELETE** rule differs | 18 | Fixed — `20260805_0005` (17 of 18) |
 | Durable | **Enum value set** differs | 5 | Fixed — `20260805_0003`, `0006` |
-| Durable | **Server default** missing on a NOT NULL column | 283 | **Open** — see below |
+| Durable | **Server default** missing on a NOT NULL column | 283 | Fixed — models + `20260805_0007` |
 | Durable | `roles`/`user_roles` never renamed to `positions` | 2 tables | **Open** — needs a decision |
 | Self-healing | Tables only in models | 37 | Not a defect |
 | Self-healing | Columns only in models | 15 | Not a defect |
 | Model-side | **Duplicate indexes** — same column indexed twice | 136 | Open, no urgency |
 | Dead | Columns only in migrations | 2 | Open, no urgency |
 
-After `20260805_0001`–`0006`, re-running the comparison gives **0 type
-mismatches** and **1 remaining foreign key difference** (the deferred
-`issuance_allowances.role_id`, which depends on the roles/positions decision).
+After `20260805_0001`–`0007`, re-running the comparison gives **0 type
+mismatches**, **0 NOT NULL columns without a needed default**, and **1 remaining
+foreign key difference** (the deferred `issuance_allowances.role_id`, which
+depends on the roles/positions decision).
+
+The backend suite against a model-built database went from
+**2,648 passed / 16 failed / 372 errors** to **3,026 passed / 0 failed /
+10 errors** — the 10 remaining being a pre-existing `MagicMock` leak in
+`test_openapi_contract.py`, unrelated to the schema.
 
 ---
 
@@ -206,13 +212,11 @@ outside the new set, so this cannot be left to the server's `sql_mode`.
 
 ---
 
-## Open
+### 8. 283 NOT NULL columns had no server default on model-built databases
 
-### A. 283 NOT NULL columns have no server default on fresh installs
-
-**This is the largest remaining divergence, and it was missed by the original
-audit** — the comparison checked column types and nullability but not defaults,
-and these columns are `NOT NULL` on *both* paths. Only the default differs:
+**This was missed by the original audit** — the comparison checked column types
+and nullability but not defaults, and these columns are `NOT NULL` on *both*
+paths. Only the default differed:
 
 ```python
 # app/models/user.py:306
@@ -233,7 +237,7 @@ tests error out** on exactly this, because fixtures insert their setup rows with
 `text("INSERT INTO users ...")`. The same suite passes against a chain-built
 database, which is why it has gone unnoticed.
 
-Scope: **283 columns across 119 tables**. Reproduce with:
+Scope was **283 columns across 119 tables**. Reproduce with:
 
 ```sql
 SELECT m.TABLE_NAME, m.COLUMN_NAME, g.COLUMN_DEFAULT AS migration_default
@@ -246,12 +250,29 @@ WHERE m.TABLE_SCHEMA = 'db_models'
   AND g.COLUMN_DEFAULT IS NOT NULL;
 ```
 
-The fix is to add `server_default=` to the models alongside the existing
-`default=`, so `create_all()` emits the same DDL the migrations do. It is
-mechanical but touches most model files, so it is called out here rather than
-bundled into the revisions above.
+Fixed on both sides. The models now declare `server_default=` alongside each
+`default=`, derived from the model's own Python default so the two cannot
+disagree — every one was cross-checked against what the migration chain actually
+created, and all 282 agreed. `20260805_0007` sets the same defaults on databases
+that already exist, skipping any column that already has one, so it is a no-op
+on a chain-built database and safe to re-run.
 
-### B. `roles` / `user_roles` were never renamed to `positions` / `user_positions`
+`training_requirements.requirement_type` is deliberately excluded: its migration
+invented a `'hours'` default, but the model treats the column as mandatory, and
+silently typing a requirement as "hours" is worse than rejecting the insert.
+
+One softer difference remains and is left alone by design: **146 nullable
+columns** have a server default on chain-built databases and none on model-built
+ones. A raw insert omitting them yields `NULL` rather than the migration's value
+— no failure, but `ORDER BY` on such a column sorts differently between the two.
+The models declare these nullable, meaning `NULL` is a legal value, so adding
+defaults would change their semantics rather than align them.
+
+---
+
+## Open
+
+### A. `roles` / `user_roles` were never renamed to `positions` / `user_positions`
 
 The models renamed the concept and kept aliases for compatibility:
 
@@ -272,17 +293,31 @@ where no member holds any position — nobody has any permission — with no err
 raised.
 
 **Whether this is reachable depends on whether any deployment predates the
-rename.** If every live install was created after it, the risk is theoretical
-and the stale tables are dead weight to drop. If not, a data-migrating rename is
-needed *before* self-heal can create the empty table. That question has to be
-answered before the right migration can be written, which is why
-`20260805_0005` skips `issuance_allowances.role_id` rather than guessing.
+rename.** The rename landed 2026-07-25 (commit `cb839f4`, the same commit that
+introduced `_fast_path_init`). An install created after that date was built by
+`create_all()` from models that already had `positions`, so it never had `roles`
+at all and is not at risk.
+
+Confirm on any given instance rather than inferring from its creation date — a
+deployment can be spun up from an older image tag:
+
+```sql
+SHOW TABLES LIKE 'roles';       -- present => predates the rename, at risk
+SHOW TABLES LIKE 'positions';   -- present alone => built after, safe
+```
+
+If no live install has a `roles` table, the remaining work is cleanup: drop the
+stale tables from the chain's tail and repoint `issuance_allowances.role_id`.
+If any does, it needs a data-migrating rename *before* self-heal creates the
+empty `positions` table. That question has to be answered before the right
+migration can be written, which is why `20260805_0005` skips
+`issuance_allowances.role_id` rather than guessing.
 
 Related loose end: `validate_schema()` in `main.py` still spot-checks a `roles`
 table that is no longer in `Base.metadata`. Harmless — the check skips absent
 tables — but it should go with whatever resolves this.
 
-### C. 136 duplicate indexes
+### B. 136 duplicate indexes
 
 In the models, so it affects **every** deployment. 136 columns carry both
 `index=True` and an identical explicit `Index(...)` in `__table_args__`,
@@ -300,7 +335,7 @@ Every write maintains both. Heaviest in `apparatus`, `facilities`, `training`
 and `inventory`. Dropping the redundant half is a pure win — no query plan
 depends on which of two identical indexes is chosen.
 
-### D. Dead columns
+### C. Dead columns
 
 Present in chain-built databases, absent from the models, never read or written:
 

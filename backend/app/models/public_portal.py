@@ -45,16 +45,20 @@ class PublicPortalConfig(Base):
     )
 
     # Enable/disable entire public portal
-    enabled = Column(Boolean, default=False, nullable=False)
+    enabled = Column(Boolean, default=False, nullable=False, server_default="0")
 
     # CORS configuration - list of allowed origins
     allowed_origins = Column(JSON, default=list, nullable=False)
 
     # Default rate limit (requests per hour per API key)
-    default_rate_limit = Column(Integer, default=1000, nullable=False)
+    default_rate_limit = Column(
+        Integer, default=1000, nullable=False, server_default="1000"
+    )
 
     # Cache TTL in seconds
-    cache_ttl_seconds = Column(Integer, default=300, nullable=False)  # 5 minutes
+    cache_ttl_seconds = Column(
+        Integer, default=300, nullable=False, server_default="300"
+    )  # 5 minutes
 
     # Additional settings (flexible JSON column)
     settings = Column(JSON, default=dict, nullable=False)
@@ -134,7 +138,7 @@ class PublicPortalAPIKey(Base):
     last_used_at = Column(DateTime(timezone=True), nullable=True)
 
     # Active/revoked status
-    is_active = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Who created this key
     created_by = Column(
@@ -232,7 +236,9 @@ class PublicPortalAccessLog(Base):
     )
 
     # Security flags
-    flagged_suspicious = Column(Boolean, default=False, nullable=False)
+    flagged_suspicious = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
     flag_reason = Column(Text, nullable=True)
 
     # Relationships
@@ -282,7 +288,7 @@ class PublicPortalDataWhitelist(Base):
     field_name = Column(String(100), nullable=False)
 
     # Whether this field is enabled for public access
-    is_enabled = Column(Boolean, default=False, nullable=False)
+    is_enabled = Column(Boolean, default=False, nullable=False, server_default="0")
 
     # Timestamps
     created_at = Column(

@@ -354,6 +354,7 @@ class Document(Base):
         Enum(DocumentStatus, values_callable=lambda x: [e.value for e in x]),
         default=DocumentStatus.ACTIVE,
         nullable=False,
+        server_default="active",
     )
 
     # Rich content (for generated documents like published minutes).

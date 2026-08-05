@@ -438,6 +438,7 @@ class TrainingRequirement(Base):
         Enum(RequirementSource, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=RequirementSource.DEPARTMENT,
+        server_default="department",
     )
     registry_name = Column(
         String(100)
@@ -453,7 +454,9 @@ class TrainingRequirement(Base):
     # Officers opt a requirement in when online/third-party delivery is acceptable
     # (e.g. HIPAA CE), and leave it off for in-house-only competencies (e.g. a
     # hands-on radios drill that a Vector course must not check off).
-    allows_external_credit = Column(Boolean, default=False, nullable=False)
+    allows_external_credit = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Requirement Quantities (based on requirement_type)
     required_hours = Column(Float)  # For HOURS type
@@ -641,7 +644,9 @@ class TrainingSession(Base):
     # pipeline/certificate requirements. Used for sessions that count toward a
     # program but aren't delivered in a way the certifying body (NFPA/NREMT)
     # would accept, so ineligible hours don't inflate a member's certificate.
-    counts_toward_certification = Column(Boolean, default=True, nullable=False)
+    counts_toward_certification = Column(
+        Boolean, default=True, nullable=False, server_default="1"
+    )
 
     # Auto-completion Settings
     auto_create_records = Column(
@@ -808,6 +813,7 @@ class TrainingProgram(Base):
         Enum(ProgramStructureType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ProgramStructureType.FLEXIBLE,
+        server_default="flexible",
     )
 
     # Prerequisites
@@ -836,7 +842,7 @@ class TrainingProgram(Base):
     # biennial recert, which is due every other March 30. recert_interval_months
     # sets the cadence; recert_anchor_month/day optionally pin the reset to a
     # fixed calendar date rather than rolling from the enrollment date.
-    recert_enabled = Column(Boolean, default=False, nullable=False)
+    recert_enabled = Column(Boolean, default=False, nullable=False, server_default="0")
     recert_interval_months = Column(Integer)  # e.g. 24 for a two-year cycle
     recert_anchor_month = Column(Integer)  # 1-12, optional fixed reset month
     recert_anchor_day = Column(Integer)  # 1-31, optional fixed reset day
@@ -1280,7 +1286,7 @@ class RequirementProgressCredit(Base):
     # training record, etc.). Kept as a plain string so any feed's identifier
     # fits without a cross-table FK.
     source_id = Column(String(64), nullable=False)
-    units = Column(Float, nullable=False, default=0.0)
+    units = Column(Float, nullable=False, default=0.0, server_default="0.0")
 
     applied_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -1937,6 +1943,7 @@ class TrainingSubmission(Base):
         default=SubmissionStatus.PENDING_REVIEW,
         nullable=False,
         index=True,
+        server_default="pending_review",
     )
 
     # Review Details
@@ -2831,11 +2838,13 @@ class ShiftAssignment(Base):
         Enum(ShiftPosition, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ShiftPosition.FIREFIGHTER,
+        server_default="firefighter",
     )
     assignment_status = Column(
         Enum(AssignmentStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=AssignmentStatus.ASSIGNED,
+        server_default="assigned",
     )
 
     # Training slot — when True this seat is a supervised training/rider
@@ -2920,6 +2929,7 @@ class ShiftSwapRequest(Base):
         Enum(SwapRequestStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=SwapRequestStatus.PENDING,
+        server_default="pending",
     )
     reason = Column(Text)
 
@@ -2982,6 +2992,7 @@ class ShiftTimeOff(Base):
         Enum(TimeOffStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=TimeOffStatus.PENDING,
+        server_default="pending",
     )
     approved_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -3032,7 +3043,9 @@ class BasicApparatus(Base):
 
     unit_number = Column(String(20), nullable=False)
     name = Column(String(100), nullable=False)
-    apparatus_type = Column(String(50), nullable=False, default="engine")
+    apparatus_type = Column(
+        String(50), nullable=False, default="engine", server_default="engine"
+    )
     min_staffing = Column(Integer, default=1)
     positions = Column(
         JSON
@@ -3091,6 +3104,7 @@ class TrainingWaiver(Base):
         Enum(TrainingWaiverType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=TrainingWaiverType.LEAVE_OF_ABSENCE,
+        server_default="leave_of_absence",
     )
     reason = Column(Text, nullable=True)
 
@@ -3107,7 +3121,7 @@ class TrainingWaiver(Base):
     )
     granted_at = Column(DateTime(timezone=True), nullable=True)
 
-    active = Column(Boolean, default=True, nullable=False)
+    active = Column(Boolean, default=True, nullable=False, server_default="1")
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -3877,7 +3891,7 @@ class ShiftEquipmentCheck(Base):
     checked_at = Column(DateTime(timezone=True), server_default=func.now())
     check_timing = Column(String(30), nullable=False)  # start_of_shift, end_of_shift
     check_context = Column(
-        String(30), nullable=False, default="shift_based"
+        String(30), nullable=False, default="shift_based", server_default="shift_based"
     )  # shift_based, standalone
     overall_status = Column(String(30), nullable=False)  # pass, fail, incomplete
     total_items = Column(Integer, nullable=False, default=0)
@@ -3962,7 +3976,7 @@ class ShiftEquipmentCheckItem(Base):
     lot_number = Column(String(100), nullable=True)
     serial_found = Column(String(100), nullable=True)
     lot_found = Column(String(100), nullable=True)
-    updated_serial = Column(Boolean, default=False, nullable=False)
+    updated_serial = Column(Boolean, default=False, nullable=False, server_default="0")
     photo_urls = Column(JSON, nullable=True)
     is_expired = Column(Boolean, default=False, nullable=False)
     expiration_date = Column(Date, nullable=True)

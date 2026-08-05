@@ -525,10 +525,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `color` | VARCHAR(7) | yes |  |  |  |
-| `require_approval` | BOOL | no |  | `True` |  |
+| `require_approval` | BOOL | no |  | `1` |  |
 | `auto_approve_under_hours` | FLOAT | yes |  |  |  |
 | `max_hours_per_session` | FLOAT | yes |  | `12.0` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
 | `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
@@ -559,7 +559,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `entry_method` | ENUM(`qr_scan`, `manual`, `event_attendance`) | no |  | `'manual'` |  |
 | `source_event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `source_rsvp_id` | VARCHAR(36) | yes | FK, IDX |  | → `event_rsvps.id` ON DELETE SET NULL |
-| `status` | ENUM(`active`, `pending`, `approved`, `rejected`) | no |  | `'active'` |  |
+| `status` | ENUM(`active`, `pending`, `approved`, `rejected`) | no |  | `active` |  |
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
 | `approved_at` | DATETIME | yes |  |  |  |
 | `rejection_reason` | TEXT | yes |  |  |  |
@@ -589,7 +589,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `custom_category` | VARCHAR(100) | yes |  |  |  |
 | `admin_hours_category_id` | VARCHAR(36) | no | FK |  | → `admin_hours_categories.id` ON DELETE CASCADE |
 | `percentage` | INTEGER | no |  | `100` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -730,7 +730,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `insurance_expiration` | DATE | yes |  |  |  |
 | `registration_expiration` | DATE | yes |  |  |  |
 | `inspection_expiration` | DATE | yes |  |  |  |
-| `is_archived` | BOOL | no | IDX | `False` |  |
+| `is_archived` | BOOL | no | IDX | `0` |  |
 | `archived_at` | DATETIME | yes |  |  |  |
 | `archived_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `sold_date` | DATE | yes |  |  |  |
@@ -741,8 +741,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `disposal_method` | VARCHAR(100) | yes |  |  |  |
 | `disposal_reason` | TEXT | yes |  |  |  |
 | `disposal_notes` | TEXT | yes |  |  |  |
-| `nfpa_tracking_enabled` | BOOL | no |  | `False` |  |
-| `has_deficiency` | BOOL | no |  | `False` |  |
+| `nfpa_tracking_enabled` | BOOL | no |  | `0` |  |
+| `has_deficiency` | BOOL | no |  | `0` |  |
 | `deficiency_since` | DATETIME | yes |  |  |  |
 | `custom_field_values` | JSON | yes |  | `dict()` |  |
 | `description` | TEXT | yes |  |  |  |
@@ -778,9 +778,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `component_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus_components.id` ON DELETE CASCADE |
 | `title` | VARCHAR(300) | no |  |  |  |
 | `description` | TEXT | no |  |  |  |
-| `note_type` | ENUM(`observation`, `repair`, `issue`, `inspection`, `update`) | no | IDX | `'observation'` |  |
-| `severity` | ENUM(`info`, `low`, `medium`, `high`, `critical`) | no | IDX | `'info'` |  |
-| `status` | ENUM(`open`, `in_progress`, `resolved`, `deferred`) | no | IDX | `'open'` |  |
+| `note_type` | ENUM(`observation`, `repair`, `issue`, `inspection`, `update`) | no | IDX | `observation` |  |
+| `severity` | ENUM(`info`, `low`, `medium`, `high`, `critical`) | no | IDX | `info` |  |
+| `status` | ENUM(`open`, `in_progress`, `resolved`, `deferred`) | no | IDX | `open` |  |
 | `service_provider_id` | VARCHAR(36) | yes | FK, IDX |  | → `apparatus_service_providers.id` ON DELETE SET NULL |
 | `estimated_cost` | NUMERIC(10, 2) | yes |  |  |  |
 | `actual_cost` | NUMERIC(10, 2) | yes |  |  |  |
@@ -818,7 +818,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `apparatus_id` | VARCHAR(36) | no | FK, IDX |  | → `apparatus.id` ON DELETE CASCADE |
 | `name` | VARCHAR(200) | no |  |  |  |
-| `component_type` | ENUM(`engine`, `pump`, `aerial`, `chassis`, `drivetrain`, `brakes`, `electrical`, `hydraulic`, `body`, `cab`, `tank`, `foam_system`, `cooling`, `exhaust`, `lighting`, `communications`, `safety_equipment`, `hvac`, `tires_wheels`, `other`) | no |  | `'other'` |  |
+| `component_type` | ENUM(`engine`, `pump`, `aerial`, `chassis`, `drivetrain`, `brakes`, `electrical`, `hydraulic`, `body`, `cab`, `tank`, `foam_system`, `cooling`, `exhaust`, `lighting`, `communications`, `safety_equipment`, `hvac`, `tires_wheels`, `other`) | no |  | `other` |  |
 | `description` | TEXT | yes |  |  |  |
 | `manufacturer` | VARCHAR(200) | yes |  |  |  |
 | `model_number` | VARCHAR(100) | yes |  |  |  |
@@ -826,12 +826,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `install_date` | DATE | yes |  |  |  |
 | `warranty_expiration` | DATE | yes |  |  |  |
 | `expected_life_years` | INTEGER | yes |  |  |  |
-| `condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `critical`) | no | IDX | `'good'` |  |
+| `condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `critical`) | no | IDX | `good` |  |
 | `last_serviced_date` | DATE | yes |  |  |  |
 | `last_inspected_date` | DATE | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `sort_order` | INTEGER | yes |  | `0` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `archived_at` | DATETIME | yes |  |  |  |
 | `archived_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -859,8 +859,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(100) | no |  |  |  |
 | `field_key` | VARCHAR(100) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `field_type` | ENUM(`text`, `number`, `decimal`, `date`, `datetime`, `boolean`, `select`, `multi_select`, `url`, `email`) | no |  | `'text'` |  |
-| `is_required` | BOOL | no |  | `False` |  |
+| `field_type` | ENUM(`text`, `number`, `decimal`, `date`, `datetime`, `boolean`, `select`, `multi_select`, `url`, `email`) | no |  | `text` |  |
+| `is_required` | BOOL | no |  | `0` |  |
 | `default_value` | TEXT | yes |  |  |  |
 | `placeholder` | VARCHAR(200) | yes |  |  |  |
 | `options` | JSON | yes |  |  |  |
@@ -871,9 +871,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `regex_pattern` | VARCHAR(500) | yes |  |  |  |
 | `applies_to_types` | JSON | yes |  |  |  |
 | `sort_order` | INTEGER | yes |  | `0` |  |
-| `show_in_list` | BOOL | no |  | `False` |  |
-| `show_in_detail` | BOOL | no |  | `True` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `show_in_list` | BOOL | no |  | `0` |  |
+| `show_in_detail` | BOOL | no |  | `1` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -931,11 +931,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `description` | TEXT | yes |  |  |  |
 | `quantity` | INTEGER | no |  | `1` |  |
 | `location_on_apparatus` | VARCHAR(200) | yes |  |  |  |
-| `is_mounted` | BOOL | no |  | `False` |  |
-| `is_required` | BOOL | no |  | `False` |  |
+| `is_mounted` | BOOL | no |  | `0` |  |
+| `is_required` | BOOL | no |  | `0` |  |
 | `serial_number` | VARCHAR(100) | yes |  |  |  |
 | `asset_tag` | VARCHAR(50) | yes |  |  |  |
-| `is_present` | BOOL | no |  | `True` |  |
+| `is_present` | BOOL | no |  | `1` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `assigned_at` | DATETIME | yes |  | `now()` |  |
 | `assigned_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -966,7 +966,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `total_cost` | NUMERIC(10, 2) | yes |  |  |  |
 | `mileage_at_fill` | INTEGER | yes |  |  |  |
 | `hours_at_fill` | NUMERIC(10, 2) | yes |  |  |  |
-| `is_full_tank` | BOOL | no |  | `True` |  |
+| `is_full_tank` | BOOL | no |  | `1` |  |
 | `station_name` | VARCHAR(200) | yes |  |  |  |
 | `station_address` | TEXT | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
@@ -1026,8 +1026,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `completed_date` | DATE | yes |  |  |  |
 | `completed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `performed_by` | VARCHAR(200) | yes |  |  |  |
-| `is_completed` | BOOL | no | IDX | `False` |  |
-| `is_overdue` | BOOL | no | IDX | `False` |  |
+| `is_completed` | BOOL | no | IDX | `0` |  |
+| `is_overdue` | BOOL | no | IDX | `0` |  |
 | `description` | TEXT | yes |  |  |  |
 | `work_performed` | TEXT | yes |  |  |  |
 | `findings` | TEXT | yes |  |  |  |
@@ -1041,7 +1041,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `next_due_hours` | NUMERIC(10, 2) | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `attachments` | JSON | yes |  |  |  |
-| `is_historic` | BOOL | no | IDX | `False` |  |
+| `is_historic` | BOOL | no | IDX | `0` |  |
 | `occurred_date` | DATE | yes | IDX |  |  |
 | `historic_source` | VARCHAR(200) | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -1078,17 +1078,17 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(100) | no |  |  |  |
 | `code` | VARCHAR(50) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `category` | ENUM(`preventive`, `repair`, `inspection`, `certification`, `fluid`, `cleaning`, `other`) | no | IDX | `'preventive'` |  |
-| `is_system` | BOOL | no | IDX | `False` |  |
+| `category` | ENUM(`preventive`, `repair`, `inspection`, `certification`, `fluid`, `cleaning`, `other`) | no | IDX | `preventive` |  |
+| `is_system` | BOOL | no | IDX | `0` |  |
 | `default_interval_value` | INTEGER | yes |  |  |  |
 | `default_interval_unit` | ENUM(`days`, `weeks`, `months`, `years`, `miles`, `kilometers`, `hours`) | yes |  |  |  |
 | `default_interval_miles` | INTEGER | yes |  |  |  |
 | `default_interval_hours` | INTEGER | yes |  |  |  |
-| `is_nfpa_required` | BOOL | no |  | `False` |  |
+| `is_nfpa_required` | BOOL | no |  | `0` |  |
 | `nfpa_reference` | VARCHAR(100) | yes |  |  |  |
 | `applies_to_types` | JSON | yes |  |  |  |
 | `sort_order` | INTEGER | yes |  | `0` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -1113,7 +1113,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `standard_code` | VARCHAR(50) | no | IDX |  |  |
 | `section_reference` | VARCHAR(100) | no |  |  |  |
 | `requirement_description` | TEXT | no |  |  |  |
-| `is_compliant` | BOOL | no |  | `False` |  |
+| `is_compliant` | BOOL | no |  | `0` |  |
 | `compliance_status` | VARCHAR(50) | yes | IDX | `'pending'` |  |
 | `last_checked_date` | DATE | yes |  |  |  |
 | `last_checked_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -1145,17 +1145,17 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `apparatus_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `apparatus.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `evoc_level_id` | VARCHAR(36) | yes | FK, IDX |  | → `evoc_levels.id` ON DELETE SET NULL |
-| `is_certified` | BOOL | no |  | `True` |  |
+| `is_certified` | BOOL | no |  | `1` |  |
 | `certification_date` | DATE | yes |  |  |  |
 | `certification_expiration` | DATE | yes |  |  |  |
 | `certified_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `license_type_required` | VARCHAR(50) | yes |  |  |  |
-| `license_verified` | BOOL | no |  | `False` |  |
+| `license_verified` | BOOL | no |  | `0` |  |
 | `license_verified_date` | DATE | yes |  |  |  |
-| `has_restrictions` | BOOL | no |  | `False` |  |
+| `has_restrictions` | BOOL | no |  | `0` |  |
 | `restrictions` | JSON | yes |  |  |  |
 | `restriction_notes` | TEXT | yes |  |  |  |
-| `is_active` | BOOL | no | IDX | `True` |  |
+| `is_active` | BOOL | no | IDX | `1` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -1191,7 +1191,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `description` | TEXT | yes |  |  |  |
 | `taken_at` | DATETIME | yes |  |  |  |
 | `photo_type` | VARCHAR(50) | yes |  |  |  |
-| `is_primary` | BOOL | no |  | `False` |  |
+| `is_primary` | BOOL | no |  | `0` |  |
 | `uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `uploaded_at` | DATETIME | yes |  | `now()` |  |
 
@@ -1215,7 +1215,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `report_type` | VARCHAR(50) | no |  |  |  |
-| `is_scheduled` | BOOL | no | IDX | `False` |  |
+| `is_scheduled` | BOOL | no | IDX | `0` |  |
 | `schedule_frequency` | VARCHAR(50) | yes |  |  |  |
 | `schedule_day` | INTEGER | yes |  |  |  |
 | `next_run_date` | DATETIME | yes | IDX |  |  |
@@ -1225,14 +1225,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `include_apparatus_ids` | JSON | yes |  |  |  |
 | `include_type_ids` | JSON | yes |  |  |  |
 | `include_status_ids` | JSON | yes |  |  |  |
-| `include_archived` | BOOL | no |  | `False` |  |
+| `include_archived` | BOOL | no |  | `0` |  |
 | `fields_to_include` | JSON | yes |  |  |  |
 | `group_by` | VARCHAR(100) | yes |  |  |  |
 | `sort_by` | VARCHAR(100) | yes |  |  |  |
 | `sort_direction` | VARCHAR(10) | yes |  | `'asc'` |  |
 | `output_format` | VARCHAR(50) | yes |  | `'pdf'` |  |
 | `email_recipients` | JSON | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -1266,15 +1266,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `website` | VARCHAR(300) | yes |  |  |  |
 | `specialties` | JSON | yes |  |  |  |
 | `certifications` | JSON | yes |  |  |  |
-| `is_emergency_service` | BOOL | no |  | `False` |  |
+| `is_emergency_service` | BOOL | no |  | `0` |  |
 | `license_number` | VARCHAR(100) | yes |  |  |  |
 | `insurance_info` | TEXT | yes |  |  |  |
 | `tax_id` | VARCHAR(50) | yes |  |  |  |
-| `is_preferred` | BOOL | no |  | `False` |  |
+| `is_preferred` | BOOL | no |  | `0` |  |
 | `rating` | INTEGER | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `contract_info` | TEXT | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `archived_at` | DATETIME | yes |  |  |  |
 | `archived_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -1333,16 +1333,16 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(100) | no |  |  |  |
 | `code` | VARCHAR(50) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `is_system` | BOOL | no | IDX | `False` |  |
+| `is_system` | BOOL | no | IDX | `0` |  |
 | `default_status` | ENUM(`in_service`, `out_of_service`, `in_maintenance`, `reserve`, `on_order`, `sold`, `disposed`) | yes |  |  |  |
-| `is_available` | BOOL | no | IDX | `True` |  |
-| `is_operational` | BOOL | no |  | `True` |  |
-| `requires_reason` | BOOL | no |  | `False` |  |
-| `is_archived_status` | BOOL | no |  | `False` |  |
+| `is_available` | BOOL | no | IDX | `1` |  |
+| `is_operational` | BOOL | no |  | `1` |  |
+| `requires_reason` | BOOL | no |  | `0` |  |
+| `is_archived_status` | BOOL | no |  | `0` |  |
 | `color` | VARCHAR(20) | yes |  |  |  |
 | `icon` | VARCHAR(50) | yes |  |  |  |
 | `sort_order` | INTEGER | yes |  | `0` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -1366,13 +1366,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(100) | no |  |  |  |
 | `code` | VARCHAR(50) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `category` | ENUM(`fire`, `ems`, `rescue`, `support`, `command`, `marine`, `aircraft`, `admin`, `other`) | no | IDX | `'fire'` |  |
-| `is_system` | BOOL | no | IDX | `False` |  |
+| `category` | ENUM(`fire`, `ems`, `rescue`, `support`, `command`, `marine`, `aircraft`, `admin`, `other`) | no | IDX | `fire` |  |
+| `is_system` | BOOL | no | IDX | `0` |  |
 | `default_type` | ENUM(`engine`, `ladder`, `quint`, `rescue`, `ambulance`, `squad`, `tanker`, `brush`, `hazmat`, `command`, `utility`, `boat`, `atv`, `staff`, `reserve`, `other`) | yes |  |  |  |
 | `icon` | VARCHAR(50) | yes |  |  |  |
 | `color` | VARCHAR(20) | yes |  |  |  |
 | `sort_order` | INTEGER | yes |  | `0` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -1397,8 +1397,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `description` | TEXT | yes |  |  |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
 | `image_url` | VARCHAR(500) | yes |  |  |  |
-| `is_header` | BOOL | no |  | `False` |  |
-| `container_type` | VARCHAR(50) | no |  | `'compartment'` |  |
+| `is_header` | BOOL | no |  | `0` |  |
+| `container_type` | VARCHAR(50) | no |  | `compartment` |  |
 | `parent_compartment_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_template_compartments.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -1462,7 +1462,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `check_timing` | VARCHAR(30) | no |  |  |  |
-| `template_type` | VARCHAR(30) | no |  | `'equipment'` |  |
+| `template_type` | VARCHAR(30) | no |  | `equipment` |  |
 | `assigned_positions` | JSON | yes |  |  |  |
 | `is_active` | BOOL | no |  | `True` |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
@@ -1492,11 +1492,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(100) | no |  |  |  |
 | `code` | VARCHAR(50) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `is_cumulative` | BOOL | no |  | `True` |  |
+| `is_cumulative` | BOOL | no |  | `1` |  |
 | `training_program_id` | VARCHAR(36) | yes | FK |  | → `training_programs.id` ON DELETE SET NULL |
-| `is_system` | BOOL | no |  | `False` |  |
+| `is_system` | BOOL | no |  | `0` |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
-| `is_active` | BOOL | no | IDX | `True` |  |
+| `is_active` | BOOL | no | IDX | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -1628,15 +1628,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, UQ |  | → `organizations.id` ON DELETE CASCADE |
-| `threshold_type` | VARCHAR(30) | no |  | `'percentage'` |  |
+| `threshold_type` | VARCHAR(30) | no |  | `percentage` |  |
 | `compliant_threshold` | FLOAT | no |  | `100.0` |  |
 | `at_risk_threshold` | FLOAT | no |  | `75.0` |  |
 | `grace_period_days` | INTEGER | no |  | `0` |  |
 | `include_current_month` | BOOL | no |  | `1` |  |
-| `auto_report_frequency` | VARCHAR(20) | no |  | `'none'` |  |
+| `auto_report_frequency` | VARCHAR(20) | no |  | `none` |  |
 | `report_email_recipients` | JSON | yes |  |  |  |
 | `report_day_of_month` | INTEGER | yes |  | `1` |  |
-| `notify_non_compliant_members` | BOOL | no |  | `False` |  |
+| `notify_non_compliant_members` | BOOL | no |  | `0` |  |
 | `notify_days_before_deadline` | JSON | yes |  | generated |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -1665,7 +1665,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `required_requirement_ids` | JSON | yes |  |  |  |
 | `optional_requirement_ids` | JSON | yes |  |  |  |
 | `admin_hours_requirements` | JSON | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `priority` | INTEGER | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -1684,7 +1684,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `period_label` | VARCHAR(50) | no |  |  |  |
 | `period_year` | INTEGER | no |  |  |  |
 | `period_month` | INTEGER | yes |  |  |  |
-| `status` | VARCHAR(20) | no |  | `'pending'` |  |
+| `status` | VARCHAR(20) | no |  | `pending` |  |
 | `report_data` | JSON | yes |  |  |  |
 | `summary` | JSON | yes |  |  |  |
 | `emailed_to` | JSON | yes |  |  |  |
@@ -1772,7 +1772,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `file_size` | BIGINT | yes |  | `0` |  |
 | `file_type` | VARCHAR(100) | yes |  |  |  |
 | `document_type` | ENUM(`uploaded`, `generated`) | yes |  | `'uploaded'` |  |
-| `status` | ENUM(`active`, `archived`) | no |  | `'active'` |  |
+| `status` | ENUM(`active`, `archived`) | no |  | `active` |  |
 | `content_html` | LONGTEXT | yes |  |  |  |
 | `source_type` | VARCHAR(50) | yes |  |  |  |
 | `source_id` | VARCHAR(36) | yes |  |  |  |
@@ -1838,7 +1838,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `positions` | JSON | yes |  |  |  |
 | `ballot_items` | JSON | yes |  |  |  |
 | `position_eligibility` | JSON | yes |  |  |  |
-| `email_sent` | BOOL | no |  | `False` |  |
+| `email_sent` | BOOL | no |  | `0` |  |
 | `email_sent_at` | DATETIME | yes |  |  |  |
 | `email_recipients` | JSON | yes |  |  |  |
 | `meeting_date` | DATETIME | yes |  |  |  |
@@ -1856,23 +1856,23 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `max_votes_per_position` | INTEGER | no |  | `1` |  |
 | `results_visible_immediately` | BOOL | no |  | `False` |  |
 | `eligible_voters` | JSON | yes |  |  |  |
-| `voting_method` | VARCHAR(50) | no |  | `'simple_majority'` |  |
-| `victory_condition` | VARCHAR(50) | no |  | `'most_votes'` |  |
+| `voting_method` | VARCHAR(50) | no |  | `simple_majority` |  |
+| `victory_condition` | VARCHAR(50) | no |  | `most_votes` |  |
 | `victory_threshold` | INTEGER | yes |  |  |  |
 | `victory_percentage` | INTEGER | yes |  |  |  |
 | `tie_policy` | VARCHAR(20) | no |  | `co_winners` |  |
 | `eligible_roster_snapshot` | JSON | yes |  |  |  |
-| `enable_runoffs` | BOOL | no |  | `False` |  |
-| `runoff_type` | VARCHAR(50) | no |  | `'top_two'` |  |
+| `enable_runoffs` | BOOL | no |  | `0` |  |
+| `runoff_type` | VARCHAR(50) | no |  | `top_two` |  |
 | `max_runoff_rounds` | INTEGER | no |  | `3` |  |
-| `is_runoff` | BOOL | no |  | `False` |  |
+| `is_runoff` | BOOL | no |  | `0` |  |
 | `parent_election_id` | VARCHAR(36) | yes | FK |  | → `elections.id` |
 | `runoff_round` | INTEGER | no |  | `0` |  |
 | `voter_anonymity_salt` | VARCHAR(64) | yes |  |  |  |
 | `attendees` | JSON | yes |  |  |  |
 | `voter_overrides` | JSON | yes |  |  |  |
 | `proxy_authorizations` | JSON | yes |  |  |  |
-| `quorum_type` | VARCHAR(20) | no |  | `'none'` |  |
+| `quorum_type` | VARCHAR(20) | no |  | `none` |  |
 | `quorum_value` | INTEGER | yes |  |  |  |
 | `last_chain_hash` | VARCHAR(64) | yes |  |  |  |
 | `rollback_history` | JSON | yes |  |  |  |
@@ -1922,7 +1922,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `notes` | TEXT | yes |  |  |  |
-| `status` | VARCHAR(20) | no |  | `'pending'` |  |
+| `status` | VARCHAR(20) | no |  | `pending` |  |
 | `required_attestations` | INTEGER | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `confirmed_at` | DATETIME | yes |  |  |  |
@@ -1952,11 +1952,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `vote_dedup_hash` | VARCHAR(64) | yes | UQ |  |  |
 | `chain_hash` | VARCHAR(64) | yes |  |  |  |
 | `receipt_hash` | VARCHAR(64) | yes |  |  |  |
-| `is_test` | BOOL | no |  | `False` |  |
+| `is_test` | BOOL | no |  | `0` |  |
 | `is_manual` | BOOL | no |  | `0` |  |
 | `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `manual_batch_id` | VARCHAR(36) | yes | IDX |  |  |
-| `is_proxy_vote` | BOOL | no |  | `False` |  |
+| `is_proxy_vote` | BOOL | no |  | `0` |  |
 | `proxy_voter_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `proxy_authorization_id` | VARCHAR(36) | yes |  |  |  |
 | `proxy_delegating_user_id` | VARCHAR(36) | yes |  |  |  |
@@ -1994,9 +1994,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `voter_hash` | VARCHAR(64) | no | IDX |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `expires_at` | DATETIME | no |  |  |  |
-| `used` | BOOL | no |  | `False` |  |
+| `used` | BOOL | no |  | `0` |  |
 | `used_at` | DATETIME | yes |  |  |  |
-| `is_test` | BOOL | no |  | `False` |  |
+| `is_test` | BOOL | no |  | `0` |  |
 | `eligible_item_ids` | JSON | yes |  |  |  |
 | `eligible_positions` | JSON | yes |  |  |  |
 | `first_accessed_at` | DATETIME | yes |  |  |  |
@@ -2054,8 +2054,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `html_body` | TEXT | no |  |  |  |
 | `text_body` | TEXT | yes |  |  |  |
 | `css_styles` | TEXT | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
-| `allow_attachments` | BOOL | no |  | `False` |  |
+| `is_active` | BOOL | no |  | `1` |  |
+| `allow_attachments` | BOOL | no |  | `0` |  |
 | `default_cc` | JSON | yes |  |  |  |
 | `default_bcc` | JSON | yes |  |  |  |
 | `available_variables` | JSON | yes |  | `list()` |  |
@@ -2084,7 +2084,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `bcc_emails` | JSON | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
 | `template_type` | VARCHAR(50) | yes |  |  |  |
-| `status` | ENUM(`sent`, `failed`) | no | IDX | `'sent'` |  |
+| `status` | ENUM(`sent`, `failed`) | no | IDX | `sent` |  |
 | `error_message` | TEXT | yes |  |  |  |
 | `recipient_count` | INTEGER | no |  | `1` |  |
 | `sent_at` | DATETIME | no |  | `now()` |  |
@@ -2112,7 +2112,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `bcc_emails` | JSON | yes |  |  |  |
 | `context` | JSON | no |  | `dict()` |  |
 | `scheduled_at` | DATETIME | no |  |  |  |
-| `status` | ENUM(`pending`, `sent`, `failed`, `cancelled`) | no | IDX | `'pending'` |  |
+| `status` | ENUM(`pending`, `sent`, `failed`, `cancelled`) | no | IDX | `pending` |  |
 | `sent_at` | DATETIME | yes |  |  |  |
 | `error_message` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -2269,7 +2269,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `email` | VARCHAR(255) | yes | IDX |  |  |
 | `phone` | VARCHAR(50) | yes |  |  |  |
 | `organization_name` | VARCHAR(255) | yes |  |  |  |
-| `checked_in` | BOOL | no |  | `False` |  |
+| `checked_in` | BOOL | no |  | `0` |  |
 | `checked_in_at` | DATETIME | yes |  |  |  |
 | `source` | VARCHAR(50) | yes |  |  |  |
 | `source_id` | VARCHAR(36) | yes |  |  |  |
@@ -2297,14 +2297,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `event_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `events.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `status` | ENUM(`going`, `not_going`, `maybe`, `waitlisted`) | no |  | `'going'` |  |
+| `status` | ENUM(`going`, `not_going`, `maybe`, `waitlisted`) | no |  | `going` |  |
 | `guest_count` | INTEGER | no |  | `0` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `dietary_restrictions` | VARCHAR(500) | yes |  |  |  |
 | `accessibility_needs` | VARCHAR(500) | yes |  |  |  |
 | `responded_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
-| `checked_in` | BOOL | no |  | `False` |  |
+| `checked_in` | BOOL | no |  | `0` |  |
 | `checked_in_at` | DATETIME | yes |  |  |  |
 | `checked_out_at` | DATETIME | yes |  |  |  |
 | `attendance_duration_minutes` | INTEGER | yes |  |  |  |
@@ -2333,25 +2333,25 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`) | no |  | `'other'` |  |
+| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`) | no |  | `other` |  |
 | `default_title` | VARCHAR(200) | yes |  |  |  |
 | `default_description` | TEXT | yes |  |  |  |
 | `default_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` |
 | `default_location` | VARCHAR(300) | yes |  |  |  |
 | `default_location_details` | TEXT | yes |  |  |  |
 | `default_duration_minutes` | INTEGER | yes |  |  |  |
-| `requires_rsvp` | BOOL | no |  | `False` |  |
+| `requires_rsvp` | BOOL | no |  | `0` |  |
 | `max_attendees` | INTEGER | yes |  |  |  |
-| `is_mandatory` | BOOL | no |  | `False` |  |
-| `allow_guests` | BOOL | no |  | `False` |  |
+| `is_mandatory` | BOOL | no |  | `0` |  |
+| `allow_guests` | BOOL | no |  | `0` |  |
 | `check_in_window_type` | ENUM(`flexible`, `strict`, `window`) | yes |  |  |  |
 | `check_in_minutes_before` | INTEGER | yes |  | `30` |  |
 | `check_in_minutes_after` | INTEGER | yes |  | `15` |  |
-| `require_checkout` | BOOL | no |  | `False` |  |
-| `send_reminders` | BOOL | no |  | `True` |  |
+| `require_checkout` | BOOL | no |  | `0` |  |
+| `send_reminders` | BOOL | no |  | `1` |  |
 | `reminder_schedule` | JSON | no |  | generated |  |
 | `custom_fields_template` | JSON | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
 | `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -2373,7 +2373,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `title` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`) | no | IDX | `'other'` |  |
+| `event_type` | ENUM(`business_meeting`, `public_education`, `training`, `social`, `fundraiser`, `ceremony`, `other`) | no | IDX | `other` |  |
 | `custom_category` | VARCHAR(100) | yes | IDX |  |  |
 | `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` |
 | `location` | VARCHAR(300) | yes |  |  |  |
@@ -2382,19 +2382,19 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `end_datetime` | DATETIME | no |  |  |  |
 | `actual_start_time` | DATETIME | yes |  |  |  |
 | `actual_end_time` | DATETIME | yes |  |  |  |
-| `requires_rsvp` | BOOL | no |  | `False` |  |
+| `requires_rsvp` | BOOL | no |  | `0` |  |
 | `rsvp_deadline` | DATETIME | yes |  |  |  |
 | `max_attendees` | INTEGER | yes |  |  |  |
 | `allowed_rsvp_statuses` | JSON | yes |  |  |  |
-| `is_mandatory` | BOOL | no |  | `False` |  |
-| `allow_guests` | BOOL | no |  | `False` |  |
-| `send_reminders` | BOOL | no |  | `True` |  |
+| `is_mandatory` | BOOL | no |  | `0` |  |
+| `allow_guests` | BOOL | no |  | `0` |  |
+| `send_reminders` | BOOL | no |  | `1` |  |
 | `reminder_schedule` | JSON | no |  | generated |  |
-| `check_in_window_type` | ENUM(`flexible`, `strict`, `window`) | no |  | `'flexible'` |  |
+| `check_in_window_type` | ENUM(`flexible`, `strict`, `window`) | no |  | `flexible` |  |
 | `check_in_minutes_before` | INTEGER | yes |  | `30` |  |
 | `check_in_minutes_after` | INTEGER | yes |  | `15` |  |
-| `require_checkout` | BOOL | no |  | `False` |  |
-| `is_recurring` | BOOL | no |  | `False` |  |
+| `require_checkout` | BOOL | no |  | `0` |  |
+| `is_recurring` | BOOL | no |  | `0` |  |
 | `recurrence_pattern` | ENUM(`daily`, `weekly`, `biweekly`, `monthly`, `monthly_weekday`, `annually`, `annually_weekday`, `custom`) | yes |  |  |  |
 | `recurrence_end_date` | DATETIME | yes |  |  |  |
 | `recurrence_custom_days` | JSON | yes |  |  |  |
@@ -2402,13 +2402,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `recurrence_week_ordinal` | INTEGER | yes |  |  |  |
 | `recurrence_month` | INTEGER | yes |  |  |  |
 | `recurrence_exceptions` | JSON | yes |  |  |  |
-| `rolling_recurrence` | BOOL | no |  | `False` |  |
+| `rolling_recurrence` | BOOL | no |  | `0` |  |
 | `recurrence_parent_id` | VARCHAR(36) | yes | FK, IDX |  | → `events.id` |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `event_templates.id` |
 | `custom_fields` | JSON | yes |  |  |  |
 | `attachments` | JSON | yes |  |  |  |
 | `is_draft` | BOOL | yes |  | `0` |  |
-| `is_cancelled` | BOOL | no |  | `False` |  |
+| `is_cancelled` | BOOL | no |  | `0` |  |
 | `cancellation_reason` | TEXT | yes |  |  |  |
 | `cancelled_at` | DATETIME | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
@@ -2479,7 +2479,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `num_floors` | INTEGER | yes |  |  |  |
 | `num_bays` | INTEGER | yes |  |  |  |
 | `lot_size_acres` | NUMERIC(10, 2) | yes |  |  |  |
-| `is_owned` | BOOL | no |  | `True` |  |
+| `is_owned` | BOOL | no |  | `1` |  |
 | `lease_expiration` | DATE | yes |  |  |  |
 | `property_tax_id` | VARCHAR(100) | yes |  |  |  |
 | `max_occupancy` | INTEGER | yes |  |  |  |
@@ -2491,7 +2491,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `notes` | TEXT | yes |  |  |  |
 | `status_changed_at` | DATETIME | yes |  |  |  |
 | `status_changed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `is_archived` | BOOL | no | IDX | `False` |  |
+| `is_archived` | BOOL | no | IDX | `0` |  |
 | `archived_at` | DATETIME | yes |  |  |  |
 | `archived_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -2527,7 +2527,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `assigned_to_name` | VARCHAR(200) | yes |  |  |  |
 | `issued_date` | DATE | yes |  |  |  |
 | `returned_date` | DATE | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -2598,7 +2598,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `due_date` | DATE | yes | IDX |  |  |
 | `completed_date` | DATE | yes |  |  |  |
 | `completed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `is_completed` | BOOL | no | IDX | `False` |  |
+| `is_completed` | BOOL | no | IDX | `0` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -2630,7 +2630,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `findings` | TEXT | yes |  |  |  |
 | `corrective_action` | TEXT | yes |  |  |  |
 | `corrective_action_deadline` | DATE | yes |  |  |  |
-| `corrective_action_completed` | BOOL | no |  | `False` |  |
+| `corrective_action_completed` | BOOL | no |  | `0` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -2690,7 +2690,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `service_contract_number` | VARCHAR(100) | yes |  |  |  |
 | `priority` | INTEGER | no |  | `1` |  |
 | `notes` | TEXT | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -2726,7 +2726,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `findings` | TEXT | yes |  |  |  |
 | `corrective_actions` | TEXT | yes |  |  |  |
 | `corrective_action_deadline` | DATE | yes |  |  |  |
-| `corrective_action_completed` | BOOL | no |  | `False` |  |
+| `corrective_action_completed` | BOOL | no |  | `0` |  |
 | `corrective_action_completed_date` | DATE | yes |  |  |  |
 | `attachments` | JSON | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
@@ -2768,7 +2768,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `expiration_date` | DATE | yes | IDX |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `attachments` | JSON | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -2799,8 +2799,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `completed_date` | DATE | yes |  |  |  |
 | `completed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `performed_by` | VARCHAR(200) | yes |  |  |  |
-| `is_completed` | BOOL | no | IDX | `False` |  |
-| `is_overdue` | BOOL | no | IDX | `False` |  |
+| `is_completed` | BOOL | no | IDX | `0` |  |
+| `is_overdue` | BOOL | no | IDX | `0` |  |
 | `description` | TEXT | yes |  |  |  |
 | `work_performed` | TEXT | yes |  |  |  |
 | `findings` | TEXT | yes |  |  |  |
@@ -2811,7 +2811,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `next_due_date` | DATE | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `attachments` | JSON | yes |  |  |  |
-| `is_historic` | BOOL | no | IDX | `False` |  |
+| `is_historic` | BOOL | no | IDX | `0` |  |
 | `occurred_date` | DATE | yes | IDX |  |  |
 | `historic_source` | VARCHAR(200) | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -2848,8 +2848,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `category` | ENUM(`preventive`, `repair`, `inspection`, `renovation`, `cleaning`, `safety`, `other`) | yes |  | `'other'` |  |
 | `default_interval_value` | INTEGER | yes |  |  |  |
 | `default_interval_unit` | ENUM(`days`, `weeks`, `months`, `years`) | yes |  |  |  |
-| `is_system` | BOOL | no |  | `False` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_system` | BOOL | no |  | `0` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -2876,7 +2876,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `contact_phone` | VARCHAR(50) | yes |  |  |  |
 | `effective_date` | DATE | yes |  |  |  |
 | `end_date` | DATE | yes |  |  |  |
-| `is_active` | BOOL | no | IDX | `True` |  |
+| `is_active` | BOOL | no | IDX | `1` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -2904,7 +2904,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `file_name` | VARCHAR(200) | no |  |  |  |
 | `mime_type` | VARCHAR(100) | yes |  |  |  |
 | `caption` | VARCHAR(500) | yes |  |  |  |
-| `is_primary` | BOOL | no |  | `False` |  |
+| `is_primary` | BOOL | no |  | `0` |  |
 | `uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `uploaded_at` | DATETIME | yes |  | `now()` |  |
 
@@ -2929,13 +2929,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `room_number` | VARCHAR(50) | yes |  |  |  |
 | `floor` | INTEGER | yes |  |  |  |
 | `room_type` | ENUM(`apparatus_bay`, `bunk_room`, `kitchen`, `bathroom`, `office`, `training_room`, `storage`, `mechanical`, `lobby`, `common_area`, `laundry`, `gym`, `decontamination`, `dispatch`, `other`) | no | IDX | `'other'` |  |
-| `zone_classification` | ENUM(`hot`, `transition`, `cold`, `unclassified`) | no |  | `'unclassified'` |  |
+| `zone_classification` | ENUM(`hot`, `transition`, `cold`, `unclassified`) | no |  | `unclassified` |  |
 | `square_footage` | INTEGER | yes |  |  |  |
 | `capacity` | INTEGER | yes |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `equipment` | TEXT | yes |  |  |  |
 | `sort_order` | INTEGER | yes |  | `0` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -2989,9 +2989,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(100) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `color` | VARCHAR(7) | yes |  |  |  |
-| `is_operational` | BOOL | no |  | `True` |  |
-| `is_system` | BOOL | no |  | `False` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_operational` | BOOL | no |  | `1` |  |
+| `is_system` | BOOL | no |  | `0` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -3032,7 +3032,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `test_frequency_days` | INTEGER | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `sort_order` | INTEGER | yes |  | `0` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `archived_at` | DATETIME | yes |  |  |  |
 | `archived_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -3060,8 +3060,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(100) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `category` | ENUM(`station`, `training`, `administration`, `storage`, `meeting_hall`, `community`, `other`) | yes |  | `'other'` |  |
-| `is_system` | BOOL | no |  | `False` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_system` | BOOL | no |  | `0` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -3091,7 +3091,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `emergency_phone` | VARCHAR(50) | yes |  |  |  |
 | `billing_cycle` | ENUM(`monthly`, `quarterly`, `annual`, `other`) | yes |  | `'monthly'` |  |
 | `notes` | TEXT | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -3672,8 +3672,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `category` | ENUM(`safety`, `operations`, `administration`, `training`, `other`) | no |  | `'operations'` |  |
-| `status` | ENUM(`draft`, `published`, `archived`) | no | IDX | `'draft'` |  |
+| `category` | ENUM(`safety`, `operations`, `administration`, `training`, `other`) | no |  | `operations` |  |
+| `status` | ENUM(`draft`, `published`, `archived`) | no | IDX | `draft` |  |
 | `allow_multiple_submissions` | BOOL | yes |  | `True` |  |
 | `require_authentication` | BOOL | yes |  | `True` |  |
 | `notify_on_submission` | BOOL | yes |  | `False` |  |
@@ -3877,7 +3877,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `opportunity_id` | VARCHAR(36) | yes | FK, IDX |  | → `grant_opportunities.id` ON DELETE SET NULL |
 | `grant_program_name` | VARCHAR(255) | yes |  |  |  |
 | `grant_agency` | VARCHAR(255) | yes |  |  |  |
-| `application_status` | ENUM(`researching`, `preparing`, `internal_review`, `submitted`, `under_review`, `awarded`, `denied`, `active`, `reporting`, `closed`) | no | IDX | `'researching'` |  |
+| `application_status` | ENUM(`researching`, `preparing`, `internal_review`, `submitted`, `under_review`, `awarded`, `denied`, `active`, `reporting`, `closed`) | no | IDX | `researching` |  |
 | `amount_requested` | NUMERIC(12, 2) | yes |  |  |  |
 | `amount_awarded` | NUMERIC(12, 2) | yes |  |  |  |
 | `match_amount` | NUMERIC(12, 2) | yes |  |  |  |
@@ -3898,7 +3898,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `next_report_due` | DATE | yes |  |  |  |
 | `final_report_due` | DATE | yes |  |  |  |
 | `assigned_to` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
-| `priority` | ENUM(`low`, `medium`, `high`, `critical`) | no | IDX | `'medium'` |  |
+| `priority` | ENUM(`low`, `medium`, `high`, `critical`) | no | IDX | `medium` |  |
 | `linked_campaign_id` | VARCHAR(36) | yes | FK, IDX |  | → `fundraising_campaigns.id` ON DELETE SET NULL |
 | `notes` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
@@ -3957,8 +3957,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `description` | TEXT | yes |  |  |  |
 | `due_date` | DATE | no | IDX |  |  |
 | `completed_date` | DATE | yes |  |  |  |
-| `status` | ENUM(`pending`, `in_progress`, `completed`, `overdue`, `waived`) | no | IDX | `'pending'` |  |
-| `priority` | ENUM(`low`, `medium`, `high`, `critical`) | no |  | `'medium'` |  |
+| `status` | ENUM(`pending`, `in_progress`, `completed`, `overdue`, `waived`) | no | IDX | `pending` |  |
+| `priority` | ENUM(`low`, `medium`, `high`, `critical`) | no |  | `medium` |  |
 | `assigned_to` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `reminder_days_before` | INTEGER | no |  | `14` |  |
 | `last_reminder_sent` | DATETIME | yes |  |  |  |
@@ -4018,7 +4018,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `application_id` | VARCHAR(36) | no | FK, IDX |  | → `grant_applications.id` ON DELETE CASCADE |
-| `note_type` | ENUM(`general`, `status_change`, `document_added`, `contact_made`, `milestone`, `financial`, `compliance`) | no | IDX | `'general'` |  |
+| `note_type` | ENUM(`general`, `status_change`, `document_added`, `contact_made`, `milestone`, `financial`, `compliance`) | no | IDX | `general` |  |
 | `content` | TEXT | no |  |  |  |
 | `metadata` | JSON | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
@@ -4049,7 +4049,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `eligibility_criteria` | TEXT | yes |  |  |  |
 | `application_url` | VARCHAR(500) | yes |  |  |  |
 | `program_url` | VARCHAR(500) | yes |  |  |  |
-| `match_required` | BOOL | no |  | `False` |  |
+| `match_required` | BOOL | no |  | `0` |  |
 | `match_percentage` | NUMERIC(5, 2) | yes |  |  |  |
 | `match_description` | VARCHAR(500) | yes |  |  |  |
 | `deadline_type` | ENUM(`fixed`, `recurring`, `rolling`) | yes |  |  |  |
@@ -4059,7 +4059,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `tags` | JSON | yes |  |  |  |
 | `category` | ENUM(`equipment`, `staffing`, `training`, `prevention`, `facilities`, `vehicles`, `wellness`, `community`, `other`) | yes | IDX |  |  |
 | `federal_program_code` | VARCHAR(50) | yes | IDX |  |  |
-| `is_active` | BOOL | no | IDX | `True` |  |
+| `is_active` | BOOL | no | IDX | `1` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -4337,7 +4337,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `item_asset_tag` | VARCHAR(255) | yes |  |  |  |
 | `item_value` | NUMERIC(10, 2) | yes |  |  |  |
 | `quantity` | INTEGER | no |  | `1` |  |
-| `disposition` | ENUM(`pending`, `returned`, `returned_damaged`, `written_off`, `waived`) | no |  | `'pending'` |  |
+| `disposition` | ENUM(`pending`, `returned`, `returned_damaged`, `written_off`, `waived`) | no |  | `pending` |  |
 | `return_condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | yes |  |  |  |
 | `resolved_at` | DATETIME | yes |  |  |  |
 | `resolved_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
@@ -4362,7 +4362,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
-| `status` | ENUM(`initiated`, `in_progress`, `completed`, `closed_incomplete`) | no |  | `'initiated'` |  |
+| `status` | ENUM(`initiated`, `in_progress`, `completed`, `closed_incomplete`) | no |  | `initiated` |  |
 | `total_items` | INTEGER | no |  | `0` |  |
 | `items_cleared` | INTEGER | no |  | `0` |  |
 | `items_outstanding` | INTEGER | no |  | `0` |  |
@@ -4555,8 +4555,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `storage_location` | VARCHAR(255) | yes |  |  |  |
 | `storage_area_id` | VARCHAR(36) | yes | FK, IDX |  | → `storage_areas.id` ON DELETE SET NULL |
 | `station` | VARCHAR(100) | yes |  |  |  |
-| `condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | no | IDX | `'good'` |  |
-| `status` | ENUM(`available`, `assigned`, `checked_out`, `in_maintenance`, `lost`, `stolen`, `retired`) | no | IDX | `'available'` |  |
+| `condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | no | IDX | `good` |  |
+| `status` | ENUM(`available`, `assigned`, `checked_out`, `in_maintenance`, `lost`, `stolen`, `retired`) | no | IDX | `available` |  |
 | `status_notes` | TEXT | yes |  |  |  |
 | `tracking_type` | ENUM(`individual`, `pool`) | no |  | `individual` |  |
 | `variant_group_id` | VARCHAR(36) | yes | FK, IDX |  | → `item_variant_groups.id` ON DELETE SET NULL |
@@ -4651,7 +4651,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `item_asset_tag` | VARCHAR(255) | yes |  |  |  |
 | `quantity` | INTEGER | no |  | `1` |  |
 | `performed_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
-| `processed` | BOOL | no | IDX | `False` |  |
+| `processed` | BOOL | no | IDX | `0` |  |
 | `processed_at` | DATETIME | yes |  |  |  |
 | `attempt_count` | INTEGER | no |  | `0` |  |
 | `last_attempt_at` | DATETIME | yes |  |  |  |
@@ -4680,7 +4680,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `item_value` | NUMERIC(10, 2) | yes |  |  |  |
 | `reason` | ENUM(`lost`, `damaged_beyond_repair`, `obsolete`, `stolen`, `other`) | no |  | `'lost'` |  |
 | `description` | TEXT | no |  |  |  |
-| `status` | ENUM(`pending`, `approved`, `denied`) | no | IDX | `'pending'` |  |
+| `status` | ENUM(`pending`, `approved`, `denied`) | no | IDX | `pending` |  |
 | `requested_by` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE RESTRICT |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `reviewed_at` | DATETIME | yes |  |  |  |
@@ -4738,7 +4738,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `item_id` | VARCHAR(36) | no | FK, IDX |  | → `inventory_items.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `assignment_type` | ENUM(`permanent`, `temporary`) | no |  | `'permanent'` |  |
+| `assignment_type` | ENUM(`permanent`, `temporary`) | no |  | `permanent` |  |
 | `assigned_date` | DATETIME | no |  | `now()` |  |
 | `returned_date` | DATETIME | yes |  |  |  |
 | `expected_return_date` | DATETIME | yes |  |  |  |
@@ -5016,8 +5016,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reminder_type` | VARCHAR(20) | no |  |  |  |
 | `items_outstanding` | INTEGER | no |  | `0` |  |
 | `total_value_outstanding` | NUMERIC(10, 2) | no |  | `0` |  |
-| `sent_to_member` | BOOL | no |  | `True` |  |
-| `sent_to_admin` | BOOL | no |  | `True` |  |
+| `sent_to_member` | BOOL | no |  | `1` |  |
+| `sent_to_admin` | BOOL | no |  | `1` |  |
 | `sent_at` | DATETIME | yes |  | `now()` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 
@@ -5047,8 +5047,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `actual_unit_cost` | NUMERIC(10, 2) | yes |  |  |  |
 | `purchase_order_number` | VARCHAR(255) | yes |  |  |  |
 | `expected_delivery_date` | DATE | yes |  |  |  |
-| `status` | ENUM(`pending`, `approved`, `ordered`, `received`, `cancelled`) | no | IDX | `'pending'` |  |
-| `urgency` | ENUM(`low`, `normal`, `high`, `critical`) | no |  | `'normal'` |  |
+| `status` | ENUM(`pending`, `approved`, `ordered`, `received`, `cancelled`) | no | IDX | `pending` |  |
+| `urgency` | ENUM(`low`, `normal`, `high`, `critical`) | no |  | `normal` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `requested_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -5157,7 +5157,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `floor` | VARCHAR(20) | yes |  |  |  |
 | `room_number` | VARCHAR(50) | yes |  |  |  |
 | `capacity` | INTEGER | yes |  |  |  |
-| `is_active` | BOOL | no | IDX | `True` |  |
+| `is_active` | BOOL | no | IDX | `1` |  |
 | `display_code` | VARCHAR(12) | yes | UQ, UQ-IDX |  |  |
 | `facility_id` | VARCHAR(36) | yes | FK, IDX |  | → `facilities.id` ON DELETE SET NULL |
 | `facility_room_id` | VARCHAR(36) | yes | FK, UQ, IDX |  | → `facility_rooms.id` ON DELETE SET NULL |
@@ -5194,7 +5194,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `prospect_id` | VARCHAR(36) | yes | FK, IDX |  | → `prospective_members.id` ON DELETE CASCADE |
 | `screening_type` | ENUM(`physical_exam`, `medical_clearance`, `drug_screening`, `vision_hearing`, `fitness_assessment`, `psychological`) | no |  |  |  |
-| `status` | ENUM(`scheduled`, `completed`, `passed`, `failed`, `pending_review`, `waived`, `expired`) | no |  | `'scheduled'` |  |
+| `status` | ENUM(`scheduled`, `completed`, `passed`, `failed`, `pending_review`, `waived`, `expired`) | no |  | `scheduled` |  |
 | `scheduled_date` | DATE | yes |  |  |  |
 | `completed_date` | DATE | yes |  |  |  |
 | `expiration_date` | DATE | yes |  |  |  |
@@ -5230,7 +5230,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `description` | TEXT | yes |  |  |  |
 | `frequency_months` | INTEGER | yes |  |  |  |
 | `applies_to_roles` | JSON | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `grace_period_days` | INTEGER | no |  | `30` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -5253,7 +5253,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `title` | VARCHAR(300) | no |  |  |  |
-| `meeting_type` | ENUM(`business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other`) | no | IDX | `'business'` |  |
+| `meeting_type` | ENUM(`business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other`) | no | IDX | `business` |  |
 | `meeting_date` | DATETIME | no | IDX |  |  |
 | `location` | VARCHAR(300) | yes |  |  |  |
 | `called_by` | VARCHAR(200) | yes |  |  |  |
@@ -5277,7 +5277,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `committee_reports` | TEXT | yes |  |  |  |
 | `announcements` | TEXT | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
-| `status` | ENUM(`draft`, `submitted`, `approved`, `rejected`) | no | IDX | `'draft'` |  |
+| `status` | ENUM(`draft`, `submitted`, `approved`, `rejected`) | no | IDX | `draft` |  |
 | `submitted_at` | DATETIME | yes |  |  |  |
 | `submitted_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
 | `approved_at` | DATETIME | yes |  |  |  |
@@ -5313,7 +5313,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `moved_by` | VARCHAR(200) | yes |  |  |  |
 | `seconded_by` | VARCHAR(200) | yes |  |  |  |
 | `discussion_notes` | TEXT | yes |  |  |  |
-| `status` | ENUM(`passed`, `failed`, `tabled`, `withdrawn`) | no |  | `'passed'` |  |
+| `status` | ENUM(`passed`, `failed`, `tabled`, `withdrawn`) | no |  | `passed` |  |
 | `votes_for` | INTEGER | yes |  |  |  |
 | `votes_against` | INTEGER | yes |  |  |  |
 | `votes_abstain` | INTEGER | yes |  |  |  |
@@ -5338,8 +5338,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `assignee_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` |
 | `assignee_name` | VARCHAR(200) | yes |  |  |  |
 | `due_date` | DATETIME | yes | IDX |  |  |
-| `priority` | ENUM(`low`, `medium`, `high`, `urgent`) | no |  | `'medium'` |  |
-| `status` | ENUM(`pending`, `in_progress`, `completed`, `cancelled`, `overdue`) | no | IDX | `'pending'` |  |
+| `priority` | ENUM(`low`, `medium`, `high`, `urgent`) | no |  | `medium` |  |
+| `status` | ENUM(`pending`, `in_progress`, `completed`, `cancelled`, `overdue`) | no | IDX | `pending` |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `completion_notes` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -5364,8 +5364,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `meeting_type` | ENUM(`business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other`) | no | IDX | `'business'` |  |
-| `is_default` | BOOL | no |  | `False` |  |
+| `meeting_type` | ENUM(`business`, `special`, `committee`, `board`, `trustee`, `executive`, `annual`, `other`) | no | IDX | `business` |  |
+| `is_default` | BOOL | no |  | `0` |  |
 | `sections` | JSON | no |  |  |  |
 | `header_config` | JSON | yes |  |  |  |
 | `footer_config` | JSON | yes |  |  |  |
@@ -5394,7 +5394,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `description` | TEXT | no |  |  |  |
 | `assigned_to` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` |
 | `due_date` | DATE | yes |  |  |  |
-| `status` | ENUM(`open`, `in_progress`, `completed`, `cancelled`) | no |  | `'open'` |  |
+| `status` | ENUM(`open`, `in_progress`, `completed`, `cancelled`) | no |  | `open` |  |
 | `priority` | INTEGER | yes |  | `0` |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `completion_notes` | TEXT | yes |  |  |  |
@@ -5448,7 +5448,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `title` | VARCHAR(255) | no |  |  |  |
-| `meeting_type` | ENUM(`business`, `special`, `committee`, `board`, `other`) | no |  | `'business'` |  |
+| `meeting_type` | ENUM(`business`, `special`, `committee`, `board`, `other`) | no |  | `business` |  |
 | `meeting_date` | DATE | no | IDX |  |  |
 | `start_time` | TIME | yes |  |  |  |
 | `end_time` | TIME | yes |  |  |  |
@@ -5456,7 +5456,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `event_id` | VARCHAR(36) | yes | FK, IDX |  | → `events.id` ON DELETE SET NULL |
 | `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE SET NULL |
 | `called_by` | VARCHAR(255) | yes |  |  |  |
-| `status` | ENUM(`draft`, `pending_approval`, `approved`) | no |  | `'draft'` |  |
+| `status` | ENUM(`draft`, `pending_approval`, `approved`) | no |  | `draft` |  |
 | `agenda` | TEXT | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `motions` | TEXT | yes |  |  |  |
@@ -5490,7 +5490,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `pipeline_id` | VARCHAR(36) | no | FK, IDX |  | → `membership_pipelines.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `step_type` | ENUM(`action`, `checkbox`, `note`, `form_submission`, `document_upload`, `election_vote`, `manual_approval`, `meeting`, `status_page_toggle`, `automated_email`, `reference_check`, `checklist`, `interview_requirement`, `multi_approval`, `medical_screening`) | no |  | `'checkbox'` |  |
+| `step_type` | ENUM(`action`, `checkbox`, `note`, `form_submission`, `document_upload`, `election_vote`, `manual_approval`, `meeting`, `status_page_toggle`, `automated_email`, `reference_check`, `checklist`, `interview_requirement`, `multi_approval`, `medical_screening`) | no |  | `checkbox` |  |
 | `action_type` | ENUM(`send_email`, `schedule_meeting`, `collect_document`, `custom`) | yes |  |  |  |
 | `is_first_step` | BOOL | yes |  | `False` |  |
 | `is_final_step` | BOOL | yes |  | `False` |  |
@@ -5601,7 +5601,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `pipeline_id` | VARCHAR(36) | yes | FK |  | → `membership_pipelines.id` ON DELETE SET NULL |
 | `step_id` | VARCHAR(36) | yes | FK |  | → `membership_pipeline_steps.id` ON DELETE SET NULL |
 | `election_id` | VARCHAR(36) | yes | FK |  | → `elections.id` ON DELETE SET NULL |
-| `status` | VARCHAR(20) | no | IDX | `'draft'` |  |
+| `status` | VARCHAR(20) | no | IDX | `draft` |  |
 | `applicant_snapshot` | JSON | yes |  | `dict()` |  |
 | `coordinator_notes` | TEXT | yes |  |  |  |
 | `package_config` | JSON | yes |  | `dict()` |  |
@@ -5675,7 +5675,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `prospect_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `prospective_members.id` ON DELETE CASCADE |
 | `step_id` | VARCHAR(36) | no | FK, IDX |  | → `membership_pipeline_steps.id` ON DELETE CASCADE |
-| `status` | ENUM(`pending`, `in_progress`, `completed`, `skipped`) | no |  | `'pending'` |  |
+| `status` | ENUM(`pending`, `in_progress`, `completed`, `skipped`) | no |  | `pending` |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `completed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `notes` | TEXT | yes |  |  |  |
@@ -5715,7 +5715,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `referred_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `desired_membership_type` | VARCHAR(50) | yes |  |  |  |
 | `current_step_id` | VARCHAR(36) | yes | FK |  | → `membership_pipeline_steps.id` ON DELETE SET NULL |
-| `status` | ENUM(`active`, `on_hold`, `approved`, `rejected`, `withdrawn`, `inactive`, `transferred`) | no | IDX | `'active'` |  |
+| `status` | ENUM(`active`, `on_hold`, `approved`, `rejected`, `withdrawn`, `inactive`, `transferred`) | no | IDX | `active` |  |
 | `metadata` | JSON | yes |  | `dict()` |  |
 | `form_submission_id` | VARCHAR(36) | yes | FK |  | → `form_submissions.id` ON DELETE SET NULL |
 | `status_token` | VARCHAR(64) | yes | UQ, UQ-IDX |  |  |
@@ -5773,8 +5773,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `title` | VARCHAR(500) | no |  |  |  |
 | `body` | TEXT | no |  |  |  |
-| `priority` | ENUM(`normal`, `important`, `urgent`) | no |  | `'normal'` |  |
-| `target_type` | ENUM(`all`, `roles`, `statuses`, `members`) | no |  | `'all'` |  |
+| `priority` | ENUM(`normal`, `important`, `urgent`) | no |  | `normal` |  |
+| `target_type` | ENUM(`all`, `roles`, `statuses`, `members`) | no |  | `all` |  |
 | `target_roles` | JSON | yes |  |  |  |
 | `target_statuses` | JSON | yes |  |  |  |
 | `target_member_ids` | JSON | yes |  |  |  |
@@ -5850,8 +5850,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `trigger` | ENUM(`event_reminder`, `training_expiry`, `schedule_change`, `new_member`, `member_dropped`, `maintenance_due`, `election_started`, `form_submitted`, `action_item_assigned`, `meeting_scheduled`, `document_uploaded`) | no |  |  |  |
-| `category` | ENUM(`events`, `training`, `scheduling`, `members`, `maintenance`, `general`) | no |  | `'general'` |  |
-| `channel` | ENUM(`email`, `in_app`) | no |  | `'in_app'` |  |
+| `category` | ENUM(`events`, `training`, `scheduling`, `members`, `maintenance`, `general`) | no |  | `general` |  |
+| `channel` | ENUM(`email`, `in_app`) | no |  | `in_app` |  |
 | `enabled` | BOOL | yes |  | `True` |  |
 | `config` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -5920,7 +5920,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `is_completed` | BOOL | no |  | `False` |  |
+| `is_completed` | BOOL | no |  | `0` |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `steps_completed` | JSON | yes |  | `dict()` |  |
 | `current_step` | INTEGER | yes |  | `0` |  |
@@ -5956,7 +5956,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `display_name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `eligible_positions` | JSON | yes |  | `list()` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -5991,7 +5991,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_agent` | TEXT | yes |  |  |  |
 | `referer` | VARCHAR(500) | yes |  |  |  |
 | `timestamp` | DATETIME | no | IDX | `now()` |  |
-| `flagged_suspicious` | BOOL | no | IDX | `False` |  |
+| `flagged_suspicious` | BOOL | no | IDX | `0` |  |
 | `flag_reason` | TEXT | yes |  |  |  |
 
 **Indexes**
@@ -6023,7 +6023,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `rate_limit_override` | INTEGER | yes |  |  |  |
 | `expires_at` | DATETIME | yes |  |  |  |
 | `last_used_at` | DATETIME | yes |  |  |  |
-| `is_active` | BOOL | no | IDX | `True` |  |
+| `is_active` | BOOL | no | IDX | `1` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
@@ -6044,7 +6044,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, UQ, UQ-IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `enabled` | BOOL | no |  | `False` |  |
+| `enabled` | BOOL | no |  | `0` |  |
 | `allowed_origins` | JSON | no |  | `list()` |  |
 | `default_rate_limit` | INTEGER | no |  | `1000` |  |
 | `cache_ttl_seconds` | INTEGER | no |  | `300` |  |
@@ -6069,7 +6069,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `config_id` | VARCHAR(36) | no | FK |  | → `public_portal_config.id` ON DELETE CASCADE |
 | `data_category` | VARCHAR(50) | no | IDX |  |  |
 | `field_name` | VARCHAR(100) | no |  |  |  |
-| `is_enabled` | BOOL | no | IDX | `False` |  |
+| `is_enabled` | BOOL | no | IDX | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
 
@@ -6100,10 +6100,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `user_id` | VARCHAR(36) | yes | IDX |  |  |
 | `organization_id` | VARCHAR(36) | yes | IDX |  |  |
 | `details` | JSON | no |  | `dict()` |  |
-| `acknowledged` | BOOL | no |  | `False` |  |
+| `acknowledged` | BOOL | no |  | `0` |  |
 | `acknowledged_by` | VARCHAR(255) | yes |  |  |  |
 | `acknowledged_at` | DATETIME | yes |  |  |  |
-| `resolved` | BOOL | no |  | `False` |  |
+| `resolved` | BOOL | no |  | `0` |  |
 | `resolved_by` | VARCHAR(255) | yes |  |  |  |
 | `resolved_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -6205,8 +6205,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `from_status` | VARCHAR(50) | yes |  |  |  |
 | `to_status` | VARCHAR(50) | yes |  |  |  |
 | `message` | TEXT | yes |  |  |  |
-| `is_member_visible` | BOOL | no |  | `True` |  |
-| `notified` | BOOL | no |  | `False` |  |
+| `is_member_visible` | BOOL | no |  | `1` |  |
+| `notified` | BOOL | no |  | `0` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
@@ -6255,19 +6255,19 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(200) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `status` | ENUM(`draft`, `scheduled`, `open`, `closed`, `fulfilled`, `cancelled`) | no |  | `'draft'` |  |
+| `status` | ENUM(`draft`, `scheduled`, `open`, `closed`, `fulfilled`, `cancelled`) | no |  | `draft` |  |
 | `opens_at` | DATETIME | yes |  |  |  |
 | `closes_at` | DATETIME | yes |  |  |  |
-| `auto_open` | BOOL | no |  | `True` |  |
-| `auto_close` | BOOL | no |  | `True` |  |
+| `auto_open` | BOOL | no |  | `1` |  |
+| `auto_close` | BOOL | no |  | `1` |  |
 | `expected_delivery_date` | DATE | yes |  |  |  |
 | `pickup_instructions` | TEXT | yes |  |  |  |
 | `vendor_name` | VARCHAR(200) | yes |  |  |  |
 | `vendor_reference` | VARCHAR(120) | yes |  |  |  |
 | `vendor_ordered_at` | DATETIME | yes |  |  |  |
 | `vendor_ordered_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `include_all_products` | BOOL | no |  | `True` |  |
-| `notify_on_open` | BOOL | no |  | `True` |  |
+| `include_all_products` | BOOL | no |  | `1` |  |
+| `notify_on_open` | BOOL | no |  | `1` |  |
 | `open_notice_sent_at` | DATETIME | yes |  |  |  |
 | `closing_reminder_sent_at` | DATETIME | yes |  |  |  |
 | `close_notice_sent_at` | DATETIME | yes |  |  |  |
@@ -6301,8 +6301,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `customer_name` | VARCHAR(200) | no |  |  |  |
 | `customer_email` | VARCHAR(255) | yes |  |  |  |
 | `customer_phone` | VARCHAR(50) | yes |  |  |  |
-| `status` | ENUM(`submitted`, `awaiting_payment`, `paid`, `ordered`, `ready_for_pickup`, `fulfilled`, `cancelled`) | no |  | `'submitted'` |  |
-| `payment_status` | ENUM(`unpaid`, `pending_verification`, `partial`, `paid`, `refunded`, `waived`) | no |  | `'unpaid'` |  |
+| `status` | ENUM(`submitted`, `awaiting_payment`, `paid`, `ordered`, `ready_for_pickup`, `fulfilled`, `cancelled`) | no |  | `submitted` |  |
+| `payment_status` | ENUM(`unpaid`, `pending_verification`, `partial`, `paid`, `refunded`, `waived`) | no |  | `unpaid` |  |
 | `payment_method` | ENUM(`venmo`, `paypal`, `cash_app`, `zelle`, `cash`, `check`, `payroll_deduction`, `other`) | yes |  |  |  |
 | `subtotal` | NUMERIC(10, 2) | no |  | `0` |  |
 | `tax_amount` | NUMERIC(10, 2) | no |  | `0` |  |
@@ -6314,7 +6314,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `payment_reported_at` | DATETIME | yes |  |  |  |
 | `paid_at` | DATETIME | yes |  |  |  |
 | `payment_verified_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `fulfillment_method` | ENUM(`pickup`, `ship`) | no |  | `'pickup'` |  |
+| `fulfillment_method` | ENUM(`pickup`, `ship`) | no |  | `pickup` |  |
 | `shipping_address` | TEXT | yes |  |  |  |
 | `member_notes` | TEXT | yes |  |  |  |
 | `admin_notes` | TEXT | yes |  |  |  |
@@ -6350,15 +6350,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `provider` | VARCHAR(30) | no |  | `'paypal'` |  |
+| `provider` | VARCHAR(30) | no |  | `paypal` |  |
 | `external_id` | VARCHAR(120) | no |  |  |  |
 | `event_id` | VARCHAR(120) | yes |  |  |  |
 | `amount` | NUMERIC(10, 2) | no |  | `0` |  |
-| `currency` | VARCHAR(3) | no |  | `'USD'` |  |
+| `currency` | VARCHAR(3) | no |  | `USD` |  |
 | `payer_name` | VARCHAR(200) | yes |  |  |  |
 | `payer_email` | VARCHAR(255) | yes |  |  |  |
 | `reference` | VARCHAR(255) | yes |  |  |  |
-| `status` | ENUM(`applied`, `matched`, `unmatched`, `ambiguous`, `ignored`, `duplicate`) | no |  | `'unmatched'` |  |
+| `status` | ENUM(`applied`, `matched`, `unmatched`, `ambiguous`, `ignored`, `duplicate`) | no |  | `unmatched` |  |
 | `matched_order_id` | VARCHAR(36) | yes | FK, IDX |  | → `store_orders.id` ON DELETE SET NULL |
 | `note` | TEXT | yes |  |  |  |
 | `raw_payload` | JSON | yes |  |  |  |
@@ -6389,7 +6389,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `product_id` | VARCHAR(36) | no | FK, UQ, UQ-IDX |  | → `store_products.id` ON DELETE CASCADE |
-| `content_type` | VARCHAR(100) | no |  | `'image/webp'` |  |
+| `content_type` | VARCHAR(100) | no |  | `image/webp` |  |
 | `data` | BLOB(16777215) | no |  |  |  |
 | `byte_size` | INTEGER | no |  | `0` |  |
 | `uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -6416,7 +6416,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `sku` | VARCHAR(100) | yes |  |  |  |
 | `price_delta` | NUMERIC(10, 2) | no |  | `0` |  |
 | `stock_quantity` | INTEGER | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `1` |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `updated_at` | DATETIME | no |  | `now()` |  |
@@ -6448,17 +6448,17 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `inventory_item_id` | VARCHAR(36) | yes | FK |  | → `inventory_items.id` ON DELETE SET NULL |
 | `price` | NUMERIC(10, 2) | no |  | `0` |  |
 | `cost` | NUMERIC(10, 2) | yes |  |  |  |
-| `is_taxable` | BOOL | no |  | `False` |  |
-| `status` | ENUM(`draft`, `active`, `archived`) | no |  | `'draft'` |  |
+| `is_taxable` | BOOL | no |  | `0` |  |
+| `status` | ENUM(`draft`, `active`, `archived`) | no |  | `draft` |  |
 | `max_per_member` | INTEGER | yes |  |  |  |
-| `personalization_enabled` | BOOL | no |  | `False` |  |
-| `personalization_required` | BOOL | no |  | `False` |  |
+| `personalization_enabled` | BOOL | no |  | `0` |  |
+| `personalization_required` | BOOL | no |  | `0` |  |
 | `personalization_label` | VARCHAR(120) | yes |  |  |  |
 | `personalization_max_length` | INTEGER | no |  | `30` |  |
 | `personalization_price` | NUMERIC(10, 2) | no |  | `0` |  |
-| `track_stock` | BOOL | no |  | `False` |  |
+| `track_stock` | BOOL | no |  | `0` |  |
 | `stock_quantity` | INTEGER | yes |  |  |  |
-| `requires_variant` | BOOL | no |  | `False` |  |
+| `requires_variant` | BOOL | no |  | `0` |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
 | `internal_notes` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -6484,11 +6484,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, UQ, UQ-IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `is_enabled` | BOOL | no |  | `False` |  |
-| `store_name` | VARCHAR(200) | no |  | `'Department Store'` |  |
+| `is_enabled` | BOOL | no |  | `0` |  |
+| `store_name` | VARCHAR(200) | no |  | `Department Store` |  |
 | `tagline` | VARCHAR(300) | yes |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `currency` | VARCHAR(3) | no |  | `'USD'` |  |
+| `currency` | VARCHAR(3) | no |  | `USD` |  |
 | `accepted_payment_methods` | JSON | yes |  |  |  |
 | `venmo_handle` | VARCHAR(100) | yes |  |  |  |
 | `paypal_me_url` | VARCHAR(300) | yes |  |  |  |
@@ -6505,14 +6505,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `payment_instructions` | TEXT | yes |  |  |  |
 | `tax_rate` | NUMERIC(6, 4) | no |  | `0` |  |
 | `shipping_flat_rate` | NUMERIC(10, 2) | yes |  |  |  |
-| `allow_pickup` | BOOL | no |  | `True` |  |
-| `allow_shipping` | BOOL | no |  | `False` |  |
+| `allow_pickup` | BOOL | no |  | `1` |  |
+| `allow_shipping` | BOOL | no |  | `0` |  |
 | `pickup_location` | VARCHAR(300) | yes |  |  |  |
 | `notify_emails` | JSON | yes |  |  |  |
-| `notify_admins_on_order` | BOOL | no |  | `True` |  |
-| `send_order_confirmation` | BOOL | no |  | `True` |  |
-| `send_status_updates` | BOOL | no |  | `True` |  |
-| `send_payment_reminders` | BOOL | no |  | `True` |  |
+| `notify_admins_on_order` | BOOL | no |  | `1` |  |
+| `send_order_confirmation` | BOOL | no |  | `1` |  |
+| `send_status_updates` | BOOL | no |  | `1` |  |
+| `send_payment_reminders` | BOOL | no |  | `1` |  |
 | `send_payment_receipts` | BOOL | no |  | `1` |  |
 | `send_window_opened` | BOOL | no |  | `1` |  |
 | `send_window_closing_reminder` | BOOL | no |  | `1` |  |
@@ -6571,7 +6571,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `unit_number` | VARCHAR(20) | no |  |  |  |
 | `name` | VARCHAR(100) | no |  |  |  |
-| `apparatus_type` | VARCHAR(50) | no |  | `'engine'` |  |
+| `apparatus_type` | VARCHAR(50) | no |  | `engine` |  |
 | `min_staffing` | INTEGER | yes |  | `1` |  |
 | `positions` | JSON | yes |  |  |  |
 | `is_active` | BOOL | yes |  | `True` |  |
@@ -7193,8 +7193,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `shift_id` | VARCHAR(36) | no | FK, IDX |  | → `shifts.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `'firefighter'` |  |
-| `assignment_status` | ENUM(`assigned`, `confirmed`, `declined`, `pending`, `cancelled`, `no_show`) | no |  | `'assigned'` |  |
+| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
+| `assignment_status` | ENUM(`assigned`, `confirmed`, `declined`, `pending`, `cancelled`, `no_show`) | no |  | `assigned` |  |
 | `is_training` | BOOL | no |  | `0` |  |
 | `training_program_id` | VARCHAR(36) | yes | FK |  | → `training_programs.id` ON DELETE SET NULL |
 | `training_evaluator_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -7348,7 +7348,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `lot_number` | VARCHAR(100) | yes |  |  |  |
 | `serial_found` | VARCHAR(100) | yes |  |  |  |
 | `lot_found` | VARCHAR(100) | yes |  |  |  |
-| `updated_serial` | BOOL | no |  | `False` |  |
+| `updated_serial` | BOOL | no |  | `0` |  |
 | `photo_urls` | JSON | yes |  |  |  |
 | `is_expired` | BOOL | no |  | `False` |  |
 | `expiration_date` | DATE | yes |  |  |  |
@@ -7377,7 +7377,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `checked_by` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `checked_at` | DATETIME | yes |  | `now()` |  |
 | `check_timing` | VARCHAR(30) | no |  |  |  |
-| `check_context` | VARCHAR(30) | no |  | `'shift_based'` |  |
+| `check_context` | VARCHAR(30) | no |  | `shift_based` |  |
 | `overall_status` | VARCHAR(30) | no |  |  |  |
 | `total_items` | INTEGER | no |  | `0` |  |
 | `completed_items` | INTEGER | no |  | `0` |  |
@@ -7444,7 +7444,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `offering_shift_id` | VARCHAR(36) | no | FK |  | → `shifts.id` ON DELETE CASCADE |
 | `requesting_shift_id` | VARCHAR(36) | yes | FK |  | → `shifts.id` ON DELETE SET NULL |
 | `target_user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `status` | ENUM(`pending`, `approved`, `denied`, `cancelled`) | no | IDX | `'pending'` |  |
+| `status` | ENUM(`pending`, `approved`, `denied`, `cancelled`) | no | IDX | `pending` |  |
 | `reason` | TEXT | yes |  |  |  |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `reviewed_at` | DATETIME | yes |  |  |  |
@@ -7506,7 +7506,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `start_date` | DATE | no | IDX |  |  |
 | `end_date` | DATE | no |  |  |  |
 | `reason` | TEXT | yes |  |  |  |
-| `status` | ENUM(`pending`, `approved`, `denied`, `cancelled`) | no |  | `'pending'` |  |
+| `status` | ENUM(`pending`, `approved`, `denied`, `cancelled`) | no |  | `pending` |  |
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `approved_at` | DATETIME | yes |  |  |  |
 | `reviewer_notes` | TEXT | yes |  |  |  |
@@ -7835,13 +7835,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `version` | INTEGER | yes |  | `1` |  |
 | `target_position` | VARCHAR(100) | yes | IDX |  |  |
 | `target_roles` | JSON | yes |  |  |  |
-| `structure_type` | ENUM(`sequential`, `phases`, `flexible`) | no |  | `'flexible'` |  |
+| `structure_type` | ENUM(`sequential`, `phases`, `flexible`) | no |  | `flexible` |  |
 | `prerequisite_program_ids` | JSON | yes |  |  |  |
 | `allows_concurrent_enrollment` | BOOL | yes |  | `True` |  |
 | `time_limit_days` | INTEGER | yes |  |  |  |
 | `warning_days_before` | INTEGER | yes |  | `30` |  |
 | `reminder_conditions` | JSON | yes |  |  |  |
-| `recert_enabled` | BOOL | no |  | `False` |  |
+| `recert_enabled` | BOOL | no |  | `0` |  |
 | `recert_interval_months` | INTEGER | yes |  |  |  |
 | `recert_anchor_month` | INTEGER | yes |  |  |  |
 | `recert_anchor_day` | INTEGER | yes |  |  |  |
@@ -7935,11 +7935,11 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `description` | TEXT | yes |  |  |  |
 | `requirement_type` | ENUM(`hours`, `courses`, `certification`, `shifts`, `calls`, `skills_evaluation`, `checklist`, `knowledge_test`) | no | IDX |  |  |
 | `training_type` | ENUM(`certification`, `continuing_education`, `skills_practice`, `orientation`, `refresher`, `specialty`) | yes |  |  |  |
-| `source` | ENUM(`department`, `state`, `national`) | no |  | `'department'` |  |
+| `source` | ENUM(`department`, `state`, `national`) | no |  | `department` |  |
 | `registry_name` | VARCHAR(100) | yes |  |  |  |
 | `registry_code` | VARCHAR(50) | yes |  |  |  |
 | `is_editable` | BOOL | yes |  | `True` |  |
-| `allows_external_credit` | BOOL | no |  | `False` |  |
+| `allows_external_credit` | BOOL | no |  | `0` |  |
 | `required_hours` | FLOAT | yes |  |  |  |
 | `required_courses` | JSON | yes |  |  |  |
 | `required_shifts` | INTEGER | yes |  |  |  |
@@ -8007,7 +8007,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `certification_number_prefix` | VARCHAR(50) | yes |  |  |  |
 | `issuing_agency` | VARCHAR(255) | yes |  |  |  |
 | `expiration_months` | INTEGER | yes |  |  |  |
-| `counts_toward_certification` | BOOL | no |  | `True` |  |
+| `counts_toward_certification` | BOOL | no |  | `1` |  |
 | `auto_create_records` | BOOL | yes |  | `True` |  |
 | `require_completion_confirmation` | BOOL | yes |  | `False` |  |
 | `approval_deadline_days` | INTEGER | yes |  | `7` |  |
@@ -8054,7 +8054,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `expiration_date` | DATE | yes |  |  |  |
 | `category_id` | VARCHAR(36) | yes | FK |  | → `training_categories.id` ON DELETE SET NULL |
 | `attachments` | JSON | yes |  |  |  |
-| `status` | ENUM(`draft`, `pending_review`, `approved`, `rejected`, `revision_requested`) | no | IDX | `'pending_review'` |  |
+| `status` | ENUM(`draft`, `pending_review`, `approved`, `rejected`, `revision_requested`) | no | IDX | `pending_review` |  |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `reviewed_at` | DATETIME | yes |  |  |  |
 | `reviewer_notes` | TEXT | yes |  |  |  |
@@ -8082,14 +8082,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `waiver_type` | ENUM(`leave_of_absence`, `medical`, `military`, `personal`, `administrative`, `new_member`, `other`) | no |  | `'leave_of_absence'` |  |
+| `waiver_type` | ENUM(`leave_of_absence`, `medical`, `military`, `personal`, `administrative`, `new_member`, `other`) | no |  | `leave_of_absence` |  |
 | `reason` | TEXT | yes |  |  |  |
 | `start_date` | DATE | no | IDX |  |  |
 | `end_date` | DATE | yes |  |  |  |
 | `requirement_ids` | JSON | yes |  |  |  |
 | `granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `granted_at` | DATETIME | yes |  |  |  |
-| `active` | BOOL | no |  | `True` |  |
+| `active` | BOOL | no |  | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -8161,14 +8161,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `leave_type` | ENUM(`leave_of_absence`, `medical`, `military`, `personal`, `administrative`, `new_member`, `other`) | no |  | `'leave_of_absence'` |  |
+| `leave_type` | ENUM(`leave_of_absence`, `medical`, `military`, `personal`, `administrative`, `new_member`, `other`) | no |  | `leave_of_absence` |  |
 | `reason` | TEXT | yes |  |  |  |
 | `start_date` | DATE | no | IDX |  |  |
 | `end_date` | DATE | yes |  |  |  |
 | `granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
 | `granted_at` | DATETIME | yes |  |  |  |
-| `active` | BOOL | no |  | `True` |  |
-| `exempt_from_training_waiver` | BOOL | no |  | `False` |  |
+| `active` | BOOL | no |  | `1` |  |
+| `exempt_from_training_waiver` | BOOL | no |  | `0` |  |
 | `linked_training_waiver_id` | VARCHAR(36) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -8192,7 +8192,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(255) | no |  |  |  |
 | `slug` | VARCHAR(100) | no | UQ |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `organization_type` | ENUM(`fire_department`, `ems_only`, `fire_ems_combined`) | no |  | `'fire_department'` |  |
+| `organization_type` | ENUM(`fire_department`, `ems_only`, `fire_ems_combined`) | no |  | `fire_department` |  |
 | `timezone` | VARCHAR(50) | yes |  | `'America/New_York'` |  |
 | `phone` | VARCHAR(20) | yes |  |  |  |
 | `fax` | VARCHAR(20) | yes |  |  |  |
@@ -8211,7 +8211,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `physical_state` | VARCHAR(50) | yes |  |  |  |
 | `physical_zip` | VARCHAR(20) | yes |  |  |  |
 | `physical_country` | VARCHAR(100) | yes |  | `'USA'` |  |
-| `identifier_type` | ENUM(`fdid`, `state_id`, `department_id`) | no |  | `'department_id'` |  |
+| `identifier_type` | ENUM(`fdid`, `state_id`, `department_id`) | no |  | `department_id` |  |
 | `fdid` | VARCHAR(50) | yes |  |  |  |
 | `state_id` | VARCHAR(50) | yes |  |  |  |
 | `department_id` | VARCHAR(50) | yes |  |  |  |
@@ -8397,7 +8397,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `status_changed_at` | DATETIME | yes |  |  |  |
 | `status_change_reason` | TEXT | yes |  |  |  |
 | `archived_at` | DATETIME | yes |  |  |  |
-| `compliance_exempt` | BOOL | no |  | `False` |  |
+| `compliance_exempt` | BOOL | no |  | `0` |  |
 | `email_verified` | BOOL | yes |  | `False` |  |
 | `mfa_enabled` | BOOL | yes |  | `False` |  |
 | `mfa_secret` | VARCHAR(255) | yes |  |  |  |

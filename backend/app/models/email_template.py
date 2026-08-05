@@ -96,8 +96,10 @@ class EmailTemplate(Base):
     css_styles = Column(Text)
 
     # Configuration
-    is_active = Column(Boolean, default=True, nullable=False)
-    allow_attachments = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="1")
+    allow_attachments = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Default recipients (JSON list of email addresses)
     default_cc = Column(JSON, nullable=True)  # Optional List[str]
@@ -229,6 +231,7 @@ class ScheduledEmail(Base):
         ),
         nullable=False,
         default=ScheduledEmailStatus.PENDING,
+        server_default="pending",
     )
     sent_at = Column(DateTime(timezone=True), nullable=True)
     error_message = Column(Text, nullable=True)
@@ -301,9 +304,10 @@ class MessageHistory(Base):
         ),
         nullable=False,
         default=MessageHistoryStatus.SENT,
+        server_default="sent",
     )
     error_message = Column(Text, nullable=True)
-    recipient_count = Column(Integer, nullable=False, default=1)
+    recipient_count = Column(Integer, nullable=False, default=1, server_default="1")
 
     # Audit
     sent_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

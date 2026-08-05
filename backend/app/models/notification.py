@@ -88,11 +88,13 @@ class NotificationRule(Base):
         Enum(NotificationCategory, values_callable=lambda x: [e.value for e in x]),
         default=NotificationCategory.GENERAL,
         nullable=False,
+        server_default="general",
     )
     channel = Column(
         Enum(NotificationChannel, values_callable=lambda x: [e.value for e in x]),
         default=NotificationChannel.IN_APP,
         nullable=False,
+        server_default="in_app",
     )
 
     # Settings
@@ -264,6 +266,7 @@ class DepartmentMessage(Base):
         Enum(MessagePriority, values_callable=lambda x: [e.value for e in x]),
         default=MessagePriority.NORMAL,
         nullable=False,
+        server_default="normal",
     )
 
     # Targeting
@@ -271,6 +274,7 @@ class DepartmentMessage(Base):
         Enum(MessageTargetType, values_callable=lambda x: [e.value for e in x]),
         default=MessageTargetType.ALL,
         nullable=False,
+        server_default="all",
     )
     target_roles = Column(
         JSON, nullable=True
