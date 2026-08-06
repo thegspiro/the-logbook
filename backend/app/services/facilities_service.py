@@ -35,6 +35,7 @@ from app.models.facilities import (
     FacilityUtilityReading,
 )
 from app.models.location import Location
+from app.models.user import User
 from app.schemas.facilities import (
     FacilityAccessKeyCreate,
     FacilityAccessKeyUpdate,
@@ -77,6 +78,7 @@ from app.schemas.facilities import (
     FacilityUtilityReadingCreate,
     FacilityUtilityReadingUpdate,
 )
+from app.utils.org_scoping import assert_in_org
 
 
 class FacilitiesService:
@@ -740,6 +742,18 @@ class FacilitiesService:
             facility.status_changed_at = datetime.now(tz=timezone.utc)
             facility.status_changed_by = updated_by
 
+        # FAC-3 (XC-1): re-validate the lookup FKs on update, mirroring
+        # create_facility — these are org-or-system lookup rows, so use the
+        # getters (which allow NULL-org system rows) rather than assert_in_org.
+        if facility_data.facility_type_id and not await self.get_facility_type(
+            facility_data.facility_type_id, organization_id
+        ):
+            raise ValueError("Invalid facility type")
+        if facility_data.status_id and not await self.get_facility_status(
+            facility_data.status_id, organization_id
+        ):
+            raise ValueError("Invalid facility status")
+
         update_data = facility_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(facility, field, value)
@@ -833,13 +847,23 @@ class FacilitiesService:
         uploaded_by: str,
     ) -> FacilityPhoto:
         """Create a facility photo"""
+        # FAC-3 (XC-1): validate the client-supplied facility_id is in-org, like
+        # every other facility child-create — a photo must not be filed against
+        # another org's facility.
+        await assert_in_org(
+            self.db,
+            Facility,
+            photo_data.facility_id,
+            organization_id,
+            label="facility",
+        )
         # If setting as primary, unset other primary photos for this facility
         if photo_data.is_primary:
             result = await self.db.execute(
                 select(FacilityPhoto)
                 .where(FacilityPhoto.facility_id == photo_data.facility_id)
                 .where(FacilityPhoto.organization_id == str(organization_id))
-                .where(FacilityPhoto.is_primary == True)  # noqa: E712
+                .where(FacilityPhoto.is_primary.is_(True))
             )
             for photo in result.scalars().all():
                 photo.is_primary = False
@@ -949,6 +973,14 @@ class FacilitiesService:
         uploaded_by: str,
     ) -> FacilityDocument:
         """Create a facility document"""
+        # FAC-3 (XC-1): validate facility_id is in-org before filing a document.
+        await assert_in_org(
+            self.db,
+            Facility,
+            document_data.facility_id,
+            organization_id,
+            label="facility",
+        )
         document = FacilityDocument(
             organization_id=organization_id,
             uploaded_by=uploaded_by,
@@ -1232,6 +1264,17 @@ class FacilitiesService:
         if not maint_type:
             raise ValueError("Invalid maintenance type")
 
+        # FAC-3 (XC-1): system_id is client-supplied and optional — validate it
+        # is in-org when present (facility and type are already verified above).
+        await assert_in_org(
+            self.db,
+            FacilitySystem,
+            getattr(maintenance_data, "system_id", None),
+            organization_id,
+            allow_none=True,
+            label="facility system",
+        )
+
         # Validate historic entries
         if maintenance_data.is_historic and not maintenance_data.occurred_date:
             raise ValueError("occurred_date is required for historic entries")
@@ -1273,6 +1316,25 @@ class FacilitiesService:
             return None
 
         update_data = maintenance_data.model_dump(exclude_unset=True)
+
+        # FAC-3 (XC-1): re-validate FKs the update may change. maintenance_type
+        # is an org-or-system lookup (use the getter); system_id is an org-owned
+        # entity (assert_in_org). Only checked when the field is actually set.
+        if update_data.get(
+            "maintenance_type_id"
+        ) and not await self.get_maintenance_type(
+            update_data["maintenance_type_id"], organization_id
+        ):
+            raise ValueError("Invalid maintenance type")
+        if "system_id" in update_data:
+            await assert_in_org(
+                self.db,
+                FacilitySystem,
+                update_data["system_id"],
+                organization_id,
+                allow_none=True,
+                label="facility system",
+            )
 
         # Handle completion
         if (
@@ -1799,6 +1861,17 @@ class FacilitiesService:
         if not facility:
             raise ValueError("Invalid facility")
 
+        # FAC-3 (XC-1): assigned_to_user_id is client-supplied and optional —
+        # validate it is in-org so a key isn't assigned to a foreign member.
+        await assert_in_org(
+            self.db,
+            User,
+            getattr(key_data, "assigned_to_user_id", None),
+            organization_id,
+            allow_none=True,
+            label="member",
+        )
+
         key = FacilityAccessKey(
             organization_id=organization_id,
             created_by=created_by,
@@ -1821,6 +1894,18 @@ class FacilitiesService:
         key = await self.get_access_key(key_id, organization_id)
         if not key:
             return None
+
+        # FAC-3 (XC-1): validate a reassigned member id is in-org before it is
+        # applied via _apply_updates.
+        if "assigned_to_user_id" in key_data.model_dump(exclude_unset=True):
+            await assert_in_org(
+                self.db,
+                User,
+                key_data.assigned_to_user_id,
+                organization_id,
+                allow_none=True,
+                label="member",
+            )
 
         await self._apply_updates(key, key_data)
 
