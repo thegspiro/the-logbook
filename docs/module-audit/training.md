@@ -96,6 +96,14 @@ immediately spawns a COMPLETED record crediting the member's self-reported hours
 with no reviewer. Config-driven (likely intended), but the only limit on member
 self-credit is the org's auto-approve config. **Status:** flagged (mirror the
 manual path's SoD guard or accept as documented config).
+> **Clarification (app-review A9):** the *manual* path's self-approval block is
+> now the shared `assert_different_person` guard
+> (`training_submission_service.review_submission`, line 289) rather than an
+> inline check — belt-and-suspenders consistency with finance/skills/admin-hours.
+> This does **not** close TR-5: the finding is about the **auto-approve** branch
+> in `create_submission` (line 114), which spawns a COMPLETED record with *no
+> reviewer at all*, so an actor≠subject check does not apply. TR-5 remains a
+> config decision (bound the auto-approve threshold, or accept it as documented).
 
 ### TR-6 — LOW (flagged) — External/enhancement cross-org FK + defense-in-depth
 `provider.default_category_id`, xAPI `source_provider_id`, `bulk_enroll` name

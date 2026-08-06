@@ -26,7 +26,7 @@ been through a review pass.
 | A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ✅ |
 | A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | ✅ |
 | A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | ✅ |
-| A9 | Platform ops & data lifecycle | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L) | OPS | ⬜ |
+| A9 | Platform ops & data lifecycle | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L) | OPS | ✅ |
 
 ## Tier B — second pass over the audited 27
 
@@ -348,4 +348,31 @@ Established before the first iteration, so any later failure is attributable:
   no assertion weakened. Backend **2514 passed, 0 failed**; frontend **2207
   passed**. See locations-kiosk.md. Next: A9 platform ops & data lifecycle
   (last of Tier A).
+- **A9 platform ops & data lifecycle ✅ — Tier A complete.** These four services
+  are the *implementations* of controls the module-audit deferred (FIN-4, AH-4,
+  CS-8, TR-5, ORU-7), so the job was to verify they're correctly and completely
+  wired and reconcile the tracking docs with the code. **Verified good:** the
+  shared `assert_different_person` guard is well-built (no-ops on missing ids,
+  approve-only, ValueError→400) and correctly wired into all four paths;
+  admin-continuity (ORU-7) is comprehensively wired across all five documented
+  paths, with the role-edit guard correctly at the **service** layer
+  (`role_service.py`) so it covers every caller; data-export is self-scoped by
+  construction (every section filters `model.user_id == user.id`, no arbitrary-id
+  path), rate-limited, audited; audit-shipping POSTs to an **env-configured**
+  URL (no SSRF), HMAC-signed, watermark advances only on 2xx.
+  **No code changed** — the controls are sound. **5 doc-accuracy corrections**,
+  each verified against code: OPS-1 (AH-4 is fixed unconditionally, docs said
+  flagged — noted the single-officer consequence), OPS-2 (CS-8 skills-half fixed
+  / attestation-half open, docs said fully open), OPS-3 (FIN-4 approval-chain
+  self-approval closed / disbursement still open, docs framed only the open
+  half), OPS-4 (**TR-5 looked fixed but is not** — the shared guard is on the
+  manual path; the auto-approve branch the finding is actually about spawns a
+  credited record with no reviewer, so it stands — clarified rather than
+  ticked off), OPS-5 (storefront SoD stays flagged, but recorded two
+  non-equivalent fix options). The near-miss on TR-5 is the case for verifying
+  over pattern-matching. Corrected `admin-hours.md`, `compliance-skills.md`,
+  `training.md`, and two `KNOWN_LIMITATIONS.md` rows. Gate clean (no code
+  change); `test_separation_of_duties.py` 8/8 pass. See platform-ops.md.
+  **Next: Tier B — B1 medical-screening (second, broader pass over the audited
+  27).**
 </content>
