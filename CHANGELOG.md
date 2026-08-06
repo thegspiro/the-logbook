@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Error messages: structured server errors now read correctly (2026-08-06)
+
+**Fixed**
+
+- **Some error notifications showed "[object Object]" instead of the real
+  message.** When the server returned a structured error (for example, the
+  "a previously archived member matches this prospect" conflict), the shared error
+  handler couldn't read it and displayed a placeholder. It now surfaces the actual
+  message across every screen that uses it.
+
 ### Roles: an admin can no longer edit a role more powerful than their own (2026-08-06)
 
 **Fixed**

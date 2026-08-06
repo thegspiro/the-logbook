@@ -65,7 +65,7 @@ from its open list.
 | B24 | core infra | CI2 | ✅ |
 | B25 | onboarding | ONB2 | ✅ |
 | B26 | public-portal | PP2 | ✅ |
-| B27 | frontend shared | FE2 | ⬜ |
+| B27 | frontend shared | FE2 | ✅ |
 
 **36 features total.** After B27 the rotation wraps to A1.
 
@@ -713,4 +713,31 @@ Established before the first iteration, so any later failure is attributable:
   lockout — accepted design limits). **Cleanup:** swept 4 E712 in `portal.py`.
   `test_public_portal_security` + `test_public_display` 21 passed. flake8/black
   clean. See public-portal.md. Next: B27 frontend shared (final Tier B item).
+- **B27 frontend shared ✅ — Tier B complete.** The shared frontend layer had **no
+  prior audit** (deferred here), so this was a security-first survey plus the
+  correctness lens. **Verified good:** no stored-XSS in the shared render helpers
+  (`simpleMarkdown` uses `React.createElement` + scheme-allowlisted links;
+  `LinkifiedText` emits text nodes + `https?://`-only hrefs — the two
+  `dangerouslySetInnerHTML` grep hits are comments saying they *don't* use it); the
+  HIPAA `UNCACHEABLE_PREFIXES` list (57 entries) is thorough and rationale-commented;
+  auth plumbing matches the documented model (`withCredentials` + CSRF double-submit
+  + shared-`refreshPromise` refresh; only `has_session` in localStorage). **1 fix
+  applied:** FE-1 (LOW/MED: `toAppError` — used by every store/async handler —
+  rendered a structured **object** `detail` as `[object Object]` in toasts because it
+  only handled string + 422-array details; added an object-detail branch extracting
+  `detail.message`. Generalizes the one-off MP-7 repair to the whole class). **2
+  frontend regression tests added**; `errorHandling.test.ts` 34 passed; tsc + eslint
+  clean. See frontend-shared.md.
+
+---
+
+## 🏁 Tier B complete (2026-08-06)
+
+All 36 features reviewed: **Tier A (A1–A9)** + **Tier B (B1–B27)**. This session
+carried B9–B27 (19 iterations). Every iteration applied only verified/safe fixes,
+flagged product/behavior/schema decisions in `KNOWN_LIMITATIONS.md`, added
+regression tests, and passed the completion gate (flake8/black/tsc/eslint;
+DB-backed tests are the known no-MySQL sandbox limit). The rotation would next wrap
+to A1 — **not auto-started**; a fresh pass is a deliberate owner decision. The loop
+is stopped.
 </content>
