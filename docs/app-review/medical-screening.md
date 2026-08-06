@@ -1,4 +1,58 @@
-# Application Review — Medical Screening (Tier B, 2nd pass)
+# Application Review — Medical Screening (Tier B)
+
+**Prefix:** `MS2` · **Iteration:** B1 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-06 (pass 2)
+
+---
+
+## Pass 2 (2026-08-06)
+
+Re-verified the pass-1 fixes still hold and widened the lens over the full
+endpoint/schema surface. **MS-2/MS-3 intact:** `create_record` still validates
+all three client FKs via `assert_in_org` (fail-closed), and `ScreeningRecordUpdate`
+deliberately omits `user_id`/`prospect_id`/`requirement_id`, so the MS-3 create
+guard **cannot be bypassed via update** — confirmed clean. `_resolve_names` still
+org-scopes every lookup. MS-1 (PHI plaintext) still stands, still migration-shaped.
+
+One new finding, the same class as MS-2 on a path pass 1 didn't cover:
+
+### MS2-4 — MED — Record list/detail responses never populated names — ✅ FIXED
+
+**What:** `ScreeningRecordResponse` declares `user_name`, `prospect_name`,
+`reviewer_name`, and `requirement_name`
+(`schemas/medical_screening.py:121-124`), but the four service methods behind the
+record endpoints — `list_records`, `get_record`, `create_record`, `update_record`
+— return the raw `ScreeningRecord` ORM row, which has **no such attributes** (only
+the `user`/`prospect`/`reviewer`/`requirement` relationships). With
+`from_attributes=True`, every one of those four fields serialized as `null` on
+`GET /records`, `GET /records/{id}`, `POST /records`, and `PUT /records/{id}`.
+
+**Why MED (live UI defect, not cosmetic):** `MedicalScreeningPage.tsx:321` — the
+**Records tab** — renders `record.user_name ?? record.prospect_name ?? 'Unknown'`,
+and its `records` come from `medicalScreeningService.listRecords()` → `GET
+/records` (the un-enriched path). So **every row on the Records tab showed
+"Unknown"** as the member/prospect name. This is exactly the MS-2 defect (which
+was fixed only for the expiring/compliance dashboards, on the separate
+`ExpiringScreening`/`ComplianceSummary` schemas); the record list/detail path was
+left behind and still broken.
+
+**Fix:** a new public `attach_record_names(organization_id, records)` service
+method reuses the existing MS-2 `_resolve_names` helper — one org-scoped batch
+query per entity type, with the reviewer (a `User`) **folded into the same user
+lookup** rather than a fourth query — and sets the four names as plain instance
+attributes Pydantic reads via `from_attributes` (non-mapped, never persisted).
+Wired into all four record endpoints; the list endpoint enriches only the paged
+slice, not the full result set. `update_record`/`delete_record`'s internal
+`get_record` fetch and the compliance path's internal `list_records` call stay
+un-enriched (no wasted queries) because enrichment lives at the endpoint layer,
+not inside the shared fetchers. Org-scoping is load-bearing and tested: an
+out-of-org id is absent from the resolved map, so a name can never cross tenants.
+3 tests added (`TestAttachRecordNames`): all-four-fields populated +
+reviewer-folded-into-user-batch, empty-list-no-query, unresolved-id-yields-None.
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `MS2` · **Iteration:** B1 · **Reviewed:** 2026-08-06
 

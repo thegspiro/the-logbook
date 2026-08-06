@@ -466,3 +466,41 @@ class MedicalScreeningService:
             requirements = {rid: name for rid, name in rows.all()}
 
         return {"users": users, "prospects": prospects, "requirements": requirements}
+
+    async def attach_record_names(
+        self, organization_id: str, records: List[ScreeningRecord]
+    ) -> None:
+        """Populate the display-name fields on record responses, in place.
+
+        `ScreeningRecordResponse` carries `user_name` / `prospect_name` /
+        `reviewer_name` / `requirement_name`, but the ORM row has none of them —
+        so without this, every record on `/records` and `/records/{id}`
+        serializes those as null and the UI (MedicalScreeningPage records tab)
+        shows "Unknown". Resolves all four org-scoped, one batch query per entity
+        type (the reviewer is a `User`, folded into the same user lookup), then
+        sets plain instance attributes Pydantic reads via `from_attributes`;
+        they are not mapped columns and never persist. Same batch approach and
+        org-scoping guarantee as `get_expiring_soon` — a name can't cross orgs.
+        """
+        if not records:
+            return
+        names = await self._resolve_names(
+            organization_id,
+            user_ids={r.user_id for r in records if r.user_id}
+            | {r.reviewed_by for r in records if r.reviewed_by},
+            prospect_ids={r.prospect_id for r in records if r.prospect_id},
+            requirement_ids={r.requirement_id for r in records if r.requirement_id},
+        )
+        for r in records:
+            r.user_name = names["users"].get(r.user_id) if r.user_id else None
+            r.prospect_name = (
+                names["prospects"].get(r.prospect_id) if r.prospect_id else None
+            )
+            r.reviewer_name = (
+                names["users"].get(r.reviewed_by) if r.reviewed_by else None
+            )
+            r.requirement_name = (
+                names["requirements"].get(r.requirement_id)
+                if r.requirement_id
+                else None
+            )

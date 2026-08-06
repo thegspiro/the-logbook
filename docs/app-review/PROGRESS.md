@@ -39,7 +39,7 @@ from its open list.
 
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
-| B1 | medical-screening | MS2 | ⬜ |
+| B1 | medical-screening | MS2 | ✅ (p1, p2) |
 | B2 | apparatus | AP2 | ⬜ |
 | B3 | inventory | INV2 | ⬜ |
 | B4 | facilities | FAC2 | ⬜ |
@@ -748,8 +748,26 @@ sandbox limit).
 ## 🔄 Pass 2 opened (2026-08-06)
 
 At the owner's direction ("continue with the next review items"), Tier B was reset
-to ⬜ for a second full pass. The next iteration takes **B1 medical-screening**.
-Pass 2 starts from pass-1's landed fixes: re-verify they still hold, and widen the
-lens for anything the first pass flagged-not-fixed or didn't reach. Tier A remains
-✅ (never-reviewed surfaces already covered once; not re-run unless directed).
+to ⬜ for a second full pass. Pass 2 starts from pass-1's landed fixes: re-verify
+they still hold, and widen the lens for anything the first pass flagged-not-fixed or
+didn't reach. Tier A remains ✅ (never-reviewed surfaces already covered once; not
+re-run unless directed).
+
+### Pass 2 log
+
+- **B1 medical-screening ✅ (pass 2).** Re-verified pass-1: MS-3 create-path FK
+  validation intact and **not bypassable via update** (`ScreeningRecordUpdate`
+  omits the FK fields); MS-2 `_resolve_names` org-scoping intact; MS-1 (PHI
+  plaintext) still stands, migration-shaped. **1 fix applied:** MS2-4 (MED, live UI
+  defect — the same class as MS-2 on the path pass 1 didn't cover): the record
+  list/detail responses (`GET /records`, `/records/{id}`, `POST`/`PUT /records`)
+  declare `user_name`/`prospect_name`/`reviewer_name`/`requirement_name` but the
+  service returned the raw ORM row, which has none of them — so every row on the
+  **Records tab** rendered "Unknown". New `attach_record_names` reuses the MS-2
+  `_resolve_names` helper (one org-scoped batch per entity type; reviewer folded
+  into the user lookup), wired into all four record endpoints, enriching only the
+  paged slice. **3 tests added** (`TestAttachRecordNames`); 22 medical-screening
+  tests pass. Gate: flake8/black clean; no frontend change (the types already
+  declare the fields and the UI already reads them — the backend now honors the
+  existing contract). See medical-screening.md → Pass 2. Next: B2 apparatus.
 </content>
