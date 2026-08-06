@@ -59,7 +59,7 @@ from its open list.
 | B18 | training | TR2 | ✅ |
 | B19 | scheduling | SCH2 | ✅ |
 | B20 | finance | FIN2 | ✅ |
-| B21 | orgs, roles & users | ORU2 | ⬜ |
+| B21 | orgs, roles & users | ORU2 | ✅ |
 | B22 | compliance & skills | CS2 | ⬜ |
 | B23 | security, audit & IP | SEC2 | ⬜ |
 | B24 | core infra | CI2 | ⬜ |
@@ -627,4 +627,20 @@ Established before the first iteration, so any later failure is attributable:
   overspend guard) — all already in KNOWN_LIMITATIONS. **Cleanup:** swept 2 E712 in
   `finance_service.py`. Tests: 19 pure unit tests pass (30 DB-fixture errors, no
   MySQL). flake8/black clean. See finance.md. Next: B21 orgs, roles & users.
+- **B21 orgs, roles & users ✅.** The privilege-management surface; ORU-1–6, ORU-8,
+  ORU-9 already fixed and re-confirmed. **1 fix applied:** ORU-7a (MED privilege
+  sabotage: `_enforce_permission_grant_ceiling` on `update_role` only validated
+  the *new* permission list and early-returns on `[]`, so a privileged-but-not-`*`
+  caller — e.g. a Fire Chief — could set the `*` System Owner role's permissions to
+  `[]` or downgrade it to their subset, gutting the tenant's wildcard admin. New
+  `_enforce_role_edit_ceiling` requires the caller's ceiling to cover the role's
+  **current** permissions when changing them — you can't edit a role more
+  privileged than you could create; the attempt is reported to security
+  monitoring). **1 doc-drift correction:** ORU-7b (last-admin lockout) is **already
+  fixed** — `assert_role_change_retains_administrator` recounts the org and blocks
+  removing the last `members.manage` holder, wired into update/delete role. **1
+  flagged:** ORU-7c (org-wide `member` role mass-escalation — intended-but-sharp,
+  KNOWN_LIMITATIONS). **3 unit tests added** (`TestRoleEditCeiling`); role tests
+  28 passed. flake8/black clean. See orgs-roles-users.md. Next: B22 compliance &
+  skills.
 </content>

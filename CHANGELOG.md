@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Roles: an admin can no longer edit a role more powerful than their own (2026-08-06)
+
+**Fixed**
+
+- **A privileged-but-not-top-level admin can no longer weaken the highest role.**
+  Previously the check that stops you granting permissions above your own level
+  didn't stop you from *editing* a role that already held them — so an admin
+  without full access could blank out or downgrade the "System Owner" role,
+  disrupting who can administer the department. Editing a role now requires that
+  your own access already covers everything that role currently holds.
+
 ### Events: RSVP guards and a template-email crash fix (2026-08-06)
 
 **Fixed**
