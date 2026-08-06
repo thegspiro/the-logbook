@@ -380,6 +380,39 @@ class AuditLogger:
                         }
                     )
 
+        # SEC-2 (tail-truncation): the genesis anchor above detects deletion from
+        # the HEAD of the chain, but deleting the NEWEST rows leaves a chain that
+        # is still internally consistent and anchored to genesis, so it would
+        # otherwise "verify". A non-archival checkpoint attests that entries
+        # existed up to its ``last_log_id``; if the chain now ends before that,
+        # those attested rows were removed. Only meaningful for a full-chain
+        # verify (no explicit ``end_id`` window) — a windowed check legitimately
+        # stops early. Archival checkpoints (``archived_at`` set) purge the OLD
+        # head range, not the tail, so they are excluded here.
+        if end_id is None and logs:
+            current_max_id = logs[-1].id
+            cp_result = await db.execute(
+                select(AuditLogCheckpoint)
+                .where(AuditLogCheckpoint.archived_at.is_(None))
+                .order_by(AuditLogCheckpoint.last_log_id.desc())
+                .limit(1)
+            )
+            latest_cp = cp_result.scalar_one_or_none()
+            if latest_cp and latest_cp.last_log_id > current_max_id:
+                results["verified"] = False
+                results["errors"].append(
+                    {
+                        "error": (
+                            "Chain tail truncated - checkpoint attests entries "
+                            f"up to id {latest_cp.last_log_id} but the chain now "
+                            f"ends at {current_max_id} (entries may have been "
+                            "removed from the end of the chain)"
+                        ),
+                        "checkpoint_last_log_id": latest_cp.last_log_id,
+                        "chain_last_id": current_max_id,
+                    }
+                )
+
         return results
 
     async def rehash_chain(self, db: AsyncSession) -> int:

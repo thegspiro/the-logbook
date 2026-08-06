@@ -61,7 +61,7 @@ from its open list.
 | B20 | finance | FIN2 | ✅ |
 | B21 | orgs, roles & users | ORU2 | ✅ |
 | B22 | compliance & skills | CS2 | ✅ |
-| B23 | security, audit & IP | SEC2 | ⬜ |
+| B23 | security, audit & IP | SEC2 | ✅ |
 | B24 | core infra | CI2 | ⬜ |
 | B25 | onboarding | ONB2 | ⬜ |
 | B26 | public-portal | PP2 | ⬜ |
@@ -659,4 +659,18 @@ Established before the first iteration, so any later failure is attributable:
   swept 4 E712 in `compliance_officer_service.py`. **1 regression test added**
   (`test_iso_readiness_user_scoping`); 96 passed. flake8/black clean. See
   compliance-skills.md. Next: B23 security, audit & IP.
+- **B23 security, audit & IP ✅.** An exhaustively-hardened surface (red-team +
+  iteration-23 closed SEC-1–9). **1 fix applied:** SEC-2 residual (MED: audit-chain
+  **tail-truncation** was undetectable — the genesis anchor catches deleting the
+  oldest rows, but deleting the newest rows leaves a chain still consistent and
+  anchored to genesis, so `verify_integrity` returned `verified: True` for a
+  truncated tail. Now, on a full-chain verify, it cross-checks the chain's last id
+  against the newest non-archival `AuditLogCheckpoint` — a checkpoint attests
+  entries existed up to its `last_log_id`, so a chain ending before that is
+  reported `"Chain tail truncated"`. Archival checkpoints excluded (they purge the
+  old head, not the tail) → no false positive on retention or on an append-only
+  chain. To truncate undetectably an attacker must now also rewrite the checkpoint,
+  which can be attested out of band). **2 regression tests added**
+  (`test_audit_hash_chain` 10 passed). All SEC-1–9 re-confirmed. flake8/black clean.
+  See security-audit-ip.md. Next: B24 core infra.
 </content>
