@@ -24,7 +24,7 @@ been through a review pass.
 | A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | ✅ |
 | A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | ✅ |
 | A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ✅ |
-| A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | ⬜ |
+| A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | ✅ |
 | A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | ⬜ |
 | A9 | Platform ops & data lifecycle | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L) | OPS | ⬜ |
 
@@ -287,4 +287,33 @@ Established before the first iteration, so any later failure is attributable:
   the ORU-9 state machine as deferred four days after it shipped — corrected;
   this is what the "re-verify open findings" step is for.
   See member-lifecycle.md. Next: A7 dashboard & action items.
+- **A7 dashboard & action items ✅** — a dashboard is a cross-module aggregator,
+  so two failure modes matter here: an aggregate that forgets its org filter
+  (RPT-1) and one that re-exposes what a sibling module restricted (XC-2). The
+  first is **clean** — minutes action items have no `organization_id` column, and
+  both places that touch them correctly join `MeetingMinutes` for the org scope,
+  with a comment saying so. The second was not.
+  **1 fix applied:** DASH-1 (MED XC-2: `GET /dashboard/action-items` merges the
+  Meetings and Minutes feeds and requires **no permission at all**, but the
+  minutes half filtered on `organization_id` only — so any authenticated member
+  could read the description, assignee and due date of action items belonging to
+  **unapproved drafts and closed executive-session minutes**, which is where
+  discipline, terminations and legal matters live. MM-3 closed exactly this on
+  the minutes module's own four read paths; this was a side door into the same
+  rows. Fixed by extracting `minutes_visibility_filter` mirroring
+  `MinuteService`'s `restricted` branch, keyed on the same existing permission —
+  no new permission, no frontend change. **One judgment call for the owner:** it
+  carves out items *assigned to the caller* so `assigned_to_me` still shows a
+  member their own tasks; drop that branch if executive items should be
+  invisible even to their assignee — it is one line and one test.)
+  **1 flagged:** DASH-2 (LOW: `GET /dashboard/stats` returns three hardcoded
+  fields and has **zero frontend callers**. Harmless today, but
+  `setup_percentage=100` asserts setup is complete rather than reporting
+  unknown, and a real source already exists — whoever wires this up later gets a
+  confident wrong answer. Delete-or-implement is a decision, not a correction.)
+  **4 tests added**, asserting the authorization predicate against compiled SQL
+  so it needs no MySQL. General lesson recorded: a restriction applied in the
+  owning module must be applied at **every cross-module read of the same rows**.
+  Backend **2512 passed, 0 failed**. See dashboard.md. Next: A8 locations &
+  kiosk.
 </content>

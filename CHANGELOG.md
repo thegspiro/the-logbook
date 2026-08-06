@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Executive-session action items are no longer visible on the dashboard (2026-08-05)
+
+**Fixed**
+
+- **The unified dashboard action-item feed re-exposed restricted minutes.**
+  `GET /dashboard/action-items` merges action items from the Meetings and
+  Minutes modules and is available to any authenticated member. The minutes half
+  filtered on organization only — so a member could read the description,
+  assignee and due date of action items belonging to **unapproved drafts and
+  closed executive-session minutes**, which is where personnel discipline,
+  terminations and legal matters are recorded. The minutes module's own reads
+  already restricted these to `minutes.manage` holders; the dashboard was a side
+  door into the same rows. It now applies the same gate, keyed on the same
+  permission, with a carve-out so a member still sees an action item assigned to
+  them.
+
 ### Email subjects read correctly, and a scheduled email can't borrow another org's template (2026-08-05)
 
 **Fixed**
