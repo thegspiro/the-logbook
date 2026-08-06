@@ -23,7 +23,7 @@ been through a review pass.
 | A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | ✅ |
 | A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | ✅ |
 | A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | ✅ |
-| A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ⬜ |
+| A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ✅ |
 | A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | ⬜ |
 | A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | ⬜ |
 | A9 | Platform ops & data lifecycle | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L) | OPS | ⬜ |
@@ -259,4 +259,32 @@ Established before the first iteration, so any later failure is attributable:
   entry; a frontend build-out plus a per-cohort/per-class product call, not a
   correction). 1 NIT open (CC-3, spring-forward gap resolves via fold=0).
   See course-cohorts.md. Next: A6 member lifecycle & offboarding.
+- **A6 member lifecycle & offboarding ✅** — the irreversible operations
+  (anonymization, unattended retention deletion, archival) were the priority and
+  are in good shape. Verified: anonymization org-scoped with an explicit
+  "never resolve a target across tenants" fetch, self-anonymization blocked,
+  departed-only precondition, idempotent; **its documented contract matches the
+  code** (the ELEC-5/CI-5 claim-vs-code check — every claimed scrub verified
+  present, and the deliberate retentions are audit logs, votes and operational
+  history, all correctly justified); **applicant ID photos and background checks
+  are removed from disk before the rows** — DOC-1's orphaned-file lesson applied
+  exactly where it would have hurt most; PII coverage checked **mechanically**
+  (58 User columns vs 31 cleared — the remainder are operational flags, no PII
+  missed); retention is conservative by design (documents/minutes excluded from
+  auto-deletion with sound reasoning, floors enforced twice, batched deletes,
+  Pitfall #12 deepcopy cited); auto-archive checks all four outstanding-property
+  categories; the two cron-trigger endpoints pass the caller's org — **the AH-2
+  lesson applied**; org scoping verified mechanically across all six services.
+  Also confirmed **ORU-9's deferred `member_status` state machine now exists**.
+  **1 fix applied:** LIFE-1 (LOW: the clearance total — a member's chargeable
+  liability for unreturned gear — was accumulated through `float` while the same
+  file already summed correctly with `Decimal` 350 lines later; aligned to the
+  file's own pattern). **1 flagged:** LIFE-2 (the per-unit float *division* is
+  bounded to ±1 cent by rounding, but converting it would shift figures members
+  may already have been charged — belongs with the FIN-7 float→Decimal refactor,
+  not a drive-by). 1 NIT (LIFE-3, null timestamps never retention-eligible —
+  arguably the safe default). **Doc fix:** `KNOWN_LIMITATIONS.md` still listed
+  the ORU-9 state machine as deferred four days after it shipped — corrected;
+  this is what the "re-verify open findings" step is for.
+  See member-lifecycle.md. Next: A7 dashboard & action items.
 </content>
