@@ -22,7 +22,7 @@ been through a review pass.
 | A2 | Auth & session lifecycle | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py` | AUTH | ✅ |
 | A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | ✅ |
 | A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | ✅ |
-| A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | ⬜ |
+| A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | ✅ |
 | A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ⬜ |
 | A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | ⬜ |
 | A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | ⬜ |
@@ -235,4 +235,28 @@ Established before the first iteration, so any later failure is attributable:
   **7 tests added**, 3 verified to fail against the pre-fix renderer. Backend
   **2508 passed, 0 failed**. See email-templates.md. Next: A5 course cohorts &
   syllabus.
+- **A5 course cohorts & syllabus ✅** — the newest code in the codebase (merged
+  the day of review) and **the cleanest module reviewed so far**. It reads as
+  though written against the module-audit findings: XC-3 clean (verified
+  mechanically — all 16 public service methods take and use `organization_id`,
+  and sub-resource ops resolve through `_get_cohort_class(id, org)` rather than
+  a bare id); XC-1 clean (`create_cohort` uses the shared `assert_in_org` helper
+  that CROSS-CUTTING recommended and most modules still don't, and `_add_members`
+  filters users by org, warning on out-of-org ids); generation bounded by
+  `MAX_GENERATED_CLASSES = 200` at four points (the SCH-3 lesson); the
+  cross-module `cancel_event` call carries the org (the EC-1 failure mode);
+  **DST handled correctly** — the date is resolved first, then wall-clock time
+  attached in the org's zone and converted to UTC, so a 19:00 class stays 19:00
+  across a transition; frontend avoids Pitfall #1 and the banned date APIs; 96
+  tests, all passing without a DB; documented before review.
+  **1 fix applied:** CC-1 (LOW defence-in-depth: the catalog-course outer join
+  had no org predicate — the MM-1 shape, and it *does* project into the response
+  as `class_course_name`. Predicate moved onto the JOIN so an out-of-org row
+  yields NULL rather than another department's catalog entry). **1 flagged:**
+  CC-2 (MED: `location_id` is a fully-built, validated, double-booking-checked
+  backend capability with **no UI that sets it** — so the room-clash warning the
+  service docstring advertises can never fire. Same shape as the finance-dues-UI
+  entry; a frontend build-out plus a per-cohort/per-class product call, not a
+  correction). 1 NIT open (CC-3, spring-forward gap resolves via fold=0).
+  See course-cohorts.md. Next: A6 member lifecycle & offboarding.
 </content>

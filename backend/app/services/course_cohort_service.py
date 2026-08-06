@@ -134,9 +134,16 @@ class CourseCohortService:
     async def _syllabus(
         self, course_id: UUID, organization_id: UUID
     ) -> List[Tuple[CourseClass, Optional[TrainingCourse]]]:
+        # Org predicate on the JOIN — see the matching note in
+        # course_syllabus_service.list_classes. Keeps a foreign catalog course
+        # out of the generated cohort's class titles.
         result = await self.db.execute(
             select(CourseClass, TrainingCourse)
-            .outerjoin(TrainingCourse, CourseClass.class_course_id == TrainingCourse.id)
+            .outerjoin(
+                TrainingCourse,
+                (CourseClass.class_course_id == TrainingCourse.id)
+                & (TrainingCourse.organization_id == str(organization_id)),
+            )
             .where(
                 CourseClass.course_id == str(course_id),
                 CourseClass.organization_id == str(organization_id),
