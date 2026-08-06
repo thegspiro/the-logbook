@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory: maintenance records, kit issuing, and reorder search hardened (2026-08-06)
+
+**Fixed**
+
+- **A "completed" maintenance record could silently update nothing.** Creating a
+  maintenance record didn't verify the item belonged to your organization, and
+  when marked completed against an item the caller couldn't see, the condition
+  and inspection-date update was skipped while the create still reported
+  success — so an NFPA inspection could record as done without advancing the
+  item's next-due date. The item is now validated in-org before the record is
+  written.
+- **Issuing an equipment kit could fail with a confusing error.** The kit-issue
+  path read an `optional` flag that no longer exists on the kit-item model, which
+  raised on any kit with a missing item or a failed line, surfacing as a generic
+  "failed to issue kit". Every kit item is now treated as required (the intended
+  behavior) without crashing; making items genuinely optional is tracked as a
+  follow-up.
+- **Reorder-request search treated a literal % or _ as a wildcard.** The reorder
+  search now escapes LIKE wildcards like every other inventory search.
+
 ### Apparatus photos and documents can't be filed against another org's apparatus (2026-08-06)
 
 **Fixed**

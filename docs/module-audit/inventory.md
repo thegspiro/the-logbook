@@ -56,7 +56,7 @@ to the lookup and a 404 when a provided `item_id` doesn't resolve in-org (a
 legitimate request always references an item the member can see; `item_id` is
 optional — name-only purchase requests are unaffected). Compiles + flake8 clean.
 
-### INV-3 — LOW — `create_maintenance_record` doesn't validate item is in-org (+ silent no-op)
+### INV-3 — MEDIUM — `create_maintenance_record` doesn't validate item is in-org (+ silent no-op) — ✅ FIXED (app-review B3, 2026-08-06)
 `create_maintenance_record` accepts a client-supplied `item_id`, writes the
 record with the caller's `organization_id`, but never checks the item belongs to
 the org. Worse, when `is_completed=True`, `_get_item_locked` silently returns
@@ -80,7 +80,7 @@ org-scoped methods, so a bad stored FK fails to resolve at execution — the gap
 is data-integrity/mis-attribution, not a live cross-tenant write.
 **Status:** flagged — best closed by the shared `assert_in_org` helper (XC-1).
 
-### INV-5 — LOW — `list_reorder_requests` LIKE without wildcard escaping
+### INV-5 — LOW — `list_reorder_requests` LIKE without wildcard escaping — ✅ FIXED (app-review B3, 2026-08-06)
 `list_reorder_requests` uses `ReorderRequest.item_name.ilike(f"%{search}%")`
 without escaping `%`/`_`, unlike the other search methods. Still a bound
 parameter (no SQL injection) — just inconsistent wildcard behavior (a `%` in the
@@ -88,7 +88,7 @@ search box matches everything).
 **Status:** flagged (cosmetic/consistency). Recommend the same `_escape_like`
 helper the other search paths use.
 
-### INV-6 — LOW — Equipment-kit `optional` flag read but never persisted
+### INV-6 — MEDIUM — Equipment-kit `optional` flag read but never persisted (live AttributeError) — ✅ FIXED safe half / 🚩 feature flagged (app-review B3, 2026-08-06)
 `issue_kit_to_member` branches on `kit_item.optional`, but `create_equipment_kit`
 never persists an `optional` value from the incoming line-item data (it sets
 `item_id`, `category_id`, `item_name`, `quantity`, `size_selectable`,
