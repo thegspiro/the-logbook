@@ -48,7 +48,7 @@ from its open list.
 | B7 | equipment-check | EC2 | ✅ |
 | B8 | documents | DOC2 | ✅ |
 | B9 | membership pipeline | MP2 | ✅ |
-| B10 | messaging & communications | MSG2 | ⬜ |
+| B10 | messaging & communications | MSG2 | ✅ |
 | B11 | notifications | NOTIF2 | ⬜ |
 | B12 | integrations | INT2 | ⬜ |
 | B13 | forms | FORM2 | ⬜ |
@@ -435,4 +435,26 @@ Established before the first iteration, so any later failure is attributable:
   no logic failures; all existing `complete_step` tests pass valid in-pipeline
   steps so the MP-5 guards don't affect them. See membership-pipeline.md. Next:
   B10 messaging & communications.
+- **B10 messaging & communications ✅.** The security pass had already proven the
+  module's crux — audience targeting can't cross org boundaries, because the
+  single delivery/stats choke point `_targeted_users` loads candidates
+  `WHERE organization_id == message.org`, so a foreign member id/role matches
+  nobody. Re-verified against `_is_targeted` and the read/ack gate
+  `_visible_message_or_none`; still holds. **1 fix applied:** MSG-2 (LOW XC-1
+  defense-in-depth: `create_message`/`update_message` stored client
+  `target_member_ids`/`target_roles` verbatim — not exploitable for delivery, but
+  it persisted garbage/foreign ids. New `_validate_targeting` rejects any member
+  id not in the org and any role entry that isn't a role id/name in the org —
+  rename-safe, matching `_is_targeted`; `Role.organization_id` is NOT NULL so no
+  cross-org system roles to special-case. Only request-supplied values are
+  checked, so a legacy stored role name is never re-validated on an unrelated
+  edit. The compose form's pickers only ever send the org's own role/member ids,
+  so no legitimate-flow impact). **1 noted (by design):** MSG-3 (test-email to a
+  client-supplied address — re-verified `settings.manage`-gated and sender-logged;
+  a rate-limit is future-dev). **Cleanup:** removed three `== True  # noqa: E712`
+  suppressions in favor of `.is_(True)` (the AP-2 fix, honoring Pitfall #10).
+  **5 tests added** (`TestValidateTargeting`): in-org pass, foreign-member reject,
+  role id+rename pass, foreign-role reject, empty-lists-no-query;
+  `test_messaging_service.py` **36 passed** (was 31), no DB needed. flake8/black
+  clean. See messaging.md. Next: B11 notifications.
 </content>
