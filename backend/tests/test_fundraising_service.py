@@ -12,6 +12,8 @@ from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.models.grant import PaymentStatus
 from app.services.fundraising_service import FundraisingService
 
@@ -228,7 +230,57 @@ class TestCrudGuards:
         assert await FundraisingService(db).update_donation("x", "org-1", {}) is None
 
 
-if __name__ == "__main__":  # pragma: no cover
-    import pytest
+class TestPledgeFkValidation:
+    """GF-6: pledge campaign_id / donor_id must be in the caller's org."""
 
+    async def test_create_pledge_rejects_foreign_campaign(self):
+        db = _db([_one(None)])  # campaign not in org
+        with pytest.raises(ValueError, match="Campaign not found"):
+            await FundraisingService(db).create_pledge(
+                "org-1", {"campaign_id": "cFOREIGN"}, "u1"
+            )
+
+    async def test_create_pledge_rejects_foreign_donor(self):
+        db = _db([_one("c1"), _one(None)])  # campaign ok, donor not in org
+        with pytest.raises(ValueError, match="Donor not found"):
+            await FundraisingService(db).create_pledge(
+                "org-1", {"campaign_id": "c1", "donor_id": "dFOREIGN"}, "u1"
+            )
+
+    async def test_create_pledge_in_org_fks_pass(self):
+        db = _db([_one("c1"), _one("d1")])
+        pledge = await FundraisingService(db).create_pledge(
+            "org-1", {"campaign_id": "c1", "donor_id": "d1"}, "u1"
+        )
+        assert pledge is not None
+
+    async def test_update_pledge_rejects_foreign_donor(self):
+        pledge = SimpleNamespace(id="p1", organization_id="org-1")
+        db = _db([_one(pledge), _one(None)])  # pledge fetch, then donor not in org
+        with pytest.raises(ValueError, match="Donor not found"):
+            await FundraisingService(db).update_pledge(
+                "p1", "org-1", {"donor_id": "dFOREIGN"}
+            )
+
+
+class TestFundraisingEventFkValidation:
+    """GF-6: fundraising-event campaign_id / event_id must be in-org."""
+
+    async def test_create_event_rejects_foreign_event(self):
+        db = _db([_one("c1"), _one(None)])  # campaign ok, event not in org
+        with pytest.raises(ValueError, match="Event not found"):
+            await FundraisingService(db).create_fundraising_event(
+                "org-1", {"campaign_id": "c1", "event_id": "eFOREIGN"}, "u1"
+            )
+
+    async def test_update_event_rejects_foreign_campaign(self):
+        event = SimpleNamespace(id="fe1", organization_id="org-1")
+        db = _db([_one(event), _one(None)])  # event fetch, campaign not in org
+        with pytest.raises(ValueError, match="Campaign not found"):
+            await FundraisingService(db).update_fundraising_event(
+                "fe1", "org-1", {"campaign_id": "cFOREIGN"}
+            )
+
+
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

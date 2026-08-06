@@ -52,7 +52,7 @@ from its open list.
 | B11 | notifications | NOTIF2 | ✅ |
 | B12 | integrations | INT2 | ✅ |
 | B13 | forms | FORM2 | ✅ |
-| B14 | grants & fundraising | GF2 | ⬜ |
+| B14 | grants & fundraising | GF2 | ✅ |
 | B15 | admin-hours | AH2 | ⬜ |
 | B16 | reports & analytics | RPT2 | ⬜ |
 | B17 | events | EV2 | ⬜ |
@@ -512,4 +512,21 @@ Established before the first iteration, so any later failure is attributable:
   which would double-escape the text-rendered labels; wants CSP/render-time). **9
   unit tests added** (`TestIsEmptyValue`, DB-free). flake8/black clean. See
   forms.md. Next: B14 grants & fundraising.
+- **B14 grants & fundraising ✅.** The CRITICAL/HIGH cross-tenant financial
+  corruption (GF-1/2/4 — unvalidated FKs feeding recompute-writes and read-leaks)
+  was already closed; re-confirmed. **1 fix applied:** GF-6 (MED XC-1: five write
+  paths stored client FKs unvalidated — `create/update_pledge` (campaign_id,
+  donor_id), `create/update_fundraising_event` (campaign_id, `event_id` →
+  calendar Event), `create/update_application` (linked_campaign_id, assigned_to,
+  approved_by). Stored-only/dangling, no recompute-write or read-leak, but the
+  standard XC-1 shape. Pledge/event FKs validated via the module's local
+  `_entity_in_org`; application FKs via the **shared** `assert_in_org`
+  (`allow_none=True`) — the CROSS-CUTTING-recommended path. All raise ValueError →
+  400, no cross-tenant existence oracle). **3 flagged (unchanged, product
+  decisions):** GF-7 (no grant state machine / overspend guard — `amount_remaining`
+  can go negative, awarded→active→awarded regenerates duplicate compliance tasks),
+  GF-8 (`is_anonymous` never enforced in responses), GF-9 (float money math /
+  unbounded amounts / donor-PII gate breadth) — GF-7/8 mirrored to
+  KNOWN_LIMITATIONS. **8 unit tests added** across both services; 40 passed.
+  flake8/black clean. See grants-fundraising.md. Next: B15 admin-hours.
 </content>

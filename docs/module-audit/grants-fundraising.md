@@ -66,13 +66,17 @@ and update.
 `.ilike()` with no wildcard escaping (not injection — parameterized — but `%`/`_`
 acted as wildcards). **Fix:** escape `\`/`%`/`_` and declare `escape="\\"`.
 
-### GF-6 — MEDIUM (flagged) — Remaining unvalidated cross-org FKs (stored-only)
+### GF-6 — MEDIUM — Remaining unvalidated cross-org FKs (stored-only) — ✅ FIXED (app-review B14)
 `create_pledge`/`update_pledge` (`campaign_id`, `donor_id`),
 `create_fundraising_event`/`update` (`campaign_id`, `event_id`),
-`update_application` (`linked_campaign_id`), and `assigned_to` / `approved_by`
-user ids are stored without in-org validation. None drive a cross-org
-recompute-write or read-leak (unlike GF-1/2/4), so they're dangling/mis-attributed
-FKs. **Status:** flagged (XC-1) — close with the shared `assert_in_org` helper.
+`create/update_application` (`linked_campaign_id`, `assigned_to`, `approved_by`)
+stored client FKs without an in-org check — dangling/mis-attributed (no
+recompute-write or read-leak, unlike GF-1/2/4). **Fix (B14):** pledge/event FKs
+validated via the module's `_entity_in_org` (`_validate_pledge_fks` /
+`_validate_fundraising_event_fks`, incl. `event_id` → calendar `Event`); the
+application FKs validated via the **shared** `assert_in_org` helper
+(`_validate_application_fks`, `allow_none=True`). 8 unit tests added. See
+`docs/app-review/grants-fundraising.md`.
 
 ### GF-7 — MEDIUM (flagged) — No financial state-machine / overspend guards
 No path checks total expenditures against `amount_awarded` / `amount_budgeted`
