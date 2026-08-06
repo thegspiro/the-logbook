@@ -77,7 +77,7 @@ restriction is coded.
 desired). If leadership-only was intended, the ACL needs to walk the parent
 chain. Member personal folders are unaffected (individually `OWNER`).
 
-### DOC-6 — LOW — Write-path FK/enum validation gaps (leadership-gated)
+### DOC-6 — LOW — Write-path FK/enum validation gaps (leadership-gated) — ✅ FIXED (app-review B8, 2026-08-06)
 - `update_document` applies `update_data` (incl. `folder_id`) via bare `setattr`
   with no org/existence/access check — a doc can be reassigned to any folder id.
 - `create_folder`/`update_folder` store `parent_id` / `owner_user_id` with no

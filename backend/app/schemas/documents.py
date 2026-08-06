@@ -10,6 +10,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.document import DocumentStatus
 from app.schemas.base import UTCResponseBase
 
 # ============================================
@@ -90,7 +91,10 @@ class DocumentUpdate(BaseModel):
     description: Optional[str] = None
     folder_id: Optional[UUID] = None
     tags: Optional[str] = None
-    status: Optional[str] = None
+    # DOC-6: constrain to the enum so an arbitrary string can't be set as a
+    # document's status via the bare setattr in update_document (Pydantic
+    # rejects an invalid value with 422 at the boundary).
+    status: Optional[DocumentStatus] = None
 
 
 class DocumentResponse(UTCResponseBase):

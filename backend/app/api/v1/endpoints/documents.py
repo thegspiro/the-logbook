@@ -121,12 +121,13 @@ async def update_folder(
     """Update a document folder"""
     service = DocumentsService(db)
     update_data = folder.model_dump(exclude_none=True)
-    result = ensure_found(
-        await service.update_folder(
+    # Wrapped so a service-layer ValueError (an out-of-org parent/owner id,
+    # DOC-6) returns 400 rather than 500, matching create_folder.
+    async with handle_service_errors("Unable to update folder"):
+        updated = await service.update_folder(
             folder_id, current_user.organization_id, update_data
-        ),
-        "Folder",
-    )
+        )
+    result = ensure_found(updated, "Folder")
     return result
 
 
@@ -368,12 +369,13 @@ async def update_document(
     """Update a document's metadata"""
     service = DocumentsService(db)
     update_data = doc.model_dump(exclude_none=True)
-    result = ensure_found(
-        await service.update_document(
+    # Wrapped so a service-layer ValueError (an out-of-org folder_id, DOC-6)
+    # returns 400 rather than 500.
+    async with handle_service_errors("Unable to update document"):
+        updated = await service.update_document(
             document_id, current_user.organization_id, update_data
-        ),
-        "Document",
-    )
+        )
+    result = ensure_found(updated, "Document")
     return result
 
 

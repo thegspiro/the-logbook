@@ -46,7 +46,7 @@ from its open list.
 | B5 | elections | ELEC2 | ✅ |
 | B6 | meetings & minutes | MM2 | ✅ |
 | B7 | equipment-check | EC2 | ✅ |
-| B8 | documents | DOC2 | ⬜ |
+| B8 | documents | DOC2 | ✅ |
 | B9 | membership pipeline | MP2 | ⬜ |
 | B10 | messaging & communications | MSG2 | ⬜ |
 | B11 | notifications | NOTIF2 | ⬜ |
