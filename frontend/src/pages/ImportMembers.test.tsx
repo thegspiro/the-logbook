@@ -335,4 +335,112 @@ describe('ImportMembers', () => {
       expect(mockToastSuccess).toHaveBeenCalledWith('File validated successfully! Found 1 members to import.');
     });
   });
+
+  // The shape a real roster failed on: a quoted address shifted every later
+  // column by one, so the empty secondaryPhone landed in email and the row was
+  // rejected as "missing required fields" while the email sat one cell over.
+  it('imports a row whose quoted address precedes an empty optional column', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv(
+      'firstName,lastName,street,city,state,zipCode,primaryPhone,secondaryPhone,email,joinDate\n' +
+        'David,Conner,"699 Great Falls Street, Apt 21",Falls Church,VA,22040,(555) 272-7510,,' +
+        'david.conner@example.com,11/11/2012'
+    );
+
+    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText('Import All Members'));
+
+    await waitFor(() => {
+      expect(mockCreateMember).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'david.conner@example.com',
+          address_street: '699 Great Falls Street, Apt 21',
+          address_city: 'Falls Church',
+          address_zip: '22040',
+          phone: '(555) 272-7510',
+          hire_date: '2012-11-11',
+        })
+      );
+    });
+    expect(mockCreateMember.mock.calls[0]?.[0]).not.toHaveProperty('mobile');
+  });
+
+  // A roster exported from another system carries a status column, and the
+  // import silently created every one of those members Active.
+  it('says so when a status column will be ignored', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,status\nJohn,Doe,john@example.com,probationary');
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.stringContaining('The status column is ignored'),
+        { icon: '⚠️' }
+      );
+    });
+  });
+
+  it('names columns it does not recognize instead of dropping them silently', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv(
+      'firstName,lastName,email,certifications,notes\nJohn,Doe,john@example.com,EMT-B,none'
+    );
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        'Ignoring 2 unrecognized column(s): certifications, notes',
+        { icon: '⚠️' }
+      );
+    });
+  });
+
+  it('does not call a recognized column unrecognized', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('First Name,LAST_NAME,E-Mail,Membership Number\nJohn,Doe,john@example.com,FF-001');
+
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith(
+        'File validated successfully! Found 1 members to import.'
+      );
+    });
+    expect(mockToast).not.toHaveBeenCalledWith(
+      expect.stringContaining('unrecognized column'),
+      expect.anything()
+    );
+  });
+
+  // Every row of a roster whose role column holds assignments rather than
+  // configured role names fails, so it is reported before the import runs
+  // rather than one row at a time afterwards.
+  it('reports unmatched role names at upload time', async () => {
+    mockGetRoles.mockResolvedValue([{ id: 'role-1', name: 'Member' }]);
+
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv(
+      'firstName,lastName,email,role\n' +
+        'John,Doe,john@example.com,Engine Operator\n' +
+        'Jane,Roe,jane@example.com,EMT\n' +
+        'Jim,Poe,jim@example.com,Engine Operator'
+    );
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        expect.stringContaining('2 role name(s) do not match a configured role: Engine Operator, EMT'),
+        { duration: 8000 }
+      );
+    });
+  });
+
+  it('stays quiet at upload time when every role name matches', async () => {
+    mockGetRoles.mockResolvedValue([{ id: 'role-1', name: 'Member' }]);
+
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,role\nJohn,Doe,john@example.com,member');
+
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith(
+        'File validated successfully! Found 1 members to import.'
+      );
+    });
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
 });

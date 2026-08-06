@@ -1887,8 +1887,10 @@ def _custom_openapi() -> dict:
     that body with ``{"detail": [{"field", "message"}]}``. The published
     contract therefore described a shape no endpoint has ever returned —
     anyone generating a client from /openapi.json got the wrong type for the
-    single most common error response, and the frontend's ``toAppError()`` was
-    written against the real shape rather than the documented one.
+    single most common error response. That divergence was not theoretical:
+    the frontend's ``toAppError()`` read ``loc``/``msg`` per the documented
+    contract, found neither, and rendered every field error in every 422 as a
+    bare "Invalid value" with no field name and no reason.
 
     Rewriting the two component schemas fixes it for every route at once,
     which is the only tractable option: the alternative is a per-route

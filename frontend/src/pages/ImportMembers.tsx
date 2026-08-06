@@ -92,6 +92,25 @@ const OPTIONAL_HEADERS = TEMPLATE_HEADERS.filter(
 );
 
 /**
+ * Every column this importer reads. A column outside this set is dropped, so it
+ * is named back to the uploader rather than discarded in silence — a roster
+ * exported from another system routinely carries columns (`status`,
+ * `certifications`, `notes`) that look imported because the upload succeeds.
+ */
+const RECOGNIZED_HEADERS: readonly string[] = [
+  ...TEMPLATE_HEADERS.map(normalizeHeader),
+  ...MEMBERSHIP_NUMBER_HEADERS,
+];
+
+/**
+ * `status` earns a specific note instead of the generic one: unlike a stray
+ * column, it names a member property the app really has, so "ignored" is
+ * surprising without the reason. POST /users has no status field — every member
+ * is created Active and adjusted afterwards.
+ */
+const STATUS_HEADER = 'status';
+
+/**
  * Excel rewrites an ISO date cell into the workstation's locale format the
  * moment the template is opened and saved, so a filled-in roster comes back
  * with `3/15/1985` where the template showed `1985-03-15`. The API binds these
@@ -342,7 +361,67 @@ const ImportMembers: React.FC = () => {
         );
       }
 
-      setPreviewData(dataRows.slice(0, 5).map((row) => buildRow(row, headers)));
+      if (headers.includes(STATUS_HEADER)) {
+        toast(
+          'The status column is ignored — every member is created Active. Set status on the member record after importing.',
+          { icon: '⚠️' }
+        );
+      }
+
+      const ignoredHeaders = headerRow
+        .map((raw, index) => ({ raw: raw.trim(), key: headers[index] ?? '' }))
+        .filter(
+          ({ raw, key }) =>
+            raw !== '' && key !== STATUS_HEADER && !RECOGNIZED_HEADERS.includes(key)
+        )
+        .map(({ raw }) => raw);
+      if (ignoredHeaders.length > 0) {
+        const shown = ignoredHeaders.slice(0, 4).join(', ');
+        const rest = ignoredHeaders.length - 4;
+        toast(
+          `Ignoring ${ignoredHeaders.length} unrecognized column(s): ${shown}` +
+            (rest > 0 ? ` and ${rest} more` : ''),
+          { icon: '⚠️' }
+        );
+      }
+
+      const parsedRows = dataRows.map((row) => buildRow(row, headers));
+
+      // Resolved here as well as during the import because an unmatched role
+      // fails its row: a roster whose role column holds assignments ("Engine
+      // Operator", "EMT") rather than configured role names imports nothing at
+      // all, and finding that out one row at a time after pressing Import is a
+      // wasted round trip.
+      if (headers.includes('role')) {
+        try {
+          const roles = await roleService.getRoles();
+          const known = new Set(roles.map((role) => role.name.trim().toLowerCase()));
+          // An empty role list means roles are not configured yet, which the
+          // import treats as "skip the column" rather than "every row is
+          // wrong"; warning here would contradict what the import then does.
+          const unknown = known.size === 0 ? [] : [
+            ...new Set(
+              parsedRows
+                .map((row) => row.role)
+                .filter((role): role is string => !!role && !known.has(role.toLowerCase()))
+            ),
+          ];
+          if (unknown.length > 0) {
+            const shown = unknown.slice(0, 3).join(', ');
+            const rest = unknown.length - 3;
+            toast.error(
+              `${unknown.length} role name(s) do not match a configured role: ${shown}` +
+                (rest > 0 ? ` and ${rest} more` : '') +
+                '. Create them under Roles or clear the role column, or those rows will fail.',
+              { duration: 8000 }
+            );
+          }
+        } catch (_error) {
+          // Non-fatal: the import re-resolves roles and reports per row.
+        }
+      }
+
+      setPreviewData(parsedRows.slice(0, 5));
       toast.success(`File validated successfully! Found ${dataRows.length} members to import.`);
     } catch (_error) {
       toast.error('Failed to parse CSV file. Please check the format.');

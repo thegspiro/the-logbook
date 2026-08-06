@@ -5907,6 +5907,33 @@ required fields.
 any version, keep commas inside double quotes — a spreadsheet exporting to CSV
 does this for you.
 
+### Problem: Rows fail with "Invalid value. Invalid value" and nothing else
+
+**Cause (Fixed 2026-08-06):** Not a CSV problem at all — the API's 422 body was
+being rendered by a reader that did not understand it. `main.py` replaces
+Pydantic's `{loc, msg, type}` validation entries with `{field, message}`, but
+`toAppError()` read the Pydantic spelling, found neither key, and fell back to
+the literal string "Invalid value" for every failed field. The row error
+therefore named neither the field nor the reason, and one "Invalid value" per
+broken field was all you got.
+
+**Fix:** Pull the latest frontend. Both spellings are now read, so the same
+response reads `date_of_birth: Invalid date format. emergency_contacts.0.email:
+Invalid value.` This affected every 422 in the application, not only the member
+import.
+
+### Problem: A column in the spreadsheet was ignored
+
+**Cause:** The importer reads the template's columns and discards the rest. A
+roster exported from another system routinely carries extra columns
+(`status`, `certifications`, `notes`) that looked imported because the upload
+succeeded.
+
+**Fix (2026-08-06):** Selecting the file now names every unrecognized column,
+and calls out `status` specifically — the create endpoint has no status field,
+so every member is created Active regardless of what the column says. Move the
+data into a template column, or set it on the member after importing.
+
 ### Problem: Imported members have no position/role
 
 **Cause (Fixed 2026-08-04):** The `role` column was read from the CSV and then
@@ -5916,6 +5943,14 @@ never sent — roles are assigned by id, and the import never resolved the name.
 against the roles configured under **Roles**, and a name matching none is
 reported against its row instead of being silently ignored. Use the exact role
 name as it appears in the system.
+
+Since 2026-08-06 unmatched names are reported when the file is selected rather
+than one row at a time after the import runs — a roster whose `role` column
+holds assignments ("Engine Operator", "EMT", "Shift Commander") instead of
+configured role names imports nothing at all, and that is worth knowing before
+pressing Import. Put those values in the `rank` column, or create matching
+roles. When no roles are configured at all the column is skipped rather than
+failing every row.
 
 ### Problem: A row fails with "Username already exists" though no username was given
 
