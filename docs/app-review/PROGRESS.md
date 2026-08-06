@@ -39,7 +39,7 @@ from its open list.
 
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
-| B1 | medical-screening | MS2 | ⬜ |
+| B1 | medical-screening | MS2 | ✅ |
 | B2 | apparatus | AP2 | ⬜ |
 | B3 | inventory | INV2 | ⬜ |
 | B4 | facilities | FAC2 | ⬜ |
@@ -375,4 +375,22 @@ Established before the first iteration, so any later failure is attributable:
   change); `test_separation_of_duties.py` 8/8 pass. See platform-ops.md.
   **Next: Tier B — B1 medical-screening (second, broader pass over the audited
   27).**
+- **B1 medical-screening ✅ (Tier B begins).** Worked the module-audit's three
+  open findings plus the broader lens; re-verified (not re-derived) the security
+  pass's tenant-isolation/gating/audit/cache conclusions still hold.
+  **2 fixes applied:** MS-3 (the create path stored client-supplied
+  `user_id`/`prospect_id`/`requirement_id` unvalidated — worse than a generic
+  XC-1 because the record holds **PHI**, so a foreign id mis-attributes a medical
+  result to the wrong person; now validated via the shared `assert_in_org`, and
+  the endpoint gained the missing `ValueError→400` conversion), MS-2 (was filed
+  as "incomplete feature" but is a **live UI defect** — the dashboard renders
+  `user_name ?? prospect_name ?? 'Unknown'`, so every expiring-screening row
+  showed "Unknown"; added a batch `_resolve_names` helper, one org-scoped query
+  per entity type, no N+1, org-scoping tested so a name can't cross tenants).
+  **1 flagged (unchanged):** MS-1 (four PHI columns still plaintext vs CLAUDE.md's
+  encryption claim — migration-shaped, verified no filter relies on plaintext
+  matching so the conversion is safe when scheduled). **3 tests added**
+  (`TestResolveNames`); pre-existing compliance/expiring tests refocused with an
+  autouse stub. Backend **2517 passed, 0 failed**. See medical-screening.md.
+  Next: B2 apparatus.
 </content>

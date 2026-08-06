@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import PaginationParams, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.medical_screening import (
     ComplianceSummary,
@@ -228,10 +229,16 @@ async def create_record(
 ):
     """Create a new screening record."""
     service = MedicalScreeningService(db)
-    record = await service.create_record(
-        organization_id=current_user.organization_id,
-        data=data,
-    )
+    try:
+        record = await service.create_record(
+            organization_id=current_user.organization_id,
+            data=data,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(exc),
+        )
     await log_audit_event(
         db=db,
         event_type="medical_screening.record_created",

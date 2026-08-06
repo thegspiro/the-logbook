@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Medical-screening: names show on the dashboard, and screenings can't be mis-filed cross-tenant (2026-08-06)
+
+**Fixed**
+
+- **The expiring-screenings dashboard showed "Unknown" for every member.** The
+  compliance and expiring-soon responses never populated the member, prospect or
+  requirement names, so the UI — which renders the member name or falls back to
+  "Unknown" — always fell back. Names are now resolved server-side in a single
+  org-scoped batch query per type.
+- **A screening record could be filed against another organization's member.**
+  Creating a record stored the supplied member/prospect/requirement ids without
+  checking they belong to the caller's organization. Because the record holds
+  protected health information, a wrong id mis-attributes a medical result to the
+  wrong person. The ids are now validated in-org before the record is written.
+
 ### The room kiosk shows department time, and a stale check-in window is corrected (2026-08-05)
 
 **Fixed**

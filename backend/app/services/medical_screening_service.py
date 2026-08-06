@@ -17,6 +17,8 @@ from app.models.medical_screening import (
     ScreeningRequirement,
     ScreeningStatus,
 )
+from app.models.membership_pipeline import ProspectiveMember
+from app.models.user import User
 from app.schemas.medical_screening import (
     ComplianceItem,
     ComplianceSummary,
@@ -26,6 +28,7 @@ from app.schemas.medical_screening import (
     ScreeningRequirementCreate,
     ScreeningRequirementUpdate,
 )
+from app.utils.org_scoping import assert_in_org
 
 
 class MedicalScreeningService:
@@ -162,6 +165,36 @@ class MedicalScreeningService:
         data: ScreeningRecordCreate,
     ) -> ScreeningRecord:
         """Create a new screening record."""
+        # MS-3 (XC-1): the record is org-stamped from the caller, but its
+        # subject/requirement ids come from the client. This record holds PHI,
+        # so a foreign user_id doesn't just dangle — it attaches medical
+        # screening results to the wrong person. Validate each in-org before
+        # persisting; assert_in_org fails closed (ValueError → 400) and no-ops
+        # on the ids that weren't supplied.
+        await assert_in_org(
+            self.db,
+            User,
+            data.user_id,
+            organization_id,
+            allow_none=True,
+            label="member",
+        )
+        await assert_in_org(
+            self.db,
+            ProspectiveMember,
+            data.prospect_id,
+            organization_id,
+            allow_none=True,
+            label="prospect",
+        )
+        await assert_in_org(
+            self.db,
+            ScreeningRequirement,
+            data.requirement_id,
+            organization_id,
+            allow_none=True,
+            label="screening requirement",
+        )
         record = ScreeningRecord(
             id=generate_uuid(),
             organization_id=organization_id,
@@ -287,9 +320,21 @@ class MedicalScreeningService:
                 )
             )
 
-        subject_name = ""
         subject_type = "user" if user_id else "prospect"
         subject_id = user_id or prospect_id or ""
+
+        # MS-2: resolve the subject's display name (was always blank).
+        names = await self._resolve_names(
+            organization_id,
+            user_ids={user_id} if user_id else set(),
+            prospect_ids={prospect_id} if prospect_id else set(),
+            requirement_ids=set(),
+        )
+        subject_name = (
+            names["users"].get(user_id)
+            if user_id
+            else names["prospects"].get(prospect_id)
+        ) or ""
 
         return ComplianceSummary(
             subject_id=subject_id,
@@ -333,6 +378,17 @@ class MedicalScreeningService:
         result = await self.db.execute(query)
         records = list(result.scalars().all())
 
+        # MS-2: resolve subject and requirement names in one batch each. The
+        # response schema carries these fields and the dashboard renders
+        # "Unknown" without them; a per-row lookup would be an N+1 over the
+        # expiring set. All three queries are org-scoped.
+        names = await self._resolve_names(
+            organization_id,
+            user_ids={r.user_id for r in records if r.user_id},
+            prospect_ids={r.prospect_id for r in records if r.prospect_id},
+            requirement_ids={r.requirement_id for r in records if r.requirement_id},
+        )
+
         expiring: List[ExpiringScreening] = []
         for record in records:
             days_left = (
@@ -342,14 +398,71 @@ class MedicalScreeningService:
                 ExpiringScreening(
                     record_id=record.id,
                     screening_type=record.screening_type,
-                    requirement_name=None,
+                    requirement_name=names["requirements"].get(record.requirement_id),
                     user_id=record.user_id,
-                    user_name=None,
+                    user_name=names["users"].get(record.user_id),
                     prospect_id=record.prospect_id,
-                    prospect_name=None,
+                    prospect_name=names["prospects"].get(record.prospect_id),
                     expiration_date=record.expiration_date,
                     days_until_expiration=days_left,
                 )
             )
 
         return expiring
+
+    async def _resolve_names(
+        self,
+        organization_id: str,
+        *,
+        user_ids: set,
+        prospect_ids: set,
+        requirement_ids: set,
+    ) -> dict:
+        """Batch-resolve member / prospect / requirement display names, org-scoped.
+
+        Returns ``{"users": {id: name}, "prospects": {id: name},
+        "requirements": {id: name}}``. Missing or out-of-org ids are simply
+        absent from their map, so callers get ``None`` from ``.get`` — a name
+        never leaks across organizations.
+        """
+        users: dict = {}
+        if user_ids:
+            rows = await self.db.execute(
+                select(User.id, User.first_name, User.last_name).where(
+                    User.id.in_(user_ids),
+                    User.organization_id == organization_id,
+                )
+            )
+            users = {
+                uid: f"{first or ''} {last or ''}".strip()
+                for uid, first, last in rows.all()
+            }
+
+        prospects: dict = {}
+        if prospect_ids:
+            rows = await self.db.execute(
+                select(
+                    ProspectiveMember.id,
+                    ProspectiveMember.first_name,
+                    ProspectiveMember.last_name,
+                ).where(
+                    ProspectiveMember.id.in_(prospect_ids),
+                    ProspectiveMember.organization_id == organization_id,
+                )
+            )
+            prospects = {
+                pid: f"{first or ''} {last or ''}".strip()
+                for pid, first, last in rows.all()
+            }
+
+        requirements: dict = {}
+        if requirement_ids:
+            rows = await self.db.execute(
+                select(ScreeningRequirement.id, ScreeningRequirement.name).where(
+                    ScreeningRequirement.id.in_(requirement_ids),
+                    ScreeningRequirement.organization_id == organization_id,
+                )
+            )
+            requirements = {rid: name for rid, name in rows.all()}
+
+        return {"users": users, "prospects": prospects, "requirements": requirements}
