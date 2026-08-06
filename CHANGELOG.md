@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Reports: two training/overview figures now read correctly (2026-08-06)
+
+**Fixed**
+
+- **The training-summary completion rate is no longer skewed low.** The rate
+  counted only current members' completed courses in the numerator but divided by
+  every training record (including departed and exempt members'), understating the
+  true completion rate. It now divides by the records that belong to the members
+  being reported on.
+- **The department overview's check-in count now respects the report period.**
+  Total check-ins were counted for all time even though the rest of the report
+  (events, training) is limited to the selected date range; check-ins are now
+  counted only for events within the period.
+
 ### Forms: stricter required fields and no internal errors leaked on public forms (2026-08-06)
 
 **Fixed**

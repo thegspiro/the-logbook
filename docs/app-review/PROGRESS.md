@@ -54,7 +54,7 @@ from its open list.
 | B13 | forms | FORM2 | ✅ |
 | B14 | grants & fundraising | GF2 | ✅ |
 | B15 | admin-hours | AH2 | ✅ |
-| B16 | reports & analytics | RPT2 | ⬜ |
+| B16 | reports & analytics | RPT2 | ✅ |
 | B17 | events | EV2 | ⬜ |
 | B18 | training | TR2 | ⬜ |
 | B19 | scheduling | SCH2 | ⬜ |
@@ -542,4 +542,21 @@ Established before the first iteration, so any later failure is attributable:
   `current_user.organization_id`). **2 compiled-SQL regression tests added**
   (`TestOrgScopedQueries`); 19 passed. flake8/black clean. See admin-hours.md.
   Next: B16 reports & analytics.
+- **B16 reports & analytics ✅.** The #1 reporting risk — cross-org aggregate
+  leakage — was already closed (RPT-1) and re-confirmed, along with "platform
+  analytics is actually per-org" and the no-injection posture. **3 fixes
+  applied:** RPT-4 (LOW: `_generate_annual_training` compared `organization_id`
+  as a raw UUID vs `str()` everywhere else — dialect-fragile; normalized both),
+  RPT-5a (LOW correctness: `completion_rate = completed/len(records)` but the
+  numerator only counts tracked (active, non-exempt) members' records while the
+  denominator included departed/exempt members' records — skewed low; now divides
+  by `counted_records`), RPT-5b (LOW correctness: `department_overview.total_checkins`
+  counted all-time while every sibling metric is period-bounded; now joins Event
+  and filters the period). **2 flagged:** RPT-3 (member/applicant PII at
+  `reports.view` — permission-granularity policy, KNOWN_LIMITATIONS), RPT-5c
+  (inventory `float()` → FIN-7; apparatus `last_inspection_date` hardcoded None —
+  incomplete feature). **Cleanup:** swept all 14 `== True/False # noqa: E712`
+  suppressions (incl. one in a `case()`) to `.is_(...)`. **1 regression test
+  added** (`TestTrainingSummaryCompletionRate`); 11 passed. flake8/black clean.
+  See reports-analytics.md. Next: B17 events.
 </content>
