@@ -56,6 +56,9 @@ class MessagingService:
         scheduled_at is None as "live immediately".
         """
         try:
+            await self._validate_targeting(
+                organization_id, target_member_ids, target_roles
+            )
             now = datetime.now(timezone.utc)
             effective_scheduled = (
                 scheduled_at if (scheduled_at and scheduled_at > now) else None
@@ -107,7 +110,7 @@ class MessagingService:
 
         def _apply_filters(q):
             if not include_inactive:
-                q = q.where(DepartmentMessage.is_active == True)  # noqa: E712
+                q = q.where(DepartmentMessage.is_active.is_(True))
             if not include_deleted:
                 q = q.where(DepartmentMessage.deleted_at.is_(None))
             if search and search.strip():
@@ -188,6 +191,12 @@ class MessagingService:
                         "Cannot reschedule a message that has already been "
                         "published",
                     )
+
+            await self._validate_targeting(
+                organization_id,
+                updates.get("target_member_ids"),
+                updates.get("target_roles"),
+            )
 
             allowed_fields = {
                 "title",
@@ -272,7 +281,7 @@ class MessagingService:
         # Get all active, non-expired, non-deleted messages for this org
         query = select(DepartmentMessage).where(
             DepartmentMessage.organization_id == organization_id,
-            DepartmentMessage.is_active == True,  # noqa: E712
+            DepartmentMessage.is_active.is_(True),
             DepartmentMessage.deleted_at.is_(None),
         )
         # Exclude expired
@@ -432,7 +441,7 @@ class MessagingService:
             )
             .where(
                 DepartmentMessage.organization_id == organization_id,
-                DepartmentMessage.is_active == True,  # noqa: E712
+                DepartmentMessage.is_active.is_(True),
                 DepartmentMessage.deleted_at.is_(None),
             )
             .where(
@@ -627,6 +636,50 @@ class MessagingService:
         except Exception as e:
             await self.db.rollback()
             return False, safe_error_detail(e)
+
+    async def _validate_targeting(
+        self,
+        organization_id: str,
+        target_member_ids: Optional[List[str]],
+        target_roles: Optional[List[str]],
+    ) -> None:
+        """MSG-2: reject target member/role ids that aren't in the caller's org.
+
+        Delivery is already org-safe — ``_targeted_users`` only ever matches
+        same-org users, so a foreign id reaches nobody — so this is data hygiene
+        / defense-in-depth: it stops a raw API caller from persisting foreign or
+        garbage ids on a message. Role entries may be a role id or (rename-safe)
+        a role name, matching ``_is_targeted``; only the values actually supplied
+        in this request are checked, so a legacy stored value is never
+        re-validated.
+        """
+        if target_member_ids:
+            result = await self.db.execute(
+                select(User.id).where(
+                    User.organization_id == organization_id,
+                    User.id.in_([str(m) for m in target_member_ids]),
+                )
+            )
+            valid_members = {str(r) for r in result.scalars().all()}
+            if any(str(m) not in valid_members for m in target_member_ids):
+                raise ValueError(
+                    "One or more target members are not in your organization"
+                )
+        if target_roles:
+            result = await self.db.execute(
+                select(Role.id, Role.name).where(
+                    Role.organization_id == organization_id
+                )
+            )
+            valid_roles: set = set()
+            for row in result.all():
+                valid_roles.add(str(row.id))
+                if row.name:
+                    valid_roles.add(row.name)
+            if any(str(r) not in valid_roles for r in target_roles):
+                raise ValueError(
+                    "One or more target roles are not in your organization"
+                )
 
     async def _targeted_users(
         self, message: DepartmentMessage, organization_id: str

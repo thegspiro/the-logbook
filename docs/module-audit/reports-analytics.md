@@ -51,18 +51,21 @@ the relatively low `reports.view`. Org-scoped (not a leak), but if member/
 applicant PII warrants a stronger grant, `reports.view` is too weak.
 **Status:** flagged — permission-granularity policy decision.
 
-### RPT-4 — LOW (flagged) — Inconsistent org-id typing in `_generate_annual_training`
-Compares `User.organization_id == organization_id` with the raw `UUID` object
+### RPT-4 — LOW — Inconsistent org-id typing in `_generate_annual_training` — ✅ FIXED (app-review B16)
+Compared `User.organization_id == organization_id` with the raw `UUID` object
 while every other method passes `str(organization_id)` (the column is
-`String(36)`). Works today because `str(uuid)` equals the stored form, but it's
-dialect-fragile. **Status:** flagged (normalize to `str(...)`).
+`String(36)`). Worked today but dialect-fragile. **Fix (B16):** normalized both
+comparisons to `str(organization_id)`. See `docs/app-review/reports-analytics.md`.
 
-### RPT-5 — LOW (flagged) — Aggregate correctness / polish
-`completion_rate` divides a members-only numerator by an all-records denominator
-(rate skews low); `department_overview.total_checkins` counts all-time (no period
-filter) though the report is otherwise period-bounded; `_generate_inventory_status`
-sums `float(current_value)` (prefer `Decimal`); `apparatus_status.last_inspection_date`
-is hardcoded `None`. **Status:** flagged (correctness/polish, not security).
+### RPT-5 — LOW — Aggregate correctness / polish — ⚠️ PARTLY FIXED (app-review B16)
+**Fixed (B16):** `completion_rate` now divides by records attributed to a tracked
+member (not `len(records)`, which included departed/exempt members and skewed the
+rate low); `department_overview.total_checkins` now joins `Event` and filters the
+report period (was all-time next to period-bounded events). 1 regression test
+added. **Still flagged:** `_generate_inventory_status` sums `float(current_value)`
+(FIN-7 refactor); `apparatus_status.last_inspection_date` hardcoded `None`
+(incomplete feature — needs a maintenance-record lookup). See
+`docs/app-review/reports-analytics.md`.
 
 ## Notes
 - The "Platform Analytics" endpoint name is misleading — it's per-org usage

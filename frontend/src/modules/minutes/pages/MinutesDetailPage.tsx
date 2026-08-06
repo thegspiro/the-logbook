@@ -69,7 +69,9 @@ export const MinutesDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
   const tz = useTimezone();
-  const canManage = checkPermission('meetings.manage');
+  // MM-3: minutes writes and restricted reads are gated on minutes.manage on
+  // the backend, not meetings.manage — check the same permission the API does.
+  const canManage = checkPermission('minutes.manage');
 
   const [minutes, setMinutes] = useState<MeetingMinutes | null>(null);
   const [loading, setLoading] = useState(true);

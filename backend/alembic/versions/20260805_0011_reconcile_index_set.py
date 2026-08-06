@@ -43,8 +43,15 @@ data that already violates it. Duplicates are reported up front, naming the
 organization and serial number, rather than surfacing as a bare 1062 part-way
 through.
 
-Revision ID: 20260805_0010
-Revises: 20260805_0009
+Renumbered from 20260805_0010 to 0011. This revision and
+``drop_onboarding_checklist_table`` were authored on separate branches that both
+claimed 0010 off the same parent, so merging them left two heads with one id —
+the collision ``20260805_0101`` documents escaping, recreated. Sequenced after
+the drop rather than before it; the two touch disjoint tables, so only the label
+and the parent pointer moved.
+
+Revision ID: 20260805_0011
+Revises: 20260805_0010
 Create Date: 2026-08-05 00:00:00.000000
 
 """
@@ -54,8 +61,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "20260805_0010"
-down_revision = "20260805_0009"
+revision = "20260805_0011"
+down_revision = "20260805_0010"
 branch_labels = None
 depends_on = None
 

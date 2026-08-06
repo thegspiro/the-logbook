@@ -175,5 +175,32 @@ class TestSubresourceOrgScoping:
             await GrantService(db).create_note("app-x", {"content": "x"}, "u1", "org-A")
 
 
+class TestApplicationFkValidation:
+    """GF-6: linked_campaign_id / assigned_to / approved_by on an application
+    must be in the caller's org (stored-only FKs — dangling/mis-attributed)."""
+
+    async def test_create_rejects_foreign_assigned_to(self):
+        # opportunity_id + linked_campaign_id absent (skipped); assigned_to
+        # present -> its in-org lookup returns nothing -> reject.
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(None)])
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        with pytest.raises(ValueError, match="Invalid Assigned user"):
+            await GrantService(db).create_application(
+                "org-1", {"assigned_to": "uFOREIGN"}, "u1"
+            )
+
+    async def test_create_rejects_foreign_linked_campaign(self):
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[_one(None)])
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        with pytest.raises(ValueError, match="Invalid Linked campaign"):
+            await GrantService(db).create_application(
+                "org-1", {"linked_campaign_id": "cFOREIGN"}, "u1"
+            )
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

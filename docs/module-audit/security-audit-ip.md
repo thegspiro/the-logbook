@@ -53,8 +53,13 @@ truncated chain — silent removal of audit history was undetectable by the very
 check the design leans on. (DB-level delete required; no API deletes audit rows.)
 **Fix:** when verifying from the chain start (`start_id is None`), the first row's
 `previous_hash` must equal the genesis `"0"*64`, else the chain is reported broken
-("chain head missing"). The checkpoint/Merkle cross-check for tail-truncation
-remains flagged (below).
+("chain head missing"). **✅ Tail-truncation now also closed (app-review B23):** on
+a full-chain verify (`end_id is None`), `verify_integrity` cross-checks the chain's
+current last id against the newest non-archival `AuditLogCheckpoint`; if a
+checkpoint attests entries past the chain's end, those rows were removed →
+`"Chain tail truncated"`, `verified: False`. Archival checkpoints are excluded (they
+purge the old head, not the tail). 2 regression tests added. See
+`docs/app-review/security-audit-ip.md`.
 
 ### SEC-3 — MEDIUM (DoS) — `POST /error_logs/log` allowed unbounded step strings — ✅ FIXED
 `troubleshooting_steps: list[str]` capped only the item **count** (20), not the

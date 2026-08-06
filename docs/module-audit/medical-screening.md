@@ -32,14 +32,14 @@ risky change that must be designed + tested, not auto-applied. Recommend:
 convert the four fields to `EncryptedType`, add an Alembic data migration, and
 verify search/filter code doesn't rely on plaintext matching on them.
 
-### MS-2 — LOW — Compliance/expiring responses never populate names
+### MS-2 — LOW — Compliance/expiring responses never populate names — ✅ FIXED (app-review B1, 2026-08-06)
 `get_compliance_status` always sets `subject_name = ""`; `get_expiring_soon`
 always sets `user_name=None`, `prospect_name=None`, `requirement_name=None`.
 The response schema carries these fields but the service never resolves them, so
 the UI shows blank names (or must re-resolve per row). Incomplete feature.
 **Recommend:** batch-resolve user/prospect/requirement names in the service.
 
-### MS-3 — LOW — No cross-org validation of referenced IDs on create
+### MS-3 — LOW→MED — No cross-org validation of referenced IDs on create — ✅ FIXED (app-review B1, 2026-08-06)
 `create_record` sets `organization_id` from the caller (good) but does not
 verify `data.user_id` / `data.prospect_id` / `data.requirement_id` belong to
 that org. Not a disclosure (the record is org-scoped), but a `manage` user could

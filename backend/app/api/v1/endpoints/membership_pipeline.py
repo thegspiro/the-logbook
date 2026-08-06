@@ -788,17 +788,18 @@ async def create_prospect(
     archived_matches = [m for m in matches if m["status"] == "archived"]
     if archived_matches:
         match = archived_matches[0]
+        # MP-7: return a plain-string message rather than a structured body
+        # carrying the archived member's internal user_id / reactivate URL.
+        # The client never consumed those fields, and this mirrors the sibling
+        # /check-existing endpoint's deliberate PII minimization.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "message": (
-                    f"A previously archived member matches this prospect: "
-                    f"{match['name']} ({match['email']}). "
-                    f"Consider reactivating their account instead of creating a new prospect."
-                ),
-                "existing_member_match": match,
-                "reactivate_url": f"/api/v1/users/{match['user_id']}/reactivate",
-            },
+            detail=(
+                f"A previously archived member matches this prospect: "
+                f"{match['name']} ({match['email']}). Consider reactivating "
+                f"their account from the archived members list instead of "
+                f"creating a new prospect."
+            ),
         )
 
     prospect_data = data.model_dump(by_alias=True)

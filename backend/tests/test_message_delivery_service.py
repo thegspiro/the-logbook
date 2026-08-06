@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from app.services.consent_service import ConsentService
 from app.services.message_delivery_service import MessageDeliveryService
 from app.services.messaging_service import MessagingService
 
@@ -60,6 +61,19 @@ def _patch_recipients(recipients):
     )
 
 
+def _patch_sms_consent(*consented_ids):
+    """Pretend the given member ids granted SMS consent (TCPA gate).
+
+    Anyone omitted is treated as never-asked, which the service must handle
+    as a refusal.
+    """
+    return patch.object(
+        ConsentService,
+        "granted_user_ids",
+        new=AsyncMock(return_value=set(consented_ids)),
+    )
+
+
 class TestInAppFanOut:
     async def test_creates_one_notification_per_recipient_excluding_author(self):
         db = _db()
@@ -104,10 +118,12 @@ class TestChannelRouting:
             await svc.deliver(message)
         return svc
 
-    async def test_normal_message_escalates_neither_email_nor_sms(self):
+    async def test_every_message_is_emailed(self):
+        # Email is the channel of record: a normal, no-ack message still goes
+        # out by email so a member can never say they were not told.
         svc = await self._route(_msg(priority="normal"))
         svc._create_in_app.assert_awaited_once()
-        svc._send_email.assert_not_awaited()
+        svc._send_email.assert_awaited_once()
         svc._send_sms.assert_not_awaited()
 
     async def test_ack_required_escalates_email_only(self):
@@ -120,9 +136,33 @@ class TestChannelRouting:
         svc._send_email.assert_awaited_once()
         svc._send_sms.assert_awaited_once()
 
+    async def test_member_without_sms_consent_is_still_emailed(self):
+        # The invariant that makes consent enforcement safe: suppressing a
+        # member's text must never mean they go uninformed. Email is sent for
+        # an urgent message even when the SMS path drops every recipient for
+        # want of consent.
+        db = _db()
+        svc = MessageDeliveryService(db)
+        svc._create_in_app = AsyncMock()
+        svc._send_email = AsyncMock()
+        fake_sms = MagicMock()
+        fake_sms.enabled = True
+        fake_sms.send_bulk_sms = AsyncMock()
+        recipient = _user("u1", email="a@fd.co", mobile="+15551234567")
+        with _patch_recipients([recipient]), patch(
+            "app.services.sms_service.SMSService", return_value=fake_sms
+        ), _patch_sms_consent():  # nobody consented
+            await svc.deliver(_msg(priority="urgent"))
+        svc._send_email.assert_awaited_once()
+        fake_sms.send_bulk_sms.assert_not_awaited()
+
 
 class TestEmailRecipientFiltering:
-    async def test_email_skips_members_who_opted_out(self):
+    async def test_email_ignores_opt_out_and_reaches_everyone_with_an_address(self):
+        # Email is the record-of-notice channel, so the email_notifications
+        # preference does NOT suppress it — a member must not be able to opt
+        # out of the evidence that they were told. Only a missing address
+        # removes someone.
         db = _db()
         recipients = [
             _user("u1", email="in@fd.co"),
@@ -146,8 +186,8 @@ class TestEmailRecipientFiltering:
         ):
             await svc._send_email(_msg(priority="urgent"), recipients, org=None)
 
-        # Only the opted-in member with an address is emailed.
-        assert sent["to"] == ["in@fd.co"]
+        # Both addressable members are emailed, including the opted-out one.
+        assert sent["to"] == ["in@fd.co", "out@fd.co"]
 
 
 class TestSmsGating:
@@ -174,7 +214,9 @@ class TestSmsGating:
         fake_sms = MagicMock()
         fake_sms.enabled = True
         fake_sms.send_bulk_sms = AsyncMock(return_value=2)
-        with patch("app.services.sms_service.SMSService", return_value=fake_sms):
+        with patch(
+            "app.services.sms_service.SMSService", return_value=fake_sms
+        ), _patch_sms_consent("u1", "u2", "u3", "u4"):
             await svc._send_sms(
                 _msg(priority="urgent"),
                 recipients,
@@ -183,6 +225,49 @@ class TestSmsGating:
         fake_sms.send_bulk_sms.assert_awaited_once()
         numbers = fake_sms.send_bulk_sms.await_args.args[0]
         assert numbers == ["+1555mobile", "+1555phone"]
+
+    async def test_sms_requires_consent_even_when_the_channel_is_on(self):
+        # TCPA: the recorded consent gates the send independently of the
+        # member's channel preference. u2 never granted consent, so despite
+        # having a number and no opt-out they must not be texted.
+        db = _db()
+        recipients = [
+            _user("u1", mobile="+1555consented"),
+            _user("u2", mobile="+1555noconsent"),
+        ]
+        svc = MessageDeliveryService(db)
+        fake_sms = MagicMock()
+        fake_sms.enabled = True
+        fake_sms.send_bulk_sms = AsyncMock(return_value=1)
+        with patch(
+            "app.services.sms_service.SMSService", return_value=fake_sms
+        ), _patch_sms_consent("u1"):
+            await svc._send_sms(
+                _msg(priority="urgent"),
+                recipients,
+                org=SimpleNamespace(name="FD"),
+            )
+        numbers = fake_sms.send_bulk_sms.await_args.args[0]
+        assert numbers == ["+1555consented"]
+
+    async def test_no_consent_means_no_sms_at_all(self):
+        # Fail closed: nobody asked, nobody texted — but deliver() still sent
+        # the email, so the members were informed.
+        db = _db()
+        recipients = [_user("u1", mobile="+15551234567")]
+        svc = MessageDeliveryService(db)
+        fake_sms = MagicMock()
+        fake_sms.enabled = True
+        fake_sms.send_bulk_sms = AsyncMock()
+        with patch(
+            "app.services.sms_service.SMSService", return_value=fake_sms
+        ), _patch_sms_consent():
+            await svc._send_sms(
+                _msg(priority="urgent"),
+                recipients,
+                org=SimpleNamespace(name="FD"),
+            )
+        fake_sms.send_bulk_sms.assert_not_awaited()
 
 
 class TestEscalationRateLimit:

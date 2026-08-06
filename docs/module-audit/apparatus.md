@@ -21,7 +21,7 @@ invariants, not line-by-line of all 5.7k lines).
 
 ## Findings
 
-### AP-1 — LOW — Create paths don't validate referenced parent belongs to org
+### AP-1 — LOW→MED — Create paths don't validate referenced parent belongs to org — ✅ FIXED (app-review B2, 2026-08-06)
 `create_photo` / `create_document` (and similar maintenance-record creates) set
 `organization_id` from the caller but do not verify the referenced
 `apparatus_id` belongs to that org. Not a disclosure — the child is scoped to

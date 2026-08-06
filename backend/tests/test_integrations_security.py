@@ -170,6 +170,24 @@ class TestValidateConfig:
         result = _validate_config("slack", {})
         assert result == {}
 
+    def test_omitted_fields_not_reemitted(self):
+        # INT-4: only the keys the caller supplied are returned. A bare
+        # model_dump() would re-emit every field at its default, which the
+        # connect/update handlers then merge over the stored config — silently
+        # resetting an omitted field. exclude_unset keeps the result minimal so
+        # the merge preserves stored values.
+        config = {
+            "instance_url": "https://acme.my.salesforce.com",
+            "match_strategy": "email_lastname",
+        }
+        result = _validate_config("salesforce", config)
+        assert result == config
+        # Defaulted fields the caller did not send must NOT appear.
+        assert "sync_direction" not in result
+        assert "graceful_fields" not in result
+        # And an empty secret-named default must not leak into the result.
+        assert "client_secret" not in result
+
 
 # ============================================
 # Secret Extraction Tests

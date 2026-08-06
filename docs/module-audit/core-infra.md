@@ -71,8 +71,12 @@ plaintext passthrough is preserved; a full fail-closed switch remains flagged
 `encrypt_data` and the `EncryptedText` docstrings claimed AES-256 in HIPAA-facing
 comments, but Fernet is AES-128-CBC + HMAC-SHA256 (still authenticated, NIST-
 approved, "AES or equivalent" for HIPAA — just not 256-bit).
-**Fix:** corrected the docstrings to state the actual algorithm. (Switching to
-real AES-256-GCM would require re-encrypting all stored ciphertext — flagged.)
+**Fix:** corrected the docstrings to state the actual algorithm. **✅ Update
+(app-review B24): the AES-256-GCM migration is DONE.** `core/security.py` now
+encrypts new values with AES-256-GCM (AEAD, tagged `$gcm2$`); legacy Fernet values
+stay readable and `scripts/reencrypt_to_aesgcm.py` backfills them (runbook:
+`docs/AES256_GCM_BACKFILL_RUNBOOK.md`). So the "switching would require
+re-encryption — flagged" note no longer stands.
 
 ### CI-6 — LOW — `decode_token` didn't require an `exp` claim — ✅ FIXED
 `jwt.decode` pinned HS256 but didn't require `exp`, so a token minted without one
@@ -111,16 +115,18 @@ default secrets is self-protecting.
 - The Redis cache manager provides **no tenant namespacing** — all current
   callers use intentionally-global keys (no PHI/PII cached), but the shared infra
   offers no guardrail, so a future caller caching an org-scoped record under a
-  bare id would leak cross-tenant with no layer catching it. `clear_pattern()` is
-  an unused wildcard-delete footgun. (cache #1/#6)
+  bare id would leak cross-tenant with no layer catching it. **✅ `clear_pattern()`
+  removed (app-review B24)** — it was unused and a wildcard-delete footgun; the
+  namespacing guardrail itself remains a design item. (cache #1/#6)
 - WebSocket `accept()` happens before auth (deliberate, so close codes reach the
   browser — minor pre-auth resource use); `publish_event` falls back to
   worker-local delivery on Redis failure. (ws #4/#7)
-- **PBKDF2 for the field-encryption KDF uses 100k iterations** (OWASP now ~600k)
-  and MFA **recovery codes are 40-bit, unsalted SHA-256** — both well-mitigated
-  (the KDF stretches an already-strong 32-char key; recovery hashes are Fernet-
-  encrypted at rest, single-use, and lockout-throttled) and both are
-  migration-shaped (changing them invalidates stored data). (crypto #3/#5)
+- **✅ PBKDF2 KDF now 600k (app-review B24).** The field-encryption KDF's current
+  work factor is 600k iterations (`_KDF_ITERATIONS_V2`, `$gcm2$`); the 100k
+  `$gcm1$` path is retained read-only for migration-era values. **Still flagged:**
+  MFA **recovery codes are 40-bit, unsalted SHA-256** — well-mitigated
+  (Fernet-encrypted at rest, single-use, lockout-throttled) and migration-shaped.
+  (crypto #3 done / #5 open)
 **Status:** flagged.
 
 ## Notes

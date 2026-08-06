@@ -1,0 +1,120 @@
+# Application Review — Documents (Tier B, 2nd pass)
+
+**Prefix:** `DOC2` · **Iteration:** B8 · **Reviewed:** 2026-08-06
+
+**Backend:** `endpoints/documents.py` (11), `services/documents_service.py`,
+`schemas/documents.py`, `models/document.py`
+**Prior audit:** `docs/module-audit/documents.md` — DOC-1/2/3 fixed; DOC-4
+(summary ignores ACL), DOC-5 (ACL not hierarchical), DOC-6 (write-path FK/enum
+gaps) left open.
+
+---
+
+## Scope
+
+Tier B: the three open findings. The security pass had already hardened upload
+(magic-byte MIME, UUID paths, no traversal), confirmed tenant isolation, and
+established the folder ACL is not bypassable on direct read — re-verified, not
+re-derived.
+
+## Findings
+
+### DOC-6 — LOW — Write-path FK / enum validation gaps (XC-1 + enum) — ✅ FIXED
+
+Closed all three parts:
+
+- **`update_document` folder_id** — a document could be reassigned to any folder
+  id (foreign or nonexistent) via bare `setattr`. Now validated in-org with
+  `assert_in_org` (`allow_none` — clearing the folder moves the doc to org
+  level).
+- **`create_folder` / `update_folder` `parent_id` + `owner_user_id`** — both
+  stored client-supplied FKs with no in-org check. Both now validated
+  (`allow_none`).
+- **`DocumentUpdate.status`** — was a free `Optional[str]` set via `setattr`, so
+  any string could become a document's status. Constrained to
+  `Optional[DocumentStatus]` at the **schema** layer, so Pydantic rejects an
+  invalid value with 422 at the boundary — the right layer for enum validation.
+
+All three are leadership-gated (`documents.manage`), so this is data-integrity
+hardening, not a privilege fix. Two endpoints (`update_document`,
+`update_folder`) called the service directly with no error wrapper, so the new
+`ValueError`s would have 500'd — wrapped both in the module's
+`handle_service_errors` (`ValueError → 400`), matching `create_folder`.
+
+### DOC-4 — LOW — `get_documents_summary` ignores the folder ACL — 🚩 FLAGGED (unchanged)
+
+`get_summary` still aggregates counts/size across the **whole org**, including
+leadership-only and member-personal folders, so a plain `documents.view` user
+sees aggregate volume/existence of restricted content (counts only — no names,
+no content). Scoping it to `accessible_folder_ids` is a behavior change to a
+stats endpoint that some deployments may rely on as an org-wide total; left for
+a deliberate decision. **Not a disclosure of content**, only of aggregate
+counts.
+
+### DOC-5 — LOW — Folder ACL is per-folder, not hierarchical — 🚩 FLAGGED (needs product decision)
+
+`can_access_folder` inspects only a folder's own `visibility`/`allowed_roles`,
+never its ancestor chain. Apparatus/facility per-item child folders are created
+`ORGANIZATION`-visibility with no `allowed_roles`, even though their parent roots
+are `LEADERSHIP` — so any `documents.view` user can read those child folders
+directly, and the apparatus docstring's "allowed_roles restricted" claim is not
+actually coded.
+
+**This is a genuine product decision, not a clear bug:** org-visible apparatus
+and facility files may be exactly what's wanted (crews should see their rig's
+manuals). If leadership-only was intended, the fix is a hierarchical ACL that
+walks the parent chain — a larger change with performance implications on every
+folder check. Flagged for the owner to decide intent; **member personal folders
+are unaffected** (individually `OWNER`-visibility), so the sensitive case is not
+exposed. Recorded in `KNOWN_LIMITATIONS.md`.
+
+## Verified good ✅ (re-confirmed)
+
+- DOC-1 (delete orphaned files — both `delete_document` and the `delete_folder`
+  subtree walk), DOC-2 (`can_access_document` fails closed on a missing folder),
+  DOC-3 (`upload_document` rejects an unresolvable `folder_id`) all remain fixed.
+- Upload hardening intact; folder ACL not bypassable on direct read; no
+  `file_path` leak in this module's `DocumentResponse`.
+
+## Duplication
+
+`get_folders` still duplicates `can_access_folder`'s logic inline rather than
+calling it (noted in the prior audit as a drift risk). Not changed — refactoring
+it is orthogonal to the XC-1 work and risks the listing behavior; recorded as
+future development.
+
+## Dead code
+
+`uploader_name` / `folder_name` on `DocumentResponse` are never populated (no
+enrichment join) — always null. The prior audit flagged them as dead fields;
+still true. Left as-is (removing response fields is a frontend-contract change);
+recorded for a future frontend-shared iteration.
+
+## Documentation
+
+`docs/module-audit/documents.md`: DOC-6 now resolved; DOC-4/DOC-5 stand.
+DOC-5's doc-vs-code mismatch (apparatus docstring claims a restriction that
+isn't coded) is the one active documentation inaccuracy — its resolution depends
+on the DOC-5 product decision (fix the code or fix the docstring).
+
+## Future development
+
+1. **DOC-5 hierarchical-ACL decision** — the one item here that could be a real
+   access gap depending on intent. Decide whether apparatus/facility child
+   folders should inherit their parent's `LEADERSHIP` restriction.
+2. **DOC-4 summary scoping** — scope the aggregate to accessible folders if the
+   count-leak matters.
+3. **`get_folders` should call `can_access_folder`** rather than re-inlining it
+   (drift risk).
+4. **Remove or populate `uploader_name`/`folder_name`** dead response fields.
+
+## Completion gate
+
+| Check | Result |
+|-------|--------|
+| `tsc --noEmit` | ✅ 0 errors (no frontend change) |
+| `flake8 app/ tests/` | ✅ 0 violations |
+| `black --check` | ✅ 503 files unchanged |
+| `eslint` | ✅ clean |
+| backend tests | ✅ **2517 passed, 0 failed**; 33 document tests pass with the schema/service changes. 648 errors, all `db_session` fixture (no MySQL). |
+</content>

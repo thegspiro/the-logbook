@@ -121,5 +121,13 @@ class LocationDisplayInfo(BaseModel):
     has_overlap: bool = Field(
         default=False, description="Whether multiple events are overlapping"
     )
+    # The kiosk runs unauthenticated, so it has no user profile to read the
+    # department timezone from and would otherwise render these UTC datetimes
+    # in whatever zone the tablet happens to be set to. Optional so an older
+    # client simply keeps its previous fallback.
+    timezone: str | None = Field(
+        default=None,
+        description="Organization IANA timezone for rendering the times above",
+    )
 
     model_config = ConfigDict(from_attributes=True)

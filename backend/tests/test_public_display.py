@@ -52,8 +52,21 @@ def _patch_location_service(monkeypatch, events):
     return location
 
 
-async def _call(code="abc123"):
-    return await display.get_public_location_display(code, db=MagicMock())
+def _db(org_timezone="America/New_York"):
+    """Stub session whose one query returns the organization's timezone.
+
+    The kiosk is unauthenticated, so the endpoint looks the timezone up itself
+    rather than reading it off a user profile — see LOC-2.
+    """
+    db = MagicMock()
+    db.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=org_timezone))
+    )
+    return db
+
+
+async def _call(code="abc123", org_timezone="America/New_York"):
+    return await display.get_public_location_display(code, db=_db(org_timezone))
 
 
 class TestPublicDisplayWindow:
@@ -85,6 +98,26 @@ class TestPublicDisplayWindow:
         with pytest.raises(HTTPException) as exc:
             await _call(code="bad!")  # non-alphanumeric
         assert exc.value.status_code == 404
+
+
+class TestKioskTimezone:
+    """The kiosk has no session, so the API must tell it which zone to render in.
+
+    Without this the page falls back to the tablet's own timezone — commonly
+    UTC on a wall-mounted device — and every time on the display is shifted.
+    """
+
+    async def test_response_carries_the_department_timezone(self, monkeypatch):
+        _patch_location_service(monkeypatch, [_event(CheckInWindowType.FLEXIBLE, 10)])
+        result = await _call(org_timezone="America/Chicago")
+        assert result.timezone == "America/Chicago"
+
+    async def test_missing_org_timezone_is_none_not_an_error(self, monkeypatch):
+        # An org that never set one must still render the kiosk; the client
+        # keeps its own fallback.
+        _patch_location_service(monkeypatch, [_event(CheckInWindowType.FLEXIBLE, 10)])
+        result = await _call(org_timezone=None)
+        assert result.timezone is None
 
 
 if __name__ == "__main__":  # pragma: no cover

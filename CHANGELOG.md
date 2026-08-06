@@ -7,6 +7,264 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Error messages: structured server errors now read correctly (2026-08-06)
+
+**Fixed**
+
+- **Some error notifications showed "[object Object]" instead of the real
+  message.** When the server returned a structured error (for example, the
+  "a previously archived member matches this prospect" conflict), the shared error
+  handler couldn't read it and displayed a placeholder. It now surfaces the actual
+  message across every screen that uses it.
+
+### Roles: an admin can no longer edit a role more powerful than their own (2026-08-06)
+
+**Fixed**
+
+- **A privileged-but-not-top-level admin can no longer weaken the highest role.**
+  Previously the check that stops you granting permissions above your own level
+  didn't stop you from *editing* a role that already held them — so an admin
+  without full access could blank out or downgrade the "System Owner" role,
+  disrupting who can administer the department. Editing a role now requires that
+  your own access already covers everything that role currently holds.
+
+### Events: RSVP guards and a template-email crash fix (2026-08-06)
+
+**Fixed**
+
+- **You can no longer RSVP to an unpublished (draft) or already-ended event.**
+  RSVPs were blocked for cancelled events and past the RSVP deadline, but a draft
+  event (before it's published) or an event that had already ended with no
+  deadline set would still accept an RSVP. Both are now rejected.
+- **Sending a template email no longer errors when a field is blank.** A missing
+  value (e.g. an event request with no contact name) could cause the "send
+  template email" action to fail; blank values are now handled cleanly.
+
+### Reports: two training/overview figures now read correctly (2026-08-06)
+
+**Fixed**
+
+- **The training-summary completion rate is no longer skewed low.** The rate
+  counted only current members' completed courses in the numerator but divided by
+  every training record (including departed and exempt members'), understating the
+  true completion rate. It now divides by the records that belong to the members
+  being reported on.
+- **The department overview's check-in count now respects the report period.**
+  Total check-ins were counted for all time even though the rest of the report
+  (events, training) is limited to the selected date range; check-ins are now
+  counted only for events within the period.
+
+### Forms: stricter required fields and no internal errors leaked on public forms (2026-08-06)
+
+**Fixed**
+
+- **A required form field left blank is now correctly rejected.** Previously a
+  required field could be satisfied by an empty or whitespace-only value (or, for
+  multi-select, nothing chosen); it now requires a real answer. Number and
+  checkbox fields answered with `0` or "unchecked" still count as answered.
+- **Public form submissions no longer surface internal error details.** If a
+  submission hit an unexpected server error, the raw message could be returned to
+  the (unauthenticated) submitter; it now returns a generic message while the full
+  error is logged server-side.
+
+### Integrations: editing one setting no longer resets the others (2026-08-06)
+
+**Fixed**
+
+- **Updating a single field of an integration's configuration silently reverted
+  the rest to their defaults.** Because a partial save re-applied every
+  unspecified field at its default value, changing (for example) a Salesforce
+  integration's sync direction would quietly reset its member-matching strategy,
+  auto-sync, and other options. Saves now change only the fields you actually
+  edited and leave everything else untouched.
+
+### Prospective members: applicant privacy and a clearer duplicate warning (2026-08-06)
+
+**Fixed**
+
+- **Editing an applicant no longer records their date of birth or home address
+  in the activity log.** The change history shown on an applicant's activity tab
+  previously stored the exact old and new values of every edited field — so
+  changing a date of birth or street address wrote those values into a log
+  visible to anyone who can view prospective members. Sensitive fields (date of
+  birth and address) now record only that the field changed, keeping the "who
+  changed what, and when" trail without exposing the value.
+- **The "this applicant matches an archived member" warning now reads
+  correctly.** Adding an applicant who matches a previously-archived member
+  showed a broken notification (it rendered as raw placeholder text). It now
+  shows a clear message naming the member so leadership can reactivate them
+  instead of creating a duplicate. The member's internal record id is no longer
+  included in that response.
+
+### Minutes management shows for the right role, and can't reference another org's data (2026-08-06)
+
+**Fixed**
+
+- **Users who could manage minutes saw no management controls, while users who
+  couldn't saw controls that failed.** The minutes pages decided whether to show
+  edit/approve controls from the `meetings.manage` permission, but the backend
+  gates every minutes write on `minutes.manage`. So a member granted
+  `minutes.manage` saw a read-only page, and a member with only `meetings.manage`
+  saw buttons that returned "forbidden" on click. Both pages now check
+  `minutes.manage`, matching the API.
+- **Meeting and minutes records validated their links.** Creating minutes, a
+  meeting, or an action item stored a client-supplied event or assignee id
+  without checking it belonged to your organization; those ids are now validated
+  in-org. A related error-handling gap meant an invalid template on minutes
+  creation returned a 500 instead of a clear 400 — now corrected.
+
+### Inventory: maintenance records, kit issuing, and reorder search hardened (2026-08-06)
+
+**Fixed**
+
+- **A "completed" maintenance record could silently update nothing.** Creating a
+  maintenance record didn't verify the item belonged to your organization, and
+  when marked completed against an item the caller couldn't see, the condition
+  and inspection-date update was skipped while the create still reported
+  success — so an NFPA inspection could record as done without advancing the
+  item's next-due date. The item is now validated in-org before the record is
+  written.
+- **Issuing an equipment kit could fail with a confusing error.** The kit-issue
+  path read an `optional` flag that no longer exists on the kit-item model, which
+  raised on any kit with a missing item or a failed line, surfacing as a generic
+  "failed to issue kit". Every kit item is now treated as required (the intended
+  behavior) without crashing; making items genuinely optional is tracked as a
+  follow-up.
+- **Reorder-request search treated a literal % or _ as a wildcard.** The reorder
+  search now escapes LIKE wildcards like every other inventory search.
+
+### Apparatus photos and documents can't be filed against another org's apparatus (2026-08-06)
+
+**Fixed**
+
+- **Uploading an apparatus photo or document didn't verify the apparatus was
+  yours.** Both endpoints took the apparatus id from the URL and stored the row
+  without checking it belonged to the caller's organization, so a request naming
+  another department's apparatus id created a record pointing at it. Both now
+  validate the apparatus is in-org before writing, closing the last two create
+  paths in this module that lacked the check.
+
+### Medical-screening: names show on the dashboard, and screenings can't be mis-filed cross-tenant (2026-08-06)
+
+**Fixed**
+
+- **The expiring-screenings dashboard showed "Unknown" for every member.** The
+  compliance and expiring-soon responses never populated the member, prospect or
+  requirement names, so the UI — which renders the member name or falls back to
+  "Unknown" — always fell back. Names are now resolved server-side in a single
+  org-scoped batch query per type.
+- **A screening record could be filed against another organization's member.**
+  Creating a record stored the supplied member/prospect/requirement ids without
+  checking they belong to the caller's organization. Because the record holds
+  protected health information, a wrong id mis-attributes a medical result to the
+  wrong person. The ids are now validated in-org before the record is written.
+
+### The room kiosk shows department time, and a stale check-in window is corrected (2026-08-05)
+
+**Fixed**
+
+- **The room kiosk rendered every time in the tablet's own timezone.** The
+  kiosk page is deliberately public (a wall-mounted tablet cannot hold a
+  session), so the hook that supplies the department timezone had no user
+  profile to read and always fell through to the device's zone. A display left
+  on its factory default — commonly UTC — showed event times and check-in
+  windows shifted by hours. The public display response now carries the
+  organization's timezone and the kiosk renders in it, keeping the browser zone
+  only as a fallback.
+- **`GET /locations/{id}/display` reported a check-in window that could not
+  happen.** It computed "one hour before the event starts", but the real window
+  is per-event configurable — the flexible default is 30 minutes, and a strict
+  window opens at the event's actual start time. It now uses the same
+  calculation the check-in endpoint enforces, which the public kiosk endpoint
+  already did.
+
+### Executive-session action items are no longer visible on the dashboard (2026-08-05)
+
+**Fixed**
+
+- **The unified dashboard action-item feed re-exposed restricted minutes.**
+  `GET /dashboard/action-items` merges action items from the Meetings and
+  Minutes modules and is available to any authenticated member. The minutes half
+  filtered on organization only — so a member could read the description,
+  assignee and due date of action items belonging to **unapproved drafts and
+  closed executive-session minutes**, which is where personnel discipline,
+  terminations and legal matters are recorded. The minutes module's own reads
+  already restricted these to `minutes.manage` holders; the dashboard was a side
+  door into the same rows. It now applies the same gate, keyed on the same
+  permission, with a carve-out so a member still sees an action item assigned to
+  them.
+
+### Email subjects read correctly, and a scheduled email can't borrow another org's template (2026-08-05)
+
+**Fixed**
+
+- **Subject lines and plain-text email bodies were HTML-escaped.** The renderer
+  applied one escaping path to all three of its outputs, but only the HTML body
+  is markup. A department called "Falls Church Fire & Rescue" went out as
+  "Falls Church Fire &amp;amp; Rescue" and a member named O'Brien as
+  "O&amp;#x27;Brien" — in the **subject line**, and throughout the `text/plain`
+  alternative that many clients and all screen readers use. The subject also
+  reached the HTML wrapper already escaped and was escaped a second time into
+  `<title>`. Escaping now applies only to the HTML body; the XSS boundary is
+  unchanged (verified against an `onerror=` payload), and the subject is safe
+  unescaped because CR/LF/NUL are already stripped from headers at the send
+  layer.
+- **A scheduled email could render another organization's template.**
+  `POST /email-templates/schedule` stored a client-supplied `template_id`
+  without checking it belonged to the caller's organization, and the send task
+  then loaded it with no organization filter while eager-loading its uploaded
+  attachments. An admin could schedule an email naming another department's
+  template and have its body and files rendered and mailed to recipients they
+  chose in the same request. Now validated at write time via `assert_in_org` and
+  org-scoped at send time, which also neutralizes any row already stored.
+
+### Consent is now enforced, client IPs are real, and the migration chain has one head (2026-08-05)
+
+**Fixed**
+
+- **The migration chain had two heads and a duplicate revision id.** Two
+  branches merged the same day each claimed `20260805_0010` off parent
+  `20260805_0009` — `drop_onboarding_checklist_table` and
+  `reconcile_index_set`. Alembic cannot resolve a duplicate id, so
+  `alembic upgrade head` (and therefore `npm run db:migrate`) **failed on every
+  deployment**, and four migration-chain tests had been failing. The index
+  reconciliation is renumbered to `20260805_0011` and sequenced after the drop;
+  the two touch disjoint tables, so only the label and parent pointer moved. It
+  is the same collision `20260805_0101` documents escaping, recreated within the
+  hour — the renumbered file now records that.
+- **Client IPs were the reverse-proxy's address in 39 places across 8 files.**
+  `request.client.host` was used instead of `get_client_ip(request)`, so behind
+  the production nginx every session row, audit event, security alert and vote
+  recorded one identical internal IP. Three consequences worth naming: ballot
+  fraud detection (`suspicious_ips` / `unique_ip_count`, documented in
+  `BALLOT_FORENSICS_GUIDE.md`) was inverted into a permanent false positive
+  rather than merely weakened; the IP-security module's own request/approval
+  audit carried no attribution; and the **public-portal rate limiter was keyed
+  on the proxy**, so all anonymous visitors shared one bucket and a single
+  caller could lock out every visitor. Corrected going forward — rows already
+  written still hold proxy addresses.
+
+**Changed**
+
+- **Member consent is enforced instead of merely recorded.**
+  `ConsentService.has_consent` previously had **zero callers**: members could
+  refuse photo use, public-roster listing, or SMS, and the choice was stored,
+  audit-logged, and ignored. SMS is now gated on the recorded consent in both
+  send paths (department-message escalation and the inventory low-stock alert),
+  via a new bulk `granted_user_ids` helper that fails closed — never asked
+  counts as refused. US TCPA requires express consent for text messaging.
+- **Email is now the channel of record and is unconditional.** Every department
+  message is emailed — not only urgent or acknowledgment-required ones — and
+  email is no longer filtered by the `email_notifications` preference. This is
+  what makes consent enforcement safe: consent may suppress a member's *text*,
+  but never the notice itself, so nobody can be left able to say they were never
+  told. The preference still governs the reminder and alert flows, and the
+  settings-page wording was updated to say so.
+- Note: `PHOTO_USE` and `PUBLIC_ROSTER_LISTING` consents are collected but have
+  **no consumer to gate** — the app has no public roster and publishes no member
+  photos today. Whoever builds either must gate on `has_consent`; the
+  requirement is recorded in the `consent_service` docstring.
+
 ### Training: a course can carry a syllabus, and a cohort runs it (2026-08-05)
 
 **Added**

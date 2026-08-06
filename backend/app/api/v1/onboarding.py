@@ -33,7 +33,7 @@ from app.api.v1.email_test_helper import (
     test_smtp_connection,
 )
 from app.core.database import get_db
-from app.core.security_middleware import check_rate_limit
+from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.onboarding import (
     OnboardingSessionModel,
@@ -454,7 +454,7 @@ async def get_or_create_session(
             return session
 
     # Create new session
-    ip_address = request.client.host if request.client else "unknown"
+    ip_address = get_client_ip(request)
     user_agent = request.headers.get("user-agent")
 
     new_session = OnboardingSessionModel(
@@ -741,6 +741,21 @@ async def get_onboarding_status(db: AsyncSession = Depends(get_db)):
     needs_onboarding = await service.needs_onboarding()
     status = await service.get_onboarding_status()
 
+    if status and status.is_completed:
+        # ONB-8: this endpoint is unauthenticated. Once onboarding is complete its
+        # only job is to tell the login guard there is nothing to set up — so do
+        # NOT leak the org name or the setup progress to anonymous callers
+        # post-completion. (Before completion the onboarding wizard legitimately
+        # reads these back to resume, so the in-progress branch keeps them.)
+        return OnboardingStatusResponse(
+            needs_onboarding=False,
+            is_completed=True,
+            current_step=0,
+            total_steps=len(service.STEPS),
+            steps_completed={},
+            organization_name=None,
+        )
+
     if status:
         return OnboardingStatusResponse(
             needs_onboarding=not status.is_completed,
@@ -785,7 +800,7 @@ async def start_onboarding(
         )
 
     # Get client info
-    ip_address = request.client.host if request.client else None
+    ip_address = get_client_ip(request)
     user_agent = request.headers.get("user-agent")
 
     onboarding_status = await service.start_onboarding(
@@ -1060,7 +1075,7 @@ async def create_system_owner(
         auth_service = AuthService(db)
         access_token, refresh_token = await auth_service.create_user_tokens(
             user=user,
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
             user_agent=request.headers.get("user-agent"),
         )
 
@@ -2059,7 +2074,7 @@ async def reset_onboarding(request: Request, db: AsyncSession = Depends(get_db))
             event_type="onboarding.reset_initiated",
             event_category="onboarding",
             severity="warning",
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
             event_data={
                 "action": "full_reset",
                 "message": "Onboarding reset initiated - clearing all data",
@@ -2112,7 +2127,7 @@ async def reset_onboarding(request: Request, db: AsyncSession = Depends(get_db))
             event_type="onboarding.reset_completed",
             event_category="onboarding",
             severity="warning",
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
             event_data={
                 "action": "full_reset",
                 "message": "Onboarding reset completed - all data cleared successfully",

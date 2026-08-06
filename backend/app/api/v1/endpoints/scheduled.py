@@ -40,12 +40,10 @@ async def run_scheduled_task(
     platform-wide side effects. It is therefore restricted to the wildcard
     "System Owner" (``system.run_tasks``) rather than a single-org admin.
 
-    Available tasks:
-    - `cert_expiration_alerts` — Send tiered cert expiration alerts (daily)
-    - `struggling_member_check` — Detect members falling behind (weekly)
-    - `enrollment_deadline_warnings` — Warn approaching deadlines (weekly)
-    - `membership_tier_advance` — Auto-advance membership tiers (monthly)
-    - `inventory_notifications` — Process delayed inventory change emails (every 15 min)
+    For the list of available task ids and their recommended cron schedules,
+    call `GET /scheduled/tasks` — it is generated from the same `SCHEDULE`
+    registry this endpoint dispatches against, so it cannot drift. (This
+    docstring previously listed five of the thirty-eight, and had.)
 
     **Requires system.run_tasks (platform System Owner).**
     """

@@ -145,7 +145,7 @@ class ISOReadinessService:
             select(User).where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
-                User.compliance_exempt == False,  # noqa: E712
+                User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
         )
@@ -184,7 +184,13 @@ class ISOReadinessService:
             member_hours: Dict[str, float] = {mid: 0.0 for mid in member_ids}
 
             for record in records:
-                if record.user_id not in member_ids:
+                # CS-9 (officer #6): member_ids is a set of str(id) and
+                # member_hours is keyed by those strings — normalize the record's
+                # user_id to str so the membership test and the dict key can't
+                # silently miss (dropping the member's hours) if it ever arrives
+                # as a UUID rather than the String(36) value it is today.
+                uid = str(record.user_id)
+                if uid not in member_ids:
                     continue
                 training_type = (
                     record.training_type.value
@@ -192,7 +198,7 @@ class ISOReadinessService:
                     else str(record.training_type or "")
                 )
                 if training_type in cat["training_types"]:
-                    member_hours[record.user_id] += record.hours_completed or 0
+                    member_hours[uid] += record.hours_completed or 0
 
             total_hours = sum(member_hours.values())
             avg_hours = total_hours / total_members
@@ -694,7 +700,7 @@ class AnnualComplianceReportService:
             select(User).where(
                 User.organization_id == organization_id,
                 User.status == UserStatus.ACTIVE,
-                User.compliance_exempt == False,  # noqa: E712
+                User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
         )
@@ -706,7 +712,7 @@ class AnnualComplianceReportService:
         reqs_result = await self.db.execute(
             select(TrainingRequirement).where(
                 TrainingRequirement.organization_id == organization_id,
-                TrainingRequirement.active == True,  # noqa: E712
+                TrainingRequirement.active.is_(True),
             )
         )
         requirements = reqs_result.scalars().all()
@@ -1065,7 +1071,7 @@ class AnnualComplianceReportService:
         pathways_result = await self.db.execute(
             select(func.count()).where(
                 RecertificationPathway.organization_id == organization_id,
-                RecertificationPathway.active == True,  # noqa: E712
+                RecertificationPathway.active.is_(True),
             )
         )
         active_pathways = pathways_result.scalar() or 0

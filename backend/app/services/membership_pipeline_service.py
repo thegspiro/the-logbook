@@ -814,6 +814,19 @@ class MembershipPipelineService:
         }
     )
 
+    # MP-6: fields whose plaintext values must NOT be written into the
+    # activity log (returned by GET /prospects/{id}/activity). For these we
+    # record only that the field changed, not the sensitive old/new values.
+    _SENSITIVE_ACTIVITY_FIELDS = frozenset(
+        {
+            "date_of_birth",
+            "address_street",
+            "address_city",
+            "address_state",
+            "address_zip",
+        }
+    )
+
     async def update_prospect(
         self,
         prospect_id: str,
@@ -833,7 +846,10 @@ class MembershipPipelineService:
             if value is not None and hasattr(prospect, key):
                 old_value = getattr(prospect, key)
                 if old_value != value:
-                    changes[key] = {"from": str(old_value), "to": str(value)}
+                    if key in self._SENSITIVE_ACTIVITY_FIELDS:
+                        changes[key] = {"changed": True}
+                    else:
+                        changes[key] = {"from": str(old_value), "to": str(value)}
                     setattr(prospect, key, value)
 
         if changes:
@@ -1002,13 +1018,19 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
-        # Validate stage-specific requirements before allowing completion
+        # MP-5: reject a step_id that isn't part of this prospect's pipeline
+        # so a client can't write a ProspectStepProgress row referencing a
+        # foreign or nonexistent step (dangling-FK / integrity).
+        pipeline_steps = prospect.pipeline.steps if prospect.pipeline else []
         step = next(
-            (s for s in prospect.pipeline.steps if str(s.id) == str(step_id)),
+            (s for s in pipeline_steps if str(s.id) == str(step_id)),
             None,
         )
-        if step:
-            await self._validate_step_completion(prospect, step)
+        if not step:
+            raise ValueError("Step does not belong to this prospect's pipeline")
+
+        # Validate stage-specific requirements before allowing completion
+        await self._validate_step_completion(prospect, step)
 
         # Find or create the progress record
         progress = next(
@@ -1045,14 +1067,11 @@ class MembershipPipelineService:
         )
 
         # Notify the prospect that this step is completed, if configured
-        if step and step.notify_prospect_on_completion and prospect.email:
+        if step.notify_prospect_on_completion and prospect.email:
             await self._send_step_completion_notification(prospect, step)
 
         # Check if the completed step is the final step and auto-transfer is on
-        step = next(
-            (s for s in prospect.pipeline.steps if str(s.id) == str(step_id)), None
-        )
-        if step and step.is_final_step and prospect.pipeline.auto_transfer_on_approval:
+        if step.is_final_step and prospect.pipeline.auto_transfer_on_approval:
             await self._do_transfer(prospect, completed_by)
         else:
             # Advance to next step
@@ -3213,6 +3232,20 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
+        # MP-5: validate any client-supplied pipeline_id / step_id are in-org
+        # and consistent, so the package can't persist a foreign/dangling FK.
+        effective_pipeline = prospect.pipeline
+        if pipeline_id and str(pipeline_id) != str(prospect.pipeline_id or ""):
+            effective_pipeline = await self.get_pipeline(
+                str(pipeline_id), organization_id
+            )
+            if not effective_pipeline:
+                raise ValueError("Pipeline does not belong to this organization")
+        if step_id:
+            steps = effective_pipeline.steps if effective_pipeline else []
+            if not any(str(s.id) == str(step_id) for s in steps):
+                raise ValueError("Step does not belong to the selected pipeline")
+
         # Eagerly load documents so the snapshot captures attached files
         doc_query = (
             select(ProspectDocument)
@@ -3882,6 +3915,13 @@ class MembershipPipelineService:
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             raise ValueError("Prospect not found")
+
+        # MP-5: reject a client-supplied step_id that isn't in this prospect's
+        # pipeline (integrity — prevents a dangling step FK on the interview).
+        if step_id:
+            steps = prospect.pipeline.steps if prospect.pipeline else []
+            if not any(str(s.id) == str(step_id) for s in steps):
+                raise ValueError("Step does not belong to this prospect's pipeline")
 
         rec_enum = None
         if recommendation:

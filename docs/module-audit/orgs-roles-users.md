@@ -102,18 +102,23 @@ inheriting trust it hadn't earned.
 **Fix:** `.where(User.id != str(user_id))`, and reset `email_verified=False` when
 the email actually changes.
 
-### ORU-7 — MED/LOW (flagged) — Role-edit ceiling, last-admin lockout, member-role guard
-- `update_role` permits editing `is_system` roles' permissions, and the API-layer
-  ceiling only validates the *new* permission list (early-returns on `[]`). So a
-  privileged-but-not-`*` caller (e.g. Fire Chief) can wipe/downgrade the tenant's
-  only `*` "System Owner" role (or gut `president`) — availability/sabotage, no
-  "cannot edit a role more privileged than you" guard. (roles #2)
-- No last-admin / lockout protection anywhere (removing the last admin, emptying
-  an admin role). (roles #3)
-- The org-wide `member` role can be mass-escalated up to the caller's own ceiling
-  (intended-but-sharp; no dedicated guard on the baseline role). (roles #4)
-**Status:** flagged — each needs a priority/ceiling-on-current-perms rule or a
-last-admin guard, which changes today's allowed admin workflow.
+### ORU-7 — MED/LOW — Role-edit ceiling, last-admin lockout, member-role guard — ⚠️ MOSTLY FIXED (app-review B21)
+- **✅ Role-edit ceiling (roles #2) — FIXED (B21).** The grant ceiling only
+  validated the *new* permission list (early-returns on `[]`), so a
+  privileged-but-not-`*` caller could wipe/downgrade the tenant's only `*` role.
+  A new `_enforce_role_edit_ceiling` now requires the caller's ceiling to cover the
+  role's **current** permissions when changing them — you cannot edit a role more
+  privileged than you could have created. 3 unit tests added.
+- **✅ Last-admin / lockout (roles #3) — ALREADY FIXED (doc drift).**
+  `assert_role_change_retains_administrator` (`admin_continuity_service.py`)
+  recounts the org with the proposed permissions and raises `LastAdministratorError`
+  if no active member would still satisfy `members.manage`; wired into
+  `update_role` (both branches) and `delete_role`. Closed since the audit.
+- **🚩 Member-role mass-escalation (roles #4) — still flagged.** The org-wide
+  `member` role can be escalated up to the caller's ceiling (intended-but-sharp);
+  a dedicated guard/confirmation is a product decision. In `KNOWN_LIMITATIONS.md`.
+**Status:** roles #2 fixed, roles #3 already-fixed, roles #4 flagged. See
+`docs/app-review/orgs-roles-users.md`.
 
 ### ORU-8 — MED/LOW — ✅ FIXED (2026-08-04) — Broader PII/config exposure than the privacy gate intends
 - `GET /users/{id}/with-roles` and `GET /users/with-roles` serialized full

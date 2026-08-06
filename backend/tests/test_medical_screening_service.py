@@ -105,8 +105,18 @@ def make_record(
 # ============================================
 
 
+_NO_NAMES = {"users": {}, "prospects": {}, "requirements": {}}
+
+
 class TestComplianceStatus:
     """Tests for get_compliance_status."""
+
+    @pytest.fixture(autouse=True)
+    def _stub_names(self, service):
+        # These tests exercise compliance counting/date math, not the MS-2
+        # name resolution (which hits the DB and is covered in TestResolveNames).
+        with patch.object(service, "_resolve_names", return_value=_NO_NAMES):
+            yield
 
     async def test_fully_compliant_no_requirements(self, service, org_id, user_id):
         """When there are no requirements, the user is fully compliant."""
@@ -266,6 +276,13 @@ class TestComplianceStatus:
 class TestExpiringSoon:
     """Tests for get_expiring_soon."""
 
+    @pytest.fixture(autouse=True)
+    def _stub_names(self, service):
+        # Focus these on the window/day math; name resolution is a separate
+        # DB round-trip covered in TestResolveNames.
+        with patch.object(service, "_resolve_names", return_value=_NO_NAMES):
+            yield
+
     async def test_returns_empty_when_no_expiring_records(
         self, service, mock_db, org_id
     ):
@@ -309,6 +326,63 @@ class TestExpiringSoon:
 
         # Verify the query was executed (details depend on SQLAlchemy mock)
         assert mock_db.execute.called
+
+
+# ============================================
+# Name Resolution Tests (MS-2)
+# ============================================
+
+
+class TestResolveNames:
+    """Tests for _resolve_names — the MS-2 batch name lookup.
+
+    Each entity type is one org-scoped query; a missing/out-of-org id is simply
+    absent from its map (callers get None, never a cross-org name).
+    """
+
+    async def test_composes_full_names_and_keys_by_id(self, service, mock_db, org_id):
+        user_row = (str(uuid4()), "Dana", "Reyes")
+        prospect_row = (str(uuid4()), "Sam", "Okafor")
+        req_row = (str(uuid4()), "Annual Physical")
+
+        # One execute() per non-empty id set, in call order: users, prospects,
+        # requirements.
+        results = []
+        for rows in ([user_row], [prospect_row], [req_row]):
+            r = MagicMock()
+            r.all.return_value = rows
+            results.append(r)
+        mock_db.execute.side_effect = results
+
+        out = await service._resolve_names(
+            org_id,
+            user_ids={user_row[0]},
+            prospect_ids={prospect_row[0]},
+            requirement_ids={req_row[0]},
+        )
+
+        assert out["users"][user_row[0]] == "Dana Reyes"
+        assert out["prospects"][prospect_row[0]] == "Sam Okafor"
+        assert out["requirements"][req_row[0]] == "Annual Physical"
+
+    async def test_skips_queries_for_empty_id_sets(self, service, mock_db, org_id):
+        out = await service._resolve_names(
+            org_id, user_ids=set(), prospect_ids=set(), requirement_ids=set()
+        )
+        assert out == {"users": {}, "prospects": {}, "requirements": {}}
+        mock_db.execute.assert_not_called()
+
+    async def test_missing_id_is_absent_not_an_error(self, service, mock_db, org_id):
+        # A queried id that returns no row (out-of-org, deleted) just isn't in
+        # the map — .get() yields None for it.
+        r = MagicMock()
+        r.all.return_value = []  # the id resolved to nothing in this org
+        mock_db.execute.return_value = r
+
+        out = await service._resolve_names(
+            org_id, user_ids={str(uuid4())}, prospect_ids=set(), requirement_ids=set()
+        )
+        assert out["users"] == {}
 
 
 # ============================================

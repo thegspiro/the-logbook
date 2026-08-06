@@ -339,7 +339,7 @@ async def _finish_oauth_login(
     service = AuthService(db)
     access_token, refresh_token = await service.create_user_tokens(
         user=user,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
     await log_audit_event(
@@ -350,7 +350,7 @@ async def _finish_oauth_login(
         event_data={"provider": provider, "email": user.email},
         user_id=str(user.id),
         username=user.username,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     response = RedirectResponse(
         url=settings.OAUTH_SUCCESS_REDIRECT, status_code=status.HTTP_302_FOUND
@@ -555,7 +555,7 @@ async def register(
     # Create tokens
     access_token, refresh_token = await auth_service.create_user_tokens(
         user=user,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
         user_agent=request.headers.get("user-agent"),
     )
 
@@ -651,7 +651,7 @@ async def login(
         # Create tokens
         access_token, refresh_token = await auth_service.create_user_tokens(
             user=user,
-            ip_address=request.client.host if request.client else None,
+            ip_address=login_ip,
             user_agent=request.headers.get("user-agent"),
         )
     except OperationalError as exc:
@@ -1201,7 +1201,7 @@ async def forgot_password(
 
     Rate limited to prevent abuse. Always returns 200 to avoid email enumeration.
     """
-    ip_address = request.client.host if request.client else None
+    ip_address = get_client_ip(request)
 
     # Look up the organization (single-org system)
     org_result = await db.execute(
@@ -1347,7 +1347,7 @@ async def reset_password(
     The token was sent via email from the forgot-password endpoint.
     Requires a new password that meets strength requirements (12+ chars).
     """
-    ip_address = request.client.host if request.client else None
+    ip_address = get_client_ip(request)
     auth_service = AuthService(db)
 
     success, error = await auth_service.reset_password_with_token(

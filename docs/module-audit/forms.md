@@ -72,10 +72,21 @@ submissions, and `allow_multiple_submissions=False` isn't enforced server-side
 **Status:** flagged — needs a product decision on the intended semantics of
 "public + require_authentication" before enforcing.
 
-### FORM-6 — INFO — Required-field check is presence-only
-Both submit paths check `field.id not in data`; a key present with `""`/
-whitespace passes the required check (later coerced to `""`). Minor validation
-gap. **Status:** flagged.
+### FORM-6 — INFO — Required-field check is presence-only — ✅ FIXED (app-review B13)
+Both submit paths checked `field.id not in data`; a key present with `""`/
+whitespace/`[]` passed the required check (later coerced to `""`). **Fix (B13):**
+a new `_is_empty_value` helper treats an empty/whitespace string or empty
+list/dict as missing (while `0`/`False` stay valid for number/boolean fields),
+applied to both required-field loops. 9 unit tests added. See
+`docs/app-review/forms.md`.
+
+### FORM-7 — LOW-MED — Raw exception text leaked to the (unauthenticated) submitter — ✅ FIXED (app-review B13)
+14 service methods returned `str(e)` on failure, which the endpoints surface as
+`HTTPException(detail=error)`. On the **public unauthenticated** submit path this
+returned raw SQL/column names to anonymous callers (a worse NOTIF-2/SF-2). **Fix
+(B13):** all 14 client-facing tuple returns now use `safe_error_detail(e)`
+(generic message + server-side log). The 5 remaining `str(e)` are internal
+processor-result dicts that `_process_integrations` never returns to the client.
 
 ## Notes
 - `member_lookup` fields are stripped from the public GET but still accepted on

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.models.public_portal import PublicPortalAccessLog, PublicPortalAPIKey
 
 # API Key header scheme
@@ -246,7 +247,7 @@ async def log_access(
         flag_reason: Reason for flagging
     """
     # Extract request details
-    ip_address = request.client.host if request.client else "unknown"
+    ip_address = get_client_ip(request)
     endpoint = str(request.url.path)
     method = request.method
     user_agent = request.headers.get("user-agent")
@@ -466,7 +467,10 @@ async def validate_ip_rate_limit(request: Request):
     if not settings.RATE_LIMIT_ENABLED:
         return
 
-    ip_address = request.client.host if request.client else "unknown"
+    # Must be the real client, not the peer: behind the production proxy every
+    # public request would otherwise share one bucket, so a single caller could
+    # exhaust the limit for every visitor (the H5 global-lockout shape).
+    ip_address = get_client_ip(request)
 
     is_allowed, current_count, limit = await check_ip_rate_limit(ip_address)
 

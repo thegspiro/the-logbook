@@ -83,25 +83,36 @@ inverted range could be persisted.
 surfaced both leave `ValueError`s as clean 400s in the endpoints, which
 previously didn't catch them).
 
-### MP-5 — LOW — Other create paths store client ids without org validation (XC-1, integrity only)
+### MP-5 — LOW — Other create paths store client ids without org validation (XC-1, integrity only) — ✅ FIXED (B9)
 `create_election_package` (`pipeline_id`/`step_id`), `create_interview`
-(`step_id`), and `complete_step` (writes a `ProspectStepProgress` even when the
-`step_id` isn't in the prospect's pipeline) store client ids unvalidated. All
+(`step_id`), and `complete_step` (wrote a `ProspectStepProgress` even when the
+`step_id` wasn't in the prospect's pipeline) stored client ids unvalidated. All
 resolve the prospect org-scoped first, so no cross-org disclosure — dangling-FK /
-integrity risk only. **Status:** flagged (XC-1).
+integrity only. **Fix (B9):** each client-supplied `step_id`/`pipeline_id` is now
+validated against the prospect's own (org-scoped) pipeline steps — steps carry no
+`organization_id`, so validation is via the loaded pipeline, not `assert_in_org`;
+a foreign `pipeline_id` on the election package is checked in-org via
+`get_pipeline`. Unknown ids reject with `ValueError → 400`. See
+`docs/app-review/membership-pipeline.md`.
 
-### MP-6 — LOW — Sensitive PII persisted in the activity log / audit trail
-`update_prospect` records old→new values of every changed field (incl.
+### MP-6 — LOW — Sensitive PII persisted in the activity log / audit trail — ✅ FIXED (B9)
+`update_prospect` recorded old→new values of every changed field (incl.
 `date_of_birth`, `address_*`) into `ProspectActivityLog.details`, which
-`GET /prospects/{id}/activity` returns (compounds MP-1). `create_prospect` also
-logs the applicant email into the audit event. Same-org, but sensitive fields
-land in logs. **Status:** flagged.
+`GET /prospects/{id}/activity` returns (compounds MP-1). **Fix (B9):** a sensitive
+allowlist (`date_of_birth`, `address_street/city/state/zip`) now logs
+`{"changed": True}` instead of the plaintext old/new values — the audit trail
+keeps who/when/what-field without the PII value. `create_prospect`'s email in the
+`log_audit_event` (the access-restricted **security** audit log, not the
+member-readable activity log) is accepted as-is.
 
-### MP-7 — LOW — Inconsistent PII disclosure on the two "existing member" paths
+### MP-7 — LOW — Inconsistent PII disclosure on the two "existing member" paths — ✅ FIXED (B9)
 `POST /prospects/check-existing` deliberately strips name/email/user_id (returns
-only `status`+`match_type`), but `POST /prospects` returns the full archived
-member match — name, email, `user_id` — in the 409 body. Contradicts the
-sibling endpoint's stated intent. **Status:** flagged.
+only `status`+`match_type`), but `POST /prospects` returned the full archived
+member match — name, email, `user_id` — in the 409 body. **Fix (B9):** the 409 now
+returns a plain-string message (dropping the unused `user_id`/`reactivate_url`
+structured fields, which the frontend never read and which mis-rendered as
+`[object Object]` anyway). Residual product call — whether the message should name
+the archived member at all — flagged in `KNOWN_LIMITATIONS.md`.
 
 ## Notes
 - Status-token public flow (`get_prospect_by_token`) gates on

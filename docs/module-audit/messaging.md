@@ -41,12 +41,17 @@ admin-controlled; endpoint requires `settings.manage`), but it was the one
 inconsistency with the module's otherwise-correct escaping discipline.
 **Fix:** `html.escape` the org name at the source in `_build_test_html`.
 
-### MSG-2 — LOW — Targeting lists not org-validated on create/update (XC-1, defense-in-depth)
-`create_message` / `update_message` store client-supplied `target_member_ids`
+### MSG-2 — LOW — Targeting lists not org-validated on create/update (XC-1, defense-in-depth) — ✅ FIXED (B10)
+`create_message` / `update_message` stored client-supplied `target_member_ids`
 and `target_roles` verbatim with no in-org check. **Not exploitable** for
 cross-org delivery (the org-scoped `_targeted_users` neutralizes foreign ids),
-but it persists garbage/foreign ids. **Status:** flagged (XC-1) — validate
-membership/role ids against the org on write for data hygiene.
+but it persisted garbage/foreign ids. **Fix (B10):** a new `_validate_targeting`
+helper rejects any member id not in the caller's org and any role entry that
+isn't a role id/name in the org (rename-safe, matching `_is_targeted`;
+`Role.organization_id` is NOT NULL so no cross-org system roles exist). Called in
+both create and update; a raised `ValueError` surfaces as a clean 400. Only
+request-supplied values are checked, so a legacy stored role name is never
+re-validated. 5 unit tests added. See `docs/app-review/messaging.md`.
 
 ### MSG-3 — LOW / informational — Test-email sends to an arbitrary client address
 `POST /message-history/test-email` sends to a fully client-supplied `to_email`

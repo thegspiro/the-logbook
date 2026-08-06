@@ -38,14 +38,21 @@ interface DisplayData {
   location_name: string;
   current_events: KioskEvent[];
   has_overlap: boolean;
+  /** Department IANA timezone, supplied because this page is unauthenticated. */
+  timezone?: string | undefined;
 }
 
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
 const LocationKioskPage: React.FC = () => {
-  const tz = useTimezone();
+  // This page runs with no session, so useTimezone() can only fall back to the
+  // tablet's own zone — commonly UTC on a wall-mounted device. Prefer the
+  // department timezone the API reports, per the project rule that times are
+  // shown in the organization's configured timezone.
+  const fallbackTz = useTimezone();
   const { code } = useParams<{ code: string }>();
   const [data, setData] = useState<DisplayData | null>(null);
+  const tz = data?.timezone || fallbackTz;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(true);

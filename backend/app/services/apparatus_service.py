@@ -1588,13 +1588,23 @@ class ApparatusService:
         uploaded_by: str,
     ) -> ApparatusPhoto:
         """Create photo"""
+        # AP-1 (XC-1): the row is org-stamped from the caller, but apparatus_id
+        # is client-supplied — validate it belongs to the caller's org so a
+        # photo can't be filed against another org's apparatus.
+        await assert_in_org(
+            self.db,
+            Apparatus,
+            photo_data.apparatus_id,
+            organization_id,
+            label="apparatus",
+        )
         # If setting as primary, unset other primary photos for this apparatus
         if photo_data.is_primary:
             result = await self.db.execute(
                 select(ApparatusPhoto)
                 .where(ApparatusPhoto.apparatus_id == photo_data.apparatus_id)
                 .where(ApparatusPhoto.organization_id == str(organization_id))
-                .where(ApparatusPhoto.is_primary == True)  # noqa: E712
+                .where(ApparatusPhoto.is_primary.is_(True))
             )
             for photo in result.scalars().all():
                 photo.is_primary = False
@@ -1648,6 +1658,15 @@ class ApparatusService:
         uploaded_by: str,
     ) -> ApparatusDocument:
         """Create document"""
+        # AP-1 (XC-1): validate the client-supplied apparatus_id is in-org
+        # before filing a document against it.
+        await assert_in_org(
+            self.db,
+            Apparatus,
+            document_data.apparatus_id,
+            organization_id,
+            label="apparatus",
+        )
         document = ApparatusDocument(
             organization_id=organization_id,
             uploaded_by=uploaded_by,

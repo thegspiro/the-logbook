@@ -104,11 +104,16 @@ role editor can express, so left for a product decision. **Status:** flagged.
 - The `reset_initiated` audit event is written in the same transaction as the
   deletes, so a failed reset rolls it back — it should be committed to a durable
   sink first.
-- `GET /status` returns the org name + onboarding state to any unauthenticated
-  caller even post-completion (minor info disclosure; frontend gate).
+- **✅ `GET /status` disclosure FIXED (app-review B25).** It returned the org name +
+  setup progress to any unauthenticated caller even post-completion. The only
+  consumer (`LoginPage`) reads just `needs_onboarding`, so once `is_completed` is
+  True `/status` now returns the minimal `needs_onboarding=False` response with
+  `organization_name=None` and empty progress; the in-progress branch (which the
+  wizard resumes from) is unchanged. 2 tests added.
 - `template_service` create/update rely on the pydantic schema never exposing
-  `organization_id`/`is_system` (mass-assignment fragility).
-**Status:** flagged.
+  `organization_id`/`is_system` (mass-assignment fragility). **Still flagged.**
+**Status:** `/status` disclosure fixed; reset re-auth + audit durability + template
+mass-assignment still flagged. See `docs/app-review/onboarding.md`.
 
 ## Notes
 - Scope correction: `org_template_service.py` is **export-only** (Phase 1, no

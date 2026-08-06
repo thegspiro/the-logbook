@@ -1093,7 +1093,8 @@ export const UserSettingsPage: React.FC = () => {
                     Email Notifications
                   </label>
                   <p className="text-sm text-theme-text-secondary">
-                    Receive email notifications for important updates
+                    Receive email for reminders and alerts. Department
+                    announcements are always emailed to you.
                   </p>
                 </div>
                 <button

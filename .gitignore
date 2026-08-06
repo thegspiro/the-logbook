@@ -176,7 +176,13 @@ Desktop.ini
 # Custom
 /data/
 /secrets/
-.claude/
+# Ignore local Claude state (settings.local.json, caches) but SHARE project
+# slash commands: they are part of the repo's workflow (/app-review drives the
+# docs/app-review rotation) and are useless if every clone must recreate them.
+# Must be `.claude/*` not `.claude/` — git cannot re-include a path through an
+# excluded parent directory, so the negation below would never apply.
+.claude/*
+!.claude/commands/
 
 # Playwright
 /frontend/test-results/

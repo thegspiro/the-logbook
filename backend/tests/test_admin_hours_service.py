@@ -205,5 +205,36 @@ class TestCreateManualEntry:
         assert entry.status == AdminHoursEntryStatus.PENDING
 
 
+class TestOrgScopedQueries:
+    """AH-5: the active-session and overlap queries filter organization_id."""
+
+    def _capturing_db(self, result):
+        captured = {}
+
+        async def _exec(stmt, *a, **k):
+            captured["stmt"] = stmt
+            return result
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=_exec)
+        db.flush = AsyncMock()
+        return db, captured
+
+    async def test_get_active_session_query_is_org_scoped(self):
+        db, captured = self._capturing_db(_one(None))
+        await AdminHoursService(db)._get_active_session("u1", "org-1")
+        assert "organization_id" in str(captured["stmt"])
+
+    async def test_check_overlap_query_is_org_scoped(self):
+        db, captured = self._capturing_db(MagicMock(scalar=MagicMock(return_value=0)))
+        await AdminHoursService(db)._check_overlap(
+            "u1",
+            "org-1",
+            datetime.now(timezone.utc) - timedelta(hours=1),
+            datetime.now(timezone.utc),
+        )
+        assert "organization_id" in str(captured["stmt"])
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

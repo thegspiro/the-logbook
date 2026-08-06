@@ -20,7 +20,7 @@ export interface AppError {
  */
 interface HttpErrorResponse {
   response: {
-    data?: { detail?: string | Array<{ loc?: string[]; msg?: string }>; message?: string; code?: string; details?: Record<string, unknown> };
+    data?: { detail?: string | Array<{ loc?: string[]; msg?: string }> | Record<string, unknown>; message?: string; code?: string; details?: Record<string, unknown> };
     status?: number;
     statusText?: string;
   };
@@ -62,8 +62,20 @@ export function toAppError(error: unknown): AppError {
           return field ? `${field}: ${msg}` : msg;
         })
         .join('. ') || 'Validation failed';
+    } else if (data?.detail && typeof data.detail === 'object') {
+      // Some endpoints raise HTTPException with a structured object detail
+      // (e.g. a 409 { message, ... }). Surface its `message` rather than
+      // letting the object stringify to "[object Object]" in a toast.
+      const objDetail = data.detail as { message?: unknown };
+      const detailMessage =
+        typeof objDetail.message === 'string' ? objDetail.message : undefined;
+      message = detailMessage || data?.message || response.statusText || 'Request failed';
     } else {
-      message = data?.detail || data?.message || response.statusText || 'Request failed';
+      message =
+        (data?.detail as string | undefined) ||
+        data?.message ||
+        response.statusText ||
+        'Request failed';
     }
     return {
       message,

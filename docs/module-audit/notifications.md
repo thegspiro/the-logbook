@@ -38,6 +38,15 @@ single mark-read goes through the recipient-scoped `/my/{id}/read`).
 **Fix:** raised the gate to `notifications.manage`, matching `/logs/read-all`,
 and documented that members use the `/my/` route. Safe — no caller to break.
 
+### NOTIF-2 — LOW — Raw exception text returned to the client (unlogged) — ✅ FIXED (app-review B11)
+All six mutating service methods returned `str(e)` on failure, which the
+endpoints interpolated into the response detail — so a DB `IntegrityError`/
+`OperationalError` leaked raw SQL/column names to the client, and the real
+exception was swallowed with no ERROR log. **Fix (B11):** all six now return
+`safe_error_detail(e)` (generic client message + server-side ERROR log), matching
+the project standard (same class as SF-2). 2 regression tests added. See
+`docs/app-review/notifications.md`.
+
 ## Notes
 - `NotificationsService.markLogRead` (frontend service method for
   `/logs/{id}/read`) is now effectively unused by any component — a candidate

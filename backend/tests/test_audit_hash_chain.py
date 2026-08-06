@@ -197,3 +197,57 @@ async def test_rehash_noop_on_clean_keyed_chain(monkeypatch):
     assert count == 0
     assert db.flushed is False
     assert [(log.previous_hash, log.current_hash) for log in logs] == sealed
+
+
+# --- verify_integrity: SEC-2 tail-truncation detection via checkpoint ---
+
+
+class _VerifyDB:
+    """Returns the log rows on the first execute() and the checkpoint on the
+    second (matching verify_integrity's query order)."""
+
+    def __init__(self, logs, checkpoint):
+        self._logs = logs
+        self._checkpoint = checkpoint
+        self._calls = 0
+
+    async def execute(self, _query):
+        self._calls += 1
+        if self._calls == 1:
+            return _FakeResult(self._logs)
+        return SimpleNamespace(scalar_one_or_none=lambda: self._checkpoint)
+
+
+async def test_verify_detects_tail_truncation(monkeypatch):
+    """A checkpoint attesting entries past the chain's end fails verification."""
+    monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_SIGNING_KEY", "key-A")
+    logger = AuditLogger()
+    logs = [
+        _make_log(1, {"a": 1}, _CURRENT_HASH_VERSION),
+        _make_log(2, {"a": 2}, _CURRENT_HASH_VERSION),
+    ]
+    _seal_chain(logger, logs)  # internally consistent, anchored to genesis
+    # A checkpoint attests entries up to id 5, but the chain now ends at 2.
+    checkpoint = SimpleNamespace(last_log_id=5, archived_at=None)
+
+    result = await logger.verify_integrity(_VerifyDB(logs, checkpoint))
+
+    assert result["verified"] is False
+    assert any("tail truncated" in e.get("error", "") for e in result["errors"])
+
+
+async def test_verify_passes_when_checkpoint_within_chain(monkeypatch):
+    """A checkpoint at/behind the chain head does not trip the tail check."""
+    monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_SIGNING_KEY", "key-A")
+    logger = AuditLogger()
+    logs = [
+        _make_log(1, {"a": 1}, _CURRENT_HASH_VERSION),
+        _make_log(2, {"a": 2}, _CURRENT_HASH_VERSION),
+    ]
+    _seal_chain(logger, logs)
+    checkpoint = SimpleNamespace(last_log_id=2, archived_at=None)
+
+    result = await logger.verify_integrity(_VerifyDB(logs, checkpoint))
+
+    assert result["verified"] is True
+    assert result["errors"] == []

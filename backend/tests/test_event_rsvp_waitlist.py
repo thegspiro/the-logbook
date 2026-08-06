@@ -42,6 +42,10 @@ def _event(**kw):
         title=kw.get("title", "Test Event"),
         organization_id="org-1",
         is_cancelled=kw.get("is_cancelled", False),
+        # EV-6: default a published, not-yet-ended event so the draft/past guards
+        # pass; tests that exercise those pass explicit values.
+        is_draft=kw.get("is_draft", False),
+        end_datetime=kw.get("end_datetime", datetime.now(tz.utc) + timedelta(days=1)),
         requires_rsvp=kw.get("requires_rsvp", True),
         rsvp_deadline=kw.get("rsvp_deadline"),
         allowed_rsvp_statuses=kw.get("allowed_rsvp_statuses", ["going", "not_going"]),
@@ -77,6 +81,19 @@ class TestRsvpGuards:
         ev = _event(allowed_rsvp_statuses=["going"])
         rsvp, err = await self._run(_db([_one(ev)]), status="not_going")
         assert "is not allowed" in err
+
+    async def test_draft_event_rejected(self):
+        # EV-6: a member who knows a draft's id cannot RSVP before publication.
+        rsvp, err = await self._run(_db([_one(_event(is_draft=True))]))
+        assert rsvp is None
+        assert err == "Cannot RSVP to an unpublished event"
+
+    async def test_ended_event_rejected(self):
+        # EV-6: no rsvp_deadline set, but the event already ended.
+        ended = datetime.now(tz.utc) - timedelta(hours=1)
+        rsvp, err = await self._run(_db([_one(_event(end_datetime=ended))]))
+        assert rsvp is None
+        assert err == "Cannot RSVP to an event that has already ended"
 
 
 class TestRsvpCapacity:

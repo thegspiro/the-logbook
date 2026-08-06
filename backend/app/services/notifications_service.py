@@ -12,6 +12,7 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.utils import safe_error_detail
 from app.models.notification import (
     NotificationCategory,
     NotificationChannel,
@@ -44,7 +45,7 @@ class NotificationsService:
             return rule, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def get_rules(
         self,
@@ -112,7 +113,7 @@ class NotificationsService:
             return rule, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def delete_rule(
         self, rule_id: UUID, organization_id: UUID
@@ -128,7 +129,7 @@ class NotificationsService:
             return True, None
         except Exception as e:
             await self.db.rollback()
-            return False, str(e)
+            return False, safe_error_detail(e)
 
     async def toggle_rule(
         self, rule_id: UUID, organization_id: UUID, enabled: bool
@@ -152,7 +153,7 @@ class NotificationsService:
             return log, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def get_logs(
         self,
@@ -216,7 +217,7 @@ class NotificationsService:
             )
 
         if not include_read:
-            query = query.where(NotificationLog.read == False)  # noqa: E712
+            query = query.where(NotificationLog.read.is_(False))
 
         count_query = select(func.count()).select_from(query.subquery())
         total_result = await self.db.execute(count_query)
@@ -240,7 +241,7 @@ class NotificationsService:
             .where(NotificationLog.organization_id == str(organization_id))
             .where(NotificationLog.recipient_id == str(user_id))
             .where(NotificationLog.channel == NotificationChannel.IN_APP)
-            .where(NotificationLog.read == False)  # noqa: E712
+            .where(NotificationLog.read.is_(False))
             .where(
                 or_(
                     NotificationLog.expires_at.is_(None),
@@ -263,7 +264,7 @@ class NotificationsService:
             .where(NotificationLog.organization_id == str(organization_id))
             .where(NotificationLog.recipient_id == str(user_id))
             .where(NotificationLog.channel == NotificationChannel.IN_APP)
-            .where(NotificationLog.read == False)  # noqa: E712
+            .where(NotificationLog.read.is_(False))
         )
         logs = list(result.scalars().all())
         for log in logs:
@@ -281,7 +282,7 @@ class NotificationsService:
         result = await self.db.execute(
             select(NotificationLog)
             .where(NotificationLog.organization_id == str(organization_id))
-            .where(NotificationLog.read == False)  # noqa: E712
+            .where(NotificationLog.read.is_(False))
         )
         logs = list(result.scalars().all())
         for log in logs:
@@ -325,7 +326,7 @@ class NotificationsService:
             return log, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def toggle_pin(
         self,
@@ -353,7 +354,7 @@ class NotificationsService:
             return log, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     # ============================================
     # Summary & Reporting
@@ -373,7 +374,7 @@ class NotificationsService:
         active_result = await self.db.execute(
             select(func.count(NotificationRule.id))
             .where(NotificationRule.organization_id == str(organization_id))
-            .where(NotificationRule.enabled == True)  # noqa: E712
+            .where(NotificationRule.enabled.is_(True))
         )
         active_rules = active_result.scalar() or 0
 

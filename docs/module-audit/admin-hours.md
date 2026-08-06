@@ -59,18 +59,28 @@ When a clock-out auto-approved, the entry was written APPROVED with
 **Fix:** stamp `approved_at = now` on auto-approval (`approved_by` stays `None`
 to denote a system/auto approval).
 
-### AH-4 — MEDIUM (flagged) — Officers can approve their own entries (no segregation of duties)
-`approve_or_reject` / `bulk_approve` don't check `entry.user_id != approver_id`,
-so an `admin_hours.manage` holder can create a pending entry, edit its times, and
-self-approve. **Why flagged, not auto-fixed:** in small volunteer departments the
-only officer legitimately logs and approves their own admin hours, so blocking
-self-approval outright could break real workflows. Recommend a configurable
-segregation-of-duties toggle (or at least an audit flag on self-approval) — a
-product decision.
+### AH-4 — MEDIUM — Officers can approve their own entries (no segregation of duties) — ✅ FIXED
+`approve_or_reject` / `bulk_approve` didn't check `entry.user_id != approver_id`,
+so an `admin_hours.manage` holder could create a pending entry, edit its times,
+and self-approve.
+**Fix (verified in app-review A9):** the approve action now calls the shared
+`assert_different_person` guard (`app/services/separation_of_duties.py`,
+`admin_hours_service.py:739`) — the same helper wired into finance approvals and
+skills-test examination. Rejection stays unguarded (withdrawing your own claim is
+not a conflict). The fix is **unconditional**, not the configurable toggle
+originally recommended: a genuinely single-officer department can therefore no
+longer approve its own admin hours and would need a second `admin_hours.manage`
+holder. That consequence is accepted as the ISO 27001 A.5.3 control the shared
+module implements; a per-org SoD toggle remains a possible future refinement if a
+sole-officer workflow proves necessary.
 
-### AH-5 — LOW (flagged, not exploitable) — Minor scoping omissions
-`get_active_session` reads the category by id without an org filter (but only for
-the caller's own session); `_check_overlap` filters `user_id` not
-`organization_id` (harmless — a user belongs to one org); `delete_category`'s
-active-session count omits org (but `category_id` is already validated in-org).
-Defense-in-depth only.
+### AH-5 — LOW — Minor scoping omissions — ✅ FIXED (app-review B15)
+`get_active_session`/`_get_active_session` read the caller's session + category
+by id without an org filter; `_check_overlap` filtered `user_id` not
+`organization_id`; `delete_category`'s active-session count omitted org. None
+exploitable (each constrained by an org-verified parent or the one-org-per-user
+invariant), but not uniform with the codebase's org-scope-everything standard.
+**Fix (B15):** all three now filter `organization_id` (threaded into
+`_get_active_session`/`get_active_session`/`_check_overlap`; the endpoint passes
+`current_user.organization_id`). 2 compiled-SQL regression tests added. See
+`docs/app-review/admin-hours.md`.

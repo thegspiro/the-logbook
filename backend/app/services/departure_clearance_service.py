@@ -193,13 +193,20 @@ class DepartureClearanceService:
             for li in line_items:
                 self.db.add(li)
 
-            # Update summary counts
-            total_value = sum(float(li.item_value or 0) for li in line_items)
+            # Update summary counts. Summed as Decimal, matching
+            # get_clearance_summary below: every item_value is already an exact
+            # 2-decimal Numeric, so accumulating them through float would
+            # reintroduce representation error into a figure the member can be
+            # charged for.
+            total_value = sum(
+                (Decimal(str(li.item_value or 0)) for li in line_items),
+                Decimal("0"),
+            )
             clearance.total_items = len(line_items)
             clearance.items_outstanding = len(line_items)
             clearance.items_cleared = 0
-            clearance.total_value = Decimal(str(round(total_value, 2)))
-            clearance.value_outstanding = Decimal(str(round(total_value, 2)))
+            clearance.total_value = total_value
+            clearance.value_outstanding = total_value
 
             await self.db.commit()
             await self.db.refresh(clearance)

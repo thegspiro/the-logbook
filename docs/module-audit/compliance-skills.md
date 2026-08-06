@@ -95,15 +95,21 @@ incoherent status bucketing.
 **Fix:** a `model_validator` on the create + update schemas rejects
 `at_risk_threshold > compliant_threshold`.
 
-### CS-8 — MED/LOW (flagged) — Separation-of-duties on skills tests + attestations
-- Skills: an examiner (`training.manage`) can create a test where they are also
-  the candidate, then score + pass it, auto-completing their own linked training
-  requirement — self-certification. (skills #3)
+### CS-8 — MED/LOW — Separation-of-duties on skills tests + attestations — ⚠️ PARTIALLY FIXED
+- Skills: an examiner (`training.manage`) could create a test where they were
+  also the candidate, then score + pass it, auto-completing their own linked
+  training requirement — self-certification. (skills #3) **✅ FIXED (verified in
+  app-review A9):** `skills_testing.py:678` now calls the shared
+  `assert_different_person` guard so the examiner cannot be the candidate, with
+  the anticipated `is_practice` carve-out (practice attempts are not logged, not
+  credited, and self-drilling is their point).
 - Attestations: `create_attestation` records a client-supplied
   `compliance_percentage` with nothing recomputed server-side and no second
-  approver (self-attestation). (officer #3)
-**Status:** flagged — both need a candidate≠examiner / dual-control rule (and
-possibly an `is_practice` carve-out), which changes the workflow.
+  approver (self-attestation). (officer #3) **Still OPEN:**
+  `compliance_officer_service.create_attestation` is unchanged — it validates the
+  period fields but stores whatever percentage the caller supplies, with no
+  server-side recompute and no dual-control. Needs a computed value or a second
+  approver; a behavior change, correctly still deferred.
 
 ### CS-9 — LOW — partially FIXED — Reporting correctness / abuse-surface polish
 - **✅ Report email HTML injection closed.** `_email_report` interpolated the org
@@ -126,7 +132,13 @@ possibly an `is_practice` carve-out), which changes the workflow.
   attestation history now filters on the audit log's `organization_id`
   column instead of over-fetching globally and filtering in Python;
   `records_with_certification` mislabel is ambiguous-intent, left as-is
-  (officer #5); ISO-readiness `user_id` String match is latent (officer #6).
+  (officer #5). **✅ officer #6 FIXED (app-review B22):** ISO-readiness now
+  normalizes `str(record.user_id)` for both the member-membership test and the
+  `member_hours` dict key, so a UUID-typed `user_id` can't silently drop a
+  member's hours from the readiness computation. 1 regression test added.
+  **Note (CS-8 attestation):** `compliance_percentage` is already range-bounded at
+  the schema (`Field(ge=0, le=100)`); the open half is the missing server-side
+  recompute / dual-control (behavior change, still deferred).
 **Status:** injection + input-validation fixed; monthly windowing (feature) and
 recipient allow-list (policy) deferred.
 

@@ -18,6 +18,7 @@ from app.core.audit import log_audit_event
 from app.models.grant import (
     ApplicationStatus,
     ComplianceTaskStatus,
+    FundraisingCampaign,
     GrantApplication,
     GrantBudgetItem,
     GrantComplianceTask,
@@ -26,6 +27,8 @@ from app.models.grant import (
     GrantNoteType,
     GrantOpportunity,
 )
+from app.models.user import User
+from app.utils.org_scoping import assert_in_org
 
 
 class GrantService:
@@ -204,6 +207,41 @@ class GrantService:
         )
         return result.scalar_one_or_none() is not None
 
+    async def _validate_application_fks(
+        self, data: Dict[str, Any], organization_id: str
+    ) -> None:
+        """GF-6: client-supplied FK ids on an application must be in the org.
+
+        ``opportunity_id`` was already validated (GF-4, read-leak); these three
+        are stored-only FKs — a foreign ``linked_campaign_id`` /
+        ``assigned_to`` / ``approved_by`` would persist a dangling/mis-attributed
+        reference. ``allow_none`` so clearing or omitting a field is fine.
+        """
+        await assert_in_org(
+            self.db,
+            FundraisingCampaign,
+            data.get("linked_campaign_id"),
+            organization_id,
+            allow_none=True,
+            label="Linked campaign",
+        )
+        await assert_in_org(
+            self.db,
+            User,
+            data.get("assigned_to"),
+            organization_id,
+            allow_none=True,
+            label="Assigned user",
+        )
+        await assert_in_org(
+            self.db,
+            User,
+            data.get("approved_by"),
+            organization_id,
+            allow_none=True,
+            label="Approver",
+        )
+
     async def create_application(
         self, organization_id: str, data: Dict[str, Any], user_id: str
     ) -> GrantApplication:
@@ -211,6 +249,7 @@ class GrantService:
             data["opportunity_id"], organization_id
         ):
             raise ValueError("Grant opportunity not found")
+        await self._validate_application_fks(data, organization_id)
         application = GrantApplication(
             organization_id=organization_id,
             created_by=user_id,
@@ -255,6 +294,7 @@ class GrantService:
             data["opportunity_id"], organization_id
         ):
             raise ValueError("Grant opportunity not found")
+        await self._validate_application_fks(data, organization_id)
 
         old_status = application.application_status
 

@@ -126,10 +126,11 @@ class AdminHoursService:
         if not category:
             raise ValueError("Category not found")
 
-        # Check for active sessions using this category
+        # Check for active sessions using this category (AH-5: org-scoped)
         active_count_result = await self.db.execute(
             select(func.count()).where(
                 AdminHoursEntry.category_id == category_id,
+                AdminHoursEntry.organization_id == organization_id,
                 AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
             )
         )
@@ -187,7 +188,7 @@ class AdminHoursService:
             raise ValueError("This category is no longer active")
 
         # Check for existing active session (any category)
-        active = await self._get_active_session(user_id)
+        active = await self._get_active_session(user_id, organization_id)
         if active:
             if active.category_id == category_id:
                 raise ValueError("ALREADY_CLOCKED_IN")
@@ -262,14 +263,19 @@ class AdminHoursService:
 
         return await self.clock_out(entry.id, user_id)
 
-    async def get_active_session(self, user_id: str) -> Optional[Dict]:
+    async def get_active_session(
+        self, user_id: str, organization_id: str
+    ) -> Optional[Dict]:
         """Get the user's current active session with category info."""
-        entry = await self._get_active_session(user_id)
+        entry = await self._get_active_session(user_id, organization_id)
         if not entry:
             return None
 
         category = await self.db.execute(
-            select(AdminHoursCategory).where(AdminHoursCategory.id == entry.category_id)
+            select(AdminHoursCategory).where(
+                AdminHoursCategory.id == entry.category_id,
+                AdminHoursCategory.organization_id == organization_id,
+            )
         )
         cat = category.scalar_one_or_none()
 
@@ -291,11 +297,14 @@ class AdminHoursService:
             "max_session_minutes": max_minutes,
         }
 
-    async def _get_active_session(self, user_id: str) -> Optional[AdminHoursEntry]:
-        """Internal: get the active entry for a user."""
+    async def _get_active_session(
+        self, user_id: str, organization_id: str
+    ) -> Optional[AdminHoursEntry]:
+        """Internal: get the active entry for a user (AH-5: org-scoped)."""
         result = await self.db.execute(
             select(AdminHoursEntry).where(
                 AdminHoursEntry.user_id == user_id,
+                AdminHoursEntry.organization_id == organization_id,
                 AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
             )
         )
@@ -448,7 +457,9 @@ class AdminHoursService:
             raise ValueError("A single entry cannot exceed 24 hours")
 
         # Check for overlapping entries
-        overlap = await self._check_overlap(user_id, clock_in_at, clock_out_at)
+        overlap = await self._check_overlap(
+            user_id, organization_id, clock_in_at, clock_out_at
+        )
         if overlap:
             raise ValueError(
                 "This time range overlaps with an existing entry. "
@@ -1097,6 +1108,7 @@ class AdminHoursService:
     async def _check_overlap(
         self,
         user_id: str,
+        organization_id: str,
         clock_in_at: datetime,
         clock_out_at: datetime,
         exclude_entry_id: Optional[str] = None,
@@ -1104,6 +1116,7 @@ class AdminHoursService:
         """Check if a time range overlaps with existing non-rejected entries."""
         query = select(func.count(AdminHoursEntry.id)).where(
             AdminHoursEntry.user_id == user_id,
+            AdminHoursEntry.organization_id == organization_id,
             AdminHoursEntry.status != AdminHoursEntryStatus.REJECTED,
             AdminHoursEntry.clock_out_at.isnot(None),
             # Overlap: existing.start < new.end AND existing.end > new.start
