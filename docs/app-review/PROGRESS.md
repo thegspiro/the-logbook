@@ -44,7 +44,7 @@ from its open list.
 | B3 | inventory | INV2 | ✅ |
 | B4 | facilities | FAC2 | ✅ |
 | B5 | elections | ELEC2 | ✅ |
-| B6 | meetings & minutes | MM2 | ⬜ |
+| B6 | meetings & minutes | MM2 | ✅ |
 | B7 | equipment-check | EC2 | ⬜ |
 | B8 | documents | DOC2 | ⬜ |
 | B9 | membership pipeline | MP2 | ⬜ |

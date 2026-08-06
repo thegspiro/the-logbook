@@ -68,7 +68,7 @@ deliberate decision. Also note a **frontend inconsistency**: `MinutesPage` /
 gates minutes writes (and now restricted reads) on `minutes.manage`; roles that
 manage minutes should hold both.
 
-### MM-4 — LOW — Cross-org / unvalidated FKs on create (XC-1 class)
+### MM-4 — LOW — Cross-org / unvalidated FKs on create (XC-1 class) — ✅ FIXED (app-review B6, 2026-08-06)
 - `create_minutes` / `update_minutes` store `event_id` with no in-org check.
 - Minutes action items store `assignee_id`; meetings bulk `create_meeting` adds
   attendees (`user_id`) and action items (`assigned_to`) with no org-membership

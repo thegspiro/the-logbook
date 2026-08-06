@@ -22,6 +22,7 @@ from app.models.meeting import (
     MeetingType,
 )
 from app.models.user import User
+from app.utils.org_scoping import assert_in_org
 
 
 class MeetingsService:
@@ -48,9 +49,20 @@ class MeetingsService:
             self.db.add(meeting)
             await self.db.flush()
 
-            # Add attendees
+            # Add attendees. MM-4 (XC-1): the dedicated add_attendee endpoint
+            # verifies the user is in-org, but this bulk-create path spread the
+            # client dict unvalidated — validate here too so a foreign user_id
+            # can't be attached as an attendee.
             for att_data in attendees_data:
                 if isinstance(att_data, dict):
+                    await assert_in_org(
+                        self.db,
+                        User,
+                        att_data.get("user_id"),
+                        organization_id,
+                        allow_none=True,
+                        label="attendee",
+                    )
                     attendee = MeetingAttendee(
                         organization_id=organization_id,
                         meeting_id=meeting.id,
@@ -58,9 +70,18 @@ class MeetingsService:
                     )
                     self.db.add(attendee)
 
-            # Add action items
+            # Add action items. MM-4 (XC-1): validate the client-supplied
+            # assignee before storing it.
             for item_data in action_items_data:
                 if isinstance(item_data, dict):
+                    await assert_in_org(
+                        self.db,
+                        User,
+                        item_data.get("assigned_to"),
+                        organization_id,
+                        allow_none=True,
+                        label="assignee",
+                    )
                     action_item = MeetingActionItem(
                         meeting_id=meeting.id,
                         organization_id=organization_id,
@@ -282,6 +303,16 @@ class MeetingsService:
             meeting = await self.get_meeting_by_id(meeting_id, organization_id)
             if not meeting:
                 return None, "Meeting not found"
+
+            # MM-4 (XC-1): validate the client-supplied assignee is in-org.
+            await assert_in_org(
+                self.db,
+                User,
+                item_data.get("assigned_to"),
+                organization_id,
+                allow_none=True,
+                label="assignee",
+            )
 
             action_item = MeetingActionItem(
                 meeting_id=meeting_id, organization_id=organization_id, **item_data

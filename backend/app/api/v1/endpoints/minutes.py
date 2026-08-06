@@ -202,11 +202,15 @@ async def create_minutes(
     **Requires permission: minutes.manage**
     """
     service = MinuteService(db)
-    minutes = await service.create_minutes(
-        data=data,
-        organization_id=current_user.organization_id,
-        created_by=current_user.id,
-    )
+    # Wrapped like the sibling write endpoints so a service-layer ValueError —
+    # an invalid template_id (MM-1) or a foreign event/assignee id (MM-4) —
+    # returns a clean 400 rather than a 500.
+    async with handle_service_errors("Failed to create minutes"):
+        minutes = await service.create_minutes(
+            data=data,
+            organization_id=current_user.organization_id,
+            created_by=current_user.id,
+        )
 
     logger.info(
         f"Minutes created | id={minutes.id} title={minutes.title!r} by={current_user.id}"

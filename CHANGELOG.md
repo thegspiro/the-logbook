@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Minutes management shows for the right role, and can't reference another org's data (2026-08-06)
+
+**Fixed**
+
+- **Users who could manage minutes saw no management controls, while users who
+  couldn't saw controls that failed.** The minutes pages decided whether to show
+  edit/approve controls from the `meetings.manage` permission, but the backend
+  gates every minutes write on `minutes.manage`. So a member granted
+  `minutes.manage` saw a read-only page, and a member with only `meetings.manage`
+  saw buttons that returned "forbidden" on click. Both pages now check
+  `minutes.manage`, matching the API.
+- **Meeting and minutes records validated their links.** Creating minutes, a
+  meeting, or an action item stored a client-supplied event or assignee id
+  without checking it belonged to your organization; those ids are now validated
+  in-org. A related error-handling gap meant an invalid template on minutes
+  creation returned a 500 instead of a clear 400 — now corrected.
+
 ### Inventory: maintenance records, kit issuing, and reorder search hardened (2026-08-06)
 
 **Fixed**
