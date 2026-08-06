@@ -64,7 +64,7 @@ from its open list.
 | B23 | security, audit & IP | SEC2 | ✅ |
 | B24 | core infra | CI2 | ✅ |
 | B25 | onboarding | ONB2 | ✅ |
-| B26 | public-portal | PP2 | ⬜ |
+| B26 | public-portal | PP2 | ✅ |
 | B27 | frontend shared | FE2 | ⬜ |
 
 **36 features total.** After B27 the rotation wraps to A1.
@@ -700,4 +700,17 @@ Established before the first iteration, so any later failure is attributable:
   mass-assignment guard). **2 tests added** (`test_onboarding_status_disclosure`);
   8 onboarding non-DB tests pass. flake8/black clean. See onboarding.md. Next: B26
   public-portal.
+- **B26 public-portal ✅ (clean-module verification).** The unauthenticated surface
+  is well-hardened — PP-1–5 fixed, PP-7 mostly; re-confirmed auth/tenant-isolation/
+  data-minimization/rate-limit-fail-closed. **No new code-level finding.** Added
+  nuance to PP-6's deferred app-status-token-hashing: the token is *re-read* to
+  rebuild the status-check URL (emails + the status response), so it can't be
+  hash-only — hashing at rest needs a two-column design (`status_token_hash` for
+  lookup + the token encrypted for re-display) + backfill. Confirms the
+  schema-change deferral; the naive "hash it" would break every status link.
+  **Flagged (unchanged):** PP-6 (Redis limiter + token-at-rest — infra/schema,
+  now in KNOWN_LIMITATIONS), PP-7 residual (nested-address whitelist, display-code
+  lockout — accepted design limits). **Cleanup:** swept 4 E712 in `portal.py`.
+  `test_public_portal_security` + `test_public_display` 21 passed. flake8/black
+  clean. See public-portal.md. Next: B27 frontend shared (final Tier B item).
 </content>

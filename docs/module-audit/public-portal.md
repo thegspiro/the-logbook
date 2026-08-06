@@ -113,7 +113,13 @@ ceiling = workers × limit) and reset on restart — a shared Redis store is nee
 for a real global limit. Separately, the application-status token is stored
 plaintext and matched by DB `==` (a DB/backup read yields live 30-day tokens); it
 should be hashed at rest and looked up by hash. Both are behavior/schema changes.
-**Status:** flagged.
+**Status:** flagged. **Nuance added (app-review B26):** unlike a reset token, the
+status token is *re-read* to rebuild the status-check URL (email templates +
+`get_application_status` response), so it can't be hash-only — hashing at rest needs
+a **two-column** design (`status_token_hash` indexed for lookup + the token stored
+**encrypted** via `EncryptedText` for re-display) plus a backfill; the naive "hash
+it" would break every status link. Confirms the schema-change deferral. See
+`docs/app-review/public-portal.md`.
 
 ### PP-7 — LOW — ✅ mostly FIXED — Per-request write + query amplification, nested-address whitelist
 - **✅ `last_used_at` write throttled.** `authenticate_api_key` no longer writes +
