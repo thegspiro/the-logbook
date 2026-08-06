@@ -58,6 +58,12 @@ Three things worth knowing:
 > first — SMS notifications require your explicit consent under US telephone
 > consumer protection rules, so they are off until you turn them on.
 
+> **Turning off texts does not turn off being notified.** The text-message choice
+> controls only the **SMS** copy of a notification. Important department notices
+> are always sent to your **email** as well — that email is the official record
+> that you were informed, so consent can silence the text but never the notice
+> itself. Keep your email address current under **My Account** for this reason.
+
 ---
 
 ## Downloading Your Data

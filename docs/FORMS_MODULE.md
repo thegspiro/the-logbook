@@ -186,6 +186,11 @@ All form submissions (both public and authenticated) pass through `_sanitize_sub
    - Select/Radio: Value must be in the field's allowed options
    - Checkbox: Each comma-separated value must be in allowed options
 6. **Validation patterns**: Custom regex patterns per field
+7. **Required fields need a real answer**: A field marked required is only
+   satisfied by a non-empty value — an empty or whitespace-only text entry, or a
+   multi-select with nothing chosen, is rejected as missing (not merely the key
+   being present). Number and checkbox fields answered with `0` or "unchecked"
+   still count as answered.
 
 ### Public Form Protection
 

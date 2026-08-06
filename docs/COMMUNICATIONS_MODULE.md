@@ -85,10 +85,18 @@ fans the message out (excluding the author):
 
 - **In-app:** one `NotificationLog` (`channel="in_app"`, category
   `department_message`) per recipient → the bell inbox.
-- **Email:** reuses `EmailService` + `wrap_email_body`; respects the member's
-  `notification_preferences.email_notifications`.
+- **Email:** reuses `EmailService` + `wrap_email_body`. For a department message
+  this is the **record-of-notice channel**, so it is sent **unconditionally** —
+  deliberately *not* filtered by the member's `email_notifications` preference or
+  by consent, so a member can never claim they weren't informed. (The
+  `email_notifications` preference still governs the separate reminder/alert
+  flows.)
 - **SMS:** `SMSService.send_bulk_sms` when Twilio is enabled and the member has a
-  `mobile`/`phone`; respects `notification_preferences.sms_notifications`.
+  `mobile`/`phone`, **and** the member has granted express **SMS consent**
+  (`ConsentType.SMS_NOTIFICATIONS`, checked via `ConsentService.granted_user_ids`,
+  which fails closed — a member who was never asked is treated as *not* consented,
+  per US TCPA), **and** their `sms_notifications` preference is on. A member who
+  turns off (or never grants) SMS still receives the email above.
 
 Escalation runs in a FastAPI `BackgroundTask` on its own DB session so the POST
 returns immediately. `deliver` is fully failure-guarded (one bad message can't

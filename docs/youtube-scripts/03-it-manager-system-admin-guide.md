@@ -243,6 +243,15 @@ application briefly to show the columns.]**
 
 **[CALLOUT: "Permission changes are immediate — no restart needed"]**
 
+> "One safety rule worth knowing: you can only edit a role that stays at or below
+> your own access level. As the IT Manager you hold the wildcard, so you can edit
+> anything — but a Chief or Secretary can't blank out or downgrade a role more
+> powerful than theirs, like the System Owner role. The system also won't let you
+> remove the last administrator, so the department can never lock itself out of
+> member management."
+
+**[CALLOUT: "You can't edit a role above your own level · can't remove the last admin"]**
+
 ### CREATING CUSTOM POSITIONS (12:30 – 13:30)
 
 **[SCREEN: Click "Create Position" button]**
