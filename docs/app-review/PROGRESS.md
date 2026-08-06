@@ -47,7 +47,7 @@ from its open list.
 | B6 | meetings & minutes | MM2 | ✅ |
 | B7 | equipment-check | EC2 | ✅ |
 | B8 | documents | DOC2 | ✅ |
-| B9 | membership pipeline | MP2 | ⬜ |
+| B9 | membership pipeline | MP2 | ✅ |
 | B10 | messaging & communications | MSG2 | ⬜ |
 | B11 | notifications | NOTIF2 | ⬜ |
 | B12 | integrations | INT2 | ⬜ |
@@ -406,4 +406,33 @@ Established before the first iteration, so any later failure is attributable:
   pattern is fully resolved. Also fixed AP-2 (a `== True # noqa` → `.is_(True)`).
   Coverage rests on `test_org_scoping.py` (7/7). Backend **2517 passed, 0
   failed**. See apparatus.md. Next: B3 inventory.
+- **B9 membership pipeline ✅.** A sensitive-PII module (DOB, home address,
+  background checks, IDs); the security pass had already confirmed tenant
+  isolation is solid and XC-3 doesn't occur here, so this pass worked the three
+  open findings, weighting the two PII-shaped ones. **3 fixes applied:** MP-5
+  (LOW XC-1 integrity: `complete_step`/`create_election_package`/`create_interview`
+  stored a client `step_id`/`pipeline_id` unvalidated — `complete_step` would even
+  write a `ProspectStepProgress` for a step not in the prospect's pipeline. Steps
+  carry no `organization_id`, so each id is now validated against the prospect's
+  own org-scoped pipeline steps — a foreign election-package `pipeline_id` via the
+  org-scoped `get_pipeline` — rejecting with `ValueError → 400`; no cross-org
+  disclosure existed, this is dangling-FK hardening), MP-6 (LOW data-min:
+  `update_prospect` wrote plaintext old→new **DOB and home-address** values into
+  `ProspectActivityLog.details`, which `GET /activity` returns to any
+  `prospective_members.view` user — a sensitive allowlist now logs
+  `{"changed": True}`, keeping who/when/what-field without the PII value; the
+  non-sensitive fields keep full old→new), MP-7 (LOW disclosure/UX: `POST
+  /prospects` returned the archived match's `name`/`email`/**`user_id`** +
+  `reactivate_url` in the 409 body while the sibling `/check-existing`
+  deliberately strips to `status`+`match_type`. The kicker: the frontend never
+  read the structured fields **and** the dict `detail` mis-rendered as
+  `[object Object]` — so returning a plain-string message dropped the `user_id`
+  leak *and* fixed the broken toast in one change). **1 flagged:** whether the
+  409 message should name the archived member at all (same disclosure
+  `/check-existing` avoids — a product call), recorded in `KNOWN_LIMITATIONS.md`.
+  Gate: flake8/black clean on both files; `test_membership_pipeline_flow` +
+  `test_integrations_webhook_advance` 5 passed / 12 DB-fixture errors (no MySQL),
+  no logic failures; all existing `complete_step` tests pass valid in-pipeline
+  steps so the MP-5 guards don't affect them. See membership-pipeline.md. Next:
+  B10 messaging & communications.
 </content>

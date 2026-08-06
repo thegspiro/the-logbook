@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Prospective members: applicant privacy and a clearer duplicate warning (2026-08-06)
+
+**Fixed**
+
+- **Editing an applicant no longer records their date of birth or home address
+  in the activity log.** The change history shown on an applicant's activity tab
+  previously stored the exact old and new values of every edited field — so
+  changing a date of birth or street address wrote those values into a log
+  visible to anyone who can view prospective members. Sensitive fields (date of
+  birth and address) now record only that the field changed, keeping the "who
+  changed what, and when" trail without exposing the value.
+- **The "this applicant matches an archived member" warning now reads
+  correctly.** Adding an applicant who matches a previously-archived member
+  showed a broken notification (it rendered as raw placeholder text). It now
+  shows a clear message naming the member so leadership can reactivate them
+  instead of creating a duplicate. The member's internal record id is no longer
+  included in that response.
+
 ### Minutes management shows for the right role, and can't reference another org's data (2026-08-06)
 
 **Fixed**
