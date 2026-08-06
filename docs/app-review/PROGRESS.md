@@ -49,7 +49,7 @@ from its open list.
 | B8 | documents | DOC2 | ✅ |
 | B9 | membership pipeline | MP2 | ✅ |
 | B10 | messaging & communications | MSG2 | ✅ |
-| B11 | notifications | NOTIF2 | ⬜ |
+| B11 | notifications | NOTIF2 | ✅ |
 | B12 | integrations | INT2 | ⬜ |
 | B13 | forms | FORM2 | ⬜ |
 | B14 | grants & fundraising | GF2 | ⬜ |
@@ -457,4 +457,21 @@ Established before the first iteration, so any later failure is attributable:
   role id+rename pass, foreign-role reject, empty-lists-no-query;
   `test_messaging_service.py` **36 passed** (was 31), no DB needed. flake8/black
   clean. See messaging.md. Next: B11 notifications.
+- **B11 notifications ✅.** The prior audit had **no open findings** and rated the
+  IDOR/user-scoping "exemplary," so this pass re-verified a sample (the `/my/*`
+  recipient-scoping, the documented optional-`user_id` split in `mark_as_read`,
+  and that `create_rule`/`update_rule` mass-assignment isn't reachable — the
+  create/update schemas expose no `id`/`organization_id`/`created_by`) and applied
+  the broader lens. **1 new fix:** NOTIF-2 (LOW info-disclosure: all six mutating
+  service methods returned raw `str(e)` on failure, which the endpoints
+  interpolated into the response detail — so a DB `IntegrityError`/
+  `OperationalError` leaked SQL/column names to the client, and the real
+  exception was swallowed with no ERROR log. Switched all six to
+  `safe_error_detail(e)` — generic client message + server-side logging — the
+  project standard, same class as SF-2). **Cleanup:** removed five
+  `== True`/`== False  # noqa: E712` suppressions in favor of
+  `.is_(True)`/`.is_(False)` (AP-2 pattern). **2 tests added**
+  (`TestErrorSanitization`), 17 passed across the non-DB notification test files.
+  NOTIF-1 re-verified fixed. flake8/black clean. See notifications.md. Next: B12
+  integrations.
 </content>
