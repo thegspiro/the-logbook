@@ -15,10 +15,12 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
+from app.models.user import Organization
 from app.schemas.event import QRCheckInData
 from app.schemas.location import LocationDisplayInfo
 from app.services.event_service import EventService
@@ -114,9 +116,22 @@ async def get_public_location_display(
             ).model_dump()
         )
 
+    # Ship the department's timezone so the kiosk renders these UTC times in
+    # department-local time. Without it an unauthenticated tablet has no
+    # profile to read and falls back to whatever zone the device is set to —
+    # commonly UTC out of the box, which shifts every displayed time.
+    org_tz = (
+        await db.execute(
+            select(Organization.timezone).where(
+                Organization.id == location.organization_id
+            )
+        )
+    ).scalar_one_or_none()
+
     return LocationDisplayInfo(
         location_id=UUID(location.id),
         location_name=location.name,
         current_events=current_events,
         has_overlap=len(current_events) > 1,
+        timezone=org_tz,
     )

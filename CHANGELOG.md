@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The room kiosk shows department time, and a stale check-in window is corrected (2026-08-05)
+
+**Fixed**
+
+- **The room kiosk rendered every time in the tablet's own timezone.** The
+  kiosk page is deliberately public (a wall-mounted tablet cannot hold a
+  session), so the hook that supplies the department timezone had no user
+  profile to read and always fell through to the device's zone. A display left
+  on its factory default — commonly UTC — showed event times and check-in
+  windows shifted by hours. The public display response now carries the
+  organization's timezone and the kiosk renders in it, keeping the browser zone
+  only as a fallback.
+- **`GET /locations/{id}/display` reported a check-in window that could not
+  happen.** It computed "one hour before the event starts", but the real window
+  is per-event configurable — the flexible default is 30 minutes, and a strict
+  window opens at the event's actual start time. It now uses the same
+  calculation the check-in endpoint enforces, which the public kiosk endpoint
+  already did.
+
 ### Executive-session action items are no longer visible on the dashboard (2026-08-05)
 
 **Fixed**

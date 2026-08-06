@@ -25,7 +25,7 @@ been through a review pass.
 | A5 | Course cohorts & syllabus | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx` | CC | ✅ |
 | A6 | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L) | LIFE | ✅ |
 | A7 | Dashboard & action items | `endpoints/dashboard.py` (456 L), `services/attendance_dashboard_service.py` (329 L); `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items` | DASH | ✅ |
-| A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | ⬜ |
+| A8 | Locations & kiosk | `endpoints/locations.py` (294 L), `services/location_service.py` (279 L); `pages/LocationKioskPage.tsx` | LOC | ✅ |
 | A9 | Platform ops & data lifecycle | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (136 L), `data_export_service.py` (169 L), `separation_of_duties.py` (70 L) | OPS | ⬜ |
 
 ## Tier B — second pass over the audited 27
@@ -316,4 +316,36 @@ Established before the first iteration, so any later failure is attributable:
   owning module must be applied at **every cross-module read of the same rows**.
   Backend **2512 passed, 0 failed**. See dashboard.md. Next: A8 locations &
   kiosk.
+- **A8 locations & kiosk ✅** — the kiosk turned out not to use the locations
+  module's own display endpoint at all, and both findings follow from that.
+  Verified: 6/6 endpoints gated and org-scoped; **PP-3's ASCII display-code
+  regex intact**; **no PP-1 recurrence** — `scalar_one_or_none()` on
+  `display_code` is safe because the column is globally `unique=True` and the
+  generator checks globally, so the constraint actually backs the assumption
+  that broke public-portal auth in PP-1.
+  **2 fixes applied:** LOC-1 (MED: the authenticated `/locations/{id}/display`
+  computed the check-in window as a hardcoded `start - 1 hour`, but the
+  canonical window is per-event configurable — FLEXIBLE defaults to **30**
+  minutes and STRICT opens at `actual_start_time` — so it opened twice as early
+  as the default and ignored STRICT entirely. The clean part: **the sibling
+  public endpoint was already fixed**, its test docstring explicitly saying "not
+  a hardcoded 1-hour guess" — the correction was applied to one copy of a
+  duplicated capability and missed on the other. Now calls
+  `EventService._get_check_in_window`.) LOC-2 (MED: `LocationKioskPage` is routed
+  **publicly**, so `useTimezone()` had no user and **always** fell back to the
+  tablet's own zone — a wall display left on its factory default, commonly UTC,
+  showed every event time and check-in window shifted by hours, and the
+  department's configured timezone was the one value never consulted, against
+  the project's own date/time rule. Added an optional `timezone` to
+  `LocationDisplayInfo`, populated from the org; the kiosk prefers it.)
+  **1 flagged:** LOC-3 (the authenticated display endpoint has **zero callers** —
+  a second implementation of the same capability that had already drifted, which
+  is how LOC-1 happened. Delete-or-wire-up is an API-surface decision; it is now
+  *correct* dead code rather than wrong dead code. Second instance of this shape
+  in two iterations, after DASH-2.)
+  **2 tests added.** LOC-2's extra query broke three existing display tests whose
+  `db` stub was a bare `MagicMock`; the stub was **extended**, not loosened, and
+  no assertion weakened. Backend **2514 passed, 0 failed**; frontend **2207
+  passed**. See locations-kiosk.md. Next: A9 platform ops & data lifecycle
+  (last of Tier A).
 </content>
