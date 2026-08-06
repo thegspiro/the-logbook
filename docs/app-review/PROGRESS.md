@@ -63,7 +63,7 @@ from its open list.
 | B22 | compliance & skills | CS2 | ✅ |
 | B23 | security, audit & IP | SEC2 | ✅ |
 | B24 | core infra | CI2 | ✅ |
-| B25 | onboarding | ONB2 | ⬜ |
+| B25 | onboarding | ONB2 | ✅ |
 | B26 | public-portal | PP2 | ⬜ |
 | B27 | frontend shared | FE2 | ⬜ |
 
@@ -686,4 +686,18 @@ Established before the first iteration, so any later failure is attributable:
   CRITICAL, `optimize_image` fail-open, Redis `CERT_NONE`), CI-10 residual (cache
   namespacing, MFA recovery-code entropy, CI-4 full fail-closed decrypt). cache
   tests 8 passed. flake8/black clean. See core-infra.md. Next: B25 onboarding.
+- **B25 onboarding ✅.** The two catastrophic scenarios (post-completion reset,
+  second owner) are blocked; ONB-1–6 re-confirmed. **1 fix applied:** ONB-8
+  `/status` disclosure (LOW: the unauthenticated `GET /onboarding/status` returned
+  the org name + setup progress even post-completion, leaking the department name
+  off a provisioned instance to any anonymous caller. The only consumer,
+  `LoginPage`, reads just `needs_onboarding` — so once `is_completed`, `/status`
+  now returns the minimal response with `organization_name=None` and empty
+  progress; the in-progress branch the wizard resumes from is unchanged). **Flagged
+  (unchanged, product/robustness):** ONB-7 (role editor accepts client
+  permissions/priority/system-flag — product decision, KNOWN_LIMITATIONS), ONB-8
+  residual (reset re-auth, `reset_initiated` audit durability, template
+  mass-assignment guard). **2 tests added** (`test_onboarding_status_disclosure`);
+  8 onboarding non-DB tests pass. flake8/black clean. See onboarding.md. Next: B26
+  public-portal.
 </content>
