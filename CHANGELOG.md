@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Forms: stricter required fields and no internal errors leaked on public forms (2026-08-06)
+
+**Fixed**
+
+- **A required form field left blank is now correctly rejected.** Previously a
+  required field could be satisfied by an empty or whitespace-only value (or, for
+  multi-select, nothing chosen); it now requires a real answer. Number and
+  checkbox fields answered with `0` or "unchecked" still count as answered.
+- **Public form submissions no longer surface internal error details.** If a
+  submission hit an unexpected server error, the raw message could be returned to
+  the (unauthenticated) submitter; it now returns a generic message while the full
+  error is logged server-side.
+
 ### Integrations: editing one setting no longer resets the others (2026-08-06)
 
 **Fixed**

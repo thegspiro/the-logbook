@@ -51,7 +51,7 @@ from its open list.
 | B10 | messaging & communications | MSG2 | ✅ |
 | B11 | notifications | NOTIF2 | ✅ |
 | B12 | integrations | INT2 | ✅ |
-| B13 | forms | FORM2 | ⬜ |
+| B13 | forms | FORM2 | ✅ |
 | B14 | grants & fundraising | GF2 | ⬜ |
 | B15 | admin-hours | AH2 | ⬜ |
 | B16 | reports & analytics | RPT2 | ⬜ |
@@ -495,4 +495,21 @@ Established before the first iteration, so any later failure is attributable:
   (`test_omitted_fields_not_reemitted`); `test_integrations_security` 50 passed,
   `test_integration_services`+`test_salesforce_sync` 88 passed. flake8/black
   clean. See integrations.md. Next: B13 forms.
+- **B13 forms ✅.** The HIGH cross-org integration writes (FORM-1/2) were already
+  closed; the public-submission surface (slug regex, rate limits, honeypot,
+  stored-XSS escaping) re-confirmed. **2 fixes applied:** FORM-7 (LOW-MED, newly
+  found: 14 service methods returned raw `str(e)` which the endpoints surface as
+  `HTTPException(detail=error)` — on the **public unauthenticated** submit path
+  this leaked SQL/column names to anonymous callers, a worse NOTIF-2/SF-2.
+  Swept all 14 client-facing tuple returns to `safe_error_detail(e)`; the 5
+  remaining `str(e)` are internal processor dicts `_process_integrations` never
+  returns to the client), FORM-6 (required-field check was presence-only — a key
+  holding `""`/whitespace/`[]` satisfied "required"; new `_is_empty_value` helper
+  rejects those while keeping `0`/`False` valid for number/boolean fields, applied
+  to both submit paths). **2 flagged:** FORM-5 (require_authentication /
+  allow_multiple_submissions not enforced — product decision, KNOWN_LIMITATIONS),
+  FORM-4 (definition text unescaped — explicitly NOT fixed by escape-at-storage,
+  which would double-escape the text-rendered labels; wants CSP/render-time). **9
+  unit tests added** (`TestIsEmptyValue`, DB-free). flake8/black clean. See
+  forms.md. Next: B14 grants & fundraising.
 </content>

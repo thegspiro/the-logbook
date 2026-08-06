@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.security_middleware import InputSanitizer
+from app.core.utils import safe_error_detail
 from app.models.forms import (
     FieldType,
     Form,
@@ -279,6 +280,21 @@ class FormsService:
         return sanitized, None
 
     @staticmethod
+    def _is_empty_value(value: Any) -> bool:
+        """FORM-6: whether a submitted value counts as "not provided" for a
+        required field. A present key holding an empty/whitespace-only string or
+        an empty list/dict is treated as missing; ``0`` / ``False`` are
+        legitimate answers for number / boolean fields and are NOT empty.
+        """
+        if value is None:
+            return True
+        if isinstance(value, str):
+            return value.strip() == ""
+        if isinstance(value, (list, tuple, dict)):
+            return len(value) == 0
+        return False
+
+    @staticmethod
     def _sanitize_submitter_info(
         name: Optional[str], email: Optional[str]
     ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
@@ -372,7 +388,7 @@ class FormsService:
             return result.scalar_one(), None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     def _auto_create_integration(
         self,
@@ -562,7 +578,7 @@ class FormsService:
             return form, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def delete_form(
         self, form_id: UUID, organization_id: UUID
@@ -606,7 +622,7 @@ class FormsService:
             return True, None
         except Exception as e:
             await self.db.rollback()
-            return False, str(e)
+            return False, safe_error_detail(e)
 
     async def publish_form(
         self, form_id: UUID, organization_id: UUID
@@ -722,7 +738,7 @@ class FormsService:
             return field, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def update_field(
         self,
@@ -762,7 +778,7 @@ class FormsService:
             return field, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def delete_field(
         self, field_id: UUID, form_id: UUID, organization_id: UUID
@@ -792,7 +808,7 @@ class FormsService:
             return True, None
         except Exception as e:
             await self.db.rollback()
-            return False, str(e)
+            return False, safe_error_detail(e)
 
     async def reorder_fields(
         self, form_id: UUID, organization_id: UUID, field_order: List[str]
@@ -812,7 +828,7 @@ class FormsService:
             return True, None
         except Exception as e:
             await self.db.rollback()
-            return False, str(e)
+            return False, safe_error_detail(e)
 
     # ============================================
     # Submission Management
@@ -836,9 +852,13 @@ class FormsService:
             if form.status != FormStatus.PUBLISHED:
                 return None, "Form is not accepting submissions"
 
-            # Validate required fields
+            # Validate required fields (FORM-6: presence AND a non-empty value —
+            # a key holding "" / whitespace / [] does not satisfy "required").
             for field in form.fields:
-                if field.required and str(field.id) not in data:
+                if field.required and (
+                    str(field.id) not in data
+                    or self._is_empty_value(data[str(field.id)])
+                ):
                     return None, f"Required field '{field.label}' is missing"
 
             # Sanitize and validate all submitted values
@@ -866,7 +886,7 @@ class FormsService:
             return submission, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def submit_public_form(
         self,
@@ -889,9 +909,13 @@ class FormsService:
             if not form:
                 return None, "Form not found or not available"
 
-            # Validate required fields
+            # Validate required fields (FORM-6: presence AND a non-empty value —
+            # a key holding "" / whitespace / [] does not satisfy "required").
             for field in form.fields:
-                if field.required and str(field.id) not in data:
+                if field.required and (
+                    str(field.id) not in data
+                    or self._is_empty_value(data[str(field.id)])
+                ):
                     return None, f"Required field '{field.label}' is missing"
 
             # Sanitize and validate all submitted values
@@ -928,7 +952,7 @@ class FormsService:
             return submission, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def get_submissions(
         self,
@@ -1006,7 +1030,7 @@ class FormsService:
             return submission, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def delete_submission(
         self, submission_id: UUID, organization_id: UUID
@@ -1022,7 +1046,7 @@ class FormsService:
             return True, None
         except Exception as e:
             await self.db.rollback()
-            return False, str(e)
+            return False, safe_error_detail(e)
 
     # ============================================
     # Integration Management
@@ -1110,7 +1134,7 @@ class FormsService:
             return integration, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def update_integration(
         self,
@@ -1152,7 +1176,7 @@ class FormsService:
             return integration, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def delete_integration(
         self,
@@ -1177,7 +1201,7 @@ class FormsService:
             return True, None
         except Exception as e:
             await self.db.rollback()
-            return False, str(e)
+            return False, safe_error_detail(e)
 
     async def _process_integrations(
         self, submission: FormSubmission, form: Form
