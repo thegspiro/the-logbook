@@ -308,15 +308,13 @@ async def delete_compartment(
     current_user: User = Depends(require_permission("equipment_check.manage")),
 ):
     """Delete a compartment and its items."""
-    from app.models.apparatus import CheckTemplateCompartment
-
     service = EquipmentCheckService(db)
-    comp_result = await db.execute(
-        select(CheckTemplateCompartment).where(
-            CheckTemplateCompartment.id == compartment_id
-        )
+    # EC-8: org-scope the changelog-metadata read too (via the org-scoped
+    # getter), so a foreign compartment id never even loads — not just relying
+    # on the delete below to fail. Behavior is unchanged for in-org ids.
+    comp = await service._get_compartment(
+        compartment_id, str(current_user.organization_id)
     )
-    comp = comp_result.scalar_one_or_none()
     comp_name = comp.name if comp else "Unknown"
     comp_template_id = str(comp.template_id) if comp else ""
     deleted = await service.delete_compartment(
@@ -451,11 +449,12 @@ async def delete_item(
 ):
     """Delete a check template item."""
     from app.models.apparatus import CheckTemplateCompartment as CTC
-    from app.models.apparatus import CheckTemplateItem as CTI
 
     service = EquipmentCheckService(db)
-    item_result = await db.execute(select(CTI).where(CTI.id == item_id))
-    item_obj = item_result.scalar_one_or_none()
+    # EC-8: org-scope the changelog-metadata read via the org-scoped getter so a
+    # foreign item id never loads. item_comp_id then comes from an in-org item,
+    # so the template lookup below is on a validated id.
+    item_obj = await service._get_item(item_id, str(current_user.organization_id))
     item_name = item_obj.name if item_obj else "Unknown"
     item_comp_id = str(item_obj.compartment_id) if item_obj else ""
     tmpl_id = None

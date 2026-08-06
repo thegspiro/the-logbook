@@ -93,7 +93,7 @@ The self-scoped `my-checklists` endpoints and the submit endpoints keep bare
 authentication (unchanged member behavior; a submit-permission gate on writes
 would be a separate deliberate decision).
 
-### EC-8 — LOW — Endpoint-level unscoped by-id reads (changelog metadata only)
+### EC-8 — LOW — Endpoint-level unscoped by-id reads (changelog metadata only) — ✅ FIXED (app-review B7, 2026-08-06)
 `delete_compartment`, `delete_item`, `add_item`, `update_item` read the target
 row by id with no org filter, but only to build changelog text (never returned)
 and the mutation itself is org-scoped. Harmless today; defense-in-depth would add
