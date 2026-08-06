@@ -55,7 +55,7 @@ from its open list.
 | B14 | grants & fundraising | GF2 | ✅ |
 | B15 | admin-hours | AH2 | ✅ |
 | B16 | reports & analytics | RPT2 | ✅ |
-| B17 | events | EV2 | ⬜ |
+| B17 | events | EV2 | ✅ |
 | B18 | training | TR2 | ⬜ |
 | B19 | scheduling | SCH2 | ⬜ |
 | B20 | finance | FIN2 | ⬜ |
@@ -559,4 +559,22 @@ Established before the first iteration, so any later failure is attributable:
   suppressions (incl. one in a `case()`) to `.is_(...)`. **1 regression test
   added** (`TestTrainingSummaryCompletionRate`); 11 passed. flake8/black clean.
   See reports-analytics.md. Next: B17 events.
+- **B17 events ✅.** The heavy surfaces (public event-request intake, attachment
+  upload/download, RSVP integrity, tenant isolation) were solid; re-confirmed
+  EV-1–4. **2 fixes applied:** EV-6 (LOW: `create_or_update_rsvp` blocked
+  cancelled + deadline but not draft or ended events — a member who knew a draft's
+  id could RSVP pre-publication, and an ended event with no deadline still
+  accepted RSVPs. Now rejects `is_draft` and past `end_datetime`; `end_datetime`
+  is non-null so it's the unambiguous "over" gate, leaving ongoing events to
+  check-in), EV-7 (LOW crash: `send_template_email` did `str.replace`/`html.escape`
+  on raw context values — a `None` base value like a missing `contact_name` raised
+  TypeError → 500 on an `events.manage` action; now str-coerces each value). **1
+  flagged:** EV-5 (public intake has no per-org opt-in + weaker anti-spam than
+  forms — feature+config, KNOWN_LIMITATIONS). **Cleanup:** swept all 8 E712
+  suppressions in `event_service.py`. **2 regression tests added** (draft + ended
+  rejection); `_event` mock factory extended (not weakened) with
+  `is_draft`/`end_datetime`; 15 passed. flake8/black clean. Also noted (not fixed):
+  `send_template_email` escapes the logo img so `{{organization_logo_img}}`
+  wouldn't render — a template-rendering behavior change left for future. See
+  events.md. Next: B18 training.
 </content>

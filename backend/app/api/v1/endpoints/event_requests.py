@@ -1263,8 +1263,12 @@ async def send_template_email(
         subject = template.subject
         body = template.body_html
         for key, value in context.items():
-            subject = subject.replace(f"{{{{{key}}}}}", value)
-            body = body.replace(f"{{{{{key}}}}}", _html.escape(value))
+            # EV-7: coerce to str before replace/escape — a None base-context
+            # value (e.g. a missing contact_name) or a non-str additional_context
+            # value would otherwise raise TypeError -> 500.
+            safe_value = "" if value is None else str(value)
+            subject = subject.replace(f"{{{{{key}}}}}", safe_value)
+            body = body.replace(f"{{{{{key}}}}}", _html.escape(safe_value))
 
         await email_service.send_email(
             to_emails=[event_request.contact_email],

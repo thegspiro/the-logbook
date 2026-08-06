@@ -71,18 +71,21 @@ writes rows and triggers assignee/requester emails (notification amplification).
 **Status:** flagged — needs a per-org opt-in setting + honeypot/daily-cap parity
 with forms (feature + config), not a one-line fix.
 
-### EV-6 — LOW (flagged) — Members can RSVP to draft / past events
-`get_event` doesn't filter `is_draft`, and `create_or_update_rsvp` blocks
-cancelled events + enforces `rsvp_deadline` but doesn't block `is_draft` events or
-past events when no deadline is set. A member who guesses a draft event id can
-RSVP before publication. **Status:** flagged — block RSVP to draft/past events
-(and decide whether members may fetch drafts at all).
+### EV-6 — LOW — Members can RSVP to draft / past events — ✅ FIXED (app-review B17)
+`create_or_update_rsvp` blocked cancelled events + enforced `rsvp_deadline` but
+not `is_draft` events or past events with no deadline set — so a member who knew a
+draft's id could RSVP before publication, and an ended event with no deadline still
+accepted RSVPs. **Fix (B17):** reject `is_draft` events ("Cannot RSVP to an
+unpublished event") and events whose `end_datetime` is in the past ("Cannot RSVP to
+an event that has already ended"). 2 regression tests added. See
+`docs/app-review/events.md`.
 
-### EV-7 — LOW (flagged) — `check_request_status` not rate-limited; `send_template_email` TypeError on non-str context
-`check_request_status` has no IP throttle (acceptable — the token is 256-bit, so
-enumeration is infeasible); `send_template_email` (`events.manage`) does
-`_html.escape(value)` on `additional_context` values without coercing to `str`,
-so a non-string value raises `TypeError` → 500. **Status:** flagged (both LOW).
+### EV-7 — LOW — `check_request_status` not rate-limited; `send_template_email` TypeError — ⚠️ PARTLY FIXED (app-review B17)
+**Fixed (B17):** `send_template_email` coerced every context value with
+`"" if value is None else str(value)` before `str.replace`/`html.escape`, so a
+`None` base value (missing `contact_name`) or non-str `additional_context` value no
+longer raises `TypeError` → 500. **Still accepted:** `check_request_status` has no
+IP throttle — the status token is 256-bit, so enumeration is infeasible.
 
 ## Notes
 - Attachment upload's `except ImportError: pass` silently skips the magic-byte

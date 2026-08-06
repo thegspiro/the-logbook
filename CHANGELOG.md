@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Events: RSVP guards and a template-email crash fix (2026-08-06)
+
+**Fixed**
+
+- **You can no longer RSVP to an unpublished (draft) or already-ended event.**
+  RSVPs were blocked for cancelled events and past the RSVP deadline, but a draft
+  event (before it's published) or an event that had already ended with no
+  deadline set would still accept an RSVP. Both are now rejected.
+- **Sending a template email no longer errors when a field is blank.** A missing
+  value (e.g. an event request with no contact name) could cause the "send
+  template email" action to fail; blank values are now handled cleanly.
+
 ### Reports: two training/overview figures now read correctly (2026-08-06)
 
 **Fixed**
