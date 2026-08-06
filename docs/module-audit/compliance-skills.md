@@ -132,7 +132,13 @@ incoherent status bucketing.
   attestation history now filters on the audit log's `organization_id`
   column instead of over-fetching globally and filtering in Python;
   `records_with_certification` mislabel is ambiguous-intent, left as-is
-  (officer #5); ISO-readiness `user_id` String match is latent (officer #6).
+  (officer #5). **✅ officer #6 FIXED (app-review B22):** ISO-readiness now
+  normalizes `str(record.user_id)` for both the member-membership test and the
+  `member_hours` dict key, so a UUID-typed `user_id` can't silently drop a
+  member's hours from the readiness computation. 1 regression test added.
+  **Note (CS-8 attestation):** `compliance_percentage` is already range-bounded at
+  the schema (`Field(ge=0, le=100)`); the open half is the missing server-side
+  recompute / dual-control (behavior change, still deferred).
 **Status:** injection + input-validation fixed; monthly windowing (feature) and
 recipient allow-list (policy) deferred.
 

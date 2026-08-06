@@ -60,7 +60,7 @@ from its open list.
 | B19 | scheduling | SCH2 | ✅ |
 | B20 | finance | FIN2 | ✅ |
 | B21 | orgs, roles & users | ORU2 | ✅ |
-| B22 | compliance & skills | CS2 | ⬜ |
+| B22 | compliance & skills | CS2 | ✅ |
 | B23 | security, audit & IP | SEC2 | ⬜ |
 | B24 | core infra | CI2 | ⬜ |
 | B25 | onboarding | ONB2 | ⬜ |
@@ -643,4 +643,20 @@ Established before the first iteration, so any later failure is attributable:
   KNOWN_LIMITATIONS). **3 unit tests added** (`TestRoleEditCeiling`); role tests
   28 passed. flake8/black clean. See orgs-roles-users.md. Next: B22 compliance &
   skills.
+- **B22 compliance & skills ✅.** The PHI-adjacent surface; CS-1–7 and the CS-8
+  skills self-cert (`assert_different_person`) already fixed and re-confirmed. **1
+  fix applied:** CS-9 officer #6 (LOW latent: `get_iso_readiness` compared
+  `record.user_id` against a set of `str(id)` and keyed `member_hours` by those
+  strings — works today because `TrainingRecord.user_id` is `String(36)`, but a
+  UUID-typed value would silently drop that member's hours from the whole
+  ISO/FSRS readiness computation. Normalized `str(record.user_id)` at both sites —
+  the ORU-6/RPT-4 pattern; behavior-neutral today, robust to type drift). **Verified
+  (phantom concern ruled out):** CS-8 attestation `compliance_percentage` is
+  **already** schema-bounded (`Field(ge=0, le=100)`), so only the server-side
+  recompute / dual-control half remains (behavior change, deferred). **Flagged
+  (unchanged):** CS-8 attestation SoD, CS-9 monthly windowing (feature) + recipient
+  allow-list (policy) — all already in KNOWN_LIMITATIONS/module-audit. **Cleanup:**
+  swept 4 E712 in `compliance_officer_service.py`. **1 regression test added**
+  (`test_iso_readiness_user_scoping`); 96 passed. flake8/black clean. See
+  compliance-skills.md. Next: B23 security, audit & IP.
 </content>
