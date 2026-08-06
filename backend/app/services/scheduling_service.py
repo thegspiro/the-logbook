@@ -51,6 +51,7 @@ from app.models.user import (
     user_positions,
 )
 from app.services.member_leave_service import MemberLeaveService
+from app.utils.org_scoping import is_in_org
 
 
 class SchedulingService:
@@ -571,6 +572,14 @@ class SchedulingService:
             officer_id = shift_data.get("shift_officer_id")
             if officer_id and not await self._user_in_org(officer_id, organization_id):
                 return None, "Shift officer not found"
+            # SCH-6: validate a client-supplied apparatus_id is in-org (it drives
+            # the min-staffing lookup) so a shift can't carry a foreign apparatus
+            # reference. station_id is an unwired placeholder column (no reads).
+            apparatus_id = shift_data.get("apparatus_id")
+            if apparatus_id and not await is_in_org(
+                self.db, BasicApparatus, apparatus_id, organization_id
+            ):
+                return None, "Apparatus not found"
             shift = Shift(
                 organization_id=organization_id, created_by=created_by, **shift_data
             )
@@ -1116,6 +1125,13 @@ class SchedulingService:
                 new_officer, organization_id
             ):
                 return None, "Shift officer not found"
+
+            # SCH-6: validate a (re)set apparatus_id is in-org (see create_shift).
+            new_apparatus = update_data.get("apparatus_id")
+            if new_apparatus and not await is_in_org(
+                self.db, BasicApparatus, new_apparatus, organization_id
+            ):
+                return None, "Apparatus not found"
 
             old_officer_id = shift.shift_officer_id
 
@@ -4672,6 +4688,12 @@ class SchedulingService:
                     uid = str(entry["user_id"])
                     if uid in existing_user_ids:
                         continue
+                    # SCH-6: the manual-hours user_id is client-supplied — don't
+                    # credit (and create an attendance row for) a user outside the
+                    # caller's org on this org's shift. hours is already bounded
+                    # (0 < hours <= 48) at the schema layer.
+                    if not await self._user_in_org(uid, organization_id):
+                        return None, "One or more members are not in your organization"
                     att = ShiftAttendance(
                         id=generate_uuid(),
                         shift_id=str(shift_id),

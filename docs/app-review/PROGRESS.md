@@ -57,7 +57,7 @@ from its open list.
 | B16 | reports & analytics | RPT2 | ✅ |
 | B17 | events | EV2 | ✅ |
 | B18 | training | TR2 | ✅ |
-| B19 | scheduling | SCH2 | ⬜ |
+| B19 | scheduling | SCH2 | ✅ |
 | B20 | finance | FIN2 | ⬜ |
 | B21 | orgs, roles & users | ORU2 | ⬜ |
 | B22 | compliance & skills | CS2 | ⬜ |
@@ -596,4 +596,20 @@ Established before the first iteration, so any later failure is attributable:
   flagged. **Cleanup:** swept 5 E712 in `external_training.py`. **2 endpoint-level
   regression tests added**; `test_training` 84 + new 2 passed. flake8/black clean.
   See training.md. Next: B19 scheduling.
+- **B19 scheduling ✅.** SCH-1–4 (self-escalation, self-signup guards, generation
+  DoS, `shift_officer_id`/hours-report) already fixed and re-confirmed. **1 fix
+  applied:** SCH-6 — the real gap was `finalize_shift` creating a `ShiftAttendance`
+  row from a client-supplied `manual_hours[].user_id` with no in-org check (a
+  foreign user credited hours on this org's shift); now validated via
+  `_user_in_org`. Also validated `apparatus_id` in-org on create/update shift
+  (DiD — was backstopped). **Two phantom findings ruled out by verification:** the
+  manual `hours` value is *already* bounded at the schema (`Field(gt=0, le=48)`),
+  and the service's ~15 `str(e)` returns are *not* a live leak because every
+  endpoint wraps them in `_safe_detail → safe_error_detail` (contrast
+  NOTIF-2/FORM-7 where the raw string reached the client). `station_id` is an
+  unwired placeholder; `template_id` isn't a Shift field. **1 flagged:** SCH-5
+  (swap accept-path re-validation + approver-identity — a workflow design change,
+  KNOWN_LIMITATIONS). **2 regression tests added** (foreign apparatus, foreign
+  manual-hours user); DB suite unchanged (no-MySQL). flake8/black clean. See
+  scheduling.md. Next: B20 finance.
 </content>
