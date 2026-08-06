@@ -63,6 +63,13 @@ Click on any event to view its detail page. The detail page shows:
 2. Your response is recorded immediately.
 3. You can change your RSVP at any time before the event.
 
+> **When RSVP is available.** You can only RSVP to a **published** event that
+> hasn't ended yet. A **draft** event (one an officer is still preparing and
+> hasn't published) does not accept RSVPs, and neither does an event that has
+> already **ended** or whose **RSVP deadline** has passed — the buttons return an
+> error in those cases. If you missed the window, use **check-in** at the event
+> or ask an officer to record your attendance.
+
 > **Screenshot placeholder:**
 > _[Screenshot of an event detail page showing the event header (title, date, location), description, RSVP buttons (Going/Maybe/Not Going with counts), and a list of attendees who have RSVP'd]_
 

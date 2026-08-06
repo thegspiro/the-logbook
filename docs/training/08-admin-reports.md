@@ -177,6 +177,20 @@ The Logbook uses a **position-based** permission system:
 2. Toggle individual permissions on or off.
 3. Save changes.
 
+> **Two guardrails protect against accidental or malicious lockout:**
+>
+> - **You can only edit a role at or below your own access level.** If a position
+>   holds a permission you don't have yourself — for example, only the IT Manager
+>   holds the wildcard (all-access) permission — you cannot edit that position's
+>   permissions, and the save is rejected with a permissions error. This stops a
+>   non-owner administrator from weakening or blanking out the System Owner role.
+>   Ask an IT Manager (or anyone whose own access already covers that role) to
+>   make the change.
+> - **You cannot remove the last administrator.** A permission change that would
+>   leave no active member able to manage members is blocked, so the department
+>   can never lock itself out of member administration. If you see this error,
+>   grant another position the member-management permission first, then retry.
+
 Permission categories include:
 - `members.*` - Member management
 - `training.*` - Training management
