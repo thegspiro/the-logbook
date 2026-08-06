@@ -51,6 +51,7 @@ from app.schemas.training import (
     TestConnectionResponse,
 )
 from app.services.external_training_service import ExternalTrainingSyncService
+from app.utils.org_scoping import is_in_org
 from app.utils.url_validator import validate_integration_url
 
 router = APIRouter()
@@ -95,7 +96,7 @@ async def list_providers(
     )
 
     if active_only:
-        query = query.where(ExternalTrainingProvider.active == True)  # noqa: E712
+        query = query.where(ExternalTrainingProvider.active.is_(True))
 
     query = query.order_by(ExternalTrainingProvider.name)
 
@@ -129,6 +130,20 @@ async def create_provider(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid API base URL: {e}",
             )
+
+    # TR-6: a client-supplied default_category_id must be an in-org training
+    # category — it's used at sync time to attribute imported records, so a
+    # foreign id would mis-attribute records to another org's category.
+    if provider.default_category_id and not await is_in_org(
+        db,
+        TrainingCategory,
+        str(provider.default_category_id),
+        current_user.organization_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Default category not found",
+        )
 
     # Encrypt sensitive credentials before storing
     new_provider = ExternalTrainingProvider(
@@ -256,6 +271,17 @@ async def update_provider(
             if update_data["default_category_id"]
             else None
         )
+        # TR-6: validate a (re)set default_category_id is in-org.
+        if update_data["default_category_id"] and not await is_in_org(
+            db,
+            TrainingCategory,
+            update_data["default_category_id"],
+            current_user.organization_id,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Default category not found",
+            )
 
     # Encrypt sensitive credential fields before storing
     _secret_fields = ("api_key", "api_secret", "client_secret")
@@ -534,7 +560,7 @@ async def trigger_sync(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == str(provider_id))
         .where(ExternalTrainingProvider.organization_id == current_user.organization_id)
-        .where(ExternalTrainingProvider.active == True)  # noqa: E712
+        .where(ExternalTrainingProvider.active.is_(True))
     )
     provider = result.scalar_one_or_none()
 
@@ -641,7 +667,7 @@ async def list_category_mappings(
     )
 
     if unmapped_only:
-        query = query.where(ExternalCategoryMapping.is_mapped == False)  # noqa: E712
+        query = query.where(ExternalCategoryMapping.is_mapped.is_(False))
 
     query = query.order_by(ExternalCategoryMapping.external_category_name)
 
@@ -670,7 +696,11 @@ async def list_category_mappings(
         if mapping.internal_category_id:
             cat_result = await db.execute(
                 select(TrainingCategory.name).where(
-                    TrainingCategory.id == mapping.internal_category_id
+                    TrainingCategory.id == mapping.internal_category_id,
+                    # TR-6: org-scope the enrichment so a pre-existing foreign id
+                    # can't leak another org's category name.
+                    TrainingCategory.organization_id
+                    == str(current_user.organization_id),
                 )
             )
             cat_name = cat_result.scalar_one_or_none()
@@ -715,11 +745,25 @@ async def update_category_mapping(
 
     # Update fields
     if mapping_update.internal_category_id is not None:
-        mapping.internal_category_id = (
+        internal_category_id = (
             str(mapping_update.internal_category_id)
             if mapping_update.internal_category_id
             else None
         )
+        # TR-6: validate the mapped category is in-org. Without this a manager
+        # could map to a foreign org's category id and read its name back via
+        # the enrichment lookup below (the TR-3 leak shape, for categories).
+        if internal_category_id and not await is_in_org(
+            db,
+            TrainingCategory,
+            internal_category_id,
+            current_user.organization_id,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Internal category not found",
+            )
+        mapping.internal_category_id = internal_category_id
         mapping.is_mapped = mapping_update.internal_category_id is not None
         mapping.auto_mapped = False
         mapping.mapped_by = current_user.id
@@ -735,7 +779,9 @@ async def update_category_mapping(
     if mapping.internal_category_id:
         cat_result = await db.execute(
             select(TrainingCategory.name).where(
-                TrainingCategory.id == mapping.internal_category_id
+                TrainingCategory.id == mapping.internal_category_id,
+                # TR-6: org-scope the enrichment (see the list path above).
+                TrainingCategory.organization_id == str(current_user.organization_id),
             )
         )
         internal_category_name = cat_result.scalar_one_or_none()
@@ -785,7 +831,7 @@ async def list_user_mappings(
     )
 
     if unmapped_only:
-        query = query.where(ExternalUserMapping.is_mapped == False)  # noqa: E712
+        query = query.where(ExternalUserMapping.is_mapped.is_(False))
 
     query = query.order_by(ExternalUserMapping.external_name)
 
@@ -1128,7 +1174,7 @@ async def bulk_import_records(
                 .where(
                     ExternalUserMapping.external_user_id == ext_import.external_user_id
                 )
-                .where(ExternalUserMapping.is_mapped == True)  # noqa: E712
+                .where(ExternalUserMapping.is_mapped.is_(True))
             )
             mapping = mapping_result.scalar_one_or_none()
             if mapping:

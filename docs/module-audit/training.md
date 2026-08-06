@@ -105,15 +105,22 @@ manual path's SoD guard or accept as documented config).
 > reviewer at all*, so an actor≠subject check does not apply. TR-5 remains a
 > config decision (bound the auto-approve threshold, or accept it as documented).
 
-### TR-6 — LOW (flagged) — External/enhancement cross-org FK + defense-in-depth
-`provider.default_category_id`, xAPI `source_provider_id`, `bulk_enroll` name
-lookups, and `perform_sync_task`'s provider re-fetch accept/lookup ids without an
-org filter (all currently backstopped by downstream org-scoped writes, so not
-live cross-tenant writes); a few internal `.in_(ids)` lookups fed by org-scoped
-ids lack their own org filter (defense-in-depth). `_decrypt_field` returns the
-raw stored value on decrypt failure (a migration shim — should fail closed once
-migration completes). The `training_enhancement_service` by-id org-scoping wasn't
-independently confirmed (spot-check recommended). **Status:** flagged.
+### TR-6 — MEDIUM (upgraded) — External/enhancement cross-org FK — ⚠️ PARTLY FIXED (app-review B18)
+**Live leak found & fixed (B18):** `update_category_mapping` stored a client
+`internal_category_id` unchecked and the list/update enrichment lookups read
+`TrainingCategory.name` by that id with **no org filter** — a `training.manage`
+user could map to a **foreign org's** category id and read its name back (the TR-3
+shape, for categories; this was under-rated as "defense-in-depth"). Fixed:
+validate `internal_category_id` in-org on write + org-scope both enrichment
+lookups. Also fixed `provider.default_category_id` (validated in-org on
+create/update — it attributes imported records at sync time). 2 endpoint tests
+added. **Spot-check resolved:** `training_enhancement_service` by-id methods
+(`get_pathway`/`get_matrix`/`update_qualification`/…) all filter `organization_id`
+— confirmed. **Still flagged (backstopped, not live):** xAPI `source_provider_id`,
+`bulk_enroll` name lookups, `perform_sync_task` provider re-fetch (backstopped by
+downstream org-scoped writes); `_decrypt_field` returns raw on decrypt failure (a
+migration shim — should fail closed once CI-5 field-encryption backfill completes).
+See `docs/app-review/training.md`.
 
 ## Notes
 - Large-module caveat: `training_program_service.py` (4,027 L) and

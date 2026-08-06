@@ -56,7 +56,7 @@ from its open list.
 | B15 | admin-hours | AH2 | ✅ |
 | B16 | reports & analytics | RPT2 | ✅ |
 | B17 | events | EV2 | ✅ |
-| B18 | training | TR2 | ⬜ |
+| B18 | training | TR2 | ✅ |
 | B19 | scheduling | SCH2 | ⬜ |
 | B20 | finance | FIN2 | ⬜ |
 | B21 | orgs, roles & users | ORU2 | ⬜ |
@@ -577,4 +577,23 @@ Established before the first iteration, so any later failure is attributable:
   `send_template_email` escapes the logo img so `{{organization_logo_img}}`
   wouldn't render — a template-rendering behavior change left for future. See
   events.md. Next: B18 training.
+- **B18 training ✅.** The largest module (154 endpoints, ~13 services); TR-1–3
+  (PHI/record/user-mapping leaks) already fixed and re-confirmed. Focused on the
+  TR-6 external-training FKs and found the audit had **under-rated** one: **1 live
+  cross-org leak fixed** — `update_category_mapping` stored a client
+  `internal_category_id` unchecked and the list/update enrichment lookups read
+  `TrainingCategory.name` by that id with **no org filter**, so a `training.manage`
+  user could map to a foreign org's category and read its name back (the TR-3
+  shape, for categories — a real read leak, not just a dangling FK). Fixed:
+  validate in-org on write + org-scope both enrichment reads. Also validated
+  `provider.default_category_id` in-org on create/update (attributes imports at
+  sync time). **Spot-check resolved:** `training_enhancement_service` by-id methods
+  all filter `organization_id` — confirmed. **2 flagged (product/config):** TR-5
+  (auto-approve submission branch spawns a COMPLETED self-credit record with no
+  reviewer — the manual path's SoD guard doesn't apply; KNOWN_LIMITATIONS), TR-4
+  (`year` default semantics). TR-6 residual (backstopped source_provider_id /
+  bulk_enroll / sync re-fetch; `_decrypt_field` fail-closed after CI-5) stays
+  flagged. **Cleanup:** swept 5 E712 in `external_training.py`. **2 endpoint-level
+  regression tests added**; `test_training` 84 + new 2 passed. flake8/black clean.
+  See training.md. Next: B19 scheduling.
 </content>
