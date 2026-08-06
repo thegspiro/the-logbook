@@ -431,7 +431,7 @@ class FinanceService:
             .options(selectinload(ApprovalChain.steps))
             .where(
                 ApprovalChain.organization_id == org_id,
-                ApprovalChain.is_active == True,  # noqa: E712
+                ApprovalChain.is_active.is_(True),
                 or_(
                     ApprovalChain.applies_to == entity_type,
                     ApprovalChain.applies_to == ApprovalEntityType.PURCHASE_REQUEST,
@@ -1710,7 +1710,7 @@ class FinanceService:
         # Get eligible members
         query = select(User).where(
             User.organization_id == org_id,
-            User.is_active == True,  # noqa: E712
+            User.is_active.is_(True),
         )
         result = await self.db.execute(query)
         users = list(result.scalars().all())

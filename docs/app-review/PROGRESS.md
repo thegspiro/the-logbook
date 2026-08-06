@@ -58,7 +58,7 @@ from its open list.
 | B17 | events | EV2 | ✅ |
 | B18 | training | TR2 | ✅ |
 | B19 | scheduling | SCH2 | ✅ |
-| B20 | finance | FIN2 | ⬜ |
+| B20 | finance | FIN2 | ✅ |
 | B21 | orgs, roles & users | ORU2 | ⬜ |
 | B22 | compliance & skills | CS2 | ⬜ |
 | B23 | security, audit & IP | SEC2 | ⬜ |
@@ -612,4 +612,19 @@ Established before the first iteration, so any later failure is attributable:
   KNOWN_LIMITATIONS). **2 regression tests added** (foreign apparatus, foreign
   manual-hours user); DB suite unchanged (no-MySQL). flake8/black clean. See
   scheduling.md. Next: B20 finance.
+- **B20 finance ✅ (clean-module verification).** One of the best-hardened modules
+  — the money-corruption/PII paths (FIN-1 CRITICAL budget corruption, FIN-2, FIN-3
+  dues, FIN-6 dues idempotency) are closed; re-confirmed `_validate_finance_fks`
+  wired into all 7 create/update paths, the org-scoped budget write-helpers, the
+  `dues_payments` ledger, and `approve_step`'s `assert_different_person` guard. **No
+  new code-level security finding.** The one noted DiD gap — `get_approval_records`/
+  `get_current_pending_step` querying `ApprovalStepRecord` without an org filter —
+  re-verified **not live** (all 7 call sites pass an already-org-resolved
+  entity_id) and **deliberately not threaded**: adding `org_id` through 4 methods +
+  7 call sites on the critical money-approval path is regression risk for zero live
+  benefit. **Flagged (unchanged, product/behavior):** FIN-4 (`finance.disburse`
+  SoD), FIN-5 (view scoping), FIN-7 residual (float→Decimal, bounded export,
+  overspend guard) — all already in KNOWN_LIMITATIONS. **Cleanup:** swept 2 E712 in
+  `finance_service.py`. Tests: 19 pure unit tests pass (30 DB-fixture errors, no
+  MySQL). flake8/black clean. See finance.md. Next: B21 orgs, roles & users.
 </content>
