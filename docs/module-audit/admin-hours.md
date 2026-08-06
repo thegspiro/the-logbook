@@ -74,9 +74,13 @@ holder. That consequence is accepted as the ISO 27001 A.5.3 control the shared
 module implements; a per-org SoD toggle remains a possible future refinement if a
 sole-officer workflow proves necessary.
 
-### AH-5 — LOW (flagged, not exploitable) — Minor scoping omissions
-`get_active_session` reads the category by id without an org filter (but only for
-the caller's own session); `_check_overlap` filters `user_id` not
-`organization_id` (harmless — a user belongs to one org); `delete_category`'s
-active-session count omits org (but `category_id` is already validated in-org).
-Defense-in-depth only.
+### AH-5 — LOW — Minor scoping omissions — ✅ FIXED (app-review B15)
+`get_active_session`/`_get_active_session` read the caller's session + category
+by id without an org filter; `_check_overlap` filtered `user_id` not
+`organization_id`; `delete_category`'s active-session count omitted org. None
+exploitable (each constrained by an org-verified parent or the one-org-per-user
+invariant), but not uniform with the codebase's org-scope-everything standard.
+**Fix (B15):** all three now filter `organization_id` (threaded into
+`_get_active_session`/`get_active_session`/`_check_overlap`; the endpoint passes
+`current_user.organization_id`). 2 compiled-SQL regression tests added. See
+`docs/app-review/admin-hours.md`.

@@ -53,7 +53,7 @@ from its open list.
 | B12 | integrations | INT2 | ✅ |
 | B13 | forms | FORM2 | ✅ |
 | B14 | grants & fundraising | GF2 | ✅ |
-| B15 | admin-hours | AH2 | ⬜ |
+| B15 | admin-hours | AH2 | ✅ |
 | B16 | reports & analytics | RPT2 | ⬜ |
 | B17 | events | EV2 | ⬜ |
 | B18 | training | TR2 | ⬜ |
@@ -529,4 +529,17 @@ Established before the first iteration, so any later failure is attributable:
   unbounded amounts / donor-PII gate breadth) — GF-7/8 mirrored to
   KNOWN_LIMITATIONS. **8 unit tests added** across both services; 40 passed.
   flake8/black clean. See grants-fundraising.md. Next: B15 admin-hours.
+- **B15 admin-hours ✅.** A clean module — AH-1 (self-credit), AH-2 (cross-tenant
+  stale-session mutation), AH-3, AH-4 (SoD via the shared `assert_different_person`)
+  already fixed and re-confirmed, along with the time-integrity guarantees
+  (server-computed duration, no member edit/delete, no impersonation). **1 fix
+  applied:** AH-5 (LOW DiD: three internal queries filtered a narrower key than
+  `organization_id` — `_get_active_session`/`get_active_session` (+ its category
+  read), `_check_overlap`, and `delete_category`'s active-session count. None
+  exploitable (each constrained by an org-verified parent or one-org-per-user),
+  but not uniform with the org-scope-everything standard. Threaded
+  `organization_id` through all three; endpoint passes
+  `current_user.organization_id`). **2 compiled-SQL regression tests added**
+  (`TestOrgScopedQueries`); 19 passed. flake8/black clean. See admin-hours.md.
+  Next: B16 reports & analytics.
 </content>

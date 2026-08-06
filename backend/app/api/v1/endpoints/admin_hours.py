@@ -322,7 +322,9 @@ async def get_active_session(
 ):
     """Get the user's currently active admin hours session."""
     service = AdminHoursService(db)
-    session = await service.get_active_session(str(current_user.id))
+    session = await service.get_active_session(
+        str(current_user.id), str(current_user.organization_id)
+    )
     return session
 
 
