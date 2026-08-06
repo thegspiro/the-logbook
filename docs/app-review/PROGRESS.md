@@ -62,7 +62,7 @@ from its open list.
 | B21 | orgs, roles & users | ORU2 | ✅ |
 | B22 | compliance & skills | CS2 | ✅ |
 | B23 | security, audit & IP | SEC2 | ✅ |
-| B24 | core infra | CI2 | ⬜ |
+| B24 | core infra | CI2 | ✅ |
 | B25 | onboarding | ONB2 | ⬜ |
 | B26 | public-portal | PP2 | ⬜ |
 | B27 | frontend shared | FE2 | ⬜ |
@@ -673,4 +673,17 @@ Established before the first iteration, so any later failure is attributable:
   which can be attested out of band). **2 regression tests added**
   (`test_audit_hash_chain` 10 passed). All SEC-1–9 re-confirmed. flake8/black clean.
   See security-audit-ip.md. Next: B24 core infra.
+- **B24 core infra ✅.** The crypto/auth/config foundation is strong (CI-1–8 fixed,
+  re-confirmed). **1 fix applied:** CI-10 cache `clear_pattern` — an unused
+  wildcard-delete footgun (no callers in source or tests) that let a future caller
+  wipe swaths of Redis keys; removed (with a pointer to a namespaced replacement).
+  **2 doc-drift corrections (both already fixed since the audit):** CI-5 — field
+  encryption is now **AES-256-GCM** (`$gcm2$`, AEAD) with `reencrypt_to_aesgcm.py`
+  backfilling legacy Fernet, so the "switching needs re-encryption — flagged" note
+  no longer stands; CI-10 crypto#3 — the KDF is now **600k PBKDF2** iterations
+  (`$gcm2$`), the 100k `$gcm1$` path read-only. Corrected core-infra.md +
+  KNOWN_LIMITATIONS. **Flagged (unchanged, ops/behavior/migration):** CI-9 (TLS
+  CRITICAL, `optimize_image` fail-open, Redis `CERT_NONE`), CI-10 residual (cache
+  namespacing, MFA recovery-code entropy, CI-4 full fail-closed decrypt). cache
+  tests 8 passed. flake8/black clean. See core-infra.md. Next: B25 onboarding.
 </content>

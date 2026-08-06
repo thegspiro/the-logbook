@@ -186,30 +186,10 @@ class CacheManager:
             logger.error(f"Cache delete error: {e}")
             return False
 
-    async def clear_pattern(self, pattern: str) -> int:
-        """
-        Delete all keys matching pattern
-
-        Args:
-            pattern: Redis key pattern (e.g., "user:*")
-
-        Returns:
-            Number of keys deleted
-        """
-        if not self.redis_client:
-            return 0
-
-        try:
-            keys = []
-            async for key in self.redis_client.scan_iter(match=pattern):
-                keys.append(key)
-
-            if keys:
-                return await self.redis_client.delete(*keys)
-            return 0
-        except Exception as e:
-            logger.error(f"Cache clear pattern error: {e}")
-            return 0
+    # CI-10: the wildcard-delete `clear_pattern` helper was removed — it had no
+    # callers and was a footgun (an unsanitized pattern could wipe swaths of
+    # keys). Reintroduce a narrowly-scoped, namespaced deleter if a real need
+    # for bulk invalidation appears.
 
     async def exists(self, key: str) -> bool:
         """Check if key exists"""
