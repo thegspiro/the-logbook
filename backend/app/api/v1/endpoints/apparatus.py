@@ -1666,11 +1666,16 @@ async def create_apparatus_photo(
     # Ensure apparatus_id matches
     photo_data.apparatus_id = apparatus_id
 
-    photo = await service.create_photo(
-        photo_data=photo_data,
-        organization_id=current_user.organization_id,
-        uploaded_by=current_user.id,
-    )
+    try:
+        photo = await service.create_photo(
+            photo_data=photo_data,
+            organization_id=current_user.organization_id,
+            uploaded_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return photo
 
@@ -1764,11 +1769,16 @@ async def create_apparatus_document(
     # Ensure apparatus_id matches
     document_data.apparatus_id = apparatus_id
 
-    document = await service.create_document(
-        document_data=document_data,
-        organization_id=current_user.organization_id,
-        uploaded_by=current_user.id,
-    )
+    try:
+        document = await service.create_document(
+            document_data=document_data,
+            organization_id=current_user.organization_id,
+            uploaded_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     return document
 

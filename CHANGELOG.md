@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Apparatus photos and documents can't be filed against another org's apparatus (2026-08-06)
+
+**Fixed**
+
+- **Uploading an apparatus photo or document didn't verify the apparatus was
+  yours.** Both endpoints took the apparatus id from the URL and stored the row
+  without checking it belonged to the caller's organization, so a request naming
+  another department's apparatus id created a record pointing at it. Both now
+  validate the apparatus is in-org before writing, closing the last two create
+  paths in this module that lacked the check.
+
 ### Medical-screening: names show on the dashboard, and screenings can't be mis-filed cross-tenant (2026-08-06)
 
 **Fixed**

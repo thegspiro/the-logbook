@@ -40,7 +40,7 @@ from its open list.
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
 | B1 | medical-screening | MS2 | ✅ |
-| B2 | apparatus | AP2 | ⬜ |
+| B2 | apparatus | AP2 | ✅ |
 | B3 | inventory | INV2 | ⬜ |
 | B4 | facilities | FAC2 | ⬜ |
 | B5 | elections | ELEC2 | ⬜ |
@@ -393,4 +393,17 @@ Established before the first iteration, so any later failure is attributable:
   (`TestResolveNames`); pre-existing compliance/expiring tests refocused with an
   autouse stub. Backend **2517 passed, 0 failed**. See medical-screening.md.
   Next: B2 apparatus.
+- **B2 apparatus ✅.** Worked the one open finding (AP-1) plus re-verified the
+  security pass's 83/83 auth and tenant-isolation conclusions. AP-1 turned out
+  partly closed already: `create_maintenance_record` validates its parent,
+  `create_operator` was fixed in the zero-trust pass, `create_maintenance_type`
+  has no apparatus FK — but **`create_photo` and `create_document` still stored
+  the path `apparatus_id` unvalidated**, so a POST to another org's
+  `/{apparatus_id}/photos|documents` filed a row against a foreign apparatus.
+  **Fixed** both via the shared `assert_in_org` (mirroring `create_operator`) +
+  the missing `ValueError→400` on both endpoints — **AP-1 now closed across every
+  create path**, and one of the two modules that seeded the XC-1 cross-cutting
+  pattern is fully resolved. Also fixed AP-2 (a `== True # noqa` → `.is_(True)`).
+  Coverage rests on `test_org_scoping.py` (7/7). Backend **2517 passed, 0
+  failed**. See apparatus.md. Next: B3 inventory.
 </content>
