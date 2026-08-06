@@ -68,14 +68,19 @@ gated on *those* permissions, not `integrations.manage` — so gating the read o
 `integrations.view` permission (or scoping the cross-module reads to a minimal
 projection) is the right follow-up. Not auto-applied.
 
-### INT-4 — MEDIUM (flagged) — PATCH update resets omitted config fields to schema defaults
-`update_integration` / `connect_integration` run the incoming config through
-`schema_cls(**config).model_dump()`, which re-emits **all** schema fields with
-their defaults and merges that over the stored config. A partial update that
-omits e.g. `sync_direction` / `match_strategy` silently overwrites the stored
-value with the schema default. Data-integrity bug (not security).
-**Recommend:** validate with `exclude_unset`/merge semantics so omitted keys keep
-their stored value. Flagged — needs care around the intended update contract.
+### INT-4 — MEDIUM — PATCH update resets omitted config fields to schema defaults — ✅ FIXED (app-review B12)
+`update_integration` / `connect_integration` ran the incoming config through
+`schema_cls(**config).model_dump()`, which re-emitted **all** schema fields with
+their defaults and merged that over the stored config. A partial update that
+omitted e.g. `sync_direction` / `match_strategy` silently overwrote the stored
+value with the schema default (a Salesforce `match_strategy="email_lastname"`
+reverting to `"email"` is a real behavior regression), and empty secret-named
+defaults leaked into public config. **Fix (B12):** `_validate_config` now returns
+`model_dump(exclude_unset=True)` — only caller-supplied keys are emitted, so
+omitted keys keep their stored value via the merge; construction still enforces
+required fields, and every service reads config via `.get(key, default)` with the
+same defaults, so a partial stored config stays usable. 1 regression test added.
+See `docs/app-review/integrations.md`.
 
 ### INT-5 — LOW / dead code (flagged)
 - The `KNOWN_WEBHOOK_DOMAINS` allowlist + `allow_known_only=True` branch in

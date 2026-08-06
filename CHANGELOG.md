@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Integrations: editing one setting no longer resets the others (2026-08-06)
+
+**Fixed**
+
+- **Updating a single field of an integration's configuration silently reverted
+  the rest to their defaults.** Because a partial save re-applied every
+  unspecified field at its default value, changing (for example) a Salesforce
+  integration's sync direction would quietly reset its member-matching strategy,
+  auto-sync, and other options. Saves now change only the fields you actually
+  edited and leave everything else untouched.
+
 ### Prospective members: applicant privacy and a clearer duplicate warning (2026-08-06)
 
 **Fixed**

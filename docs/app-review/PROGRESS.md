@@ -50,7 +50,7 @@ from its open list.
 | B9 | membership pipeline | MP2 | ✅ |
 | B10 | messaging & communications | MSG2 | ✅ |
 | B11 | notifications | NOTIF2 | ✅ |
-| B12 | integrations | INT2 | ⬜ |
+| B12 | integrations | INT2 | ✅ |
 | B13 | forms | FORM2 | ⬜ |
 | B14 | grants & fundraising | GF2 | ⬜ |
 | B15 | admin-hours | AH2 | ⬜ |
@@ -474,4 +474,25 @@ Established before the first iteration, so any later failure is attributable:
   (`TestErrorSanitization`), 17 passed across the non-DB notification test files.
   NOTIF-1 re-verified fixed. flake8/black clean. See notifications.md. Next: B12
   integrations.
+- **B12 integrations ✅.** The security pass had already hardened the external
+  surfaces (send-time SSRF re-validation, OAuth state, inbound-webhook HMAC
+  fail-closed, no secret exposure) — re-confirmed, not re-derived. **1 fix
+  applied:** INT-4 (MED data-integrity: `_validate_config` returned
+  `schema_cls(**config).model_dump()`, re-emitting every field at its default,
+  which connect/update then merged over the stored config — so a partial PATCH
+  silently reset omitted fields to defaults. A Salesforce `match_strategy`
+  reverting from `email_lastname` to `email` — which *adopts* pre-existing
+  Contacts — is a real regression; and empty secret-named defaults leaked into
+  public config. Fixed with `model_dump(exclude_unset=True)`: only supplied keys
+  emitted, omitted keys keep their stored value via the merge; verified safe
+  because every service reads config via `.get(key, default)` with matching
+  defaults and construction still enforces required fields). **2 flagged
+  (unchanged):** INT-3 (list/get reads on bare `get_current_user` — needs a
+  dedicated `integrations.view` permission because the list is consumed
+  cross-module under other permissions; recorded in KNOWN_LIMITATIONS), INT-5
+  (uninvoked `KNOWN_WEBHOOK_DOMAINS` allowlist + unused `request` params —
+  cosmetic/behavior-change, batched for later). **1 regression test added**
+  (`test_omitted_fields_not_reemitted`); `test_integrations_security` 50 passed,
+  `test_integration_services`+`test_salesforce_sync` 88 passed. flake8/black
+  clean. See integrations.md. Next: B13 forms.
 </content>
