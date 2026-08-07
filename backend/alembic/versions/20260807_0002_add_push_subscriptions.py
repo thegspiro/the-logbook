@@ -9,7 +9,6 @@ installs the PWA on both a phone and a station tablet is reached on both.
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 revision = "20260807_0002"

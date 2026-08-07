@@ -10,7 +10,6 @@ database level, guarding against race conditions in concurrent requests.
 
 from alembic import op
 
-
 # revision identifiers
 revision = "20260226_0200"
 down_revision = "20260226_0100"
@@ -27,4 +26,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("uq_shift_assignment_shift_user", "shift_assignments", type_="unique")
+    op.drop_constraint(
+        "uq_shift_assignment_shift_user", "shift_assignments", type_="unique"
+    )

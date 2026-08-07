@@ -7,11 +7,12 @@ Revises: 20260222_0450
 Create Date: 2026-02-22 05:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 from sqlalchemy import inspect
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "20260222_0500"
@@ -60,7 +61,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("organization_id", "rank_code", name="uq_ranks_org_code"),
     )
 
-    op.create_index("ix_operational_ranks_org", "operational_ranks", ["organization_id"])
+    op.create_index(
+        "ix_operational_ranks_org", "operational_ranks", ["organization_id"]
+    )
 
 
 def downgrade() -> None:

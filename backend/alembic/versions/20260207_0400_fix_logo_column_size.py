@@ -10,14 +10,12 @@ to support base64-encoded images which can be several hundred KB.
 Base64 images are typically 33% larger than the original image size.
 A 250KB image becomes ~330KB in base64, which exceeds the TEXT limit.
 """
-from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260207_0400'
-down_revision = '20260206_0303'
+revision = "20260207_0400"
+down_revision = "20260206_0303"
 branch_labels = None
 depends_on = None
 
@@ -34,9 +32,7 @@ def upgrade() -> None:
     from sqlalchemy import text
 
     bind = op.get_bind()
-    bind.execute(text(
-        "ALTER TABLE organizations MODIFY COLUMN logo LONGTEXT"
-    ))
+    bind.execute(text("ALTER TABLE organizations MODIFY COLUMN logo LONGTEXT"))
 
 
 def downgrade() -> None:
@@ -45,6 +41,4 @@ def downgrade() -> None:
     from sqlalchemy import text
 
     bind = op.get_bind()
-    bind.execute(text(
-        "ALTER TABLE organizations MODIFY COLUMN logo TEXT"
-    ))
+    bind.execute(text("ALTER TABLE organizations MODIFY COLUMN logo TEXT"))

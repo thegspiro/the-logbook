@@ -9,8 +9,8 @@ login.  Set by admins when creating accounts with temporary passwords
 or when resetting a user's password.
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260220_0100"

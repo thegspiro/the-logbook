@@ -9,6 +9,7 @@ Revises: 20260222_0500
 Create Date: 2026-02-22 06:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -21,7 +22,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 # Old and new enum values
 OLD_VALUES = ("active", "approved", "rejected", "withdrawn", "transferred")
-NEW_VALUES = ("active", "on_hold", "approved", "rejected", "withdrawn", "inactive", "transferred")
+NEW_VALUES = (
+    "active",
+    "on_hold",
+    "approved",
+    "rejected",
+    "withdrawn",
+    "inactive",
+    "transferred",
+)
 
 
 def upgrade() -> None:
@@ -34,8 +43,12 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Convert on_hold → active and inactive → withdrawn before shrinking the enum
-    op.execute("UPDATE prospective_members SET status = 'active' WHERE status = 'on_hold'")
-    op.execute("UPDATE prospective_members SET status = 'withdrawn' WHERE status = 'inactive'")
+    op.execute(
+        "UPDATE prospective_members SET status = 'active' WHERE status = 'on_hold'"
+    )
+    op.execute(
+        "UPDATE prospective_members SET status = 'withdrawn' WHERE status = 'inactive'"
+    )
 
     old_enum = ", ".join(f"'{v}'" for v in OLD_VALUES)
     op.execute(

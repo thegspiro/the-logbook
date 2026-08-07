@@ -22,9 +22,9 @@ Revises: 20260622_0001
 Create Date: 2026-07-02 00:00:00.000000
 
 """
-from alembic import op
-import sqlalchemy as sa
 
+import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260702_0001"
@@ -78,9 +78,9 @@ def _fk_name(table: str, column: str) -> str:
 def _drop_user_fks(inspector, table: str, column: str) -> None:
     """Drop any FK on ``table.column`` that references the users table."""
     for fk in inspector.get_foreign_keys(table):
-        if fk.get("referred_table") == "users" and fk.get(
-            "constrained_columns"
-        ) == [column]:
+        if fk.get("referred_table") == "users" and fk.get("constrained_columns") == [
+            column
+        ]:
             name = fk.get("name")
             if name:
                 op.drop_constraint(name, table, type_="foreignkey")

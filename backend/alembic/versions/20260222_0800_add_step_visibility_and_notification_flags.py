@@ -8,10 +8,11 @@ Revises: 20260222_0700
 Create Date: 2026-02-22 08:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "20260222_0800"
@@ -24,17 +25,29 @@ def upgrade() -> None:
     # Per-step: notify prospect when this step is completed
     op.add_column(
         "membership_pipeline_steps",
-        sa.Column("notify_prospect_on_completion", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column(
+            "notify_prospect_on_completion",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
     )
     # Per-step: show this step on the public application status page
     op.add_column(
         "membership_pipeline_steps",
-        sa.Column("public_visible", sa.Boolean(), nullable=False, server_default=sa.true()),
+        sa.Column(
+            "public_visible", sa.Boolean(), nullable=False, server_default=sa.true()
+        ),
     )
     # Pipeline-level: enable or disable public status page
     op.add_column(
         "membership_pipelines",
-        sa.Column("public_status_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column(
+            "public_status_enabled",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
     )
 
 

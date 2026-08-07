@@ -16,7 +16,7 @@ view permission required to print it. The actual PDF rendering is shared
 
 import copy
 from io import BytesIO
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,6 +33,22 @@ SpecBuilder = Callable[
 
 def _short_id(value: str, length: int = 12) -> str:
     return value.replace("-", "")[:length].upper()
+
+
+def _filter_ids(ids: List[str], exclude_ids: Optional[Set[str]]) -> List[str]:
+    """Drop ids the caller is not allowed to print.
+
+    Callers pass ids the record-privacy layer has already canonicalized (see
+    :func:`app.api.prospect_privacy.normalize_prospect_id`); normalize the
+    request side the same way so a re-cased or unhyphenated UUID cannot slip
+    a filtered record back in.
+    """
+    if not exclude_ids:
+        return ids
+
+    from app.api.prospect_privacy import normalize_prospect_id
+
+    return [i for i in ids if normalize_prospect_id(i) not in exclude_ids]
 
 
 async def _build_inventory_specs(db, org_id, ids, extra_lines):
@@ -258,6 +274,7 @@ class LabelService:
         custom_height: Optional[float] = None,
         auto_rotate: Optional[bool] = None,
         extra_lines: Optional[List[str]] = None,
+        exclude_ids: Optional[Set[str]] = None,
     ) -> Tuple[BytesIO, int]:
         entry = MODULE_LABELS.get(module)
         if entry is None:
@@ -265,7 +282,7 @@ class LabelService:
         _, builder = entry
 
         specs, auto_populated = await builder(
-            self.db, str(organization_id), ids, extra_lines
+            self.db, str(organization_id), _filter_ids(ids, exclude_ids), extra_lines
         )
         if not specs:
             raise ValueError("No records found for label generation")
@@ -276,7 +293,11 @@ class LabelService:
         return pdf, auto_populated
 
     async def preview(
-        self, organization_id, module: str, ids: List[str]
+        self,
+        organization_id,
+        module: str,
+        ids: List[str],
+        exclude_ids: Optional[Set[str]] = None,
     ) -> List[Dict[str, Any]]:
         """Return label preview data (name, barcode value, subtitle) for the
         on-screen preview — read-only, no side effects."""
@@ -284,7 +305,9 @@ class LabelService:
         if entry is None:
             raise ValueError(f"Labels are not available for module: {module}")
         _, builder = entry
-        specs, _ = await builder(self.db, str(organization_id), ids, None)
+        specs, _ = await builder(
+            self.db, str(organization_id), _filter_ids(ids, exclude_ids), None
+        )
         return [
             {
                 "name": s.name,

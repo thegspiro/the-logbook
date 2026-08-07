@@ -347,6 +347,10 @@ class TrainingService:
         certification, shifts, calls, and fallback.
         """
         from app.models.training import RequirementType
+        from app.services.training_compliance import (
+            apply_recency,
+            certification_record_matches,
+        )
         from app.services.training_period import (
             effective_include_current_month,
             resolve_as_of_date,
@@ -374,6 +378,9 @@ class TrainingService:
 
         # Filter completed records in the date window
         completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
+        # Freshness window narrows the pool first, so a stale completion can't
+        # satisfy a requirement whose frequency window is unbounded (one_time).
+        completed = apply_recency(req, completed, today)
         if start_date and end_date:
             windowed = [
                 r
@@ -447,23 +454,7 @@ class TrainingService:
 
         # ---- CERTIFICATION ----
         elif req_type == RequirementType.CERTIFICATION.value:
-            matching = [
-                r
-                for r in completed
-                if (
-                    (req.training_type and r.training_type == req.training_type)
-                    or (
-                        r.course_name
-                        and req.name
-                        and req.name.lower() in r.course_name.lower()
-                    )
-                    or (
-                        r.certification_number
-                        and getattr(req, "registry_code", None)
-                        and req.registry_code.lower() in r.certification_number.lower()
-                    )
-                )
-            ]
+            matching = [r for r in completed if certification_record_matches(req, r)]
             base_required = 1
             adjusted_required = 1
             if matching:
@@ -618,6 +609,11 @@ class TrainingService:
         the service will fetch them automatically.
         """
         from app.models.training import RequirementType
+        from app.services.training_compliance import (
+            apply_recency,
+            certification_record_matches,
+            recency_cutoff,
+        )
 
         # Get the requirement
         result = await self.db.execute(
@@ -632,6 +628,13 @@ class TrainingService:
 
         today = date.today()
         start_date, end_date = self._get_date_window(requirement, today)
+        # Narrow the window by the freshness cutoff up front so every query
+        # below inherits it. A one_time requirement has no frequency window at
+        # all, so recency supplies both bounds rather than tightening them.
+        cutoff = recency_cutoff(requirement, today)
+        if cutoff is not None:
+            start_date = cutoff if start_date is None else max(start_date, cutoff)
+            end_date = end_date or today
         req_type = (
             requirement.requirement_type.value
             if hasattr(requirement.requirement_type, "value")
@@ -786,29 +789,17 @@ class TrainingService:
                 TrainingRecord.status == TrainingStatus.COMPLETED,
             )
             cert_result = await self.db.execute(cert_q)
-            all_completed = cert_result.scalars().all()
+            # This query deliberately ignores the frequency window (a cert is
+            # valid until it expires, not per period), so the freshness window
+            # has to be applied here rather than inherited from start/end.
+            all_completed = apply_recency(
+                requirement, cert_result.scalars().all(), today
+            )
 
-            # Match by training_type, name substring, or registry_code
+            # Match by linked catalog course, training_type, name substring, or
+            # registry_code (see certification_record_matches)
             matching = [
-                r
-                for r in all_completed
-                if (
-                    (
-                        requirement.training_type
-                        and r.training_type == requirement.training_type
-                    )
-                    or (
-                        r.course_name
-                        and requirement.name
-                        and requirement.name.lower() in r.course_name.lower()
-                    )
-                    or (
-                        r.certification_number
-                        and requirement.registry_code
-                        and requirement.registry_code.lower()
-                        in r.certification_number.lower()
-                    )
-                )
+                r for r in all_completed if certification_record_matches(requirement, r)
             ]
 
             if matching:

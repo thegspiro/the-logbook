@@ -34,12 +34,7 @@ import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { ConfirmDialog } from '../components/ux/ConfirmDialog';
-import {
-  EditProgramModal,
-  PhaseFormModal,
-  RequirementFormModal,
-  MilestoneFormModal,
-} from './PipelineEditModals';
+import { EditProgramModal, PhaseFormModal, RequirementFormModal, MilestoneFormModal } from './PipelineEditModals';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
@@ -102,7 +97,7 @@ const StructureBadge: React.FC<{ type: ProgramStructureType }> = ({ type }) => {
   };
 
   return (
-    <span className={`px-2 py-1 text-xs rounded-sm ${colors[type]}`}>
+    <span className={`rounded-sm px-2 py-1 text-xs ${colors[type]}`}>
       {type === 'phases' ? 'Phase-based' : type === 'sequential' ? 'Sequential' : 'Flexible'}
     </span>
   );
@@ -119,7 +114,7 @@ const PositionBadge: React.FC<{ position: string }> = ({ position }) => {
   };
 
   return (
-    <span className="px-2 py-1 bg-red-500/20 text-red-700 dark:text-red-400 text-xs rounded-sm">
+    <span className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 dark:text-red-400">
       {labels[position] || position}
     </span>
   );
@@ -147,7 +142,9 @@ const ReqTypeBadge: React.FC<{ type: string }> = ({ type }) => {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs rounded-sm ${colors[type] || 'bg-theme-surface-secondary text-theme-text-muted'}`}>
+    <span
+      className={`rounded-sm px-2 py-0.5 text-xs ${colors[type] || 'bg-theme-surface-secondary text-theme-text-muted'}`}
+    >
       {labels[type] || type}
     </span>
   );
@@ -194,7 +191,9 @@ const EnrollModal: React.FC<{
         if (!cancelled) setLoadingMembers(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, programId]);
 
   const eligibleCount = useMemo(() => members.filter((m) => m.eligible).length, [members]);
@@ -205,10 +204,7 @@ const EnrollModal: React.FC<{
     return members.filter((m) => {
       if (eligibleOnly && !m.eligible) return false;
       if (!q) return true;
-      return (
-        eligibilityName(m).toLowerCase().includes(q) ||
-        (m.membership_number ?? '').toLowerCase().includes(q)
-      );
+      return eligibilityName(m).toLowerCase().includes(q) || (m.membership_number ?? '').toLowerCase().includes(q);
     });
   }, [members, search, eligibleOnly]);
 
@@ -253,33 +249,46 @@ const EnrollModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90dvh] flex flex-col">
-        <div className="p-6 border-b border-theme-surface-border">
-          <h2 className="text-xl font-bold text-theme-text-primary">Enroll Members</h2>
-          <p className="text-theme-text-muted text-sm mt-1">Enroll members into {programName}</p>
+      <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-lg flex-col rounded-lg">
+        <div className="border-theme-surface-border border-b p-6">
+          <h2 className="text-theme-text-primary text-xl font-bold">Enroll Members</h2>
+          <p className="text-theme-text-muted mt-1 text-sm">Enroll members into {programName}</p>
         </div>
-        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4 overflow-y-auto">
+        <form
+          onSubmit={(e) => {
+            void handleSubmit(e);
+          }}
+          className="space-y-4 overflow-y-auto p-6"
+        >
           {/* Selected chips */}
           {selected.size > 0 && (
             <div className="flex flex-wrap gap-2">
               {Array.from(selected.entries()).map(([id, name]) => (
                 <span
                   key={id}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/15 text-red-700 dark:text-red-400 rounded-md text-xs"
+                  className="inline-flex items-center gap-1 rounded-md bg-red-500/15 px-2 py-1 text-xs text-red-700 dark:text-red-400"
                 >
                   {name}
                   <button
                     type="button"
-                    onClick={() => setSelected((prev) => { const n = new Map(prev); n.delete(id); return n; })}
+                    onClick={() =>
+                      setSelected((prev) => {
+                        const n = new Map(prev);
+                        n.delete(id);
+                        return n;
+                      })
+                    }
                     aria-label={`Remove ${name}`}
                     className="hover:text-red-900 dark:hover:text-red-200"
                   >
-                    <X className="w-3 h-3" />
+                    <X className="h-3 w-3" />
                   </button>
                 </span>
               ))}
@@ -288,7 +297,7 @@ const EnrollModal: React.FC<{
 
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+            <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
             <input
               type="text"
               value={search}
@@ -306,7 +315,7 @@ const EnrollModal: React.FC<{
               <span className="text-theme-text-muted">
                 {eligibleCount} of {members.length} eligible
               </span>
-              <label className="inline-flex items-center gap-2 cursor-pointer select-none text-theme-text-secondary">
+              <label className="text-theme-text-secondary inline-flex cursor-pointer items-center gap-2 select-none">
                 <input
                   type="checkbox"
                   checked={eligibleOnly}
@@ -319,21 +328,25 @@ const EnrollModal: React.FC<{
           )}
 
           {/* Member list */}
-          <div className="border border-theme-surface-border rounded-lg max-h-64 overflow-y-auto">
+          <div className="border-theme-surface-border max-h-64 overflow-y-auto rounded-lg border">
             {loadingMembers ? (
-              <div className="flex items-center justify-center py-8 text-theme-text-muted" role="status" aria-live="polite">
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              <div
+                className="text-theme-text-muted flex items-center justify-center py-8"
+                role="status"
+                aria-live="polite"
+              >
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 <span className="text-sm">Loading members...</span>
               </div>
             ) : membersError ? (
               <div className="p-3 text-sm text-red-600 dark:text-red-400">{membersError}</div>
             ) : filtered.length === 0 ? (
-              <div className="py-8 text-center text-theme-text-muted text-sm px-4">
+              <div className="text-theme-text-muted px-4 py-8 text-center text-sm">
                 {search
                   ? 'No members match your search.'
                   : eligibleOnly && members.length > 0
-                  ? 'No eligible members. Turn off “Show eligible only” to see who’s blocked and why.'
-                  : 'No members found.'}
+                    ? 'No eligible members. Turn off “Show eligible only” to see who’s blocked and why.'
+                    : 'No members found.'}
               </div>
             ) : (
               filtered.map((m) => {
@@ -345,12 +358,8 @@ const EnrollModal: React.FC<{
                     type="button"
                     onClick={() => toggle(m)}
                     disabled={!m.eligible}
-                    className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-sm border-b border-theme-surface-border last:border-b-0 transition-colors ${
-                      !m.eligible
-                        ? 'cursor-not-allowed'
-                        : isSelected
-                        ? 'bg-red-500/10'
-                        : 'hover:bg-theme-surface-hover'
+                    className={`border-theme-surface-border flex w-full items-center justify-between gap-3 border-b px-3 py-2 text-left text-sm transition-colors last:border-b-0 ${
+                      !m.eligible ? 'cursor-not-allowed' : isSelected ? 'bg-red-500/10' : 'hover:bg-theme-surface-hover'
                     }`}
                   >
                     <div className="min-w-0">
@@ -363,19 +372,21 @@ const EnrollModal: React.FC<{
                       {m.reason && (
                         // Advisory (amber) for eligible-but-flagged members,
                         // muted for hard-ineligible ones.
-                        <p className={`text-xs mt-0.5 ${m.eligible ? 'text-yellow-700 dark:text-yellow-400' : 'text-theme-text-muted'}`}>
+                        <p
+                          className={`mt-0.5 text-xs ${m.eligible ? 'text-yellow-700 dark:text-yellow-400' : 'text-theme-text-muted'}`}
+                        >
                           {m.reason}
                         </p>
                       )}
                     </div>
                     {m.eligible ? (
                       isSelected ? (
-                        <CheckCircle2 className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                        <CheckCircle2 className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
                       ) : (
-                        <Circle className="w-4 h-4 text-theme-text-muted shrink-0" />
+                        <Circle className="text-theme-text-muted h-4 w-4 shrink-0" />
                       )
                     ) : (
-                      <span className={`text-xs shrink-0 ${meta.className}`}>{meta.label}</span>
+                      <span className={`shrink-0 text-xs ${meta.className}`}>{meta.label}</span>
                     )}
                   </button>
                 );
@@ -384,7 +395,7 @@ const EnrollModal: React.FC<{
           </div>
 
           <div>
-            <label htmlFor="enroll-target-date" className="block text-sm font-medium text-theme-text-secondary mb-1">
+            <label htmlFor="enroll-target-date" className="text-theme-text-secondary mb-1 block text-sm font-medium">
               Target Completion Date
             </label>
             <input
@@ -400,16 +411,14 @@ const EnrollModal: React.FC<{
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm"
+              className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover rounded-lg px-4 py-2 text-sm"
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              className="btn-primary text-sm"
-              disabled={isSubmitting || selected.size === 0}
-            >
-              {isSubmitting ? 'Enrolling...' : `Enroll ${selected.size || ''} Member${selected.size === 1 ? '' : 's'}`.trim()}
+            <button type="submit" className="btn-primary text-sm" disabled={isSubmitting || selected.size === 0}>
+              {isSubmitting
+                ? 'Enrolling...'
+                : `Enroll ${selected.size || ''} Member${selected.size === 1 ? '' : 's'}`.trim()}
             </button>
           </div>
         </form>
@@ -430,9 +439,7 @@ const NUMERIC_TYPES = new Set(['hours', 'shifts', 'calls', 'courses']);
 // knowledge-test feature later.
 const SCORED_TYPES = new Set(['knowledge_test']);
 
-function requirementTarget(
-  req?: TrainingRequirementEnhanced,
-): { value: number; label: string } | null {
+function requirementTarget(req?: TrainingRequirementEnhanced): { value: number; label: string } | null {
   if (!req) return null;
   if (req.requirement_type === 'hours' && req.required_hours) return { value: req.required_hours, label: 'hours' };
   if (req.requirement_type === 'shifts' && req.required_shifts) return { value: req.required_shifts, label: 'shifts' };
@@ -481,27 +488,31 @@ const RequirementProgressRow: React.FC<{
   return (
     <div className="bg-theme-surface-secondary rounded-lg p-3">
       <div className="min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium text-theme-text-primary">{req?.name || 'Requirement'}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-theme-text-primary text-sm font-medium">{req?.name || 'Requirement'}</span>
           {req?.requirement_type && <ReqTypeBadge type={req.requirement_type} />}
           {record.verified_by && (
             <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
-              <BadgeCheck className="w-3.5 h-3.5" /> Verified
+              <BadgeCheck className="h-3.5 w-3.5" /> Verified
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 mt-1 text-xs">
+        <div className="mt-1 flex items-center gap-2 text-xs">
           <span className={statusMeta.className}>{statusMeta.label}</span>
           <span className="text-theme-text-muted">· {Math.round(record.progress_percentage)}%</span>
-          {target && <span className="text-theme-text-muted">· target {target.value} {target.label}</span>}
+          {target && (
+            <span className="text-theme-text-muted">
+              · target {target.value} {target.label}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Numeric value editor (hours / shifts / calls) */}
       {numeric && (
-        <div className="flex items-end gap-2 mt-3">
+        <div className="mt-3 flex items-end gap-2">
           <div className="flex-1">
-            <label className="block text-xs text-theme-text-muted mb-1">Logged {target?.label ?? 'value'}</label>
+            <label className="text-theme-text-muted mb-1 block text-xs">Logged {target?.label ?? 'value'}</label>
             <input
               type="number"
               min={0}
@@ -514,11 +525,13 @@ const RequirementProgressRow: React.FC<{
           </div>
           <button
             type="button"
-            onClick={() => { void onUpdate(record.id, { progress_value: value ? parseFloat(value) : 0 }); }}
+            onClick={() => {
+              void onUpdate(record.id, { progress_value: value ? parseFloat(value) : 0 });
+            }}
             disabled={saving}
-            className="btn-primary text-xs flex items-center gap-1 px-3 disabled:opacity-50"
+            className="btn-primary flex items-center gap-1 px-3 text-xs disabled:opacity-50"
           >
-            <Save className="w-3.5 h-3.5" /> Save
+            <Save className="h-3.5 w-3.5" /> Save
           </button>
         </div>
       )}
@@ -527,7 +540,7 @@ const RequirementProgressRow: React.FC<{
       {scored && (
         <div className="mt-3 space-y-2">
           {typeof latestScore === 'number' && (
-            <div className="text-xs text-theme-text-muted">
+            <div className="text-theme-text-muted text-xs">
               Last score:{' '}
               <span className={latestPassed ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}>
                 {latestScore}% ({latestPassed ? 'pass' : 'fail'})
@@ -535,16 +548,14 @@ const RequirementProgressRow: React.FC<{
             </div>
           )}
           {maxAttempts && (
-            <div className="text-xs text-theme-text-muted">
+            <div className="text-theme-text-muted text-xs">
               Attempts: {attemptsUsed} / {maxAttempts}
-              {attemptsExhausted && (
-                <span className="text-red-700 dark:text-red-400"> · no attempts remaining</span>
-              )}
+              {attemptsExhausted && <span className="text-red-700 dark:text-red-400"> · no attempts remaining</span>}
             </div>
           )}
           <div className="flex items-end gap-2">
             <div className="flex-1">
-              <label className="block text-xs text-theme-text-muted mb-1">
+              <label className="text-theme-text-muted mb-1 block text-xs">
                 Test score (%) · pass ≥ {passThreshold}%
               </label>
               <input
@@ -561,51 +572,59 @@ const RequirementProgressRow: React.FC<{
               type="button"
               onClick={recordScore}
               disabled={saving || attemptsExhausted}
-              className="btn-primary text-xs flex items-center gap-1 px-3 disabled:opacity-50"
+              className="btn-primary flex items-center gap-1 px-3 text-xs disabled:opacity-50"
             >
-              <Save className="w-3.5 h-3.5" /> Record
+              <Save className="h-3.5 w-3.5" /> Record
             </button>
           </div>
         </div>
       )}
 
       {/* Status quick actions — simple pass (Mark complete) / reopen */}
-      <div className="flex flex-wrap gap-2 mt-3">
+      <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => { void onUpdate(record.id, { status: 'in_progress' }); }}
+          onClick={() => {
+            void onUpdate(record.id, { status: 'in_progress' });
+          }}
           disabled={saving || record.status === 'in_progress'}
-          className="text-xs px-2 py-1 rounded-md border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-40"
+          className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-2 py-1 text-xs disabled:opacity-40"
         >
-          <Clock className="w-3.5 h-3.5 inline mr-1" /> In progress
+          <Clock className="mr-1 inline h-3.5 w-3.5" /> In progress
         </button>
         <button
           type="button"
-          onClick={() => { void onUpdate(record.id, { status: 'completed' }); }}
+          onClick={() => {
+            void onUpdate(record.id, { status: 'completed' });
+          }}
           disabled={saving || isDone}
-          className="text-xs px-2 py-1 rounded-md border border-green-600/40 text-green-700 dark:text-green-400 hover:bg-green-500/10 disabled:opacity-40"
+          className="rounded-md border border-green-600/40 px-2 py-1 text-xs text-green-700 hover:bg-green-500/10 disabled:opacity-40 dark:text-green-400"
         >
-          <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" /> Mark complete
+          <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" /> Mark complete
         </button>
         {isDone && (
           <button
             type="button"
-            onClick={() => { void onUpdate(record.id, { status: 'not_started' }); }}
+            onClick={() => {
+              void onUpdate(record.id, { status: 'not_started' });
+            }}
             disabled={saving}
-            className="text-xs px-2 py-1 rounded-md border border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover disabled:opacity-40"
+            className="border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover rounded-md border px-2 py-1 text-xs disabled:opacity-40"
           >
-            <Circle className="w-3.5 h-3.5 inline mr-1" /> Reopen
+            <Circle className="mr-1 inline h-3.5 w-3.5" /> Reopen
           </button>
         )}
         {record.status !== 'not_started' && (
           <button
             type="button"
-            onClick={() => { void onReset(record.id, req?.name ?? 'this requirement'); }}
+            onClick={() => {
+              void onReset(record.id, req?.name ?? 'this requirement');
+            }}
             disabled={saving}
             title="Reset accumulated progress for a new cycle"
-            className="text-xs px-2 py-1 rounded-md border border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover disabled:opacity-40"
+            className="border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover rounded-md border px-2 py-1 text-xs disabled:opacity-40"
           >
-            <RotateCcw className="w-3.5 h-3.5 inline mr-1" /> Reset
+            <RotateCcw className="mr-1 inline h-3.5 w-3.5" /> Reset
           </button>
         )}
       </div>
@@ -646,15 +665,18 @@ const EnrollmentProgressModal: React.FC<{
 
   useEffect(() => {
     if (isOpen && enrollmentId) void load();
-    if (!isOpen) { setData(null); setError(null); }
+    if (!isOpen) {
+      setData(null);
+      setError(null);
+    }
   }, [isOpen, enrollmentId, load]);
 
   const handleUpdate = async (progressId: string, updates: RequirementProgressUpdate) => {
     setSavingId(progressId);
     try {
       await trainingProgramService.updateProgress(progressId, updates);
-      await load();  // pull recalculated percentages/status (may auto-advance the phase)
-      onSaved();     // refresh the outer enrollments list (overall %, completion)
+      await load(); // pull recalculated percentages/status (may auto-advance the phase)
+      onSaved(); // refresh the outer enrollments list (overall %, completion)
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update progress'));
     } finally {
@@ -678,7 +700,12 @@ const EnrollmentProgressModal: React.FC<{
   };
 
   const handleReset = async (progressId: string, requirementName: string) => {
-    if (!window.confirm(`Reset "${requirementName}" to not-started? This clears the accumulated progress for a new cycle.`)) return;
+    if (
+      !window.confirm(
+        `Reset "${requirementName}" to not-started? This clears the accumulated progress for a new cycle.`
+      )
+    )
+      return;
     setSavingId(progressId);
     try {
       await trainingProgramService.resetProgress(progressId);
@@ -693,7 +720,12 @@ const EnrollmentProgressModal: React.FC<{
 
   const handleResetCycle = async () => {
     if (!enrollmentId) return;
-    if (!window.confirm(`Start a new cycle for ${memberName}? Every requirement resets to not-started and they return to the first phase.`)) return;
+    if (
+      !window.confirm(
+        `Start a new cycle for ${memberName}? Every requirement resets to not-started and they return to the first phase.`
+      )
+    )
+      return;
     setResettingCycle(true);
     try {
       await trainingProgramService.resetEnrollment(enrollmentId);
@@ -713,41 +745,39 @@ const EnrollmentProgressModal: React.FC<{
   const overall = data ? Math.round(data.enrollment.progress_percentage) : 0;
 
   const orderedPhases = [...phases].sort((a, b) => a.phase_number - b.phase_number);
-  const currentIdx = data
-    ? orderedPhases.findIndex((p) => p.id === data.enrollment.current_phase_id)
-    : -1;
+  const currentIdx = data ? orderedPhases.findIndex((p) => p.id === data.enrollment.current_phase_id) : -1;
   // No current phase (idx -1) but phases exist → the first phase is still "next".
   const hasNextPhase = orderedPhases.length > 0 && currentIdx < orderedPhases.length - 1;
 
-  const groups = data && phased
-    ? groupRecordsByPhase(data.requirement_progress, phases, programReqs)
-    : [];
+  const groups = data && phased ? groupRecordsByPhase(data.requirement_progress, phases, programReqs) : [];
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-2xl w-full max-h-[90dvh] flex flex-col">
-        <div className="p-6 border-b border-theme-surface-border">
+      <div className="bg-theme-surface-modal flex max-h-[90dvh] w-full max-w-2xl flex-col rounded-lg">
+        <div className="border-theme-surface-border border-b p-6">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-xl font-bold text-theme-text-primary">Progress — {memberName}</h2>
+              <h2 className="text-theme-text-primary text-xl font-bold">Progress — {memberName}</h2>
               {data && (
-                <p className="text-theme-text-muted text-sm mt-1">
+                <p className="text-theme-text-muted mt-1 text-sm">
                   {data.completed_requirements}/{data.total_requirements} requirements · {overall}% overall
                 </p>
               )}
               {phased && data?.current_phase && (
-                <p className="text-xs text-theme-text-muted mt-1">
+                <p className="text-theme-text-muted mt-1 text-xs">
                   Current phase: <span className="text-theme-text-secondary">{data.current_phase.name}</span>
                 </p>
               )}
               {data?.enrollment.next_recert_reset_at && (
-                <p className="text-xs text-theme-text-muted mt-1 inline-flex items-center gap-1">
-                  <RotateCcw className="w-3 h-3" />
+                <p className="text-theme-text-muted mt-1 inline-flex items-center gap-1 text-xs">
+                  <RotateCcw className="h-3 w-3" />
                   Auto-resets{' '}
                   <span className="text-theme-text-secondary">
                     {formatCalendarDate(data.enrollment.next_recert_reset_at)}
@@ -759,46 +789,54 @@ const EnrollmentProgressModal: React.FC<{
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="p-1 text-theme-text-muted hover:text-theme-text-primary"
+              className="text-theme-text-muted hover:text-theme-text-primary p-1"
             >
-              <X className="w-5 h-5" />
+              <X className="h-5 w-5" />
             </button>
           </div>
-          <div className="flex flex-wrap gap-2 mt-3">
+          <div className="mt-3 flex flex-wrap gap-2">
             {phased && (
               <button
                 type="button"
-                onClick={() => { void handleAdvance(); }}
+                onClick={() => {
+                  void handleAdvance();
+                }}
                 disabled={!data || !hasNextPhase || advancing}
-                className="btn-primary text-xs flex items-center gap-1 px-3 disabled:opacity-50"
+                className="btn-primary flex items-center gap-1 px-3 text-xs disabled:opacity-50"
               >
-                <ArrowUpRight className="w-3.5 h-3.5" />
+                <ArrowUpRight className="h-3.5 w-3.5" />
                 {advancing ? 'Advancing...' : hasNextPhase ? 'Advance to next phase' : 'Final phase reached'}
               </button>
             )}
             <button
               type="button"
-              onClick={() => { void handleResetCycle(); }}
+              onClick={() => {
+                void handleResetCycle();
+              }}
               disabled={!data || resettingCycle}
               title="Reset every requirement and return to the first phase — for a new recert cycle"
-              className="text-xs flex items-center gap-1 px-3 py-2 rounded-lg border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg border px-3 py-2 text-xs disabled:opacity-50"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <RotateCcw className="h-3.5 w-3.5" />
               {resettingCycle ? 'Resetting...' : 'Start new cycle'}
             </button>
           </div>
         </div>
 
-        <div className="p-6 overflow-y-auto space-y-4">
+        <div className="space-y-4 overflow-y-auto p-6">
           {loading ? (
-            <div className="flex items-center justify-center py-10 text-theme-text-muted" role="status" aria-live="polite">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            <div
+              className="text-theme-text-muted flex items-center justify-center py-10"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               <span className="text-sm">Loading progress...</span>
             </div>
           ) : error ? (
             <div className="p-3 text-sm text-red-600 dark:text-red-400">{error}</div>
           ) : !data || data.requirement_progress.length === 0 ? (
-            <div className="py-10 text-center text-theme-text-muted text-sm">
+            <div className="text-theme-text-muted py-10 text-center text-sm">
               No requirements to track for this enrollment.
             </div>
           ) : phased ? (
@@ -807,19 +845,24 @@ const EnrollmentProgressModal: React.FC<{
               const complete = isPhaseGroupComplete(group.records, programReqs);
               return (
                 <div key={group.phase?.id ?? 'program-level'} className="space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-sm font-semibold text-theme-text-primary">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-theme-text-primary text-sm font-semibold">
                       {group.phase ? `Phase ${group.phase.phase_number}: ${group.phase.name}` : 'Program-level'}
                     </h3>
                     {isCurrent && (
-                      <span className="px-2 py-0.5 bg-red-500/15 text-red-700 dark:text-red-400 text-xs rounded-sm">Current phase</span>
+                      <span className="rounded-sm bg-red-500/15 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
+                        Current phase
+                      </span>
                     )}
                     {complete && (
-                      <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" aria-label="Phase complete" />
+                      <CheckCircle2
+                        className="h-4 w-4 text-green-600 dark:text-green-400"
+                        aria-label="Phase complete"
+                      />
                     )}
                     {group.phase?.requires_manual_advancement && (
                       <span className="inline-flex items-center gap-1 text-xs text-yellow-700 dark:text-yellow-400">
-                        <AlertTriangle className="w-3.5 h-3.5" /> Manual advancement
+                        <AlertTriangle className="h-3.5 w-3.5" /> Manual advancement
                       </span>
                     )}
                   </div>
@@ -850,11 +893,11 @@ const EnrollmentProgressModal: React.FC<{
           )}
         </div>
 
-        <div className="p-4 border-t border-theme-surface-border flex justify-end">
+        <div className="border-theme-surface-border flex justify-end border-t p-4">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm"
+            className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover rounded-lg px-4 py-2 text-sm"
           >
             Done
           </button>
@@ -1014,7 +1057,10 @@ const PipelineDetailPage: React.FC = () => {
     ordered[i] = b;
     ordered[j] = a;
     try {
-      await trainingProgramService.reorderProgramPhases(programId, ordered.map((p) => p.id));
+      await trainingProgramService.reorderProgramPhases(
+        programId,
+        ordered.map((p) => p.id)
+      );
       void loadProgram();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to reorder phases'));
@@ -1032,7 +1078,10 @@ const PipelineDetailPage: React.FC = () => {
     ordered[i] = b;
     ordered[j] = a;
     try {
-      await trainingProgramService.reorderProgramRequirements(programId, ordered.map((r) => r.id));
+      await trainingProgramService.reorderProgramRequirements(
+        programId,
+        ordered.map((r) => r.id)
+      );
       void loadProgram();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to reorder requirements'));
@@ -1109,9 +1158,12 @@ const PipelineDetailPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" role="status" aria-live="polite">
+      <div className="flex min-h-screen items-center justify-center" role="status" aria-live="polite">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" aria-hidden="true" />
+          <div
+            className="inline-block h-10 w-10 animate-spin rounded-full border-b-2 border-red-500"
+            aria-hidden="true"
+          />
           <p className="text-theme-text-muted mt-4">Loading pipeline...</p>
         </div>
       </div>
@@ -1125,41 +1177,49 @@ const PipelineDetailPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Breadcrumbs items={[
-          { label: 'Training', path: '/training' },
-          { label: 'Programs', path: '/training/programs' },
-          { label: program.name },
-        ]} />
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <Breadcrumbs
+          items={[
+            { label: 'Training', path: '/training' },
+            { label: 'Programs', path: '/training/programs' },
+            { label: program.name },
+          ]}
+        />
 
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
+        <div className="mb-8 flex items-start justify-between">
           <div className="flex items-start space-x-4">
             <button
               onClick={() => void navigate('/training/programs')}
-              className="mt-1 p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover mt-1 rounded-lg p-2"
               aria-label="Back to programs"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="h-5 w-5" />
             </button>
             <div>
-              <div className="flex items-center space-x-3 mb-2">
-                <h1 className="text-2xl font-bold text-theme-text-primary">{program.name}</h1>
+              <div className="mb-2 flex items-center space-x-3">
+                <h1 className="text-theme-text-primary text-2xl font-bold">{program.name}</h1>
                 {program.is_template && (
-                  <span className="px-2 py-0.5 bg-green-500/20 text-green-700 dark:text-green-400 text-xs rounded-sm">Template</span>
+                  <span className="rounded-sm bg-green-500/20 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
+                    Template
+                  </span>
                 )}
               </div>
               {program.description && (
-                <p className="text-theme-text-muted text-sm max-w-2xl mb-3">{program.description}</p>
+                <p className="text-theme-text-muted mb-3 max-w-2xl text-sm">{program.description}</p>
               )}
               <div className="flex flex-wrap items-center gap-2">
                 {program.code && (
-                  <span className="px-2 py-0.5 bg-theme-surface text-theme-text-secondary text-xs rounded-sm font-mono">{program.code}</span>
+                  <span className="bg-theme-surface text-theme-text-secondary rounded-sm px-2 py-0.5 font-mono text-xs">
+                    {program.code}
+                  </span>
                 )}
                 <StructureBadge type={program.structure_type} />
                 {program.target_position && <PositionBadge position={program.target_position} />}
                 {program.version > 1 && (
-                  <span className="px-2 py-0.5 bg-theme-surface text-theme-text-muted text-xs rounded-sm">v{program.version}</span>
+                  <span className="bg-theme-surface text-theme-text-muted rounded-sm px-2 py-0.5 text-xs">
+                    v{program.version}
+                  </span>
                 )}
               </div>
             </div>
@@ -1168,42 +1228,44 @@ const PipelineDetailPage: React.FC = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={() => window.open(`/training/print/program?id=${programId}`, '_blank')}
-              className="flex items-center space-x-1 px-3 py-2 bg-theme-surface text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover text-sm print:hidden"
+              className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm print:hidden"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="h-4 w-4" />
               <span>Print</span>
             </button>
             {canManage && (
               <button
                 onClick={() => setShowEditProgram(true)}
-                className="flex items-center space-x-1 px-3 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm"
+                className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
               >
-                <Pencil className="w-4 h-4" />
+                <Pencil className="h-4 w-4" />
                 <span>Edit</span>
               </button>
             )}
             <button
               onClick={() => setShowEnrollModal(true)}
-              className="btn-success flex items-center px-3 space-x-1 text-sm"
+              className="btn-success flex items-center space-x-1 px-3 text-sm"
             >
-              <UserPlus className="w-4 h-4" />
+              <UserPlus className="h-4 w-4" />
               <span>Enroll</span>
             </button>
             <button
-              onClick={() => { void handleDuplicate(); }}
+              onClick={() => {
+                void handleDuplicate();
+              }}
               disabled={isDuplicating}
-              className="flex items-center space-x-1 px-3 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm disabled:opacity-50"
+              className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm disabled:opacity-50"
             >
-              <Copy className="w-4 h-4" />
+              <Copy className="h-4 w-4" />
               <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
             </button>
             {canManage && (
               <button
                 onClick={confirmDeleteProgram}
                 title="Delete pipeline"
-                className="flex items-center space-x-1 px-3 py-2 text-red-700 dark:text-red-400 hover:bg-red-500/10 rounded-lg text-sm"
+                className="flex items-center space-x-1 rounded-lg px-3 py-2 text-sm text-red-700 hover:bg-red-500/10 dark:text-red-400"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="h-4 w-4" />
                 <span>Delete</span>
               </button>
             )}
@@ -1211,42 +1273,42 @@ const PipelineDetailPage: React.FC = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
           <div className="bg-theme-surface rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
-              <Layers className="w-4 h-4" />
+            <div className="text-theme-text-muted mb-1 flex items-center space-x-2">
+              <Layers className="h-4 w-4" />
               <span className="text-xs uppercase">Phases</span>
             </div>
-            <p className="text-2xl font-bold text-theme-text-primary">{phases.length}</p>
+            <p className="text-theme-text-primary text-2xl font-bold">{phases.length}</p>
           </div>
           <div className="bg-theme-surface rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
-              <ListChecks className="w-4 h-4" />
+            <div className="text-theme-text-muted mb-1 flex items-center space-x-2">
+              <ListChecks className="h-4 w-4" />
               <span className="text-xs uppercase">Requirements</span>
             </div>
-            <p className="text-2xl font-bold text-theme-text-primary">{totalReqs}</p>
-            <p className="text-xs text-theme-text-muted">{requiredReqs} required</p>
+            <p className="text-theme-text-primary text-2xl font-bold">{totalReqs}</p>
+            <p className="text-theme-text-muted text-xs">{requiredReqs} required</p>
           </div>
           <div className="bg-theme-surface rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
-              <Calendar className="w-4 h-4" />
+            <div className="text-theme-text-muted mb-1 flex items-center space-x-2">
+              <Calendar className="h-4 w-4" />
               <span className="text-xs uppercase">Time Limit</span>
             </div>
-            <p className="text-2xl font-bold text-theme-text-primary">
+            <p className="text-theme-text-primary text-2xl font-bold">
               {program.time_limit_days ? `${program.time_limit_days}d` : '—'}
             </p>
           </div>
           <div className="bg-theme-surface rounded-lg p-4">
-            <div className="flex items-center space-x-2 text-theme-text-muted mb-1">
-              <Users className="w-4 h-4" />
+            <div className="text-theme-text-muted mb-1 flex items-center space-x-2">
+              <Users className="h-4 w-4" />
               <span className="text-xs uppercase">Enrolled</span>
             </div>
-            <p className="text-2xl font-bold text-theme-text-primary">{enrollments.length}</p>
+            <p className="text-theme-text-primary text-2xl font-bold">{enrollments.length}</p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 bg-theme-surface p-1 rounded-lg mb-6" role="tablist">
+        <div className="bg-theme-surface mb-6 flex space-x-1 rounded-lg p-1" role="tablist">
           {[
             { key: 'overview' as DetailTab, label: 'Phases & Requirements', icon: Layers },
             { key: 'enrollments' as DetailTab, label: 'Enrollments', icon: Users },
@@ -1258,13 +1320,13 @@ const PipelineDetailPage: React.FC = () => {
                 onClick={() => setActiveTab(tab.key)}
                 role="tab"
                 aria-selected={activeTab === tab.key}
-                className={`flex-1 flex items-center justify-center space-x-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
+                className={`flex flex-1 items-center justify-center space-x-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.key
                     ? 'bg-red-600 text-white'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="h-4 w-4" />
                 <span>{tab.label}</span>
               </button>
             );
@@ -1275,8 +1337,8 @@ const PipelineDetailPage: React.FC = () => {
         {activeTab === 'overview' && (
           <div className="space-y-4">
             {phases.length === 0 ? (
-              <div className="text-center py-12 bg-theme-surface rounded-lg">
-                <Layers className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
+              <div className="bg-theme-surface rounded-lg py-12 text-center">
+                <Layers className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                 <p className="text-theme-text-muted">No phases defined for this pipeline</p>
               </div>
             ) : (
@@ -1288,80 +1350,115 @@ const PipelineDetailPage: React.FC = () => {
                   const isExpanded = expandedPhases.has(phase.id);
 
                   return (
-                    <div key={phase.id} className="bg-theme-surface rounded-lg border border-theme-surface-border">
+                    <div key={phase.id} className="bg-theme-surface border-theme-surface-border rounded-lg border">
                       {/* Phase header */}
                       <div className="flex items-center justify-between p-4">
                         <button
                           type="button"
-                          className="flex items-center space-x-3 text-left flex-1 min-w-0"
+                          className="flex min-w-0 flex-1 items-center space-x-3 text-left"
                           onClick={() => togglePhase(phase.id)}
                           aria-expanded={isExpanded}
                         >
-                          <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white">
                             {phase.phase_number}
                           </div>
                           <div className="min-w-0">
-                            <h3 className="text-theme-text-primary font-medium truncate">{phase.name}</h3>
-                            <div className="flex items-center space-x-3 text-xs text-theme-text-muted">
-                              <span>{phaseReqs.length} requirement{phaseReqs.length !== 1 ? 's' : ''}</span>
+                            <h3 className="text-theme-text-primary truncate font-medium">{phase.name}</h3>
+                            <div className="text-theme-text-muted flex items-center space-x-3 text-xs">
+                              <span>
+                                {phaseReqs.length} requirement{phaseReqs.length !== 1 ? 's' : ''}
+                              </span>
                               {phase.time_limit_days && (
                                 <span className="flex items-center space-x-1">
-                                  <Clock className="w-3 h-3" />
+                                  <Clock className="h-3 w-3" />
                                   <span>{phase.time_limit_days} day limit</span>
                                 </span>
                               )}
                               {phase.requires_manual_advancement && (
                                 <span className="flex items-center space-x-1 text-yellow-700 dark:text-yellow-400">
-                                  <AlertTriangle className="w-3 h-3" />
+                                  <AlertTriangle className="h-3 w-3" />
                                   <span>Manual advancement</span>
                                 </span>
                               )}
                             </div>
                           </div>
                         </button>
-                        <div className="flex items-center gap-0.5 shrink-0">
+                        <div className="flex shrink-0 items-center gap-0.5">
                           {canManage && (
                             <>
-                              <button type="button" onClick={() => void movePhase(phase, -1)} disabled={phaseIndex === 0} title="Move phase up" aria-label="Move phase up" className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded disabled:opacity-30 disabled:hover:bg-transparent">
-                                <ArrowUp className="w-4 h-4" />
+                              <button
+                                type="button"
+                                onClick={() => void movePhase(phase, -1)}
+                                disabled={phaseIndex === 0}
+                                title="Move phase up"
+                                aria-label="Move phase up"
+                                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 disabled:opacity-30 disabled:hover:bg-transparent"
+                              >
+                                <ArrowUp className="h-4 w-4" />
                               </button>
-                              <button type="button" onClick={() => void movePhase(phase, 1)} disabled={phaseIndex === phases.length - 1} title="Move phase down" aria-label="Move phase down" className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded disabled:opacity-30 disabled:hover:bg-transparent">
-                                <ArrowDown className="w-4 h-4" />
+                              <button
+                                type="button"
+                                onClick={() => void movePhase(phase, 1)}
+                                disabled={phaseIndex === phases.length - 1}
+                                title="Move phase down"
+                                aria-label="Move phase down"
+                                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 disabled:opacity-30 disabled:hover:bg-transparent"
+                              >
+                                <ArrowDown className="h-4 w-4" />
                               </button>
-                              <button type="button" onClick={() => setPhaseModal({ phase })} title="Edit phase" aria-label="Edit phase" className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded">
-                                <Pencil className="w-4 h-4" />
+                              <button
+                                type="button"
+                                onClick={() => setPhaseModal({ phase })}
+                                title="Edit phase"
+                                aria-label="Edit phase"
+                                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5"
+                              >
+                                <Pencil className="h-4 w-4" />
                               </button>
-                              <button type="button" onClick={() => confirmDeletePhase(phase)} title="Delete phase" aria-label="Delete phase" className="p-1.5 text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-theme-surface-hover rounded">
-                                <Trash2 className="w-4 h-4" />
+                              <button
+                                type="button"
+                                onClick={() => confirmDeletePhase(phase)}
+                                title="Delete phase"
+                                aria-label="Delete phase"
+                                className="text-theme-text-muted hover:bg-theme-surface-hover rounded p-1.5 hover:text-red-600 dark:hover:text-red-400"
+                              >
+                                <Trash2 className="h-4 w-4" />
                               </button>
                             </>
                           )}
-                          <button type="button" onClick={() => togglePhase(phase.id)} aria-label={isExpanded ? 'Collapse phase' : 'Expand phase'} className="p-1.5 text-theme-text-muted hover:bg-theme-surface-hover rounded">
-                            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                          <button
+                            type="button"
+                            onClick={() => togglePhase(phase.id)}
+                            aria-label={isExpanded ? 'Collapse phase' : 'Expand phase'}
+                            className="text-theme-text-muted hover:bg-theme-surface-hover rounded p-1.5"
+                          >
+                            {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                           </button>
                         </div>
                       </div>
 
                       {/* Phase content */}
                       {isExpanded && (
-                        <div className="border-t border-theme-surface-border p-4">
+                        <div className="border-theme-surface-border border-t p-4">
                           {phase.description && (
-                            <p className="text-theme-text-muted text-sm mb-4">{phase.description}</p>
+                            <p className="text-theme-text-muted mb-4 text-sm">{phase.description}</p>
                           )}
 
                           {phaseReqs.length === 0 ? (
-                            <p className="text-theme-text-muted text-sm text-center py-4">No requirements assigned to this phase.</p>
+                            <p className="text-theme-text-muted py-4 text-center text-sm">
+                              No requirements assigned to this phase.
+                            </p>
                           ) : (
                             <div className="space-y-2">
                               {phaseReqs.map((pr, reqIndex) => (
                                 <div
                                   key={pr.id}
-                                  className="bg-theme-surface-secondary rounded-lg p-3 flex items-start justify-between gap-2"
+                                  className="bg-theme-surface-secondary flex items-start justify-between gap-2 rounded-lg p-3"
                                 >
-                                  <div className="flex items-start space-x-3 min-w-0">
-                                    <CheckCircle2 className="w-5 h-5 text-theme-text-muted mt-0.5" />
+                                  <div className="flex min-w-0 items-start space-x-3">
+                                    <CheckCircle2 className="text-theme-text-muted mt-0.5 h-5 w-5" />
                                     <div>
-                                      <div className="flex items-center space-x-2 mb-1">
+                                      <div className="mb-1 flex items-center space-x-2">
                                         <span className="text-theme-text-primary text-sm font-medium">
                                           {pr.requirement?.name || `Requirement ${pr.requirement_id.slice(0, 8)}`}
                                         </span>
@@ -1385,13 +1482,13 @@ const PipelineDetailPage: React.FC = () => {
                                             }`}
                                           >
                                             {savingReqId === pr.id && (
-                                              <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                                              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
                                             )}
                                             {pr.is_required ? 'Required' : 'Optional'}
                                           </button>
                                         ) : (
                                           pr.is_required && (
-                                            <span className="text-red-700 dark:text-red-400 text-xs">Required</span>
+                                            <span className="text-xs text-red-700 dark:text-red-400">Required</span>
                                           )
                                         )}
                                       </div>
@@ -1399,9 +1496,11 @@ const PipelineDetailPage: React.FC = () => {
                                         <p className="text-theme-text-muted text-xs">{pr.requirement.description}</p>
                                       )}
                                       {pr.program_specific_description && (
-                                        <p className="text-theme-text-secondary text-xs mt-1 italic">{pr.program_specific_description}</p>
+                                        <p className="text-theme-text-secondary mt-1 text-xs italic">
+                                          {pr.program_specific_description}
+                                        </p>
                                       )}
-                                      <div className="flex items-center space-x-3 mt-1 text-xs text-theme-text-muted">
+                                      <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
                                         {pr.requirement?.required_hours && (
                                           <span>{pr.requirement.required_hours}h required</span>
                                         )}
@@ -1411,22 +1510,57 @@ const PipelineDetailPage: React.FC = () => {
                                         {pr.requirement?.checklist_items && (
                                           <span>{pr.requirement.checklist_items.length} items</span>
                                         )}
+                                        {pr.requirement?.recency_days != null && (
+                                          <span>within last {pr.requirement.recency_days}d</span>
+                                        )}
+                                        {pr.requirement?.required_courses?.length ? (
+                                          <span>
+                                            {pr.requirement.required_courses.length} course
+                                            {pr.requirement.required_courses.length === 1 ? '' : 's'} linked
+                                          </span>
+                                        ) : null}
                                       </div>
                                     </div>
                                   </div>
                                   {canManage && (
-                                    <div className="flex items-center gap-0.5 shrink-0">
-                                      <button type="button" onClick={() => void moveRequirement(pr, -1)} disabled={reqIndex === 0} title="Move up" aria-label="Move requirement up" className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded disabled:opacity-30 disabled:hover:bg-transparent">
-                                        <ArrowUp className="w-4 h-4" />
+                                    <div className="flex shrink-0 items-center gap-0.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => void moveRequirement(pr, -1)}
+                                        disabled={reqIndex === 0}
+                                        title="Move up"
+                                        aria-label="Move requirement up"
+                                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded p-1 disabled:opacity-30 disabled:hover:bg-transparent"
+                                      >
+                                        <ArrowUp className="h-4 w-4" />
                                       </button>
-                                      <button type="button" onClick={() => void moveRequirement(pr, 1)} disabled={reqIndex === phaseReqs.length - 1} title="Move down" aria-label="Move requirement down" className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded disabled:opacity-30 disabled:hover:bg-transparent">
-                                        <ArrowDown className="w-4 h-4" />
+                                      <button
+                                        type="button"
+                                        onClick={() => void moveRequirement(pr, 1)}
+                                        disabled={reqIndex === phaseReqs.length - 1}
+                                        title="Move down"
+                                        aria-label="Move requirement down"
+                                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded p-1 disabled:opacity-30 disabled:hover:bg-transparent"
+                                      >
+                                        <ArrowDown className="h-4 w-4" />
                                       </button>
-                                      <button type="button" onClick={() => setReqModal({ phaseId: phase.id, link: pr })} title="Edit requirement" aria-label="Edit requirement" className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded">
-                                        <Pencil className="w-4 h-4" />
+                                      <button
+                                        type="button"
+                                        onClick={() => setReqModal({ phaseId: phase.id, link: pr })}
+                                        title="Edit requirement"
+                                        aria-label="Edit requirement"
+                                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded p-1"
+                                      >
+                                        <Pencil className="h-4 w-4" />
                                       </button>
-                                      <button type="button" onClick={() => confirmRemoveRequirement(pr)} title="Remove requirement" aria-label="Remove requirement" className="p-1 text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-theme-surface rounded">
-                                        <Trash2 className="w-4 h-4" />
+                                      <button
+                                        type="button"
+                                        onClick={() => confirmRemoveRequirement(pr)}
+                                        title="Remove requirement"
+                                        aria-label="Remove requirement"
+                                        className="text-theme-text-muted hover:bg-theme-surface rounded p-1 hover:text-red-600 dark:hover:text-red-400"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
                                       </button>
                                     </div>
                                   )}
@@ -1438,9 +1572,9 @@ const PipelineDetailPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setReqModal({ phaseId: phase.id })}
-                              className="mt-3 inline-flex items-center gap-1 text-sm text-red-700 dark:text-red-400 hover:underline"
+                              className="mt-3 inline-flex items-center gap-1 text-sm text-red-700 hover:underline dark:text-red-400"
                             >
-                              <Plus className="w-4 h-4" /> Add requirement
+                              <Plus className="h-4 w-4" /> Add requirement
                             </button>
                           )}
                         </div>
@@ -1453,25 +1587,25 @@ const PipelineDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setPhaseModal({})}
-                className="w-full flex items-center justify-center gap-1 py-3 border border-dashed border-theme-surface-border rounded-lg text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex w-full items-center justify-center gap-1 rounded-lg border border-dashed py-3 text-sm"
               >
-                <Plus className="w-4 h-4" /> Add phase
+                <Plus className="h-4 w-4" /> Add phase
               </button>
             )}
 
             {/* Milestones */}
-            <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-theme-text-primary font-medium flex items-center gap-2">
-                  <Flag className="w-4 h-4 text-yellow-600 dark:text-yellow-400" /> Milestones
+            <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-theme-text-primary flex items-center gap-2 font-medium">
+                  <Flag className="h-4 w-4 text-yellow-600 dark:text-yellow-400" /> Milestones
                 </h3>
                 {canManage && (
                   <button
                     type="button"
                     onClick={() => setMilestoneModal({})}
-                    className="inline-flex items-center gap-1 text-sm text-red-700 dark:text-red-400 hover:underline"
+                    className="inline-flex items-center gap-1 text-sm text-red-700 hover:underline dark:text-red-400"
                   >
-                    <Plus className="w-4 h-4" /> Add milestone
+                    <Plus className="h-4 w-4" /> Add milestone
                   </button>
                 )}
               </div>
@@ -1483,18 +1617,35 @@ const PipelineDetailPage: React.FC = () => {
                     .slice()
                     .sort((a, b) => a.completion_percentage_threshold - b.completion_percentage_threshold)
                     .map((m) => (
-                      <div key={m.id} className="flex items-center justify-between gap-2 bg-theme-surface-secondary rounded-lg p-3">
+                      <div
+                        key={m.id}
+                        className="bg-theme-surface-secondary flex items-center justify-between gap-2 rounded-lg p-3"
+                      >
                         <div className="min-w-0">
-                          <p className="text-sm text-theme-text-primary truncate">{m.name}</p>
-                          <p className="text-xs text-theme-text-muted">Triggers at {Math.round(m.completion_percentage_threshold)}%</p>
+                          <p className="text-theme-text-primary truncate text-sm">{m.name}</p>
+                          <p className="text-theme-text-muted text-xs">
+                            Triggers at {Math.round(m.completion_percentage_threshold)}%
+                          </p>
                         </div>
                         {canManage && (
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button type="button" onClick={() => setMilestoneModal({ milestone: m })} title="Edit milestone" aria-label="Edit milestone" className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded">
-                              <Pencil className="w-4 h-4" />
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setMilestoneModal({ milestone: m })}
+                              title="Edit milestone"
+                              aria-label="Edit milestone"
+                              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded p-1"
+                            >
+                              <Pencil className="h-4 w-4" />
                             </button>
-                            <button type="button" onClick={() => confirmDeleteMilestone(m)} title="Delete milestone" aria-label="Delete milestone" className="p-1 text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-theme-surface rounded">
-                              <Trash2 className="w-4 h-4" />
+                            <button
+                              type="button"
+                              onClick={() => confirmDeleteMilestone(m)}
+                              title="Delete milestone"
+                              aria-label="Delete milestone"
+                              className="text-theme-text-muted hover:bg-theme-surface rounded p-1 hover:text-red-600 dark:hover:text-red-400"
+                            >
+                              <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
                         )}
@@ -1509,22 +1660,19 @@ const PipelineDetailPage: React.FC = () => {
         {activeTab === 'enrollments' && (
           <div>
             {enrollments.length === 0 ? (
-              <div className="text-center py-12 bg-theme-surface rounded-lg">
-                <Users className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
+              <div className="bg-theme-surface rounded-lg py-12 text-center">
+                <Users className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
                 <p className="text-theme-text-muted mb-2">No members enrolled yet</p>
-                <p className="text-theme-text-muted text-sm mb-4">
+                <p className="text-theme-text-muted mb-4 text-sm">
                   Use the Enroll button to add members to this pipeline
                 </p>
-                <button
-                  onClick={() => setShowEnrollModal(true)}
-                  className="btn-primary text-sm"
-                >
+                <button onClick={() => setShowEnrollModal(true)} className="btn-primary text-sm">
                   Enroll Members
                 </button>
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-xs text-theme-text-muted">
+                <p className="text-theme-text-muted text-xs">
                   Select a member to view and update their requirement progress.
                 </p>
                 {enrollments.map((enrollment) => (
@@ -1532,19 +1680,19 @@ const PipelineDetailPage: React.FC = () => {
                     key={enrollment.id}
                     type="button"
                     onClick={() => setProgressEnrollment(enrollment)}
-                    className="w-full bg-theme-surface rounded-lg p-4 flex items-center justify-between text-left hover:bg-theme-surface-hover transition-colors"
+                    className="bg-theme-surface hover:bg-theme-surface-hover flex w-full items-center justify-between rounded-lg p-4 text-left transition-colors"
                     aria-label={`Manage progress for ${enrollment.user_name}`}
                   >
                     <div>
                       <p className="text-theme-text-primary font-medium">{enrollment.user_name}</p>
-                      <div className="flex items-center space-x-3 text-xs text-theme-text-muted mt-1">
+                      <div className="text-theme-text-muted mt-1 flex items-center space-x-3 text-xs">
                         <span>Status: {enrollment.status}</span>
                         <span>{Math.round(enrollment.progress_percentage)}% complete</span>
                       </div>
                     </div>
-                    <div className="w-32 bg-theme-surface-secondary rounded-full h-2">
+                    <div className="bg-theme-surface-secondary h-2 w-32 rounded-full">
                       <div
-                        className="bg-red-500 h-2 rounded-full transition-all"
+                        className="h-2 rounded-full bg-red-500 transition-all"
                         style={{ width: `${enrollment.progress_percentage}%` }}
                       />
                     </div>
@@ -1561,7 +1709,9 @@ const PipelineDetailPage: React.FC = () => {
         programId={programId || ''}
         programName={program.name}
         onClose={() => setShowEnrollModal(false)}
-        onSuccess={() => { void loadEnrollments(); }}
+        onSuccess={() => {
+          void loadEnrollments();
+        }}
       />
 
       <EnrollmentProgressModal
@@ -1572,7 +1722,9 @@ const PipelineDetailPage: React.FC = () => {
         programReqs={programReqs}
         structureType={program.structure_type}
         onClose={() => setProgressEnrollment(null)}
-        onSaved={() => { void loadEnrollments(); }}
+        onSaved={() => {
+          void loadEnrollments();
+        }}
       />
 
       {showEditProgram && (

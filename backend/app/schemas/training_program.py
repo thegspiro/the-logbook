@@ -61,6 +61,9 @@ class TrainingRequirementEnhancedBase(BaseModel):
     checklist_items: Optional[List[str]] = None
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
+    # Freshness window: a completion older than this many days doesn't count
+    # toward the requirement. None = any completion counts however old.
+    recency_days: Optional[int] = Field(None, ge=1, le=3650)
 
     frequency: str
     time_limit_days: Optional[int] = Field(None, ge=0)
@@ -104,6 +107,7 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     checklist_items: Optional[List[str]] = None
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
+    recency_days: Optional[int] = Field(None, ge=1, le=3650)
     frequency: Optional[str] = None
     time_limit_days: Optional[int] = Field(None, ge=0)
     applies_to_all: Optional[bool] = None
@@ -637,6 +641,15 @@ class ProgramBuildRequirementInput(BaseModel):
     checklist_items: Optional[List[str]] = None
     required_courses: Optional[List[str]] = Field(
         None, description="Course IDs that satisfy a 'courses' requirement"
+    )
+    recency_days: Optional[int] = Field(
+        None,
+        ge=1,
+        le=3650,
+        description=(
+            "Freshness window — a completion older than this many days does not "
+            "count toward the requirement"
+        ),
     )
     allows_external_credit: bool = False
     is_required: bool = True

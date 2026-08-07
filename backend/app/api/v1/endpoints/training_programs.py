@@ -1569,6 +1569,7 @@ async def apply_training_record(
         hours=float(record.hours_completed or 0),
         verified_by=current_user.id,
         source_id=str(payload.record_id),
+        completed_on=record.completion_date,
     )
     if not applied:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)

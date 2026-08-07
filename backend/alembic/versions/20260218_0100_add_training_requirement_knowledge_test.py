@@ -13,12 +13,13 @@ Also adds 'knowledge_test' to the requirement_type MySQL ENUM.
 These columns were defined in the SQLAlchemy model but never added
 via migration, causing OperationalError on queries that select them.
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260218_0100'
-down_revision = '20260216_0300'
+revision = "20260218_0100"
+down_revision = "20260216_0300"
 branch_labels = None
 depends_on = None
 
@@ -36,16 +37,16 @@ def upgrade() -> None:
     """))
     existing_columns = {row[0] for row in result}
 
-    if 'passing_score' not in existing_columns:
+    if "passing_score" not in existing_columns:
         op.add_column(
-            'training_requirements',
-            sa.Column('passing_score', sa.Float(), nullable=True),
+            "training_requirements",
+            sa.Column("passing_score", sa.Float(), nullable=True),
         )
 
-    if 'max_attempts' not in existing_columns:
+    if "max_attempts" not in existing_columns:
         op.add_column(
-            'training_requirements',
-            sa.Column('max_attempts', sa.Integer(), nullable=True),
+            "training_requirements",
+            sa.Column("max_attempts", sa.Integer(), nullable=True),
         )
 
     # Add 'knowledge_test' to the requirement_type ENUM if not already present.
@@ -60,7 +61,7 @@ def upgrade() -> None:
     row = result.fetchone()
     if row:
         col_type = row[0]
-        if 'knowledge_test' not in col_type:
+        if "knowledge_test" not in col_type:
             conn.execute(sa.text("""
                 ALTER TABLE training_requirements
                 MODIFY COLUMN requirement_type
@@ -82,7 +83,7 @@ def downgrade() -> None:
         AND COLUMN_NAME = 'requirement_type'
     """))
     row = result.fetchone()
-    if row and 'knowledge_test' in row[0]:
+    if row and "knowledge_test" in row[0]:
         conn.execute(sa.text("""
             ALTER TABLE training_requirements
             MODIFY COLUMN requirement_type
@@ -91,5 +92,5 @@ def downgrade() -> None:
             NOT NULL DEFAULT 'hours'
         """))
 
-    op.drop_column('training_requirements', 'max_attempts')
-    op.drop_column('training_requirements', 'passing_score')
+    op.drop_column("training_requirements", "max_attempts")
+    op.drop_column("training_requirements", "passing_score")

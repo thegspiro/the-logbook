@@ -9,9 +9,8 @@ clock-in/clock-out or manual entry, with configurable categories
 and optional approval workflows.
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers
 revision = "20260227_0200"
@@ -36,11 +35,17 @@ def upgrade() -> None:
         sa.Column("color", sa.String(7), nullable=True),
         sa.Column("require_approval", sa.Boolean, nullable=False, server_default="1"),
         sa.Column("auto_approve_under_hours", sa.Float, nullable=True),
-        sa.Column("max_hours_per_session", sa.Float, nullable=True, server_default="12"),
+        sa.Column(
+            "max_hours_per_session", sa.Float, nullable=True, server_default="12"
+        ),
         sa.Column("is_active", sa.Boolean, nullable=False, server_default="1"),
         sa.Column("sort_order", sa.Integer, nullable=False, server_default="0"),
-        sa.Column("created_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("updated_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True),
+        sa.Column(
+            "created_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True
+        ),
+        sa.Column(
+            "updated_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -99,11 +104,19 @@ def upgrade() -> None:
         ),
         sa.Column(
             "status",
-            sa.Enum("active", "pending", "approved", "rejected", name="adminhoursentrystatus"),
+            sa.Enum(
+                "active",
+                "pending",
+                "approved",
+                "rejected",
+                name="adminhoursentrystatus",
+            ),
             nullable=False,
             server_default="active",
         ),
-        sa.Column("approved_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True),
+        sa.Column(
+            "approved_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True
+        ),
         sa.Column("approved_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("rejection_reason", sa.Text, nullable=True),
         sa.Column(

@@ -5,6 +5,7 @@ Revises: 20260222_0200
 Create Date: 2026-02-22 03:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -22,9 +23,13 @@ def _index_exists(connection, table_name: str, index_name: str) -> bool:
     return any(idx["name"] == index_name for idx in insp.get_indexes(table_name))
 
 
-def _unique_constraint_exists(connection, table_name: str, constraint_name: str) -> bool:
+def _unique_constraint_exists(
+    connection, table_name: str, constraint_name: str
+) -> bool:
     insp = inspect(connection)
-    return any(uc["name"] == constraint_name for uc in insp.get_unique_constraints(table_name))
+    return any(
+        uc["name"] == constraint_name for uc in insp.get_unique_constraints(table_name)
+    )
 
 
 def upgrade() -> None:
@@ -40,7 +45,9 @@ def upgrade() -> None:
 
     # Add unique constraint on (program_id, phase_number) to prevent
     # duplicate phase numbers within the same program (race condition fix)
-    if not _unique_constraint_exists(conn, "program_phases", "uq_program_phases_program_id_phase_number"):
+    if not _unique_constraint_exists(
+        conn, "program_phases", "uq_program_phases_program_id_phase_number"
+    ):
         op.create_unique_constraint(
             "uq_program_phases_program_id_phase_number",
             "program_phases",
@@ -51,7 +58,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     conn = op.get_bind()
 
-    if _unique_constraint_exists(conn, "program_phases", "uq_program_phases_program_id_phase_number"):
+    if _unique_constraint_exists(
+        conn, "program_phases", "uq_program_phases_program_id_phase_number"
+    ):
         op.drop_constraint(
             "uq_program_phases_program_id_phase_number",
             "program_phases",

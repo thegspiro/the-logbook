@@ -8,9 +8,8 @@ Adds a color column to the shifts table so shifts can carry the hex color
 from their originating template for consistent calendar rendering.
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers
 revision = "20260226_0100"

@@ -9,15 +9,16 @@ Adds:
 - email_attachments: File attachments for email templates
 - Seeds a default welcome email template per organization
 """
-from alembic import op
-import sqlalchemy as sa
-import uuid
-import json
 
+import json
+import uuid
+
+import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers
-revision = '20260206_0302'
-down_revision = '20260206_0301'
+revision = "20260206_0302"
+down_revision = "20260206_0301"
 branch_labels = None
 depends_on = None
 
@@ -78,53 +79,107 @@ Log in at: {{login_url}}
 This is an automated message from {{organization_name}}.
 Please do not reply to this email."""
 
-WELCOME_VARIABLES = json.dumps([
-    {"name": "first_name", "description": "Recipient's first name"},
-    {"name": "last_name", "description": "Recipient's last name"},
-    {"name": "full_name", "description": "Recipient's full name"},
-    {"name": "username", "description": "Login username"},
-    {"name": "temp_password", "description": "Temporary password"},
-    {"name": "organization_name", "description": "Organization name"},
-    {"name": "login_url", "description": "URL to the login page"},
-])
+WELCOME_VARIABLES = json.dumps(
+    [
+        {"name": "first_name", "description": "Recipient's first name"},
+        {"name": "last_name", "description": "Recipient's last name"},
+        {"name": "full_name", "description": "Recipient's full name"},
+        {"name": "username", "description": "Login username"},
+        {"name": "temp_password", "description": "Temporary password"},
+        {"name": "organization_name", "description": "Organization name"},
+        {"name": "login_url", "description": "URL to the login page"},
+    ]
+)
 
 
 def upgrade() -> None:
     # Create email_templates table
     op.create_table(
-        'email_templates',
-        sa.Column('id', sa.String(36), primary_key=True),
-        sa.Column('organization_id', sa.String(36), sa.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('template_type', sa.Enum('welcome', 'password_reset', 'event_cancellation', 'event_reminder', 'training_approval', 'ballot_notification', 'custom', name='emailtemplatetype'), nullable=False),
-        sa.Column('name', sa.String(255), nullable=False),
-        sa.Column('description', sa.Text()),
-        sa.Column('subject', sa.String(500), nullable=False),
-        sa.Column('html_body', sa.Text(), nullable=False),
-        sa.Column('text_body', sa.Text()),
-        sa.Column('css_styles', sa.Text()),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='1'),
-        sa.Column('allow_attachments', sa.Boolean(), nullable=False, server_default='0'),
-        sa.Column('available_variables', sa.JSON()),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('created_by', sa.String(36), sa.ForeignKey('users.id', ondelete='SET NULL')),
-        sa.Column('updated_by', sa.String(36), sa.ForeignKey('users.id', ondelete='SET NULL')),
+        "email_templates",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column(
+            "organization_id",
+            sa.String(36),
+            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "template_type",
+            sa.Enum(
+                "welcome",
+                "password_reset",
+                "event_cancellation",
+                "event_reminder",
+                "training_approval",
+                "ballot_notification",
+                "custom",
+                name="emailtemplatetype",
+            ),
+            nullable=False,
+        ),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("description", sa.Text()),
+        sa.Column("subject", sa.String(500), nullable=False),
+        sa.Column("html_body", sa.Text(), nullable=False),
+        sa.Column("text_body", sa.Text()),
+        sa.Column("css_styles", sa.Text()),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default="1"),
+        sa.Column(
+            "allow_attachments", sa.Boolean(), nullable=False, server_default="0"
+        ),
+        sa.Column("available_variables", sa.JSON()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "created_by", sa.String(36), sa.ForeignKey("users.id", ondelete="SET NULL")
+        ),
+        sa.Column(
+            "updated_by", sa.String(36), sa.ForeignKey("users.id", ondelete="SET NULL")
+        ),
     )
-    op.create_index('idx_email_template_org_type', 'email_templates', ['organization_id', 'template_type'])
+    op.create_index(
+        "idx_email_template_org_type",
+        "email_templates",
+        ["organization_id", "template_type"],
+    )
 
     # Create email_attachments table
     op.create_table(
-        'email_attachments',
-        sa.Column('id', sa.String(36), primary_key=True),
-        sa.Column('template_id', sa.String(36), sa.ForeignKey('email_templates.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('filename', sa.String(255), nullable=False),
-        sa.Column('content_type', sa.String(100), nullable=False),
-        sa.Column('file_size', sa.String(20)),
-        sa.Column('storage_path', sa.String(500), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column('uploaded_by', sa.String(36), sa.ForeignKey('users.id', ondelete='SET NULL')),
+        "email_attachments",
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column(
+            "template_id",
+            sa.String(36),
+            sa.ForeignKey("email_templates.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("filename", sa.String(255), nullable=False),
+        sa.Column("content_type", sa.String(100), nullable=False),
+        sa.Column("file_size", sa.String(20)),
+        sa.Column("storage_path", sa.String(500), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "uploaded_by", sa.String(36), sa.ForeignKey("users.id", ondelete="SET NULL")
+        ),
     )
-    op.create_index('idx_email_attachment_template', 'email_attachments', ['template_id'])
+    op.create_index(
+        "idx_email_attachment_template", "email_attachments", ["template_id"]
+    )
 
     # Seed a default welcome template for each existing organization
     conn = op.get_bind()
@@ -155,6 +210,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table('email_attachments')
-    op.drop_table('email_templates')
+    op.drop_table("email_attachments")
+    op.drop_table("email_templates")
     op.execute("DROP TYPE IF EXISTS emailtemplatetype")

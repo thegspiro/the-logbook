@@ -14,10 +14,11 @@ Revises: 20260215_0100
 Create Date: 2026-02-15
 """
 
-from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.sql import table, column
 from uuid import uuid4
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.sql import column, table
 
 # revision identifiers
 revision = "20260215_0200"

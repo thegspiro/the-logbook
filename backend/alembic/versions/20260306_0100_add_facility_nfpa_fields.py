@@ -9,8 +9,8 @@ to facility systems, inspector fields to inspections, and zone
 classification to rooms per NFPA 1500/1581/1585/1851 standards.
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260306_0100"

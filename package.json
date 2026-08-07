@@ -74,8 +74,8 @@
     }
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx}": [
-      "eslint --fix",
+    "frontend/**/*.{ts,tsx,js,jsx}": [
+      "bash -c 'cd frontend && npx eslint --fix \"$@\"' --",
       "prettier --write"
     ],
     "frontend/src/**/*.{ts,tsx}": [
