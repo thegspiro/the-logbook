@@ -72,7 +72,7 @@ interface SkillsTestingState {
     criterionId: string,
     result: Partial<CriterionResult>,
     sectionName?: string,
-    criterionLabel?: string,
+    criterionLabel?: string
   ) => void;
   setActiveTestTimer: (seconds: number) => void;
   setActiveTestRunning: (running: boolean) => void;
@@ -134,7 +134,16 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
     set({ error: null });
     try {
       const template = await skillsTestingService.createTemplate(data);
-      set((state) => ({ templates: [{ ...template, section_count: template.sections.length, criteria_count: template.sections.reduce((sum, s) => sum + s.criteria.length, 0) }, ...state.templates] }));
+      set((state) => ({
+        templates: [
+          {
+            ...template,
+            section_count: template.sections.length,
+            criteria_count: template.sections.reduce((sum, s) => sum + s.criteria.length, 0),
+          },
+          ...state.templates,
+        ],
+      }));
       return template;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to create template');
@@ -300,7 +309,13 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
   // Active test session actions
   setActiveSectionIndex: (index: number) => set({ activeSectionIndex: index }),
 
-  updateCriterionResult: (sectionId: string, criterionId: string, result: Partial<CriterionResult>, sectionName?: string, criterionLabel?: string) => {
+  updateCriterionResult: (
+    sectionId: string,
+    criterionId: string,
+    result: Partial<CriterionResult>,
+    sectionName?: string,
+    criterionLabel?: string
+  ) => {
     const { currentTest } = get();
     if (!currentTest) return;
 
@@ -363,5 +378,6 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
   // General
   clearError: () => set({ error: null }),
   clearCurrentTemplate: () => set({ currentTemplate: null }),
-  clearCurrentTest: () => set({ currentTest: null, activeTestTimer: 0, activeTestRunning: false, activeSectionIndex: 0 }),
+  clearCurrentTest: () =>
+    set({ currentTest: null, activeTestTimer: 0, activeTestRunning: false, activeSectionIndex: 0 }),
 }));

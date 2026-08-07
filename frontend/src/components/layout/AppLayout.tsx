@@ -83,19 +83,22 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
     // If localStorage is empty (first visit), fetch branding from backend
     if (!savedDepartmentName) {
-      void axios.get<{ name?: string; logo?: string }>('/api/v1/auth/branding').then((response) => {
-        const { name, logo } = response.data;
-        if (name) {
-          setDepartmentName(name);
-          localStorage.setItem('departmentName', name);
-        }
-        if (logo && isValidLogoUrl(logo)) {
-          setLogoPreview(logo);
-          localStorage.setItem('logoData', logo);
-        }
-      }).catch(() => {
-        // Branding is non-critical — keep defaults
-      });
+      void axios
+        .get<{ name?: string; logo?: string }>('/api/v1/auth/branding')
+        .then((response) => {
+          const { name, logo } = response.data;
+          if (name) {
+            setDepartmentName(name);
+            localStorage.setItem('departmentName', name);
+          }
+          if (logo && isValidLogoUrl(logo)) {
+            setLogoPreview(logo);
+            localStorage.setItem('logoData', logo);
+          }
+        })
+        .catch(() => {
+          // Branding is non-critical — keep defaults
+        });
     }
 
     // Listen for branding updates from the Settings page (same-tab)
@@ -125,15 +128,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const content = children ?? <Outlet />;
 
   const footer = (
-    <footer className="bg-theme-input-bg/80 backdrop-blur-sm border-t border-theme-surface-border mt-auto" role="contentinfo">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <p className="text-center text-theme-text-secondary text-sm">
+    <footer
+      className="bg-theme-input-bg/80 border-theme-surface-border mt-auto border-t backdrop-blur-sm"
+      role="contentinfo"
+    >
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <p className="text-theme-text-secondary text-center text-sm">
           &copy; {new Date().getFullYear()} {departmentName}. All rights reserved.
         </p>
-        <p className="text-center text-theme-text-muted text-xs mt-1.5 tracking-wide">
-          Powered by The Logbook
-        </p>
-        <p className="mt-2 text-center text-[11px] text-theme-text-muted">
+        <p className="text-theme-text-muted mt-1.5 text-center text-xs tracking-wide">Powered by The Logbook</p>
+        <p className="text-theme-text-muted mt-2 text-center text-[11px]">
           End-to-end encrypted &middot; Self-hosted &middot; HIPAA-aware
         </p>
       </div>
@@ -142,39 +146,37 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   if (navigationLayout === 'left') {
     return (
-      <div className="min-h-screen flex flex-col has-bottom-nav" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
+      <div
+        className="has-bottom-nav flex min-h-screen flex-col"
+        style={{
+          background:
+            'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))',
+        }}
+      >
         <TopProgressBar />
-        <PullToRefreshIndicator
-          pulling={pulling}
-          refreshing={refreshing}
-          pullDistance={pullDistance}
-        />
+        <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} />
         <CommandPalette />
         {/* Skip to main content link for keyboard users */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:bg-red-600 focus:text-white focus:rounded-md focus:outline-hidden focus:ring-2 focus:ring-white"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-red-600 focus:px-4 focus:py-2 focus:text-white focus:ring-2 focus:ring-white focus:outline-hidden"
         >
           Skip to main content
         </a>
-        <SideNavigation
-          departmentName={departmentName}
-          logoPreview={logoPreview}
-          onLogout={handleLogoutClick}
-        />
-        <div className="md:ml-64 min-h-screen flex flex-col mobile-header-offset">
+        <SideNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
+        <div className="mobile-header-offset flex min-h-screen flex-col md:ml-64">
           <div className="flex-1" id="main-content" role="main">
-            <PageTransition>
-              {content}
-            </PageTransition>
+            <PageTransition>{content}</PageTransition>
           </div>
           {/* Reserve room so the fixed bottom bar never covers the footer. */}
-          <div className="md:ml-0 pb-[var(--bottom-nav-height,0px)]">{footer}</div>
+          <div className="pb-[var(--bottom-nav-height,0px)] md:ml-0">{footer}</div>
         </div>
         <BottomNavigation hidden={keyboardInset > 0} />
         <ConfirmDialog
           isOpen={showLogoutModal}
-          onConfirm={() => { void handleLogoutConfirm(); }}
+          onConfirm={() => {
+            void handleLogoutConfirm();
+          }}
           onClose={handleLogoutCancel}
           title="Confirm Logout"
           message="Are you sure you want to log out? Any unsaved changes may be lost."
@@ -186,37 +188,35 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col has-bottom-nav" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
+    <div
+      className="has-bottom-nav flex min-h-screen flex-col"
+      style={{
+        background:
+          'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))',
+      }}
+    >
       <TopProgressBar />
-      <PullToRefreshIndicator
-        pulling={pulling}
-        refreshing={refreshing}
-        pullDistance={pullDistance}
-      />
+      <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} />
       <CommandPalette />
       {/* Skip to main content link for keyboard users */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-4 focus:left-4 focus:px-4 focus:py-2 focus:bg-red-600 focus:text-white focus:rounded-md focus:outline-hidden focus:ring-2 focus:ring-white"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-red-600 focus:px-4 focus:py-2 focus:text-white focus:ring-2 focus:ring-white focus:outline-hidden"
       >
         Skip to main content
       </a>
-      <TopNavigation
-        departmentName={departmentName}
-        logoPreview={logoPreview}
-        onLogout={handleLogoutClick}
-      />
+      <TopNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
       <div className="flex-1" id="main-content" role="main">
-        <PageTransition>
-          {content}
-        </PageTransition>
+        <PageTransition>{content}</PageTransition>
       </div>
       {/* Reserve room so the fixed bottom bar never covers the footer. */}
       <div className="pb-[var(--bottom-nav-height,0px)]">{footer}</div>
       <BottomNavigation hidden={keyboardInset > 0} />
       <ConfirmDialog
         isOpen={showLogoutModal}
-        onConfirm={() => { void handleLogoutConfirm(); }}
+        onConfirm={() => {
+          void handleLogoutConfirm();
+        }}
         onClose={handleLogoutCancel}
         title="Confirm Logout"
         message="Are you sure you want to log out? Any unsaved changes may be lost."

@@ -8,33 +8,15 @@
 
 // ==================== Enums / Union Types ====================
 
-export type SkillTestStatus =
-  | 'draft'
-  | 'in_progress'
-  | 'completed'
-  | 'cancelled';
+export type SkillTestStatus = 'draft' | 'in_progress' | 'completed' | 'cancelled';
 
-export type CriterionType =
-  | 'pass_fail'
-  | 'score'
-  | 'time_limit'
-  | 'checklist'
-  | 'statement';
+export type CriterionType = 'pass_fail' | 'score' | 'time_limit' | 'checklist' | 'statement';
 
-export type TemplateStatus =
-  | 'draft'
-  | 'published'
-  | 'archived';
+export type TemplateStatus = 'draft' | 'published' | 'archived';
 
-export type TemplateVisibility =
-  | 'all_members'
-  | 'officers_only'
-  | 'assigned_only';
+export type TemplateVisibility = 'all_members' | 'officers_only' | 'assigned_only';
 
-export type TestResult =
-  | 'pass'
-  | 'fail'
-  | 'incomplete';
+export type TestResult = 'pass' | 'fail' | 'incomplete';
 
 // ==================== Template Types ====================
 

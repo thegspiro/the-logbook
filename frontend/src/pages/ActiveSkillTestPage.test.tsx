@@ -70,7 +70,7 @@ vi.mock('../stores/skillsTestingStore', () => ({
     }),
     {
       getState: () => ({ activeTestTimer: 0 }),
-    },
+    }
   ),
 }));
 

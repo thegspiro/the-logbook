@@ -42,12 +42,7 @@ import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
-import type {
-  SkillCriterion,
-  SkillTemplateSection,
-  CriterionResult,
-  SectionResult,
-} from '../types/skillsTesting';
+import type { SkillCriterion, SkillTemplateSection, CriterionResult, SectionResult } from '../types/skillsTesting';
 
 // ==================== Helpers ====================
 
@@ -56,9 +51,7 @@ import type {
  * The backend stores sections/criteria without IDs, so we generate
  * deterministic IDs based on section/criterion indices.
  */
-function hydrateTemplateSections(
-  raw: Record<string, unknown>[] | undefined | null
-): SkillTemplateSection[] {
+function hydrateTemplateSections(raw: Record<string, unknown>[] | undefined | null): SkillTemplateSection[] {
   if (!raw) return [];
   return raw.map((section, si) => {
     const criteria = (section.criteria as Record<string, unknown>[] | undefined) ?? [];
@@ -97,21 +90,21 @@ const TestTimer: React.FC<{
   const secs = seconds % 60;
 
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-xl font-mono ${
-      isOverTime
-        ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
-        : 'bg-theme-surface text-theme-text-primary'
-    }`}>
+    <div
+      className={`flex items-center gap-3 rounded-xl px-4 py-3 font-mono ${
+        isOverTime
+          ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+          : 'bg-theme-surface text-theme-text-primary'
+      }`}
+    >
       <button
         onClick={onToggle}
-        className={`p-3 rounded-full transition-colors ${
-          running
-            ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-            : 'bg-green-500 hover:bg-green-600 text-white'
+        className={`rounded-full p-3 transition-colors ${
+          running ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-green-500 text-white hover:bg-green-600'
         }`}
         aria-label={running ? 'Pause timer' : 'Start timer'}
       >
-        {running ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+        {running ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
       </button>
       <div className="flex-1">
         <div className="text-3xl font-bold tracking-wider">
@@ -123,9 +116,7 @@ const TestTimer: React.FC<{
           </div>
         )}
       </div>
-      {isOverTime && (
-        <AlertTriangle className="w-6 h-6 text-red-600 animate-pulse" />
-      )}
+      {isOverTime && <AlertTriangle className="h-6 w-6 animate-pulse text-red-600" />}
     </div>
   );
 };
@@ -140,36 +131,34 @@ const PassFailCriterion: React.FC<{
   <div className="space-y-2">
     <div className="flex items-start gap-3">
       <div className="flex-1">
-        <p className="font-medium text-theme-text-primary text-base">
+        <p className="text-theme-text-primary text-base font-medium">
           {criterion.label}
-          {criterion.required && <span className="ml-1 text-red-500 text-sm">(Critical)</span>}
+          {criterion.required && <span className="ml-1 text-sm text-red-500">(Critical)</span>}
         </p>
-        {criterion.description && (
-          <p className="text-sm text-theme-text-muted mt-0.5">{criterion.description}</p>
-        )}
+        {criterion.description && <p className="text-theme-text-muted mt-0.5 text-sm">{criterion.description}</p>}
       </div>
     </div>
     <div className="flex gap-3">
       <button
         onClick={() => onChange({ passed: true })}
-        className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-lg font-bold transition-all ${
+        className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-4 text-lg font-bold transition-all ${
           result?.passed === true
-            ? 'bg-green-600 text-white shadow-lg shadow-green-600/30 scale-[1.02]'
-            : 'bg-theme-surface border-2 border-theme-surface-border text-theme-text-muted hover:border-green-500'
+            ? 'scale-[1.02] bg-green-600 text-white shadow-lg shadow-green-600/30'
+            : 'bg-theme-surface border-theme-surface-border text-theme-text-muted border-2 hover:border-green-500'
         }`}
       >
-        <Check className="w-6 h-6" />
+        <Check className="h-6 w-6" />
         PASS
       </button>
       <button
         onClick={() => onChange({ passed: false })}
-        className={`flex-1 flex items-center justify-center gap-2 py-4 rounded-xl text-lg font-bold transition-all ${
+        className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-4 text-lg font-bold transition-all ${
           result?.passed === false
-            ? 'bg-red-600 text-white shadow-lg shadow-red-600/30 scale-[1.02]'
-            : 'bg-theme-surface border-2 border-theme-surface-border text-theme-text-muted hover:border-red-500'
+            ? 'scale-[1.02] bg-red-600 text-white shadow-lg shadow-red-600/30'
+            : 'bg-theme-surface border-theme-surface-border text-theme-text-muted border-2 hover:border-red-500'
         }`}
       >
-        <X className="w-6 h-6" />
+        <X className="h-6 w-6" />
         FAIL
       </button>
     </div>
@@ -197,49 +186,43 @@ const ScoreCriterion: React.FC<{
   };
 
   // Non-critical uses neutral blue styling; critical uses green/red
-  const scoreColor = isCritical
-    ? isPassing ? 'text-green-600' : 'text-red-600'
-    : 'text-blue-600 dark:text-blue-400';
+  const scoreColor = isCritical ? (isPassing ? 'text-green-600' : 'text-red-600') : 'text-blue-600 dark:text-blue-400';
 
   return (
     <div className="space-y-2">
       <div className="flex items-start justify-between">
         <div>
-          <p className="font-medium text-theme-text-primary text-base">
+          <p className="text-theme-text-primary text-base font-medium">
             {criterion.label}
-            {isCritical && <span className="ml-1 text-red-500 text-sm">(Critical)</span>}
+            {isCritical && <span className="ml-1 text-sm text-red-500">(Critical)</span>}
           </p>
-          {criterion.description && (
-            <p className="text-sm text-theme-text-muted mt-0.5">{criterion.description}</p>
-          )}
+          {criterion.description && <p className="text-theme-text-muted mt-0.5 text-sm">{criterion.description}</p>}
         </div>
         <div className={`text-2xl font-bold ${scoreColor}`}>
           {currentScore}/{maxScore}
         </div>
       </div>
       {usePointButtons ? (
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex flex-wrap gap-2">
           {Array.from({ length: maxScore + 1 }, (_, i) => (
             <button
               key={i}
               onClick={() => handleScoreChange(i)}
-              className={`min-w-12 h-12 rounded-xl text-lg font-bold transition-all ${
+              className={`h-12 min-w-12 rounded-xl text-lg font-bold transition-all ${
                 currentScore === i
                   ? isCritical
                     ? i >= passingScore
-                      ? 'bg-green-600 text-white shadow-lg shadow-green-600/30 scale-105'
-                      : 'bg-red-600 text-white shadow-lg shadow-red-600/30 scale-105'
-                    : 'bg-blue-600 text-white shadow-lg shadow-blue-600/30 scale-105'
-                  : 'bg-theme-surface border-2 border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted'
+                      ? 'scale-105 bg-green-600 text-white shadow-lg shadow-green-600/30'
+                      : 'scale-105 bg-red-600 text-white shadow-lg shadow-red-600/30'
+                    : 'scale-105 bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                  : 'bg-theme-surface border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted border-2'
               }`}
             >
               {i}
             </button>
           ))}
           {isCritical && passingScore > 0 && (
-            <p className="w-full text-xs text-theme-text-muted mt-1">
-              Must score {passingScore}+ pts to pass
-            </p>
+            <p className="text-theme-text-muted mt-1 w-full text-xs">Must score {passingScore}+ pts to pass</p>
           )}
         </div>
       ) : (
@@ -250,10 +233,12 @@ const ScoreCriterion: React.FC<{
             max={maxScore}
             value={currentScore}
             onChange={(e) => handleScoreChange(Number(e.target.value))}
-            className="w-full h-3 rounded-lg appearance-none cursor-pointer accent-red-600"
-            style={{ background: `linear-gradient(to right, ${isCritical ? (isPassing ? 'var(--status-passed)' : 'var(--status-failed)') : 'var(--accent-blue)'} ${(currentScore / maxScore) * 100}%, var(--surface-border) ${(currentScore / maxScore) * 100}%)` }}
+            className="h-3 w-full cursor-pointer appearance-none rounded-lg accent-red-600"
+            style={{
+              background: `linear-gradient(to right, ${isCritical ? (isPassing ? 'var(--status-passed)' : 'var(--status-failed)') : 'var(--accent-blue)'} ${(currentScore / maxScore) * 100}%, var(--surface-border) ${(currentScore / maxScore) * 100}%)`,
+            }}
           />
-          <div className="flex justify-between text-xs text-theme-text-muted">
+          <div className="text-theme-text-muted flex justify-between text-xs">
             <span>0</span>
             {isCritical && <span className="text-yellow-600">Pass: {passingScore}</span>}
             <span>{maxScore}</span>
@@ -313,21 +298,21 @@ const TimedCriterion: React.FC<{
   return (
     <div className="space-y-2">
       <div>
-        <p className="font-medium text-theme-text-primary text-base">
+        <p className="text-theme-text-primary text-base font-medium">
           {criterion.label}
-          {criterion.required && <span className="ml-1 text-red-500 text-sm">(Critical)</span>}
+          {criterion.required && <span className="ml-1 text-sm text-red-500">(Critical)</span>}
         </p>
-        {criterion.description && (
-          <p className="text-sm text-theme-text-muted mt-0.5">{criterion.description}</p>
-        )}
+        {criterion.description && <p className="text-theme-text-muted mt-0.5 text-sm">{criterion.description}</p>}
       </div>
-      <div className={`flex items-center gap-4 p-4 rounded-xl ${isOverLimit ? 'bg-red-100 dark:bg-red-900/30' : 'bg-theme-surface border border-theme-surface-border'}`}>
+      <div
+        className={`flex items-center gap-4 rounded-xl p-4 ${isOverLimit ? 'bg-red-100 dark:bg-red-900/30' : 'bg-theme-surface border-theme-surface-border border'}`}
+      >
         <div className="flex-1">
-          <div className={`text-3xl font-mono font-bold ${isOverLimit ? 'text-red-600' : 'text-theme-text-primary'}`}>
+          <div className={`font-mono text-3xl font-bold ${isOverLimit ? 'text-red-600' : 'text-theme-text-primary'}`}>
             {Math.floor(localTimer / 60)}:{String(localTimer % 60).padStart(2, '0')}
           </div>
           {timeLimit > 0 && (
-            <p className="text-xs text-theme-text-muted">
+            <p className="text-theme-text-muted text-xs">
               Limit: {Math.floor(timeLimit / 60)}:{String(timeLimit % 60).padStart(2, '0')}
             </p>
           )}
@@ -336,26 +321,26 @@ const TimedCriterion: React.FC<{
           {!isRunning ? (
             <button
               onClick={() => setIsRunning(true)}
-              className="p-3 rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
+              className="rounded-full bg-green-500 p-3 text-white transition-colors hover:bg-green-600"
               aria-label="Start timer"
             >
-              <Play className="w-6 h-6" />
+              <Play className="h-6 w-6" />
             </button>
           ) : (
             <button
               onClick={handleStop}
-              className="p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
+              className="rounded-full bg-red-500 p-3 text-white transition-colors hover:bg-red-600"
               aria-label="Stop timer"
             >
-              <Square className="w-6 h-6" />
+              <Square className="h-6 w-6" />
             </button>
           )}
           <button
             onClick={handleReset}
-            className="p-3 rounded-full bg-theme-surface-hover text-theme-text-muted transition-colors"
+            className="bg-theme-surface-hover text-theme-text-muted rounded-full p-3 transition-colors"
             aria-label="Reset timer"
           >
-            <Timer className="w-6 h-6" />
+            <Timer className="h-6 w-6" />
           </button>
         </div>
       </div>
@@ -384,15 +369,13 @@ const ChecklistCriterion: React.FC<{
     <div className="space-y-2">
       <div className="flex items-start justify-between">
         <div>
-          <p className="font-medium text-theme-text-primary text-base">
+          <p className="text-theme-text-primary text-base font-medium">
             {criterion.label}
-            {criterion.required && <span className="ml-1 text-red-500 text-sm">(Critical)</span>}
+            {criterion.required && <span className="ml-1 text-sm text-red-500">(Critical)</span>}
           </p>
-          {criterion.description && (
-            <p className="text-sm text-theme-text-muted mt-0.5">{criterion.description}</p>
-          )}
+          {criterion.description && <p className="text-theme-text-muted mt-0.5 text-sm">{criterion.description}</p>}
         </div>
-        <span className="text-sm font-medium text-theme-text-muted">
+        <span className="text-theme-text-muted text-sm font-medium">
           {checkedCount}/{items.length}
         </span>
       </div>
@@ -401,20 +384,22 @@ const ChecklistCriterion: React.FC<{
           <button
             key={i}
             onClick={() => toggleItem(i)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all ${
+            className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-all ${
               completed[i]
-                ? 'bg-green-100 dark:bg-green-900/30 border border-green-500/30'
-                : 'bg-theme-surface border border-theme-surface-border'
+                ? 'border border-green-500/30 bg-green-100 dark:bg-green-900/30'
+                : 'bg-theme-surface border-theme-surface-border border'
             }`}
           >
-            <div className={`w-6 h-6 rounded-md flex items-center justify-center border-2 transition-colors ${
-              completed[i]
-                ? 'bg-green-600 border-green-600 text-white'
-                : 'border-theme-surface-border'
-            }`}>
-              {completed[i] && <Check className="w-4 h-4" />}
+            <div
+              className={`flex h-6 w-6 items-center justify-center rounded-md border-2 transition-colors ${
+                completed[i] ? 'border-green-600 bg-green-600 text-white' : 'border-theme-surface-border'
+              }`}
+            >
+              {completed[i] && <Check className="h-4 w-4" />}
             </div>
-            <span className={`text-sm ${completed[i] ? 'text-green-700 dark:text-green-300 line-through' : 'text-theme-text-primary'}`}>
+            <span
+              className={`text-sm ${completed[i] ? 'text-green-700 line-through dark:text-green-300' : 'text-theme-text-primary'}`}
+            >
               {item}
             </span>
           </button>
@@ -439,19 +424,15 @@ const StatementCriterion: React.FC<{
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-        <p className="font-medium text-theme-text-primary text-base">
-          {criterion.label}
-        </p>
+        <FileText className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+        <p className="text-theme-text-primary text-base font-medium">{criterion.label}</p>
       </div>
-      {criterion.description && (
-        <p className="text-sm text-theme-text-muted">{criterion.description}</p>
-      )}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
-        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1.5">
+      {criterion.description && <p className="text-theme-text-muted text-sm">{criterion.description}</p>}
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
+        <p className="mb-1.5 text-xs font-medium tracking-wide text-blue-600 uppercase dark:text-blue-400">
           Read aloud to candidate:
         </p>
-        <p className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
+        <p className="text-sm leading-relaxed whitespace-pre-wrap text-blue-900 dark:text-blue-100">
           {criterion.statement_text}
         </p>
       </div>
@@ -472,9 +453,9 @@ const CriterionNotes: React.FC<{
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
-          className="flex items-center gap-1 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+          className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors"
         >
-          <MessageSquare className="w-3 h-3" />
+          <MessageSquare className="h-3 w-3" />
           Add note
         </button>
       ) : (
@@ -483,7 +464,7 @@ const CriterionNotes: React.FC<{
           onChange={(e) => onChange(e.target.value)}
           placeholder="Notes for this criterion..."
           rows={2}
-          className="w-full px-3 py-2 text-sm bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
+          className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
           autoFocus
         />
       )}
@@ -498,27 +479,22 @@ const SectionView: React.FC<{
   sectionResults: CriterionResult[];
   onUpdateCriterion: (criterionId: string, result: Partial<CriterionResult>, criterionLabel?: string) => void;
 }> = ({ section, sectionResults, onUpdateCriterion }) => {
-  const getResult = (criterionId: string) =>
-    sectionResults.find((r) => r.criterion_id === criterionId);
+  const getResult = (criterionId: string) => sectionResults.find((r) => r.criterion_id === criterionId);
 
   return (
     <div className="space-y-6">
       {/* Section header */}
-      <div className="pb-2 border-b border-theme-surface-border">
-        <h2 className="text-xl font-bold text-theme-text-primary">{section.name}</h2>
-        {section.description && (
-          <p className="text-sm text-theme-text-muted mt-1">{section.description}</p>
-        )}
-        <div className="flex items-center gap-4 mt-2">
-          <span className="text-xs text-theme-text-muted">
+      <div className="border-theme-surface-border border-b pb-2">
+        <h2 className="text-theme-text-primary text-xl font-bold">{section.name}</h2>
+        {section.description && <p className="text-theme-text-muted mt-1 text-sm">{section.description}</p>}
+        <div className="mt-2 flex items-center gap-4">
+          <span className="text-theme-text-muted text-xs">
             {sectionResults.filter((r) => r.passed !== null).length} / {section.criteria.length} evaluated
           </span>
           <span className="text-xs text-green-600">
             {sectionResults.filter((r) => r.passed === true).length} passed
           </span>
-          <span className="text-xs text-red-600">
-            {sectionResults.filter((r) => r.passed === false).length} failed
-          </span>
+          <span className="text-xs text-red-600">{sectionResults.filter((r) => r.passed === false).length} failed</span>
         </div>
       </div>
 
@@ -526,21 +502,41 @@ const SectionView: React.FC<{
       {section.criteria.map((criterion) => {
         const result = getResult(criterion.id);
         return (
-          <div key={criterion.id} className="pb-4 border-b border-theme-surface-border last:border-b-0">
+          <div key={criterion.id} className="border-theme-surface-border border-b pb-4 last:border-b-0">
             {criterion.type === 'pass_fail' && (
-              <PassFailCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)} />
+              <PassFailCriterion
+                criterion={criterion}
+                result={result}
+                onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)}
+              />
             )}
             {criterion.type === 'score' && (
-              <ScoreCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)} />
+              <ScoreCriterion
+                criterion={criterion}
+                result={result}
+                onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)}
+              />
             )}
             {criterion.type === 'time_limit' && (
-              <TimedCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)} />
+              <TimedCriterion
+                criterion={criterion}
+                result={result}
+                onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)}
+              />
             )}
             {criterion.type === 'checklist' && (
-              <ChecklistCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)} />
+              <ChecklistCriterion
+                criterion={criterion}
+                result={result}
+                onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)}
+              />
             )}
             {criterion.type === 'statement' && (
-              <StatementCriterion criterion={criterion} result={result} onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)} />
+              <StatementCriterion
+                criterion={criterion}
+                result={result}
+                onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)}
+              />
             )}
             <CriterionNotes
               notes={result?.notes ?? ''}
@@ -566,74 +562,75 @@ const CriterionResultDisplay: React.FC<{
   const statusBadge = () => {
     if (criterion.type === 'statement') {
       return (
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">Statement</span>
+        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+          Statement
+        </span>
       );
     }
     // Non-critical score criteria show a neutral "Scored" badge — not earning
     // full points is NOT a fail, only critical steps can fail.
     if (!isCritical && criterion.type === 'score' && result?.score != null) {
       return (
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
           {result.score}/{criterion.max_score ?? 100} pts
         </span>
       );
     }
     if (passed === true) {
       return (
-        <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-          <Check className="w-3 h-3" /> Pass
+        <span className="flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
+          <Check className="h-3 w-3" /> Pass
         </span>
       );
     }
     if (passed === false) {
       return (
-        <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
-          <X className="w-3 h-3" /> Fail
+        <span className="flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+          <X className="h-3 w-3" /> Fail
         </span>
       );
     }
     return (
-      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-theme-surface-secondary text-theme-text-muted">Not evaluated</span>
+      <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-xs font-medium">
+        Not evaluated
+      </span>
     );
   };
 
   return (
     <div className="flex items-start justify-between gap-2 py-2">
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-theme-text-primary">
+      <div className="min-w-0 flex-1">
+        <p className="text-theme-text-primary text-sm font-medium">
           {criterion.label}
-          {isCritical && <span className="ml-1 text-red-500 text-xs">(Critical)</span>}
+          {isCritical && <span className="ml-1 text-xs text-red-500">(Critical)</span>}
         </p>
         {criterion.type === 'score' && result?.score != null && isCritical && (
-          <p className="text-xs text-theme-text-muted mt-0.5">
+          <p className="text-theme-text-muted mt-0.5 text-xs">
             {result.score}/{criterion.max_score ?? 100} pts
             {criterion.passing_score != null && ` (pass: ${criterion.passing_score}+)`}
           </p>
         )}
         {criterion.type === 'score' && result?.score != null && !isCritical && (
-          <p className="text-xs text-theme-text-muted mt-0.5">
+          <p className="text-theme-text-muted mt-0.5 text-xs">
             {result.score}/{criterion.max_score ?? 100} pts
           </p>
         )}
         {criterion.type === 'time_limit' && result?.time_seconds != null && (
-          <p className="text-xs text-theme-text-muted mt-0.5">
+          <p className="text-theme-text-muted mt-0.5 text-xs">
             Time: {Math.floor(result.time_seconds / 60)}:{String(result.time_seconds % 60).padStart(2, '0')}
-            {criterion.time_limit_seconds != null && ` / ${Math.floor(criterion.time_limit_seconds / 60)}:${String(criterion.time_limit_seconds % 60).padStart(2, '0')}`}
+            {criterion.time_limit_seconds != null &&
+              ` / ${Math.floor(criterion.time_limit_seconds / 60)}:${String(criterion.time_limit_seconds % 60).padStart(2, '0')}`}
           </p>
         )}
         {criterion.type === 'checklist' && result?.checklist_completed && (
-          <p className="text-xs text-theme-text-muted mt-0.5">
+          <p className="text-theme-text-muted mt-0.5 text-xs">
             {result.checklist_completed.filter(Boolean).length}/{criterion.checklist_items?.length ?? 0} items completed
           </p>
         )}
         {criterion.type === 'statement' && criterion.statement_text && (
-          <p className="text-xs text-theme-text-muted mt-0.5 italic line-clamp-2">
-            {criterion.statement_text}
-          </p>
+          <p className="text-theme-text-muted mt-0.5 line-clamp-2 text-xs italic">{criterion.statement_text}</p>
         )}
-        {result?.notes && (
-          <p className="text-xs text-theme-text-muted mt-1 italic">&ldquo;{result.notes}&rdquo;</p>
-        )}
+        {result?.notes && <p className="text-theme-text-muted mt-1 text-xs italic">&ldquo;{result.notes}&rdquo;</p>}
       </div>
       {statusBadge()}
     </div>
@@ -643,7 +640,7 @@ const CriterionResultDisplay: React.FC<{
 /** Compute point totals for score-type criteria in a section */
 function computeSectionPoints(
   criteria: SkillCriterion[],
-  criteriaResults: CriterionResult[],
+  criteriaResults: CriterionResult[]
 ): { earned: number; available: number } | null {
   const scoreCriteria = criteria.filter((c) => c.type === 'score' && c.max_score != null && c.max_score > 0);
   if (scoreCriteria.length === 0) return null;
@@ -676,23 +673,19 @@ const ReviewSection: React.FC<{
   const points = computeSectionPoints(section.criteria, criteriaResults);
 
   return (
-    <div className="bg-theme-surface rounded-xl border border-theme-surface-border overflow-hidden">
+    <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
       {/* Section header */}
-      <div className="px-4 py-3 border-b border-theme-surface-border bg-theme-surface-hover/50">
+      <div className="border-theme-surface-border bg-theme-surface-hover/50 border-b px-4 py-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-theme-text-primary">{section.name}</h3>
+          <h3 className="text-theme-text-primary font-bold">{section.name}</h3>
           <div className="flex items-center gap-2 text-xs">
             {points && (
-              <span className="font-bold text-theme-text-primary">
+              <span className="text-theme-text-primary font-bold">
                 {points.earned}/{points.available} pts
               </span>
             )}
-            {passCount > 0 && (
-              <span className="text-green-600 font-medium">{passCount} passed</span>
-            )}
-            {failCount > 0 && (
-              <span className="text-red-600 font-medium">{failCount} failed</span>
-            )}
+            {passCount > 0 && <span className="font-medium text-green-600">{passCount} passed</span>}
+            {failCount > 0 && <span className="font-medium text-red-600">{failCount} failed</span>}
             {nonStatementCriteria.length - passCount - failCount > 0 && (
               <span className="text-theme-text-muted font-medium">
                 {nonStatementCriteria.length - passCount - failCount} unevaluated
@@ -700,29 +693,21 @@ const ReviewSection: React.FC<{
             )}
           </div>
         </div>
-        {section.description && (
-          <p className="text-xs text-theme-text-muted mt-0.5">{section.description}</p>
-        )}
+        {section.description && <p className="text-theme-text-muted mt-0.5 text-xs">{section.description}</p>}
       </div>
 
       {/* Criteria results */}
-      <div className="px-4 divide-y divide-theme-surface-border">
+      <div className="divide-theme-surface-border divide-y px-4">
         {section.criteria.map((criterion) => {
           const result = criteriaResults.find((r) => r.criterion_id === criterion.id);
-          return (
-            <CriterionResultDisplay
-              key={criterion.id}
-              criterion={criterion}
-              result={result}
-            />
-          );
+          return <CriterionResultDisplay key={criterion.id} criterion={criterion} result={result} />;
         })}
       </div>
 
       {/* Section notes */}
-      <div className="px-4 py-3 border-t border-theme-surface-border">
-        <label className="flex items-center gap-1.5 text-xs font-medium text-theme-text-muted mb-1.5">
-          <FileText className="w-3 h-3" />
+      <div className="border-theme-surface-border border-t px-4 py-3">
+        <label className="text-theme-text-muted mb-1.5 flex items-center gap-1.5 text-xs font-medium">
+          <FileText className="h-3 w-3" />
           Section Notes
         </label>
         <textarea
@@ -730,7 +715,7 @@ const ReviewSection: React.FC<{
           onChange={(e) => onNotesChange(e.target.value)}
           placeholder="Add notes for this section..."
           rows={2}
-          className="w-full px-3 py-2 text-sm bg-theme-bg border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted/50 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50 resize-none"
+          className="bg-theme-bg border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted/50 focus:ring-theme-focus-ring/50 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
         />
       </div>
     </div>
@@ -744,35 +729,27 @@ const ReadOnlySectionView: React.FC<{
 }> = ({ section, sectionResult }) => {
   const criteriaResults = sectionResult?.criteria_results ?? [];
   // Filter out the special review-notes entry for display
-  const actualCriteria = criteriaResults.filter(
-    (r) => !r.criterion_id.endsWith('-review-notes')
-  );
-  const reviewNotesEntry = criteriaResults.find(
-    (r) => r.criterion_id.endsWith('-review-notes')
-  );
+  const actualCriteria = criteriaResults.filter((r) => !r.criterion_id.endsWith('-review-notes'));
+  const reviewNotesEntry = criteriaResults.find((r) => r.criterion_id.endsWith('-review-notes'));
   const passCount = actualCriteria.filter((r) => r.passed === true).length;
   const failCount = actualCriteria.filter((r) => r.passed === false).length;
   const nonStatementCriteria = section.criteria.filter((c) => c.type !== 'statement');
   const points = computeSectionPoints(section.criteria, actualCriteria);
 
   return (
-    <div className="bg-theme-surface rounded-xl border border-theme-surface-border overflow-hidden">
+    <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
       {/* Section header */}
-      <div className="px-4 py-3 border-b border-theme-surface-border bg-theme-surface-hover/50">
+      <div className="border-theme-surface-border bg-theme-surface-hover/50 border-b px-4 py-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-theme-text-primary">{section.name}</h3>
+          <h3 className="text-theme-text-primary font-bold">{section.name}</h3>
           <div className="flex items-center gap-2 text-xs">
             {points && (
-              <span className="font-bold text-theme-text-primary">
+              <span className="text-theme-text-primary font-bold">
                 {points.earned}/{points.available} pts
               </span>
             )}
-            {passCount > 0 && (
-              <span className="text-green-600 font-medium">{passCount} passed</span>
-            )}
-            {failCount > 0 && (
-              <span className="text-red-600 font-medium">{failCount} failed</span>
-            )}
+            {passCount > 0 && <span className="font-medium text-green-600">{passCount} passed</span>}
+            {failCount > 0 && <span className="font-medium text-red-600">{failCount} failed</span>}
             {nonStatementCriteria.length - passCount - failCount > 0 && (
               <span className="text-theme-text-muted font-medium">
                 {nonStatementCriteria.length - passCount - failCount} unevaluated
@@ -780,37 +757,27 @@ const ReadOnlySectionView: React.FC<{
             )}
           </div>
         </div>
-        {section.description && (
-          <p className="text-xs text-theme-text-muted mt-0.5">{section.description}</p>
-        )}
+        {section.description && <p className="text-theme-text-muted mt-0.5 text-xs">{section.description}</p>}
       </div>
 
       {/* Criteria results */}
-      <div className="px-4 divide-y divide-theme-surface-border">
+      <div className="divide-theme-surface-border divide-y px-4">
         {section.criteria.map((criterion) => {
           const result = actualCriteria.find(
             (r) => r.criterion_id === criterion.id || r.criterion_label === criterion.label
           );
-          return (
-            <CriterionResultDisplay
-              key={criterion.id}
-              criterion={criterion}
-              result={result}
-            />
-          );
+          return <CriterionResultDisplay key={criterion.id} criterion={criterion} result={result} />;
         })}
       </div>
 
       {/* Section review notes (read-only) */}
       {reviewNotesEntry?.notes && (
-        <div className="px-4 py-3 border-t border-theme-surface-border">
-          <p className="flex items-center gap-1.5 text-xs font-medium text-theme-text-muted mb-1">
-            <FileText className="w-3 h-3" />
+        <div className="border-theme-surface-border border-t px-4 py-3">
+          <p className="text-theme-text-muted mb-1 flex items-center gap-1.5 text-xs font-medium">
+            <FileText className="h-3 w-3" />
             Section Notes
           </p>
-          <p className="text-sm text-theme-text-primary whitespace-pre-wrap">
-            {reviewNotesEntry.notes}
-          </p>
+          <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{reviewNotesEntry.notes}</p>
         </div>
       )}
     </div>
@@ -1081,21 +1048,28 @@ export const ActiveSkillTestPage: React.FC = () => {
     }
   }, [currentTest, navigate]);
 
-  const handleUpdateCriterion = useCallback((
-    sectionId: string,
-    criterionId: string,
-    result: Partial<CriterionResult>,
-    sectionName?: string,
-    criterionLabel?: string,
-  ) => {
-    updateCriterionResult(sectionId, criterionId, result, sectionName, criterionLabel);
-  }, [updateCriterionResult]);
+  const handleUpdateCriterion = useCallback(
+    (
+      sectionId: string,
+      criterionId: string,
+      result: Partial<CriterionResult>,
+      sectionName?: string,
+      criterionLabel?: string
+    ) => {
+      updateCriterionResult(sectionId, criterionId, result, sectionName, criterionLabel);
+    },
+    [updateCriterionResult]
+  );
 
   // Loading state
   if (testLoading || !currentTest) {
     return (
-      <div className="min-h-screen flex items-center justify-center" role="status" aria-live="polite">
-        <div role="status" aria-live="polite" className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500" />
+      <div className="flex min-h-screen items-center justify-center" role="status" aria-live="polite">
+        <div
+          role="status"
+          aria-live="polite"
+          className="h-12 w-12 animate-spin rounded-full border-t-4 border-b-4 border-red-500"
+        />
       </div>
     );
   }
@@ -1103,51 +1077,63 @@ export const ActiveSkillTestPage: React.FC = () => {
   // Completed test — full detail view (read-only)
   if (currentTest.status === 'completed' && !reviewing) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="flex min-h-screen flex-col">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-theme-surface-modal border-b border-theme-surface-border px-4 py-3">
+        <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b px-4 py-3">
           <div className="flex items-center justify-between">
             <button
-              onClick={() => void navigate(currentTest.is_practice ? '/training/skills-testing' : '/training/admin?page=skills-testing&tab=tests')}
-              className="flex items-center gap-1 p-2 rounded-lg hover:bg-theme-surface-hover transition-colors text-sm"
+              onClick={() =>
+                void navigate(
+                  currentTest.is_practice ? '/training/skills-testing' : '/training/admin?page=skills-testing&tab=tests'
+                )
+              }
+              className="hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg p-2 text-sm transition-colors"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="h-4 w-4" />
               Back
             </button>
             <div className="text-center">
-              <p className="font-bold text-theme-text-primary text-sm">{currentTest.template_name}</p>
-              <p className="text-xs text-theme-text-muted">{currentTest.is_practice ? 'Practice Results' : 'Test Results'}</p>
+              <p className="text-theme-text-primary text-sm font-bold">{currentTest.template_name}</p>
+              <p className="text-theme-text-muted text-xs">
+                {currentTest.is_practice ? 'Practice Results' : 'Test Results'}
+              </p>
             </div>
             <div className="w-16" /> {/* Spacer for centering */}
           </div>
         </div>
 
-        <div className="flex-1 px-4 py-4 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-4 py-4">
           {/* Practice banner */}
           {currentTest.is_practice && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 mb-4 text-center">
+            <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-center dark:border-blue-800 dark:bg-blue-900/20">
               <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
                 Practice Attempt — Not recorded in official history
               </p>
             </div>
           )}
           {/* Result banner */}
-          <div className={`flex items-center gap-3 p-4 rounded-xl mb-4 ${
-            currentTest.result === 'pass'
-              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-              : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
-          }`}>
+          <div
+            className={`mb-4 flex items-center gap-3 rounded-xl p-4 ${
+              currentTest.result === 'pass'
+                ? 'border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
+                : 'border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
+            }`}
+          >
             {currentTest.result === 'pass' ? (
-              <CheckCircle2 className="w-10 h-10 text-green-500 shrink-0" />
+              <CheckCircle2 className="h-10 w-10 shrink-0 text-green-500" />
             ) : (
-              <XCircle className="w-10 h-10 text-red-500 shrink-0" />
+              <XCircle className="h-10 w-10 shrink-0 text-red-500" />
             )}
             <div className="flex-1">
-              <p className={`text-lg font-bold ${currentTest.result === 'pass' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+              <p
+                className={`text-lg font-bold ${currentTest.result === 'pass' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}
+              >
                 {currentTest.result === 'pass' ? 'Passed' : 'Failed'}
               </p>
               {currentTest.overall_score != null && (
-                <p className={`text-sm font-medium ${currentTest.result === 'pass' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <p
+                  className={`text-sm font-medium ${currentTest.result === 'pass' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                >
                   Overall Score: {Math.round(currentTest.overall_score)}%
                 </p>
               )}
@@ -1155,39 +1141,40 @@ export const ActiveSkillTestPage: React.FC = () => {
           </div>
 
           {/* Test details grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-            <div className="bg-theme-surface rounded-xl p-3 border border-theme-surface-border">
-              <div className="flex items-center gap-1.5 mb-1">
-                <User className="w-3 h-3 text-theme-text-muted" />
-                <p className="text-xs text-theme-text-muted">Candidate</p>
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-3">
+              <div className="mb-1 flex items-center gap-1.5">
+                <User className="text-theme-text-muted h-3 w-3" />
+                <p className="text-theme-text-muted text-xs">Candidate</p>
               </div>
-              <p className="font-medium text-theme-text-primary text-sm">{currentTest.candidate_name}</p>
+              <p className="text-theme-text-primary text-sm font-medium">{currentTest.candidate_name}</p>
             </div>
-            <div className="bg-theme-surface rounded-xl p-3 border border-theme-surface-border">
-              <div className="flex items-center gap-1.5 mb-1">
-                <ClipboardCheck className="w-3 h-3 text-theme-text-muted" />
-                <p className="text-xs text-theme-text-muted">Examiner</p>
+            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-3">
+              <div className="mb-1 flex items-center gap-1.5">
+                <ClipboardCheck className="text-theme-text-muted h-3 w-3" />
+                <p className="text-theme-text-muted text-xs">Examiner</p>
               </div>
-              <p className="font-medium text-theme-text-primary text-sm">{currentTest.examiner_name}</p>
+              <p className="text-theme-text-primary text-sm font-medium">{currentTest.examiner_name}</p>
             </div>
             {currentTest.elapsed_seconds != null && (
-              <div className="bg-theme-surface rounded-xl p-3 border border-theme-surface-border">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Timer className="w-3 h-3 text-theme-text-muted" />
-                  <p className="text-xs text-theme-text-muted">Total Time</p>
+              <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-3">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <Timer className="text-theme-text-muted h-3 w-3" />
+                  <p className="text-theme-text-muted text-xs">Total Time</p>
                 </div>
-                <p className="font-medium font-mono text-theme-text-primary text-sm">
-                  {Math.floor(currentTest.elapsed_seconds / 60)}:{String(currentTest.elapsed_seconds % 60).padStart(2, '0')}
+                <p className="text-theme-text-primary font-mono text-sm font-medium">
+                  {Math.floor(currentTest.elapsed_seconds / 60)}:
+                  {String(currentTest.elapsed_seconds % 60).padStart(2, '0')}
                 </p>
               </div>
             )}
             {currentTest.completed_at && (
-              <div className="bg-theme-surface rounded-xl p-3 border border-theme-surface-border">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Calendar className="w-3 h-3 text-theme-text-muted" />
-                  <p className="text-xs text-theme-text-muted">Completed</p>
+              <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-3">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <Calendar className="text-theme-text-muted h-3 w-3" />
+                  <p className="text-theme-text-muted text-xs">Completed</p>
                 </div>
-                <p className="font-medium text-theme-text-primary text-sm">
+                <p className="text-theme-text-primary text-sm font-medium">
                   {formatDateTime(currentTest.completed_at, tz)}
                 </p>
               </div>
@@ -1200,54 +1187,48 @@ export const ActiveSkillTestPage: React.FC = () => {
               const sectionResult = currentTest.section_results?.find(
                 (sr) => sr.section_id === section.id || sr.section_name === section.name
               );
-              return (
-                <ReadOnlySectionView
-                  key={section.id}
-                  section={section}
-                  sectionResult={sectionResult}
-                />
-              );
+              return <ReadOnlySectionView key={section.id} section={section} sectionResult={sectionResult} />;
             })}
           </div>
 
           {/* Test notes */}
           {currentTest.notes && (
-            <div className="bg-theme-surface rounded-xl border border-theme-surface-border p-4 mt-4">
-              <p className="flex items-center gap-1.5 text-xs font-medium text-theme-text-muted mb-2">
-                <FileText className="w-3 h-3" />
+            <div className="bg-theme-surface border-theme-surface-border mt-4 rounded-xl border p-4">
+              <p className="text-theme-text-muted mb-2 flex items-center gap-1.5 text-xs font-medium">
+                <FileText className="h-3 w-3" />
                 Test Notes
               </p>
-              <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{currentTest.notes}</p>
+              <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{currentTest.notes}</p>
             </div>
           )}
         </div>
 
         {/* Bottom bar */}
-        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 action-bar-safe">
+        <div className="bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t px-4">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               <button
                 onClick={() => void handleEmailResults()}
                 disabled={emailing}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-bold transition-colors"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
-                <Mail className="w-5 h-5" />
+                <Mail className="h-5 w-5" />
                 {emailing ? 'Sending...' : 'Email Results to Candidate'}
               </button>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button
                   onClick={() => void handleRetake()}
-                  className="flex items-center justify-center gap-2 py-3 bg-theme-surface border-2 border-blue-500/50 hover:border-blue-500 text-blue-600 dark:text-blue-400 rounded-xl font-medium transition-colors"
+                  className="bg-theme-surface flex items-center justify-center gap-2 rounded-xl border-2 border-blue-500/50 py-3 font-medium text-blue-600 transition-colors hover:border-blue-500 dark:text-blue-400"
                 >
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="h-4 w-4" />
                   Retake
                 </button>
                 <button
                   onClick={() => void handleDiscardPractice()}
                   disabled={discarding}
-                  className="flex items-center justify-center gap-2 py-3 bg-theme-surface border-2 border-theme-surface-border hover:border-red-500 text-theme-text-muted hover:text-red-600 rounded-xl font-medium transition-colors"
+                  className="bg-theme-surface border-theme-surface-border text-theme-text-muted flex items-center justify-center gap-2 rounded-xl border-2 py-3 font-medium transition-colors hover:border-red-500 hover:text-red-600"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="h-4 w-4" />
                   {discarding ? 'Discarding...' : 'Discard'}
                 </button>
               </div>
@@ -1255,7 +1236,7 @@ export const ActiveSkillTestPage: React.FC = () => {
           ) : (
             <button
               onClick={() => void navigate('/training/admin?page=skills-testing&tab=tests')}
-              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors"
+              className="w-full rounded-xl bg-red-600 py-3 font-medium text-white transition-colors hover:bg-red-700"
             >
               Back to Tests
             </button>
@@ -1268,20 +1249,20 @@ export const ActiveSkillTestPage: React.FC = () => {
   // Review screen — shown after completing evaluation, before final submission
   if (reviewing) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="flex min-h-screen flex-col">
         {/* Review Header */}
-        <div className="sticky top-0 z-10 bg-theme-surface-modal border-b border-theme-surface-border px-4 py-3">
+        <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b px-4 py-3">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setReviewing(false)}
-              className="flex items-center gap-1 p-2 rounded-lg hover:bg-theme-surface-hover transition-colors text-sm"
+              className="hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg p-2 text-sm transition-colors"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="h-4 w-4" />
               Back
             </button>
             <div className="text-center">
-              <p className="font-bold text-theme-text-primary text-sm">{currentTest.template_name}</p>
-              <p className="text-xs text-theme-text-muted">Review &amp; Submit</p>
+              <p className="text-theme-text-primary text-sm font-bold">{currentTest.template_name}</p>
+              <p className="text-theme-text-muted text-xs">Review &amp; Submit</p>
             </div>
             <div className="w-16" /> {/* Spacer for centering */}
           </div>
@@ -1289,7 +1270,7 @@ export const ActiveSkillTestPage: React.FC = () => {
 
         {/* Practice Mode Banner */}
         {currentTest.is_practice && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-4 py-2 text-center">
+          <div className="border-b border-blue-200 bg-blue-50 px-4 py-2 text-center dark:border-blue-800 dark:bg-blue-900/20">
             <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
               Practice Mode — This attempt will not be recorded
             </p>
@@ -1297,16 +1278,16 @@ export const ActiveSkillTestPage: React.FC = () => {
         )}
 
         {/* Review Content */}
-        <div className="flex-1 px-4 py-4 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-4 py-4">
           {/* Summary stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-            <div className="bg-theme-surface rounded-xl p-4 border border-theme-surface-border text-center">
-              <p className="text-xs text-theme-text-muted">Candidate</p>
-              <p className="font-bold text-theme-text-primary text-sm mt-1">{currentTest.candidate_name}</p>
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 text-center">
+              <p className="text-theme-text-muted text-xs">Candidate</p>
+              <p className="text-theme-text-primary mt-1 text-sm font-bold">{currentTest.candidate_name}</p>
             </div>
-            <div className="bg-theme-surface rounded-xl p-4 border border-theme-surface-border text-center">
-              <p className="text-xs text-theme-text-muted">Total Time</p>
-              <p className="font-bold font-mono text-theme-text-primary text-sm mt-1">
+            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 text-center">
+              <p className="text-theme-text-muted text-xs">Total Time</p>
+              <p className="text-theme-text-primary mt-1 font-mono text-sm font-bold">
                 {Math.floor(activeTestTimer / 60)}:{String(activeTestTimer % 60).padStart(2, '0')}
               </p>
             </div>
@@ -1315,18 +1296,14 @@ export const ActiveSkillTestPage: React.FC = () => {
           {/* Sections with results and notes */}
           <div className="space-y-4">
             {templateSections.map((section) => {
-              const sectionResult = currentTest.section_results?.find(
-                (sr) => sr.section_id === section.id
-              );
+              const sectionResult = currentTest.section_results?.find((sr) => sr.section_id === section.id);
               return (
                 <ReviewSection
                   key={section.id}
                   section={section}
                   sectionResult={sectionResult}
                   sectionNotes={reviewNotes[section.id] ?? ''}
-                  onNotesChange={(notes) =>
-                    setReviewNotes((prev) => ({ ...prev, [section.id]: notes }))
-                  }
+                  onNotesChange={(notes) => setReviewNotes((prev) => ({ ...prev, [section.id]: notes }))}
                 />
               );
             })}
@@ -1334,23 +1311,23 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         {/* Action Bar */}
-        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 action-bar-safe">
+        <div className="bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t px-4">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               <button
                 onClick={() => void handlePracticeViewResults()}
                 disabled={submitting}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-bold transition-colors"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
-                <ClipboardCheck className="w-5 h-5" />
+                <ClipboardCheck className="h-5 w-5" />
                 {submitting ? 'Calculating...' : 'View Results'}
               </button>
               <button
                 onClick={() => void handleDiscardPractice()}
                 disabled={discarding}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-theme-surface border-2 border-theme-surface-border hover:border-red-500 text-theme-text-muted hover:text-red-600 rounded-xl font-medium transition-colors"
+                className="bg-theme-surface border-theme-surface-border text-theme-text-muted flex w-full items-center justify-center gap-2 rounded-xl border-2 py-3 font-medium transition-colors hover:border-red-500 hover:text-red-600"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="h-4 w-4" />
                 {discarding ? 'Discarding...' : 'Discard & Return'}
               </button>
             </div>
@@ -1358,9 +1335,9 @@ export const ActiveSkillTestPage: React.FC = () => {
             <button
               onClick={() => void handleSubmit()}
               disabled={submitting}
-              className="w-full flex items-center justify-center gap-2 py-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl font-bold text-lg transition-colors"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-4 text-lg font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
             >
-              <Save className="w-5 h-5" />
+              <Save className="h-5 w-5" />
               {submitting ? 'Submitting...' : 'Submit Test'}
             </button>
           )}
@@ -1370,33 +1347,33 @@ export const ActiveSkillTestPage: React.FC = () => {
   }
 
   const currentSection = templateSections[activeSectionIndex];
-  const currentSectionResults = currentTest.section_results?.find(
-    (s) => currentSection && s.section_id === currentSection.id
-  )?.criteria_results ?? [];
+  const currentSectionResults =
+    currentTest.section_results?.find((s) => currentSection && s.section_id === currentSection.id)?.criteria_results ??
+    [];
 
   const canGoBack = activeSectionIndex > 0;
   const canGoForward = activeSectionIndex < templateSections.length - 1;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="flex min-h-screen flex-col">
       {/* Top Bar */}
-      <div className="sticky top-0 z-10 bg-theme-surface-modal border-b border-theme-surface-border px-4 py-3">
-        <div className="flex items-center justify-between mb-2">
+      <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 border-b px-4 py-3">
+        <div className="mb-2 flex items-center justify-between">
           <button
             onClick={() => void navigate('/training/admin?page=skills-testing&tab=tests')}
-            className="p-2 rounded-lg hover:bg-theme-surface-hover transition-colors"
+            className="hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="h-5 w-5" />
           </button>
           <div className="text-center">
-            <p className="font-bold text-theme-text-primary text-sm">{currentTest.template_name}</p>
-            <p className="text-xs text-theme-text-muted">
+            <p className="text-theme-text-primary text-sm font-bold">{currentTest.template_name}</p>
+            <p className="text-theme-text-muted text-xs">
               Section {activeSectionIndex + 1} of {templateSections.length}
             </p>
           </div>
           <button
             onClick={() => void handleSaveProgress()}
-            className="px-3 py-1.5 text-xs font-medium bg-theme-surface border border-theme-surface-border rounded-lg"
+            className="bg-theme-surface border-theme-surface-border rounded-lg border px-3 py-1.5 text-xs font-medium"
           >
             Save
           </button>
@@ -1409,15 +1386,13 @@ export const ActiveSkillTestPage: React.FC = () => {
         />
 
         {/* Section Progress Dots */}
-        <div className="flex justify-center gap-1.5 mt-2">
+        <div className="mt-2 flex justify-center gap-1.5">
           {templateSections.map((_, i) => (
             <button
               key={i}
               onClick={() => setActiveSectionIndex(i)}
-              className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                i === activeSectionIndex
-                  ? 'bg-red-600'
-                  : 'bg-theme-surface-border hover:bg-theme-text-muted'
+              className={`h-2.5 w-2.5 rounded-full transition-colors ${
+                i === activeSectionIndex ? 'bg-red-600' : 'bg-theme-surface-border hover:bg-theme-text-muted'
               }`}
               aria-label={`Go to section ${i + 1}`}
             />
@@ -1427,7 +1402,7 @@ export const ActiveSkillTestPage: React.FC = () => {
 
       {/* Practice Mode Banner */}
       {currentTest.is_practice && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800 px-4 py-2 text-center">
+        <div className="border-b border-blue-200 bg-blue-50 px-4 py-2 text-center dark:border-blue-800 dark:bg-blue-900/20">
           <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
             Practice Mode — This attempt will not be recorded
           </p>
@@ -1435,7 +1410,7 @@ export const ActiveSkillTestPage: React.FC = () => {
       )}
 
       {/* Section Content */}
-      <div className="flex-1 px-4 py-4 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto px-4 py-4">
         {currentSection && (
           <SectionView
             section={currentSection}
@@ -1448,29 +1423,29 @@ export const ActiveSkillTestPage: React.FC = () => {
       </div>
 
       {/* Bottom Navigation Bar */}
-      <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 action-bar-safe">
+      <div className="bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t px-4">
         <div className="flex gap-3">
           <button
             onClick={() => setActiveSectionIndex(activeSectionIndex - 1)}
             disabled={!canGoBack}
-            className="flex items-center justify-center gap-1 py-3 px-4 bg-theme-surface border border-theme-surface-border rounded-xl font-medium transition-colors disabled:opacity-30"
+            className="bg-theme-surface border-theme-surface-border flex items-center justify-center gap-1 rounded-xl border px-4 py-3 font-medium transition-colors disabled:opacity-30"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="h-5 w-5" />
             Prev
           </button>
           <button
             onClick={() => void handleComplete()}
-            className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors"
+            className="flex-1 rounded-xl bg-red-600 py-3 font-bold text-white transition-colors hover:bg-red-700"
           >
             Complete Test
           </button>
           <button
             onClick={() => setActiveSectionIndex(activeSectionIndex + 1)}
             disabled={!canGoForward}
-            className="flex items-center justify-center gap-1 py-3 px-4 bg-theme-surface border border-theme-surface-border rounded-xl font-medium transition-colors disabled:opacity-30"
+            className="bg-theme-surface border-theme-surface-border flex items-center justify-center gap-1 rounded-xl border px-4 py-3 font-medium transition-colors disabled:opacity-30"
           >
             Next
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       </div>

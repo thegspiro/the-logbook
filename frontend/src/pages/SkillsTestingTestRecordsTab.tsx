@@ -7,11 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  Plus,
-  Search,
-  Trash2,
-} from 'lucide-react';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDate } from '../utils/dateFormatting';
@@ -33,7 +29,9 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   };
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] ?? 'bg-theme-surface-secondary text-theme-text-primary'}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styles[status] ?? 'bg-theme-surface-secondary text-theme-text-primary'}`}
+    >
       {status.replace('_', ' ')}
     </span>
   );
@@ -46,51 +44,53 @@ const TestCard: React.FC<{
 }> = ({ test, onClick, onDelete }) => {
   const tz = useTimezone();
   return (
-  <div
-    role="button"
-    tabIndex={0}
-    onClick={onClick}
-    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
-    className="w-full text-left bg-theme-surface rounded-lg p-4 border border-theme-surface-border hover:border-red-500/50 transition-colors cursor-pointer"
-  >
-    <div className="flex items-center justify-between">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <p className="font-medium text-theme-text-primary truncate">{test.template_name}</p>
-          <StatusBadge status={test.status} />
-          {test.result !== 'incomplete' && <StatusBadge status={test.result} />}
-          {test.is_practice && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-              Practice
-            </span>
-          )}
-        </div>
-        <p className="text-sm text-theme-text-muted">
-          Candidate: {test.candidate_name} &middot; Examiner: {test.examiner_name}
-        </p>
-      </div>
-      <div className="flex items-center gap-3 ml-4 shrink-0">
-        <div className="text-right">
-          {test.overall_score != null && (
-            <p className="text-lg font-bold text-theme-text-primary">{Math.round(test.overall_score)}%</p>
-          )}
-          <p className="text-xs text-theme-text-muted">
-            {test.completed_at ? formatDate(test.completed_at, tz) : test.started_at ? 'In Progress' : 'Not Started'}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onClick();
+      }}
+      className="bg-theme-surface border-theme-surface-border w-full cursor-pointer rounded-lg border p-4 text-left transition-colors hover:border-red-500/50"
+    >
+      <div className="flex items-center justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center gap-2">
+            <p className="text-theme-text-primary truncate font-medium">{test.template_name}</p>
+            <StatusBadge status={test.status} />
+            {test.result !== 'incomplete' && <StatusBadge status={test.result} />}
+            {test.is_practice && (
+              <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                Practice
+              </span>
+            )}
+          </div>
+          <p className="text-theme-text-muted text-sm">
+            Candidate: {test.candidate_name} &middot; Examiner: {test.examiner_name}
           </p>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          className="p-2 rounded-lg text-theme-text-muted hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-          aria-label={`Delete test for ${test.candidate_name}`}
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        <div className="ml-4 flex shrink-0 items-center gap-3">
+          <div className="text-right">
+            {test.overall_score != null && (
+              <p className="text-theme-text-primary text-lg font-bold">{Math.round(test.overall_score)}%</p>
+            )}
+            <p className="text-theme-text-muted text-xs">
+              {test.completed_at ? formatDate(test.completed_at, tz) : test.started_at ? 'In Progress' : 'Not Started'}
+            </p>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+            aria-label={`Delete test for ${test.candidate_name}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
-  </div>
   );
 };
 
@@ -107,10 +107,11 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
     void loadTemplates({ status: 'published' });
   }, [loadTests, loadTemplates, statusFilter]);
 
-  const filteredTests = tests.filter((t) =>
-    t.template_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.candidate_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.examiner_name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredTests = tests.filter(
+    (t) =>
+      t.template_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.candidate_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.examiner_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleDelete = async (test: SkillTestListItem) => {
@@ -128,27 +129,28 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+          <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             type="text"
-            aria-label="Search tests..." placeholder="Search tests..."
+            aria-label="Search tests..."
+            placeholder="Search tests..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary placeholder:text-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring/50 w-full rounded-lg border py-2 pr-4 pl-10 focus:ring-2 focus:outline-hidden"
           />
         </div>
         <div className="flex gap-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+            className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring/50 rounded-lg border px-3 py-2 focus:ring-2 focus:outline-hidden"
             aria-label="Filter by status"
           >
             <option value="">All Statuses</option>
@@ -158,9 +160,9 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           </select>
           <button
             onClick={() => void navigate('/training/skills-testing/test/new')}
-            className="btn-primary flex font-medium gap-2 items-center"
+            className="btn-primary flex items-center gap-2 font-medium"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Start Test</span>
           </button>
         </div>
@@ -169,10 +171,10 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
       {/* Tests List */}
       {testsLoading ? (
         <div className="flex justify-center py-12" role="status" aria-live="polite">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" />
+          <div className="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-red-500" />
         </div>
       ) : filteredTests.length === 0 ? (
-        <div className="bg-theme-surface rounded-lg border border-theme-surface-border">
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border">
           <EmptyState
             icon={ClipboardList}
             title="No test records found"
