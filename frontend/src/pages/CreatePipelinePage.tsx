@@ -121,13 +121,13 @@ const emptyMilestone = (): MilestoneFormData => ({
 
 // Small muted hint shown beneath a field.
 const HelpText: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="mt-1 text-xs text-theme-text-muted">{children}</p>
+  <p className="text-theme-text-muted mt-1 text-xs">{children}</p>
 );
 
 // Highlighted explanatory callout shown at the top of a step.
 const InfoCallout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="flex gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-theme-text-secondary">
-    <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" aria-hidden="true" />
+  <div className="text-theme-text-secondary flex gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-sm">
+    <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
     <div className="space-y-1">{children}</div>
   </div>
 );
@@ -140,8 +140,7 @@ const REQUIREMENT_TYPE_HELP: Record<string, string> = {
   courses: 'Completion of specific courses — checked off as the member completes them.',
   skills_evaluation:
     'A hands-on skill. Completed by passing a linked skills test in the Skills Testing module, or marked by an officer.',
-  knowledge_test:
-    'A written test. An officer records a pass/fail or score; reaching the passing score completes it.',
+  knowledge_test: 'A written test. An officer records a pass/fail or score; reaching the passing score completes it.',
   checklist: 'A list of items an officer checks off. Completed when marked done.',
   certification: 'An external certification — marked complete when the member earns it.',
   shifts: 'A number of shifts. Accrue automatically from approved shift reports.',
@@ -165,20 +164,22 @@ const StepInfo: React.FC<{
 }> = ({ data, onChange }) => (
   <div className="space-y-6">
     <div>
-      <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Program Information</h2>
+      <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Program Information</h2>
       <p className="text-theme-text-muted text-sm">Define the basic details for your training pipeline.</p>
     </div>
 
     <InfoCallout>
       <p className="text-theme-text-primary font-medium">How a training pipeline works</p>
       <p>
-        A pipeline tracks a member&apos;s progression through a training program. You&apos;ll build it in
-        four parts: <strong>Phases</strong> (the stages a member moves through), <strong>Requirements</strong>{' '}
-        (what they must complete in each phase), and optional <strong>Milestones</strong> (progress
-        notifications). After you create it, enroll members from the program&apos;s page — their progress
-        then updates automatically from training sessions, shifts, and skills tests, or by an officer.
+        A pipeline tracks a member&apos;s progression through a training program. You&apos;ll build it in four parts:{' '}
+        <strong>Phases</strong> (the stages a member moves through), <strong>Requirements</strong> (what they must
+        complete in each phase), and optional <strong>Milestones</strong> (progress notifications). After you create it,
+        enroll members from the program&apos;s page — their progress then updates automatically from training sessions,
+        shifts, and skills tests, or by an officer.
       </p>
-      <p>Only a <strong>Program Name</strong> is required; you can add phases and requirements now or later.</p>
+      <p>
+        Only a <strong>Program Name</strong> is required; you can add phases and requirements now or later.
+      </p>
     </InfoCallout>
 
     <div>
@@ -210,7 +211,7 @@ const StepInfo: React.FC<{
       />
     </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div>
         <label htmlFor="prog-code" className="form-label">
           Program Code
@@ -249,7 +250,7 @@ const StepInfo: React.FC<{
       </div>
     </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       <div>
         <label htmlFor="prog-structure" className="form-label">
           Structure Type
@@ -265,9 +266,8 @@ const StepInfo: React.FC<{
           <option value="flexible">Flexible (any order)</option>
         </select>
         <HelpText>
-          <strong>Phases</strong>: members move through ordered stages.{' '}
-          <strong>Sequential</strong>: requirements done in strict order.{' '}
-          <strong>Flexible</strong>: any order. Most recruit programs use Phases.
+          <strong>Phases</strong>: members move through ordered stages. <strong>Sequential</strong>: requirements done
+          in strict order. <strong>Flexible</strong>: any order. Most recruit programs use Phases.
         </HelpText>
       </div>
 
@@ -313,7 +313,7 @@ const StepInfo: React.FC<{
           onChange={(e) => onChange('is_template', e.target.checked)}
           className="form-checkbox"
         />
-        <span className="text-sm text-theme-text-secondary">Save as template (can be cloned for future use)</span>
+        <span className="text-theme-text-secondary text-sm">Save as template (can be cloned for future use)</span>
       </label>
       <HelpText>Templates are reusable blueprints — you don&apos;t enroll members directly into a template.</HelpText>
     </div>
@@ -330,75 +330,77 @@ const StepPhases: React.FC<{
   <div className="space-y-6">
     <div className="flex items-center justify-between">
       <div>
-        <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Program Phases</h2>
-        <p className="text-theme-text-muted text-sm">Define the phases or stages of your training pipeline. Members progress through these in order.</p>
+        <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Program Phases</h2>
+        <p className="text-theme-text-muted text-sm">
+          Define the phases or stages of your training pipeline. Members progress through these in order.
+        </p>
       </div>
-      <button
-        onClick={onAdd}
-        className="btn-primary flex items-center px-3 space-x-1 text-sm"
-      >
-        <Plus className="w-4 h-4" />
+      <button onClick={onAdd} className="btn-primary flex items-center space-x-1 px-3 text-sm">
+        <Plus className="h-4 w-4" />
         <span>Add Phase</span>
       </button>
     </div>
 
     <InfoCallout>
       <p>
-        Phases are the stages a member works through, in order (e.g. <em>Orientation → Engine Ops →
-        Truck Ops</em>). A member finishes a phase once every required item in it is complete, and then
+        Phases are the stages a member works through, in order (e.g. <em>Orientation → Engine Ops → Truck Ops</em>). A
+        member finishes a phase once every required item in it is complete, and then
         <strong> advances automatically</strong> to the next one.
       </p>
       <p>
-        Tick <strong>&ldquo;Require officer approval to advance&rdquo;</strong> on a phase to hold members
-        there until an officer signs off — even after they finish it. You&apos;ll add the actual requirements
-        in the next step.
+        Tick <strong>&ldquo;Require officer approval to advance&rdquo;</strong> on a phase to hold members there until
+        an officer signs off — even after they finish it. You&apos;ll add the actual requirements in the next step.
       </p>
     </InfoCallout>
 
     {phases.length === 0 ? (
       <div className="card-secondary border-dashed py-12 text-center">
-        <Layers className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
+        <Layers className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
         <p className="text-theme-text-muted mb-2">No phases defined yet</p>
-        <p className="text-theme-text-muted text-sm mb-4">Add phases to structure your training pipeline</p>
-        <button
-          onClick={onAdd}
-          className="btn-primary text-sm"
-        >
+        <p className="text-theme-text-muted mb-4 text-sm">Add phases to structure your training pipeline</p>
+        <button onClick={onAdd} className="btn-primary text-sm">
           Add First Phase
         </button>
       </div>
     ) : (
       <div className="space-y-3">
         {phases.map((phase) => (
-          <div key={phase.id} className="bg-theme-surface rounded-lg border border-theme-surface-border">
+          <div key={phase.id} className="bg-theme-surface border-theme-surface-border rounded-lg border">
             <div
-              className="flex items-center justify-between p-4 cursor-pointer"
+              className="flex cursor-pointer items-center justify-between p-4"
               onClick={() => onToggleExpand(phase.id)}
             >
               <div className="flex items-center space-x-3">
-                <GripVertical className="w-4 h-4 text-theme-text-muted" />
-                <span className="text-red-700 dark:text-red-400 font-bold text-sm">Phase {phase.phase_number}</span>
+                <GripVertical className="text-theme-text-muted h-4 w-4" />
+                <span className="text-sm font-bold text-red-700 dark:text-red-400">Phase {phase.phase_number}</span>
                 <span className="text-theme-text-primary font-medium">{phase.name || 'Untitled Phase'}</span>
                 {phase.requirements.length > 0 && (
-                  <span className="px-2 py-0.5 bg-blue-500/20 text-blue-700 dark:text-blue-400 text-xs rounded-sm">
+                  <span className="rounded-sm bg-blue-500/20 px-2 py-0.5 text-xs text-blue-700 dark:text-blue-400">
                     {phase.requirements.length} req{phase.requirements.length !== 1 ? 's' : ''}
                   </span>
                 )}
               </div>
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={(e) => { e.stopPropagation(); onRemove(phase.id); }}
-                  className="p-1 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(phase.id);
+                  }}
+                  className="text-theme-text-muted p-1 hover:text-red-800 dark:hover:text-red-400"
                   aria-label={`Remove phase ${phase.phase_number}`}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="h-4 w-4" />
                 </button>
-                {phase.isExpanded ? <ChevronUp className="w-4 h-4 text-theme-text-muted" /> : <ChevronDown className="w-4 h-4 text-theme-text-muted" />}
+                {phase.isExpanded ? (
+                  <ChevronUp className="text-theme-text-muted h-4 w-4" />
+                ) : (
+                  <ChevronDown className="text-theme-text-muted h-4 w-4" />
+                )}
               </div>
             </div>
 
             {phase.isExpanded && (
-              <div className="px-4 pb-4 space-y-4 border-t border-theme-surface-border pt-4">
+              <div className="border-theme-surface-border space-y-4 border-t px-4 pt-4 pb-4">
                 <div>
                   <label className="form-label-sm">Phase Name *</label>
                   <input
@@ -419,7 +421,7 @@ const StepPhases: React.FC<{
                     placeholder="Describe what this phase covers..."
                   />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className="form-label-sm">Time Limit (days)</label>
                     <input
@@ -433,7 +435,7 @@ const StepPhases: React.FC<{
                     <HelpText>Target time to finish this phase. Optional.</HelpText>
                   </div>
                   <div>
-                    <label className="flex items-center space-x-2 text-sm text-theme-text-secondary">
+                    <label className="text-theme-text-secondary flex items-center space-x-2 text-sm">
                       <input
                         type="checkbox"
                         checked={phase.requires_manual_advancement}
@@ -442,7 +444,9 @@ const StepPhases: React.FC<{
                       />
                       <span>Require officer approval to advance</span>
                     </label>
-                    <HelpText>Members won&apos;t auto-advance out of this phase, even when complete, until an officer approves.</HelpText>
+                    <HelpText>
+                      Members won&apos;t auto-advance out of this phase, even when complete, until an officer approves.
+                    </HelpText>
                   </div>
                 </div>
               </div>
@@ -462,17 +466,17 @@ const StepRequirements: React.FC<{
 }> = ({ phases, onAddRequirement, onRemoveRequirement, onUpdateRequirement }) => (
   <div className="space-y-6">
     <div>
-      <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Requirements</h2>
+      <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Requirements</h2>
       <p className="text-theme-text-muted text-sm">Define the requirements members must complete within each phase.</p>
     </div>
 
     {phases.length > 0 && (
       <InfoCallout>
         <p>
-          Requirements are what a member must complete in each phase. Choose a <strong>type</strong> for
-          each — the help under the selector explains how it&apos;s completed. Some fill in
-          <strong> automatically</strong> (hours, shifts, calls from sessions and shift reports; skills from
-          skills tests); others an <strong>officer marks off</strong> (checklist, certification, knowledge test).
+          Requirements are what a member must complete in each phase. Choose a <strong>type</strong> for each — the help
+          under the selector explains how it&apos;s completed. Some fill in
+          <strong> automatically</strong> (hours, shifts, calls from sessions and shift reports; skills from skills
+          tests); others an <strong>officer marks off</strong> (checklist, certification, knowledge test).
         </p>
         <p>
           A phase is finished when its <strong>required</strong> items are done. Uncheck
@@ -483,35 +487,38 @@ const StepRequirements: React.FC<{
 
     {phases.length === 0 ? (
       <div className="card-secondary border-dashed py-12 text-center">
-        <ListChecks className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
+        <ListChecks className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
         <p className="text-theme-text-muted">Add phases first before defining requirements.</p>
       </div>
     ) : (
       phases.map((phase) => (
-        <div key={phase.id} className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
-          <div className="flex items-center justify-between mb-4">
+        <div key={phase.id} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+          <div className="mb-4 flex items-center justify-between">
             <h3 className="text-theme-text-primary font-medium">
-              <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
+              <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span>{' '}
+              {phase.name || 'Untitled'}
             </h3>
             <button
               onClick={() => onAddRequirement(phase.id)}
-              className="flex items-center space-x-1 px-2 py-1 bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover text-xs"
+              className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-sm px-2 py-1 text-xs"
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="h-3 w-3" />
               <span>Add Requirement</span>
             </button>
           </div>
 
           {phase.requirements.length === 0 ? (
-            <p className="text-theme-text-muted text-sm text-center py-4">No requirements yet for this phase.</p>
+            <p className="text-theme-text-muted py-4 text-center text-sm">No requirements yet for this phase.</p>
           ) : (
             <div className="space-y-3">
               {phase.requirements.map((req) => (
-                <div key={req.id} className="bg-theme-surface-secondary rounded-lg p-3 space-y-3">
+                <div key={req.id} className="bg-theme-surface-secondary space-y-3 rounded-lg p-3">
                   <div className="flex items-start justify-between">
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
                       <div>
-                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Requirement Name *</label>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                          Requirement Name *
+                        </label>
                         <input
                           type="text"
                           value={req.name}
@@ -521,7 +528,7 @@ const StepRequirements: React.FC<{
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Type</label>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Type</label>
                         <select
                           value={req.requirement_type}
                           onChange={(e) => onUpdateRequirement(phase.id, req.id, 'requirement_type', e.target.value)}
@@ -543,15 +550,15 @@ const StepRequirements: React.FC<{
                     </div>
                     <button
                       onClick={() => onRemoveRequirement(phase.id, req.id)}
-                      className="p-1 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400 ml-2"
+                      className="text-theme-text-muted ml-2 p-1 hover:text-red-800 dark:hover:text-red-400"
                       aria-label="Remove requirement"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-theme-text-muted mb-1">Description</label>
+                    <label className="text-theme-text-muted mb-1 block text-xs font-medium">Description</label>
                     <textarea
                       value={req.description}
                       onChange={(e) => onUpdateRequirement(phase.id, req.id, 'description', e.target.value)}
@@ -563,37 +570,44 @@ const StepRequirements: React.FC<{
 
                   {/* Required toggle — applies to every requirement type */}
                   <div>
-                    <label className="flex items-center space-x-2 text-xs text-theme-text-secondary">
+                    <label className="text-theme-text-secondary flex items-center space-x-2 text-xs">
                       <input
                         type="checkbox"
                         checked={req.is_required}
                         onChange={(e) => onUpdateRequirement(phase.id, req.id, 'is_required', e.target.checked)}
-                        className="w-3 h-3 text-red-500 bg-theme-input-bg border-theme-input-border rounded-sm"
+                        className="bg-theme-input-bg border-theme-input-border h-3 w-3 rounded-sm text-red-500"
                       />
                       <span>Required to complete the phase</span>
                     </label>
-                    <HelpText>Uncheck for optional or extra-credit items that shouldn&apos;t hold up advancement.</HelpText>
+                    <HelpText>
+                      Uncheck for optional or extra-credit items that shouldn&apos;t hold up advancement.
+                    </HelpText>
                   </div>
 
                   {/* External-credit flag — a deliberate choice for each hours/
                       courses requirement, since the default is in-house-only. */}
                   {(req.requirement_type === 'hours' || req.requirement_type === 'courses') && (
                     <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
-                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+                      <AlertCircle
+                        className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+                        aria-hidden="true"
+                      />
                       <div>
-                        <label className="flex items-start gap-2 text-xs text-theme-text-secondary">
+                        <label className="text-theme-text-secondary flex items-start gap-2 text-xs">
                           <input
                             type="checkbox"
                             checked={req.allows_external_credit}
-                            onChange={(e) => onUpdateRequirement(phase.id, req.id, 'allows_external_credit', e.target.checked)}
-                            className="w-3 h-3 mt-0.5 text-red-500 bg-theme-input-bg border-theme-input-border rounded-sm"
+                            onChange={(e) =>
+                              onUpdateRequirement(phase.id, req.id, 'allows_external_credit', e.target.checked)
+                            }
+                            className="bg-theme-input-bg border-theme-input-border mt-0.5 h-3 w-3 rounded-sm text-red-500"
                           />
                           <span>Accept external / imported training credit</span>
                         </label>
                         <HelpText>
-                          Off by default — imported courses (e.g. Vector Solutions) won&apos;t count
-                          toward this; only in-house sessions, skills tests, or manual sign-off will.
-                          Check it if online/third-party delivery is acceptable.
+                          Off by default — imported courses (e.g. Vector Solutions) won&apos;t count toward this; only
+                          in-house sessions, skills tests, or manual sign-off will. Check it if online/third-party
+                          delivery is acceptable.
                         </HelpText>
                       </div>
                     </div>
@@ -602,7 +616,7 @@ const StepRequirements: React.FC<{
                   {/* Conditional fields based on type */}
                   {req.requirement_type === 'hours' && (
                     <div>
-                      <label className="block text-xs font-medium text-theme-text-muted mb-1">Required Hours</label>
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Hours</label>
                       <input
                         type="number"
                         value={req.required_hours}
@@ -617,7 +631,7 @@ const StepRequirements: React.FC<{
 
                   {req.requirement_type === 'shifts' && (
                     <div>
-                      <label className="block text-xs font-medium text-theme-text-muted mb-1">Required Shifts</label>
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Shifts</label>
                       <input
                         type="number"
                         value={req.required_shifts}
@@ -631,7 +645,7 @@ const StepRequirements: React.FC<{
 
                   {req.requirement_type === 'calls' && (
                     <div>
-                      <label className="block text-xs font-medium text-theme-text-muted mb-1">Required Calls</label>
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">Required Calls</label>
                       <input
                         type="number"
                         value={req.required_calls}
@@ -645,12 +659,14 @@ const StepRequirements: React.FC<{
 
                   {req.requirement_type === 'checklist' && (
                     <div>
-                      <label className="block text-xs font-medium text-theme-text-muted mb-1">
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">
                         Checklist Items (one per line)
                       </label>
                       <textarea
                         value={req.checklist_items.join('\n')}
-                        onChange={(e) => onUpdateRequirement(phase.id, req.id, 'checklist_items', e.target.value.split('\n'))}
+                        onChange={(e) =>
+                          onUpdateRequirement(phase.id, req.id, 'checklist_items', e.target.value.split('\n'))
+                        }
                         rows={4}
                         className="form-input-sm"
                         placeholder="Enter each checklist item on a new line..."
@@ -659,9 +675,11 @@ const StepRequirements: React.FC<{
                   )}
 
                   {req.requirement_type === 'knowledge_test' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
-                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Passing Score (%)</label>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                          Passing Score (%)
+                        </label>
                         <input
                           type="number"
                           value={req.passing_score}
@@ -674,7 +692,7 @@ const StepRequirements: React.FC<{
                         <HelpText>Minimum score to pass. Defaults to 70% if left blank.</HelpText>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Max Attempts</label>
+                        <label className="text-theme-text-muted mb-1 block text-xs font-medium">Max Attempts</label>
                         <input
                           type="number"
                           value={req.max_attempts}
@@ -706,48 +724,53 @@ const StepMilestones: React.FC<{
 }> = ({ phases, onAddMilestone, onRemoveMilestone, onUpdateMilestone, onMoveMilestone }) => (
   <div className="space-y-6">
     <div>
-      <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Milestones <span className="text-theme-text-muted text-sm font-normal">(optional)</span></h2>
-      <p className="text-theme-text-muted text-sm">Define milestones to celebrate member progress and trigger notifications. Use the arrows to reorder.</p>
+      <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">
+        Milestones <span className="text-theme-text-muted text-sm font-normal">(optional)</span>
+      </h2>
+      <p className="text-theme-text-muted text-sm">
+        Define milestones to celebrate member progress and trigger notifications. Use the arrows to reorder.
+      </p>
     </div>
 
     {phases.length > 0 && (
       <InfoCallout>
         <p>
-          Milestones are optional check-ins. When a member&apos;s progress in a phase reaches the
-          percentage you set, they (and their mentor) get a notification with your message — a nice way
-          to mark &ldquo;halfway there&rdquo; moments. Milestones <strong>don&apos;t gate advancement</strong>;
-          they&apos;re purely encouragement. Skip this step entirely if you don&apos;t need them.
+          Milestones are optional check-ins. When a member&apos;s progress in a phase reaches the percentage you set,
+          they (and their mentor) get a notification with your message — a nice way to mark &ldquo;halfway there&rdquo;
+          moments. Milestones <strong>don&apos;t gate advancement</strong>; they&apos;re purely encouragement. Skip this
+          step entirely if you don&apos;t need them.
         </p>
       </InfoCallout>
     )}
 
     {phases.length === 0 ? (
       <div className="card-secondary border-dashed py-12 text-center">
-        <Flag className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
+        <Flag className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
         <p className="text-theme-text-muted">Add phases first before defining milestones.</p>
       </div>
     ) : (
       phases.map((phase) => (
-        <div key={phase.id} className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
-          <div className="flex items-center justify-between mb-4">
+        <div key={phase.id} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+          <div className="mb-4 flex items-center justify-between">
             <h3 className="text-theme-text-primary font-medium">
-              <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
+              <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span>{' '}
+              {phase.name || 'Untitled'}
             </h3>
             <button
               onClick={() => onAddMilestone(phase.id)}
-              className="flex items-center space-x-1 px-2 py-1 bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover text-xs"
+              className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-sm px-2 py-1 text-xs"
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="h-3 w-3" />
               <span>Add Milestone</span>
             </button>
           </div>
 
           {phase.milestones.length === 0 ? (
-            <p className="text-theme-text-muted text-sm text-center py-4">No milestones for this phase (optional).</p>
+            <p className="text-theme-text-muted py-4 text-center text-sm">No milestones for this phase (optional).</p>
           ) : (
             <div className="space-y-3">
               {phase.milestones.map((ms, msIndex) => (
-                <div key={ms.id} className="bg-theme-surface-secondary rounded-lg p-3 space-y-3">
+                <div key={ms.id} className="bg-theme-surface-secondary space-y-3 rounded-lg p-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start space-x-2">
                       {/* Reorder buttons */}
@@ -755,23 +778,25 @@ const StepMilestones: React.FC<{
                         <button
                           onClick={() => onMoveMilestone(phase.id, ms.id, 'up')}
                           disabled={msIndex === 0}
-                          className="p-0.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="Move milestone up"
                         >
-                          <ChevronUp className="w-3.5 h-3.5" />
+                          <ChevronUp className="h-3.5 w-3.5" />
                         </button>
                         <button
                           onClick={() => onMoveMilestone(phase.id, ms.id, 'down')}
                           disabled={msIndex === phase.milestones.length - 1}
-                          className="p-0.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="text-theme-text-muted hover:text-theme-text-primary p-0.5 disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="Move milestone down"
                         >
-                          <ChevronDown className="w-3.5 h-3.5" />
+                          <ChevronDown className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2">
                         <div>
-                          <label className="block text-xs font-medium text-theme-text-muted mb-1">Milestone Name *</label>
+                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                            Milestone Name *
+                          </label>
                           <input
                             type="text"
                             value={ms.name}
@@ -781,11 +806,15 @@ const StepMilestones: React.FC<{
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-theme-text-muted mb-1">Trigger at (% complete)</label>
+                          <label className="text-theme-text-muted mb-1 block text-xs font-medium">
+                            Trigger at (% complete)
+                          </label>
                           <input
                             type="number"
                             value={ms.completion_percentage_threshold}
-                            onChange={(e) => onUpdateMilestone(phase.id, ms.id, 'completion_percentage_threshold', e.target.value)}
+                            onChange={(e) =>
+                              onUpdateMilestone(phase.id, ms.id, 'completion_percentage_threshold', e.target.value)
+                            }
                             className="form-input-sm"
                             placeholder="e.g., 50"
                             min={1}
@@ -796,13 +825,13 @@ const StepMilestones: React.FC<{
                     </div>
                     <button
                       onClick={() => onRemoveMilestone(phase.id, ms.id)}
-                      className="p-1 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400 ml-2"
+                      className="text-theme-text-muted ml-2 p-1 hover:text-red-800 dark:hover:text-red-400"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                   <div className="pl-7">
-                    <label className="block text-xs font-medium text-theme-text-muted mb-1">Notification Message</label>
+                    <label className="text-theme-text-muted mb-1 block text-xs font-medium">Notification Message</label>
                     <input
                       type="text"
                       value={ms.notification_message}
@@ -840,21 +869,20 @@ const StepReview: React.FC<{
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Review Your Pipeline</h2>
+        <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Review Your Pipeline</h2>
         <p className="text-theme-text-muted text-sm">Review all details before creating the training pipeline.</p>
       </div>
 
       <InfoCallout>
         <p>
-          Everything is created together when you click <strong>Create Pipeline</strong>. Next, open the
-          program and <strong>enroll members</strong> from its Enrollments tab — from there you can track
-          progress, and members can watch their own progression from <em>My Training</em>. You can edit or
-          duplicate the program later.
+          Everything is created together when you click <strong>Create Pipeline</strong>. Next, open the program and{' '}
+          <strong>enroll members</strong> from its Enrollments tab — from there you can track progress, and members can
+          watch their own progression from <em>My Training</em>. You can edit or duplicate the program later.
         </p>
       </InfoCallout>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
         <div className="bg-theme-surface rounded-lg p-4 text-center">
           <p className="text-2xl font-bold text-red-700 dark:text-red-400">{phases.length}</p>
           <p className="text-theme-text-muted text-sm">Phases</p>
@@ -875,37 +903,56 @@ const StepReview: React.FC<{
 
       {/* Program info */}
       <div className="bg-theme-surface rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-theme-text-primary mb-3">{info.name || 'Untitled Program'}</h3>
-        {info.description && <p className="text-theme-text-muted text-sm mb-3">{info.description}</p>}
+        <h3 className="text-theme-text-primary mb-3 text-lg font-semibold">{info.name || 'Untitled Program'}</h3>
+        {info.description && <p className="text-theme-text-muted mb-3 text-sm">{info.description}</p>}
         <div className="flex flex-wrap gap-2 text-xs">
-          {info.code && <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-secondary rounded-sm">{info.code}</span>}
-          {info.target_position && <span className="px-2 py-1 bg-red-500/20 text-red-700 dark:text-red-400 rounded-sm">{info.target_position}</span>}
-          <span className="px-2 py-1 bg-blue-500/20 text-blue-700 dark:text-blue-400 rounded-sm">{info.structure_type}</span>
-          {info.is_template && <span className="px-2 py-1 bg-green-500/20 text-green-700 dark:text-green-400 rounded-sm">Template</span>}
+          {info.code && (
+            <span className="bg-theme-surface-hover text-theme-text-secondary rounded-sm px-2 py-1">{info.code}</span>
+          )}
+          {info.target_position && (
+            <span className="rounded-sm bg-red-500/20 px-2 py-1 text-red-700 dark:text-red-400">
+              {info.target_position}
+            </span>
+          )}
+          <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-blue-700 dark:text-blue-400">
+            {info.structure_type}
+          </span>
+          {info.is_template && (
+            <span className="rounded-sm bg-green-500/20 px-2 py-1 text-green-700 dark:text-green-400">Template</span>
+          )}
         </div>
       </div>
 
       {/* Phase details */}
       {phases.map((phase) => (
         <div key={phase.id} className="bg-theme-surface rounded-lg p-4">
-          <h4 className="font-medium text-theme-text-primary mb-2">
-            <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span> {phase.name || 'Untitled'}
+          <h4 className="text-theme-text-primary mb-2 font-medium">
+            <span className="text-red-700 dark:text-red-400">Phase {phase.phase_number}:</span>{' '}
+            {phase.name || 'Untitled'}
           </h4>
-          {phase.description && <p className="text-theme-text-muted text-sm mb-3">{phase.description}</p>}
-          <div className="flex flex-wrap gap-2 text-xs mb-3">
-            {phase.time_limit_days && <span className="px-2 py-1 bg-theme-surface-hover text-theme-text-secondary rounded-sm">{phase.time_limit_days} day limit</span>}
-            {phase.requires_manual_advancement && <span className="px-2 py-1 bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-sm">Manual advancement</span>}
+          {phase.description && <p className="text-theme-text-muted mb-3 text-sm">{phase.description}</p>}
+          <div className="mb-3 flex flex-wrap gap-2 text-xs">
+            {phase.time_limit_days && (
+              <span className="bg-theme-surface-hover text-theme-text-secondary rounded-sm px-2 py-1">
+                {phase.time_limit_days} day limit
+              </span>
+            )}
+            {phase.requires_manual_advancement && (
+              <span className="rounded-sm bg-yellow-500/20 px-2 py-1 text-yellow-700 dark:text-yellow-400">
+                Manual advancement
+              </span>
+            )}
           </div>
 
           {phase.requirements.length > 0 && (
-            <div className="space-y-1 mb-2">
-              <p className="text-xs font-medium text-theme-text-muted uppercase">Requirements:</p>
+            <div className="mb-2 space-y-1">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Requirements:</p>
               {phase.requirements.map((req) => (
-                <div key={req.id} className="flex items-center space-x-2 text-sm text-theme-text-secondary">
-                  <ListChecks className="w-3 h-3 text-blue-700 dark:text-blue-400" />
+                <div key={req.id} className="text-theme-text-secondary flex items-center space-x-2 text-sm">
+                  <ListChecks className="h-3 w-3 text-blue-700 dark:text-blue-400" />
                   <span>{req.name || 'Untitled'}</span>
-                  <span className="text-xs text-theme-text-muted">({req.requirement_type})</span>
-                  {req.required_hours && <span className="text-xs text-theme-text-muted">- {req.required_hours}h</span>}
+                  <span className="text-theme-text-muted text-xs">({req.requirement_type})</span>
+                  {req.required_hours && <span className="text-theme-text-muted text-xs">- {req.required_hours}h</span>}
                 </div>
               ))}
             </div>
@@ -913,12 +960,14 @@ const StepReview: React.FC<{
 
           {phase.milestones.length > 0 && (
             <div className="space-y-1">
-              <p className="text-xs font-medium text-theme-text-muted uppercase">Milestones:</p>
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Milestones:</p>
               {phase.milestones.map((ms) => (
-                <div key={ms.id} className="flex items-center space-x-2 text-sm text-theme-text-secondary">
-                  <Flag className="w-3 h-3 text-yellow-700 dark:text-yellow-400" />
+                <div key={ms.id} className="text-theme-text-secondary flex items-center space-x-2 text-sm">
+                  <Flag className="h-3 w-3 text-yellow-700 dark:text-yellow-400" />
                   <span>{ms.name || 'Untitled'}</span>
-                  {ms.completion_percentage_threshold && <span className="text-xs text-theme-text-muted">at {ms.completion_percentage_threshold}%</span>}
+                  {ms.completion_percentage_threshold && (
+                    <span className="text-theme-text-muted text-xs">at {ms.completion_percentage_threshold}%</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -1001,20 +1050,14 @@ const CreatePipelinePage: React.FC = () => {
   const addRequirement = (phaseId: string) => {
     setPhases((prev) =>
       prev.map((p) =>
-        p.id === phaseId
-          ? { ...p, requirements: [...p.requirements, emptyRequirement(p.requirements.length + 1)] }
-          : p
+        p.id === phaseId ? { ...p, requirements: [...p.requirements, emptyRequirement(p.requirements.length + 1)] } : p
       )
     );
   };
 
   const removeRequirement = (phaseId: string, reqId: string) => {
     setPhases((prev) =>
-      prev.map((p) =>
-        p.id === phaseId
-          ? { ...p, requirements: p.requirements.filter((r) => r.id !== reqId) }
-          : p
-      )
+      prev.map((p) => (p.id === phaseId ? { ...p, requirements: p.requirements.filter((r) => r.id !== reqId) } : p))
     );
   };
 
@@ -1024,9 +1067,7 @@ const CreatePipelinePage: React.FC = () => {
         p.id === phaseId
           ? {
               ...p,
-              requirements: p.requirements.map((r) =>
-                r.id === reqId ? { ...r, [field]: value } : r
-              ),
+              requirements: p.requirements.map((r) => (r.id === reqId ? { ...r, [field]: value } : r)),
             }
           : p
       )
@@ -1036,21 +1077,13 @@ const CreatePipelinePage: React.FC = () => {
   // ---- Milestone handlers ----
   const addMilestone = (phaseId: string) => {
     setPhases((prev) =>
-      prev.map((p) =>
-        p.id === phaseId
-          ? { ...p, milestones: [...p.milestones, emptyMilestone()] }
-          : p
-      )
+      prev.map((p) => (p.id === phaseId ? { ...p, milestones: [...p.milestones, emptyMilestone()] } : p))
     );
   };
 
   const removeMilestone = (phaseId: string, msId: string) => {
     setPhases((prev) =>
-      prev.map((p) =>
-        p.id === phaseId
-          ? { ...p, milestones: p.milestones.filter((m) => m.id !== msId) }
-          : p
-      )
+      prev.map((p) => (p.id === phaseId ? { ...p, milestones: p.milestones.filter((m) => m.id !== msId) } : p))
     );
   };
 
@@ -1060,9 +1093,7 @@ const CreatePipelinePage: React.FC = () => {
         p.id === phaseId
           ? {
               ...p,
-              milestones: p.milestones.map((m) =>
-                m.id === msId ? { ...m, [field]: value } : m
-              ),
+              milestones: p.milestones.map((m) => (m.id === msId ? { ...m, [field]: value } : m)),
             }
           : p
       )
@@ -1080,7 +1111,10 @@ const CreatePipelinePage: React.FC = () => {
         const updated = [...p.milestones];
         const a = updated[idx];
         const b = updated[swapIdx];
-        if (a && b) { updated[idx] = b; updated[swapIdx] = a; }
+        if (a && b) {
+          updated[idx] = b;
+          updated[swapIdx] = a;
+        }
         return { ...p, milestones: updated };
       })
     );
@@ -1145,8 +1179,7 @@ const CreatePipelinePage: React.FC = () => {
       void navigate(`/training/programs/${program.id}`);
     } catch (err: unknown) {
       const errorMessage =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to create pipeline';
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to create pipeline';
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -1156,19 +1189,19 @@ const CreatePipelinePage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="flex items-center space-x-4 mb-8">
+        <div className="mb-8 flex items-center space-x-4">
           <button
             onClick={() => void navigate('/training/programs')}
-            className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg p-2"
             aria-label="Back to programs"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-theme-text-primary flex items-center space-x-2">
-              <GraduationCap className="w-7 h-7 text-red-500" />
+            <h1 className="text-theme-text-primary flex items-center space-x-2 text-2xl font-bold">
+              <GraduationCap className="h-7 w-7 text-red-500" />
               <span>Create Training Pipeline</span>
             </h1>
             <p className="text-theme-text-muted text-sm">Step-by-step wizard to build your training program</p>
@@ -1176,7 +1209,7 @@ const CreatePipelinePage: React.FC = () => {
         </div>
 
         {/* Step indicator */}
-        <div className="flex items-center mb-8 bg-theme-surface rounded-lg p-3">
+        <div className="bg-theme-surface mb-8 flex items-center rounded-lg p-3">
           {WIZARD_STEPS.map((step, i) => {
             const StepIcon = step.icon;
             const isActive = step.key === currentStep;
@@ -1185,23 +1218,21 @@ const CreatePipelinePage: React.FC = () => {
             return (
               <React.Fragment key={step.key}>
                 {i > 0 && (
-                  <div className={`flex-1 h-0.5 mx-2 ${isComplete ? 'bg-red-500' : 'bg-theme-surface-border'}`} />
+                  <div className={`mx-2 h-0.5 flex-1 ${isComplete ? 'bg-red-500' : 'bg-theme-surface-border'}`} />
                 )}
                 <button
-                  onClick={() => { if (i <= stepIndex || canGoNext()) setCurrentStep(step.key); }}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  onClick={() => {
+                    if (i <= stepIndex || canGoNext()) setCurrentStep(step.key);
+                  }}
+                  className={`flex items-center space-x-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-red-600 text-white'
                       : isComplete
-                      ? 'text-red-700 dark:text-red-400 hover:bg-theme-surface-hover'
-                      : 'text-theme-text-muted hover:text-theme-text-secondary'
+                        ? 'hover:bg-theme-surface-hover text-red-700 dark:text-red-400'
+                        : 'text-theme-text-muted hover:text-theme-text-secondary'
                   }`}
                 >
-                  {isComplete ? (
-                    <Check className="w-4 h-4" />
-                  ) : (
-                    <StepIcon className="w-4 h-4" />
-                  )}
+                  {isComplete ? <Check className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
                   <span className="hidden sm:inline">{step.label}</span>
                 </button>
               </React.Fragment>
@@ -1212,7 +1243,7 @@ const CreatePipelinePage: React.FC = () => {
         {/* Step content */}
         <div className="card-secondary mb-6 p-6">
           {error && (
-            <div className="bg-red-500/10 border border-red-500 text-red-700 dark:text-red-400 px-4 py-3 rounded-sm mb-4">
+            <div className="mb-4 rounded-sm border border-red-500 bg-red-500/10 px-4 py-3 text-red-700 dark:text-red-400">
               {error}
             </div>
           )}
@@ -1252,38 +1283,36 @@ const CreatePipelinePage: React.FC = () => {
           <button
             onClick={goBack}
             disabled={stepIndex === 0}
-            className="flex items-center space-x-2 px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-2 rounded-lg px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="h-4 w-4" />
             <span>Back</span>
           </button>
 
           {currentStep === 'review' ? (
             <button
-              onClick={() => { void handleSubmit(); }}
+              onClick={() => {
+                void handleSubmit();
+              }}
               disabled={isSubmitting || !info.name.trim()}
-              className="btn-primary flex items-center px-6 space-x-2"
+              className="btn-primary flex items-center space-x-2 px-6"
             >
               {isSubmitting ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white" />
                   <span>Creating...</span>
                 </>
               ) : (
                 <>
-                  <Check className="w-4 h-4" />
+                  <Check className="h-4 w-4" />
                   <span>Create Pipeline</span>
                 </>
               )}
             </button>
           ) : (
-            <button
-              onClick={goNext}
-              disabled={!canGoNext()}
-              className="btn-primary flex items-center space-x-2"
-            >
+            <button onClick={goNext} disabled={!canGoNext()} className="btn-primary flex items-center space-x-2">
               <span>Next</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="h-4 w-4" />
             </button>
           )}
         </div>
