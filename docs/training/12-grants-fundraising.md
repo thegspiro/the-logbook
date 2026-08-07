@@ -67,7 +67,7 @@ The main dashboard at `/grants` shows key performance indicators:
 - **Compliance Tasks Due**
 - **Pipeline by Status** (applications across all stages)
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Grants Dashboard showing KPI cards (Total Raised: $125,000, Active Campaigns: 3, Pending Applications: 2, Active Grants: 1), upcoming deadlines widget, and recent donations list._
+![Grants dashboard with KPI cards for raised funds and active campaigns](./images/12-02-grants-dashboard.png)
 
 ---
 
@@ -122,7 +122,7 @@ The opportunities library is a catalog of available grant programs. Pre-loaded w
    - **Assigned To** — team member managing the application
 3. Save — application starts in **Researching** status
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Create Application form showing program name, agency, amount requested, match fields, deadline, project description, priority dropdown, and assignee selector._
+![Create grant application form with program, agency, and amount fields](./images/12-04-create-application.png)
 
 ---
 
@@ -459,7 +459,7 @@ Navigate to **Grants > Reports** for two report types:
 - Payment method breakdown
 - Average donation size
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Fundraising Report showing donation trends chart (monthly bars), top campaigns table, payment method pie chart, and summary metrics._
+![Fundraising report with donation trends and top campaigns](./images/12-14-fundraising-reports.png)
 
 ---
 

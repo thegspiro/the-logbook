@@ -49,8 +49,7 @@ Key pages in the inventory module:
 | **Storage Areas** | `/inventory/storage-areas` | Hierarchical storage location management (Facility → Room → Area) |
 | **Admin Dashboard** | `/inventory/admin` | Summary statistics, low-stock alerts, and navigation to admin sub-pages |
 
-> **Screenshot needed:**
-> _[Screenshot of the Inventory Items List page showing the search bar, category filter dropdown, status filter pills, location filter cascading selectors (Facility → Room → Storage Area), and a grid of inventory item cards with name, category badge, condition indicator, and status badge]_
+![Inventory Items list with search, category filter, and status pills](./images/05-01-inventory-items.png)
 
 ---
 
@@ -92,8 +91,7 @@ The **Categories** tab organizes items into groups. Common categories include:
 3. Enter the category name and description.
 4. Save.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Categories tab showing a list of categories with item counts, and the Add Category form/modal]_
+![Inventory categories page listing categories with item counts](./images/05-03-inventory-categories.png)
 
 ---
 

@@ -563,7 +563,7 @@ Platoons are **off by default**. To enable them:
 5. Click **Assign** to move selected members to that platoon
 6. Use **Clear** to remove members from their current platoon
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Platoon Management page showing three platoon columns (A, B, C) with member names listed under each, checkboxes for selection, and the "Assign to Platoon" dropdown/button at the top. Show an "Unassigned" bucket with members not yet assigned._
+![Platoon Management page showing platoon columns and their members](./images/03-16-platoon-management.png)
 
 ### How Platoon Shift Generation Works
 

@@ -288,8 +288,7 @@ The main dashboard now adapts to phone and tablet screens:
 - Touch-friendly buttons and controls sized for finger taps
 - Notification cards include clear/dismiss buttons directly on the dashboard
 
-> **Screenshot needed:**
-> _[Screenshot of the Dashboard on a mobile phone (portrait) showing stacked widget cards — "My Upcoming Shifts", "Upcoming Events", and "Notifications" — with touch-friendly buttons and a compact layout]_
+![Dashboard on a phone in portrait orientation with stacked widget cards](./images/10-04-mobile-dashboard.png)
 
 ### Inventory Module
 
@@ -301,11 +300,9 @@ All inventory pages received responsive design improvements:
   - Non-admin users see "Assign Items" action
   - Admin users see additional actions (Add Item, Scan Barcode, Import CSV)
 
-> **Screenshot needed:**
-> _[Screenshot of the Inventory Items List on a mobile phone showing item cards (instead of table rows) with name, category badge, condition indicator, and status. Show the floating action button in the bottom-right corner]_
+![Inventory items list on a phone, rendered as cards instead of table rows](./images/10-05-mobile-inventory.png)
 
-> **Screenshot needed:**
-> _[Screenshot of the Inventory Admin Hub on a mobile phone showing grouped card sections stacked vertically with prominent navigation cards for Items, Pool, Categories, Kits, and Variant Groups]_
+![Inventory admin hub on a phone with grouped card sections stacked vertically](./images/10-06-mobile-inventory-admin.png)
 
 ### Other Pages
 

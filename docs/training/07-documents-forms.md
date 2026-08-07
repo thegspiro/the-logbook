@@ -38,8 +38,7 @@ The Documents page provides:
 - **Grid and List view** toggles
 - **Search** across all documents
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Documents page showing the folder tree on the left (with folders like "SOPs", "Policies", "Training Materials", "Meeting Minutes"), the file list on the right with document names, types, dates, and a search bar at the top]_
+![Documents page with the folder tree, file list, and search bar](./images/07-01-documents.png)
 
 ---
 
@@ -244,8 +243,7 @@ The Notifications page uses a three-tab layout:
 | **Email Templates** | Link to email template management for customizing notification formats |
 | **Send Log** | View delivery history with channel filtering (All / Email / In-App) |
 
-> **Screenshot needed:**
-> _[Screenshot of the Notification Rules & Logs page showing the three tabs, the summary statistics cards (Total Rules, Active Rules, Sent Count), and the rules list with search, create button, and enable/disable toggles]_
+![Notification rules and logs page with summary cards and the rules list](./images/07-08-notification-rules.png)
 
 ### Notification Rules
 
@@ -466,8 +464,7 @@ Navigate to **Integrations** in the sidebar to configure connections with extern
 4. Configure which events or triggers should use this integration.
 5. Test the connection.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Integrations page showing available integrations as cards with logos, connection status (Connected in green, Not Connected in gray), and a Configure button]_
+![Integrations page showing available integrations and connection status](./images/07-13-integrations.png)
 
 > **Hint:** Calendar integrations use iCal feeds. After connecting, events from The Logbook will appear in your personal calendar app automatically.
 

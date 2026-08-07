@@ -34,8 +34,7 @@ The directory shows all active members with their name, rank, status, and contac
 - **Filter** by status (Active, Inactive, On Leave, Retired)
 - **Click** any member to view their full profile
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Members page showing the member list table with columns for name, rank, status, and contact info. Show the search bar at the top and the status filter dropdown]_
+![Member directory listing members with rank, status, and contact columns](./images/01-01-member-directory.png)
 
 **Member Statuses:**
 
@@ -125,8 +124,7 @@ Navigate to **Administration > Members > Member Management**, then click the **A
 3. Check **Send Welcome Email** to automatically email the new member their login credentials.
 4. Click **Create Member**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Add Member form showing the personal information fields, role assignment section, and the "Send Welcome Email" checkbox at the bottom]_
+![Add Member form with personal information and role assignment fields](./images/01-05-add-member-form.png)
 
 > **Hint:** The system generates a temporary password for the new member. If you uncheck "Send Welcome Email," you will need to share the credentials manually. The member will be prompted to change their password on first login.
 
@@ -149,8 +147,7 @@ For bulk onboarding, you can import members from a CSV file:
 5. Review the **preview** to verify the data looks correct.
 6. Confirm the import.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Import Members page showing the file upload area, the download template link, and the preview table of the first five parsed rows (name, member #, email, phone, emergency contact), plus the post-import results panel with successful/failed counts and the per-row error list]_
+![Import Members page with the file upload area and template download link](./images/01-06-import-members.png)
 
 **CSV Columns:** (the downloaded template contains all of them, in this order)
 
@@ -262,8 +259,7 @@ The pipeline offers two views:
 - **Kanban Board** - Drag-and-drop cards through stages
 - **Table View** - Traditional list with sorting and filtering
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Kanban board view showing pipeline stages as columns (e.g., "Application Received", "Interview Scheduled", "Background Check", "Vote Required", "Approved") with prospect cards in each column]_
+![Prospective members kanban board with pipeline stages as columns](./images/01-10-prospective-pipeline.png)
 
 ### Working with Prospects
 
@@ -564,8 +560,7 @@ The **Member Lifecycle Management** page (found under Members Admin) consolidate
 | **Leave of Absence** | Manage leave periods for active members |
 | **Tier Configuration** | Configure membership tiers and auto-advancement |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Member Lifecycle Management page showing the four tab buttons at the top and the Archived Members tab active, displaying a table of archived members with reactivate buttons]_
+![Member Lifecycle Management page with its tab bar and archived member list](./images/01-22-member-lifecycle.png)
 
 ---
 

@@ -46,7 +46,7 @@ The module uses two primary permissions:
 | `prospective_members.view` | View pipeline, applicants, documents |
 | `prospective_members.manage` | Full CRUD, advance/reject/convert, configure pipeline |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Prospective Members main page showing the kanban board view with columns for each pipeline stage (Interest Form, Application Review, Interview, Membership Vote, Onboarding), applicant cards in each column, and the Kanban/Table view toggle at the top._
+![Prospective members kanban board with a column per pipeline stage](./images/15-01-pipeline-board.png)
 
 ---
 
