@@ -38,12 +38,14 @@ The app will be available at http://localhost:3000
 ### Environment Variables
 
 **For development (with Vite dev server proxy):**
+
 ```env
 VITE_API_URL=/api/v1
 VITE_BACKEND_URL=http://localhost:3001
 ```
 
 **For production (Docker with nginx proxy):**
+
 ```env
 VITE_API_URL=/api/v1
 ```
@@ -106,6 +108,7 @@ frontend/
 ### Welcome Page (/)
 
 The landing page with a beautiful fade-in animation:
+
 - Blank screen for 3 seconds
 - "Welcome to The Logbook" title fades in
 - Description paragraph fades in after 1 second
@@ -115,6 +118,7 @@ The landing page with a beautiful fade-in animation:
 ### Onboarding Check (/onboarding)
 
 Checks if the system needs onboarding:
+
 - Calls `/api/v1/onboarding/status`
 - Redirects to onboarding wizard if needed
 - Redirects to login if already complete
@@ -136,8 +140,10 @@ npm run build
 # Development
 docker-compose up frontend
 
-# Production build
-docker build --target production -t logbook-frontend .
+# Production build — run from the repository root, not from frontend/.
+# The image installs from the workspace lockfile at the root, so the root
+# must be the build context.
+docker build -f frontend/Dockerfile --target production -t logbook-frontend .
 docker run -p 80:80 logbook-frontend
 ```
 

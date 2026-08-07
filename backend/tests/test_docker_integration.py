@@ -82,16 +82,33 @@ def _run(
 
 
 def _docker_build(
-    context: Path, target: str | None = None, tag: str = ""
+    context: Path,
+    target: str | None = None,
+    tag: str = "",
+    dockerfile: Path | None = None,
 ) -> subprocess.CompletedProcess:
-    """Build a Docker image and return the result."""
+    """Build a Docker image and return the result.
+
+    `dockerfile` is required when it does not sit at the context root — the
+    frontend image builds from the repository root so that `npm ci` can see
+    the workspace lockfile, while its Dockerfile stays in frontend/.
+    """
     cmd = ["docker", "build", str(context)]
+    if dockerfile:
+        cmd += ["-f", str(dockerfile)]
     if target:
         cmd += ["--target", target]
     if tag:
         cmd += ["-t", tag]
     # Don't pull to avoid network dependency — use cached base images
     return _run(cmd, timeout=600)
+
+
+def _build_frontend(target: str, tag: str) -> subprocess.CompletedProcess:
+    """Build the frontend image from the repository root context."""
+    return _docker_build(
+        ROOT_DIR, target=target, tag=tag, dockerfile=FRONTEND_DIR / "Dockerfile"
+    )
 
 
 def _docker_rm_image(tag: str):
@@ -234,6 +251,48 @@ def _wait_for_healthy(container: str, timeout: int = 120) -> bool:
     return False
 
 
+def _frontend_diagnostics(container: str) -> str:
+    """Collect why an nginx container is not answering, for an assertion message.
+
+    "Connection refused" alone cannot distinguish nginx having exited, nginx
+    listening on an address the client did not pick, or nginx never binding at
+    all — and these tests only run in CI, where nobody can poke at the
+    container afterwards. Capturing the state at failure time is the only
+    chance to tell those apart.
+    """
+    sections: list[str] = []
+
+    info = _docker_inspect(container)
+    state = info.get("State", {})
+    sections.append(
+        f"container state: status={state.get('Status')!r} "
+        f"running={state.get('Running')!r} exit_code={state.get('ExitCode')!r} "
+        f"health={state.get('Health', {}).get('Status')!r}"
+    )
+
+    logs = _run(["docker", "logs", "--tail", "40", container], timeout=30)
+    sections.append(f"docker logs:\n{logs.stdout[-2000:]}{logs.stderr[-2000:]}")
+
+    # Listening sockets, resolver state, and both loopback families — the set
+    # that separates "not listening" from "listening on the other address".
+    probes = {
+        "listening sockets": "netstat -ltn 2>/dev/null || ss -ltn 2>/dev/null",
+        "/etc/hosts": "cat /etc/hosts",
+        "GET via 127.0.0.1": "wget -q -O- -T3 http://127.0.0.1/ 2>&1 | head -c 200",
+        "GET via [::1]": "wget -q -O- -T3 http://[::1]/ 2>&1 | head -c 200",
+        "GET via localhost": "wget -q -O- -T3 http://localhost/ 2>&1 | head -c 200",
+    }
+    for label, script in probes.items():
+        probe = _run(
+            ["docker", "exec", container, "sh", "-c", script],
+            timeout=20,
+        )
+        output = (probe.stdout + probe.stderr).strip() or "(no output)"
+        sections.append(f"{label} (rc={probe.returncode}): {output}")
+
+    return "\n".join(sections)
+
+
 # ===========================================================================
 # Backend Image Build Tests
 # ===========================================================================
@@ -343,7 +402,7 @@ class TestFrontendImageBuild:
     def test_build_development_stage(self):
         tag = f"{_TAG_PREFIX}-frontend-dev"
         try:
-            result = _docker_build(FRONTEND_DIR, target="development", tag=tag)
+            result = _build_frontend(target="development", tag=tag)
             assert (
                 result.returncode == 0
             ), f"Frontend 'development' stage failed to build:\n{result.stderr[-2000:]}"
@@ -353,7 +412,7 @@ class TestFrontendImageBuild:
     def test_build_production_stage(self):
         tag = f"{_TAG_PREFIX}-frontend-prod"
         try:
-            result = _docker_build(FRONTEND_DIR, target="production", tag=tag)
+            result = _build_frontend(target="production", tag=tag)
             assert (
                 result.returncode == 0
             ), f"Frontend 'production' stage failed to build:\n{result.stderr[-2000:]}"
@@ -363,7 +422,7 @@ class TestFrontendImageBuild:
     def test_production_image_has_healthcheck(self):
         tag = f"{_TAG_PREFIX}-frontend-hc"
         try:
-            result = _docker_build(FRONTEND_DIR, target="production", tag=tag)
+            result = _build_frontend(target="production", tag=tag)
             if result.returncode != 0:
                 pytest.skip("Image build failed — cannot inspect")
             info = _docker_inspect(tag)
@@ -376,7 +435,7 @@ class TestFrontendImageBuild:
     def test_production_image_exposes_port_80(self):
         tag = f"{_TAG_PREFIX}-frontend-port"
         try:
-            result = _docker_build(FRONTEND_DIR, target="production", tag=tag)
+            result = _build_frontend(target="production", tag=tag)
             if result.returncode != 0:
                 pytest.skip("Image build failed — cannot inspect")
             info = _docker_inspect(tag)
@@ -567,7 +626,7 @@ class TestFrontendContainerHealth:
 
     @pytest.fixture(autouse=True)
     def _build_and_cleanup(self):
-        result = _docker_build(FRONTEND_DIR, target="production", tag=self._tag)
+        result = _build_frontend(target="production", tag=self._tag)
         if result.returncode != 0:
             pytest.skip(f"Frontend build failed: {result.stderr[-500:]}")
         assert _docker_network_create(self._network), "Could not create network"
@@ -627,7 +686,11 @@ class TestFrontendContainerHealth:
         if result.returncode != 0:
             pytest.skip(f"Container failed to start: {result.stderr}")
 
-        # Wait for nginx to be ready
+        # Wait for nginx to be ready.
+        #
+        # 127.0.0.1, not localhost: nginx binds IPv4 only, but the container
+        # resolves localhost to ::1 first, where nothing is listening. See the
+        # HEALTHCHECK comment in frontend/Dockerfile.
         deadline = time.time() + 20
         served = False
         while time.time() < deadline:
@@ -640,7 +703,7 @@ class TestFrontendContainerHealth:
                     "--quiet",
                     "--tries=1",
                     "--spider",
-                    "http://localhost/",
+                    "http://127.0.0.1/",
                 ],
                 timeout=10,
             )
@@ -649,7 +712,10 @@ class TestFrontendContainerHealth:
                 break
             time.sleep(2)
 
-        assert served, "Frontend container did not serve content on port 80 within 20s"
+        assert served, (
+            "Frontend container did not serve content on port 80 within 20s.\n"
+            f"{_frontend_diagnostics(self._container)}"
+        )
 
     def test_frontend_becomes_healthy(self):
         """Frontend container should pass its own HEALTHCHECK."""
@@ -673,7 +739,10 @@ class TestFrontendContainerHealth:
             pytest.skip(f"Container failed to start: {result.stderr}")
 
         healthy = _wait_for_healthy(self._container, timeout=60)
-        assert healthy, "Frontend container did not become healthy within 60s"
+        assert healthy, (
+            "Frontend container did not become healthy within 60s.\n"
+            f"{_frontend_diagnostics(self._container)}"
+        )
 
 
 # ===========================================================================

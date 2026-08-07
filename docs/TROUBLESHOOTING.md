@@ -6615,7 +6615,9 @@ missing optional column produces a warning, not a rejection. Notes:
 
 **Root Cause:** No `package-lock.json` existed in the frontend Docker context, causing npm to resolve dependencies from scratch each build. This led to unpredictable version resolution and peer dependency conflicts.
 
-**Fix:** The Dockerfile now uses `npm install --legacy-peer-deps` instead of `npm ci`. A `backend/.dockerignore` was also added to reduce the Docker build context from 343MB.
+**Fix (2026-03-04, superseded):** The Dockerfile switched to `npm install --legacy-peer-deps` instead of `npm ci`. That silenced the error without addressing the root cause — every image build still re-resolved the tree, so production shipped dependency versions no test had run against.
+
+**Fix (current):** The lockfile is now _in_ the context. `frontend/Dockerfile` builds from the repository root (`docker build -f frontend/Dockerfile .`, or `context: .` in compose) so the npm workspace's single root `package-lock.json` is available, and installs with `npm ci`. `npm ci` installs the locked tree verbatim rather than re-resolving, so the original ERESOLVE conflict cannot recur. Build the frontend from the repository root, never from `frontend/`.
 
 ```bash
 # Rebuild after pulling latest

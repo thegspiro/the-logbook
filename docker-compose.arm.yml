@@ -49,7 +49,9 @@ services:
   frontend:
     platform: linux/arm64
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      # Root context: the workspace lockfile lives at the repo root and
+      # `npm ci` needs it inside the context. See frontend/Dockerfile.
+      context: .
+      dockerfile: frontend/Dockerfile
       platforms:
         - linux/arm64
