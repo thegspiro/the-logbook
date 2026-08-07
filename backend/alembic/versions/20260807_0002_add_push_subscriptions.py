@@ -47,6 +47,15 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("endpoint_hash", name="uq_push_sub_endpoint"),
         mysql_charset="utf8mb4",
+        # Naming a charset without a collation is not the same as naming
+        # neither: the table then takes that charset's *server* default
+        # collation (utf8mb4_general_ci on MariaDB, utf8mb4_0900_ai_ci on
+        # MySQL 8) instead of the database default. organizations.id and
+        # users.id are utf8mb4_unicode_ci, and a foreign key requires the
+        # referencing and referenced columns to agree on collation as well as
+        # type — without this line the table cannot be created at all
+        # (errno 150).
+        mysql_collate="utf8mb4_unicode_ci",
     )
     op.create_index(
         "idx_push_sub_org_user",
