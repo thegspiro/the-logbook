@@ -36,6 +36,26 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
       workbox: {
+        // Precache the app SHELL only, not all ~275 route chunks.
+        //
+        // Precaching everything made installing the PWA a ~6.1MB download, most
+        // of it admin surfaces (finance, grants, elections, onboarding) that a
+        // given member will never open — a slow first launch on the rural
+        // cellular connections this app is used from. The shell here is the
+        // entry chunk (which contains Login and Dashboard), the vendor chunks
+        // and the stylesheet: ~1.8MB. Every other route chunk is cached on
+        // first visit by the CacheFirst rule below, so a page works offline
+        // once it has been opened online.
+        //
+        // Trade-off worth knowing: a member who installs and immediately goes
+        // offline can no longer open a page they have never visited. Restore
+        // the old behavior by deleting globPatterns/globIgnores.
+        globPatterns: ['**/*.{css,html}', 'assets/index-*.js', 'assets/vendor-*.js'],
+        // Drag-and-drop is only reachable from kanban/builder screens, which are
+        // desk work — never needed offline in the field. vendor-scanner is
+        // deliberately NOT ignored: barcode scanning is an offline field
+        // activity, so it has to survive a cold, disconnected start.
+        globIgnores: ['**/vendor-dnd-*.js'],
         // Prevent the service worker from caching API responses
         // containing sensitive/PII data (HIPAA §164.312).
         navigateFallbackDenylist: [/^\/api/],
@@ -49,6 +69,23 @@ export default defineConfig({
           {
             urlPattern: /\/version\.json$/,
             handler: 'NetworkOnly',
+          },
+          // Route chunks not covered by the precache above. Their filenames are
+          // content-hashed, so a given URL's bytes never change and CacheFirst
+          // is safe — a new build produces new filenames rather than new
+          // contents at the same URL. This is what gives a visited page offline
+          // access. LRU-capped so superseded chunks don't accumulate forever.
+          {
+            urlPattern: /\/assets\/.*\.(?:js|css)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'app-chunks',
+              expiration: {
+                maxEntries: 300,
+                maxAgeSeconds: 60 * 60 * 24 * 60, // 60 days
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
           },
         ],
       },
@@ -64,7 +101,15 @@ export default defineConfig({
         // Without an explicit start_url the spec defaults to the URL the app
         // was installed from — so a member who installed while viewing
         // /events/abc123 would get an app that always reopens that event.
-        start_url: '/',
+        //
+        // Deliberately NOT '/': that route is the onboarding Welcome splash,
+        // which only reaches the dashboard by mounting, reading has_session and
+        // redirecting. Launching there costs an extra hop through the
+        // onboarding chunk, and a logged-out offline launch falls through
+        // Welcome's branding-fetch catch to the "Get Started" screen, which
+        // reads as though the department was never set up. /dashboard is behind
+        // ProtectedRoute, so unauthenticated launches land on /login instead.
+        start_url: '/dashboard',
         scope: '/',
         // The app is form-heavy and table-heavy; leaving orientation
         // unlocked lets members rotate to landscape to read wide tables.
@@ -102,7 +147,8 @@ export default defineConfig({
           {
             name: 'Dashboard',
             short_name: 'Home',
-            url: '/',
+            // '/' is the onboarding Welcome splash, not the dashboard.
+            url: '/dashboard',
             description: 'Go to the main dashboard',
           },
           {

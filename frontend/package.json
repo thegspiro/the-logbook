@@ -17,7 +17,8 @@
     "typecheck:watch": "tsc --noEmit --watch",
     "validate": "npm run typecheck && npm run lint",
     "validate:onboarding": "npm run typecheck && eslint src/modules/onboarding",
-    "precommit": "npm run validate"
+    "precommit": "npm run validate",
+    "generate:pwa-assets": "node scripts/generate-pwa-assets.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -64,6 +65,7 @@
     "postcss": "8.5.25",
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
+    "sharp": "^0.35.3",
     "tailwindcss": "^4.2.1",
     "typescript": "7.0.2",
     "typescript-eslint": "^8.65.0",

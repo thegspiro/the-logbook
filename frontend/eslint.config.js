@@ -10,7 +10,10 @@ import globals from 'globals';
 export default tseslint.config(
   // Global ignores (replaces ignorePatterns)
   {
-    ignores: ['dist/', 'coverage/', '*.config.ts', '*.config.js'],
+    // `scripts/` holds build-time Node utilities, not app source. They sit
+    // outside tsconfig.eslint.json's project, so the type-aware rules cannot
+    // resolve them — same reason the *.config.* files are ignored here.
+    ignores: ['dist/', 'coverage/', 'scripts/', '*.config.ts', '*.config.js'],
   },
 
   // Base recommended configs
