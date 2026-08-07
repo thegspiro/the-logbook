@@ -5922,6 +5922,55 @@ response reads `date_of_birth: Invalid date format. emergency_contacts.0.email:
 Invalid value.` This affected every 422 in the application, not only the member
 import.
 
+### Problem: A row was rejected and the reason does not say what to fix
+
+**Cause (Fixed 2026-08-07):** Validation ran one row at a time inside the
+import loop and stopped at the first problem it found, so a row with three bad
+cells took three upload-fix-upload cycles. Anything the client did not check —
+a malformed email, an over-long cell — reached the API instead and came back as
+a 422 that named no column.
+
+**Fix:** Every row is now checked before any member is created, and every
+problem in a row is reported at once, each naming the column and the offending
+value. The check covers required fields, email shape, date format, field
+lengths, the 3-character username minimum, partial emergency contacts, unmatched
+role names, and values repeated within the file.
+
+Rejected rows come back as a downloadable CSV: the original row, unchanged,
+with the reasons in a leading `errorReason` column. Fix them in Excel, delete
+column A, and upload that file. Because it holds only the failures, re-uploading
+it cannot collide with the members that imported successfully.
+
+### Problem: A phone number was imported into the email field
+
+**Cause (Fixed 2026-08-07):** A comma inside an *unquoted* value splits one
+column into two and slides every later column one place right, so
+`secondaryPhone` lands in `email`. Quoted commas have parsed correctly since
+2026-08-04, but nothing compared a row's value count against the header's
+column count, so an unquoted one was accepted in silence.
+
+**Fix:** A row carrying more values than the header has columns is rejected,
+naming both counts and the quoting rule. Two further checks catch the damage a
+count alone cannot: a *missing* comma shifts columns left while leaving the
+count plausible, so every email column is also checked for shape — and a value
+holding seven or more digits and no `@` is called out as a probable phone
+number in a shifted row.
+
+The importer does not guess at the intended split. A shifted row is always
+rejected, never repaired.
+
+### Problem: "Email already exists" on a member who is not in the system
+
+**Cause:** The address appears twice in the file being uploaded. The first row
+created the member; the second collided with it.
+
+**Fix (2026-08-07):** Repeats of `email`, `username` and `membershipNumber`
+within one file are now caught before the import runs, and the message names the
+line the value was first used on. Note that two different addresses can still
+collide on username, because an omitted username is derived from the part before
+the `@` — `j.doe@a.com` and `j.doe@b.org` both yield `j_doe`. Add a `username`
+column to separate them.
+
 ### Problem: A column in the spreadsheet was ignored
 
 **Cause:** The importer reads the template's columns and discards the rest. A

@@ -5,6 +5,7 @@ import {
   Download,
   FileText,
   CheckCircle,
+  AlertTriangle,
   ArrowRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -12,10 +13,43 @@ import { CSVMemberRow } from '../types/member';
 import { userService, roleService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
 
+/**
+ * One rejected row: why it was rejected, and the cells it was rejected from.
+ *
+ * The cells are kept verbatim so the downloadable error report can hand the
+ * original row back for correction. A rejection the uploader cannot act on is
+ * worth nothing, and "row 3 failed" without the row is exactly that.
+ */
+interface RowIssue {
+  line: number;
+  reasons: string[];
+  cells: string[];
+}
+
+interface ValidRow {
+  line: number;
+  data: CSVMemberRow;
+  cells: string[];
+}
+
+/**
+ * The verdict on every data row, reached before a single member is created.
+ *
+ * Validation used to run inside the import loop, so row 21's problem surfaced
+ * only after rows 1-20 had already been created — the uploader could not see
+ * the scale of the problem until the database had been half-written.
+ */
+interface Preflight {
+  headerRow: string[];
+  total: number;
+  valid: ValidRow[];
+  invalid: RowIssue[];
+}
+
 interface ImportResult {
   success: number;
-  failed: number;
-  errors: Array<{ row: number; error: string; data: unknown }>;
+  /** Pre-flight rejections and server-side failures, as one list. */
+  issues: RowIssue[];
 }
 
 /**
@@ -111,6 +145,49 @@ const RECOGNIZED_HEADERS: readonly string[] = [
 const STATUS_HEADER = 'status';
 
 /**
+ * Length ceilings copied from `AdminUserCreate` and `EmergencyContact`.
+ *
+ * Checked here so an over-long cell is reported as the column, its length and
+ * the limit. The server's own answer is "Value is too long.", which names
+ * neither the column nor the ceiling.
+ */
+const FIELD_LIMITS: Partial<Record<keyof CSVMemberRow, number>> = {
+  firstName: 100,
+  lastName: 100,
+  middleName: 100,
+  membershipNumber: 50,
+  username: 100,
+  street: 255,
+  city: 100,
+  state: 50,
+  zipCode: 20,
+  primaryPhone: 20,
+  secondaryPhone: 20,
+  rank: 100,
+  station: 100,
+  platoon: 20,
+  emergencyName1: 100,
+  emergencyRelationship1: 50,
+  emergencyPhone1: 20,
+  emergencyName2: 100,
+  emergencyRelationship2: 50,
+  emergencyPhone2: 20,
+};
+
+const EMAIL_COLUMNS = ['email', 'emergencyEmail1', 'emergencyEmail2'] as const;
+
+/**
+ * Deliberately permissive. Its job is to catch a phone number or a name sitting
+ * in an email column — the signature of a shifted row — not to out-guess the
+ * server's RFC-grade parser and reject an address the API would have accepted.
+ */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Seven or more digits and no `@`: the tell of a phone number in a shifted row. */
+const looksLikePhone = (value: string): boolean =>
+  !value.includes('@') && (value.match(/\d/g) ?? []).length >= 7;
+
+/**
  * Excel rewrites an ISO date cell into the workstation's locale format the
  * moment the template is opened and saved, so a filled-in roster comes back
  * with `3/15/1985` where the template showed `1985-03-15`. The API binds these
@@ -164,15 +241,30 @@ const toIsoDate = (value: string): string | null => {
 };
 
 /**
+ * One parsed record: its cells, plus the 1-based line the record started on.
+ *
+ * The line is tracked during the scan rather than inferred from the record's
+ * position, because a quoted field may contain newlines — which puts record 12
+ * somewhere well below line 13. An error has to name a line the uploader can
+ * actually find in the file.
+ */
+interface CsvRecord {
+  cells: string[];
+  line: number;
+}
+
+/**
  * Minimal RFC 4180 parser. A plain `split(',')` shifts every column right of a
  * quoted address ("123 Main St, Apt 4") — which surfaces as bogus "missing
  * required field" errors on rows that are actually well-formed.
  */
-const parseCsv = (text: string): string[][] => {
-  const rows: string[][] = [];
-  let row: string[] = [];
+const parseCsv = (text: string): CsvRecord[] => {
+  const records: CsvRecord[] = [];
+  let cells: string[] = [];
   let field = '';
   let inQuotes = false;
+  let line = 1;
+  let recordLine = 1;
 
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
@@ -186,6 +278,7 @@ const parseCsv = (text: string): string[][] => {
           inQuotes = false;
         }
       } else {
+        if (char === '\n') line++;
         field += char;
       }
       continue;
@@ -194,29 +287,31 @@ const parseCsv = (text: string): string[][] => {
     if (char === '"') {
       inQuotes = true;
     } else if (char === ',') {
-      row.push(field);
+      cells.push(field);
       field = '';
     } else if (char === '\n' || char === '\r') {
       // Treat CRLF as a single terminator.
       if (char === '\r' && text[i + 1] === '\n') i++;
-      row.push(field);
-      rows.push(row);
-      row = [];
+      cells.push(field);
+      records.push({ cells, line: recordLine });
+      cells = [];
       field = '';
+      line++;
+      recordLine = line;
     } else {
       field += char;
     }
   }
 
-  if (field.length > 0 || row.length > 0) {
-    row.push(field);
-    rows.push(row);
+  if (field.length > 0 || cells.length > 0) {
+    cells.push(field);
+    records.push({ cells, line: recordLine });
   }
 
-  return rows;
+  return records;
 };
 
-const isBlankRow = (row: string[]): boolean => row.every((cell) => cell.trim() === '');
+const isBlankRow = (cells: string[]): boolean => cells.every((cell) => cell.trim() === '');
 
 const cell = (row: string[], headers: string[], name: string): string | undefined => {
   const index = headers.indexOf(name);
@@ -255,40 +350,197 @@ const buildRow = (row: string[], headers: string[]): CSVMemberRow => ({
   emergencyEmail2: cell(row, headers, 'emergencyemail2'),
 });
 
+const usernameFromEmail = (email: string): string =>
+  (email.split('@')[0] ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+
 /**
- * Row-level checks that mirror the backend's own constraints, so a bad cell is
- * reported against its row number here instead of coming back as an opaque 422.
+ * Every reason this row cannot be created, not just the first one found.
+ *
+ * Returning on the first problem means a row with three bad cells takes three
+ * upload-fix-upload cycles to clear. Each reason names the column and the
+ * offending value, because a reason the uploader cannot map back to a cell is
+ * no better than no reason at all.
  */
-const validateRow = (data: CSVMemberRow): string | null => {
-  const missing: string[] = [];
-  if (!data.firstName) missing.push('firstName');
-  if (!data.lastName) missing.push('lastName');
-  if (!data.email) missing.push('email');
+const validateRow = (data: CSVMemberRow): string[] => {
+  const problems: string[] = [];
+
+  const missing = (
+    [
+      ['firstName', data.firstName],
+      ['lastName', data.lastName],
+      ['email', data.email],
+    ] as const
+  )
+    .filter(([, value]) => !value)
+    .map(([column]) => column);
   if (missing.length > 0) {
-    return `Missing required fields: ${missing.join(', ')}`;
+    problems.push(
+      `Missing required ${missing.length === 1 ? 'field' : 'fields'}: ${missing.join(', ')}`
+    );
+  }
+
+  for (const column of EMAIL_COLUMNS) {
+    const value = data[column];
+    if (!value || EMAIL_PATTERN.test(value)) continue;
+    problems.push(
+      `${column} "${value}" is not an email address` +
+        (looksLikePhone(value)
+          ? " — that looks like a phone number, so this row's columns are probably shifted"
+          : '')
+    );
+  }
+
+  for (const [column, max] of Object.entries(FIELD_LIMITS)) {
+    const value = data[column as keyof CSVMemberRow];
+    if (max !== undefined && value && value.length > max) {
+      problems.push(`${column} is ${value.length} characters long; the limit is ${max}`);
+    }
+  }
+
+  // The API's minimum is 3 characters, and an omitted username is derived from
+  // the email's local part — so a two-letter mailbox fails a column the file
+  // never had.
+  const username = data.username || (data.email ? usernameFromEmail(data.email) : '');
+  if (username && username.length < 3) {
+    problems.push(
+      data.username
+        ? `username "${username}" is under the 3-character minimum`
+        : `username "${username}", derived from email "${data.email}", is under the 3-character minimum — add a username column for this member`
+    );
   }
 
   // EmergencyContact requires name, relationship and phone together; a partial
   // contact is rejected by the API rather than saved with blanks.
-  if (data.emergencyName1 && (!data.emergencyRelationship1 || !data.emergencyPhone1)) {
-    return 'Emergency contact 1 needs both emergencyRelationship1 and emergencyPhone1';
-  }
-  if (data.emergencyName2 && (!data.emergencyRelationship2 || !data.emergencyPhone2)) {
-    return 'Emergency contact 2 needs both emergencyRelationship2 and emergencyPhone2';
+  for (const [label, suffix, name, relationship, phone] of [
+    ['Emergency contact 1', '1', data.emergencyName1, data.emergencyRelationship1, data.emergencyPhone1],
+    ['Emergency contact 2', '2', data.emergencyName2, data.emergencyRelationship2, data.emergencyPhone2],
+  ] as const) {
+    if (!name) continue;
+    const absent = [
+      relationship ? '' : `emergencyRelationship${suffix}`,
+      phone ? '' : `emergencyPhone${suffix}`,
+    ].filter(Boolean);
+    if (absent.length > 0) {
+      problems.push(
+        `${label} "${name}" is missing ${absent.join(' and ')} — name, relationship and phone are stored together or not at all`
+      );
+    }
   }
 
-  const badDate = ([['dateOfBirth', data.dateOfBirth], ['joinDate', data.joinDate]] as const).find(
-    ([, value]) => value && toIsoDate(value) === null
-  );
-  if (badDate) {
-    return `${badDate[0]} "${badDate[1] ?? ''}" is not a recognized date — use YYYY-MM-DD or MM/DD/YYYY`;
+  for (const [column, value] of [
+    ['dateOfBirth', data.dateOfBirth],
+    ['joinDate', data.joinDate],
+  ] as const) {
+    if (value && toIsoDate(value) === null) {
+      problems.push(
+        `${column} "${value}" is not a recognized date — use YYYY-MM-DD or MM/DD/YYYY`
+      );
+    }
   }
 
-  return null;
+  return problems;
 };
 
-const usernameFromEmail = (email: string): string =>
-  (email.split('@')[0] ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+/**
+ * Judges every data row up front, so the uploader sees the whole problem before
+ * any member is created rather than discovering it partway through a write.
+ *
+ * `knownRoles` is null when roles could not be loaded or none are configured,
+ * which means the role column is skipped rather than failing every row.
+ */
+const runPreflight = (
+  records: CsvRecord[],
+  headerRow: string[],
+  headers: string[],
+  knownRoles: Set<string> | null
+): Preflight => {
+  const dataRecords = records.slice(1).filter((record) => !isBlankRow(record.cells));
+
+  // Cross-row uniqueness. The API answers a repeat with "Email already exists",
+  // which is true but says nothing about the collision being with another row
+  // of the very file being uploaded. The first occurrence stays importable.
+  const claimed: Array<[Map<string, number>, string, (row: CSVMemberRow) => string | undefined]> = [
+    [new Map<string, number>(), 'email', (row) => row.email],
+    [new Map<string, number>(), 'username', (row) => row.username || (row.email ? usernameFromEmail(row.email) : '')],
+    [new Map<string, number>(), 'membershipNumber', (row) => row.membershipNumber],
+  ];
+
+  const valid: ValidRow[] = [];
+  const invalid: RowIssue[] = [];
+
+  for (const record of dataRecords) {
+    const reasons: string[] = [];
+
+    // Extra cells mean a comma inside an unquoted value split one column into
+    // two, sliding every later column right — which is how a phone number ends
+    // up in the email field. There is no safe way to guess the intended split.
+    if (record.cells.length > headerRow.length) {
+      reasons.push(
+        `Row has ${record.cells.length} values but the header has ${headerRow.length} columns, so every column after the extra comma is shifted. Wrap any value containing a comma in double quotes.`
+      );
+    }
+
+    const data = buildRow(record.cells, headers);
+    reasons.push(...validateRow(data));
+
+    if (knownRoles && data.role && !knownRoles.has(data.role.toLowerCase())) {
+      reasons.push(
+        `role "${data.role}" does not match any role configured under Roles — create it there, or clear the role column and use rank instead`
+      );
+    }
+
+    for (const [seen, label, read] of claimed) {
+      const key = (read(data) ?? '').trim().toLowerCase();
+      if (!key) continue;
+      const firstSeen = seen.get(key);
+      if (firstSeen === undefined) {
+        seen.set(key, record.line);
+      } else {
+        reasons.push(`${label} "${read(data) ?? ''}" is already used on line ${firstSeen} of this file`);
+      }
+    }
+
+    if (reasons.length > 0) {
+      invalid.push({ line: record.line, reasons, cells: record.cells });
+    } else {
+      valid.push({ line: record.line, data, cells: record.cells });
+    }
+  }
+
+  return { headerRow, total: dataRecords.length, valid, invalid };
+};
+
+const escapeCell = (value: string): string =>
+  /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+
+/**
+ * The rejected rows, verbatim, with the reasons in a leading column.
+ *
+ * `errorReason` leads rather than trails so it cannot collide with a row that
+ * carries more cells than the header — precisely the shifted-column case this
+ * report exists to explain. Delete column A and the file is ready to re-upload,
+ * and because it holds only the failures, re-uploading cannot collide with the
+ * members that imported successfully.
+ */
+const buildErrorReport = (headerRow: string[], issues: RowIssue[]): string => {
+  const header = ['errorReason', ...headerRow].map(escapeCell).join(',');
+  const rows = issues.map((issue) =>
+    [issue.reasons.join(' | '), ...issue.cells].map(escapeCell).join(',')
+  );
+  return [header, ...rows].join('\r\n');
+};
+
+const downloadCsv = (contents: string, filename: string): void => {
+  const blob = new Blob([contents], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+};
 
 const ImportMembers: React.FC = () => {
   const navigate = useNavigate();
@@ -296,8 +548,15 @@ const ImportMembers: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [validating, setValidating] = useState(false);
-  const [previewData, setPreviewData] = useState<CSVMemberRow[]>([]);
+  const [preflight, setPreflight] = useState<Preflight | null>(null);
+  const [roleIdsByName, setRoleIdsByName] = useState<Map<string, string>>(new Map());
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+
+  const resetFileState = () => {
+    setPreflight(null);
+    setRoleIdsByName(new Map());
+    setImportResult(null);
+  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -309,8 +568,7 @@ const ImportMembers: React.FC = () => {
     }
 
     setFile(selectedFile);
-    setPreviewData([]);
-    setImportResult(null);
+    resetFileState();
     void validateFile(selectedFile);
   };
 
@@ -318,15 +576,16 @@ const ImportMembers: React.FC = () => {
     setValidating(true);
     try {
       const text = await file.text();
-      const rows = parseCsv(text);
-      const headerRow = rows[0];
+      const records = parseCsv(text);
+      const headerRecord = records[0];
 
-      if (!headerRow || isBlankRow(headerRow)) {
+      if (!headerRecord || isBlankRow(headerRecord.cells)) {
         toast.error('The file is empty or has no header row.');
         setValidating(false);
         return;
       }
 
+      const headerRow = headerRecord.cells;
       const headers = headerRow.map(normalizeHeader);
 
       const missingHeaders = REQUIRED_HEADERS.filter((h) => !headers.includes(h));
@@ -336,8 +595,7 @@ const ImportMembers: React.FC = () => {
         return;
       }
 
-      const dataRows = rows.slice(1).filter((row) => !isBlankRow(row));
-      if (dataRows.length === 0) {
+      if (records.length < 2 || records.slice(1).every((r) => isBlankRow(r.cells))) {
         toast.error('The file has a header row but no member data.');
         setValidating(false);
         return;
@@ -385,44 +643,39 @@ const ImportMembers: React.FC = () => {
         );
       }
 
-      const parsedRows = dataRows.map((row) => buildRow(row, headers));
-
-      // Resolved here as well as during the import because an unmatched role
-      // fails its row: a roster whose role column holds assignments ("Engine
-      // Operator", "EMT") rather than configured role names imports nothing at
-      // all, and finding that out one row at a time after pressing Import is a
-      // wasted round trip.
+      // Roles are named in the CSV but assigned by id, so the org's roles are
+      // resolved once here and reused by the import rather than re-fetched.
+      let knownRoles: Set<string> | null = null;
+      const resolvedRoleIds = new Map<string, string>();
       if (headers.includes('role')) {
         try {
           const roles = await roleService.getRoles();
-          const known = new Set(roles.map((role) => role.name.trim().toLowerCase()));
-          // An empty role list means roles are not configured yet, which the
-          // import treats as "skip the column" rather than "every row is
-          // wrong"; warning here would contradict what the import then does.
-          const unknown = known.size === 0 ? [] : [
-            ...new Set(
-              parsedRows
-                .map((row) => row.role)
-                .filter((role): role is string => !!role && !known.has(role.toLowerCase()))
-            ),
-          ];
-          if (unknown.length > 0) {
-            const shown = unknown.slice(0, 3).join(', ');
-            const rest = unknown.length - 3;
-            toast.error(
-              `${unknown.length} role name(s) do not match a configured role: ${shown}` +
-                (rest > 0 ? ` and ${rest} more` : '') +
-                '. Create them under Roles or clear the role column, or those rows will fail.',
-              { duration: 8000 }
-            );
-          }
+          roles.forEach((role) => resolvedRoleIds.set(role.name.trim().toLowerCase(), role.id));
+          // An empty list means roles are not configured yet, which the import
+          // treats as "skip the column" rather than "every row is wrong".
+          knownRoles = resolvedRoleIds.size > 0 ? new Set(resolvedRoleIds.keys()) : null;
         } catch (_error) {
-          // Non-fatal: the import re-resolves roles and reports per row.
+          toast.error('Could not load roles; the role column will be skipped.');
         }
       }
+      setRoleIdsByName(resolvedRoleIds);
 
-      setPreviewData(parsedRows.slice(0, 5));
-      toast.success(`File validated successfully! Found ${dataRows.length} members to import.`);
+      const report = runPreflight(records, headerRow, headers, knownRoles);
+      setPreflight(report);
+
+      if (report.invalid.length === 0) {
+        toast.success(`File validated successfully! Found ${report.total} members to import.`);
+      } else if (report.valid.length === 0) {
+        toast.error(
+          `No rows can be imported — all ${report.total} have problems. Download the error report for the reason on each row.`,
+          { duration: 8000 }
+        );
+      } else {
+        toast(
+          `${report.valid.length} of ${report.total} rows are ready; ${report.invalid.length} will be skipped. Review the reasons below.`,
+          { icon: '⚠️', duration: 8000 }
+        );
+      }
     } catch (_error) {
       toast.error('Failed to parse CSV file. Please check the format.');
     }
@@ -430,154 +683,104 @@ const ImportMembers: React.FC = () => {
   };
 
   const handleImport = async () => {
-    if (!file) return;
+    if (!preflight || preflight.valid.length === 0) return;
 
     setImporting(true);
-    const result: ImportResult = {
-      success: 0,
-      failed: 0,
-      errors: [],
-    };
+    // Rows rejected before the import began belong in the same report as rows
+    // the server rejected during it; the uploader needs one list, not two.
+    const issues: RowIssue[] = [...preflight.invalid];
+    let success = 0;
 
-    try {
-      const text = await file.text();
-      const rows = parseCsv(text);
-      const headerRow = rows[0];
+    for (const row of preflight.valid) {
+      const rowData = row.data;
+      try {
+        const username = rowData.username || usernameFromEmail(rowData.email);
+        const roleId = rowData.role
+          ? roleIdsByName.get(rowData.role.trim().toLowerCase())
+          : undefined;
 
-      if (!headerRow || isBlankRow(headerRow)) {
-        result.errors.push({ row: 0, error: 'The file is empty or has no header row.', data: null });
-        setImportResult(result);
-        setImporting(false);
-        return;
-      }
+        // Pre-flight has already rejected anything toIsoDate cannot parse.
+        const dateOfBirth = rowData.dateOfBirth ? toIsoDate(rowData.dateOfBirth) : null;
+        const joinDate = rowData.joinDate ? toIsoDate(rowData.joinDate) : null;
 
-      const headers = headerRow.map(normalizeHeader);
+        const emergencyContacts: Array<{
+          name: string;
+          relationship: string;
+          phone: string;
+          email?: string | undefined;
+          is_primary: boolean;
+        }> = [];
 
-      // Roles are named in the CSV but the API assigns them by id, so resolve
-      // the org's roles once up front rather than per row.
-      const rolesByName = new Map<string, string>();
-      if (headers.includes('role')) {
-        try {
-          const roles = await roleService.getRoles();
-          roles.forEach((role) => rolesByName.set(role.name.trim().toLowerCase(), role.id));
-        } catch (_error) {
-          toast.error('Could not load roles; the role column will be skipped.');
-        }
-      }
-
-      // Process each row (skip header)
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || isBlankRow(row)) continue; // Skip empty rows
-
-        const rowData = buildRow(row, headers);
-
-        const validationError = validateRow(rowData);
-        if (validationError) {
-          result.failed++;
-          result.errors.push({
-            row: i + 1,
-            error: validationError,
-            data: rowData,
-          });
-          continue;
-        }
-
-        const roleId = rowData.role ? rolesByName.get(rowData.role.toLowerCase()) : undefined;
-        if (rowData.role && rolesByName.size > 0 && !roleId) {
-          result.failed++;
-          result.errors.push({
-            row: i + 1,
-            error: `Unknown role "${rowData.role}". Create it under Roles first, or clear the column.`,
-            data: rowData,
-          });
-          continue;
-        }
-
-        try {
-          const username = rowData.username || usernameFromEmail(rowData.email);
-
-          // validateRow has already rejected anything toIsoDate cannot parse.
-          const dateOfBirth = rowData.dateOfBirth ? toIsoDate(rowData.dateOfBirth) : null;
-          const joinDate = rowData.joinDate ? toIsoDate(rowData.joinDate) : null;
-
-          // Build emergency contacts array
-          const emergencyContacts: Array<{
-            name: string;
-            relationship: string;
-            phone: string;
-            email?: string | undefined;
-            is_primary: boolean;
-          }> = [];
-
-          if (rowData.emergencyName1) {
-            emergencyContacts.push({
-              name: rowData.emergencyName1,
-              relationship: rowData.emergencyRelationship1,
-              phone: rowData.emergencyPhone1,
-              ...(rowData.emergencyEmail1 ? { email: rowData.emergencyEmail1 } : {}),
-              is_primary: true,
-            });
-          }
-
-          if (rowData.emergencyName2) {
-            emergencyContacts.push({
-              name: rowData.emergencyName2,
-              relationship: rowData.emergencyRelationship2 || '',
-              phone: rowData.emergencyPhone2 || '',
-              ...(rowData.emergencyEmail2 ? { email: rowData.emergencyEmail2 } : {}),
-              is_primary: false,
-            });
-          }
-
-          // Call the API
-          await userService.createMember({
-            username,
-            email: rowData.email,
-            first_name: rowData.firstName,
-            last_name: rowData.lastName,
-            address_country: 'USA',
-            emergency_contacts: emergencyContacts,
-            send_welcome_email: true,
-            ...(rowData.middleName ? { middle_name: rowData.middleName } : {}),
-            ...(rowData.membershipNumber ? { membership_number: rowData.membershipNumber } : {}),
-            ...(rowData.primaryPhone ? { phone: rowData.primaryPhone } : {}),
-            ...(rowData.secondaryPhone ? { mobile: rowData.secondaryPhone } : {}),
-            ...(dateOfBirth ? { date_of_birth: dateOfBirth } : {}),
-            ...(joinDate ? { hire_date: joinDate } : {}),
-            ...(rowData.rank ? { rank: rowData.rank } : {}),
-            ...(rowData.station ? { station: rowData.station } : {}),
-            ...(rowData.platoon ? { platoon: rowData.platoon } : {}),
-            ...(rowData.street ? { address_street: rowData.street } : {}),
-            ...(rowData.city ? { address_city: rowData.city } : {}),
-            ...(rowData.state ? { address_state: rowData.state } : {}),
-            ...(rowData.zipCode ? { address_zip: rowData.zipCode } : {}),
-            ...(roleId ? { role_ids: [roleId] } : {}),
-          });
-
-          result.success++;
-        } catch (error: unknown) {
-          result.failed++;
-          const errorMessage = getErrorMessage(error, 'Unknown error');
-          result.errors.push({
-            row: i + 1,
-            error: errorMessage,
-            data: rowData,
+        if (rowData.emergencyName1) {
+          emergencyContacts.push({
+            name: rowData.emergencyName1,
+            relationship: rowData.emergencyRelationship1,
+            phone: rowData.emergencyPhone1,
+            ...(rowData.emergencyEmail1 ? { email: rowData.emergencyEmail1 } : {}),
+            is_primary: true,
           });
         }
-      }
 
-      setImportResult(result);
-      if (result.success > 0) {
-        toast.success(`Successfully imported ${result.success} members!`);
+        if (rowData.emergencyName2) {
+          emergencyContacts.push({
+            name: rowData.emergencyName2,
+            relationship: rowData.emergencyRelationship2 || '',
+            phone: rowData.emergencyPhone2 || '',
+            ...(rowData.emergencyEmail2 ? { email: rowData.emergencyEmail2 } : {}),
+            is_primary: false,
+          });
+        }
+
+        await userService.createMember({
+          username,
+          email: rowData.email,
+          first_name: rowData.firstName,
+          last_name: rowData.lastName,
+          address_country: 'USA',
+          emergency_contacts: emergencyContacts,
+          send_welcome_email: true,
+          ...(rowData.middleName ? { middle_name: rowData.middleName } : {}),
+          ...(rowData.membershipNumber ? { membership_number: rowData.membershipNumber } : {}),
+          ...(rowData.primaryPhone ? { phone: rowData.primaryPhone } : {}),
+          ...(rowData.secondaryPhone ? { mobile: rowData.secondaryPhone } : {}),
+          ...(dateOfBirth ? { date_of_birth: dateOfBirth } : {}),
+          ...(joinDate ? { hire_date: joinDate } : {}),
+          ...(rowData.rank ? { rank: rowData.rank } : {}),
+          ...(rowData.station ? { station: rowData.station } : {}),
+          ...(rowData.platoon ? { platoon: rowData.platoon } : {}),
+          ...(rowData.street ? { address_street: rowData.street } : {}),
+          ...(rowData.city ? { address_city: rowData.city } : {}),
+          ...(rowData.state ? { address_state: rowData.state } : {}),
+          ...(rowData.zipCode ? { address_zip: rowData.zipCode } : {}),
+          ...(roleId ? { role_ids: [roleId] } : {}),
+        });
+
+        success++;
+      } catch (error: unknown) {
+        issues.push({
+          line: row.line,
+          reasons: [getErrorMessage(error, 'The server rejected this row without a reason.')],
+          cells: row.cells,
+        });
       }
-      if (result.failed > 0) {
-        toast.error(`Failed to import ${result.failed} members. Check the error details below.`);
-      }
-    } catch (_error) {
-      toast.error('Failed to process CSV file. Please try again.');
+    }
+
+    issues.sort((a, b) => a.line - b.line);
+    setImportResult({ success, issues });
+
+    if (success > 0) {
+      toast.success(`Successfully imported ${success} members!`);
+    }
+    if (issues.length > 0) {
+      toast.error(`${issues.length} row(s) were not imported. Download the error report for details.`);
     }
     setImporting(false);
+  };
+
+  const downloadErrorReport = (issues: RowIssue[]) => {
+    if (!preflight) return;
+    downloadCsv(buildErrorReport(preflight.headerRow, issues), 'member-import-errors.csv');
+    toast.success('Error report downloaded!');
   };
 
   const downloadTemplate = () => {
@@ -610,24 +813,30 @@ const ImportMembers: React.FC = () => {
       emergencyEmail2: 'bob.doe@example.com',
     };
 
-    const escapeCell = (value: string): string =>
-      /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-
     const exampleRow = TEMPLATE_HEADERS.map((h) => escapeCell(exampleValues[h]));
 
-    const csv = [TEMPLATE_HEADERS.join(','), exampleRow.join(',')].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'member-import-template.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadCsv(
+      [TEMPLATE_HEADERS.join(','), exampleRow.join(',')].join('\n'),
+      'member-import-template.csv'
+    );
 
     toast.success('Template downloaded!');
   };
+
+  const renderIssues = (issues: RowIssue[]) => (
+    <div className="space-y-2 text-sm">
+      {issues.map((issue) => (
+        <div key={issue.line}>
+          <p className="text-red-700 dark:text-red-300 font-medium">Line {issue.line}</p>
+          <ul className="ml-4 list-disc text-red-700 dark:text-red-200">
+            {issue.reasons.map((reason, index) => (
+              <li key={index}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="min-h-screen">
@@ -668,11 +877,12 @@ const ImportMembers: React.FC = () => {
               <strong>email</strong> are required on every row; the rest are optional
             </li>
             <li>Replace the sample row — it is imported like any other row if left in</li>
+            <li>Wrap any value containing a comma in double quotes, or its row will be rejected</li>
             <li>Leave membershipNumber blank to have the system assign one</li>
             <li>Role must match a role name configured under Roles</li>
             <li>Dates accept either YYYY-MM-DD or MM/DD/YYYY</li>
-            <li>Upload your completed CSV file</li>
-            <li>Review the preview and import</li>
+            <li>Upload your completed CSV file and review the check results</li>
+            <li>Rows that pass are imported; any that fail come back as a downloadable report</li>
           </ol>
 
           <div className="mt-4 pt-4 border-t border-blue-500/30">
@@ -705,8 +915,7 @@ const ImportMembers: React.FC = () => {
                   onClick={(e) => {
                     e.stopPropagation();
                     setFile(null);
-                    setPreviewData([]);
-                    setImportResult(null);
+                    resetFileState();
                   }}
                   className="mt-3 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm"
                 >
@@ -733,54 +942,96 @@ const ImportMembers: React.FC = () => {
           {validating && (
             <div className="mt-4 flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-400">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400"></div>
-              <span>Validating file...</span>
+              <span>Checking every row...</span>
             </div>
           )}
         </div>
 
-        {/* Preview */}
-        {previewData.length > 0 && !importResult && (
+        {/* Pre-flight review */}
+        {preflight && !importResult && (
           <div className="card mb-8 p-8">
-            <h2 className="text-theme-text-primary font-bold mb-4">Step 2: Preview Data</h2>
-            <p className="text-theme-text-secondary text-sm mb-4">
-              Showing first {previewData.length} members from the file
-            </p>
+            <h2 className="text-theme-text-primary font-bold mb-4">Step 2: Review</h2>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-theme-input-bg border-b border-theme-surface-border">
-                  <tr>
-                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Name</th>
-                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Member #</th>
-                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Email</th>
-                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Phone</th>
-                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Emergency Contact</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10">
-                  {previewData.map((row, index) => (
-                    <tr key={index} className="hover:bg-theme-surface-secondary">
-                      <td className="px-4 py-2 text-theme-text-primary">
-                        {row.firstName} {row.lastName}
-                      </td>
-                      <td className="px-4 py-2 text-theme-text-secondary font-mono">{row.membershipNumber}</td>
-                      <td className="px-4 py-2 text-theme-text-secondary">{row.email}</td>
-                      <td className="px-4 py-2 text-theme-text-secondary">{row.primaryPhone}</td>
-                      <td className="px-4 py-2 text-theme-text-secondary">
-                        {row.emergencyName1
-                          ? `${row.emergencyName1}${row.emergencyRelationship1 ? ` (${row.emergencyRelationship1})` : ''}`
-                          : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
+                <p className="text-green-700 dark:text-green-400 text-2xl font-bold">
+                  {preflight.valid.length}
+                </p>
+                <p className="text-green-700 dark:text-green-300 text-sm">Ready to import</p>
+              </div>
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
+                <p className="text-red-700 dark:text-red-400 text-2xl font-bold">
+                  {preflight.invalid.length}
+                </p>
+                <p className="text-red-700 dark:text-red-300 text-sm">Will be skipped</p>
+              </div>
             </div>
+
+            {preflight.valid.length > 0 && (
+              <>
+                <p className="text-theme-text-secondary text-sm mb-4">
+                  Showing the first {Math.min(5, preflight.valid.length)} of{' '}
+                  {preflight.valid.length} members that will be imported
+                </p>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-theme-input-bg border-b border-theme-surface-border">
+                      <tr>
+                        <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Name</th>
+                        <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Member #</th>
+                        <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Email</th>
+                        <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Phone</th>
+                        <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Emergency Contact</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {preflight.valid.slice(0, 5).map(({ line, data }) => (
+                        <tr key={line} className="hover:bg-theme-surface-secondary">
+                          <td className="px-4 py-2 text-theme-text-primary">
+                            {data.firstName} {data.lastName}
+                          </td>
+                          <td className="px-4 py-2 text-theme-text-secondary font-mono">{data.membershipNumber}</td>
+                          <td className="px-4 py-2 text-theme-text-secondary">{data.email}</td>
+                          <td className="px-4 py-2 text-theme-text-secondary">{data.primaryPhone}</td>
+                          <td className="px-4 py-2 text-theme-text-secondary">
+                            {data.emergencyName1
+                              ? `${data.emergencyName1}${data.emergencyRelationship1 ? ` (${data.emergencyRelationship1})` : ''}`
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            {preflight.invalid.length > 0 && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-6">
+                <h3 className="text-red-700 dark:text-red-300 font-bold mb-1 flex items-center space-x-2">
+                  <AlertTriangle className="w-5 h-5" />
+                  <span>{preflight.invalid.length} row(s) will not be imported</span>
+                </h3>
+                <p className="text-red-700 dark:text-red-200 text-sm mb-3">
+                  Download the report to get these rows back with the reason in the first
+                  column. Fix them, delete that column, and upload the file again.
+                </p>
+                {renderIssues(preflight.invalid)}
+                <button
+                  onClick={() => downloadErrorReport(preflight.invalid)}
+                  className="btn-info mt-4 flex items-center space-x-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Error Report</span>
+                </button>
+              </div>
+            )}
 
             <div className="mt-6 flex items-center justify-end">
               <button
                 onClick={() => { void handleImport(); }}
-                disabled={importing}
+                disabled={importing || preflight.valid.length === 0}
                 className="flex items-center space-x-2 px-6 py-3 bg-linear-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {importing ? (
@@ -791,7 +1042,7 @@ const ImportMembers: React.FC = () => {
                 ) : (
                   <>
                     <CheckCircle className="w-5 h-5" />
-                    <span>Import All Members</span>
+                    <span>Import {preflight.valid.length} Members</span>
                   </>
                 )}
               </button>
@@ -816,21 +1067,26 @@ const ImportMembers: React.FC = () => {
                 <p className="text-green-700 dark:text-green-300 text-sm">Successful</p>
               </div>
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
-                <p className="text-red-700 dark:text-red-400 text-2xl font-bold">{importResult.failed}</p>
+                <p className="text-red-700 dark:text-red-400 text-2xl font-bold">{importResult.issues.length}</p>
                 <p className="text-red-700 dark:text-red-300 text-sm">Failed</p>
               </div>
             </div>
 
-            {importResult.errors.length > 0 && (
+            {importResult.issues.length > 0 && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
-                <h3 className="text-red-700 dark:text-red-300 font-bold mb-2">Errors:</h3>
-                <div className="space-y-1 text-sm">
-                  {importResult.errors.map((error, index) => (
-                    <p key={index} className="text-red-200">
-                      Row {error.row}: {error.error}
-                    </p>
-                  ))}
-                </div>
+                <h3 className="text-red-700 dark:text-red-300 font-bold mb-1">Rows not imported:</h3>
+                <p className="text-red-700 dark:text-red-200 text-sm mb-3">
+                  The report contains only these rows, so you can fix them and upload it
+                  again without colliding with the members that imported.
+                </p>
+                {renderIssues(importResult.issues)}
+                <button
+                  onClick={() => downloadErrorReport(importResult.issues)}
+                  className="btn-info mt-4 flex items-center space-x-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Error Report</span>
+                </button>
               </div>
             )}
 

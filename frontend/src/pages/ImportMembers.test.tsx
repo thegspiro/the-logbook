@@ -66,6 +66,14 @@ const uploadCsv = async (csv: string): Promise<void> => {
   await user.upload(screen.getByTestId<HTMLInputElement>('csv-file-input'), file);
 };
 
+const IMPORT_BUTTON = /^Import \d+ Members?$/;
+
+/** Waits for pre-flight to finish, then starts the import. */
+const clickImport = async (): Promise<void> => {
+  await screen.findByText(IMPORT_BUTTON);
+  await userEvent.setup().click(screen.getByText(IMPORT_BUTTON));
+};
+
 describe('ImportMembers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -187,7 +195,7 @@ describe('ImportMembers', () => {
       expect(screen.getByText('john@example.com')).toBeInTheDocument();
     });
 
-    await userEvent.setup().click(screen.getByText('Import All Members'));
+    await clickImport();
 
     await waitFor(() => {
       expect(mockCreateMember).toHaveBeenCalledWith(
@@ -203,8 +211,7 @@ describe('ImportMembers', () => {
     renderWithRouter(<ImportMembers />);
     await uploadCsv('firstName,lastName,email\nJohn,Doe,john.doe@example.com');
 
-    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Import All Members'));
+    await clickImport();
 
     await waitFor(() => {
       expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ username: 'john_doe' }));
@@ -215,8 +222,7 @@ describe('ImportMembers', () => {
     renderWithRouter(<ImportMembers />);
     await uploadCsv('firstName,lastName,email,username\nJohn,Doe,john@example.com,jdoe');
 
-    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Import All Members'));
+    await clickImport();
 
     await waitFor(() => {
       expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ username: 'jdoe' }));
@@ -232,8 +238,7 @@ describe('ImportMembers', () => {
     renderWithRouter(<ImportMembers />);
     await uploadCsv('firstName,lastName,email,role\nJohn,Doe,john@example.com,officer');
 
-    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Import All Members'));
+    await clickImport();
 
     await waitFor(() => {
       expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ role_ids: ['role-2'] }));
@@ -246,11 +251,12 @@ describe('ImportMembers', () => {
     renderWithRouter(<ImportMembers />);
     await uploadCsv('firstName,lastName,email,role\nJohn,Doe,john@example.com,Chief');
 
-    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Import All Members'));
+    await clickImport();
 
     await waitFor(() => {
-      expect(screen.getByText(/Unknown role "Chief"/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/role "Chief" does not match any role configured under Roles/)
+      ).toBeInTheDocument();
     });
     expect(mockCreateMember).not.toHaveBeenCalled();
   });
@@ -262,11 +268,14 @@ describe('ImportMembers', () => {
         'John,Doe,john@example.com,Jane Doe,,'
     );
 
-    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Import All Members'));
+    await clickImport();
 
     await waitFor(() => {
-      expect(screen.getByText(/needs both emergencyRelationship1 and emergencyPhone1/)).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          /Emergency contact 1 "Jane Doe" is missing emergencyRelationship1 and emergencyPhone1/
+        )
+      ).toBeInTheDocument();
     });
     expect(mockCreateMember).not.toHaveBeenCalled();
   });
@@ -290,8 +299,7 @@ describe('ImportMembers', () => {
       'firstName,lastName,email,dateOfBirth,joinDate\nJohn,Doe,john@example.com,3/15/1985,1/5/2020'
     );
 
-    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Import All Members'));
+    await clickImport();
 
     await waitFor(() => {
       expect(mockCreateMember).toHaveBeenCalledWith(
@@ -304,8 +312,7 @@ describe('ImportMembers', () => {
     renderWithRouter(<ImportMembers />);
     await uploadCsv('firstName,lastName,email,dateOfBirth\nJohn,Doe,john@example.com,1985-03-15');
 
-    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Import All Members'));
+    await clickImport();
 
     await waitFor(() => {
       expect(mockCreateMember).toHaveBeenCalledWith(
@@ -318,8 +325,7 @@ describe('ImportMembers', () => {
     renderWithRouter(<ImportMembers />);
     await uploadCsv('firstName,lastName,email,dateOfBirth\nJohn,Doe,john@example.com,March 15 1985');
 
-    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Import All Members'));
+    await clickImport();
 
     await waitFor(() => {
       expect(screen.getByText(/dateOfBirth "March 15 1985" is not a recognized date/)).toBeInTheDocument();
@@ -347,8 +353,7 @@ describe('ImportMembers', () => {
         'david.conner@example.com,11/11/2012'
     );
 
-    expect(await screen.findByText('Import All Members')).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByText('Import All Members'));
+    await clickImport();
 
     await waitFor(() => {
       expect(mockCreateMember).toHaveBeenCalledWith(
@@ -424,10 +429,15 @@ describe('ImportMembers', () => {
 
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith(
-        expect.stringContaining('2 role name(s) do not match a configured role: Engine Operator, EMT'),
+        expect.stringContaining('No rows can be imported — all 3 have problems'),
         { duration: 8000 }
       );
     });
+    // Both rows naming that role are reported, not just the first.
+    expect(
+      screen.getAllByText(/role "Engine Operator" does not match any role configured under Roles/)
+    ).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /Import 0 Members/ })).toBeDisabled();
   });
 
   it('stays quiet at upload time when every role name matches', async () => {
@@ -442,5 +452,223 @@ describe('ImportMembers', () => {
       );
     });
     expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  describe('shifted columns', () => {
+    // The whole point of the exercise: an unquoted comma used to slide a phone
+    // number into the email column and import it without a word.
+    const UNQUOTED_COMMA =
+      'firstName,lastName,street,city,primaryPhone,email\n' +
+      'John,Doe,123 Main St, Apt 4,Springfield,(555) 111-2222,john@example.com';
+
+    it('rejects a row carrying more values than the header has columns', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv(UNQUOTED_COMMA);
+
+      expect(
+        await screen.findByText(
+          /Row has 7 values but the header has 6 columns, so every column after the extra comma is shifted/
+        )
+      ).toBeInTheDocument();
+    });
+
+    it('names the phone number sitting in the email column', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv(UNQUOTED_COMMA);
+
+      expect(
+        await screen.findByText(
+          /email "\(555\) 111-2222" is not an email address — that looks like a phone number/
+        )
+      ).toBeInTheDocument();
+    });
+
+    it('never sends a shifted row to the API', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv(UNQUOTED_COMMA);
+      await clickImport();
+
+      expect(mockCreateMember).not.toHaveBeenCalled();
+    });
+
+    // A missing comma shifts the other way and cannot be caught by counting
+    // cells, so the email check is the only thing standing between a merged row
+    // and a member whose email address is a state abbreviation.
+    it('catches a leftward shift that keeps the column count plausible', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv('firstName,lastName,email,state\nJohn,Doe,VA,');
+
+      expect(
+        await screen.findByText(/email "VA" is not an email address/)
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Import 0 Members/ })).toBeDisabled();
+    });
+  });
+
+  it('reports every problem in a row at once, not just the first', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv(
+      'firstName,lastName,email,dateOfBirth,joinDate\nJohn,Doe,not-an-email,32/1/1985,someday'
+    );
+
+    expect(await screen.findByText(/email "not-an-email" is not an email address/)).toBeInTheDocument();
+    expect(screen.getByText(/dateOfBirth "32\/1\/1985" is not a recognized date/)).toBeInTheDocument();
+    expect(screen.getByText(/joinDate "someday" is not a recognized date/)).toBeInTheDocument();
+  });
+
+  it('flags a cell longer than the column the API stores it in', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv(`firstName,lastName,email,platoon\nJohn,Doe,john@example.com,${'A'.repeat(21)}`);
+
+    expect(
+      await screen.findByText('platoon is 21 characters long; the limit is 20')
+    ).toBeInTheDocument();
+  });
+
+  describe('duplicates within one file', () => {
+    it('points at the line the value was first used on', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv(
+        'firstName,lastName,email\nJohn,Doe,dup@example.com\nJane,Roe,dup@example.com'
+      );
+
+      expect(
+        await screen.findByText('email "dup@example.com" is already used on line 2 of this file')
+      ).toBeInTheDocument();
+    });
+
+    it('keeps the first occurrence importable', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv(
+        'firstName,lastName,email\nJohn,Doe,dup@example.com\nJane,Roe,dup@example.com'
+      );
+      await clickImport();
+
+      await waitFor(() => {
+        expect(mockCreateMember).toHaveBeenCalledTimes(1);
+      });
+      expect(mockCreateMember).toHaveBeenCalledWith(
+        expect.objectContaining({ first_name: 'John' })
+      );
+    });
+
+    // Two different addresses can still collide, because an omitted username is
+    // derived from the local part.
+    it('catches usernames that collide only after being derived', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv(
+        'firstName,lastName,email\nJohn,Doe,j.doe@example.com\nJane,Doe,j.doe@other.org'
+      );
+
+      expect(
+        await screen.findByText('username "j_doe" is already used on line 2 of this file')
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('imports the good rows and skips the bad ones', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv(
+      'firstName,lastName,email\n' +
+        'John,Doe,john@example.com\n' +
+        'Jane,Roe,not-an-email\n' +
+        'Jim,Poe,jim@example.com'
+    );
+
+    expect(await screen.findByText('Import 2 Members')).toBeInTheDocument();
+    await clickImport();
+
+    await waitFor(() => {
+      expect(mockCreateMember).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByText('Import Complete!')).toBeInTheDocument();
+    expect(screen.getByText('Successfully imported 2 members')).toBeInTheDocument();
+  });
+
+  describe('error report', () => {
+    /** Captures the CSV handed to Blob by a download, without touching the DOM download. */
+    const captureDownload = async (act: () => Promise<void>): Promise<string> => {
+      const originalCreateObjectURL = URL.createObjectURL;
+      const originalRevokeObjectURL = URL.revokeObjectURL;
+      URL.createObjectURL = vi.fn(() => 'blob:mock');
+      URL.revokeObjectURL = vi.fn();
+
+      let captured = '';
+      const originalBlob = globalThis.Blob;
+      class CapturingBlob extends originalBlob {
+        constructor(parts: BlobPart[], options?: BlobPropertyBag) {
+          super(parts, options);
+          captured = parts.map(String).join('');
+        }
+      }
+      globalThis.Blob = CapturingBlob as unknown as typeof Blob;
+
+      try {
+        await act();
+      } finally {
+        globalThis.Blob = originalBlob;
+        URL.createObjectURL = originalCreateObjectURL;
+        URL.revokeObjectURL = originalRevokeObjectURL;
+      }
+      return captured;
+    };
+
+    it('hands back the failed rows with the reason in the first column', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv(
+        'firstName,lastName,email\nJohn,Doe,john@example.com\nJane,Roe,not-an-email'
+      );
+      await screen.findByText('Download Error Report');
+
+      const report = await captureDownload(async () => {
+        await userEvent.setup().click(screen.getByText('Download Error Report'));
+      });
+
+      const lines = report.split('\r\n');
+      expect(lines[0]).toBe('errorReason,firstName,lastName,email');
+      expect(lines[1]).toBe(
+        '"email ""not-an-email"" is not an email address",Jane,Roe,not-an-email'
+      );
+      // Only the failures, so the corrected file cannot collide with the
+      // members that already imported.
+      expect(lines).toHaveLength(2);
+    });
+
+    it('carries a shifted row through verbatim so it can be re-quoted', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv(
+        'firstName,lastName,street,email\nJohn,Doe,123 Main St, Apt 4,john@example.com'
+      );
+      await screen.findByText('Download Error Report');
+
+      const report = await captureDownload(async () => {
+        await userEvent.setup().click(screen.getByText('Download Error Report'));
+      });
+
+      // Every original cell survives, including the two the stray comma made.
+      expect(report).toContain('123 Main St, Apt 4');
+      expect(report).toContain('Row has 5 values but the header has 4 columns');
+    });
+
+    it('includes rows the server rejected alongside rows pre-flight rejected', async () => {
+      mockCreateMember.mockRejectedValueOnce({
+        response: { data: { detail: 'Email already exists' }, status: 400 },
+      });
+
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv(
+        'firstName,lastName,email\nJohn,Doe,taken@example.com\nJane,Roe,not-an-email'
+      );
+      await clickImport();
+      await screen.findByText('Import Complete!');
+
+      const report = await captureDownload(async () => {
+        await userEvent.setup().click(screen.getByText('Download Error Report'));
+      });
+
+      expect(report).toContain('Email already exists');
+      expect(report).toContain('is not an email address');
+      expect(screen.getByText('Import Complete!')).toBeInTheDocument();
+    });
   });
 });
