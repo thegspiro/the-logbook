@@ -6,10 +6,12 @@ import ImportMembers from './ImportMembers';
 
 const mockCreateMember = vi.fn();
 const mockGetRoles = vi.fn();
+const mockGetUsers = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: {
     createMember: (...args: unknown[]) => mockCreateMember(...args) as unknown,
+    getUsers: (...args: unknown[]) => mockGetUsers(...args) as unknown,
   },
   roleService: {
     getRoles: (...args: unknown[]) => mockGetRoles(...args) as unknown,
@@ -78,6 +80,7 @@ describe('ImportMembers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetRoles.mockResolvedValue([]);
+    mockGetUsers.mockResolvedValue([]);
     mockCreateMember.mockResolvedValue({ id: 'u1' });
   });
 
@@ -92,16 +95,33 @@ describe('ImportMembers', () => {
   // Regression: the template used to ship `membershipNumber` while the
   // validator demanded a `departmentId` column, so the downloaded file was
   // rejected on upload with "Missing required columns: departmentid".
-  it('accepts its own downloaded template without reporting missing columns', async () => {
+  it('accepts every column of its own downloaded template', async () => {
     const template = await captureTemplate();
     expect(template).not.toBe('');
 
     await uploadCsv(template);
 
-    await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith('File validated successfully! Found 1 members to import.');
-    });
-    expect(mockToastError).not.toHaveBeenCalled();
+    await screen.findByText(IMPORT_BUTTON);
+    expect(mockToastError).not.toHaveBeenCalledWith(
+      expect.stringContaining('Missing required columns')
+    );
+    expect(mockToast).not.toHaveBeenCalledWith(
+      expect.stringContaining('unrecognized column'),
+      expect.anything()
+    );
+  });
+
+  it('rejects the template example row rather than importing John Doe', async () => {
+    const template = await captureTemplate();
+    await uploadCsv(template);
+
+    expect(
+      await screen.findByText(
+        /This is the template's example row, not a member — delete it from the file/
+      )
+    ).toBeInTheDocument();
+    await clickImport();
+    expect(mockCreateMember).not.toHaveBeenCalled();
   });
 
   it('includes every column the create-member API accepts', async () => {
@@ -207,14 +227,16 @@ describe('ImportMembers', () => {
     });
   });
 
+  // Not John Doe: that name with that address is the template's own example
+  // row, which the importer rejects rather than creating.
   it('derives the username from the email when the column is omitted', async () => {
     renderWithRouter(<ImportMembers />);
-    await uploadCsv('firstName,lastName,email\nJohn,Doe,john.doe@example.com');
+    await uploadCsv('firstName,lastName,email\nMary,Smith,mary.smith@example.com');
 
     await clickImport();
 
     await waitFor(() => {
-      expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ username: 'john_doe' }));
+      expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ username: 'mary_smith' }));
     });
   });
 
@@ -585,6 +607,111 @@ describe('ImportMembers', () => {
     expect(screen.getByText('Successfully imported 2 members')).toBeInTheDocument();
   });
 
+  // Creating a member emails a password-setup link immediately, and an import
+  // creates them by the dozen — so a bulk load does not send until asked.
+  describe('welcome emails', () => {
+    it('does not send them unless the box is ticked', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv('firstName,lastName,email\nMary,Smith,mary@example.com');
+      await clickImport();
+
+      await waitFor(() => {
+        expect(mockCreateMember).toHaveBeenCalledWith(
+          expect.objectContaining({ send_welcome_email: false })
+        );
+      });
+    });
+
+    it('sends them when the box is ticked', async () => {
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv('firstName,lastName,email\nMary,Smith,mary@example.com');
+
+      await screen.findByText(IMPORT_BUTTON);
+      await userEvent.setup().click(screen.getByRole('checkbox', { name: /Send welcome emails now/ }));
+      await clickImport();
+
+      await waitFor(() => {
+        expect(mockCreateMember).toHaveBeenCalledWith(
+          expect.objectContaining({ send_welcome_email: true })
+        );
+      });
+    });
+  });
+
+  describe('members already on the roster', () => {
+    const EXISTING = [
+      {
+        id: 'u-1',
+        username: 'mary_smith',
+        email: 'mary@example.com',
+        membership_number: 'FF-001',
+        full_name: 'Mary Smith',
+      },
+    ];
+
+    it('names the member an email already belongs to', async () => {
+      mockGetUsers.mockResolvedValue(EXISTING);
+
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv('firstName,lastName,email\nMary,Smith,mary@example.com');
+
+      expect(
+        await screen.findByText(
+          'email "mary@example.com" already belongs to Mary Smith in this organization — this member is already on the roster'
+        )
+      ).toBeInTheDocument();
+      await clickImport();
+      expect(mockCreateMember).not.toHaveBeenCalled();
+    });
+
+    it('catches a membership number already in use', async () => {
+      mockGetUsers.mockResolvedValue(EXISTING);
+
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv(
+        'firstName,lastName,email,membershipNumber\nPat,Jones,pat@example.com,FF-001'
+      );
+
+      expect(
+        await screen.findByText(/membershipNumber "FF-001" already belongs to Mary Smith/)
+      ).toBeInTheDocument();
+    });
+
+    it('imports a member who collides with nobody', async () => {
+      mockGetUsers.mockResolvedValue(EXISTING);
+
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv('firstName,lastName,email\nPat,Jones,pat@example.com');
+      await clickImport();
+
+      await waitFor(() => {
+        expect(mockCreateMember).toHaveBeenCalledWith(
+          expect.objectContaining({ email: 'pat@example.com' })
+        );
+      });
+    });
+
+    // Losing the roster lookup must not block the upload; the server still
+    // rejects a genuine duplicate.
+    it('imports anyway when the roster cannot be loaded', async () => {
+      mockGetUsers.mockRejectedValue(new Error('network'));
+
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv('firstName,lastName,email\nPat,Jones,pat@example.com');
+
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith(
+          expect.stringContaining('Could not load the current roster'),
+          { icon: '⚠️' }
+        );
+      });
+      await clickImport();
+      await waitFor(() => {
+        expect(mockCreateMember).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
   describe('error report', () => {
     /** Captures the CSV handed to Blob by a download, without touching the DOM download. */
     const captureDownload = async (act: () => Promise<void>): Promise<string> => {
@@ -648,6 +775,45 @@ describe('ImportMembers', () => {
       // Every original cell survives, including the two the stray comma made.
       expect(report).toContain('123 Main St, Apt 4');
       expect(report).toContain('Row has 5 values but the header has 4 columns');
+    });
+
+    it('lists a cancelled row as work still to do', async () => {
+      // The first row parks until the test releases it, so Stop is pressed at a
+      // known point rather than racing the render of its own button.
+      let releaseFirstRow: () => void = () => {};
+      const firstRowParked = new Promise<void>((resolve) => {
+        releaseFirstRow = resolve;
+      });
+      let started = 0;
+      mockCreateMember.mockImplementation(async () => {
+        started++;
+        if (started === 1) await firstRowParked;
+        return { id: `u${started}` };
+      });
+
+      renderWithRouter(<ImportMembers />);
+      await uploadCsv(
+        'firstName,lastName,email\n' +
+          'Ann,One,ann@example.com\n' +
+          'Bob,Two,bob@example.com\n' +
+          'Cal,Three,cal@example.com'
+      );
+      await clickImport();
+
+      await userEvent.setup().click(await screen.findByText('Stop importing'));
+      releaseFirstRow();
+
+      await screen.findByText('Import Complete!');
+
+      expect(mockCreateMember).toHaveBeenCalledTimes(1);
+
+      const report = await captureDownload(async () => {
+        await userEvent.setup().click(screen.getByText('Download Error Report'));
+      });
+      expect(report).toContain('Not imported — the import was stopped before this row.');
+      expect(report).toContain('bob@example.com');
+      expect(report).toContain('cal@example.com');
+      expect(report).not.toContain('ann@example.com');
     });
 
     it('includes rows the server rejected alongside rows pre-flight rejected', async () => {

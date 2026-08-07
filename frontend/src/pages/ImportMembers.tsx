@@ -91,6 +91,52 @@ const TEMPLATE_HEADERS = [
 ] as const;
 
 /**
+ * The filled-in row the template ships with, so the columns are self-
+ * explanatory to whoever opens it.
+ *
+ * The instructions say to replace it, and when it was left in it imported as a
+ * real member — a John Doe with a working password-setup link. The importer
+ * recognizes its own example and rejects that row instead.
+ */
+const TEMPLATE_EXAMPLE: Record<(typeof TEMPLATE_HEADERS)[number], string> = {
+  firstName: 'John',
+  lastName: 'Doe',
+  middleName: 'Michael',
+  membershipNumber: 'FF-001',
+  username: 'john.doe',
+  dateOfBirth: '1985-03-15',
+  street: '123 Main Street, Apt 4',
+  city: 'Springfield',
+  state: 'IL',
+  zipCode: '62701',
+  primaryPhone: '(555) 123-4567',
+  secondaryPhone: '(555) 987-6543',
+  email: 'john.doe@example.com',
+  joinDate: '2020-01-15',
+  rank: 'Firefighter',
+  role: 'Member',
+  station: 'Station 1',
+  platoon: 'A',
+  emergencyName1: 'Jane Doe',
+  emergencyRelationship1: 'Spouse',
+  emergencyPhone1: '(555) 234-5678',
+  emergencyEmail1: 'jane.doe@example.com',
+  emergencyName2: 'Bob Doe',
+  emergencyRelationship2: 'Parent',
+  emergencyPhone2: '(555) 345-6789',
+  emergencyEmail2: 'bob.doe@example.com',
+};
+
+/**
+ * All three of name and address must match, so a real member who happens to be
+ * called John Doe is not turned away over his name alone.
+ */
+const isTemplateExampleRow = (data: CSVMemberRow): boolean =>
+  data.firstName.trim().toLowerCase() === TEMPLATE_EXAMPLE.firstName.toLowerCase() &&
+  data.lastName.trim().toLowerCase() === TEMPLATE_EXAMPLE.lastName.toLowerCase() &&
+  data.email.trim().toLowerCase() === TEMPLATE_EXAMPLE.email.toLowerCase();
+
+/**
  * Only these three are enforced as hard requirements, because they are the only
  * fields `AdminUserCreate` rejects a request without. Membership numbers are
  * auto-assigned server-side when omitted, and every other column maps to an
@@ -442,17 +488,80 @@ const validateRow = (data: CSVMemberRow): string[] => {
 };
 
 /**
+ * The organization's current members, indexed by the three values a new member
+ * cannot reuse. Each map holds a display name, so a collision can say who owns
+ * the value rather than only that one exists.
+ */
+interface ExistingMembers {
+  byEmail: Map<string, string>;
+  byUsername: Map<string, string>;
+  byMembershipNumber: Map<string, string>;
+}
+
+const describeMember = (member: {
+  full_name?: string | undefined;
+  first_name?: string | undefined;
+  last_name?: string | undefined;
+  username: string;
+}): string =>
+  member.full_name ||
+  [member.first_name, member.last_name].filter(Boolean).join(' ') ||
+  member.username;
+
+/**
+ * Indexes the roster so a row that collides with an existing member is caught
+ * before the import runs.
+ *
+ * Without this the collision surfaces as the API's "Email already exists" on
+ * that one row, partway through a write — the worst moment to learn it, and the
+ * usual outcome of re-uploading a file after fixing a few rows. Emails are
+ * omitted from the response when the organization hides contact information, in
+ * which case that dimension simply goes unchecked and the server still catches
+ * it.
+ */
+const indexExistingMembers = (
+  members: Array<{
+    email?: string | undefined;
+    username: string;
+    membership_number?: string | undefined;
+    full_name?: string | undefined;
+    first_name?: string | undefined;
+    last_name?: string | undefined;
+  }>
+): ExistingMembers => {
+  const index: ExistingMembers = {
+    byEmail: new Map<string, string>(),
+    byUsername: new Map<string, string>(),
+    byMembershipNumber: new Map<string, string>(),
+  };
+
+  for (const member of members) {
+    const name = describeMember(member);
+    if (member.email) index.byEmail.set(member.email.trim().toLowerCase(), name);
+    if (member.username) index.byUsername.set(member.username.trim().toLowerCase(), name);
+    if (member.membership_number) {
+      index.byMembershipNumber.set(member.membership_number.trim().toLowerCase(), name);
+    }
+  }
+
+  return index;
+};
+
+/**
  * Judges every data row up front, so the uploader sees the whole problem before
  * any member is created rather than discovering it partway through a write.
  *
  * `knownRoles` is null when roles could not be loaded or none are configured,
  * which means the role column is skipped rather than failing every row.
+ * `existing` is null when the roster could not be loaded, which likewise skips
+ * the collision check rather than blocking the import on it.
  */
 const runPreflight = (
   records: CsvRecord[],
   headerRow: string[],
   headers: string[],
-  knownRoles: Set<string> | null
+  knownRoles: Set<string> | null,
+  existing: ExistingMembers | null
 ): Preflight => {
   const dataRecords = records.slice(1).filter((record) => !isBlankRow(record.cells));
 
@@ -481,12 +590,42 @@ const runPreflight = (
     }
 
     const data = buildRow(record.cells, headers);
+
+    if (isTemplateExampleRow(data)) {
+      invalid.push({
+        line: record.line,
+        reasons: [
+          "This is the template's example row, not a member — delete it from the file before importing.",
+        ],
+        cells: record.cells,
+      });
+      continue;
+    }
+
     reasons.push(...validateRow(data));
 
     if (knownRoles && data.role && !knownRoles.has(data.role.toLowerCase())) {
       reasons.push(
         `role "${data.role}" does not match any role configured under Roles — create it there, or clear the role column and use rank instead`
       );
+    }
+
+    if (existing) {
+      const effectiveUsername = data.username || (data.email ? usernameFromEmail(data.email) : '');
+      for (const [map, label, value] of [
+        [existing.byEmail, 'email', data.email],
+        [existing.byUsername, 'username', effectiveUsername],
+        [existing.byMembershipNumber, 'membershipNumber', data.membershipNumber],
+      ] as const) {
+        const key = value.trim().toLowerCase();
+        if (!key) continue;
+        const owner = map.get(key);
+        if (owner) {
+          reasons.push(
+            `${label} "${value}" already belongs to ${owner} in this organization — this member is already on the roster`
+          );
+        }
+      }
     }
 
     for (const [seen, label, read] of claimed) {
@@ -551,11 +690,22 @@ const ImportMembers: React.FC = () => {
   const [preflight, setPreflight] = useState<Preflight | null>(null);
   const [roleIdsByName, setRoleIdsByName] = useState<Map<string, string>>(new Map());
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  /**
+   * Off by default, deliberately. Creating a member sends a password-setup link
+   * the moment the record exists, and an import creates them by the dozen — a
+   * roster loaded for staging, or from a list with stale addresses, would put
+   * mail no one can recall in front of every one of them.
+   */
+  const [sendWelcomeEmails, setSendWelcomeEmails] = useState(false);
+  /** Read inside the import loop, so a ref rather than state — a re-render would not reach it. */
+  const cancelRequested = useRef(false);
 
   const resetFileState = () => {
     setPreflight(null);
     setRoleIdsByName(new Map());
     setImportResult(null);
+    setProgress(null);
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -660,7 +810,19 @@ const ImportMembers: React.FC = () => {
       }
       setRoleIdsByName(resolvedRoleIds);
 
-      const report = runPreflight(records, headerRow, headers, knownRoles);
+      // One request turns "Email already exists", discovered per row partway
+      // through a write, into a reason naming the member it collides with.
+      let existing: ExistingMembers | null = null;
+      try {
+        existing = indexExistingMembers(await userService.getUsers());
+      } catch (_error) {
+        toast(
+          'Could not load the current roster, so rows that duplicate an existing member will only be caught during the import.',
+          { icon: '⚠️' }
+        );
+      }
+
+      const report = runPreflight(records, headerRow, headers, knownRoles, existing);
       setPreflight(report);
 
       if (report.invalid.length === 0) {
@@ -686,12 +848,27 @@ const ImportMembers: React.FC = () => {
     if (!preflight || preflight.valid.length === 0) return;
 
     setImporting(true);
+    cancelRequested.current = false;
+    setProgress({ done: 0, total: preflight.valid.length });
     // Rows rejected before the import began belong in the same report as rows
     // the server rejected during it; the uploader needs one list, not two.
     const issues: RowIssue[] = [...preflight.invalid];
     let success = 0;
 
-    for (const row of preflight.valid) {
+    for (const [index, row] of preflight.valid.entries()) {
+      // Cancelled rows go into the report like any other unimported row, so the
+      // downloaded file is exactly what is left to do.
+      if (cancelRequested.current) {
+        for (const remaining of preflight.valid.slice(index)) {
+          issues.push({
+            line: remaining.line,
+            reasons: ['Not imported — the import was stopped before this row.'],
+            cells: remaining.cells,
+          });
+        }
+        break;
+      }
+
       const rowData = row.data;
       try {
         const username = rowData.username || usernameFromEmail(rowData.email);
@@ -738,7 +915,7 @@ const ImportMembers: React.FC = () => {
           last_name: rowData.lastName,
           address_country: 'USA',
           emergency_contacts: emergencyContacts,
-          send_welcome_email: true,
+          send_welcome_email: sendWelcomeEmails,
           ...(rowData.middleName ? { middle_name: rowData.middleName } : {}),
           ...(rowData.membershipNumber ? { membership_number: rowData.membershipNumber } : {}),
           ...(rowData.primaryPhone ? { phone: rowData.primaryPhone } : {}),
@@ -763,10 +940,13 @@ const ImportMembers: React.FC = () => {
           cells: row.cells,
         });
       }
+
+      setProgress({ done: index + 1, total: preflight.valid.length });
     }
 
     issues.sort((a, b) => a.line - b.line);
     setImportResult({ success, issues });
+    setProgress(null);
 
     if (success > 0) {
       toast.success(`Successfully imported ${success} members!`);
@@ -784,36 +964,7 @@ const ImportMembers: React.FC = () => {
   };
 
   const downloadTemplate = () => {
-    const exampleValues: Record<(typeof TEMPLATE_HEADERS)[number], string> = {
-      firstName: 'John',
-      lastName: 'Doe',
-      middleName: 'Michael',
-      membershipNumber: 'FF-001',
-      username: 'john.doe',
-      dateOfBirth: '1985-03-15',
-      street: '123 Main Street, Apt 4',
-      city: 'Springfield',
-      state: 'IL',
-      zipCode: '62701',
-      primaryPhone: '(555) 123-4567',
-      secondaryPhone: '(555) 987-6543',
-      email: 'john.doe@example.com',
-      joinDate: '2020-01-15',
-      rank: 'Firefighter',
-      role: 'Member',
-      station: 'Station 1',
-      platoon: 'A',
-      emergencyName1: 'Jane Doe',
-      emergencyRelationship1: 'Spouse',
-      emergencyPhone1: '(555) 234-5678',
-      emergencyEmail1: 'jane.doe@example.com',
-      emergencyName2: 'Bob Doe',
-      emergencyRelationship2: 'Parent',
-      emergencyPhone2: '(555) 345-6789',
-      emergencyEmail2: 'bob.doe@example.com',
-    };
-
-    const exampleRow = TEMPLATE_HEADERS.map((h) => escapeCell(exampleValues[h]));
+    const exampleRow = TEMPLATE_HEADERS.map((h) => escapeCell(TEMPLATE_EXAMPLE[h]));
 
     downloadCsv(
       [TEMPLATE_HEADERS.join(','), exampleRow.join(',')].join('\n'),
@@ -1028,7 +1179,61 @@ const ImportMembers: React.FC = () => {
               </div>
             )}
 
-            <div className="mt-6 flex items-center justify-end">
+            {preflight.valid.length > 0 && (
+              <label className="mt-6 flex items-start space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sendWelcomeEmails}
+                  onChange={(e) => setSendWelcomeEmails(e.target.checked)}
+                  disabled={importing}
+                  className="mt-1 h-4 w-4 rounded border-theme-input-border"
+                />
+                <span className="text-sm">
+                  <span className="text-theme-text-primary font-medium">
+                    Send welcome emails now
+                  </span>
+                  <span className="block text-theme-text-muted">
+                    Each member is emailed a password-setup link the moment their record is
+                    created, and it cannot be recalled. Left off, the roster imports quietly
+                    and you issue credentials later from Member Management.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {progress && (
+              <div className="mt-6">
+                <div className="flex justify-between text-sm text-theme-text-secondary mb-1">
+                  <span>
+                    Importing {progress.done} of {progress.total}
+                  </span>
+                  <span>{Math.round((progress.done / Math.max(progress.total, 1)) * 100)}%</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-theme-input-bg overflow-hidden">
+                  <div
+                    className="h-full bg-green-600 transition-all"
+                    style={{ width: `${(progress.done / Math.max(progress.total, 1)) * 100}%` }}
+                    role="progressbar"
+                    aria-valuenow={progress.done}
+                    aria-valuemin={0}
+                    aria-valuemax={progress.total}
+                    aria-label="Import progress"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex items-center justify-end space-x-3">
+              {importing && (
+                <button
+                  onClick={() => {
+                    cancelRequested.current = true;
+                  }}
+                  className="px-6 py-3 rounded-lg border border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                >
+                  Stop importing
+                </button>
+              )}
               <button
                 onClick={() => { void handleImport(); }}
                 disabled={importing || preflight.valid.length === 0}

@@ -5922,6 +5922,55 @@ response reads `date_of_birth: Invalid date format. emergency_contacts.0.email:
 Invalid value.` This affected every 422 in the application, not only the member
 import.
 
+### Problem: An import sent welcome emails I did not want sent
+
+**Cause (Fixed 2026-08-07):** The importer hardcoded `send_welcome_email: true`,
+so every created member was emailed a password-setup link immediately. Loading a
+roster for staging, or from a list with stale addresses, put mail in front of
+every one of them, and it cannot be recalled.
+
+**Fix:** The review step now carries a **Send welcome emails now** checkbox,
+**off by default** for imports. Left off, the roster loads quietly and no mail
+is sent; issue credentials afterwards from **Member Management → Reset
+Password**. Tick it to restore the previous behavior. Creating a member
+one-at-a-time from **Add Member** is unchanged.
+
+### Problem: "Email already exists" halfway through an import
+
+**Cause:** The member is already on the roster. The importer only found out when
+the API rejected that row, partway through a write — the usual outcome of
+re-uploading a file after correcting a few rows.
+
+**Fix (2026-08-07):** The current roster is loaded when the file is selected,
+and any row whose email, username or membership number belongs to an existing
+member is reported before the import runs, naming who owns the value. If the
+roster cannot be loaded the import still proceeds and the server catches the
+duplicate as before. Note that emails are omitted from the roster response when
+the organization hides contact information, in which case that one check is
+skipped.
+
+### Problem: An import created a member called John Doe
+
+**Cause (Fixed 2026-08-07):** The downloaded template ships with a filled-in
+example row so its columns are self-explanatory. The instructions say to replace
+it, and if it was left in it imported as a real member.
+
+**Fix:** The importer recognizes its own example row and rejects it, naming it
+as the template example. All three of first name, last name and email must match
+the example, so a real member who happens to be called John Doe is unaffected.
+
+### Problem: A large import appears to hang, or was started by mistake
+
+**Cause:** Members are created one request at a time, and the only feedback was
+a spinner reading "Importing...". A 500-row roster is 500 sequential requests
+with nothing to watch, and no way to stop.
+
+**Fix (2026-08-07):** The review step shows live progress ("Importing 23 of
+47") and a **Stop importing** button. Members already created stay created —
+stopping does not roll back. Rows not reached are listed in the error report as
+"Not imported — the import was stopped before this row", so the downloaded file
+is exactly what is left to do and can be uploaded to finish the job.
+
 ### Problem: A row was rejected and the reason does not say what to fix
 
 **Cause (Fixed 2026-08-07):** Validation ran one row at a time inside the
