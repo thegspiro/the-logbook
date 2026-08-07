@@ -51,6 +51,7 @@ from app.models.user import Organization, User
 from app.services.storefront_notification_service import StorefrontNotificationService
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 from app.utils.storefront_payments import (
     build_payment_option,
     build_payment_options,
@@ -313,12 +314,14 @@ class StorefrontService:
         elif not include_archived:
             query = query.where(StoreProduct.status != StoreProductStatus.ARCHIVED)
         if search:
-            pattern = f"%{search}%"
+            # Escape LIKE wildcards: an unescaped "%" in a member's search
+            # string matches the whole catalog instead of nothing.
+            pattern = like_pattern(search)
             query = query.where(
                 or_(
-                    StoreProduct.name.ilike(pattern),
-                    StoreProduct.sku.ilike(pattern),
-                    StoreProduct.category.ilike(pattern),
+                    StoreProduct.name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    StoreProduct.sku.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    StoreProduct.category.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                 )
             )
         query = query.order_by(StoreProduct.sort_order, StoreProduct.name)
@@ -1564,12 +1567,12 @@ class StorefrontService:
         if user_id:
             filters.append(StoreOrder.user_id == str(user_id))
         if search:
-            pattern = f"%{search}%"
+            pattern = like_pattern(search)
             filters.append(
                 or_(
-                    StoreOrder.order_number.ilike(pattern),
-                    StoreOrder.customer_name.ilike(pattern),
-                    StoreOrder.customer_email.ilike(pattern),
+                    StoreOrder.order_number.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    StoreOrder.customer_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    StoreOrder.customer_email.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                 )
             )
 

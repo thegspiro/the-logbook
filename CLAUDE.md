@@ -236,7 +236,11 @@ npm run docker:up        # Start Docker Compose stack
 
 ## Package Manager
 
-npm (with workspaces). Node >= 18 required at root level, >= 22 for the frontend.
+npm (with workspaces). Node >= 22 — the root install builds the frontend
+workspace, so the frontend's floor is the real floor; the old root `>= 18` / npm
+`>= 9` range understated it. Run `npm install` from the repo root only: the root
+`package-lock.json` is the single lockfile (see "No nested
+`frontend/package-lock.json`" in KNOWN_LIMITATIONS.md).
 
 ## Architecture & Conventions
 

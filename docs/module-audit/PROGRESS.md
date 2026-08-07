@@ -40,11 +40,18 @@ already covered by the red-team review on this branch).
 | 25 | onboarding | services/onboarding.py, org_template_service.py | modules/onboarding | ✅ |
 | 26 | public-portal | public/portal.py, display.py, calendar.py, core/public_portal_security.py | modules/public-portal | ✅ |
 | 27 | frontend shared | — | components/, components/ux/, hooks/, utils/, stores/ | ✅ |
+| 28 | storefront | endpoints/storefront.py, services/storefront_service.py, storefront_notification_service.py, storefront_preview_service.py, public/paypal_webhook.py | modules/storefront | ✅ |
 
-**✅ Rotation complete — all 27 modules audited (2026-07-26).** Each module has a
+**✅ Rotation complete — all 28 modules audited.** Each module has a
 `docs/module-audit/<module>.md`; cross-cutting patterns are in CROSS-CUTTING.md;
 open owner-decision items are in `docs/KNOWN_LIMITATIONS.md`. A second pass would
 start over at #1.
+
+**Note on #28.** The rotation was declared complete at 27 on 2026-07-26 while
+storefront — the newest module, and the only one that moves money — had never
+been audited. It was not skipped deliberately; it was simply never added to the
+table. Anything added after a rotation table is written needs a row, or
+"complete" quietly stops meaning what it says.
 
 ## Log
 
@@ -452,3 +459,22 @@ start over at #1.
   rate limiter needs Redis; application-status token plaintext at rest), PP-7
   (write-on-read + anomaly query load, nested-address whitelist, 40-bit display
   code). See public-portal.md. Next: frontend shared (final).
+- #28 storefront ✅ (2026-08-07) — the module the rotation never listed. All 47
+  endpoints authed (46 permission-gated; the one bare-`get_current_user` route
+  is a self-permission probe); zero unscoped by-id queries; already using
+  `assert_in_org` for client FKs and `SafeCsvWriter` for the vendor/treasurer
+  export. Money path reviewed closely and sound: lines priced from the catalog
+  (never the client), products locked before limits are counted, member
+  self-reported payment never moves `amount_paid`, inbound captures require an
+  **exact** balance match (short/over/cancelled → `AMBIGUOUS` for a human), and
+  replay is blocked per (org, provider, capture id). PayPal webhook verifies
+  every payload through PayPal's signature API and rejects integrations with no
+  webhook id. **2 fixes applied:** SF-1 (LOW: product/order search did not
+  escape LIKE wildcards — `%` returned the whole catalog and the whole order
+  list; same defect as INV-5), SF-2 (LOW: `/store/` missing from the frontend
+  API-cache exclusion list — no live exposure, module clients bypass the cache,
+  fixed as a guardrail). 1 informational: SF-3 promoted the sevenfold-duplicated
+  LIKE escaping to `app/utils/sql_search.py` with tests; the seven existing call
+  sites are correct and were left for a follow-up sweep. 1 open: SF-4
+  (`storefront.order` vs `storefront.view` seed-role question). See
+  storefront.md.
