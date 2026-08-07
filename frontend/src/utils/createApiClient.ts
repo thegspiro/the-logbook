@@ -15,6 +15,7 @@
 import axios, { type AxiosError, type AxiosInstance } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
 import { performSharedRefresh } from '../services/apiClient';
+import { reportApiError } from '../services/errorReporting';
 
 declare module 'axios' {
   export interface InternalAxiosRequestConfig {
@@ -83,6 +84,12 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
           window.location.href = '/login';
         }
       }
+
+      // Module traffic has to reach the Error Monitoring page too — a failure
+      // in a module's own axios instance is no less an administrator's
+      // problem than one on the global client.
+      reportApiError(error);
+
       return Promise.reject(
         error instanceof Error ? error : new Error(String(error)),
       );

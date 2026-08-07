@@ -6,6 +6,17 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatTime, getTodayLocalDate } from '../utils/dateFormatting';
 
 /**
+ * Where the error was raised. Rows written before the `source` context key
+ * existed carry neither marker, so they fall back to "Client".
+ */
+function sourceLabel(error: ErrorLog): string {
+  if (error.context.source === 'backend' || error.errorType?.startsWith('BACKEND_')) {
+    return 'Server';
+  }
+  return 'Client';
+}
+
+/**
  * Error Monitoring Dashboard
  *
  * Displays all tracked errors with filtering, statistics, and export capabilities.
@@ -165,7 +176,10 @@ const ErrorMonitoringPage: React.FC = () => {
                     Error Type
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                    User Message
+                    Source
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                    Message
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                     Context
@@ -190,13 +204,25 @@ const ErrorMonitoringPage: React.FC = () => {
                         {error.errorType}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-theme-text-secondary max-w-md truncate">
-                      {error.userMessage}
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-theme-text-secondary">
+                      {sourceLabel(error)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-theme-text-secondary max-w-md">
+                      <div className="truncate">{error.userMessage}</div>
+                      {/* The technical message is what an administrator
+                          actually needs to act on; the user message above is
+                          what the member was shown. */}
+                      {error.errorMessage && error.errorMessage !== error.userMessage && (
+                        <div className="truncate font-mono text-xs text-theme-text-muted mt-1">
+                          {error.errorMessage}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-theme-text-secondary">
-                      {error.context.source === 'backend' ? (
+                      {error.context.path ? (
                         <span className="font-mono text-xs">
-                          {(error.context.method as string | undefined) ?? ''} {(error.context.path as string | undefined) ?? ''}
+                          {(error.context.method as string | undefined) ?? ''} {error.context.path as string}
+                          {error.context.status ? ` → ${error.context.status as number}` : ''}
                         </span>
                       ) : (
                         <>
@@ -210,6 +236,11 @@ const ErrorMonitoringPage: React.FC = () => {
                           )}
                           {error.context.userId && ` | User: ${(error.context.userId as string).substring(0, 8)}`}
                         </>
+                      )}
+                      {typeof error.context.page === 'string' && (
+                        <div className="text-xs text-theme-text-muted mt-1 truncate">
+                          on {error.context.page}
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-xs text-theme-text-muted font-mono">

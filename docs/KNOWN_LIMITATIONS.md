@@ -162,6 +162,20 @@ Owner-decision items from the feature-by-feature review under
 | **Membership pipeline: duplicate-archived-member 409 names the matched member** | Open (LOW, product decision) | Creating a prospect who matches a previously-archived member returns a 409 whose message names that member (`"…matches this prospect: <name> (<email>)…"`) so leadership can recognize who to reactivate. The structured `user_id`/`reactivate_url` leak was removed (MP-7 fix) and the frontend never read them, but the sibling `POST /prospects/check-existing` deliberately strips *all* identity to `status`+`match_type`. Whether the create-path message should likewise avoid naming the archived member — trading leadership convenience for the same minimization — is a product call. When the match is by name rather than email, the message can surface an email the caller didn't supply. (MP-7) |
 | **Client IP recorded as the proxy address** | ✅ Resolved (2026-08-05); one historical-data decision open | `request.client.host` was used instead of `get_client_ip(request)` in 39 places across 8 files, so behind the production nginx every record stored one identical internal IP. Worst case was **elections**: per-vote IPs drive the fraud detection documented in `BALLOT_FORENSICS_GUIDE.md`, so `unique_ip_count` collapsed to 1 and every election permanently tripped the `suspicious_ips` threshold. The sweep also caught a live **availability** bug the survey had missed: `public_portal_security.py` keyed the public-portal *rate limiter* on the peer IP, so all anonymous visitors shared one bucket and a single caller could lock out everyone (the H5 shape, still live on the public surface). Verified behavior-neutral: identical test results before and after. **Open:** rows already written still hold proxy IPs and are indistinguishable from real ones — recommend noting the cutover date in `BALLOT_FORENSICS_GUIDE.md` rather than rewriting hash-chained audit history. (AXC-1) |
 
+## Error Monitoring Coverage (2026-08-07)
+
+What does *not* reach the Error Monitoring page after the reporting sweep. Each
+is an accepted gap with the same root cause: an `error_logs` row is org-scoped
+and `organization_id` is NOT NULL, so a failure that cannot be attributed to an
+organization has nowhere to go.
+
+| Item | Status | Detail |
+|---|---|---|
+| **Failures before sign-in are not reported** | Accepted (by design) | `POST /errors/log` requires an authenticated session, and the client transport skips reporting when no session flag is present. So a login failure, a public-portal or public-form error, and anything on the pre-auth onboarding screens are invisible to the page. Closing it needs an anonymous ingestion path with its own org resolution and abuse protection (the endpoint would be unauthenticated and world-writable), which is a larger design than the sweep. |
+| **The onboarding client is not instrumented** | Accepted (follows from the above) | `modules/onboarding/services/api-client.ts` calls `fetch` directly rather than an axios instance, so it does not pass through the interceptor that reports API failures. Onboarding traffic is mostly pre-session, where a report would be dropped anyway. If it is ever instrumented, route it through `reportApiError` rather than adding a second transport. |
+| **Celery task failures are not reported** | Open (LOW) | `persist_error_log` resolves the org from the request's credentials, and a background worker has no request. Scheduled email sends, report generation and similar failures reach Loguru/Sentry only. Closing it means passing an explicit `organization_id` into a request-free variant of the helper. |
+| **A 5xx produces two rows** | Accepted (intentional) | The backend logs `BACKEND_HTTP_5xx` with the traceback and endpoint; the client logs `API_SERVER_ERROR` with the member and the page they were on. Neither is redundant — the backend row is missing when the failure never reached the app (gateway 502) and the client row is missing for a failure outside a request the user made. They are distinguished by the Source column. |
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

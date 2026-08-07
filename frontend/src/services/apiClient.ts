@@ -14,6 +14,7 @@
 import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import type { AxiosResponse } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
+import { reportApiError } from './errorReporting';
 import {
   getCacheKey,
   getCached,
@@ -258,6 +259,8 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         // Refresh failed — clear session flag and redirect to login.
+        // Not reported to error monitoring: an expired session is routine and
+        // logging every one would bury real failures.
         // Skip the hard redirect during onboarding: the onboarding flow
         // manages its own session and auth cookies may not be fully
         // established yet. A hard redirect here would kick the user out
@@ -274,6 +277,13 @@ api.interceptors.response.use(
         return Promise.reject(refreshError instanceof Error ? refreshError : new Error(String(refreshError)));
       }
     }
+
+    // Surface the failure to the Error Monitoring page before handing it to
+    // the caller. Callers turn these into toasts and inline messages that only
+    // the affected member ever sees; without this an administrator has no
+    // record that anything failed. reportApiError filters routine statuses
+    // and de-duplicates, so this is safe on every request.
+    reportApiError(error);
 
     return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   }
