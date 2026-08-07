@@ -95,15 +95,15 @@ export const ForgotPasswordPage: React.FC = () => {
         <div className="card p-8">
           <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
             {error && (
-              <div className="rounded-md bg-red-500/20 border border-red-500/50 p-4" role="alert" aria-live="polite">
+              <div className="rounded-md bg-theme-alert-danger-bg border border-theme-alert-danger-border p-4" role="alert" aria-live="polite">
                 <div className="flex">
                   <div className="shrink-0">
-                    <svg className="h-5 w-5 text-red-700 dark:text-red-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <svg className="h-5 w-5 text-theme-alert-danger-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-red-200">{error}</p>
+                    <p className="text-sm font-medium text-theme-alert-danger-text">{error}</p>
                   </div>
                 </div>
               </div>
@@ -166,16 +166,16 @@ export const ForgotPasswordPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="mt-6 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+        <div className="mt-6 bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-4">
           <div className="flex items-start space-x-3">
-            <svg className="w-5 h-5 text-blue-700 dark:text-blue-400 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+            <svg className="w-5 h-5 text-theme-alert-info-icon shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>
             <div>
-              <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
+              <h4 className="text-sm font-medium text-theme-alert-info-title mb-1">
                 Security Note
               </h4>
-              <p className="text-sm text-blue-200">
+              <p className="text-sm text-theme-alert-info-text">
                 For security reasons, we don't reveal whether an email exists in our system.
                 You'll receive an email only if the account exists.
               </p>

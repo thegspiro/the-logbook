@@ -300,7 +300,7 @@ const MinutesPage: React.FC = () => {
             return (
               <div
                 key={meeting.id}
-                className="stat-card hover:border-white/30 transition-colors"
+                className="stat-card hover:border-theme-text-muted/40 transition-colors"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">

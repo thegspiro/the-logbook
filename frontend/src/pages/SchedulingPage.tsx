@@ -1633,7 +1633,7 @@ const SchedulingPage: React.FC = () => {
                     disabled={creating || !shiftForm.startDate}
                     className={`px-4 py-2 rounded-lg transition-colors inline-flex items-center space-x-2 ${
                       creating || !shiftForm.startDate
-                        ? "bg-violet-600/50 text-white/50 cursor-not-allowed"
+                        ? "bg-violet-600 text-white opacity-50 cursor-not-allowed"
                         : "bg-violet-600 hover:bg-violet-700 text-white"
                     }`}
                   >

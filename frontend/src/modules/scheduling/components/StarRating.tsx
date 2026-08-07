@@ -31,7 +31,7 @@ export const StarRating: React.FC<StarRatingProps> = ({
       : 'fill-amber-400 text-amber-400';
 
   const emptyClass = interactive
-    ? 'text-theme-text-muted hover:text-amber-300'
+    ? 'text-theme-text-muted hover:text-amber-500 dark:hover:text-amber-300'
     : 'text-theme-text-muted';
 
   return (

@@ -501,13 +501,13 @@ export const ReportsPage: React.FC = () => {
 
         {/* Error Banner */}
         {error && !activeCard && (
-          <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+          <div className="mb-6 rounded-lg border border-theme-alert-danger-border bg-theme-alert-danger-bg p-4">
             <div className="flex items-start space-x-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-700 dark:text-red-400" aria-hidden="true" />
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-theme-alert-danger-icon" aria-hidden="true" />
               <div className="flex-1">
-                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                <p className="text-sm text-theme-alert-danger-text">{error}</p>
               </div>
-              <button onClick={() => setError(null)} className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300">
+              <button onClick={() => setError(null)} className="text-theme-alert-danger-icon hover:text-theme-alert-danger-title">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -583,12 +583,12 @@ export const ReportsPage: React.FC = () => {
         )}
 
         {/* Info Banner */}
-        <div className="mt-8 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
+        <div className="mt-8 rounded-lg border border-theme-alert-info-border bg-theme-alert-info-bg p-4">
           <div className="flex items-start space-x-3">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-blue-700 dark:text-blue-400" aria-hidden="true" />
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-theme-alert-info-icon" aria-hidden="true" />
             <div>
-              <h4 className="mb-1 text-sm font-medium text-blue-700 dark:text-blue-300">Report Generation</h4>
-              <p className="text-sm text-blue-200">
+              <h4 className="mb-1 text-sm font-medium text-theme-alert-info-title">Report Generation</h4>
+              <p className="text-sm text-theme-alert-info-text">
                 Reports are generated in real-time. Use the date range presets or set a custom period for date-based
                 reports. All reports can be exported to CSV or printed to PDF. Use the Compare button in the report
                 modal to see period-over-period trends.

@@ -1016,12 +1016,12 @@ const ImportMembers: React.FC = () => {
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Instructions */}
-        <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-6 mb-8">
+        <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-6 mb-8">
           <h2 className="text-theme-text-primary font-bold mb-3 flex items-center space-x-2">
-            <FileText className="w-5 h-5 text-blue-700 dark:text-blue-400" />
+            <FileText className="w-5 h-5 text-theme-alert-info-icon" />
             <span>How to Import Members</span>
           </h2>
-          <ol className="text-blue-200 text-sm space-y-2 ml-6 list-decimal">
+          <ol className="text-theme-alert-info-text text-sm space-y-2 ml-6 list-decimal">
             <li>Download the CSV template below</li>
             <li>
               Fill in member information — <strong>firstName</strong>, <strong>lastName</strong> and{' '}
@@ -1036,7 +1036,7 @@ const ImportMembers: React.FC = () => {
             <li>Rows that pass are imported; any that fail come back as a downloadable report</li>
           </ol>
 
-          <div className="mt-4 pt-4 border-t border-blue-500/30">
+          <div className="mt-4 pt-4 border-t border-theme-alert-info-border">
             <button
               onClick={downloadTemplate}
               className="btn-info flex items-center space-x-2"
@@ -1068,7 +1068,7 @@ const ImportMembers: React.FC = () => {
                     setFile(null);
                     resetFileState();
                   }}
-                  className="mt-3 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm"
+                  className="mt-3 text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 text-sm"
                 >
                   Remove file
                 </button>
@@ -1092,8 +1092,8 @@ const ImportMembers: React.FC = () => {
 
           {validating && (
             <div className="mt-4 flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-400">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400"></div>
-              <span>Checking every row...</span>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-700 dark:border-blue-400"></div>
+              <span>Validating file...</span>
             </div>
           )}
         </div>
@@ -1101,21 +1101,40 @@ const ImportMembers: React.FC = () => {
         {/* Pre-flight review */}
         {preflight && !importResult && (
           <div className="card mb-8 p-8">
-            <h2 className="text-theme-text-primary font-bold mb-4">Step 2: Review</h2>
+            <h2 className="text-theme-text-primary font-bold mb-4">Step 2: Preview Data</h2>
+            <p className="text-theme-text-secondary text-sm mb-4">
+              Showing first {previewData.length} members from the file
+            </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
-                <p className="text-green-700 dark:text-green-400 text-2xl font-bold">
-                  {preflight.valid.length}
-                </p>
-                <p className="text-green-700 dark:text-green-300 text-sm">Ready to import</p>
-              </div>
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
-                <p className="text-red-700 dark:text-red-400 text-2xl font-bold">
-                  {preflight.invalid.length}
-                </p>
-                <p className="text-red-700 dark:text-red-300 text-sm">Will be skipped</p>
-              </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-theme-input-bg border-b border-theme-surface-border">
+                  <tr>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Name</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Member #</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Email</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Phone</th>
+                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Emergency Contact</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-theme-surface-border">
+                  {previewData.map((row, index) => (
+                    <tr key={index} className="hover:bg-theme-surface-secondary">
+                      <td className="px-4 py-2 text-theme-text-primary">
+                        {row.firstName} {row.lastName}
+                      </td>
+                      <td className="px-4 py-2 text-theme-text-secondary font-mono">{row.membershipNumber}</td>
+                      <td className="px-4 py-2 text-theme-text-secondary">{row.email}</td>
+                      <td className="px-4 py-2 text-theme-text-secondary">{row.primaryPhone}</td>
+                      <td className="px-4 py-2 text-theme-text-secondary">
+                        {row.emergencyName1
+                          ? `${row.emergencyName1}${row.emergencyRelationship1 ? ` (${row.emergencyRelationship1})` : ''}`
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
             {preflight.valid.length > 0 && (
@@ -1259,7 +1278,7 @@ const ImportMembers: React.FC = () => {
         {importResult && (
           <div className="card p-8">
             <div className="text-center mb-6">
-              <CheckCircle className="w-16 h-16 text-green-700 dark:text-green-400 mx-auto mb-4" />
+              <CheckCircle className="w-16 h-16 text-theme-alert-success-icon mx-auto mb-4" />
               <h2 className="text-theme-text-primary text-2xl font-bold mb-2">Import Complete!</h2>
               <p className="text-theme-text-secondary">
                 Successfully imported {importResult.success} members
@@ -1267,31 +1286,26 @@ const ImportMembers: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center">
-                <p className="text-green-700 dark:text-green-400 text-2xl font-bold">{importResult.success}</p>
-                <p className="text-green-700 dark:text-green-300 text-sm">Successful</p>
+              <div className="bg-theme-alert-success-bg border border-theme-alert-success-border rounded-lg p-4 text-center">
+                <p className="text-theme-alert-success-title text-2xl font-bold">{importResult.success}</p>
+                <p className="text-theme-alert-success-text text-sm">Successful</p>
               </div>
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center">
-                <p className="text-red-700 dark:text-red-400 text-2xl font-bold">{importResult.issues.length}</p>
-                <p className="text-red-700 dark:text-red-300 text-sm">Failed</p>
+              <div className="bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4 text-center">
+                <p className="text-theme-alert-danger-title text-2xl font-bold">{importResult.failed}</p>
+                <p className="text-theme-alert-danger-text text-sm">Failed</p>
               </div>
             </div>
 
-            {importResult.issues.length > 0 && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
-                <h3 className="text-red-700 dark:text-red-300 font-bold mb-1">Rows not imported:</h3>
-                <p className="text-red-700 dark:text-red-200 text-sm mb-3">
-                  The report contains only these rows, so you can fix them and upload it
-                  again without colliding with the members that imported.
-                </p>
-                {renderIssues(importResult.issues)}
-                <button
-                  onClick={() => downloadErrorReport(importResult.issues)}
-                  className="btn-info mt-4 flex items-center space-x-2"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download Error Report</span>
-                </button>
+            {importResult.errors.length > 0 && (
+              <div className="bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4 mb-6">
+                <h3 className="text-theme-alert-danger-title font-bold mb-2">Errors:</h3>
+                <div className="space-y-1 text-sm">
+                  {importResult.errors.map((error, index) => (
+                    <p key={index} className="text-theme-alert-danger-text">
+                      Row {error.row}: {error.error}
+                    </p>
+                  ))}
+                </div>
               </div>
             )}
 
