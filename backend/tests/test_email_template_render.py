@@ -69,7 +69,8 @@ class TestNonMarkupDestinations:
             escape_html=False,
         )
         assert out == "Hi Sean O'Brien at Falls Church Fire & Rescue"
-        assert "&" in out and "&amp;" not in out
+        assert "&" in out
+        assert "&amp;" not in out
         assert "&#x27;" not in out
 
     def test_html_still_escapes_when_flag_defaults(self):
