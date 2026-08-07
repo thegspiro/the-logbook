@@ -143,8 +143,7 @@ Variant groups link related items that differ only in size or style — for exam
 - The variant group view shows aggregate stock across all sizes/styles
 - When issuing from a variant group, the system prompts for size selection based on the member's size preferences (if recorded)
 
-> **Screenshot needed:**
-> _[Screenshot of the Variant Group creation form showing the base product name field, a table of variants with Size dropdown (XS–5XL), Style dropdown (Regular/Long/Short/Tall), and per-variant stock quantity fields. Show the "Add Variant" button at the bottom]_
+![Variant group creation form with the size and colour matrix](./images/05-04-variant-group-form.png)
 
 > **Edge case:** If a variant group has zero total stock across all sizes, it still appears in the inventory list but is marked as "Out of Stock." Individual variants with zero stock are dimmed but not hidden, so administrators can see which sizes need reordering.
 
@@ -363,8 +362,7 @@ When available stock drops to or below the reorder point, the item appears on th
 
 Each status transition is audit-logged with the user, timestamp, and any notes.
 
-> **Screenshot needed:**
-> _[Screenshot of the Reorder Requests page showing a table of reorder requests with columns for item name, requested quantity, status badge (Pending in yellow, Approved in blue, Ordered in purple, Received in green), requested by, and date. Show the Create Reorder Request button in the toolbar]_
+![Reorder requests table with requested quantities and status](./images/05-14-reorder-requests.png)
 
 > **Edge case:** If an item's stock is replenished through a regular return or issuance reversal (not through the reorder workflow), the reorder request remains open. Admins should manually close or cancel outdated requests.
 
@@ -1248,8 +1246,7 @@ Two new dedicated admin pages have been added:
 - Edit individual variants within a group
 - Link to auto-generation for new variant groups
 
-> **Screenshot needed:**
-> _[Screenshot of the Variant Groups admin page showing variant groups with base product name, total stock across sizes, and expandable variant details]_
+![Variant groups admin page with base products and per-size stock](./images/05-32-variant-groups.png)
 
 ### Barcode Label Printing Improvements
 

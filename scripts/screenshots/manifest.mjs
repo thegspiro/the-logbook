@@ -54,30 +54,54 @@ export function clickByName(name) {
  *   apiPath   collection endpoint, relative to /api/v1
  *   routeFor  (id) => path to visit
  *   listKey   optional container key when the response is not a bare array
+ *   match     optional (record) => boolean picking which record to open
+ *
+ * `match` matters more than it looks. Without it a shot opens whatever the API
+ * returns first, which is not a stable choice: adding back-dated events to the
+ * seeder silently repointed the event-detail shot at an old event with no RSVPs
+ * and emptied a screenshot that had been correct for weeks. A shot that needs a
+ * record in a particular state should say so.
  */
-export function openFirstFromApi(apiPath, routeFor, listKey) {
+export function openFirstFromApi(apiPath, routeFor, listKey, match) {
   return async (page) => {
-    const id = await page.evaluate(
+    const records = await page.evaluate(
       async ([path, key]) => {
         const response = await fetch(`/api/v1${path}`, {
           credentials: "include",
         });
-        if (!response.ok) return null;
+        if (!response.ok) return [];
         const body = await response.json();
-        const list = Array.isArray(body)
+        return Array.isArray(body)
           ? body
           : body[key] || body.items || body.results || body.data || [];
-        return list.length ? (list[0].id ?? null) : null;
       },
       [apiPath, listKey ?? ""],
     );
-    if (!id)
-      throw new Error(`openFirstFromApi: ${apiPath} returned no records`);
-    await page.goto(new URL(routeFor(id), page.url()).toString(), {
+    const chosen = match ? records.find(match) : records[0];
+    if (!chosen?.id) {
+      throw new Error(
+        `openFirstFromApi: ${apiPath} returned no ${match ? "matching " : ""}records`,
+      );
+    }
+    await page.goto(new URL(routeFor(chosen.id), page.url()).toString(), {
       waitUntil: "domcontentloaded",
     });
   };
 }
+
+/** True for an event that has started but not finished. */
+export const isInProgress = (event) => {
+  const now = new Date().toISOString();
+  const start = event.start_datetime ?? event.startDatetime ?? "";
+  const end = event.end_datetime ?? event.endDatetime ?? "";
+  return start <= now && end >= now;
+};
+
+/** True for an event still in the future, which is where the RSVPs are. */
+export const isUpcoming = (event) => {
+  const start = event.start_datetime ?? event.startDatetime ?? "";
+  return start > new Date().toISOString();
+};
 
 export const SHOTS = [
   // ── 00 Getting Started ──────────────────────────────────────────────
@@ -918,9 +942,10 @@ export const SHOTS = [
     alt: "Event detail page with the header, description, and RSVP controls",
     route: "/events",
     prepare: openFirstFromApi(
-      "/events?limit=1",
+      "/events?limit=100",
       (id) => `/events/${id}`,
       "events",
+      isUpcoming,
     ),
     fullPage: true,
   },
@@ -1150,9 +1175,10 @@ export const SHOTS = [
     alt: "Event QR code display page for member self check-in",
     route: "/events",
     prepare: openFirstFromApi(
-      "/events?limit=1",
+      "/events?limit=100",
       (id) => `/events/${id}/qr-code`,
       "events",
+      isUpcoming,
     ),
   },
   {
@@ -1164,9 +1190,10 @@ export const SHOTS = [
     alt: "Event check-in monitoring page with the live attendee list",
     route: "/events",
     prepare: openFirstFromApi(
-      "/events?limit=1",
+      "/events?limit=100",
       (id) => `/events/${id}/monitoring`,
       "events",
+      isInProgress,
     ),
     fullPage: true,
   },
