@@ -173,7 +173,7 @@ Budget categories organize your department's spending into logical groups. Categ
 7. Optionally enter a **QuickBooks account name** to pre-configure the export mapping (see [QuickBooks Export](#quickbooks-export)).
 8. Click **Save**.
 
-> **[SCREENSHOT NEEDED]:** _The Budget Categories section on the Settings page showing a hierarchical list of categories with parent-child indentation, sort order numbers, QB account name column, active/inactive toggle, and Add/Edit/Delete action buttons._
+![Budget categories list with QuickBooks account mapping](./images/11-03-budget-categories.png)
 
 ### Category Hierarchy
 
@@ -945,7 +945,7 @@ The dues summary provides an overview of collection status across all members:
 
 The summary can be filtered by a specific dues schedule using the optional `scheduleId` parameter.
 
-> **[SCREENSHOT NEEDED]:** _The Dues Management page showing the summary cards at the top (total expected, collected, outstanding, collection rate), a filter bar (by schedule, status), and a member dues table below with columns for member name, amount due, amount paid, status badge, due date, and action buttons (Record Payment, Waive)._
+![Dues management page with collection summary cards and the member dues table](./images/11-15-dues-management.png)
 
 ### Edge Cases
 

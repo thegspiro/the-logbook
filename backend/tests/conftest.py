@@ -19,6 +19,19 @@ from sqlalchemy.orm import configure_mappers
 # key (e.g. in CI) authoritative.
 os.environ.setdefault("SECRET_KEY", "test-secret-key-" + "x" * 48)
 
+# Point the suite at its own database BEFORE Settings is constructed.
+#
+# Without this, DB_NAME resolves from .env — the developer's working database.
+# The per-test transaction is rolled back, so tests do not write to it, but they
+# still *read* it, and several assert on a clean slate: `create_organization`
+# refuses to create a second organization, so twenty facilities-onboarding tests
+# fail the moment the developer has an organization on their machine. The
+# failures look like product bugs and are nothing of the kind.
+#
+# setdefault, so CI (or anyone) can still name the database explicitly by
+# exporting DB_NAME; only the implicit .env value is overridden.
+os.environ.setdefault("DB_NAME", "intranet_test")
+
 # Eagerly register EVERY model and resolve all mappers at import time, before any
 # test module is collected. String-based relationships (e.g.
 # Organization.relationship("PublicPortalConfig")) can only resolve once every
@@ -34,12 +47,55 @@ from app.core.database import database_manager
 configure_mappers()
 
 
+def _ensure_test_database() -> None:
+    """Create the test database and its schema if they are not there yet.
+
+    The application builds its own schema at startup, so a developer's working
+    database is always ready; the dedicated test database has nothing to do
+    that for it. Creating it here keeps `pytest` a single command on a fresh
+    checkout instead of a documented setup ritual.
+
+    Both steps are idempotent — an existing database and existing tables are
+    left exactly as they are.
+
+    Only model-defined tables are created. main.py additionally replays the
+    migration-only files and the seed-data files; if a test ever needs one of
+    those lookup tables (apparatus types, facility types, …) this is where that
+    would be added.
+    """
+    from sqlalchemy import create_engine, text
+
+    from app.core.config import settings
+    from app.core.database import Base
+
+    server_url = settings.SYNC_DATABASE_URL.rsplit("/", 1)[0] + "/"
+    server = create_engine(server_url, isolation_level="AUTOCOMMIT")
+    with server.connect() as conn:
+        conn.execute(
+            text(
+                f"CREATE DATABASE IF NOT EXISTS `{settings.DB_NAME}` "
+                "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            )
+        )
+    server.dispose()
+
+    engine = create_engine(settings.SYNC_DATABASE_URL)
+    with engine.begin() as conn:
+        # Models carry circular foreign keys, so constraint checking has to be
+        # off while the tables are created — the same thing main.py does.
+        conn.exec_driver_sql("SET FOREIGN_KEY_CHECKS = 0")
+        Base.metadata.create_all(conn, checkfirst=True)
+        conn.exec_driver_sql("SET FOREIGN_KEY_CHECKS = 1")
+    engine.dispose()
+
+
 @pytest.fixture(scope="session")
 async def _initialize_database():
     """
     Initialize database connection for all tests.
     This runs once per test session.
     """
+    _ensure_test_database()
     await database_manager.connect()
     yield
     await database_manager.disconnect()

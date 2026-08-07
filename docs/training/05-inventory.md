@@ -284,8 +284,7 @@ An **issuance allowance** caps how many units of a category a member may receive
    - **Period Type** — **Annual** (resets each calendar year), **Career** (lifetime total), or **One-time**.
 4. Click **Create**. Use the pencil and trash icons on each row to edit or delete an allowance.
 
-> **Screenshot needed:**
-> _[Screenshot of the Issuance Allowances admin page showing a list of allowance rows — each with category name, role scope ("All members" or a role), max quantity, and a period-type badge (Annual/Career/One-time) — plus a "New Allowance" button in the toolbar. One row shows an inactive badge.]_
+![Issuance allowances with per-category limits and periods](./images/05-11-allowances.png)
 
 > **Screenshot needed:**
 > _[Screenshot of the New Allowance modal showing the Category dropdown, the "Applies To" role dropdown defaulting to "All members", the Max Quantity number input, the Period Type selector (Annual/Career/One-time), and Create/Cancel buttons]_
@@ -400,8 +399,7 @@ Each inventory item has a dedicated detail page at `/inventory/items/:id` with a
 - **Maintenance**: Maintenance records and upcoming scheduled maintenance
 - **NFPA Compliance**: (If NFPA tracking enabled) Lifecycle dates, ensemble info, exposures, inspections
 
-> **Screenshot needed:**
-> _[Screenshot of the Item Detail page showing the two-column layout. Left sidebar shows a Code128 barcode, quick info card (status: Available, condition: Good, category: PPE), and assignment history timeline. Right side shows tabbed content with the Overview tab active displaying item name, description, serial number, purchase date, warranty info, and storage location]_
+![Inventory item detail with its barcode, quick info, and history panels](./images/05-06-item-detail.png)
 
 ---
 
@@ -454,8 +452,7 @@ For items that are temporarily loaned (not permanently assigned), use the checko
    - **Damaged** — needs repair or replacement
 4. Confirm.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the checkout form showing the item being checked out, the member selector, expected return date, and a condition notes field]_
+![Equipment checkout page with the item, member, and expected return date](./images/05-08-checkouts.png)
 
 ---
 
@@ -577,8 +574,7 @@ The **Inventory Summary** (available from the inventory dashboard) shows:
 - Items with overdue maintenance
 - Items currently checked out and overdue for return
 
-> **Screenshot placeholder:**
-> _[Screenshot of the inventory summary/dashboard showing alert cards for low stock items (red), overdue maintenance (yellow), and overdue returns (orange)]_
+![Inventory dashboard with low-stock, maintenance, and assignment alert cards](./images/05-02-inventory-dashboard.png)
 
 ---
 
@@ -762,8 +758,7 @@ This is especially useful on mobile during equipment distribution events where y
 4. Set a return condition for each item.
 5. Click **Return Selected Items**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Members inventory tab showing a list of members with their assigned item counts, expandable to show individual items with assignment dates and conditions]_
+![Members inventory tab listing each member and their assigned item count](./images/05-24-member-inventory.png)
 
 ---
 
@@ -789,8 +784,7 @@ The hub is organized into three sections:
 
 3. **Low Stock Alerts** — Banner showing items below reorder threshold with category breakdown
 
-> **Screenshot needed:**
-> _[Screenshot of the Inventory Admin Hub showing the three prominent cards at the top, the grouped navigation sections below, and a low-stock alert banner at the bottom]_
+![Inventory admin hub with its grouped navigation cards](./images/05-25-admin-hub.png)
 
 ### Edge Cases
 
@@ -1247,8 +1241,7 @@ Two new dedicated admin pages have been added:
 - View kit components and their quantities
 - Issue kits to members with size preference auto-selection
 
-> **Screenshot needed:**
-> _[Screenshot of the Equipment Kits admin page showing a list of kits with name, component count, and actions (Edit, Issue, Delete)]_
+![Equipment kits admin page listing kits with their component counts](./images/05-31-equipment-kits.png)
 
 **Variant Groups** (`/inventory/admin/variant-groups`):
 - View and manage variant groups with aggregate stock across all sizes
@@ -1268,8 +1261,7 @@ Label generation has been significantly improved:
 - **Unified formats**: Frontend and backend share the same label format catalog, preventing size mismatches
 - **Batch limit**: Maximum batch size enforced to prevent browser memory issues
 
-> **Screenshot needed:**
-> _[Screenshot of the label printing page showing the format dropdown (Letter, Dymo 30252, Dymo 30256, Dymo 30334, Rollo 4×6, Custom), the "Test Print" button, and a label preview with ISO-compliant barcode]_
+![Inventory label printing page with format presets and preview](./images/05-33-label-printing.png)
 
 ### Inventory Dashboard Scoping
 
@@ -1304,8 +1296,7 @@ The Storage Areas page now shows the **actual inventory items** assigned to each
 - Item name, serial number, status, and condition
 - Direct links to each item's detail page
 
-> **Screenshot needed:**
-> _[Screenshot of the Storage Areas page showing an expanded storage area panel with 3 items listed — each row showing item name, serial number (e.g., "SN-12345"), a green "Good" condition badge, and a clickable link icon]_
+![Storage areas page with an expanded area listing its items](./images/05-36-storage-areas.png)
 
 > **Edge case:** Storage areas with no items show an empty state message. Items without serial numbers display the item name and barcode instead.
 
@@ -1592,7 +1583,7 @@ The **Impact Planner** at `/inventory/admin/impact-planner` allows quartermaster
 4. **Choose a size field**: Shirt, Pant, Jacket, Boot, Glove, or Hat
 5. Click **Analyze**
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Impact Planner page showing the filter panel on the left (status, rank, station dropdowns), category and size field selectors, and the Analyze button. Show the filter panel with "Active" status selected and "Firefighter" rank selected._
+![Inventory impact planner with its filter panel and member analysis](./images/05-45-impact-planner.png)
 
 ### Reading the Analysis Results
 

@@ -69,8 +69,7 @@ Click on any event to view its detail page. The detail page shows:
 > error in those cases. If you missed the window, use **check-in** at the event
 > or ask an officer to record your attendance.
 
-> **Screenshot placeholder:**
-> _[Screenshot of an event detail page showing the event header (title, date, location), description, RSVP buttons (Going/Maybe/Not Going with counts), and a list of attendees who have RSVP'd]_
+![Event detail page with the header, description, and RSVP controls](./images/04-02-event-detail.png)
 
 ---
 
@@ -84,8 +83,7 @@ Events support QR code-based check-in for tracking attendance:
 2. Click **QR Code** to display or print the check-in QR code.
 3. Display the QR code on a screen or print it for the venue entrance.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the QR code display page showing a large QR code in the center, the event name above it, and instructions below ("Scan to check in")]_
+![Event QR code display page for member self check-in](./images/04-04-event-qr-code.png)
 
 ### For Members (Checking In)
 
@@ -229,8 +227,7 @@ Navigate to **Events > Analytics** to view department-wide event metrics:
 - **Top Events**: Table of highest-attendance events
 - **Date Range Filter**: Filter all analytics by custom date range
 
-> **Screenshot needed:**
-> _[Screenshot of the EventAnalyticsPage showing the summary cards at the top, the event type bar chart on the left, monthly trends line chart on the right, and the top events table below]_
+![Event analytics page with summary cards and attendance charts](./images/04-08-event-analytics.png)
 
 ### Event Templates Management
 
@@ -245,8 +242,7 @@ Navigate to **Events > Templates** to manage reusable event configurations:
 
 When creating a new event, the **Template Picker** lets you quick-select from active templates to pre-fill the event form.
 
-> **Screenshot needed:**
-> _[Screenshot of the EventTemplatesPage showing a list of templates with name, type, active toggle, and edit/delete buttons. Show the create template modal open with the form fields]_
+![Event Templates page listing templates with type and active state](./images/04-09-event-templates.png)
 
 ### Quick-Create Events
 
@@ -633,8 +629,7 @@ Here are examples of outreach programs departments commonly configure:
 
 For detailed program descriptions, pipeline task suggestions, and sample email templates for each, see [Public Programs How-To](../../wiki/Public-Programs.md).
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Event Requests tab showing a list of requests with status badges, assigned coordinator, and expand arrow. Below: expanded request detail showing contact info, comment thread, pipeline task checklist, and action buttons (Schedule, Postpone, Cancel)]_
+![Event requests tab listing incoming requests with status badges](./images/04-20-event-requests.png)
 
 ---
 

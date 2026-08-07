@@ -10,13 +10,14 @@ after a UI change refreshes the images rather than leaving stale ones behind.
 
 ## Pieces
 
-| File                    | Role                                                                                                                     |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `bootstrap_demo.py`     | Runs the onboarding API end to end, creating the demo organization and its administrator                                 |
-| `seed_demo_data.py`     | Creates members, stations, apparatus, events, training, inventory, documents, and finance records through the public API |
-| `manifest.mjs`          | Declares each screenshot: which placeholder it fills, which route to visit, and any interaction needed                   |
-| `capture.mjs`           | Logs in, walks the manifest, writes PNGs to `docs/training/images/`, and records the result in `capture-report.json`     |
-| `apply_placeholders.py` | Rewrites the placeholder blocks in `docs/training/*.md` into `![alt](./images/....png)`                                  |
+| File                    | Role                                                                                                                                                                                                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bootstrap_demo.py`     | Runs the onboarding API end to end, creating the demo organization and its administrator                                                                                                                                                                        |
+| `seed_demo_data.py`     | Populates every module through the public API — members, stations, apparatus, shifts, events and RSVPs, training records and programs, skills tests, inventory, documents, forms, elections, prospects, grants, medical screening, storefront, finance and dues |
+| `manifest.mjs`          | Declares each screenshot: which placeholder it fills, which route to visit, and any interaction needed                                                                                                                                                          |
+| `capture.mjs`           | Logs in, walks the manifest, writes PNGs to `docs/training/images/`, and records the result in `capture-report.json`                                                                                                                                            |
+| `apply_placeholders.py` | Rewrites the placeholder blocks in `docs/training/*.md` into `![alt](./images/....png)`                                                                                                                                                                         |
+| `status_report.py`      | Regenerates `docs/training/SCREENSHOT_STATUS.md`                                                                                                                                                                                                                |
 
 ## Running it
 
@@ -38,10 +39,16 @@ node scripts/screenshots/capture.mjs
 node scripts/screenshots/capture.mjs --only 04-      # one guide
 node scripts/screenshots/capture.mjs --headed        # watch it run
 
-# 4. Rewrite the placeholders
+# 4. Rewrite the placeholders, then refresh the tracker
 python scripts/screenshots/apply_placeholders.py --dry-run
 python scripts/screenshots/apply_placeholders.py
+python scripts/screenshots/status_report.py
 ```
+
+The seeder is safe to re-run: each step lists what exists and skips it. It gives
+the demo member accounts a password, because several things the guides picture
+(event RSVPs) have no admin "on behalf of" endpoint and can only be produced by
+acting as the member.
 
 `SCREENSHOT_BASE_URL` overrides the frontend origin (default
 `http://localhost:3000`).
@@ -59,13 +66,23 @@ Where an empty phrase is incidental — an empty "My Upcoming Shifts" panel on a
 otherwise-populated dashboard, or an error monitor correctly reporting no
 errors — the manifest entry sets `allowEmptyState: true`.
 
+## How a shot finds its placeholder
+
+Each entry records the placeholder's `line`, but that is only a hint: applying
+one shot deletes several lines, so every line number below it shifts. The
+durable key is `anchor` — the opening words of the placeholder's own
+description. When the line hint misses, the applier searches for the anchor, and
+declines to guess if two placeholders match it.
+
 ## Adding a screenshot
 
-1. Find the placeholder in the guide and note its line number.
-2. Add an entry to `SHOTS` in `manifest.mjs` with a stable `id`, the `doc` and
-   `line`, alt text, and the route.
+1. Find the placeholder in the guide. Note its line number and the first dozen
+   words of its description.
+2. Add an entry to `SHOTS` in `manifest.mjs` with a stable `id`, the `doc`,
+   `line`, `anchor`, alt text, and the route.
 3. If the shot pictures a modal, a specific tab, or an expanded panel, give it a
-   `prepare(page)` that drives the UI there.
+   `prepare(page)` that drives the UI there. For a detail page, use
+   `openFirstFromApi()` rather than hard-coding an id — ids change every seed.
 4. Capture with `--only <id-prefix>`, look at the PNG, then apply.
 
 Ids are the filename and the applier's key, so keep them stable once a shot has

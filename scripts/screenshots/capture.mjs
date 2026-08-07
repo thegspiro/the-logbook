@@ -15,26 +15,26 @@
  *   node scripts/screenshots/capture.mjs [--only <id-prefix>] [--headed]
  */
 
-import { chromium } from '@playwright/test';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { chromium } from "@playwright/test";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { DEMO_CREDENTIALS, SHOTS } from './manifest.mjs';
+import { DEMO_CREDENTIALS, SHOTS } from "./manifest.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(HERE, '..', '..');
-const OUTPUT_DIR = resolve(REPO_ROOT, 'docs', 'training', 'images');
-const BASE_URL = process.env.SCREENSHOT_BASE_URL || 'http://localhost:3000';
+const REPO_ROOT = resolve(HERE, "..", "..");
+const OUTPUT_DIR = resolve(REPO_ROOT, "docs", "training", "images");
+const BASE_URL = process.env.SCREENSHOT_BASE_URL || "http://localhost:3000";
 
 /** Desktop framing matches the guides, which describe full-width layouts. */
 const DESKTOP = { width: 1440, height: 900 };
 const MOBILE = { width: 414, height: 896 };
 
 const args = process.argv.slice(2);
-const onlyIndex = args.indexOf('--only');
+const onlyIndex = args.indexOf("--only");
 const only = onlyIndex >= 0 ? args[onlyIndex + 1] : null;
-const headed = args.includes('--headed');
+const headed = args.includes("--headed");
 
 /**
  * The dashboard and most list pages fetch on mount, and several render a
@@ -42,7 +42,7 @@ const headed = args.includes('--headed');
  * frames, so settle on both.
  */
 async function settle(page) {
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(700);
 }
 
@@ -52,21 +52,37 @@ async function settle(page) {
  * placeholder would replace an accurate description with a misleading picture,
  * so shots are flagged here and the applier leaves the placeholder alone.
  */
-const EMPTY_STATE = /\bno [a-z .'-]{2,40}\b(found|yet|scheduled|available|to show)|get started by (creating|adding)|nothing (here|to show)/i;
+const EMPTY_STATE =
+  /\bno [a-z .'-]{2,40}\b(found|yet|scheduled|available|to show)|get started by (creating|adding)|nothing (here|to show)/i;
 
 async function detectEmptyState(page) {
-  const text = await page.locator('main, body').first().innerText().catch(() => '');
+  const text = await page
+    .locator("main, body")
+    .first()
+    .innerText()
+    .catch(() => "");
   const match = text.match(EMPTY_STATE);
   return match ? match[0].trim() : null;
 }
 
 async function login(page) {
-  await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
   await settle(page);
-  await page.getByLabel(/username|email/i).first().fill(DEMO_CREDENTIALS.username);
-  await page.getByLabel(/password/i).first().fill(DEMO_CREDENTIALS.password);
-  await page.getByRole('button', { name: /sign in|log ?in/i }).first().click();
-  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 30_000 });
+  await page
+    .getByLabel(/username|email/i)
+    .first()
+    .fill(DEMO_CREDENTIALS.username);
+  await page
+    .getByLabel(/password/i)
+    .first()
+    .fill(DEMO_CREDENTIALS.password);
+  await page
+    .getByRole("button", { name: /sign in|log ?in/i })
+    .first()
+    .click();
+  await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
+    timeout: 30_000,
+  });
   await settle(page);
 }
 
@@ -86,8 +102,8 @@ async function main() {
     // 1x, not 2x: a 1440px-wide capture is already legible in the guides, and
     // retina captures tripled the repository weight for no readability gain.
     deviceScaleFactor: 1,
-    colorScheme: 'light',
-    reducedMotion: 'reduce',
+    colorScheme: "light",
+    reducedMotion: "reduce",
   };
 
   const authed = await browser.newContext(contextOptions);
@@ -103,49 +119,69 @@ async function main() {
   const shots = SHOTS.filter((shot) => !only || shot.id.startsWith(only));
   for (const shot of shots) {
     const target = resolve(OUTPUT_DIR, `${shot.id}.png`);
-    const page = shot.auth === 'anonymous' ? anonPage : authedPage;
+    const page = shot.auth === "anonymous" ? anonPage : authedPage;
     try {
-      await page.setViewportSize(shot.viewport === 'mobile' ? MOBILE : DESKTOP);
-      await page.goto(`${BASE_URL}${shot.route}`, { waitUntil: 'domcontentloaded' });
+      await page.setViewportSize(shot.viewport === "mobile" ? MOBILE : DESKTOP);
+      await page.goto(`${BASE_URL}${shot.route}`, {
+        waitUntil: "domcontentloaded",
+      });
       await settle(page);
       if (shot.prepare) {
         await shot.prepare(page);
         await settle(page);
       }
-      const clip = shot.selector ? await page.locator(shot.selector).first() : null;
+      const clip = shot.selector
+        ? await page.locator(shot.selector).first()
+        : null;
       if (clip) {
         await clip.screenshot({ path: target });
       } else {
-        await page.screenshot({ path: target, fullPage: Boolean(shot.fullPage) });
+        await page.screenshot({
+          path: target,
+          fullPage: Boolean(shot.fullPage),
+        });
       }
-      const emptyState = shot.allowEmptyState ? null : await detectEmptyState(page);
+      const emptyState = shot.allowEmptyState
+        ? null
+        : await detectEmptyState(page);
       results.push({
         id: shot.id,
-        status: 'ok',
+        status: "ok",
         file: `${shot.id}.png`,
         doc: shot.doc,
         line: shot.line,
+        anchor: shot.anchor,
         alt: shot.alt,
         ...(emptyState ? { emptyState } : {}),
       });
-      console.log(`  ${emptyState ? '~' : '+'} ${shot.id}${emptyState ? ` (empty: "${emptyState}")` : ''}`);
+      console.log(
+        `  ${emptyState ? "~" : "+"} ${shot.id}${emptyState ? ` (empty: "${emptyState}")` : ""}`,
+      );
     } catch (error) {
-      results.push({ id: shot.id, status: 'failed', error: String(error).split('\n')[0] });
-      console.log(`  ! ${shot.id}: ${String(error).split('\n')[0]}`);
+      results.push({
+        id: shot.id,
+        status: "failed",
+        error: String(error).split("\n")[0],
+      });
+      console.log(`  ! ${shot.id}: ${String(error).split("\n")[0]}`);
     }
   }
 
   await writeFile(
-    resolve(HERE, 'capture-report.json'),
+    resolve(HERE, "capture-report.json"),
     `${JSON.stringify(results, null, 2)}\n`,
   );
   await browser.close();
 
-  const failed = results.filter((r) => r.status === 'failed');
+  const failed = results.filter((r) => r.status === "failed");
   const empty = results.filter((r) => r.emptyState);
-  console.log(`\n${results.length - failed.length}/${results.length} screenshots captured.`);
+  console.log(
+    `\n${results.length - failed.length}/${results.length} screenshots captured.`,
+  );
   if (empty.length) {
-    console.log(`${empty.length} show an empty state and need richer seed data before they can be applied.`);
+    console.log(
+      `${empty.length} show an empty state and need richer seed data before they can be applied.`,
+    );
   }
   if (failed.length) {
     process.exitCode = 1;

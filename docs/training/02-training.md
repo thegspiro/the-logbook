@@ -50,8 +50,7 @@ This page shows:
 - **Requirement Progress** - Your progress toward department training requirements
 - **Recent Training Records** - Your latest completed training entries
 
-> **Screenshot placeholder:**
-> _[Screenshot of the My Training page showing stat cards at the top (total hours, courses completed, etc.), an active enrollment card with a progress bar, and a list of recent training records below]_
+![My Training page with stat cards and the personal training record list](./images/02-01-my-training.png)
 
 > **Hint:** The visibility of sections on this page is controlled by your department's Training Module Configuration. Your officers may choose to show or hide certain sections for regular members.
 
@@ -244,8 +243,7 @@ If you are enrolled in a program, click on it to see:
 - Skill evaluations and check-offs
 - Time tracking (hours logged vs. required)
 
-> **Screenshot placeholder:**
-> _[Screenshot of a training program detail page showing the program name and description at the top, a progress bar, phases listed as an accordion with requirements inside each phase showing completion status (checkmarks, progress indicators)]_
+![Training program detail with phases, requirements, and progress](./images/02-09-program-detail.png)
 
 > **Hint:** Some requirements auto-progress based on shift completion reports. If you work a qualifying shift, your hours or shift count may be automatically credited toward program requirements.
 
@@ -589,8 +587,7 @@ The list shows:
 
 You can trigger notification emails to members with expiring certifications by clicking **Process Alerts**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Expiring Certifications page showing a table of upcoming expirations sorted by date, with color coding (yellow for 30-90 days, red for under 30 days) and a "Process Alerts" button]_
+![Expiring certifications table sorted by expiration date](./images/02-21-expiring-certifications.png)
 
 ### Automated Certification Alerts
 
@@ -959,7 +956,7 @@ Navigate to **Training Admin > Reports** for department-wide exports:
 3. **Certification Report** — A CSV of all certifications with their valid / expiring-soon / expired status for renewal tracking.
 4. **Compliance Report** — Department-wide compliance status across all members and requirements.
 
-> **[SCREENSHOT NEEDED]:** _The Training Admin Reports tab showing the Compliance, Hours Summary, and Certification report cards above the "Member Records (All Members)" period selector with CSV / PDF buttons._
+![Training admin reports tab with the compliance, hours, and certification cards](./images/02-41-training-admin-reports.png)
 
 > **Hint:** A bulk PDF for a period with no matching records still produces a valid (placeholder) PDF rather than failing — useful as proof that a quiet period was reviewed.
 
@@ -1023,7 +1020,7 @@ Officers can share training programs between departments:
 4. The system generates a JSON package containing all phases, requirements, milestones, and linked course definitions
 5. Save or share the JSON file with other departments
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Training Programs page with the Export button visible on a program card or detail view._
+![Training Programs page listing programs with an export action](./images/02-45-training-programs.png)
 
 **Importing a Program:**
 1. Navigate to **Training > Programs**
@@ -1453,8 +1450,7 @@ With Skills Testing, examiners can:
 
 For a comprehensive guide with a realistic NREMT example walkthrough, see the dedicated **[Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)** training guide.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Skills Testing section within Training Admin, showing the template list with published templates and a "New Test" button]_
+![Skills Testing section within Training Admin showing the template list](./images/02-64-skills-testing-admin.png)
 
 ---
 

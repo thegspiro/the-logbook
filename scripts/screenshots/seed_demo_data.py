@@ -22,11 +22,16 @@ import json
 import sys
 import urllib.error
 import urllib.request
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from http.cookiejar import CookieJar
+from time import sleep
 from typing import Any
 
 from bootstrap_demo import DEMO_ADMIN_PASSWORD, DEMO_ADMIN_USERNAME
+
+# Shared password given to the seeded member accounts so the seeder can act as
+# them where the API has no admin-on-behalf-of route (event RSVPs). Demo-only.
+DEMO_MEMBER_PASSWORD = "DemoMember!2026"
 
 # Screenshots must not look stale, so dated records are generated relative to
 # the run date rather than hard-coded.
@@ -71,12 +76,25 @@ class Api:
             token = self._csrf()
             if token:
                 req.add_header("X-CSRF-Token", token)
-        try:
-            with self.opener.open(req, timeout=120) as resp:
-                body = resp.read().decode()
-        except urllib.error.HTTPError as exc:
-            raise ApiError(method, path, exc.code, exc.read().decode()[:600]) from exc
-        return json.loads(body) if body else None
+        # Seeding drives hundreds of writes in a burst, which trips the API's
+        # rate limiter on the auth and admin routes. That limiter is doing its
+        # job, so back off and retry rather than asking for it to be widened.
+        for attempt in range(6):
+            try:
+                with self.opener.open(req, timeout=120) as resp:
+                    return json.loads(resp.read().decode() or "null")
+            except urllib.error.HTTPError as exc:
+                if exc.code == 429 and attempt < 5:
+                    # Honour Retry-After where the server sends one: the admin
+                    # password-reset limiter is 5 per 5 minutes, so a fixed
+                    # few-second backoff would never clear it.
+                    retry_after = exc.headers.get("Retry-After")
+                    sleep(int(retry_after) if retry_after else 5 * (attempt + 1))
+                    continue
+                raise ApiError(
+                    method, path, exc.code, exc.read().decode()[:600]
+                ) from exc
+        return None
 
     def get(self, path: str) -> Any:
         return self.call("GET", path)
@@ -91,11 +109,10 @@ class Api:
         return self.call("PUT", path, payload)
 
     def login(self) -> None:
-        self.call(
-            "POST",
-            "/auth/login",
-            {"username": DEMO_ADMIN_USERNAME, "password": DEMO_ADMIN_PASSWORD},
-        )
+        self.login_as(DEMO_ADMIN_USERNAME, DEMO_ADMIN_PASSWORD)
+
+    def login_as(self, username: str, password: str) -> None:
+        self.call("POST", "/auth/login", {"username": username, "password": password})
 
 
 def items(result: Any, *keys: str) -> list[dict]:
@@ -162,8 +179,9 @@ FACILITIES = [
 
 
 class Seeder:
-    def __init__(self, api: Api) -> None:
+    def __init__(self, api: Api, base_url: str) -> None:
         self.api = api
+        self.base_url = base_url
         self.failures: list[str] = []
         self.created: dict[str, list[dict]] = {}
 
@@ -241,6 +259,10 @@ class Seeder:
                         }
                     ],
                     "send_welcome_email": False,
+                    # Set here rather than through the admin reset endpoint so a
+                    # fresh seed never has to wait out that route's 5-per-5-minute
+                    # limiter. See seed_event_rsvps for why members need a login.
+                    "password": DEMO_MEMBER_PASSWORD,
                 },
             )
             created.append(record)
@@ -395,6 +417,163 @@ class Seeder:
                 )
             )
         return created
+
+    # -- scheduling --------------------------------------------------
+
+    SHIFT_TEMPLATES = [
+        ("Day Shift", "07:00", "19:00", 12, "#F59E0B", 3),
+        ("Night Shift", "19:00", "07:00", 12, "#4338CA", 3),
+        ("Weekend Duty Crew", "08:00", "20:00", 12, "#059669", 4),
+        ("Medic Duty", "06:00", "18:00", 12, "#2563EB", 2),
+    ]
+
+    def seed_scheduling(
+        self, stations: list[dict], apparatus: list[dict], members: list[dict]
+    ) -> dict[str, list[dict]]:
+        templates = items(self.api.get("/scheduling/templates"), "templates")
+        names = {t.get("name") for t in templates}
+        for index, (name, start, end, hours, color, staffing) in enumerate(
+            self.SHIFT_TEMPLATES
+        ):
+            if name in names:
+                continue
+            payload = {
+                "name": name,
+                "description": f"{name} — {start} to {end}.",
+                "start_time_of_day": start,
+                "end_time_of_day": end,
+                "duration_hours": hours,
+                "color": color,
+                "min_staffing": staffing,
+                "is_default": index == 0,
+                "open_to_all_members": True,
+            }
+            if apparatus:
+                payload["apparatus_id"] = pick(apparatus[index % len(apparatus)], "id")
+            templates.append(self.api.post("/scheduling/templates", payload))
+
+        patterns = items(self.api.get("/scheduling/patterns"), "patterns")
+        pattern_names = {p.get("name") for p in patterns}
+        for name, pattern_type, days_on, days_off in [
+            ("A/B/C Platoon Rotation", "platoon", 1, 2),
+            ("Weekend Duty Rotation", "weekly", 2, 5),
+        ]:
+            if name in pattern_names:
+                continue
+            payload = {
+                "name": name,
+                "description": f"{name} covering all front-line apparatus.",
+                "pattern_type": pattern_type,
+                "days_on": days_on,
+                "days_off": days_off,
+                "rotation_days": days_on + days_off,
+                "start_date": str(TODAY - timedelta(days=TODAY.weekday())),
+                "end_date": str(TODAY + timedelta(days=180)),
+            }
+            if templates:
+                payload["template_id"] = pick(templates[0], "id")
+            patterns.append(self.api.post("/scheduling/patterns", payload))
+
+        # Shifts reference the scheduling module's own lightweight apparatus
+        # table, not the full Apparatus records seeded above — passing an
+        # apparatus-module id here fails the in-org check with
+        # "Apparatus not found". Mirror the front-line fleet into it.
+        basic = items(self.api.get("/scheduling/apparatus"), "apparatus")
+        basic_units = {pick(a, "unit_number", "unitNumber") for a in basic}
+        for unit, name, _year, _make, _model, slug in APPARATUS[:4]:
+            if unit in basic_units:
+                continue
+            basic.append(
+                self.api.post(
+                    "/scheduling/apparatus",
+                    {
+                        "unit_number": unit,
+                        "name": name,
+                        "apparatus_type": slug,
+                        "min_staffing": 2 if slug in ("ambulance", "utility") else 3,
+                    },
+                )
+            )
+
+        shifts = items(self.api.get("/scheduling/shifts?limit=200"), "shifts")
+        # Shifts are keyed by (date, apparatus) so a re-run recognises its own
+        # rows; the API has no natural unique name to match on.
+        existing_keys = {
+            (s.get("shift_date"), s.get("apparatus_id") or s.get("apparatusId"))
+            for s in shifts
+        }
+        station_id = pick(stations[0], "id") if stations else None
+        member_ids = [pick(m, "id") for m in members if pick(m, "id")]
+        officers = member_ids[:8]
+
+        # Two weeks either side of today: the calendar, "my shifts", and the
+        # open-shifts list each need past and future rows to look real.
+        for offset in range(-10, 12):
+            shift_date = str(TODAY + timedelta(days=offset))
+            # The API rejects a member assigned to two shifts on one date, so
+            # crews are drawn from a single per-day pool that each apparatus
+            # consumes from in turn — rotated by the day so the roster varies.
+            rotation = offset % max(1, len(member_ids))
+            day_pool = member_ids[rotation:] + member_ids[:rotation]
+            pool_cursor = 0
+            for index, unit in enumerate(basic[:3]):
+                apparatus_id = pick(unit, "id")
+                if (shift_date, apparatus_id) in existing_keys:
+                    continue
+                name, start, end, hours, color, staffing = self.SHIFT_TEMPLATES[
+                    index % len(self.SHIFT_TEMPLATES)
+                ]
+                # shift_date is a date, but start_time/end_time are full
+                # timestamps — a bare "07:00" is rejected. A shift whose end
+                # time is earlier than its start crosses midnight, so its end
+                # lands on the following day.
+                start_at = datetime.combine(
+                    TODAY + timedelta(days=offset),
+                    time.fromisoformat(start),
+                    tzinfo=timezone.utc,
+                )
+                end_at = datetime.combine(
+                    TODAY + timedelta(days=offset + (1 if end <= start else 0)),
+                    time.fromisoformat(end),
+                    tzinfo=timezone.utc,
+                )
+                payload = {
+                    "shift_date": shift_date,
+                    "start_time": iso(start_at),
+                    "end_time": iso(end_at),
+                    "apparatus_id": apparatus_id,
+                    "color": color,
+                    "min_staffing": staffing,
+                    "notes": f"{name} on {pick(unit, 'unit_number', 'unitNumber')}.",
+                }
+                if station_id:
+                    payload["station_id"] = station_id
+                if officers:
+                    payload["shift_officer_id"] = officers[
+                        (offset + index) % len(officers)
+                    ]
+                shift = self.api.post("/scheduling/shifts", payload)
+                shifts.append(shift)
+
+                # Staff each shift short of its minimum so the Open Shifts tab
+                # has vacancies to show alongside the filled assignments.
+                shift_id = pick(shift, "id")
+                crew = day_pool[pool_cursor : pool_cursor + staffing - 1]
+                pool_cursor += len(crew)
+                for slot, user_id in enumerate(crew):
+                    self.api.post(
+                        f"/scheduling/shifts/{shift_id}/assignments",
+                        {
+                            "user_id": user_id,
+                            "position": "officer" if slot == 0 else "firefighter",
+                        },
+                    )
+        return {
+            "templates": templates,
+            "patterns": patterns,
+            "apparatus": basic,
+            "shifts": shifts,
+        }
 
     # -- training ----------------------------------------------------
 
@@ -613,6 +792,141 @@ class Seeder:
             existing_items.append(self.api.post("/inventory/items", payload))
         return {"categories": categories, "items": existing_items}
 
+    # -- inventory: kits, storage, allowances, assignments -----------
+
+    def seed_inventory_operations(
+        self,
+        categories: list[dict],
+        inventory_items: list[dict],
+        stations: list[dict],
+        members: list[dict],
+    ) -> dict[str, list[dict]]:
+        category_ids = {c.get("name"): pick(c, "id") for c in categories}
+        items_by_name = {i.get("name"): i for i in inventory_items}
+
+        areas = items(self.api.get("/inventory/storage-areas"), "storage_areas")
+        area_names = {a.get("name") for a in areas}
+        location_id = pick(stations[0], "id") if stations else None
+        for order, (name, label, storage_type) in enumerate(
+            [
+                ("Turnout Gear Racks", "TG-01", "rack"),
+                ("SCBA Cabinet", "SCBA-01", "cabinet"),
+                ("Quartermaster Shelving", "QM-01", "shelf"),
+                ("Uniform Bins", "UNI-01", "bin"),
+            ]
+        ):
+            if name in area_names:
+                continue
+            payload = {
+                "name": name,
+                "label": label,
+                "description": f"{name} in the Station 1 quartermaster room.",
+                "storage_type": storage_type,
+                "sort_order": order,
+            }
+            if location_id:
+                payload["location_id"] = location_id
+            areas.append(self.api.post("/inventory/storage-areas", payload))
+
+        kits = items(self.api.get("/inventory/kits"), "kits")
+        kit_names = {k.get("name") for k in kits}
+        for name, description, line_items in [
+            (
+                "New Recruit PPE Kit",
+                "Issued to every probationary member on day one.",
+                [
+                    ("Bunker Coat", "Structural PPE", 1),
+                    ("Bunker Pants", "Structural PPE", 1),
+                    ("Structural Helmet", "Structural PPE", 1),
+                    ("Firefighting Gloves", "Structural PPE", 2),
+                ],
+            ),
+            (
+                "Duty Uniform Kit",
+                "Standard duty uniform issue.",
+                [
+                    ("Job Shirt", "Uniforms", 2),
+                    ("Class B Uniform Shirt", "Uniforms", 3),
+                ],
+            ),
+        ]:
+            if name in kit_names:
+                continue
+            kits.append(
+                self.api.post(
+                    "/inventory/kits",
+                    {
+                        "name": name,
+                        "description": description,
+                        "line_items": [
+                            {
+                                "item_name": item_name,
+                                "quantity": quantity,
+                                "size_selectable": True,
+                                **(
+                                    {"item_id": pick(items_by_name[item_name], "id")}
+                                    if item_name in items_by_name
+                                    else {}
+                                ),
+                                **(
+                                    {"category_id": category_ids[category]}
+                                    if category_ids.get(category)
+                                    else {}
+                                ),
+                            }
+                            for item_name, category, quantity in line_items
+                        ],
+                    },
+                )
+            )
+
+        allowances = items(self.api.get("/inventory/allowances"), "allowances")
+        if not allowances:
+            for category, quantity, period in [
+                ("Structural PPE", 1, "career"),
+                ("Uniforms", 3, "annual"),
+                ("Portable Radios", 1, "career"),
+            ]:
+                category_id = category_ids.get(category)
+                if not category_id:
+                    continue
+                allowances.append(
+                    self.api.post(
+                        "/inventory/allowances",
+                        {
+                            "category_id": category_id,
+                            "max_quantity": quantity,
+                            "period_type": period,
+                        },
+                    )
+                )
+
+        # Assign individually-tracked gear so "My Equipment", the member
+        # inventory tab, and the item detail page all show a holder.
+        assignable = [
+            i
+            for i in inventory_items
+            if (i.get("tracking_type") or i.get("trackingType")) == "individual"
+        ]
+        for index, item in enumerate(assignable):
+            status = (item.get("status") or "").lower()
+            if status and status != "available":
+                continue
+            user_id = pick(members[index % len(members)], "id")
+            item_id = pick(item, "id")
+            if not user_id or not item_id:
+                continue
+            self.api.post(
+                f"/inventory/items/{item_id}/assign",
+                {
+                    "item_id": item_id,
+                    "user_id": user_id,
+                    "assignment_type": "permanent",
+                    "assignment_reason": "Initial issue",
+                },
+            )
+        return {"storage_areas": areas, "kits": kits, "allowances": allowances}
+
     # -- documents ---------------------------------------------------
 
     def seed_documents(self) -> list[dict]:
@@ -729,6 +1043,1113 @@ class Seeder:
             "budgets": budgets,
         }
 
+    # -- training programs (pipelines) -------------------------------
+
+    def seed_training_programs(self, members: list[dict]) -> list[dict]:
+        programs = items(self.api.get("/training/programs/programs"), "programs")
+        names = {p.get("name") for p in programs}
+        blueprint = [
+            (
+                "Probationary Firefighter Pipeline",
+                "PROB-FF",
+                "Firefighter",
+                [
+                    (
+                        "Phase 1 — Orientation",
+                        [
+                            ("Department Orientation", "hours", 8),
+                            ("PPE Familiarization", "hours", 4),
+                            ("Station Duties Checklist", "checklist", None),
+                            ("Ride-Along Shifts", "shifts", 3),
+                        ],
+                    ),
+                    (
+                        "Phase 2 — Basic Skills",
+                        [
+                            ("Hose Deployment", "hours", 12),
+                            ("Ladder Evolutions", "hours", 12),
+                            ("SCBA Confidence", "hours", 8),
+                            ("Search & Rescue Drills", "hours", 8),
+                            ("Duty Shifts", "shifts", 12),
+                            ("Emergency Calls", "calls", 20),
+                        ],
+                    ),
+                    (
+                        "Phase 3 — Certification",
+                        [
+                            ("Firefighter I Written Exam", "knowledge_test", None),
+                            ("Practical Skills Evaluation", "skills_evaluation", None),
+                            ("Officer Sign-Off", "checklist", None),
+                        ],
+                    ),
+                ],
+            ),
+            (
+                "Driver / Operator Pipeline",
+                "DRV-OP",
+                "Driver",
+                [
+                    (
+                        "Phase 1 — Classroom",
+                        [
+                            ("Pump Theory", "hours", 16),
+                            ("Hydraulics Calculations", "hours", 8),
+                        ],
+                    ),
+                    (
+                        "Phase 2 — Behind the Wheel",
+                        [
+                            ("Supervised Driving Hours", "hours", 20),
+                            ("Pump Panel Evolutions", "shifts", 6),
+                        ],
+                    ),
+                ],
+            ),
+        ]
+
+        for name, code, position, phases in blueprint:
+            if name in names:
+                continue
+            payload = {
+                "program": {
+                    "name": name,
+                    "code": code,
+                    "description": (
+                        f"{name} — phased progression with officer sign-off "
+                        "before advancement."
+                    ),
+                    "target_position": position,
+                    "structure_type": "phases",
+                    "time_limit_days": 365,
+                },
+                "phases": [],
+            }
+            for number, (phase_name, requirements) in enumerate(phases, start=1):
+                phase = {
+                    "phase_number": number,
+                    "name": phase_name,
+                    "description": f"{phase_name} of the {name.lower()}.",
+                    # The last phase gates on an officer, which is what the
+                    # guides picture on the "Advance to next phase" control.
+                    "requires_manual_advancement": number == len(phases),
+                    "requirements": [],
+                    "milestones": [
+                        {
+                            "name": f"{phase_name} complete",
+                            "completion_percentage_threshold": 100,
+                            "notification_message": (
+                                f"{phase_name} is finished — ready for review."
+                            ),
+                        }
+                    ],
+                }
+                for order, (req_name, req_type, amount) in enumerate(requirements):
+                    requirement: dict[str, Any] = {
+                        "name": req_name,
+                        "requirement_type": req_type,
+                        "frequency": "one_time",
+                        "is_required": True,
+                        "sort_order": order,
+                    }
+                    if req_type == "hours":
+                        requirement["required_hours"] = amount
+                    elif req_type == "shifts":
+                        requirement["required_shifts"] = amount
+                    elif req_type == "calls":
+                        requirement["required_calls"] = amount
+                    elif req_type == "knowledge_test":
+                        requirement["passing_score"] = 70
+                        requirement["max_attempts"] = 3
+                    elif req_type == "checklist":
+                        requirement["checklist_items"] = [
+                            "Reviewed with company officer",
+                            "Signed off in station logbook",
+                        ]
+                    phase["requirements"].append(requirement)
+                payload["phases"].append(phase)
+            programs.append(self.api.post("/training/programs/programs/build", payload))
+
+        # Enrol the probationary members so the Enrollments tab and the
+        # member-facing progression view have rows to render. Enrollments are
+        # only listable per program — there is no collection-level GET.
+        probationary = [
+            pick(m, "id")
+            for m in members
+            if str(m.get("rank") or "").lower().startswith("probation")
+        ]
+        for program in programs:
+            program_id = pick(program, "id")
+            if not program_id:
+                continue
+            enrolled = {
+                e.get("user_id") or e.get("userId")
+                for e in items(
+                    self.api.get(
+                        f"/training/programs/programs/{program_id}/enrollments"
+                    ),
+                    "enrollments",
+                )
+            }
+            for user_id in probationary:
+                if not user_id or user_id in enrolled:
+                    continue
+                self.api.post(
+                    "/training/programs/enrollments",
+                    {"program_id": program_id, "user_id": user_id},
+                )
+        return programs
+
+    # -- skills testing ----------------------------------------------
+
+    def seed_skills_testing(self) -> list[dict]:
+        templates = items(
+            self.api.get("/training/skills-testing/templates"), "templates"
+        )
+        names = {t.get("name") for t in templates}
+        blueprint = [
+            (
+                "Patient Assessment / Management — Medical",
+                "Emergency Medical",
+                [
+                    (
+                        "Scene Size-Up",
+                        [
+                            "Takes or verbalizes standard precautions",
+                            "Determines the scene is safe",
+                            "Determines the mechanism of injury / nature of illness",
+                            "Determines the number of patients",
+                            "Requests additional EMS assistance if necessary",
+                        ],
+                    ),
+                    (
+                        "Primary Survey",
+                        [
+                            "Verbalizes general impression of the patient",
+                            "Determines responsiveness / level of consciousness",
+                            "Determines chief complaint / apparent life threats",
+                            "Assesses airway and breathing",
+                            "Assesses circulation",
+                        ],
+                    ),
+                    (
+                        "History Taking",
+                        [
+                            "Obtains history of the present illness",
+                            "Obtains past medical history",
+                            "Performs a focused physical examination",
+                        ],
+                    ),
+                ],
+            ),
+            (
+                "SCBA Donning — Timed Evolution",
+                "Fire Suppression",
+                [
+                    (
+                        "Preparation",
+                        [
+                            "Inspects cylinder pressure before donning",
+                            "Checks harness and straps for damage",
+                        ],
+                    ),
+                    (
+                        "Donning",
+                        [
+                            "Dons the pack without assistance",
+                            "Seals the facepiece and checks for leaks",
+                            "Activates the PASS device",
+                        ],
+                    ),
+                ],
+            ),
+        ]
+
+        for name, category, sections in blueprint:
+            if name in names:
+                continue
+            template = self.api.post(
+                "/training/skills-testing/templates",
+                {
+                    "name": name,
+                    "description": f"{name} skill sheet, NREMT-style scoring.",
+                    "category": category,
+                    "passing_percentage": 70,
+                    "require_all_critical": True,
+                    # The list endpoint hides anything other than
+                    # "all_members" from non-officer viewers; "organization"
+                    # is not one of the accepted values and made every
+                    # template invisible.
+                    "visibility": "all_members",
+                    "sections": [
+                        {
+                            "name": section_name,
+                            "sort_order": order,
+                            "criteria": [
+                                {
+                                    "label": label,
+                                    "type": "checkbox",
+                                    "required": True,
+                                    "sort_order": criterion_order,
+                                    "max_score": 1,
+                                }
+                                for criterion_order, label in enumerate(criteria)
+                            ],
+                        }
+                        for order, (section_name, criteria) in enumerate(sections)
+                    ],
+                },
+            )
+            # A draft template cannot be selected when starting a test, so the
+            # "New Test" page shows nothing until at least one is published.
+            self.api.post(
+                f"/training/skills-testing/templates/{pick(template, 'id')}/publish"
+            )
+            templates.append(template)
+        return templates
+
+    # -- training records --------------------------------------------
+
+    def seed_training_records(
+        self, members: list[dict], courses: list[dict]
+    ) -> list[dict]:
+        records = items(self.api.get("/training/records?limit=200"), "records")
+        if records or not courses:
+            return records
+        # Every member gets a spread of completed courses so My Training, the
+        # compliance matrix and the hours reports all have something to show;
+        # a few expirations land in the near future to populate the
+        # expiring-certifications view.
+        for member_index, member in enumerate(members):
+            user_id = pick(member, "id")
+            if not user_id:
+                continue
+            for offset in range(3):
+                course = courses[(member_index + offset) % len(courses)]
+                completed = TODAY - timedelta(days=45 * offset + member_index * 5)
+                hours = pick(course, "duration_hours", "durationHours") or 8
+                payload = {
+                    "user_id": user_id,
+                    "course_id": pick(course, "id"),
+                    "course_name": course.get("name") or "Department Training",
+                    "course_code": course.get("code"),
+                    "training_type": course.get("training_type")
+                    or course.get("trainingType")
+                    or "continuing_education",
+                    "hours_completed": hours,
+                    "credit_hours": hours,
+                    "completion_date": str(completed),
+                    "expiration_date": str(
+                        completed + timedelta(days=365 + member_index * 3)
+                    ),
+                    "status": "completed",
+                    "passed": True,
+                    "instructor": "Capt. Owen Kittredge",
+                    "location": "Training & Administration Center",
+                    "rank_at_completion": member.get("rank"),
+                }
+                records.append(self.api.post("/training/records", payload))
+        return records
+
+    # -- event RSVPs --------------------------------------------------
+
+    def seed_event_rsvps(
+        self, base_url: str, events: list[dict], members: list[dict]
+    ) -> None:
+        # There is no admin "RSVP on behalf of" endpoint — `POST /events/{id}/rsvp`
+        # always records the *calling* user, and the override route only edits an
+        # RSVP that already exists. So each member answers for themselves, which
+        # means giving the demo accounts a password and signing in as each one.
+        # These are local demo fixtures in a throwaway database, never real
+        # accounts.
+        # Events created without an explicit allowed_rsvp_statuses list accept
+        # only going / not_going, so "maybe" is deliberately absent here.
+        statuses = ["going", "going", "going", "going", "not_going"]
+        event_ids = [pick(e, "id") for e in events if pick(e, "id")]
+        if not event_ids:
+            return
+
+        for member_index, member in enumerate(members):
+            user_id = pick(member, "id")
+            username = member.get("username")
+            if not user_id or username == DEMO_ADMIN_USERNAME:
+                continue
+            member_api = Api(base_url)
+            try:
+                member_api.login_as(username, DEMO_MEMBER_PASSWORD)
+            except ApiError:
+                # Members seeded before the demo password was set at creation
+                # need one; the admin reset route is heavily rate limited, so
+                # this path is slow by design and only runs once per member.
+                self.api.post(
+                    f"/users/{user_id}/reset-password",
+                    {"new_password": DEMO_MEMBER_PASSWORD, "force_change": False},
+                )
+                member_api = Api(base_url)
+                member_api.login_as(username, DEMO_MEMBER_PASSWORD)
+            for event_index, event_id in enumerate(event_ids):
+                member_api.post(
+                    f"/events/{event_id}/rsvp",
+                    {
+                        "status": statuses[
+                            (event_index + member_index) % len(statuses)
+                        ],
+                        "notes": "Confirmed with the duty officer.",
+                    },
+                )
+
+    # -- skills tests --------------------------------------------------
+
+    def seed_skills_tests(
+        self, templates: list[dict], members: list[dict]
+    ) -> list[dict]:
+        tests = items(self.api.get("/training/skills-testing/tests"), "tests")
+        if tests or not templates or not members:
+            return tests
+        for index, member in enumerate(members[:6]):
+            candidate_id = pick(member, "id")
+            template_id = pick(templates[index % len(templates)], "id")
+            if not candidate_id or not template_id:
+                continue
+            tests.append(
+                self.api.post(
+                    "/training/skills-testing/tests",
+                    {
+                        "template_id": template_id,
+                        "candidate_id": candidate_id,
+                        "notes": "Scheduled during the quarterly skills night.",
+                    },
+                )
+            )
+        return tests
+
+    # -- dues ---------------------------------------------------------
+
+    def seed_dues(self, fiscal_year: dict | None) -> list[dict]:
+        schedules = items(self.api.get("/finance/dues-schedules"), "schedules")
+        name = f"{TODAY.year} Annual Member Dues"
+        if not any(s.get("name") == name for s in schedules):
+            payload = {
+                "name": name,
+                "amount": 120,
+                "frequency": "annual",
+                "due_date": str(date(TODAY.year, 3, 1)),
+                "grace_period_days": 30,
+                "late_fee_amount": 15,
+                "notes": "Billed annually; waivers handled case by case.",
+            }
+            if fiscal_year and pick(fiscal_year, "id"):
+                payload["fiscal_year_id"] = pick(fiscal_year, "id")
+            schedule = self.api.post("/finance/dues-schedules", payload)
+            schedules.append(schedule)
+            # Generating turns the schedule into one dues row per member,
+            # which is what the Dues Management table lists.
+            self.api.post(f"/finance/dues-schedules/{pick(schedule, 'id')}/generate")
+        return schedules
+
+    # -- forms -------------------------------------------------------
+
+    def seed_forms(self) -> list[dict]:
+        forms = items(self.api.get("/forms"), "forms")
+        names = {f.get("name") for f in forms}
+        blueprint = [
+            (
+                "Incident Near-Miss Report",
+                "safety",
+                [
+                    ("Date of incident", "date", True, None),
+                    ("Apparatus involved", "text", False, None),
+                    ("What happened?", "textarea", True, None),
+                    (
+                        "Severity",
+                        "select",
+                        True,
+                        ["Minor", "Moderate", "Serious", "Critical"],
+                    ),
+                    ("Suggested corrective action", "textarea", False, None),
+                ],
+            ),
+            (
+                "Turnout Gear Sizing",
+                "operations",
+                [
+                    ("Full name", "text", True, None),
+                    ("Coat size", "select", True, ["S", "M", "L", "XL", "XXL"]),
+                    ("Pant inseam (in)", "number", True, None),
+                    ("Boot size", "text", True, None),
+                    ("Notes for the quartermaster", "textarea", False, None),
+                ],
+            ),
+            (
+                "Community Event Request",
+                "other",
+                [
+                    ("Organization name", "text", True, None),
+                    ("Contact email", "email", True, None),
+                    ("Requested date", "date", True, None),
+                    (
+                        "Type of appearance",
+                        "select",
+                        True,
+                        ["Station tour", "Truck visit", "Fire safety talk", "Standby"],
+                    ),
+                    ("Expected attendance", "number", False, None),
+                ],
+            ),
+        ]
+
+        for name, category, fields in blueprint:
+            if name in names:
+                continue
+            forms.append(
+                self.api.post(
+                    "/forms",
+                    {
+                        "name": name,
+                        "description": f"{name} — submitted by members online.",
+                        "category": category,
+                        "is_public": name.startswith("Community"),
+                        "require_authentication": not name.startswith("Community"),
+                        "notify_on_submission": True,
+                        "fields": [
+                            {
+                                "label": label,
+                                "field_type": field_type,
+                                "required": required,
+                                "sort_order": order,
+                                **(
+                                    {
+                                        "options": [
+                                            {"value": option.lower(), "label": option}
+                                            for option in options
+                                        ]
+                                    }
+                                    if options
+                                    else {}
+                                ),
+                            }
+                            for order, (
+                                label,
+                                field_type,
+                                required,
+                                options,
+                            ) in enumerate(fields)
+                        ],
+                    },
+                )
+            )
+        return forms
+
+    # -- elections ---------------------------------------------------
+
+    def seed_elections(self) -> list[dict]:
+        elections = items(self.api.get("/elections"), "elections")
+        titles = {e.get("title") for e in elections}
+        start = NOW + timedelta(days=14)
+        blueprint = [
+            (
+                "Annual Officer Elections",
+                ["Fire Chief", "Deputy Chief", "Captain"],
+                start,
+            ),
+            (
+                "Bylaw Amendment Vote",
+                ["Article VII Amendment"],
+                start + timedelta(days=30),
+            ),
+        ]
+        for title, positions, opens in blueprint:
+            if title in titles:
+                continue
+            elections.append(
+                self.api.post(
+                    "/elections",
+                    {
+                        "title": title,
+                        "description": (
+                            f"{title} — conducted at the monthly business meeting."
+                        ),
+                        "election_type": "position" if len(positions) > 1 else "issue",
+                        "positions": positions,
+                        "ballot_items": [
+                            {
+                                "id": f"item-{index + 1}",
+                                "type": (
+                                    "officer_election"
+                                    if len(positions) > 1
+                                    else "general_vote"
+                                ),
+                                "title": position,
+                                "description": f"Vote for {position}.",
+                                "position": position,
+                                "vote_type": (
+                                    "candidate_selection"
+                                    if len(positions) > 1
+                                    else "approval"
+                                ),
+                                "voting_method": "simple_majority",
+                            }
+                            for index, position in enumerate(positions)
+                        ],
+                        "start_date": iso(opens),
+                        "end_date": iso(opens + timedelta(days=2)),
+                        "anonymous_voting": True,
+                        "allow_write_ins": True,
+                        "results_visible_immediately": False,
+                        "voting_method": "simple_majority",
+                        "victory_condition": "most_votes",
+                        "quorum_type": "percentage",
+                        "quorum_value": 50,
+                    },
+                )
+            )
+        return elections
+
+    # -- prospective members -----------------------------------------
+
+    PIPELINE_STAGES = [
+        ("Application Received", "form_submission", True, False),
+        ("Application Review", "manual_approval", False, False),
+        ("Interview", "interview_requirement", False, False),
+        ("Background & Medical", "document_upload", False, False),
+        ("Membership Vote", "election_vote", False, False),
+        ("Onboarding", "checklist", False, True),
+    ]
+
+    PROSPECTS = [
+        ("Alex", "Rivera", "Saw the station open house"),
+        ("Jordan", "Fields", "Family member is a volunteer"),
+        ("Sam", "Okafor", "Career change into the fire service"),
+        ("Casey", "Lindgren", "Referred by a current member"),
+        ("Morgan", "Tran", "Wants EMS experience before paramedic school"),
+        ("Riley", "Bishop", "Lives two blocks from Station 2"),
+    ]
+
+    def seed_prospective_members(self) -> dict[str, list[dict]]:
+        pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
+        if not any(p.get("name") == "Volunteer Membership Pipeline" for p in pipelines):
+            pipelines.append(
+                self.api.post(
+                    "/prospective-members/pipelines",
+                    {
+                        "name": "Volunteer Membership Pipeline",
+                        "description": (
+                            "Application through onboarding for volunteer members."
+                        ),
+                        "is_default": True,
+                        "is_active": True,
+                        "public_status_enabled": True,
+                        "steps": [
+                            {
+                                "name": name,
+                                "description": f"{name} stage.",
+                                "step_type": step_type,
+                                "is_first_step": first,
+                                "is_final_step": final,
+                                "sort_order": order,
+                                "required": True,
+                                "public_visible": True,
+                            }
+                            for order, (name, step_type, first, final) in enumerate(
+                                self.PIPELINE_STAGES
+                            )
+                        ],
+                    },
+                )
+            )
+        pipeline_id = pick(pipelines[0], "id") if pipelines else None
+
+        prospects = items(
+            self.api.get("/prospective-members/prospects?limit=100"), "prospects"
+        )
+        emails = {p.get("email") for p in prospects}
+        for index, (first, last, reason) in enumerate(self.PROSPECTS):
+            email = f"{first.lower()}.{last.lower()}@example.org"
+            if email in emails:
+                continue
+            payload = {
+                "first_name": first,
+                "last_name": last,
+                "email": email,
+                "phone": f"(703) 555-{5000 + index:04d}",
+                "address_city": "Oakville",
+                "address_state": "VA",
+                "address_zip": "22046",
+                "interest_reason": reason,
+                "referral_source": "Open house" if index % 2 else "Word of mouth",
+                "desired_membership_type": "active",
+            }
+            if pipeline_id:
+                payload["pipeline_id"] = pipeline_id
+            prospect = self.api.post("/prospective-members/prospects", payload)
+            prospects.append(prospect)
+            # Spread applicants across the board so the kanban shows movement
+            # rather than a single stacked first column.
+            for _ in range(index % len(self.PIPELINE_STAGES)):
+                self.api.post(
+                    f"/prospective-members/prospects/{pick(prospect, 'id')}/advance"
+                )
+        return {"pipelines": pipelines, "prospects": prospects}
+
+    # -- grants & fundraising ----------------------------------------
+
+    def seed_grants(self) -> dict[str, list[dict]]:
+        opportunities = items(self.api.get("/grants"), "opportunities")
+        names = {o.get("name") for o in opportunities}
+        for name, agency, category, low, high in [
+            ("Assistance to Firefighters Grant", "FEMA", "equipment", 25_000, 750_000),
+            ("SAFER Grant", "FEMA", "staffing", 50_000, 1_500_000),
+            ("Fire Prevention & Safety Grant", "FEMA", "prevention", 10_000, 250_000),
+            (
+                "State Rescue Squad Assistance Fund",
+                "Virginia OEMS",
+                "vehicles",
+                15_000,
+                200_000,
+            ),
+        ]:
+            if name in names:
+                continue
+            opportunities.append(
+                self.api.post(
+                    "/grants",
+                    {
+                        "name": name,
+                        "agency": agency,
+                        "category": category,
+                        "description": f"{name}, administered by {agency}.",
+                        "typicalAwardMin": low,
+                        "typicalAwardMax": high,
+                        "matchRequired": True,
+                        "matchPercentage": 5,
+                        "deadlineType": "recurring",
+                        "deadlineDate": str(TODAY + timedelta(days=75)),
+                        "eligibleUses": "Apparatus, PPE, training, and safety equipment.",
+                    },
+                )
+            )
+
+        applications = items(self.api.get("/grants/applications"), "applications")
+        applied = {
+            a.get("grantProgramName") or a.get("grant_program_name")
+            for a in applications
+        }
+        for program, agency, status, requested, awarded in [
+            ("Assistance to Firefighters Grant", "FEMA", "submitted", 180_000, None),
+            ("Fire Prevention & Safety Grant", "FEMA", "awarded", 42_000, 42_000),
+            (
+                "State Rescue Squad Assistance Fund",
+                "Virginia OEMS",
+                "preparing",
+                96_000,
+                None,
+            ),
+        ]:
+            if program in applied:
+                continue
+            payload = {
+                "grantProgramName": program,
+                "grantAgency": agency,
+                "applicationStatus": status,
+                "amountRequested": requested,
+                "matchAmount": round(requested * 0.05, 2),
+                "matchSource": "Department capital reserve",
+                "applicationDeadline": str(TODAY + timedelta(days=45)),
+                "projectDescription": (
+                    f"{program} request supporting the department's capital plan."
+                ),
+                "priority": "high" if awarded else "medium",
+            }
+            if awarded:
+                payload["amountAwarded"] = awarded
+                payload["awardDate"] = str(TODAY - timedelta(days=30))
+                payload["grantStartDate"] = str(TODAY - timedelta(days=25))
+                payload["grantEndDate"] = str(TODAY + timedelta(days=340))
+            applications.append(self.api.post("/grants/applications", payload))
+
+        campaigns = items(self.api.get("/grants/campaigns"), "campaigns")
+        campaign_names = {c.get("name") for c in campaigns}
+        for name, campaign_type, goal in [
+            (f"{TODAY.year} Equipment Fund", "equipment", 75_000),
+            ("Memorial Scholarship Drive", "memorial", 15_000),
+            ("Fill the Boot", "community", 20_000),
+        ]:
+            if name in campaign_names:
+                continue
+            campaigns.append(
+                self.api.post(
+                    "/grants/campaigns",
+                    {
+                        "name": name,
+                        "description": f"{name} — community fundraising campaign.",
+                        "campaignType": campaign_type,
+                        "goalAmount": goal,
+                        "startDate": str(date(TODAY.year, 1, 1)),
+                        "endDate": str(date(TODAY.year, 12, 31)),
+                        "publicPageEnabled": True,
+                        "allowAnonymous": True,
+                        "suggestedAmounts": [25, 50, 100, 250],
+                    },
+                )
+            )
+        campaign_ids = [pick(c, "id") for c in campaigns if pick(c, "id")]
+
+        donors = items(self.api.get("/grants/donors"), "donors")
+        donor_emails = {d.get("email") for d in donors}
+        donor_blueprint = [
+            ("Harriet", "Delacroix", "individual", None),
+            ("Peter", "Novak", "individual", None),
+            ("Ana", "Villanueva", "individual", None),
+            ("Grace", "Oyelaran", "business", "Oyelaran Hardware"),
+            ("Thomas", "Reid", "business", "Reid & Sons Contracting"),
+            ("Miriam", "Stein", "foundation", "Stein Family Foundation"),
+        ]
+        for index, (first, last, donor_type, company) in enumerate(donor_blueprint):
+            email = f"{first.lower()}.{last.lower()}@example.org"
+            if email in donor_emails:
+                continue
+            payload = {
+                "firstName": first,
+                "lastName": last,
+                "email": email,
+                "phone": f"(703) 555-{6000 + index:04d}",
+                "city": "Oakville",
+                "state": "VA",
+                "postalCode": "22046",
+                "donorType": donor_type,
+            }
+            if company:
+                payload["companyName"] = company
+            donors.append(self.api.post("/grants/donors", payload))
+
+        donations = items(self.api.get("/grants/donations"), "donations")
+        if len(donations) < len(donors):
+            for index, donor in enumerate(donors):
+                donor_id = pick(donor, "id")
+                if not donor_id:
+                    continue
+                payload = {
+                    "amount": [50, 100, 250, 500, 1_000, 2_500][index % 6],
+                    "donationDate": str(TODAY - timedelta(days=15 * (index + 1))),
+                    "paymentMethod": ["check", "credit_card", "cash"][index % 3],
+                    "paymentStatus": "completed",
+                    "taxDeductible": True,
+                    "donorId": donor_id,
+                }
+                if campaign_ids:
+                    payload["campaignId"] = campaign_ids[index % len(campaign_ids)]
+                donations.append(self.api.post("/grants/donations", payload))
+        return {
+            "opportunities": opportunities,
+            "applications": applications,
+            "campaigns": campaigns,
+            "donors": donors,
+            "donations": donations,
+        }
+
+    # -- medical screening -------------------------------------------
+
+    def seed_medical_screening(self, members: list[dict]) -> dict[str, list[dict]]:
+        requirements = items(
+            self.api.get("/medical-screening/requirements"), "requirements"
+        )
+        names = {r.get("name") for r in requirements}
+        for name, screening_type, months, grace in [
+            ("Annual NFPA 1582 Physical", "physical_exam", 12, 30),
+            ("Return-to-Duty Medical Clearance", "medical_clearance", 12, 14),
+            ("Annual Fitness Assessment", "fitness_assessment", 12, 30),
+            ("Vision & Hearing Screening", "vision_hearing", 24, 30),
+        ]:
+            if name in names:
+                continue
+            payload = {
+                "name": name,
+                "screening_type": screening_type,
+                "description": f"{name} required for all interior-qualified members.",
+                "is_active": True,
+                "grace_period_days": grace,
+            }
+            if months:
+                payload["frequency_months"] = months
+            requirements.append(
+                self.api.post("/medical-screening/requirements", payload)
+            )
+
+        records = items(self.api.get("/medical-screening/records"), "records")
+        if not records:
+            # Mix current, expiring, and overdue so the compliance dashboard
+            # shows all three states rather than a uniform green.
+            for index, member in enumerate(members[:14]):
+                user_id = pick(member, "id")
+                requirement = requirements[index % len(requirements)]
+                if not user_id or not pick(requirement, "id"):
+                    continue
+                completed = TODAY - timedelta(days=30 + index * 25)
+                records.append(
+                    self.api.post(
+                        "/medical-screening/records",
+                        {
+                            "screening_type": pick(
+                                requirement, "screening_type", "screeningType"
+                            )
+                            or "physical_exam",
+                            "status": "completed",
+                            "completed_date": str(completed),
+                            "expiration_date": str(completed + timedelta(days=365)),
+                            "provider_name": "Oakville Occupational Health",
+                            "result_summary": "Cleared for full duty.",
+                            "requirement_id": pick(requirement, "id"),
+                            "user_id": user_id,
+                        },
+                    )
+                )
+        return {"requirements": requirements, "records": records}
+
+    # -- facilities: maintenance & inspections -----------------------
+
+    def seed_facility_activity(self, facilities: list[dict]) -> dict[str, list[dict]]:
+        maintenance = items(self.api.get("/facilities/maintenance"), "maintenance")
+        inspections = items(self.api.get("/facilities/inspections"), "inspections")
+        if not facilities:
+            return {"maintenance": maintenance, "inspections": inspections}
+
+        # Every maintenance record must name a type; the module ships none, so
+        # the demo defines its own catalogue first.
+        types = items(self.api.get("/facilities/maintenance-types"), "types")
+        type_names = {t.get("name") for t in types}
+        for name, category, interval, unit in [
+            ("Preventive Maintenance", "preventive", 6, "months"),
+            ("Repair", "repair", None, None),
+            ("Safety Inspection", "safety", 12, "months"),
+            ("Deep Cleaning", "cleaning", 3, "months"),
+        ]:
+            if name in type_names:
+                continue
+            payload = {
+                "name": name,
+                "category": category,
+                "description": f"{name} performed on department facilities.",
+            }
+            if interval:
+                payload["default_interval_value"] = interval
+                payload["default_interval_unit"] = unit
+            types.append(self.api.post("/facilities/maintenance-types", payload))
+
+        if not maintenance:
+            for index, (description, vendor, cost, days_ago) in enumerate(
+                [
+                    (
+                        "Replace bay door opener motor",
+                        "Tidewater Door Service",
+                        1_840,
+                        45,
+                    ),
+                    ("Annual generator load bank test", "PowerGen Services", 950, 30),
+                    ("HVAC filter replacement — dorm wing", "In-house", 120, 12),
+                    ("Repair kitchen exhaust hood", "Chesapeake Mechanical", 640, None),
+                    ("Reseal apparatus bay floor", "Atlantic Coatings", 3_200, None),
+                ]
+            ):
+                facility = facilities[index % len(facilities)]
+                payload = {
+                    "facility_id": pick(facility, "id"),
+                    "maintenance_type_id": pick(types[index % len(types)], "id"),
+                    "description": description,
+                    "vendor": vendor,
+                    "cost": cost,
+                    "notes": f"{description} at {facility.get('name')}.",
+                }
+                if days_ago is None:
+                    payload["is_completed"] = False
+                    payload["due_date"] = str(TODAY + timedelta(days=21))
+                    payload["scheduled_date"] = str(TODAY + timedelta(days=14))
+                else:
+                    payload["is_completed"] = True
+                    payload["completed_date"] = str(TODAY - timedelta(days=days_ago))
+                    payload["work_performed"] = description
+                    payload["next_due_date"] = str(
+                        TODAY + timedelta(days=365 - days_ago)
+                    )
+                maintenance.append(self.api.post("/facilities/maintenance", payload))
+
+        if not inspections:
+            for index, (title, kind, inspector, agency, passed, days_ago) in enumerate(
+                [
+                    (
+                        "Annual Fire Marshal Inspection",
+                        "fire",
+                        "L. Ferreira",
+                        "Oakville Fire Marshal",
+                        True,
+                        60,
+                    ),
+                    (
+                        "Building Code Compliance Review",
+                        "building_code",
+                        "D. Whitmore",
+                        "County Building Office",
+                        True,
+                        120,
+                    ),
+                    (
+                        "Insurance Loss-Control Survey",
+                        "insurance",
+                        "R. Alvarez",
+                        "Commonwealth Mutual",
+                        False,
+                        20,
+                    ),
+                    (
+                        "ADA Accessibility Audit",
+                        "ada",
+                        "K. Berhane",
+                        "Access Consultants LLC",
+                        None,
+                        None,
+                    ),
+                ]
+            ):
+                facility = facilities[index % len(facilities)]
+                payload = {
+                    "facility_id": pick(facility, "id"),
+                    "title": title,
+                    "inspection_type": kind,
+                    "inspection_date": str(
+                        TODAY - timedelta(days=days_ago if days_ago else 0)
+                    ),
+                    "inspector_name": inspector,
+                    "inspector_organization": agency,
+                    "inspector_agency": agency,
+                    "next_inspection_date": str(TODAY + timedelta(days=300)),
+                }
+                if passed is not None:
+                    payload["passed"] = passed
+                if passed is False:
+                    payload["findings"] = (
+                        "Extinguisher in the dorm hallway is past its hydrostatic test date."
+                    )
+                    payload["corrective_actions"] = "Replace or recertify the unit."
+                    payload["corrective_action_deadline"] = str(
+                        TODAY + timedelta(days=30)
+                    )
+                inspections.append(self.api.post("/facilities/inspections", payload))
+        return {"maintenance": maintenance, "inspections": inspections}
+
+    # -- events: templates -------------------------------------------
+
+    def seed_event_templates(self) -> list[dict]:
+        templates = items(self.api.get("/events/templates"), "templates")
+        names = {t.get("name") for t in templates}
+        for name, event_type, minutes, mandatory in [
+            ("Monthly Business Meeting", "business_meeting", 120, True),
+            ("Weekly Company Drill", "training", 180, False),
+            ("Station Open House", "public_education", 300, False),
+            ("Officer Meeting", "business_meeting", 90, False),
+        ]:
+            if name in names:
+                continue
+            templates.append(
+                self.api.post(
+                    "/events/templates",
+                    {
+                        "name": name,
+                        "description": f"Reusable settings for {name.lower()}s.",
+                        "event_type": event_type,
+                        "default_title": name,
+                        "default_location": "Station 1 - Headquarters",
+                        "default_duration_minutes": minutes,
+                        "requires_rsvp": True,
+                        "is_mandatory": mandatory,
+                        "send_reminders": True,
+                        "reminder_schedule": [168, 24],
+                    },
+                )
+            )
+        return templates
+
+    # -- storefront ---------------------------------------------------
+
+    def seed_storefront(self) -> dict[str, Any]:
+        products = items(self.api.get("/store/products"), "products")
+        names = {p.get("name") for p in products}
+        blueprint = [
+            (
+                "Department Job Shirt",
+                "SHIRT-JOB",
+                "Apparel",
+                48.00,
+                ["S", "M", "L", "XL", "XXL"],
+            ),
+            ("Duty Polo", "SHIRT-POLO", "Apparel", 32.00, ["S", "M", "L", "XL", "XXL"]),
+            (
+                "Department Hoodie",
+                "HOOD-01",
+                "Apparel",
+                54.00,
+                ["S", "M", "L", "XL", "XXL"],
+            ),
+            ("Ball Cap", "CAP-01", "Headwear", 22.00, []),
+            ("Challenge Coin", "COIN-01", "Accessories", 12.00, []),
+            ("Travel Mug", "MUG-01", "Accessories", 18.00, []),
+        ]
+        for order, (name, sku, category, price, sizes) in enumerate(blueprint):
+            if name in names:
+                continue
+            products.append(
+                self.api.post(
+                    "/store/products",
+                    {
+                        "name": name,
+                        "sku": sku,
+                        "category": category,
+                        "description": f"{name} with department crest.",
+                        "price": price,
+                        "status": "active",
+                        "sortOrder": order,
+                        "personalizationEnabled": bool(sizes),
+                        "personalizationLabel": "Name for embroidery",
+                        "personalizationPrice": 6.00 if sizes else 0,
+                        "requiresVariant": bool(sizes),
+                        "variants": [
+                            {
+                                "label": size,
+                                "sku": f"{sku}-{size}",
+                                "priceDelta": 3.00 if size == "XXL" else 0,
+                                "isActive": True,
+                                "sortOrder": index,
+                            }
+                            for index, size in enumerate(sizes)
+                        ],
+                    },
+                )
+            )
+
+        windows = items(self.api.get("/store/windows"), "windows")
+        window_name = f"Fall {TODAY.year} Order Window"
+        if not any(w.get("name") == window_name for w in windows):
+            windows.append(
+                self.api.post(
+                    "/store/windows",
+                    {
+                        "name": window_name,
+                        "description": (
+                            "Place apparel orders for the fall vendor run."
+                        ),
+                        "opensAt": iso(NOW - timedelta(days=3)),
+                        "closesAt": iso(NOW + timedelta(days=18)),
+                        "autoOpen": True,
+                        "autoClose": True,
+                        "expectedDeliveryDate": str(TODAY + timedelta(days=60)),
+                        "pickupInstructions": (
+                            "Pick up at Station 1 during weeknight duty crew hours."
+                        ),
+                        "includeAllProducts": True,
+                        "notifyOnOpen": True,
+                        "offerings": [],
+                    },
+                )
+            )
+        return {"products": products, "windows": windows}
+
     # -- run ---------------------------------------------------------
 
     def run(self) -> int:
@@ -737,12 +2158,45 @@ class Seeder:
         members = self.step("members", self.seed_members) or []
         facilities = self.step("facilities", self.seed_facilities) or []
         stations = self.step("stations", lambda: self.seed_locations(facilities)) or []
-        self.step("apparatus", lambda: self.seed_apparatus(stations))
-        self.step("events", self.seed_events)
-        self.step("training", self.seed_training)
-        self.step("inventory", lambda: self.seed_inventory(stations))
+        apparatus = self.step("apparatus", lambda: self.seed_apparatus(stations)) or []
+        events = self.step("events", self.seed_events) or []
+        self.step(
+            "event rsvps",
+            lambda: self.seed_event_rsvps(self.base_url, events, members),
+        )
+        self.step(
+            "scheduling",
+            lambda: self.seed_scheduling(stations, apparatus, members),
+        )
+        training = self.step("training", self.seed_training) or {}
+        self.step(
+            "training records",
+            lambda: self.seed_training_records(members, training.get("courses", [])),
+        )
+        self.step("training programs", lambda: self.seed_training_programs(members))
+        templates = self.step("skills testing", self.seed_skills_testing) or []
+        self.step("skills tests", lambda: self.seed_skills_tests(templates, members))
+        inventory = self.step("inventory", lambda: self.seed_inventory(stations)) or {}
+        self.step(
+            "inventory operations",
+            lambda: self.seed_inventory_operations(
+                inventory.get("categories", []),
+                inventory.get("items", []),
+                stations,
+                members,
+            ),
+        )
         self.step("documents", self.seed_documents)
-        self.step("finance", self.seed_finance)
+        self.step("forms", self.seed_forms)
+        self.step("event templates", self.seed_event_templates)
+        self.step("elections", self.seed_elections)
+        self.step("prospective members", self.seed_prospective_members)
+        self.step("grants & fundraising", self.seed_grants)
+        self.step("medical screening", lambda: self.seed_medical_screening(members))
+        self.step("facility activity", lambda: self.seed_facility_activity(facilities))
+        self.step("storefront", self.seed_storefront)
+        finance = self.step("finance", self.seed_finance) or {}
+        self.step("dues", lambda: self.seed_dues(finance.get("fiscal_year")))
 
         print(f"\nMembers on file: {len(members)}")
         if self.failures:
@@ -761,7 +2215,7 @@ def main() -> int:
 
     api = Api(args.base_url)
     api.login()
-    return Seeder(api).run()
+    return Seeder(api, args.base_url).run()
 
 
 if __name__ == "__main__":
