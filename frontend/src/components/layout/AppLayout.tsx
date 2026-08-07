@@ -13,6 +13,7 @@ import { useOfflineSyncEngine } from '../../hooks/useOfflineSyncEngine';
 import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import { usePullToRefreshContext } from '../../contexts/PullToRefreshContext';
+import { useScrollToTopOnNavigate } from '../../hooks/useScrollToTopOnNavigate';
 import { PullToRefreshIndicator } from '../PullToRefreshIndicator';
 import { BottomNavigation } from './BottomNavigation';
 
@@ -43,6 +44,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     () => (localStorage.getItem('navigationLayout') as 'top' | 'left') || 'left'
   );
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Start each newly-opened page at the top. Called here rather than per-page
+  // so every route gets it — react-router carries the previous page's scroll
+  // offset over otherwise.
+  useScrollToTopOnNavigate();
 
   // Session inactivity timeout (configurable, fetched from backend, with warning toast)
   useIdleTimer();

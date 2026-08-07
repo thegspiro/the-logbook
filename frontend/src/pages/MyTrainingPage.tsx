@@ -25,6 +25,7 @@ import {
   Send,
   BarChart3,
   Download,
+  ClipboardCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { trainingModuleConfigService } from '../services/api';
@@ -35,6 +36,8 @@ import { SubmissionStatus } from '../constants/enums';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDetail } from '../types/training';
 import { getErrorMessage } from '../utils/errorHandling';
 import { SkeletonPage } from '../components/ux/Skeleton';
+import { MySkillTestsList } from '../components/training/MySkillTestsList';
+import { useAuthStore } from '../stores/authStore';
 import { getProgressBarColor, getPercentageBarColor } from '../utils/trainingColors';
 
 // ==================== Helpers ====================
@@ -421,6 +424,7 @@ const ConfigEditor: React.FC<ConfigEditorProps> = ({ config, onSave }) => {
 const MyTrainingPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const { user } = useAuthStore();
   const [data, setData] = useState<MyTrainingSummary | null>(null);
   const [config, setConfig] = useState<TMConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -821,6 +825,16 @@ const MyTrainingPage: React.FC = () => {
                     </div>
                   ))}
               </div>
+            </Section>
+          )}
+
+          {/* Skills Tests — the member's own results, official and practice.
+              Always rendered (not behind a show_* visibility flag): these are
+              the member's own evaluations, and this page is the only place they
+              can see them at all. */}
+          {user?.id && (
+            <Section title="Skills Tests" icon={ClipboardCheck} defaultOpen={false}>
+              <MySkillTestsList userId={user.id} />
             </Section>
           )}
 

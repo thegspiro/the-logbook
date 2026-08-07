@@ -7,14 +7,19 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Plus, Search, Trash2 } from 'lucide-react';
+import { Ban, Plus, Search, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { SkillTestListItem } from '../types/skillsTesting';
 import { EmptyState } from '../components/ux';
+import { Modal } from '../components/Modal';
 import { ClipboardList } from 'lucide-react';
+
+/** Matches the backend's SkillTestVoidRequest minimum — a void stays visible in
+ *  the member's history, so the record has to say why it was withdrawn. */
+const MIN_VOID_REASON_LENGTH = 10;
 
 // ── Sub-components ─────────────────────────────────────────────
 
@@ -23,6 +28,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
     completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    voided: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     pass: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     fail: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     incomplete: 'bg-theme-surface-secondary text-theme-text-primary',
@@ -41,7 +47,8 @@ const TestCard: React.FC<{
   test: SkillTestListItem;
   onClick: () => void;
   onDelete: () => void;
-}> = ({ test, onClick, onDelete }) => {
+  onVoid: () => void;
+}> = ({ test, onClick, onDelete, onVoid }) => {
   const tz = useTimezone();
   return (
     <div
@@ -78,16 +85,34 @@ const TestCard: React.FC<{
               {test.completed_at ? formatDate(test.completed_at, tz) : test.started_at ? 'In Progress' : 'Not Started'}
             </p>
           </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
-            aria-label={`Delete test for ${test.candidate_name}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          {/* Practice attempts were never recorded, so they are simply deleted.
+            An official result is an evaluation record the member's
+            certification may rest on — it is withdrawn by voiding, which keeps
+            the row, its reason, and its author. Already-voided rows offer
+            neither action. */}
+          {test.is_practice ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+              aria-label={`Delete practice attempt for ${test.candidate_name}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          ) : test.status !== 'voided' ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onVoid();
+              }}
+              className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
+              aria-label={`Void test for ${test.candidate_name}`}
+            >
+              <Ban className="h-4 w-4" />
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -98,9 +123,12 @@ const TestCard: React.FC<{
 
 const SkillsTestingTestRecordsTab: React.FC = () => {
   const navigate = useNavigate();
-  const { tests, testsLoading, loadTests, deleteTest, templates, loadTemplates } = useSkillsTestingStore();
+  const { tests, testsLoading, loadTests, deleteTest, voidTest, templates, loadTemplates } = useSkillsTestingStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [voidTarget, setVoidTarget] = useState<SkillTestListItem | null>(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voiding, setVoiding] = useState(false);
 
   useEffect(() => {
     void loadTests(statusFilter ? { status: statusFilter } : undefined);
@@ -116,15 +144,35 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
 
   const handleDelete = async (test: SkillTestListItem) => {
     const confirmed = window.confirm(
-      `Delete the test record for ${test.candidate_name} (${test.template_name})? This action cannot be undone.`
+      `Delete the practice attempt for ${test.candidate_name} (${test.template_name})? This action cannot be undone.`
     );
     if (!confirmed) return;
 
     try {
       await deleteTest(test.id);
-      toast.success('Test record deleted');
+      toast.success('Practice attempt deleted');
     } catch {
-      toast.error('Failed to delete test record');
+      toast.error('Failed to delete practice attempt');
+    }
+  };
+
+  const closeVoidModal = () => {
+    setVoidTarget(null);
+    setVoidReason('');
+  };
+
+  const handleVoid = async () => {
+    if (!voidTarget || voidReason.trim().length < MIN_VOID_REASON_LENGTH) return;
+
+    setVoiding(true);
+    try {
+      await voidTest(voidTarget.id, voidReason.trim());
+      toast.success('Test result voided');
+      closeVoidModal();
+    } catch {
+      toast.error('Failed to void test result');
+    } finally {
+      setVoiding(false);
     }
   };
 
@@ -157,6 +205,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
+            <option value="voided">Voided</option>
           </select>
           <button
             onClick={() => void navigate('/training/skills-testing/test/new')}
@@ -198,10 +247,60 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
               test={test}
               onClick={() => void navigate(`/training/skills-testing/test/${test.id}`)}
               onDelete={() => void handleDelete(test)}
+              onVoid={() => setVoidTarget(test)}
             />
           ))}
         </div>
       )}
+
+      <Modal
+        isOpen={voidTarget !== null}
+        onClose={closeVoidModal}
+        title="Void test result"
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={closeVoidModal}
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void handleVoid()}
+              disabled={voiding || voidReason.trim().length < MIN_VOID_REASON_LENGTH}
+              className="rounded-lg bg-amber-600 px-4 py-2 font-medium text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {voiding ? 'Voiding...' : 'Void result'}
+            </button>
+          </div>
+        }
+      >
+        <div className="modal-body space-y-3">
+          <p className="text-theme-text-secondary text-sm">
+            Voiding withdraws this result for{' '}
+            <span className="text-theme-text-primary font-medium">{voidTarget?.candidate_name}</span> (
+            {voidTarget?.template_name}) without deleting it. The record stays in the member&apos;s history marked as
+            voided, stops counting toward testing statistics, and releases any training requirement this test completed.
+          </p>
+          <div>
+            <label htmlFor="void-reason" className="form-label">
+              Reason for voiding
+            </label>
+            <textarea
+              id="void-reason"
+              rows={3}
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              placeholder="e.g. Scored against the wrong candidate"
+              className="form-input"
+            />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Required, at least {MIN_VOID_REASON_LENGTH} characters. The member can see this reason.
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

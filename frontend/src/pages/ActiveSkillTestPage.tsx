@@ -42,40 +42,8 @@ import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
+import { hydrateTemplateSections } from '../utils/skillTemplateSections';
 import type { SkillCriterion, SkillTemplateSection, CriterionResult, SectionResult } from '../types/skillsTesting';
-
-// ==================== Helpers ====================
-
-/**
- * Hydrate raw template section JSON (from the API) with stable generated IDs.
- * The backend stores sections/criteria without IDs, so we generate
- * deterministic IDs based on section/criterion indices.
- */
-function hydrateTemplateSections(raw: Record<string, unknown>[] | undefined | null): SkillTemplateSection[] {
-  if (!raw) return [];
-  return raw.map((section, si) => {
-    const criteria = (section.criteria as Record<string, unknown>[] | undefined) ?? [];
-    return {
-      id: `section-${si}`,
-      name: (section.name as string) ?? `Section ${si + 1}`,
-      description: section.description as string | undefined,
-      sort_order: (section.sort_order as number) ?? si,
-      criteria: criteria.map((c, ci) => ({
-        id: `criterion-${si}-${ci}`,
-        label: (c.label as string) ?? `Criterion ${ci + 1}`,
-        description: c.description as string | undefined,
-        type: (c.type as SkillCriterion['type']) ?? 'pass_fail',
-        required: (c.required as boolean) ?? false,
-        sort_order: (c.sort_order as number) ?? ci,
-        passing_score: c.passing_score as number | undefined,
-        max_score: c.max_score as number | undefined,
-        time_limit_seconds: c.time_limit_seconds as number | undefined,
-        checklist_items: c.checklist_items as string[] | undefined,
-        statement_text: c.statement_text as string | undefined,
-      })),
-    };
-  });
-}
 
 // ==================== Timer Component ====================
 
@@ -723,7 +691,7 @@ const ReviewSection: React.FC<{
 };
 
 /** Read-only section view for completed tests (no editable fields) */
-const ReadOnlySectionView: React.FC<{
+export const ReadOnlySectionView: React.FC<{
   section: SkillTemplateSection;
   sectionResult: SectionResult | undefined;
 }> = ({ section, sectionResult }) => {
@@ -822,6 +790,39 @@ export const ActiveSkillTestPage: React.FC = () => {
     }
     return () => clearCurrentTest();
   }, [testId, loadTest, clearCurrentTest]);
+
+  // Clear per-test state when moving from one test straight to another —
+  // "Retake" navigates between two test ids and every route here renders this
+  // same component, so React keeps it mounted and nothing resets on its own.
+  // reviewNotes is the dangerous one: it is keyed by section id, a retake uses
+  // the same template, and submit merges it into section_results — so the
+  // previous attempt's notes would silently land on the new attempt. Skipped on
+  // first mount and on same-id navigation (completing a test routes to its own
+  // detail view) so a resumed test keeps its running clock.
+  const loadedTestIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const previousTestId = loadedTestIdRef.current;
+    loadedTestIdRef.current = testId;
+    if (!previousTestId || previousTestId === testId) return;
+
+    setReviewing(false);
+    setReviewNotes({});
+    setSubmitting(false);
+    setActiveSectionIndex(0);
+    setActiveTestTimer(0);
+    setActiveTestRunning(false);
+  }, [testId, setActiveSectionIndex, setActiveTestTimer, setActiveTestRunning]);
+
+  // Return to the top whenever the visible content is swapped out underneath
+  // the examiner. Moving between sections, entering review, and showing results
+  // all happen without a route change, and the controls that trigger them sit
+  // at the bottom of the page — so the next screen would otherwise render with
+  // the window still scrolled down, below its own questions, forcing a scroll
+  // back up every single time.
+  const showingResults = currentTest?.status === 'completed' || currentTest?.status === 'voided';
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [activeSectionIndex, reviewing, showingResults]);
 
   // Global timer
   useEffect(() => {
@@ -947,6 +948,11 @@ export const ActiveSkillTestPage: React.FC = () => {
       // Then finalize
       const completed = await completeTest(currentTest.id);
       toast.success(`Test submitted: ${completed.result.toUpperCase()}`);
+      // Leave review mode before navigating. Both the active and detail routes
+      // render THIS component, so react-router swaps the URL without remounting
+      // and `reviewing` would survive the transition — pinning the page on the
+      // review screen even though the test is now complete.
+      setReviewing(false);
       void navigate(`/training/skills-testing/test/${currentTest.id}`);
     } catch {
       toast.error('Failed to submit test');
@@ -993,7 +999,12 @@ export const ActiveSkillTestPage: React.FC = () => {
       });
       await completeTest(currentTest.id);
 
-      // Navigate to the completed view within this same page
+      // Leaving review mode is what actually reveals the results: the completed
+      // view below is gated on `!reviewing`, and navigating between the active
+      // and detail routes does not remount this component (both routes render
+      // it), so without this the page re-renders the identical review screen
+      // and the button appears to do nothing.
+      setReviewing(false);
       void navigate(`/training/skills-testing/test/${currentTest.id}`);
     } catch {
       toast.error('Failed to calculate results');

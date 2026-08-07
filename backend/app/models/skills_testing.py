@@ -48,6 +48,12 @@ class SkillTestStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+    # An official result withdrawn after the fact. Official results are never
+    # deleted — they are evaluation records that a member's certification may
+    # rest on — so a mistaken or invalidated test is voided instead: the row
+    # survives with its reason and author, but stops counting toward stats and
+    # releases any pipeline requirement it had credited.
+    VOIDED = "voided"
 
 
 class SkillTestResult(str, enum.Enum):
@@ -185,6 +191,16 @@ class SkillTest(Base):
     # Notes
     notes = Column(Text, nullable=True)
 
+    # Void trail — set only when an official result is withdrawn. SET NULL on the
+    # author (a departed officer must not erase the void record), so nullable.
+    voided_at = Column(DateTime(timezone=True), nullable=True)
+    voided_by = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    void_reason = Column(Text, nullable=True)
+
     # Timing
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
@@ -203,6 +219,9 @@ class SkillTest(Base):
     __table_args__ = (
         Index("idx_skill_test_org_status", "organization_id", "status"),
         Index("idx_skill_test_template_candidate", "template_id", "candidate_id"),
+        # Sweep index for the practice-attempt purge job, which scans by
+        # is_practice + age.
+        Index("idx_skill_test_practice_created", "is_practice", "created_at"),
     )
 
     def __repr__(self):

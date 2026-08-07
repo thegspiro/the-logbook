@@ -1238,6 +1238,7 @@ export const skillsTestingService = {
     status?: string;
     candidate_id?: string;
     template_id?: string;
+    include_practice?: boolean;
   }): Promise<SkillTestListItem[]> {
     const response = await api.get<SkillTestListItem[]>('/training/skills-testing/tests', { params });
     return response.data;
@@ -1269,6 +1270,11 @@ export const skillsTestingService = {
 
   async discardPracticeTest(testId: string): Promise<void> {
     await api.delete(`/training/skills-testing/tests/${testId}/discard`);
+  },
+
+  async voidTest(testId: string, reason: string): Promise<SkillTest> {
+    const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/void`, { reason });
+    return response.data;
   },
 
   async emailTestResults(testId: string): Promise<{ message: string }> {

@@ -34,6 +34,14 @@ Object.defineProperty(window, 'print', {
   value: vi.fn(),
 });
 
+// jsdom does not implement window.scrollTo — it logs a "Not implemented" error
+// on every call. Pages reset scroll on navigation and on in-page view changes,
+// so without this stub that noise floods any test touching those paths.
+Object.defineProperty(window, 'scrollTo', {
+  writable: true,
+  value: vi.fn(),
+});
+
 // jsdom does not implement navigator.mediaDevices. Provide a stub so camera /
 // scanner code treats the test environment as a secure context (the real
 // secure-context guard checks for this API's presence). Individual tests still

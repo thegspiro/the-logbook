@@ -8,7 +8,16 @@
 
 // ==================== Enums / Union Types ====================
 
-export type SkillTestStatus = 'draft' | 'in_progress' | 'completed' | 'cancelled';
+export type SkillTestStatus =
+  | 'draft'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled'
+  /** An official result withdrawn after the fact. Official results are never
+   *  deleted, so a mistaken or invalidated test is voided instead: the record
+   *  survives with its reason, stops counting toward statistics, and releases
+   *  any training requirement it had credited. */
+  | 'voided';
 
 export type CriterionType = 'pass_fail' | 'score' | 'time_limit' | 'checklist' | 'statement';
 
@@ -169,6 +178,11 @@ export interface SkillTest {
   completed_at?: string | undefined;
   created_at: string;
   updated_at: string;
+  /** Void trail — present only when an official result has been withdrawn */
+  voided_at?: string | undefined;
+  voided_by?: string | undefined;
+  voided_by_name?: string | undefined;
+  void_reason?: string | undefined;
   /** Template sections for active test rendering (from API response) */
   template_sections?: SkillTemplateSection[] | undefined;
   /** Template global time limit in seconds */
@@ -214,8 +228,11 @@ export interface SkillTemplateListItem {
 
 export interface SkillTestListItem {
   id: string;
+  template_id: string;
   template_name: string;
+  candidate_id: string;
   candidate_name: string;
+  examiner_id: string;
   examiner_name: string;
   status: SkillTestStatus;
   result: TestResult;
@@ -224,6 +241,10 @@ export interface SkillTestListItem {
   started_at?: string;
   completed_at?: string;
   created_at: string;
+  /** Explicitly widened to include undefined: with exactOptionalPropertyTypes,
+   *  the store patches this field straight from a SkillTest response where it
+   *  is optional, and assigning undefined to a bare `?:` property is an error. */
+  voided_at?: string | undefined;
 }
 
 export interface SkillTestingSummary {

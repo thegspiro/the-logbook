@@ -56,13 +56,19 @@ interface SkillsTestingState {
   duplicateTemplate: (id: string) => Promise<SkillTemplate>;
 
   // Test actions
-  loadTests: (params?: { status?: string; candidate_id?: string; template_id?: string }) => Promise<void>;
+  loadTests: (params?: {
+    status?: string;
+    candidate_id?: string;
+    template_id?: string;
+    include_practice?: boolean;
+  }) => Promise<void>;
   loadTest: (id: string) => Promise<void>;
   createTest: (data: SkillTestCreate) => Promise<SkillTest>;
   updateTest: (id: string, data: SkillTestUpdate) => Promise<SkillTest>;
   completeTest: (id: string) => Promise<SkillTest>;
   deleteTest: (id: string) => Promise<void>;
   discardPracticeTest: (id: string) => Promise<void>;
+  voidTest: (id: string, reason: string) => Promise<SkillTest>;
   emailTestResults: (id: string) => Promise<string>;
 
   // Active test session actions
@@ -301,6 +307,26 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
       return message;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to email results');
+      set({ error: msg });
+      throw err;
+    }
+  },
+
+  voidTest: async (id: string, reason: string) => {
+    set({ error: null });
+    try {
+      const voided = await skillsTestingService.voidTest(id, reason);
+      // The row stays in the list — voiding withdraws a result, it does not
+      // remove the record — so patch it in place rather than filtering it out.
+      set((state: SkillsTestingState) => ({
+        tests: state.tests.map((t: SkillTestListItem) =>
+          t.id === id ? { ...t, status: voided.status, voided_at: voided.voided_at } : t
+        ),
+        currentTest: state.currentTest?.id === id ? voided : state.currentTest,
+      }));
+      return voided;
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to void test');
       set({ error: msg });
       throw err;
     }

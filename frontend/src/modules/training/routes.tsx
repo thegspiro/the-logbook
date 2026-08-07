@@ -21,6 +21,7 @@ const SubmitTrainingPage = lazyWithRetry(() => import('../../pages/SubmitTrainin
 const TrainingProgramsPage = lazyWithRetry(() => import('../../pages/TrainingProgramsPage'));
 const PipelineDetailPage = lazyWithRetry(() => import('../../pages/PipelineDetailPage'));
 const MyProgramProgressPage = lazyWithRetry(() => import('../../pages/MyProgramProgressPage'));
+const MySkillTestResultPage = lazyWithRetry(() => import('../../pages/MySkillTestResultPage'));
 
 // Training Module - Course Cohorts (multi-class courses)
 const CohortsPage = lazyWithRetry(() => import('../../pages/training/CohortsPage'));
@@ -66,6 +67,12 @@ export const getTrainingRoutes = () => {
       <Route path="/training/programs/:programId" element={<PipelineDetailPage />} />
       {/* Member-facing read-only progression view for one enrollment */}
       <Route path="/training/my-progress/:enrollmentId" element={<MyProgramProgressPage />} />
+      {/* Member-facing read-only skills-test result. Auth-only on purpose: the
+          examiner routes below require training.manage, which is exactly why a
+          candidate previously could not see their own result. The API scopes a
+          non-officer to tests they are party to, so this cannot expose someone
+          else's scorecard. */}
+      <Route path="/training/my-skill-tests/:testId" element={<MySkillTestResultPage />} />
 
       {/* Course Cohorts — scheduled runs of a multi-class course */}
       <Route
