@@ -141,6 +141,34 @@ export default defineConfig({
             purpose: 'any maskable',
           },
         ],
+        // Shown in Android's richer install dialog instead of the minimal
+        // card. At least one `narrow` and one `wide` entry are required for
+        // that richer treatment, and each declared size must match the file
+        // exactly or the entry is dropped. Regenerate with
+        // `npx playwright test --grep @screenshots`.
+        screenshots: [
+          {
+            src: 'screenshots/narrow-dashboard.png',
+            sizes: '390x844',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'Your shifts, training and notifications at a glance',
+          },
+          {
+            src: 'screenshots/narrow-training.png',
+            sizes: '390x844',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'Track certifications and log training from your phone',
+          },
+          {
+            src: 'screenshots/wide-dashboard.png',
+            sizes: '1280x800',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'The full department dashboard on a desktop',
+          },
+        ],
         shortcuts: [
           {
             name: 'My Schedule',
