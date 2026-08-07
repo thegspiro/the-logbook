@@ -15,15 +15,54 @@ export interface AppError {
 }
 
 /**
+ * One entry of a 422 validation `detail` array.
+ *
+ * Two spellings are accepted because the API emits one and FastAPI's own
+ * machinery emits the other. `main.py` installs a `RequestValidationError`
+ * handler that rewrites Pydantic's default `{loc, msg, type}` into
+ * `{field, message}` before the body leaves the server, so a reader that
+ * understands only the Pydantic spelling drops both halves of every validation
+ * failure and renders a bare "Invalid value" with no field name and no reason.
+ * `{loc, msg}` still has to be handled: anything that bypasses that handler — a
+ * mounted sub-application, a gateway-generated 422 — arrives in the original
+ * form.
+ */
+interface ValidationErrorEntry {
+  loc?: Array<string | number>;
+  msg?: string;
+  field?: string;
+  message?: string;
+}
+
+/**
  * Shape of an Axios-like error with a response property.
  * Used for narrowing unknown catch values without importing axios.
  */
 interface HttpErrorResponse {
   response: {
-    data?: { detail?: string | Array<{ loc?: string[]; msg?: string }> | Record<string, unknown>; message?: string; code?: string; details?: Record<string, unknown> };
+    data?: { detail?: string | ValidationErrorEntry[] | Record<string, unknown>; message?: string; code?: string; details?: Record<string, unknown> };
     status?: number;
     statusText?: string;
   };
+}
+
+/**
+ * Renders one validation entry as `field: reason`, tolerating either spelling.
+ *
+ * The backend uses the literal field name `"request"` for an error it could not
+ * attribute to any field; prefixing the message with it reads as a field called
+ * "request", so that one is dropped rather than shown.
+ */
+function describeValidationError(entry: ValidationErrorEntry): string {
+  const locField = entry.loc?.length ? String(entry.loc[entry.loc.length - 1]) : undefined;
+  const field = entry.field || locField;
+  const message = entry.message || entry.msg || 'Invalid value';
+  const described = field && field !== 'request' ? `${field}: ${message}` : message;
+  // The two 422 sources punctuate differently — the API's handler ends each
+  // message with a period, Pydantic's own do not — so entries are terminated
+  // here and joined on a single space. Joining on ". " instead produced
+  // "Invalid date format.. " wherever the message already carried its period.
+  return /[.!?]$/.test(described) ? described : `${described}.`;
 }
 
 /**
@@ -53,15 +92,8 @@ export function toAppError(error: unknown): AppError {
     const { data } = response;
     let message: string;
     if (Array.isArray(data?.detail)) {
-      // FastAPI/Pydantic 422 validation errors return detail as an array
-      const errors = data.detail as Array<{ loc?: string[]; msg?: string }>;
-      message = errors
-        .map(e => {
-          const field = e.loc?.[e.loc.length - 1];
-          const msg = e.msg || 'Invalid value';
-          return field ? `${field}: ${msg}` : msg;
-        })
-        .join('. ') || 'Validation failed';
+      // 422 validation errors return detail as an array
+      message = data.detail.map(describeValidationError).join(' ') || 'Validation failed';
     } else if (data?.detail && typeof data.detail === 'object') {
       // Some endpoints raise HTTPException with a structured object detail
       // (e.g. a 409 { message, ... }). Surface its `message` rather than

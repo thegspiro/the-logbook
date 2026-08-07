@@ -415,8 +415,13 @@ export const MembersAdminPage: React.FC = () => {
           </p>
         </div>
         {canCreateMembers && (
+          // This page is the admin hub's "manage" tab, so Add Member selects
+          // the hub's sibling tab rather than routing anywhere new. The old
+          // target, /admin/members/add, matched no route at all — only the
+          // exact path /admin/members is redirected — so the button fell
+          // through to the catch-all and bounced the user to the dashboard.
           <Link
-            to="/admin/members/add"
+            to="/members/admin?tab=add"
             className="btn-primary font-medium inline-flex items-center rounded-md text-sm"
           >
             <svg
