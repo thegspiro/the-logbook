@@ -127,15 +127,9 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
       const templates = await schedulingService.getTemplates({
         active_only: true,
       });
-      // The axios response generic asserts an array rather than proving one.
-      // Every consumer calls .filter/.map straight off this value, so a
-      // non-array body (an envelope, an error payload served with 200) takes
-      // the whole scheduling page down via the error boundary instead of
-      // degrading to "no templates".
-      set({
-        templates: Array.isArray(templates) ? templates : [],
-        templatesLoaded: true,
-      });
+      // No array guard needed here: schedulingService normalizes every
+      // array-returning method at the boundary (see asArray there).
+      set({ templates, templatesLoaded: true });
     } catch {
       set({ templatesLoaded: true }); // mark loaded even on error to prevent retry loop
     } finally {
