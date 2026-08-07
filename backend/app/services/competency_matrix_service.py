@@ -28,6 +28,7 @@ from app.models.training import (
 )
 from app.models.user import User, UserStatus
 from app.services.training_compliance import (
+    apply_recency,
     certification_record_matches,
     get_org_include_current_month,
 )
@@ -284,6 +285,9 @@ class CompetencyMatrixService:
 
         # Filter completed records within the date window
         completed = [r for r in user_records if r.status == TrainingStatus.COMPLETED]
+        # Freshness window narrows the pool before the frequency window, so a
+        # stale completion can't satisfy an unbounded (one_time) requirement.
+        completed = apply_recency(requirement, completed, today)
         if start_date and end_date:
             windowed = [
                 r

@@ -524,6 +524,19 @@ class TrainingRequirement(Base):
     #   False -> stop at the end of the previous month for this requirement
     include_current_month = Column(Boolean, nullable=True)
 
+    # Freshness window: a completion older than this many days does not count
+    # toward the requirement, even though it happened.
+    #
+    # Distinct from `rolling_period_months`, which sets a recurring obligation
+    # ("redo it every N months"). This is a validity window on the completion
+    # itself — a recruit school can demand CPR taken within the last 180 days
+    # while the department's own CPR requirement stays a one-time item. NULL
+    # means any completion counts however old, which is the prior behavior.
+    #
+    # When both apply, the narrower window wins: this only ever removes records
+    # from consideration, never adds them.
+    recency_days = Column(Integer, nullable=True)
+
     # Categories - which training categories count towards this requirement
     category_ids = Column(
         JSON

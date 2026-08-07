@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { trainingService, trainingProgramService } from '../services/api';
 import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
+import { RecencyWindowField } from '../components/training/RecencyWindowField';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import type {
   TrainingRequirement,
@@ -693,6 +694,12 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                     value={requirement.required_courses.map((id) => courseNameById.get(id) ?? id).join(', ')}
                   />
                 )}
+                {requirement.recency_days != null && (
+                  <DetailRow
+                    label="Recency Window"
+                    value={`Completed within the last ${requirement.recency_days} days`}
+                  />
+                )}
                 {requirement.checklist_items && requirement.checklist_items.length > 0 && (
                   <DetailRow label="Checklist Items" value={String(requirement.checklist_items.length)} />
                 )}
@@ -812,6 +819,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({ requirement, templa
   // Linked course-library ids. Kept out of `formData` because it is an id list
   // the picker owns, not a text field.
   const [requiredCourses, setRequiredCourses] = useState<string[]>(seed?.required_courses ?? []);
+  const [recencyDays, setRecencyDays] = useState<number | undefined>(seed?.recency_days ?? undefined);
   const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
 
   const [saving, setSaving] = useState(false);
@@ -887,6 +895,12 @@ const RequirementModal: React.FC<RequirementModalProps> = ({ requirement, templa
           formData.requirement_type === 'courses' || formData.requirement_type === 'certification'
             ? requiredCourses
             : [],
+        // Sent unconditionally (undefined when off) so lifting a freshness
+        // window persists rather than silently keeping the old value.
+        recency_days:
+          formData.requirement_type === 'courses' || formData.requirement_type === 'certification'
+            ? recencyDays
+            : undefined,
         ...(formData.requirement_type === 'shifts' && formData.required_shifts
           ? { required_shifts: formData.required_shifts }
           : {}),
@@ -1115,6 +1129,10 @@ const RequirementModal: React.FC<RequirementModalProps> = ({ requirement, templa
                 selectedIds={requiredCourses}
                 onChange={setRequiredCourses}
               />
+            )}
+
+            {(formData.requirement_type === 'courses' || formData.requirement_type === 'certification') && (
+              <RecencyWindowField idPrefix="req" value={recencyDays} onChange={setRecencyDays} />
             )}
 
             {formData.requirement_type === 'shifts' && (

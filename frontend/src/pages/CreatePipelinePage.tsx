@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
+import { RecencyWindowField } from '../components/training/RecencyWindowField';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import type {
   ProgramStructureType,
@@ -57,6 +58,8 @@ interface RequirementFormData {
   checklist_items: string[];
   // Course-library ids backing a `courses` or `certification` requirement.
   required_courses: string[];
+  // Freshness window in days, or undefined for no window.
+  recency_days: number | undefined;
   allows_external_credit: boolean;
   is_required: boolean;
   sort_order: number;
@@ -110,6 +113,7 @@ const emptyRequirement = (sortOrder: number): RequirementFormData => ({
   max_attempts: '',
   checklist_items: [],
   required_courses: [],
+  recency_days: undefined,
   allows_external_credit: false,
   is_required: true,
   sort_order: sortOrder,
@@ -472,7 +476,12 @@ const StepRequirements: React.FC<{
   coursesError: string;
   onAddRequirement: (phaseId: string) => void;
   onRemoveRequirement: (phaseId: string, reqId: string) => void;
-  onUpdateRequirement: (phaseId: string, reqId: string, field: string, value: string | boolean | string[]) => void;
+  onUpdateRequirement: (
+    phaseId: string,
+    reqId: string,
+    field: string,
+    value: string | boolean | string[] | number | undefined
+  ) => void;
 }> = ({
   phases,
   courses,
@@ -642,6 +651,19 @@ const StepRequirements: React.FC<{
                       variant={req.requirement_type === 'certification' ? 'certification' : 'courses'}
                       selectedIds={req.required_courses}
                       onChange={(ids) => onUpdateRequirement(phase.id, req.id, 'required_courses', ids)}
+                    />
+                  )}
+
+                  {/* Freshness window — offered for the types where a stale
+                      completion is the realistic failure (a certification from
+                      three years ago, a course taken before the last revision).
+                      Hours/shifts/calls accrue continuously, so a window there
+                      would mostly confuse. */}
+                  {(req.requirement_type === 'courses' || req.requirement_type === 'certification') && (
+                    <RecencyWindowField
+                      idPrefix={`wizard-${req.id}`}
+                      value={req.recency_days}
+                      onChange={(days) => onUpdateRequirement(phase.id, req.id, 'recency_days', days)}
                     />
                   )}
 
@@ -1001,6 +1023,11 @@ const StepReview: React.FC<{
                       No course linked — members can&apos;t earn credit for this yet.
                     </p>
                   )}
+                  {req.recency_days != null && (
+                    <p className="text-theme-text-muted pl-5 text-xs">
+                      Must be completed within the last {req.recency_days} days
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -1112,7 +1139,12 @@ const CreatePipelinePage: React.FC = () => {
     );
   };
 
-  const updateRequirement = (phaseId: string, reqId: string, field: string, value: string | boolean | string[]) => {
+  const updateRequirement = (
+    phaseId: string,
+    reqId: string,
+    field: string,
+    value: string | boolean | string[] | number | undefined
+  ) => {
     setPhases((prev) =>
       prev.map((p) =>
         p.id === phaseId
@@ -1210,6 +1242,7 @@ const CreatePipelinePage: React.FC = () => {
             max_attempts: reqData.max_attempts ? parseInt(reqData.max_attempts) : undefined,
             checklist_items: reqData.checklist_items.filter((i) => i.trim()),
             required_courses: reqData.required_courses.length > 0 ? reqData.required_courses : undefined,
+            recency_days: reqData.recency_days,
             allows_external_credit: reqData.allows_external_credit,
             is_required: reqData.is_required,
             sort_order: reqData.sort_order,

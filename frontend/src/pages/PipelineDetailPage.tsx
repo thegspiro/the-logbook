@@ -1510,6 +1510,9 @@ const PipelineDetailPage: React.FC = () => {
                                         {pr.requirement?.checklist_items && (
                                           <span>{pr.requirement.checklist_items.length} items</span>
                                         )}
+                                        {pr.requirement?.recency_days != null && (
+                                          <span>within last {pr.requirement.recency_days}d</span>
+                                        )}
                                         {pr.requirement?.required_courses?.length ? (
                                           <span>
                                             {pr.requirement.required_courses.length} course

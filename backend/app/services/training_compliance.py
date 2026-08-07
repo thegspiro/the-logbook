@@ -140,6 +140,46 @@ def get_requirement_date_window(req, today: date):
         return date(yr, 1, 1), date(yr, 12, 31)
 
 
+def recency_cutoff(req, today: date) -> Optional[date]:
+    """Earliest completion date still fresh enough to count, or None.
+
+    ``recency_days`` is a validity window on the completion itself: a recruit
+    school can demand CPR taken within the last 180 days even though the
+    department's own CPR requirement is a one-time item that never expires.
+    None means no freshness constraint — any completion counts however old.
+    """
+    days = getattr(req, "recency_days", None)
+    if not days or days <= 0:
+        return None
+    return today - timedelta(days=int(days))
+
+
+def is_recent_enough(req, record, today: date) -> bool:
+    """Is ``record``'s completion inside the requirement's freshness window?
+
+    A record with no completion date is treated as *not* fresh whenever a window
+    is set: the window can't be verified, and silently counting it would let
+    exactly the stale completions the officer meant to exclude through.
+    """
+    cutoff = recency_cutoff(req, today)
+    if cutoff is None:
+        return True
+    completion = getattr(record, "completion_date", None)
+    return completion is not None and completion >= cutoff
+
+
+def apply_recency(req, records, today: date):
+    """Drop records that fall outside the requirement's freshness window.
+
+    Applied *on top of* the frequency date window rather than replacing it, so
+    the narrower of the two always wins and this can only ever remove records
+    from consideration.
+    """
+    if recency_cutoff(req, today) is None:
+        return records
+    return [r for r in records if is_recent_enough(req, r, today)]
+
+
 def certification_record_matches(req, record) -> bool:
     """Does ``record`` satisfy the CERTIFICATION requirement ``req``?
 
@@ -244,6 +284,10 @@ def evaluate_member_requirement(
 
     # Filter completed records within the date window
     completed = [r for r in member_records if r.status == TrainingStatus.COMPLETED]
+    # A freshness window narrows the pool for every requirement type before the
+    # frequency window is applied, so a stale completion can't satisfy anything
+    # — including a one_time requirement, whose frequency window is unbounded.
+    completed = apply_recency(req, completed, today)
     if start_date and end_date:
         windowed = [
             r

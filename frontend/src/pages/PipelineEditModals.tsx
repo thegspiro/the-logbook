@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { X, AlertCircle } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
+import { RecencyWindowField } from '../components/training/RecencyWindowField';
 import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { getErrorMessage } from '../utils/errorHandling';
 import type {
@@ -458,6 +459,7 @@ export const RequirementFormModal: React.FC<{
   const [attempts, setAttempts] = useState(req?.max_attempts?.toString() ?? '');
   const [checklist, setChecklist] = useState((req?.checklist_items ?? []).join('\n'));
   const [requiredCourses, setRequiredCourses] = useState<string[]>(req?.required_courses ?? []);
+  const [recencyDays, setRecencyDays] = useState<number | undefined>(req?.recency_days ?? undefined);
   const [isRequired, setIsRequired] = useState(link?.is_required !== false);
   const [allowsExternal, setAllowsExternal] = useState(req?.allows_external_credit === true);
   const [submitting, setSubmitting] = useState(false);
@@ -491,6 +493,9 @@ export const RequirementFormModal: React.FC<{
         // from courses/certification clears stale links — a leftover course id
         // narrows the hours evaluator to only that course's records.
         required_courses: linksCourses ? requiredCourses : [],
+        // Sent even when null so an officer can lift a freshness window they
+        // previously set; the service treats recency_days as clearable.
+        recency_days: linksCourses ? recencyDays : undefined,
         allows_external_credit: allowsExternal,
       };
       if (link) {
@@ -661,6 +666,7 @@ export const RequirementFormModal: React.FC<{
           onChange={setRequiredCourses}
         />
       )}
+      {linksCourses && <RecencyWindowField idPrefix="rq" value={recencyDays} onChange={setRecencyDays} />}
       {(type === 'hours' || type === 'courses') && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />

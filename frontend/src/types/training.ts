@@ -697,6 +697,8 @@ export interface TrainingRequirement {
   // Evaluation period: null = inherit org default, true = count current month,
   // false = stop at end of previous month
   include_current_month?: boolean | null;
+  // Freshness window: a completion older than this many days doesn't count
+  recency_days?: number;
   category_ids?: string[];
   active: boolean;
   created_at: string;
@@ -744,6 +746,8 @@ export interface TrainingRequirementCreate {
   period_end_month?: number | undefined;
   period_end_day?: number | undefined;
   include_current_month?: boolean | null | undefined;
+  // Freshness window: a completion older than this many days doesn't count
+  recency_days?: number | undefined;
   category_ids?: string[] | undefined;
 }
 
@@ -783,6 +787,8 @@ export interface TrainingRequirementUpdate {
   period_end_month?: number | undefined;
   period_end_day?: number | undefined;
   include_current_month?: boolean | null | undefined;
+  // Freshness window: a completion older than this many days doesn't count
+  recency_days?: number | undefined;
   category_ids?: string[] | undefined;
   active?: boolean;
 }
@@ -1188,6 +1194,8 @@ export interface ProgramBuildRequirementInput {
   checklist_items?: string[] | undefined;
   // Course-library ids satisfying a `courses` or `certification` requirement.
   required_courses?: string[] | undefined;
+  // Freshness window: a completion older than this many days doesn't count.
+  recency_days?: number | undefined;
   allows_external_credit?: boolean | undefined;
   is_required: boolean;
   sort_order: number;
