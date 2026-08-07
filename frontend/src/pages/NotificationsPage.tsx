@@ -556,6 +556,9 @@ const NotificationsPage: React.FC = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
                 <label htmlFor="notif-search" className="sr-only">Search notification rules</label>
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   id="notif-search"
                   type="text"
                   aria-label="Search notification rules..." placeholder="Search notification rules..."
@@ -706,8 +709,9 @@ const NotificationsPage: React.FC = () => {
             ) : (
               <div className="space-y-3">
                 <div className="card overflow-hidden">
-                  {/* Table Header */}
-                  <div className="grid grid-cols-12 gap-4 px-5 py-3 border-b border-theme-surface-border text-xs font-medium text-theme-text-muted uppercase">
+                  {/* Table Header — hidden on mobile, where each row stacks
+                      into a card and the column headings would be meaningless */}
+                  <div className="hidden md:grid grid-cols-12 gap-4 px-5 py-3 border-b border-theme-surface-border text-xs font-medium text-theme-text-muted uppercase">
                     <div className="col-span-4">Subject</div>
                     <div className="col-span-3">Recipient</div>
                     <div className="col-span-2">Channel</div>
@@ -718,15 +722,15 @@ const NotificationsPage: React.FC = () => {
                   {filteredLogs.map((log) => (
                     <div
                       key={log.id}
-                      className="grid grid-cols-12 gap-4 px-5 py-4 border-b border-theme-surface-border last:border-b-0 hover:bg-theme-surface-hover transition-colors"
+                      className="grid grid-cols-1 gap-1 md:grid-cols-12 md:gap-4 px-5 py-4 border-b border-theme-surface-border last:border-b-0 hover:bg-theme-surface-hover transition-colors"
                     >
-                      <div className="col-span-4">
+                      <div className="md:col-span-4">
                         <p className="text-theme-text-primary text-sm truncate">{log.subject || '(No subject)'}</p>
                         {log.rule_name && (
                           <p className="text-theme-text-muted text-xs mt-0.5 truncate">Rule: {log.rule_name}</p>
                         )}
                       </div>
-                      <div className="col-span-3">
+                      <div className="md:col-span-3">
                         <p className="text-theme-text-secondary text-sm truncate">
                           {log.recipient_name || log.recipient_email || 'Unknown'}
                         </p>
@@ -734,12 +738,12 @@ const NotificationsPage: React.FC = () => {
                           <p className="text-theme-text-muted text-xs mt-0.5 truncate">{log.recipient_email}</p>
                         )}
                       </div>
-                      <div className="col-span-2">
+                      <div className="md:col-span-2">
                         <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-sm bg-theme-surface-secondary text-theme-text-muted">
                           {log.channel === 'in_app' ? 'In-App' : log.channel === 'email' ? 'Email' : log.channel}
                         </span>
                       </div>
-                      <div className="col-span-2">
+                      <div className="md:col-span-2">
                         <p className="text-theme-text-secondary text-sm">
                           {formatDate(log.sent_at, tz)}
                         </p>
@@ -747,7 +751,7 @@ const NotificationsPage: React.FC = () => {
                           {formatTime(log.sent_at, tz)}
                         </p>
                       </div>
-                      <div className="col-span-1">
+                      <div className="md:col-span-1">
                         {log.delivered ? (
                           <span className="flex items-center space-x-1 text-green-700 dark:text-green-400" title="Delivered">
                             <CheckCircle className="w-4 h-4" />

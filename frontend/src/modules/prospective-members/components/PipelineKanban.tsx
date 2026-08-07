@@ -152,7 +152,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
 
             {/* Cards */}
             <div
-              className="p-2 space-y-2 min-h-[100px] max-h-[calc(100vh-300px)] overflow-y-auto"
+              className="p-2 space-y-2 min-h-[100px] max-h-[calc(100dvh-300px)] overflow-y-auto"
               onDragEnd={handleDragEnd}
             >
               {stageApplicants.length === 0 ? (

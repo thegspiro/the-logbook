@@ -267,6 +267,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
               SKU (optional)
             </label>
             <input
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               id="product-sku"
               type="text"
               value={form.sku}

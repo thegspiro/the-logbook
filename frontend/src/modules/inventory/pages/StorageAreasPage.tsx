@@ -115,7 +115,7 @@ const ItemsPanel: React.FC<ItemsPanelProps> = ({ areaId, indent }) => {
             {item.tracking_type === 'pool' && (
               <span className="text-xs text-theme-text-muted shrink-0">qty: {item.quantity - item.quantity_issued}</span>
             )}
-            <ExternalLink className="w-3 h-3 text-theme-text-muted opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0" />
+            <ExternalLink className="w-3 h-3 text-theme-text-muted sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity shrink-0" />
           </Link>
         );
       })}
@@ -467,7 +467,11 @@ const StorageAreasPage: React.FC = () => {
           </div>
           <div>
             <label htmlFor="sa-barcode" className={labelClass}>Barcode</label>
-            <input id="sa-barcode" type="text" value={formData.barcode}
+            <input
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              id="sa-barcode" type="text" value={formData.barcode}
               onChange={(e) => set({ barcode: e.target.value })} className={inputClass} placeholder="Optional barcode" />
           </div>
         </form>

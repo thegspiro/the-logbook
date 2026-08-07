@@ -413,6 +413,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             {/* Search */}
             <div className="flex-1 min-w-[200px]">
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 type="text"
                 aria-label="Search courses..." placeholder="Search courses..."
                 value={searchQuery}

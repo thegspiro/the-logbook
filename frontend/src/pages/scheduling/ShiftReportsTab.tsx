@@ -1321,6 +1321,9 @@ export const ShiftReportsTab: React.FC = () => {
               <div className="relative mb-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   type="text"
                   placeholder="Search shifts by apparatus or date..."
                   value={shiftSearchQuery}
@@ -1986,7 +1989,7 @@ export const ShiftReportsTab: React.FC = () => {
         const reviewReport = reports.find(r => r.id === reviewReportId);
         return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Review Report">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4">
+          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 sm:p-6 w-full max-w-2xl max-h-[90dvh] overflow-y-auto space-y-4">
             <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
               <ClipboardCheck className="w-5 h-5 text-violet-500" /> Review Report
             </h3>

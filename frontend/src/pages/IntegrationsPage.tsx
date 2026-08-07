@@ -1255,6 +1255,9 @@ const IntegrationsPage: React.FC = () => {
                 Search integrations
               </label>
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 id="integrations-search"
                 type="text"
                 aria-label="Search integrations..."

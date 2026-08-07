@@ -473,8 +473,8 @@ export const MembersAdminPage: React.FC = () => {
 
       {/* View by Member */}
       {viewMode === 'by-member' && (
-        <div className="bg-theme-surface backdrop-blur-xs shadow-sm overflow-hidden sm:rounded-lg">
-          <table className="min-w-full divide-y divide-theme-surface-border" aria-label="Members and their roles">
+        <div className="bg-theme-surface backdrop-blur-xs shadow-sm overflow-x-auto sm:rounded-lg">
+          <table className="rwd-table min-w-full divide-y divide-theme-surface-border" aria-label="Members and their roles">
             <thead className="bg-theme-surface-secondary">
               <tr>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
@@ -497,7 +497,7 @@ export const MembersAdminPage: React.FC = () => {
             <tbody className="divide-y divide-theme-surface-border">
               {users.map((user) => (
                 <tr key={user.id} className="hover:bg-theme-surface-hover">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td data-label="Member" className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="shrink-0 h-10 w-10 rounded-full bg-theme-surface flex items-center justify-center">
                         <span className="text-theme-text-secondary font-medium">
@@ -512,11 +512,11 @@ export const MembersAdminPage: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
+                  <td data-label="Member #" className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-muted">
                     {user.membership_number || '-'}
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1">
+                  <td data-label="Roles" className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1 justify-end md:justify-start">
                       {user.roles.length === 0 ? (
                         <span className="text-sm text-theme-text-muted">No roles</span>
                       ) : (
@@ -542,7 +542,7 @@ export const MembersAdminPage: React.FC = () => {
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td data-label="Status" className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         user.status === UserStatus.ACTIVE
@@ -553,8 +553,8 @@ export const MembersAdminPage: React.FC = () => {
                       {user.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex justify-end gap-3">
+                  <td data-label="Actions" className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex flex-wrap justify-end gap-3">
                       <button
                         onClick={() => void navigate(`/members/admin/edit/${user.id}`)}
                         className="text-green-700 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
@@ -705,7 +705,7 @@ export const MembersAdminPage: React.FC = () => {
       >
         <div className="space-y-4">
           {/* Name Fields */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">First Name</label>
               <input
@@ -763,7 +763,7 @@ export const MembersAdminPage: React.FC = () => {
           </div>
 
           {/* Department Fields */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Membership #</label>
               <input

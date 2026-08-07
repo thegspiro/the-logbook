@@ -288,7 +288,7 @@ function LocationSetupWizard({
   /* ── Render ── */
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-2xl max-w-lg w-full max-h-[90dvh] flex flex-col overflow-hidden">
         {/* Progress bar */}
         <div className="px-6 pt-5 pb-2">
           <div className="flex items-center justify-between mb-2">
@@ -426,7 +426,7 @@ function LocationSetupWizard({
                           disabled={station.saved}
                         />
                       </div>
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                           <label className={labelCls}>City</label>
                           <input type="text" value={station.city} onChange={e => updateStation(idx, 'city', e.target.value)} className={inputCls} disabled={station.saved} />
@@ -549,7 +549,7 @@ function LocationSetupWizard({
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRoom(); } }}
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className={labelCls}>Room #</label>
                     <input type="text" value={roomForm.room_number} onChange={e => setRoomForm(p => ({ ...p, room_number: e.target.value }))} placeholder="101" className={inputCls} />
@@ -1270,7 +1270,7 @@ export default function LocationsPage() {
                   placeholder="123 Main Street" className={inputCls}
                 />
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className={labelCls}>City</label>
                   <input type="text" value={stationForm.city} onChange={e => setStationForm(p => ({...p, city: e.target.value}))} className={inputCls} />

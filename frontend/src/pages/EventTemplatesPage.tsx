@@ -316,7 +316,7 @@ export const EventTemplatesPage: React.FC = () => {
                 {editingTemplate ? 'Edit Template' : 'Create Template'}
               </h2>
             </div>
-            <div className="p-6 max-h-[calc(100vh-12rem)] overflow-y-auto">
+            <div className="p-6 max-h-[calc(100dvh-12rem)] overflow-y-auto">
               <EventTemplateForm
                 initialData={editingTemplate ?? undefined}
                 onSubmit={handleFormSubmit}

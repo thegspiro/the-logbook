@@ -230,6 +230,9 @@ const TrainingProgramsPage: React.FC = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
             <label htmlFor="programs-search" className="sr-only">Search {activeTab}</label>
             <input
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               id="programs-search"
               type="text"
               value={searchTerm}

@@ -185,7 +185,7 @@ const ShiftReportPage: React.FC = () => {
 
         {/* Stats Bar */}
         {myStats && myStats.total_reports > 0 && (
-          <div className="grid grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
             <div className="bg-theme-surface rounded-lg p-3 text-center">
               <div className="text-2xl font-bold text-theme-text-primary">{myStats.total_reports}</div>
               <div className="text-xs text-theme-text-muted">Reports</div>

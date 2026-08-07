@@ -185,6 +185,9 @@ export const StoreOrdersTab: React.FC<StoreOrdersTabProps> = ({ onChanged, initi
             Search orders
           </label>
           <input
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             id="order-search"
             type="search"
             value={search}

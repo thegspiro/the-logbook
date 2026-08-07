@@ -130,7 +130,7 @@ export default function InspectionsListPage() {
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true"
           onKeyDown={e => { if (e.key === 'Escape') setShowModal(false); }}>
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-lg w-full max-h-[90dvh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 className="text-lg font-bold text-theme-text-primary">{editingInspection ? 'Edit Inspection' : 'New Inspection'}</h2>
               <button onClick={() => setShowModal(false)} aria-label="Close dialog" className="text-theme-text-muted hover:text-theme-text-primary"><X className="w-5 h-5" /></button>

@@ -310,6 +310,9 @@ const Members: React.FC = () => {
             <div className="relative flex-1 w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 type="text"
                 aria-label="Search by name, membership number, or email..." placeholder="Search by name, membership number, or email..."
                 value={searchQuery}

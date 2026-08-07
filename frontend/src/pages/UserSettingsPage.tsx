@@ -511,6 +511,9 @@ export const UserSettingsPage: React.FC = () => {
                     <div>
                       <label htmlFor="membershipNumber" className="block text-sm font-medium text-theme-text-secondary mb-1">Membership Number</label>
                       <input
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
                         id="membershipNumber"
                         type="text"
                         value={profileForm.membership_number || ''}

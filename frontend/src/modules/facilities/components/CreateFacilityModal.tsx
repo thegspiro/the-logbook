@@ -86,7 +86,7 @@ export default function CreateFacilityModal({
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
           <h2
             id="create-facility-title"
@@ -144,7 +144,7 @@ export default function CreateFacilityModal({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">
                 City

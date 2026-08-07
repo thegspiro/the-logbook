@@ -62,6 +62,9 @@ export function useHtml5Scanner({
   const [flashlightOn, setFlashlightOn] = useState(false);
   const flashlightOnRef = useRef(false);
   flashlightOnRef.current = flashlightOn;
+  // Whether the scanner was live when the page was backgrounded, so it can be
+  // resumed on return. See the visibilitychange effect below.
+  const wasScanningRef = useRef(false);
   // Keep onScan in a ref so the callback given to html5-qrcode always
   // calls the latest version without restarting the scanner.
   const onScanRef = useRef(onScan);
@@ -165,6 +168,32 @@ export function useHtml5Scanner({
       setFlashlightSupported(false);
     }
   }, [viewportId, scanConfig, formatsToSupport, stopScanner]);
+
+  // Release the camera while the page is backgrounded, and pick it back up on
+  // return. Without this, switching apps or locking the screen mid-scan leaves
+  // the capture track held: iOS suspends the track but does not resume it, so
+  // the user comes back to a permanently frozen preview, and the OS camera
+  // indicator stays lit meanwhile. Restart only if we were actually scanning,
+  // so returning to an idle scanner screen doesn't switch the camera on.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (scannerRef.current) {
+          wasScanningRef.current = true;
+          void stopScanner();
+        }
+      } else if (wasScanningRef.current) {
+        wasScanningRef.current = false;
+        void startScanner().catch(() => {
+          // Camera may be unavailable on return (permission revoked, device
+          // taken by another app). Leave the scanner stopped; the UI's own
+          // start control remains available.
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [startScanner, stopScanner]);
 
   // Cleanup on unmount
   useEffect(() => {

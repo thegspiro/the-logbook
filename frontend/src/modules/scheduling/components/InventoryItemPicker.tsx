@@ -123,6 +123,9 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChan
       <div className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2">
         <Search className="h-4 w-4 text-theme-text-muted shrink-0" />
         <input
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           type="text"
           className="flex-1 min-w-0 bg-transparent text-sm text-theme-text-primary outline-none placeholder:text-theme-text-muted"
           placeholder="Search inventory to link…"
