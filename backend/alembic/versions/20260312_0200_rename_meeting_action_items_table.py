@@ -8,12 +8,13 @@ The ActionItem model uses __tablename__ = "minutes_action_items" but the
 original migration (20260212_1200) created the table as "meeting_action_items".
 This migration renames the table and its indexes to match the model.
 """
+
 from alembic import op
 from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
-revision = '20260312_0200'
-down_revision = '20260312_0100'
+revision = "20260312_0200"
+down_revision = "20260312_0100"
 branch_labels = None
 depends_on = None
 
@@ -24,50 +25,78 @@ def upgrade() -> None:
     # meetings-module meeting_action_items from 20260212_0300 and failed on
     # every real run). Nothing to rename in that case — and renaming here
     # would grab the unrelated meetings-module table.
-    if 'minutes_action_items' in inspect(op.get_bind()).get_table_names():
+    if "minutes_action_items" in inspect(op.get_bind()).get_table_names():
         return
 
     # Rename the table to match the SQLAlchemy model
-    op.rename_table('meeting_action_items', 'minutes_action_items')
+    op.rename_table("meeting_action_items", "minutes_action_items")
 
     # Recreate indexes with the correct table-prefixed names
     # Drop old indexes (silently skip if they don't exist)
     try:
-        op.drop_index('ix_meeting_action_items_minutes_id', table_name='minutes_action_items')
+        op.drop_index(
+            "ix_meeting_action_items_minutes_id", table_name="minutes_action_items"
+        )
     except Exception:
         pass
     try:
-        op.drop_index('ix_meeting_action_items_assignee_id', table_name='minutes_action_items')
+        op.drop_index(
+            "ix_meeting_action_items_assignee_id", table_name="minutes_action_items"
+        )
     except Exception:
         pass
     try:
-        op.drop_index('ix_meeting_action_items_status', table_name='minutes_action_items')
+        op.drop_index(
+            "ix_meeting_action_items_status", table_name="minutes_action_items"
+        )
     except Exception:
         pass
     try:
-        op.drop_index('ix_meeting_action_items_due_date', table_name='minutes_action_items')
+        op.drop_index(
+            "ix_meeting_action_items_due_date", table_name="minutes_action_items"
+        )
     except Exception:
         pass
 
     # Create new indexes with the correct names
-    op.create_index('ix_minutes_action_items_minutes_id', 'minutes_action_items', ['minutes_id'])
-    op.create_index('ix_minutes_action_items_assignee_id', 'minutes_action_items', ['assignee_id'])
-    op.create_index('ix_minutes_action_items_status', 'minutes_action_items', ['status'])
-    op.create_index('ix_minutes_action_items_due_date', 'minutes_action_items', ['due_date'])
+    op.create_index(
+        "ix_minutes_action_items_minutes_id", "minutes_action_items", ["minutes_id"]
+    )
+    op.create_index(
+        "ix_minutes_action_items_assignee_id", "minutes_action_items", ["assignee_id"]
+    )
+    op.create_index(
+        "ix_minutes_action_items_status", "minutes_action_items", ["status"]
+    )
+    op.create_index(
+        "ix_minutes_action_items_due_date", "minutes_action_items", ["due_date"]
+    )
 
 
 def downgrade() -> None:
     # Drop new indexes
-    op.drop_index('ix_minutes_action_items_due_date', table_name='minutes_action_items')
-    op.drop_index('ix_minutes_action_items_status', table_name='minutes_action_items')
-    op.drop_index('ix_minutes_action_items_assignee_id', table_name='minutes_action_items')
-    op.drop_index('ix_minutes_action_items_minutes_id', table_name='minutes_action_items')
+    op.drop_index("ix_minutes_action_items_due_date", table_name="minutes_action_items")
+    op.drop_index("ix_minutes_action_items_status", table_name="minutes_action_items")
+    op.drop_index(
+        "ix_minutes_action_items_assignee_id", table_name="minutes_action_items"
+    )
+    op.drop_index(
+        "ix_minutes_action_items_minutes_id", table_name="minutes_action_items"
+    )
 
     # Rename back
-    op.rename_table('minutes_action_items', 'meeting_action_items')
+    op.rename_table("minutes_action_items", "meeting_action_items")
 
     # Recreate original indexes
-    op.create_index('ix_meeting_action_items_minutes_id', 'meeting_action_items', ['minutes_id'])
-    op.create_index('ix_meeting_action_items_assignee_id', 'meeting_action_items', ['assignee_id'])
-    op.create_index('ix_meeting_action_items_status', 'meeting_action_items', ['status'])
-    op.create_index('ix_meeting_action_items_due_date', 'meeting_action_items', ['due_date'])
+    op.create_index(
+        "ix_meeting_action_items_minutes_id", "meeting_action_items", ["minutes_id"]
+    )
+    op.create_index(
+        "ix_meeting_action_items_assignee_id", "meeting_action_items", ["assignee_id"]
+    )
+    op.create_index(
+        "ix_meeting_action_items_status", "meeting_action_items", ["status"]
+    )
+    op.create_index(
+        "ix_meeting_action_items_due_date", "meeting_action_items", ["due_date"]
+    )

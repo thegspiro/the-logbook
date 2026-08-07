@@ -19,13 +19,12 @@ Four partial unique indexes are created to handle:
 4. Anonymous voting without positions
 
 """
-from alembic import op
-import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260210_0023'
-down_revision = '20260210_0600'  # Fixed: points to actual latest migration
+revision = "20260210_0023"
+down_revision = "20260210_0600"  # Fixed: points to actual latest migration
 branch_labels = None
 depends_on = None
 

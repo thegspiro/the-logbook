@@ -20,9 +20,8 @@ Create Date: 2026-06-10 00:00:00.000000
 
 """
 
-from sqlalchemy import text
-
 from alembic import op
+from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision = "20260610_0001"
@@ -37,9 +36,7 @@ def upgrade() -> None:
     # 1. Reassign every item a sequential, per-organization barcode. The
     #    derived table is materialised (it uses a window function), so
     #    self-updating inventory_items is permitted.
-    conn.execute(
-        text(
-            """
+    conn.execute(text("""
             UPDATE inventory_items i
             JOIN (
                 SELECT
@@ -57,15 +54,11 @@ def upgrade() -> None:
                 FROM inventory_items
             ) seq ON i.id = seq.id
             SET i.barcode = seq.bc
-            """
-        )
-    )
+            """))
 
     # 2. Seed each organization's counter so the app continues after the last
     #    assigned number. Organizations with no items keep the default (1).
-    conn.execute(
-        text(
-            """
+    conn.execute(text("""
             UPDATE organizations o
             JOIN (
                 SELECT organization_id, COUNT(*) AS cnt
@@ -77,9 +70,7 @@ def upgrade() -> None:
                 '$.barcode',
                 JSON_OBJECT('prefix', 'INV-', 'next_number', c.cnt + 1)
             )
-            """
-        )
-    )
+            """))
 
 
 def downgrade() -> None:

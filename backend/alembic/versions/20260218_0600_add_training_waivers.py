@@ -3,10 +3,10 @@
 Revision ID: 20260218_0600
 Revises: 20260218_0500
 """
-from alembic import op
-import sqlalchemy as sa
-from sqlalchemy import inspect
 
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy import inspect
 
 revision = "20260218_0600"
 down_revision = "20260218_0500"
@@ -27,22 +27,49 @@ def upgrade() -> None:
     op.create_table(
         "training_waivers",
         sa.Column("id", sa.String(36), primary_key=True),
-        sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("user_id", sa.String(36), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("waiver_type", sa.String(30), nullable=False, server_default="leave_of_absence"),
+        sa.Column(
+            "organization_id",
+            sa.String(36),
+            sa.ForeignKey("organizations.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "user_id",
+            sa.String(36),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column(
+            "waiver_type",
+            sa.String(30),
+            nullable=False,
+            server_default="leave_of_absence",
+        ),
         sa.Column("reason", sa.Text, nullable=True),
         sa.Column("start_date", sa.Date, nullable=False),
         sa.Column("end_date", sa.Date, nullable=False),
         sa.Column("requirement_ids", sa.JSON, nullable=True),
-        sa.Column("granted_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True),
+        sa.Column(
+            "granted_by", sa.String(36), sa.ForeignKey("users.id"), nullable=True
+        ),
         sa.Column("granted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("active", sa.Boolean, nullable=False, server_default=sa.text("1")),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()
+        ),
     )
 
-    op.create_index("idx_training_waivers_org_user", "training_waivers", ["organization_id", "user_id"])
-    op.create_index("idx_training_waivers_dates", "training_waivers", ["start_date", "end_date"])
+    op.create_index(
+        "idx_training_waivers_org_user",
+        "training_waivers",
+        ["organization_id", "user_id"],
+    )
+    op.create_index(
+        "idx_training_waivers_dates", "training_waivers", ["start_date", "end_date"]
+    )
 
 
 def downgrade() -> None:

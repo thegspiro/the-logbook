@@ -11,9 +11,8 @@ Create Date: 2026-03-17 02:00:00.000000
 
 import json
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers
 revision = "a9f3e7c10004"
@@ -24,8 +23,15 @@ depends_on = None
 
 # Same defaults used in operational_rank_service.py DEFAULT_RANKS
 _ALL = [
-    "officer", "driver", "firefighter", "ems",
-    "captain", "lieutenant", "probationary", "volunteer", "other",
+    "officer",
+    "driver",
+    "firefighter",
+    "ems",
+    "captain",
+    "lieutenant",
+    "probationary",
+    "volunteer",
+    "other",
 ]
 
 _DEFAULTS_BY_CODE = {

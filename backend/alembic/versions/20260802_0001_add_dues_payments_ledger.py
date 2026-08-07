@@ -20,7 +20,6 @@ Create Date: 2026-08-02 00:00:00.000000
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 # revision identifiers
@@ -99,8 +98,7 @@ def upgrade() -> None:
     # Backfill one payment per already-paid dues record so the derived total
     # matches what the aggregate said before this migration. paid_date can be
     # NULL on older rows, so fall back to created_at, which is NOT NULL.
-    op.execute(
-        """
+    op.execute("""
         INSERT INTO dues_payments (
             id, organization_id, member_dues_id, amount,
             payment_method, transaction_reference, notes,
@@ -120,8 +118,7 @@ def upgrade() -> None:
             COALESCE(md.paid_date, md.created_at)
         FROM member_dues md
         WHERE md.amount_paid > 0
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

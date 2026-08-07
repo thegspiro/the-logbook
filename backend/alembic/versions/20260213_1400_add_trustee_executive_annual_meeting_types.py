@@ -5,11 +5,12 @@ Revises: 20260213_0800
 Create Date: 2026-02-13 14:00:00.000000
 
 """
+
 from alembic import op
 
 # revision identifiers
-revision = 'a7f3e2d91b04'
-down_revision = '20260213_0800'
+revision = "a7f3e2d91b04"
+down_revision = "20260213_0800"
 branch_labels = None
 depends_on = None
 

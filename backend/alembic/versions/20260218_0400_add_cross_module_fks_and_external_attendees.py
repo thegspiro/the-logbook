@@ -23,12 +23,13 @@ Extends enums:
 - form_integrations.target_module: adds 'events'
 - form_integrations.integration_type: adds 'event_registration'
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260218_0400'
-down_revision = '20260218_0300'
+revision = "20260218_0400"
+down_revision = "20260218_0300"
 branch_labels = None
 depends_on = None
 
@@ -61,96 +62,189 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # ── meetings.event_id FK → events.id ──
-    if _table_exists(conn, "meetings") and not _column_exists(conn, "meetings", "event_id"):
+    if _table_exists(conn, "meetings") and not _column_exists(
+        conn, "meetings", "event_id"
+    ):
         op.add_column("meetings", sa.Column("event_id", sa.String(36), nullable=True))
         op.create_foreign_key(
-            "fk_meetings_event_id", "meetings", "events",
-            ["event_id"], ["id"], ondelete="SET NULL",
+            "fk_meetings_event_id",
+            "meetings",
+            "events",
+            ["event_id"],
+            ["id"],
+            ondelete="SET NULL",
         )
         op.create_index("ix_meetings_event_id", "meetings", ["event_id"])
 
     # ── meetings.location_id FK → locations.id ──
-    if _table_exists(conn, "meetings") and not _column_exists(conn, "meetings", "location_id"):
-        op.add_column("meetings", sa.Column("location_id", sa.String(36), nullable=True))
+    if _table_exists(conn, "meetings") and not _column_exists(
+        conn, "meetings", "location_id"
+    ):
+        op.add_column(
+            "meetings", sa.Column("location_id", sa.String(36), nullable=True)
+        )
         op.create_foreign_key(
-            "fk_meetings_location_id", "meetings", "locations",
-            ["location_id"], ["id"], ondelete="SET NULL",
+            "fk_meetings_location_id",
+            "meetings",
+            "locations",
+            ["location_id"],
+            ["id"],
+            ondelete="SET NULL",
         )
         op.create_index("ix_meetings_location_id", "meetings", ["location_id"])
 
     # ── meeting_minutes.meeting_id FK → meetings.id ──
-    if _table_exists(conn, "meeting_minutes") and not _column_exists(conn, "meeting_minutes", "meeting_id"):
-        op.add_column("meeting_minutes", sa.Column("meeting_id", sa.String(36), nullable=True))
-        op.create_foreign_key(
-            "fk_meeting_minutes_meeting_id", "meeting_minutes", "meetings",
-            ["meeting_id"], ["id"], ondelete="SET NULL",
+    if _table_exists(conn, "meeting_minutes") and not _column_exists(
+        conn, "meeting_minutes", "meeting_id"
+    ):
+        op.add_column(
+            "meeting_minutes", sa.Column("meeting_id", sa.String(36), nullable=True)
         )
-        op.create_index("ix_meeting_minutes_meeting_id", "meeting_minutes", ["meeting_id"])
+        op.create_foreign_key(
+            "fk_meeting_minutes_meeting_id",
+            "meeting_minutes",
+            "meetings",
+            ["meeting_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
+        op.create_index(
+            "ix_meeting_minutes_meeting_id", "meeting_minutes", ["meeting_id"]
+        )
 
     # ── training_sessions.instructor_id FK → users.id ──
-    if _table_exists(conn, "training_sessions") and not _column_exists(conn, "training_sessions", "instructor_id"):
-        op.add_column("training_sessions", sa.Column("instructor_id", sa.String(36), nullable=True))
-        op.create_foreign_key(
-            "fk_training_sessions_instructor_id", "training_sessions", "users",
-            ["instructor_id"], ["id"], ondelete="SET NULL",
+    if _table_exists(conn, "training_sessions") and not _column_exists(
+        conn, "training_sessions", "instructor_id"
+    ):
+        op.add_column(
+            "training_sessions",
+            sa.Column("instructor_id", sa.String(36), nullable=True),
         )
-        op.create_index("ix_training_sessions_instructor_id", "training_sessions", ["instructor_id"])
+        op.create_foreign_key(
+            "fk_training_sessions_instructor_id",
+            "training_sessions",
+            "users",
+            ["instructor_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
+        op.create_index(
+            "ix_training_sessions_instructor_id", "training_sessions", ["instructor_id"]
+        )
 
     # ── training_sessions.co_instructors JSON ──
-    if _table_exists(conn, "training_sessions") and not _column_exists(conn, "training_sessions", "co_instructors"):
-        op.add_column("training_sessions", sa.Column("co_instructors", sa.JSON, nullable=True))
+    if _table_exists(conn, "training_sessions") and not _column_exists(
+        conn, "training_sessions", "co_instructors"
+    ):
+        op.add_column(
+            "training_sessions", sa.Column("co_instructors", sa.JSON, nullable=True)
+        )
 
     # ── training_sessions.apparatus_id FK → apparatus.id ──
-    if _table_exists(conn, "training_sessions") and not _column_exists(conn, "training_sessions", "apparatus_id"):
-        op.add_column("training_sessions", sa.Column("apparatus_id", sa.String(36), nullable=True))
+    if _table_exists(conn, "training_sessions") and not _column_exists(
+        conn, "training_sessions", "apparatus_id"
+    ):
+        op.add_column(
+            "training_sessions", sa.Column("apparatus_id", sa.String(36), nullable=True)
+        )
         # Only add FK if apparatus table exists (module may be disabled)
         if _table_exists(conn, "apparatus"):
             op.create_foreign_key(
-                "fk_training_sessions_apparatus_id", "training_sessions", "apparatus",
-                ["apparatus_id"], ["id"], ondelete="SET NULL",
+                "fk_training_sessions_apparatus_id",
+                "training_sessions",
+                "apparatus",
+                ["apparatus_id"],
+                ["id"],
+                ondelete="SET NULL",
             )
-        op.create_index("ix_training_sessions_apparatus_id", "training_sessions", ["apparatus_id"])
+        op.create_index(
+            "ix_training_sessions_apparatus_id", "training_sessions", ["apparatus_id"]
+        )
 
     # ── training_records.apparatus_id FK → apparatus.id ──
-    if _table_exists(conn, "training_records") and not _column_exists(conn, "training_records", "apparatus_id"):
-        op.add_column("training_records", sa.Column("apparatus_id", sa.String(36), nullable=True))
+    if _table_exists(conn, "training_records") and not _column_exists(
+        conn, "training_records", "apparatus_id"
+    ):
+        op.add_column(
+            "training_records", sa.Column("apparatus_id", sa.String(36), nullable=True)
+        )
         if _table_exists(conn, "apparatus"):
             op.create_foreign_key(
-                "fk_training_records_apparatus_id", "training_records", "apparatus",
-                ["apparatus_id"], ["id"], ondelete="SET NULL",
+                "fk_training_records_apparatus_id",
+                "training_records",
+                "apparatus",
+                ["apparatus_id"],
+                ["id"],
+                ondelete="SET NULL",
             )
-        op.create_index("ix_training_records_apparatus_id", "training_records", ["apparatus_id"])
+        op.create_index(
+            "ix_training_records_apparatus_id", "training_records", ["apparatus_id"]
+        )
 
     # ── skill_checkoffs.session_id FK → training_sessions.id ──
-    if _table_exists(conn, "skill_checkoffs") and not _column_exists(conn, "skill_checkoffs", "session_id"):
-        op.add_column("skill_checkoffs", sa.Column("session_id", sa.String(36), nullable=True))
-        op.create_foreign_key(
-            "fk_skill_checkoffs_session_id", "skill_checkoffs", "training_sessions",
-            ["session_id"], ["id"], ondelete="SET NULL",
+    if _table_exists(conn, "skill_checkoffs") and not _column_exists(
+        conn, "skill_checkoffs", "session_id"
+    ):
+        op.add_column(
+            "skill_checkoffs", sa.Column("session_id", sa.String(36), nullable=True)
         )
-        op.create_index("ix_skill_checkoffs_session_id", "skill_checkoffs", ["session_id"])
+        op.create_foreign_key(
+            "fk_skill_checkoffs_session_id",
+            "skill_checkoffs",
+            "training_sessions",
+            ["session_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
+        op.create_index(
+            "ix_skill_checkoffs_session_id", "skill_checkoffs", ["session_id"]
+        )
 
     # ── skill_checkoffs.apparatus_id FK → apparatus.id ──
-    if _table_exists(conn, "skill_checkoffs") and not _column_exists(conn, "skill_checkoffs", "apparatus_id"):
-        op.add_column("skill_checkoffs", sa.Column("apparatus_id", sa.String(36), nullable=True))
+    if _table_exists(conn, "skill_checkoffs") and not _column_exists(
+        conn, "skill_checkoffs", "apparatus_id"
+    ):
+        op.add_column(
+            "skill_checkoffs", sa.Column("apparatus_id", sa.String(36), nullable=True)
+        )
         if _table_exists(conn, "apparatus"):
             op.create_foreign_key(
-                "fk_skill_checkoffs_apparatus_id", "skill_checkoffs", "apparatus",
-                ["apparatus_id"], ["id"], ondelete="SET NULL",
+                "fk_skill_checkoffs_apparatus_id",
+                "skill_checkoffs",
+                "apparatus",
+                ["apparatus_id"],
+                ["id"],
+                ondelete="SET NULL",
             )
-        op.create_index("ix_skill_checkoffs_apparatus_id", "skill_checkoffs", ["apparatus_id"])
+        op.create_index(
+            "ix_skill_checkoffs_apparatus_id", "skill_checkoffs", ["apparatus_id"]
+        )
 
     # ── skill_checkoffs.conditions JSON ──
-    if _table_exists(conn, "skill_checkoffs") and not _column_exists(conn, "skill_checkoffs", "conditions"):
-        op.add_column("skill_checkoffs", sa.Column("conditions", sa.JSON, nullable=True))
+    if _table_exists(conn, "skill_checkoffs") and not _column_exists(
+        conn, "skill_checkoffs", "conditions"
+    ):
+        op.add_column(
+            "skill_checkoffs", sa.Column("conditions", sa.JSON, nullable=True)
+        )
 
     # ── Create event_external_attendees table ──
     if not _table_exists(conn, "event_external_attendees"):
         op.create_table(
             "event_external_attendees",
             sa.Column("id", sa.String(36), primary_key=True),
-            sa.Column("organization_id", sa.String(36), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
-            sa.Column("event_id", sa.String(36), sa.ForeignKey("events.id", ondelete="CASCADE"), nullable=False),
+            sa.Column(
+                "organization_id",
+                sa.String(36),
+                sa.ForeignKey("organizations.id", ondelete="CASCADE"),
+                nullable=False,
+            ),
+            sa.Column(
+                "event_id",
+                sa.String(36),
+                sa.ForeignKey("events.id", ondelete="CASCADE"),
+                nullable=False,
+            ),
             # Attendee info
             sa.Column("name", sa.String(255), nullable=False),
             sa.Column("email", sa.String(255), nullable=True),
@@ -164,11 +258,22 @@ def upgrade() -> None:
             sa.Column("source_id", sa.String(36), nullable=True),
             sa.Column("notes", sa.Text, nullable=True),
             # Timestamps
-            sa.Column("created_at", sa.DateTime, nullable=False, server_default=sa.func.now()),
-            sa.Column("created_by", sa.String(36), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+            sa.Column(
+                "created_at", sa.DateTime, nullable=False, server_default=sa.func.now()
+            ),
+            sa.Column(
+                "created_by",
+                sa.String(36),
+                sa.ForeignKey("users.id", ondelete="SET NULL"),
+                nullable=True,
+            ),
         )
-        op.create_index("ix_ext_attendees_event_id", "event_external_attendees", ["event_id"])
-        op.create_index("ix_ext_attendees_org_id", "event_external_attendees", ["organization_id"])
+        op.create_index(
+            "ix_ext_attendees_event_id", "event_external_attendees", ["event_id"]
+        )
+        op.create_index(
+            "ix_ext_attendees_org_id", "event_external_attendees", ["organization_id"]
+        )
         op.create_index("ix_ext_attendees_email", "event_external_attendees", ["email"])
 
     # ── Extend form_integrations enum values ──
@@ -177,9 +282,14 @@ def upgrade() -> None:
     if _table_exists(conn, "form_integrations"):
         try:
             op.alter_column(
-                "form_integrations", "target_module",
-                type_=sa.Enum("membership", "inventory", "events", name="integrationtarget"),
-                existing_type=sa.Enum("membership", "inventory", name="integrationtarget"),
+                "form_integrations",
+                "target_module",
+                type_=sa.Enum(
+                    "membership", "inventory", "events", name="integrationtarget"
+                ),
+                existing_type=sa.Enum(
+                    "membership", "inventory", name="integrationtarget"
+                ),
                 existing_nullable=False,
             )
         except Exception:
@@ -187,9 +297,19 @@ def upgrade() -> None:
 
         try:
             op.alter_column(
-                "form_integrations", "integration_type",
-                type_=sa.Enum("membership_interest", "equipment_assignment", "event_registration", name="integrationtype"),
-                existing_type=sa.Enum("membership_interest", "equipment_assignment", name="integrationtype"),
+                "form_integrations",
+                "integration_type",
+                type_=sa.Enum(
+                    "membership_interest",
+                    "equipment_assignment",
+                    "event_registration",
+                    name="integrationtype",
+                ),
+                existing_type=sa.Enum(
+                    "membership_interest",
+                    "equipment_assignment",
+                    name="integrationtype",
+                ),
                 existing_nullable=False,
             )
         except Exception:
@@ -223,13 +343,19 @@ def downgrade() -> None:
     if _table_exists(conn, "form_integrations"):
         try:
             op.alter_column(
-                "form_integrations", "target_module",
+                "form_integrations",
+                "target_module",
                 type_=sa.Enum("membership", "inventory", name="integrationtarget"),
                 existing_nullable=False,
             )
             op.alter_column(
-                "form_integrations", "integration_type",
-                type_=sa.Enum("membership_interest", "equipment_assignment", name="integrationtype"),
+                "form_integrations",
+                "integration_type",
+                type_=sa.Enum(
+                    "membership_interest",
+                    "equipment_assignment",
+                    name="integrationtype",
+                ),
                 existing_nullable=False,
             )
         except Exception:

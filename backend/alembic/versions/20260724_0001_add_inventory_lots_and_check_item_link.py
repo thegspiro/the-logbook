@@ -51,9 +51,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["inventory_item_id"], ["inventory_items.id"], ondelete="CASCADE"
         ),
-        sa.ForeignKeyConstraint(
-            ["created_by"], ["users.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
