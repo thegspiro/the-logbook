@@ -76,8 +76,7 @@ Click on any member in the directory to view their profile. The profile page inc
 - **Quick Stats** - Training count, total hours, assigned equipment count
 - **Leave of Absence** - Any active leave periods (shown if applicable)
 
-> **Screenshot placeholder:**
-> _[Screenshot of a member profile page showing the two-column layout. Left side shows profile photo, compliance summary card (green/yellow/red indicator), basic info card, and training records table. Right side shows contact info, emergency contacts, and roles sections]_
+![Member profile page with the photo, compliance summary, and detail panels](./images/01-02-member-profile.png)
 
 ### Profile Photo Upload
 

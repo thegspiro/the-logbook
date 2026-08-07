@@ -368,7 +368,7 @@ Navigate to **Settings > Pipeline** and configure:
 
 Individual stages can override the pipeline timeout. For example, a background check stage might have a 180-day timeout (longer than the default 90 days) because background checks take time.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Inactivity Configuration panel showing the timeout preset dropdown, warning threshold slider, notify coordinator toggle, and auto-purge toggle with purge days input._
+![Prospective members settings showing the inactivity configuration panel](./images/15-10-pipeline-settings.png)
 
 ---
 

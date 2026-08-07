@@ -40,8 +40,7 @@ When your department first sets up The Logbook, this checklist guides you throug
 
 Each step shows its completion status. You can return to any step to update the configuration.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Department Setup Checklist page showing a vertical checklist of steps with green checkmarks for completed steps, a blue circle for the current step, and gray circles for incomplete steps. Show step titles like "Department Profile", "Member Import", "Configure Roles", "Enable Modules"]_
+![Department setup checklist with each step and its completion state](./images/08-01-setup-checklist.png)
 
 > **Hint:** The setup checklist is always accessible even after initial setup. Use it as a reference to verify your department's configuration is complete.
 

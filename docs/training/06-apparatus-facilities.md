@@ -68,8 +68,7 @@ Click on any apparatus to view its complete record:
 - **Status History** - Timeline of status changes
 - **Custom Fields** - Department-defined additional fields
 
-> **Screenshot placeholder:**
-> _[Screenshot of an apparatus detail page showing the unit header (photo, name, status), tabbed sections for maintenance, fuel, equipment, etc., and the overview card with VIN, plate, year, make, model]_
+![Apparatus detail page with the unit header and tabbed sections](./images/06-03-apparatus-detail.png)
 
 ---
 
@@ -196,8 +195,7 @@ Click on any facility from the dashboard to open its full-page detail view at `/
 | **Occupants** | Organizations or units housed in the facility |
 | **Compliance** | Compliance checklists for fire code, ADA, and other standards |
 
-> **Screenshot needed:**
-> _[Screenshot of the Facility Detail page showing the sidebar navigation on the left (Overview, Rooms, Systems, Maintenance, etc. with the Rooms section highlighted) and the main content area on the right showing a list of rooms with name, purpose, capacity, and NFPA zone classification badges (Hot Zone in red, Transition Zone in yellow, Cold Zone in green)]_
+![Facility detail page with its sidebar navigation and content area](./images/06-11-facility-detail.png)
 
 > **Edge case:** If a facility was created during onboarding, it is automatically linked to a Location record so it appears in the Events location picker. Rooms added later also auto-create Location records. If you delete a room, its linked Location record is preserved (with a note that the room was removed) to avoid breaking existing event references.
 
@@ -232,8 +230,7 @@ The **Maintenance** tab (at the facility level or the department-wide view) trac
 4. Set the scheduled or completed date.
 5. Save.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the facility maintenance tab showing upcoming maintenance items as cards with priority badges (green/yellow/red), and a completed maintenance timeline below]_
+![Facility maintenance view with upcoming items and completed history](./images/06-13-facility-maintenance.png)
 
 ---
 
@@ -256,8 +253,7 @@ The **Inspections** tab tracks scheduled and completed facility inspections:
 5. Upload inspection reports or photos.
 6. Save.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Inspections tab showing a table of inspections with facility name, type, date, inspector, and result (Pass in green, Fail in red, Pending in yellow)]_
+![Facility inspections table with type, date, inspector, and result](./images/06-14-facility-inspections.png)
 
 ---
 

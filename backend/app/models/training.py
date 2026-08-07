@@ -1535,6 +1535,13 @@ class ProgramEnrollment(Base):
     withdrawn_at = Column(DateTime(timezone=True))
     withdrawal_reason = Column(Text)
 
+    # Free-text note captured when an officer enrols the member. Part of the
+    # enrollment request/response contract (ProgramEnrollmentBase.notes) since
+    # the schema was written, but the column was never added — so
+    # enroll_member()'s `notes=` kwarg raised TypeError and every enrollment
+    # attempt 500'd.
+    notes = Column(Text)
+
     # Deadline Tracking
     deadline_warning_sent = Column(Boolean, default=False)
     deadline_warning_sent_at = Column(DateTime(timezone=True))

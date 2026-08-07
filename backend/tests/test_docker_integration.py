@@ -14,6 +14,7 @@ run or excluded selectively.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import time
@@ -47,7 +48,55 @@ def _docker_daemon_running() -> bool:
         return False
 
 
+def _base_images() -> list[str]:
+    """Base images the Dockerfiles pull, read from their FROM lines.
+
+    Read rather than hard-coded so the reachability probe below keeps testing
+    the images actually in use after a base-image bump.
+    """
+    images = []
+    for dockerfile in (BACKEND_DIR / "Dockerfile", FRONTEND_DIR / "Dockerfile"):
+        if not dockerfile.exists():
+            continue
+        for line in dockerfile.read_text().splitlines():
+            if not line.upper().startswith("FROM "):
+                continue
+            image = line.split()[1]
+            # Skip references to earlier stages in the same file — only the
+            # external images are fetched from a registry.
+            if ":" in image:
+                images.append(image)
+    return sorted(set(images))
+
+
+def _registry_reachable() -> bool:
+    """Whether the base images can actually be resolved from the registry.
+
+    A running daemon is not sufficient: behind a proxy that blocks the registry
+    CDN, `docker build` dies at "load metadata for ..." with a 403 and the build
+    tests fail for a reason that has nothing to do with the Dockerfiles. That is
+    an unavailable prerequisite, so the tests should skip the way they do when
+    the daemon is missing.
+
+    Deliberately probes only image *resolution*. A failure inside a RUN step is
+    a real defect and still fails the test.
+    """
+    for image in _base_images():
+        try:
+            result = subprocess.run(
+                ["docker", "manifest", "inspect", image],
+                capture_output=True,
+                timeout=60,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return False
+        if result.returncode != 0:
+            return False
+    return True
+
+
 _docker_ready = _docker_daemon_running()
+_registry_ready = _docker_ready and _registry_reachable()
 
 pytestmark = [
     pytest.mark.docker,
@@ -58,6 +107,13 @@ pytestmark = [
         reason="Docker daemon is not available — skipping container tests",
     ),
 ]
+
+# Config-only tests parse compose files and need no registry; the build and
+# runtime tests do, so they carry the extra guard.
+requires_registry = pytest.mark.skipif(
+    not _registry_ready,
+    reason="Docker registry is unreachable — cannot pull base images",
+)
 
 # Test-specific image tag prefix to avoid clashing with real builds
 _TAG_PREFIX = "logbook-test"
@@ -239,6 +295,7 @@ def _wait_for_healthy(container: str, timeout: int = 120) -> bool:
 # ===========================================================================
 
 
+@requires_registry
 class TestBackendImageBuild:
     """Test that the backend Docker image builds successfully for each stage."""
 
@@ -337,6 +394,7 @@ class TestBackendImageBuild:
 # ===========================================================================
 
 
+@requires_registry
 class TestFrontendImageBuild:
     """Test that the frontend Docker image builds successfully."""
 
@@ -686,9 +744,33 @@ class TestDockerComposeConfig:
     Validate docker-compose configuration using 'docker compose config'.
     This catches variable interpolation errors, invalid references, and
     schema issues that static YAML parsing alone cannot detect.
+
+    The compose files mark several variables required (``${VAR:?...}``), so
+    without values `config` aborts on the first one and validates nothing. Those
+    values come from the developer's own `.env`, which makes the result depend
+    on local setup: on a checkout that has not run `cp .env.example .env` these
+    tests fail with a missing-variable error that says nothing about the compose
+    files. Supplying throwaway values here keeps the test hermetic and keeps it
+    testing what it is named for — the structure of the compose files.
     """
 
     _compose_available = shutil.which("docker") is not None
+
+    # Placeholders only: `config` interpolates and discards them, and nothing is
+    # started. Values are shaped to satisfy any length or format expectations.
+    _COMPOSE_ENV = {
+        "SECRET_KEY": "x" * 64,
+        "ENCRYPTION_KEY": "0" * 64,
+        "ENCRYPTION_SALT": "0" * 32,
+        "DB_PASSWORD": "test-db-password",
+        "MYSQL_ROOT_PASSWORD": "test-root-password",
+        "REDIS_PASSWORD": "test-redis-password",
+    }
+
+    @classmethod
+    def _env(cls) -> dict:
+        """Process environment plus the variables compose requires."""
+        return {**os.environ, **cls._COMPOSE_ENV}
 
     @pytest.mark.skipif(
         not _compose_available,
@@ -699,6 +781,7 @@ class TestDockerComposeConfig:
             ["docker", "compose", "-f", "docker-compose.yml", "config", "--quiet"],
             timeout=30,
             cwd=str(ROOT_DIR),
+            env=self._env(),
         )
         assert (
             result.returncode == 0
@@ -722,6 +805,7 @@ class TestDockerComposeConfig:
             ],
             timeout=30,
             cwd=str(ROOT_DIR),
+            env=self._env(),
         )
         assert (
             result.returncode == 0
@@ -748,6 +832,7 @@ class TestDockerComposeConfig:
             ],
             timeout=30,
             cwd=str(ROOT_DIR),
+            env=self._env(),
         )
         assert (
             result.returncode == 0
