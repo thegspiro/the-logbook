@@ -16,4 +16,9 @@ export type {
   MessageHistoryRecord,
   MessageHistoryListResponse,
   SendTestEmailRequest,
+  DepartmentOfficer,
+  OfficerCandidate,
+  OfficerDirectory,
+  OfficerUpdate,
+  OfficerVariable,
 } from '../../../services/api';

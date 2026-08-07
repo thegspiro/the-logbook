@@ -90,6 +90,7 @@ export {
   scheduledEmailsService,
   messagesService,
   messageHistoryService,
+  officersService,
 } from './communicationsServices';
 export type {
   DashboardStats, AdminSummary, ActionItemSummary, CommunityEngagement,
@@ -97,6 +98,7 @@ export type {
   ScheduledEmail, ScheduledEmailCreate, ScheduledEmailUpdate,
   MessageHistoryRecord, MessageHistoryListResponse, SendTestEmailRequest,
   Location, LocationCreate,
+  DepartmentOfficer, OfficerCandidate, OfficerDirectory, OfficerUpdate, OfficerVariable,
 } from './communicationsServices';
 
 // Facilities, Locations, Ranks

@@ -23,9 +23,11 @@ import {
   History,
   RotateCcw,
   Send,
+  UserCheck,
 } from 'lucide-react';
 import { Breadcrumbs, ConfirmDialog, SkeletonPage } from '../../../components/ux';
 import { useEmailTemplatesStore } from '../store/emailTemplatesStore';
+import { useOfficersStore } from '../store/officersStore';
 import { emailTemplatesService, userService } from '../../../services/api';
 import { TemplateList } from '../components/TemplateList';
 import { TemplateEditor } from '../components/TemplateEditor';
@@ -33,6 +35,7 @@ import { TemplatePreview } from '../components/TemplatePreview';
 import ScheduleEmailForm from '../components/ScheduleEmailForm';
 import ScheduledEmailList from '../components/ScheduledEmailList';
 import MessageHistoryList from '../components/MessageHistoryList';
+import OfficersPanel from '../components/OfficersPanel';
 import type { EmailTemplateUpdate, EmailAttachment } from '../types';
 import toast from 'react-hot-toast';
 
@@ -70,7 +73,12 @@ const EmailTemplatesPage: React.FC = () => {
   const [isTogglingActive, setIsTogglingActive] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [, setIsDirty] = useState(false);
-  const [activeTab, setActiveTab] = useState<'templates' | 'scheduled' | 'history'>('templates');
+  const officerVariables = useOfficersStore((s) => s.variables);
+  const fetchOfficers = useOfficersStore((s) => s.fetchOfficers);
+
+  const [activeTab, setActiveTab] = useState<'templates' | 'officers' | 'scheduled' | 'history'>(
+    'templates',
+  );
   const [editorView, setEditorView] = useState<'edit' | 'preview'>('edit');
   const [showScheduleForm, setShowScheduleForm] = useState(false);
   const [members, setMembers] = useState<PreviewMember[]>([]);
@@ -83,6 +91,9 @@ const EmailTemplatesPage: React.FC = () => {
 
   useEffect(() => {
     void fetchTemplates();
+    // Loaded up front (not only on the Officers tab) so the editor's
+    // signature-variable palette is populated on first render.
+    void fetchOfficers();
     // Fetch org members for the preview dropdown
     setIsLoadingMembers(true);
     void userService
@@ -102,7 +113,7 @@ const EmailTemplatesPage: React.FC = () => {
         // Non-critical — member dropdown will just be empty
       })
       .finally(() => setIsLoadingMembers(false));
-  }, [fetchTemplates]);
+  }, [fetchTemplates, fetchOfficers]);
 
   // Auto-select first template when loaded
   useEffect(() => {
@@ -282,6 +293,17 @@ const EmailTemplatesPage: React.FC = () => {
             Templates
           </button>
           <button
+            onClick={() => setActiveTab('officers')}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'officers'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-theme-text-secondary hover:text-theme-text-primary'
+            }`}
+          >
+            <UserCheck className="h-4 w-4" />
+            Officers
+          </button>
+          <button
             onClick={() => setActiveTab('scheduled')}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'scheduled'
@@ -320,6 +342,11 @@ const EmailTemplatesPage: React.FC = () => {
               <X className="w-4 h-4" />
             </button>
           </div>
+        )}
+
+        {/* Officers Tab */}
+        {activeTab === 'officers' && (
+          <OfficersPanel members={members} isLoadingMembers={isLoadingMembers} />
         )}
 
         {/* Scheduled Emails Tab */}
@@ -450,6 +477,7 @@ const EmailTemplatesPage: React.FC = () => {
                         isSaving={isSaving}
                         onSave={(data) => { void handleSave(data); }}
                         onDirtyChange={setIsDirty}
+                        officerVariables={officerVariables}
                       />
 
                       {/* Attachments section */}

@@ -40,6 +40,7 @@ const UNCACHEABLE_PREFIXES = [
   '/notifications/my/', // user-specific notification state
   '/notifications/logs', // delivery logs: recipient identities (PII)
   '/email-templates/scheduled', // scheduled emails: recipient PII
+  '/officers',        // office holders: member names, emails, phone numbers (PII)
   '/training/waivers',  // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
   '/training/shift-reports/', // attendance/location data
