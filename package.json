@@ -8,6 +8,7 @@
     "frontend"
   ],
   "scripts": {
+    "prepare": "husky",
     "setup": "npm install && npm run setup:backend && npm run setup:frontend",
     "setup:backend": "cd backend && pip install -r requirements.txt",
     "setup:frontend": "cd frontend && npm install",
@@ -87,6 +88,9 @@
       "bash -c 'cd backend && python -m black --check \"$@\"' --",
       "bash -c 'cd backend && python -m flake8 \"$@\"' --",
       "bash -c 'cd backend && python -m isort --check-only \"$@\"' --"
+    ],
+    "{generate_registry.py,scripts/**/*.py}": [
+      "bash -c 'python -m flake8 --config backend/.flake8 \"$@\"' --"
     ]
   },
   "overrides": {
