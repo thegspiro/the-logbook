@@ -1,6 +1,6 @@
 """Add push_subscriptions table for Web Push delivery.
 
-Revision ID: 20260807_0001
+Revision ID: 20260807_0002
 Revises: 20260805_0011
 Create Date: 2026-08-07
 
@@ -8,11 +8,11 @@ Stores one Web Push endpoint per browser/device per user, so a member who
 installs the PWA on both a phone and a station tablet is reached on both.
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
-revision = "20260807_0001"
+revision = "20260807_0002"
 down_revision = "20260805_0011"
 branch_labels = None
 depends_on = None
@@ -64,7 +64,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_push_subscriptions_user_id"), table_name="push_subscriptions")
+    op.drop_index(
+        op.f("ix_push_subscriptions_user_id"), table_name="push_subscriptions"
+    )
     op.drop_index(
         op.f("ix_push_subscriptions_organization_id"),
         table_name="push_subscriptions",
