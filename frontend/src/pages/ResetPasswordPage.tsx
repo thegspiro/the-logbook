@@ -190,15 +190,15 @@ export const ResetPasswordPage: React.FC = () => {
         <div className="card p-8">
           <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
             {error && (
-              <div className="rounded-md bg-red-500/20 border border-red-500/50 p-4" role="alert" aria-live="polite">
+              <div className="rounded-md bg-theme-alert-danger-bg border border-theme-alert-danger-border p-4" role="alert" aria-live="polite">
                 <div className="flex">
                   <div className="shrink-0">
-                    <svg className="h-5 w-5 text-red-700 dark:text-red-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <svg className="h-5 w-5 text-theme-alert-danger-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-red-800 dark:text-red-200">{error}</p>
+                    <p className="text-sm font-medium text-theme-alert-danger-text">{error}</p>
                   </div>
                 </div>
               </div>
