@@ -101,7 +101,7 @@ export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <form onSubmit={(e) => void handleSubmit(e)} className="max-h-[70vh] space-y-4 overflow-y-auto p-6">
+        <form onSubmit={(e) => void handleSubmit(e)} className="max-h-[70dvh] space-y-4 overflow-y-auto p-6">
           {!record && (
             <div>
               <label htmlFor="rec-requirement" className={labelClass}>

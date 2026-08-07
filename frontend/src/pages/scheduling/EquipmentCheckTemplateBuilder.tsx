@@ -3380,7 +3380,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="max-h-[60vh] overflow-auto px-6 py-4">
+            <div className="max-h-[60dvh] overflow-auto px-6 py-4">
               {changelogLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
@@ -3454,7 +3454,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="max-h-[60vh] overflow-auto px-6 py-4">
+            <div className="max-h-[60dvh] overflow-auto px-6 py-4">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-theme-surface-border text-left text-theme-text-secondary">

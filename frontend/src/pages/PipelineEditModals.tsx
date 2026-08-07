@@ -59,7 +59,7 @@ const ModalShell: React.FC<{
     aria-label={title}
     onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
   >
-    <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] flex flex-col">
+    <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90dvh] flex flex-col">
       <div className="p-5 border-b border-theme-surface-border flex items-center justify-between">
         <h2 className="text-lg font-bold text-theme-text-primary">{title}</h2>
         <button type="button" onClick={onClose} aria-label="Close" className="text-theme-text-muted hover:text-theme-text-primary">

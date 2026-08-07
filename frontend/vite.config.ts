@@ -53,10 +53,24 @@ export default defineConfig({
         ],
       },
       manifest: {
+        // `id` pins the app's identity across deploys. Without it the identity
+        // is derived from start_url, so changing that URL later would register
+        // as a *different* app and install a duplicate alongside the first.
+        id: '/',
         name: 'The Logbook',
         short_name: 'Logbook',
         description:
           'Volunteer Fire Department Intranet - Secure & Built with HIPAA Requirements in Mind',
+        // Without an explicit start_url the spec defaults to the URL the app
+        // was installed from — so a member who installed while viewing
+        // /events/abc123 would get an app that always reopens that event.
+        start_url: '/',
+        scope: '/',
+        // The app is form-heavy and table-heavy; leaving orientation
+        // unlocked lets members rotate to landscape to read wide tables.
+        orientation: 'any',
+        lang: 'en-US',
+        dir: 'ltr',
         theme_color: '#991b1b',
         background_color: '#0f172a',
         display: 'standalone',

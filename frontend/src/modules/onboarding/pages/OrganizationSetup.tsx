@@ -698,7 +698,7 @@ const OrganizationSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4 relative">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-pt-8 pb-8 px-4 relative">
       <ThemeToggle className="absolute top-4 right-4" />
       <div className="max-w-3xl mx-auto">
         {/* Back Button */}
@@ -1185,7 +1185,7 @@ const OrganizationSetup: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="pt-4 sticky bottom-0 md:relative bg-linear-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-4 md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
+          <div className="pt-4 sticky bottom-0 md:relative bg-linear-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-0 -mx-6 px-6 md:mx-0 md:px-0">
             <button
               onClick={() => { void handleContinue(); }}
               disabled={isSaving}

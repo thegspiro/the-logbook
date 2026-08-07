@@ -248,14 +248,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const accountActive = isActive('/account');
 
   return (
-    <header className="border-b" style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }} role="banner">
+    <header className="border-b safe-top" style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }} role="banner">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Department Name */}
           <a href="/dashboard" className="flex items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 rounded-lg">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
               <img
-                src={logoPreview || '/logo.png'}
+                src={logoPreview || '/logo-128.png'}
                 alt={`${departmentName} logo`}
                 className="max-w-full max-h-full object-contain"
               />
@@ -490,7 +490,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       <button
                         onClick={() => toggleMobileMenu(item.label)}
                         aria-expanded={isExpanded}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                        className={`w-full flex items-center justify-between px-3 py-2 min-h-[44px] rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                           isParentActive(item) ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                         }`}
                       >
@@ -512,7 +512,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                               href={subItem.path}
                               onClick={(e) => handleNavigation(subItem.path, e)}
                               aria-current={subActive ? 'page' : undefined}
-                              className={`block px-3 py-2 rounded-md text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                              className={`flex items-center px-3 py-2 min-h-[44px] rounded-md text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                                 subActive
                                   ? 'bg-red-600 text-white'
                                   : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
@@ -534,7 +534,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                     href={item.path}
                     onClick={(e) => handleNavigation(item.path, e)}
                     aria-current={isActive(item.path) ? 'page' : undefined}
-                    className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                    className={`flex items-center px-3 py-2 min-h-[44px] rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                       isActive(item.path) ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                     }`}
                   >

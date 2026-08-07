@@ -378,7 +378,7 @@ export const ReportsPage: React.FC = () => {
         return <PipelineOverviewRenderer data={data as PipelineOverviewReport} />;
       default:
         return (
-          <pre className="text-theme-text-secondary max-h-[50vh] overflow-auto text-sm whitespace-pre-wrap">
+          <pre className="text-theme-text-secondary max-h-[50dvh] overflow-auto text-sm whitespace-pre-wrap">
             {JSON.stringify(data, null, 2)}
           </pre>
         );

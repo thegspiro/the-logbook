@@ -126,7 +126,7 @@ const PreMeetingPackageModal: React.FC<PreMeetingPackageModalProps> = ({
       aria-labelledby="premeeting-package-modal-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full max-h-[90dvh] overflow-y-auto">
         <div className="px-6 py-4 border-b border-theme-surface-border">
           <h3
             id="premeeting-package-modal-title"

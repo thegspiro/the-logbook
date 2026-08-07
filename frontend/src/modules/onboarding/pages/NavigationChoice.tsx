@@ -73,7 +73,7 @@ const NavigationChoice: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col">
+    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col safe-top">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<LayoutDashboard aria-hidden="true" className="w-6 h-6 text-white" />} />
 
       {/* Main Content */}
@@ -293,7 +293,7 @@ const NavigationChoice: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          <div className="max-w-md mx-auto sticky bottom-0 md:relative bg-linear-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-4 md:pb-0">
+          <div className="max-w-md mx-auto sticky bottom-0 md:relative bg-linear-to-t from-theme-bg-to via-theme-bg-to to-transparent md:bg-none pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-0">
             <button
               onClick={() => { void handleContinue(); }}
               disabled={!navigationLayout || isSaving}

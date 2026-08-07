@@ -288,7 +288,7 @@ function LocationSetupWizard({
   /* ── Render ── */
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-2xl max-w-lg w-full max-h-[90dvh] flex flex-col overflow-hidden">
         {/* Progress bar */}
         <div className="px-6 pt-5 pb-2">
           <div className="flex items-center justify-between mb-2">

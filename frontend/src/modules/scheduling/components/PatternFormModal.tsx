@@ -69,7 +69,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
       aria-labelledby="pattern-modal-title"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90dvh] overflow-y-auto">
         <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
           <h2 id="pattern-modal-title" className="text-xl font-bold text-theme-text-primary">{title}</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">

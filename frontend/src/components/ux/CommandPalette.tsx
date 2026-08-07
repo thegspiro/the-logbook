@@ -175,7 +175,7 @@ export const CommandPalette: React.FC = () => {
         onClick={() => setIsOpen(false)}
         aria-hidden="true"
       />
-      <div className="relative flex items-start justify-center min-h-screen pt-[15vh] px-4">
+      <div className="relative flex items-start justify-center min-h-screen pt-[15dvh] px-4">
         <div
           className="w-full max-w-lg bg-theme-surface-modal rounded-xl shadow-2xl border border-theme-surface-border overflow-hidden"
           role="dialog"

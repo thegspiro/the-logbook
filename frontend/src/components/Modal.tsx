@@ -145,7 +145,7 @@ export const Modal: React.FC<ModalProps> = ({
         {/* Modal panel */}
         <div
           ref={modalRef}
-          className={`relative z-10 inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} w-full max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] overflow-y-auto`}
+          className={`relative z-10 inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle ${sizeClasses[size]} w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)] overflow-y-auto`}
           data-testid="modal-panel"
           tabIndex={-1}
         >

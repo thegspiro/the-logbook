@@ -157,7 +157,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           logoPreview={logoPreview}
           onLogout={handleLogoutClick}
         />
-        <div className="md:ml-64 min-h-screen flex flex-col pt-16 md:pt-0">
+        <div className="md:ml-64 min-h-screen flex flex-col mobile-header-offset">
           <div className="flex-1" id="main-content" role="main">
             <PageTransition>
               {content}
@@ -181,6 +181,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
       <TopProgressBar />
+      <PullToRefreshIndicator
+        pulling={pulling}
+        refreshing={refreshing}
+        pullDistance={pullDistance}
+      />
       <CommandPalette />
       {/* Skip to main content link for keyboard users */}
       <a

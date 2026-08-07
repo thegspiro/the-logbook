@@ -278,7 +278,7 @@ export const LoginPage: React.FC = () => {
             <div className="flex justify-center">
               <div className="h-36 max-w-[18rem] rounded-lg overflow-hidden shadow-md flex items-center justify-center">
                 <img
-                  src={branding.logo || '/logo.png'}
+                  src={branding.logo || '/logo-256.png'}
                   alt={branding.name ? `${branding.name} logo` : 'The Logbook logo'}
                   className="max-h-full max-w-full object-contain"
                 />
@@ -353,7 +353,7 @@ export const LoginPage: React.FC = () => {
           <div className="flex justify-center">
             <div className="h-36 max-w-[18rem] rounded-lg overflow-hidden shadow-md flex items-center justify-center">
               <img
-                src={branding.logo || '/logo.png'}
+                src={branding.logo || '/logo-256.png'}
                 alt={branding.name ? `${branding.name} logo` : 'The Logbook logo'}
                 className="max-h-full max-w-full object-contain"
               />
