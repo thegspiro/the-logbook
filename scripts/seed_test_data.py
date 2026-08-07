@@ -150,7 +150,7 @@ def login():
 
 
 def rand_phone():
-    return f"555-{random.randint(100,999)}-{random.randint(1000,9999)}"
+    return f"555-{random.randint(100, 999)}-{random.randint(1000, 9999)}"
 
 
 def rand_date(start_year: int, end_year: int) -> str:
@@ -242,10 +242,10 @@ def create_member(idx: int) -> Optional[dict]:
         "hire_date": hire_date,
         "rank": rank,
         "station": station,
-        "address_street": f"{random.randint(100,9999)} {random.choice(STREETS)}",
+        "address_street": f"{random.randint(100, 9999)} {random.choice(STREETS)}",
         "address_city": city,
         "address_state": state,
-        "address_zip": f"{random.randint(10000,99999)}",
+        "address_zip": f"{random.randint(10000, 99999)}",
         "emergency_contacts": [
             {
                 "name": f"{ec_first} {ec_last}",
@@ -265,7 +265,7 @@ def create_member(idx: int) -> Optional[dict]:
     else:
         # Membership number collision — retry with different number
         if resp.status_code == 409 or "already" in resp.text.lower():
-            payload["membership_number"] = f"{random.randint(10000,99999)}"
+            payload["membership_number"] = f"{random.randint(10000, 99999)}"
             payload["username"] = f"{username}x"
             payload["email"] = f"{username}x@testdept.example.com"
             resp2 = session.post(f"{API}/users", json=payload)
@@ -354,7 +354,7 @@ def create_training_records(user: dict):
             payload["expiration_date"] = expiration
         if status == "completed" and random.random() < 0.5:
             payload["certification_number"] = (
-                f"{tc['code']}-{completion.year}-{random.randint(1000,9999)}"
+                f"{tc['code']}-{completion.year}-{random.randint(1000, 9999)}"
             )
             payload["issuing_agency"] = random.choice(ISSUING_AGENCIES)
 
