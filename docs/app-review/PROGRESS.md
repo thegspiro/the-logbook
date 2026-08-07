@@ -39,35 +39,41 @@ from its open list.
 
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
-| B1 | medical-screening | MS2 | ✅ |
-| B2 | apparatus | AP2 | ✅ |
-| B3 | inventory | INV2 | ✅ |
-| B4 | facilities | FAC2 | ✅ |
-| B5 | elections | ELEC2 | ✅ |
-| B6 | meetings & minutes | MM2 | ✅ |
-| B7 | equipment-check | EC2 | ✅ |
-| B8 | documents | DOC2 | ✅ |
-| B9 | membership pipeline | MP2 | ✅ |
-| B10 | messaging & communications | MSG2 | ✅ |
-| B11 | notifications | NOTIF2 | ✅ |
-| B12 | integrations | INT2 | ✅ |
-| B13 | forms | FORM2 | ✅ |
-| B14 | grants & fundraising | GF2 | ✅ |
-| B15 | admin-hours | AH2 | ✅ |
-| B16 | reports & analytics | RPT2 | ✅ |
-| B17 | events | EV2 | ✅ |
-| B18 | training | TR2 | ✅ |
-| B19 | scheduling | SCH2 | ✅ |
-| B20 | finance | FIN2 | ✅ |
-| B21 | orgs, roles & users | ORU2 | ✅ |
-| B22 | compliance & skills | CS2 | ✅ |
-| B23 | security, audit & IP | SEC2 | ✅ |
-| B24 | core infra | CI2 | ✅ |
-| B25 | onboarding | ONB2 | ✅ |
-| B26 | public-portal | PP2 | ✅ |
-| B27 | frontend shared | FE2 | ✅ |
+| B1 | medical-screening | MS2 | ✅ (p1, p2) |
+| B2 | apparatus | AP2 | ⬜ |
+| B3 | inventory | INV2 | ⬜ |
+| B4 | facilities | FAC2 | ⬜ |
+| B5 | elections | ELEC2 | ⬜ |
+| B6 | meetings & minutes | MM2 | ⬜ |
+| B7 | equipment-check | EC2 | ⬜ |
+| B8 | documents | DOC2 | ⬜ |
+| B9 | membership pipeline | MP2 | ⬜ |
+| B10 | messaging & communications | MSG2 | ⬜ |
+| B11 | notifications | NOTIF2 | ⬜ |
+| B12 | integrations | INT2 | ⬜ |
+| B13 | forms | FORM2 | ⬜ |
+| B14 | grants & fundraising | GF2 | ⬜ |
+| B15 | admin-hours | AH2 | ⬜ |
+| B16 | reports & analytics | RPT2 | ⬜ |
+| B17 | events | EV2 | ⬜ |
+| B18 | training | TR2 | ⬜ |
+| B19 | scheduling | SCH2 | ⬜ |
+| B20 | finance | FIN2 | ⬜ |
+| B21 | orgs, roles & users | ORU2 | ⬜ |
+| B22 | compliance & skills | CS2 | ⬜ |
+| B23 | security, audit & IP | SEC2 | ⬜ |
+| B24 | core infra | CI2 | ⬜ |
+| B25 | onboarding | ONB2 | ⬜ |
+| B26 | public-portal | PP2 | ⬜ |
+| B27 | frontend shared | FE2 | ⬜ |
 
 **36 features total.** After B27 the rotation wraps to A1.
+
+**Pass 2 (fresh, opened 2026-08-06).** Tier B reset to ⬜ at the owner's
+direction after the first full rotation completed. Tier A (A1–A9) stays ✅ —
+those were front-loaded, never-reviewed surfaces; a fresh pass re-runs the
+27-feature Tier B lens (duplication, dead code, doc accuracy, correctness,
+future-dev), starting from the fixes the first pass already landed.
 
 ---
 
@@ -731,13 +737,37 @@ Established before the first iteration, so any later failure is attributable:
 
 ---
 
-## 🏁 Tier B complete (2026-08-06)
+## 🏁 Pass 1 complete (2026-08-06)
 
-All 36 features reviewed: **Tier A (A1–A9)** + **Tier B (B1–B27)**. This session
-carried B9–B27 (19 iterations). Every iteration applied only verified/safe fixes,
-flagged product/behavior/schema decisions in `KNOWN_LIMITATIONS.md`, added
-regression tests, and passed the completion gate (flake8/black/tsc/eslint;
-DB-backed tests are the known no-MySQL sandbox limit). The rotation would next wrap
-to A1 — **not auto-started**; a fresh pass is a deliberate owner decision. The loop
-is stopped.
+All 36 features reviewed in pass 1: **Tier A (A1–A9)** + **Tier B (B1–B27)**.
+Every iteration applied only verified/safe fixes, flagged product/behavior/schema
+decisions in `KNOWN_LIMITATIONS.md`, added regression tests, and passed the
+completion gate (flake8/black/tsc/eslint; DB-backed tests are the known no-MySQL
+sandbox limit).
+
+## 🔄 Pass 2 opened (2026-08-06)
+
+At the owner's direction ("continue with the next review items"), Tier B was reset
+to ⬜ for a second full pass. Pass 2 starts from pass-1's landed fixes: re-verify
+they still hold, and widen the lens for anything the first pass flagged-not-fixed or
+didn't reach. Tier A remains ✅ (never-reviewed surfaces already covered once; not
+re-run unless directed).
+
+### Pass 2 log
+
+- **B1 medical-screening ✅ (pass 2).** Re-verified pass-1: MS-3 create-path FK
+  validation intact and **not bypassable via update** (`ScreeningRecordUpdate`
+  omits the FK fields); MS-2 `_resolve_names` org-scoping intact; MS-1 (PHI
+  plaintext) still stands, migration-shaped. **1 fix applied:** MS2-4 (MED, live UI
+  defect — the same class as MS-2 on the path pass 1 didn't cover): the record
+  list/detail responses (`GET /records`, `/records/{id}`, `POST`/`PUT /records`)
+  declare `user_name`/`prospect_name`/`reviewer_name`/`requirement_name` but the
+  service returned the raw ORM row, which has none of them — so every row on the
+  **Records tab** rendered "Unknown". New `attach_record_names` reuses the MS-2
+  `_resolve_names` helper (one org-scoped batch per entity type; reviewer folded
+  into the user lookup), wired into all four record endpoints, enriching only the
+  paged slice. **3 tests added** (`TestAttachRecordNames`); 22 medical-screening
+  tests pass. Gate: flake8/black clean; no frontend change (the types already
+  declare the fields and the UI already reads them — the backend now honors the
+  existing contract). See medical-screening.md → Pass 2. Next: B2 apparatus.
 </content>

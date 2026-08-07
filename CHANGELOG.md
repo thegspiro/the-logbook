@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Medical screening: the Records list now shows the member's name (2026-08-06)
+
+**Fixed**
+
+- **Every row on the medical-screening Records tab showed "Unknown" instead of a
+  name.** The record list and detail responses left the member/prospect, reviewer,
+  and requirement names blank, so the screen fell back to "Unknown" for each entry.
+  Those names are now filled in (matching the expiring-screenings and compliance
+  views, which already showed them).
+
 ### Error messages: structured server errors now read correctly (2026-08-06)
 
 **Fixed**

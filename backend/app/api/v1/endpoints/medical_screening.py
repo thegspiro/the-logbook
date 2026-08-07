@@ -194,7 +194,11 @@ async def list_records(
         screening_type=screening_type,
         status=record_status,
     )
-    return records[pagination.skip : pagination.skip + pagination.limit]
+    page = records[pagination.skip : pagination.skip + pagination.limit]
+    # Enrich only the returned page — resolves the name fields the response
+    # schema promises (else the UI shows "Unknown" for every row).
+    await service.attach_record_names(current_user.organization_id, page)
+    return page
 
 
 @router.get(
@@ -214,6 +218,7 @@ async def get_record(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Screening record not found",
         )
+    await service.attach_record_names(current_user.organization_id, [record])
     return record
 
 
@@ -252,6 +257,7 @@ async def create_record(
         username=current_user.username,
     )
     await db.commit()
+    await service.attach_record_names(current_user.organization_id, [record])
     return record
 
 
@@ -288,6 +294,7 @@ async def update_record(
         username=current_user.username,
     )
     await db.commit()
+    await service.attach_record_names(current_user.organization_id, [record])
     return record
 
 
