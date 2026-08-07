@@ -76,6 +76,26 @@ with only *mis-attribution* risk (org-stamped, no direct read-back) — is a
 mechanical sweep now that the shared helper exists; prioritize any that
 eager-load the FK into a response.
 
+**✅ UPDATE (2026-08-07): the prioritized band is closed.** A scan of all 85
+services for the stated priority — a create/update that stores a client-supplied
+FK *and* eager-loads that same relationship into a response — returned exactly
+three candidates, and two were already validated by local ad-hoc helpers
+(`grant_service._opportunity_in_org` for `opportunity_id`;
+`membership_pipeline_service` re-fetches a client `pipeline_id` org-scoped).
+The third was real and is now fixed: `inventory_service.create_variant_group`
+stored a client `category_id` unvalidated, and `update_variant_group` reached it
+through a blind `setattr` over client keys. Both now call `assert_in_org`. The
+schema bounds *which* keys can arrive (`organization_id` is not among them, so
+there is no mass-assignment path) but not which org the category belongs to.
+
+What remains is the genuine tail: ~80 services that still validate client FKs
+ad-hoc or not at all, where the exposure is mis-attribution rather than
+disclosure. Two notes for whoever picks it up. First, "already validated" is
+common — check before changing, as two of the three priority candidates were.
+Second, the sweep needs a database to verify: these paths are only exercised by
+DB-backed tests, so a migration done without MySQL available cannot be confirmed
+end-to-end and should not be batched blind.
+
 ## XC-2 — Sensitive reads gated by a permission broader than intended
 **Seen in:** membership-pipeline (MP-1 — applicant PII / background-check
 document downloads reachable with generic `members.view` roster permission —
