@@ -1510,6 +1510,12 @@ const PipelineDetailPage: React.FC = () => {
                                         {pr.requirement?.checklist_items && (
                                           <span>{pr.requirement.checklist_items.length} items</span>
                                         )}
+                                        {pr.requirement?.required_courses?.length ? (
+                                          <span>
+                                            {pr.requirement.required_courses.length} course
+                                            {pr.requirement.required_courses.length === 1 ? '' : 's'} linked
+                                          </span>
+                                        ) : null}
                                       </div>
                                     </div>
                                   </div>

@@ -140,6 +140,59 @@ def get_requirement_date_window(req, today: date):
         return date(yr, 1, 1), date(yr, 12, 31)
 
 
+def certification_record_matches(req, record) -> bool:
+    """Does ``record`` satisfy the CERTIFICATION requirement ``req``?
+
+    A certification requirement is satisfied by any completed training record
+    that ties back to it. The tie can be made four ways, in descending order of
+    precision:
+
+    1. An explicit catalog course linked on the requirement
+       (``required_courses``). This is the only exact match — the officer picked
+       the course out of the library, so a record for that course is
+       unambiguously the certification in question.
+    2. The requirement's ``training_type``.
+    3. The requirement name appearing in the record's course name.
+    4. The requirement's registry code appearing in the certification number.
+
+    Matches 2–4 are heuristics kept for requirements created before the library
+    link existed (and for imported records that carry no course id), which is
+    why linking a course *widens* the match rather than replacing it: an
+    existing "CPR" requirement must keep crediting the records it already
+    credited when an officer links the CPR course to it.
+
+    Shared by the compliance matrix, the member compliance summary, and the
+    competency matrix so all three agree on what counts.
+    """
+    linked_courses = getattr(req, "required_courses", None) or []
+    if linked_courses:
+        course_id = getattr(record, "course_id", None)
+        if course_id and str(course_id) in {str(c) for c in linked_courses}:
+            return True
+
+    req_training_type = getattr(req, "training_type", None)
+    if req_training_type and record.training_type == req_training_type:
+        return True
+
+    req_name = getattr(req, "name", None)
+    if (
+        record.course_name
+        and req_name
+        and req_name.lower() in record.course_name.lower()
+    ):
+        return True
+
+    registry_code = getattr(req, "registry_code", None)
+    if (
+        record.certification_number
+        and registry_code
+        and registry_code.lower() in record.certification_number.lower()
+    ):
+        return True
+
+    return False
+
+
 def evaluate_member_requirement(
     req,
     member_records,
@@ -305,25 +358,10 @@ def evaluate_member_requirement(
         else:
             return "not_started", None, None
 
-    # ---- CERTIFICATION requirements: match by name, training_type, or cert number ----
+    # ---- CERTIFICATION requirements: match by linked course, name, type, or
+    # cert number (see certification_record_matches) ----
     if req_type == RequirementType.CERTIFICATION.value:
-        matching = [
-            r
-            for r in completed
-            if (
-                (req.training_type and r.training_type == req.training_type)
-                or (
-                    r.course_name
-                    and req.name
-                    and req.name.lower() in r.course_name.lower()
-                )
-                or (
-                    r.certification_number
-                    and req.registry_code
-                    and req.registry_code.lower() in r.certification_number.lower()
-                )
-            )
-        ]
+        matching = [r for r in completed if certification_record_matches(req, r)]
         if matching:
             latest = max(matching, key=lambda r: r.completion_date or date.min)
             latest_comp = (

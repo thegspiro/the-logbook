@@ -347,6 +347,7 @@ class TrainingService:
         certification, shifts, calls, and fallback.
         """
         from app.models.training import RequirementType
+        from app.services.training_compliance import certification_record_matches
         from app.services.training_period import (
             effective_include_current_month,
             resolve_as_of_date,
@@ -447,23 +448,7 @@ class TrainingService:
 
         # ---- CERTIFICATION ----
         elif req_type == RequirementType.CERTIFICATION.value:
-            matching = [
-                r
-                for r in completed
-                if (
-                    (req.training_type and r.training_type == req.training_type)
-                    or (
-                        r.course_name
-                        and req.name
-                        and req.name.lower() in r.course_name.lower()
-                    )
-                    or (
-                        r.certification_number
-                        and getattr(req, "registry_code", None)
-                        and req.registry_code.lower() in r.certification_number.lower()
-                    )
-                )
-            ]
+            matching = [r for r in completed if certification_record_matches(req, r)]
             base_required = 1
             adjusted_required = 1
             if matching:
@@ -618,6 +603,7 @@ class TrainingService:
         the service will fetch them automatically.
         """
         from app.models.training import RequirementType
+        from app.services.training_compliance import certification_record_matches
 
         # Get the requirement
         result = await self.db.execute(
@@ -788,27 +774,10 @@ class TrainingService:
             cert_result = await self.db.execute(cert_q)
             all_completed = cert_result.scalars().all()
 
-            # Match by training_type, name substring, or registry_code
+            # Match by linked catalog course, training_type, name substring, or
+            # registry_code (see certification_record_matches)
             matching = [
-                r
-                for r in all_completed
-                if (
-                    (
-                        requirement.training_type
-                        and r.training_type == requirement.training_type
-                    )
-                    or (
-                        r.course_name
-                        and requirement.name
-                        and requirement.name.lower() in r.course_name.lower()
-                    )
-                    or (
-                        r.certification_number
-                        and requirement.registry_code
-                        and requirement.registry_code.lower()
-                        in r.certification_number.lower()
-                    )
-                )
+                r for r in all_completed if certification_record_matches(requirement, r)
             ]
 
             if matching:

@@ -1186,6 +1186,8 @@ export interface ProgramBuildRequirementInput {
   passing_score?: number | undefined;
   max_attempts?: number | undefined;
   checklist_items?: string[] | undefined;
+  // Course-library ids satisfying a `courses` or `certification` requirement.
+  required_courses?: string[] | undefined;
   allows_external_credit?: boolean | undefined;
   is_required: boolean;
   sort_order: number;

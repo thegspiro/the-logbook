@@ -20,6 +20,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { trainingService, trainingProgramService } from '../services/api';
+import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
+import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import type {
   TrainingRequirement,
   TrainingRequirementCreate,
@@ -62,6 +64,10 @@ const TrainingRequirementsPage: React.FC = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSource, setFilterSource] = useState<FilterSource>('all');
+
+  // Course catalog, so a requirement's linked course ids render as names.
+  const { courses } = useCourseLibrary();
+  const courseNameById = React.useMemo(() => new Map(courses.map((c) => [c.id, c.name])), [courses]);
 
   // Build a lookup from registry name to source_url
   const registryUrlMap = React.useMemo(() => {
@@ -325,6 +331,7 @@ const TrainingRequirementsPage: React.FC = () => {
                 key={requirement.id}
                 requirement={requirement}
                 categories={categories}
+                courseNameById={courseNameById}
                 registryUrlMap={registryUrlMap}
                 isExpanded={expandedId === requirement.id}
                 onToggleExpand={() => setExpandedId(expandedId === requirement.id ? null : requirement.id)}
@@ -386,6 +393,8 @@ const TrainingRequirementsPage: React.FC = () => {
 interface RequirementCardProps {
   requirement: TrainingRequirement;
   categories: TrainingCategory[];
+  /** Course id → name, for rendering linked courses instead of raw ids. */
+  courseNameById: Map<string, string>;
   registryUrlMap: Record<string, string>;
   isExpanded: boolean;
   onToggleExpand: () => void;
@@ -398,6 +407,7 @@ interface RequirementCardProps {
 const RequirementCard: React.FC<RequirementCardProps> = ({
   requirement,
   categories,
+  courseNameById,
   registryUrlMap,
   isExpanded,
   onToggleExpand,
@@ -675,7 +685,13 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                   <DetailRow label="Required Calls" value={String(requirement.required_calls)} />
                 )}
                 {requirement.required_courses && requirement.required_courses.length > 0 && (
-                  <DetailRow label="Required Courses" value={requirement.required_courses.join(', ')} />
+                  <DetailRow
+                    label={requirement.requirement_type === 'certification' ? 'Earned By' : 'Required Courses'}
+                    // Pre-picker requirements stored course *names* here, which
+                    // the map can't resolve — show the stored value rather than
+                    // a blank so those legacy entries stay diagnosable.
+                    value={requirement.required_courses.map((id) => courseNameById.get(id) ?? id).join(', ')}
+                  />
                 )}
                 {requirement.checklist_items && requirement.checklist_items.length > 0 && (
                   <DetailRow label="Checklist Items" value={String(requirement.checklist_items.length)} />
@@ -766,7 +782,6 @@ const RequirementModal: React.FC<RequirementModalProps> = ({ requirement, templa
     requirement_type: seed?.requirement_type || 'hours',
     training_type: seed?.training_type || '',
     required_hours: seed?.required_hours || undefined,
-    required_courses: (seed?.required_courses || []).join('\n'),
     required_shifts: seed?.required_shifts || undefined,
     required_calls: seed?.required_calls || undefined,
     checklist_items: (seed?.checklist_items || []).join('\n'),
@@ -794,6 +809,11 @@ const RequirementModal: React.FC<RequirementModalProps> = ({ requirement, templa
     category_ids: seed?.category_ids || ([] as string[]),
   });
 
+  // Linked course-library ids. Kept out of `formData` because it is an id list
+  // the picker owns, not a text field.
+  const [requiredCourses, setRequiredCourses] = useState<string[]>(seed?.required_courses ?? []);
+  const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
+
   const [saving, setSaving] = useState(false);
 
   // A one-time requirement never recurs, so every cycle-related control (due
@@ -817,14 +837,13 @@ const RequirementModal: React.FC<RequirementModalProps> = ({ requirement, templa
 
     // Mirror the backend TrainingRequirementCreate validator so users get a
     // specific message instead of a generic 422 failure
-    const courses = splitLines(formData.required_courses);
     const checklistItems = splitLines(formData.checklist_items);
     if (formData.requirement_type === 'hours' && !formData.required_hours) {
       toast.error('Required hours must be set for an hours requirement');
       return;
     }
-    if (formData.requirement_type === 'courses' && courses.length === 0) {
-      toast.error('List at least one course for a courses requirement');
+    if (formData.requirement_type === 'courses' && requiredCourses.length === 0) {
+      toast.error('Select at least one course from the library for a courses requirement');
       return;
     }
     if (formData.requirement_type === 'shifts' && !formData.required_shifts) {
@@ -861,7 +880,13 @@ const RequirementModal: React.FC<RequirementModalProps> = ({ requirement, templa
         requirement_type: formData.requirement_type,
         ...(formData.training_type ? { training_type: formData.training_type as TrainingType } : {}),
         ...(formData.required_hours ? { required_hours: formData.required_hours } : {}),
-        ...(formData.requirement_type === 'courses' ? { required_courses: courses } : {}),
+        // Always sent so switching a requirement off the course/certification
+        // types clears stale links — a leftover course id silently narrows the
+        // hours evaluator to only that course's records.
+        required_courses:
+          formData.requirement_type === 'courses' || formData.requirement_type === 'certification'
+            ? requiredCourses
+            : [],
         ...(formData.requirement_type === 'shifts' && formData.required_shifts
           ? { required_shifts: formData.required_shifts }
           : {}),
@@ -1077,29 +1102,19 @@ const RequirementModal: React.FC<RequirementModalProps> = ({ requirement, templa
             </div>
 
             {/* Per-type quantity fields */}
-            {formData.requirement_type === 'courses' && (
-              <div>
-                <label
-                  htmlFor="req-required-courses"
-                  className="text-theme-text-secondary mb-2 block text-sm font-medium"
-                >
-                  Required Courses{' '}
-                  <span aria-hidden="true" className="text-red-700 dark:text-red-400">
-                    *
-                  </span>
-                </label>
-                <textarea
-                  id="req-required-courses"
-                  value={formData.required_courses}
-                  onChange={(e) => setFormData({ ...formData, required_courses: e.target.value })}
-                  className="form-input placeholder-theme-text-muted"
-                  placeholder={'One course per line, e.g.\nICS-100\nICS-200'}
-                  rows={4}
-                />
-                <p className="text-theme-text-muted mt-1 text-sm">
-                  Members must complete every course listed (one per line).
-                </p>
-              </div>
+            {/* Courses are picked from the library, never typed: compliance
+                matches a member's records by course id, so a typed-in course
+                name never matches and the requirement could never complete. */}
+            {(formData.requirement_type === 'courses' || formData.requirement_type === 'certification') && (
+              <CourseLibraryPicker
+                idPrefix="req"
+                courses={courses}
+                loading={coursesLoading}
+                error={coursesError}
+                variant={formData.requirement_type === 'certification' ? 'certification' : 'courses'}
+                selectedIds={requiredCourses}
+                onChange={setRequiredCourses}
+              />
             )}
 
             {formData.requirement_type === 'shifts' && (
@@ -1820,16 +1835,14 @@ const TemplateModal: React.FC<{
     },
     {
       name: 'NIMS/ICS Initial Certification',
+      // The four FEMA courses are named in the description rather than seeded
+      // into required_courses: that field holds course-library ids, which are
+      // per-department, so a starter template can't know them. The officer
+      // links the matching library courses when applying the template.
       description:
-        'One-time incident command system courses required for emergency responders under the National Incident Management System',
+        'One-time incident command system courses required for emergency responders under the National Incident Management System. Link ICS-100, ICS-200, IS-700, and IS-800 from the course library.',
       requirement_type: 'courses',
       training_type: 'certification',
-      required_courses: [
-        'ICS-100: Introduction to the Incident Command System',
-        'ICS-200: Basic Incident Command System for Initial Response',
-        'IS-700: An Introduction to the National Incident Management System',
-        'IS-800: National Response Framework, An Introduction',
-      ],
       frequency: 'one_time',
       applies_to_all: true,
       source: 'national',

@@ -19,11 +19,14 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
+import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
+import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import type {
   ProgramStructureType,
   RequirementType,
   RequirementFrequency,
   ProgramBuildRequest,
+  TrainingCourse,
 } from '../types/training';
 
 // ==================== Types ====================
@@ -52,6 +55,8 @@ interface RequirementFormData {
   passing_score: string;
   max_attempts: string;
   checklist_items: string[];
+  // Course-library ids backing a `courses` or `certification` requirement.
+  required_courses: string[];
   allows_external_credit: boolean;
   is_required: boolean;
   sort_order: number;
@@ -104,6 +109,7 @@ const emptyRequirement = (sortOrder: number): RequirementFormData => ({
   passing_score: '',
   max_attempts: '',
   checklist_items: [],
+  required_courses: [],
   allows_external_credit: false,
   is_required: true,
   sort_order: sortOrder,
@@ -137,12 +143,13 @@ const InfoCallout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 const REQUIREMENT_TYPE_HELP: Record<string, string> = {
   hours:
     'Training hours. Fill in automatically from linked training sessions and approved shift reports, or an officer can log them.',
-  courses: 'Completion of specific courses — checked off as the member completes them.',
+  courses: 'Completion of specific courses from the library — pick them below; progress fills in as each is recorded.',
   skills_evaluation:
     'A hands-on skill. Completed by passing a linked skills test in the Skills Testing module, or marked by an officer.',
   knowledge_test: 'A written test. An officer records a pass/fail or score; reaching the passing score completes it.',
   checklist: 'A list of items an officer checks off. Completed when marked done.',
-  certification: 'An external certification — marked complete when the member earns it.',
+  certification:
+    'A certification. Link the library course that grants it, or leave it unlinked and an officer marks it earned.',
   shifts: 'A number of shifts. Accrue automatically from approved shift reports.',
   calls: 'A number of call responses. Accrue automatically from approved shift reports.',
 };
@@ -460,10 +467,21 @@ const StepPhases: React.FC<{
 
 const StepRequirements: React.FC<{
   phases: PhaseFormData[];
+  courses: TrainingCourse[];
+  coursesLoading: boolean;
+  coursesError: string;
   onAddRequirement: (phaseId: string) => void;
   onRemoveRequirement: (phaseId: string, reqId: string) => void;
   onUpdateRequirement: (phaseId: string, reqId: string, field: string, value: string | boolean | string[]) => void;
-}> = ({ phases, onAddRequirement, onRemoveRequirement, onUpdateRequirement }) => (
+}> = ({
+  phases,
+  courses,
+  coursesLoading,
+  coursesError,
+  onAddRequirement,
+  onRemoveRequirement,
+  onUpdateRequirement,
+}) => (
   <div className="space-y-6">
     <div>
       <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Requirements</h2>
@@ -611,6 +629,20 @@ const StepRequirements: React.FC<{
                         </HelpText>
                       </div>
                     </div>
+                  )}
+
+                  {/* Course-library link — the requirement's target for course
+                      and certification types. */}
+                  {(req.requirement_type === 'courses' || req.requirement_type === 'certification') && (
+                    <CourseLibraryPicker
+                      idPrefix={`wizard-${req.id}`}
+                      courses={courses}
+                      loading={coursesLoading}
+                      error={coursesError}
+                      variant={req.requirement_type === 'certification' ? 'certification' : 'courses'}
+                      selectedIds={req.required_courses}
+                      onChange={(ids) => onUpdateRequirement(phase.id, req.id, 'required_courses', ids)}
+                    />
                   )}
 
                   {/* Conditional fields based on type */}
@@ -862,9 +894,11 @@ const StepReview: React.FC<{
     is_template: boolean;
   };
   phases: PhaseFormData[];
-}> = ({ info, phases }) => {
+  courses: TrainingCourse[];
+}> = ({ info, phases, courses }) => {
   const totalReqs = phases.reduce((sum, p) => sum + p.requirements.length, 0);
   const totalMs = phases.reduce((sum, p) => sum + p.milestones.length, 0);
+  const courseNameById = new Map(courses.map((c) => [c.id, c.name]));
 
   return (
     <div className="space-y-6">
@@ -948,11 +982,25 @@ const StepReview: React.FC<{
             <div className="mb-2 space-y-1">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Requirements:</p>
               {phase.requirements.map((req) => (
-                <div key={req.id} className="text-theme-text-secondary flex items-center space-x-2 text-sm">
-                  <ListChecks className="h-3 w-3 text-blue-700 dark:text-blue-400" />
-                  <span>{req.name || 'Untitled'}</span>
-                  <span className="text-theme-text-muted text-xs">({req.requirement_type})</span>
-                  {req.required_hours && <span className="text-theme-text-muted text-xs">- {req.required_hours}h</span>}
+                <div key={req.id} className="text-theme-text-secondary text-sm">
+                  <div className="flex items-center space-x-2">
+                    <ListChecks className="h-3 w-3 text-blue-700 dark:text-blue-400" />
+                    <span>{req.name || 'Untitled'}</span>
+                    <span className="text-theme-text-muted text-xs">({req.requirement_type})</span>
+                    {req.required_hours && (
+                      <span className="text-theme-text-muted text-xs">- {req.required_hours}h</span>
+                    )}
+                  </div>
+                  {req.required_courses.length > 0 && (
+                    <p className="text-theme-text-muted pl-5 text-xs">
+                      {req.required_courses.map((id) => courseNameById.get(id) ?? 'Unknown course').join(', ')}
+                    </p>
+                  )}
+                  {req.required_courses.length === 0 && req.requirement_type === 'courses' && (
+                    <p className="pl-5 text-xs text-amber-700 dark:text-amber-400">
+                      No course linked — members can&apos;t earn credit for this yet.
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -1000,6 +1048,9 @@ const CreatePipelinePage: React.FC = () => {
 
   // Phases state
   const [phases, setPhases] = useState<PhaseFormData[]>([]);
+
+  // Course catalog backing the course/certification requirement pickers.
+  const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
 
   // ---- Step navigation ----
   const stepIndex = WIZARD_STEPS.findIndex((s) => s.key === currentStep);
@@ -1158,6 +1209,7 @@ const CreatePipelinePage: React.FC = () => {
             passing_score: reqData.passing_score ? parseFloat(reqData.passing_score) : undefined,
             max_attempts: reqData.max_attempts ? parseInt(reqData.max_attempts) : undefined,
             checklist_items: reqData.checklist_items.filter((i) => i.trim()),
+            required_courses: reqData.required_courses.length > 0 ? reqData.required_courses : undefined,
             allows_external_credit: reqData.allows_external_credit,
             is_required: reqData.is_required,
             sort_order: reqData.sort_order,
@@ -1261,6 +1313,9 @@ const CreatePipelinePage: React.FC = () => {
           {currentStep === 'requirements' && (
             <StepRequirements
               phases={phases}
+              courses={courses}
+              coursesLoading={coursesLoading}
+              coursesError={coursesError}
               onAddRequirement={addRequirement}
               onRemoveRequirement={removeRequirement}
               onUpdateRequirement={updateRequirement}
@@ -1275,7 +1330,7 @@ const CreatePipelinePage: React.FC = () => {
               onMoveMilestone={moveMilestone}
             />
           )}
-          {currentStep === 'review' && <StepReview info={info} phases={phases} />}
+          {currentStep === 'review' && <StepReview info={info} phases={phases} courses={courses} />}
         </div>
 
         {/* Navigation */}

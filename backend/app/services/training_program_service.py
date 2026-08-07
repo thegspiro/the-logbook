@@ -35,6 +35,7 @@ from app.models.training import (
     RequirementSource,
     RequirementType,
     TrainingCategory,
+    TrainingCourse,
     TrainingProgram,
     TrainingRequirement,
     TrainingType,
@@ -59,6 +60,7 @@ from app.services.training_waiver_service import (
     fetch_user_waivers,
     get_rolling_period_months,
 )
+from app.utils.org_scoping import assert_all_in_org
 
 
 class TrainingProgramService:
@@ -314,6 +316,33 @@ class TrainingProgramService:
 
     # ==================== Training Requirement Methods ====================
 
+    async def _validate_required_courses(
+        self, course_ids: Optional[List[str]], organization_id: UUID
+    ) -> Optional[str]:
+        """Verify every course id a client linked to a requirement belongs to the
+        caller's org, returning an error message if not.
+
+        ``required_courses`` is a JSON array of client-supplied catalog ids, so
+        nothing about the write itself constrains them to the caller's tenant.
+        Storing an out-of-org id would persist a dangling cross-tenant reference
+        that the compliance evaluator then matches records against — so the ids
+        are checked before they are stored (XC-1).
+
+        Returns the message instead of raising, to match this service's
+        ``(result, error)`` convention.
+        """
+        try:
+            await assert_all_in_org(
+                self.db,
+                TrainingCourse,
+                course_ids,
+                organization_id,
+                label="linked course",
+            )
+        except ValueError as exc:
+            return str(exc)
+        return None
+
     async def create_training_requirement(
         self,
         requirement_data: TrainingRequirementEnhancedCreate,
@@ -339,6 +368,12 @@ class TrainingProgramService:
             source = RequirementSource(requirement_data.source)
         except ValueError:
             return None, f"Invalid source: {requirement_data.source}"
+
+        course_error = await self._validate_required_courses(
+            requirement_data.required_courses, organization_id
+        )
+        if course_error:
+            return None, course_error
 
         # Create requirement
         requirement = TrainingRequirement(
@@ -435,6 +470,13 @@ class TrainingProgramService:
         if not requirement.is_editable:
             return None, "This requirement cannot be edited"
 
+        if "required_courses" in updates:
+            course_error = await self._validate_required_courses(
+                updates["required_courses"], organization_id
+            )
+            if course_error:
+                return None, course_error
+
         # A changed numeric target changes completion math for enrolled members.
         target_fields = {
             "required_hours",
@@ -530,6 +572,21 @@ class TrainingProgramService:
             structure_type = ProgramStructureType(prog.structure_type)
         except ValueError:
             return None, f"Invalid structure type: {prog.structure_type}"
+
+        # Validate every linked course up front, before anything is added to the
+        # session — a rejection part-way through the build would otherwise leave
+        # flushed rows behind for this transaction to roll back.
+        all_linked_courses = [
+            course_id
+            for phase_input in payload.phases
+            for req_input in phase_input.requirements
+            for course_id in (getattr(req_input, "required_courses", None) or [])
+        ]
+        course_error = await self._validate_required_courses(
+            all_linked_courses, organization_id
+        )
+        if course_error:
+            return None, course_error
 
         program = TrainingProgram(
             organization_id=organization_id,

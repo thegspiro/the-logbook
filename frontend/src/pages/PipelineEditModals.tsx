@@ -8,6 +8,8 @@ import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { X, AlertCircle } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
+import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
+import { useCourseLibrary } from '../hooks/useCourseLibrary';
 import { getErrorMessage } from '../utils/errorHandling';
 import type {
   ProgramMilestone,
@@ -455,9 +457,12 @@ export const RequirementFormModal: React.FC<{
   const [passing, setPassing] = useState(req?.passing_score?.toString() ?? '');
   const [attempts, setAttempts] = useState(req?.max_attempts?.toString() ?? '');
   const [checklist, setChecklist] = useState((req?.checklist_items ?? []).join('\n'));
+  const [requiredCourses, setRequiredCourses] = useState<string[]>(req?.required_courses ?? []);
   const [isRequired, setIsRequired] = useState(link?.is_required !== false);
   const [allowsExternal, setAllowsExternal] = useState(req?.allows_external_credit === true);
   const [submitting, setSubmitting] = useState(false);
+  const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
+  const linksCourses = type === 'courses' || type === 'certification';
 
   const submit = async () => {
     if (!name.trim()) {
@@ -482,6 +487,10 @@ export const RequirementFormModal: React.FC<{
                 .map((s) => s.trim())
                 .filter(Boolean)
             : undefined,
+        // Always sent (as [] for other types) so switching a requirement away
+        // from courses/certification clears stale links — a leftover course id
+        // narrows the hours evaluator to only that course's records.
+        required_courses: linksCourses ? requiredCourses : [],
         allows_external_credit: allowsExternal,
       };
       if (link) {
@@ -639,6 +648,18 @@ export const RequirementFormModal: React.FC<{
             onChange={(e) => setChecklist(e.target.value)}
           />
         </div>
+      )}
+      {linksCourses && (
+        <CourseLibraryPicker
+          idPrefix="rq"
+          compact
+          courses={courses}
+          loading={coursesLoading}
+          error={coursesError}
+          variant={type === 'certification' ? 'certification' : 'courses'}
+          selectedIds={requiredCourses}
+          onChange={setRequiredCourses}
+        />
       )}
       {(type === 'hours' || type === 'courses') && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
