@@ -978,8 +978,8 @@ const ImportMembers: React.FC = () => {
     <div className="space-y-2 text-sm">
       {issues.map((issue) => (
         <div key={issue.line}>
-          <p className="text-red-700 dark:text-red-300 font-medium">Line {issue.line}</p>
-          <ul className="ml-4 list-disc text-red-700 dark:text-red-200">
+          <p className="text-theme-alert-danger-title font-medium">Line {issue.line}</p>
+          <ul className="ml-4 list-disc text-theme-alert-danger-text">
             {issue.reasons.map((reason, index) => (
               <li key={index}>{reason}</li>
             ))}
@@ -1102,41 +1102,6 @@ const ImportMembers: React.FC = () => {
         {preflight && !importResult && (
           <div className="card mb-8 p-8">
             <h2 className="text-theme-text-primary font-bold mb-4">Step 2: Preview Data</h2>
-            <p className="text-theme-text-secondary text-sm mb-4">
-              Showing first {previewData.length} members from the file
-            </p>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-theme-input-bg border-b border-theme-surface-border">
-                  <tr>
-                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Name</th>
-                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Member #</th>
-                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Email</th>
-                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Phone</th>
-                    <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Emergency Contact</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-theme-surface-border">
-                  {previewData.map((row, index) => (
-                    <tr key={index} className="hover:bg-theme-surface-secondary">
-                      <td className="px-4 py-2 text-theme-text-primary">
-                        {row.firstName} {row.lastName}
-                      </td>
-                      <td className="px-4 py-2 text-theme-text-secondary font-mono">{row.membershipNumber}</td>
-                      <td className="px-4 py-2 text-theme-text-secondary">{row.email}</td>
-                      <td className="px-4 py-2 text-theme-text-secondary">{row.primaryPhone}</td>
-                      <td className="px-4 py-2 text-theme-text-secondary">
-                        {row.emergencyName1
-                          ? `${row.emergencyName1}${row.emergencyRelationship1 ? ` (${row.emergencyRelationship1})` : ''}`
-                          : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
             {preflight.valid.length > 0 && (
               <>
                 <p className="text-theme-text-secondary text-sm mb-4">
@@ -1155,7 +1120,7 @@ const ImportMembers: React.FC = () => {
                         <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Emergency Contact</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/10">
+                    <tbody className="divide-y divide-theme-surface-border">
                       {preflight.valid.slice(0, 5).map(({ line, data }) => (
                         <tr key={line} className="hover:bg-theme-surface-secondary">
                           <td className="px-4 py-2 text-theme-text-primary">
@@ -1178,12 +1143,12 @@ const ImportMembers: React.FC = () => {
             )}
 
             {preflight.invalid.length > 0 && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-6">
-                <h3 className="text-red-700 dark:text-red-300 font-bold mb-1 flex items-center space-x-2">
+              <div className="bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4 mt-6">
+                <h3 className="text-theme-alert-danger-title font-bold mb-1 flex items-center space-x-2">
                   <AlertTriangle className="w-5 h-5" />
                   <span>{preflight.invalid.length} row(s) will not be imported</span>
                 </h3>
-                <p className="text-red-700 dark:text-red-200 text-sm mb-3">
+                <p className="text-theme-alert-danger-text text-sm mb-3">
                   Download the report to get these rows back with the reason in the first
                   column. Fix them, delete that column, and upload the file again.
                 </p>
@@ -1291,21 +1256,22 @@ const ImportMembers: React.FC = () => {
                 <p className="text-theme-alert-success-text text-sm">Successful</p>
               </div>
               <div className="bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4 text-center">
-                <p className="text-theme-alert-danger-title text-2xl font-bold">{importResult.failed}</p>
+                <p className="text-theme-alert-danger-title text-2xl font-bold">{importResult.issues.length}</p>
                 <p className="text-theme-alert-danger-text text-sm">Failed</p>
               </div>
             </div>
 
-            {importResult.errors.length > 0 && (
+            {importResult.issues.length > 0 && (
               <div className="bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4 mb-6">
                 <h3 className="text-theme-alert-danger-title font-bold mb-2">Errors:</h3>
-                <div className="space-y-1 text-sm">
-                  {importResult.errors.map((error, index) => (
-                    <p key={index} className="text-theme-alert-danger-text">
-                      Row {error.row}: {error.error}
-                    </p>
-                  ))}
-                </div>
+                {renderIssues(importResult.issues)}
+                <button
+                  onClick={() => downloadErrorReport(importResult.issues)}
+                  className="btn-info mt-4 flex items-center space-x-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Error Report</span>
+                </button>
               </div>
             )}
 
