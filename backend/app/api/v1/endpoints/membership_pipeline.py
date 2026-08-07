@@ -28,6 +28,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
+from app.api.prospect_privacy import (
+    block_self_prospect_access,
+    get_hidden_prospect_ids,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.user import User
@@ -67,7 +71,11 @@ from app.schemas.membership_pipeline import (
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 
-router = APIRouter()
+# Applied router-wide, not per route: every endpoint that takes a
+# {prospect_id} path parameter — including ones added later — must refuse to
+# serve the caller their own prospective-membership file. See
+# app/api/prospect_privacy.py for why.
+router = APIRouter(dependencies=[Depends(block_self_prospect_access)])
 
 
 # ============================================
@@ -552,17 +560,21 @@ async def get_kanban_board(
     current_user: User = Depends(
         require_permission("prospective_members.view", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     Get the kanban board view for a pipeline.
 
-    Returns prospects grouped by their current step.
+    Returns prospects grouped by their current step, omitting the caller's
+    own prospective-membership record if they have one.
 
     **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     board = await service.get_kanban_board(
-        str(pipeline_id), current_user.organization_id
+        str(pipeline_id),
+        current_user.organization_id,
+        exclude_prospect_ids=hidden_prospect_ids,
     )
     if not board:
         raise HTTPException(
@@ -583,15 +595,21 @@ async def get_pipeline_stats(
     current_user: User = Depends(
         require_permission("prospective_members.view", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     Get statistics for a pipeline (counts by status, by step, conversion rate).
+
+    Counts exclude the caller's own prospective-membership record so the
+    totals reconcile with the list and board views.
 
     **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     stats = await service.get_pipeline_stats(
-        str(pipeline_id), current_user.organization_id
+        str(pipeline_id),
+        current_user.organization_id,
+        exclude_prospect_ids=hidden_prospect_ids,
     )
     if not stats:
         raise HTTPException(
@@ -663,12 +681,16 @@ async def list_prospects(
     current_user: User = Depends(
         require_permission("prospective_members.view", "prospective_members.manage")
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     List prospective members with optional filters.
 
     Returns a paginated response with ``items``, ``total``, ``limit``,
     and ``offset`` so clients can implement proper pagination.
+
+    The caller's own prospective-membership record, if they have one, is
+    omitted from the results and from ``total``.
 
     **Requires permission: prospective_members.view**
     """
@@ -680,6 +702,7 @@ async def list_prospects(
         search=search,
         limit=limit,
         offset=offset,
+        exclude_prospect_ids=hidden_prospect_ids,
     )
 
     now = datetime.now(timezone.utc)
@@ -1434,9 +1457,13 @@ async def list_election_packages(
             "elections.manage",
         )
     ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """
     List election packages across all prospects, optionally filtered.
+
+    The package built for the caller's own application is omitted — it
+    bundles the interview and coordinator material the vote is based on.
 
     **Requires permission: prospective_members.view or elections.view**
     """
@@ -1445,6 +1472,7 @@ async def list_election_packages(
         organization_id=current_user.organization_id,
         pipeline_id=str(pipeline_id) if pipeline_id else None,
         status_filter=status_filter,
+        exclude_prospect_ids=hidden_prospect_ids,
     )
     return packages
 

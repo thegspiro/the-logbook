@@ -12,13 +12,14 @@ import re
 import secrets
 import unicodedata
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from loguru import logger
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models.election import Election, ElectionStatus
 from app.models.event import Event
@@ -504,6 +505,49 @@ class MembershipPipelineService:
     # Prospect CRUD
     # =========================================================================
 
+    @staticmethod
+    def _apply_prospect_exclusions(
+        query, exclude_prospect_ids: Optional[Iterable[str]]
+    ):
+        """Drop specific prospect rows from a query over ``ProspectiveMember``.
+
+        Used to keep a caller's own prospective-membership record out of the
+        lists, boards and counts they can see (see app/api/prospect_privacy.py).
+        """
+        ids = [str(i) for i in (exclude_prospect_ids or []) if i]
+        if not ids:
+            return query
+        return query.where(ProspectiveMember.id.notin_(ids))
+
+    @staticmethod
+    def _prospect_search_filter(search: str) -> ColumnElement[bool]:
+        """Build the name/email search predicate for a prospect list query.
+
+        Each whitespace-separated term must match somewhere, so "smith john"
+        finds the same person as "john smith" — coordinators type the full
+        name far more often than a single field, and matching the raw string
+        against each column individually never hits.
+        """
+
+        def _escape(value: str) -> str:
+            return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+        terms = [t for t in search.split() if t]
+        if not terms:
+            terms = [search]
+
+        clauses = []
+        for term in terms:
+            pattern = f"%{_escape(term)}%"
+            clauses.append(
+                or_(
+                    ProspectiveMember.first_name.ilike(pattern),
+                    ProspectiveMember.last_name.ilike(pattern),
+                    ProspectiveMember.email.ilike(pattern),
+                )
+            )
+        return and_(*clauses)
+
     async def list_prospects(
         self,
         organization_id: str,
@@ -512,6 +556,7 @@ class MembershipPipelineService:
         search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> tuple[List[ProspectiveMember], int]:
         """List prospects with filters"""
         query = (
@@ -528,16 +573,9 @@ class MembershipPipelineService:
             query = query.where(ProspectiveMember.pipeline_id == pipeline_id)
         if status:
             query = query.where(ProspectiveMember.status == status)
+        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
-            query = query.where(
-                ProspectiveMember.first_name.ilike(search_term)
-                | ProspectiveMember.last_name.ilike(search_term)
-                | ProspectiveMember.email.ilike(search_term)
-            )
+            query = query.where(self._prospect_search_filter(search))
 
         # Count query
         count_query = select(func.count()).select_from(query.subquery())
@@ -2220,7 +2258,10 @@ class MembershipPipelineService:
     # =========================================================================
 
     async def get_kanban_board(
-        self, pipeline_id: str, organization_id: str
+        self,
+        pipeline_id: str,
+        organization_id: str,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get the kanban board view for a pipeline"""
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
@@ -2240,6 +2281,7 @@ class MembershipPipelineService:
             .options(selectinload(ProspectiveMember.current_step))
             .order_by(ProspectiveMember.created_at)
         )
+        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         result = await self.db.execute(query)
         prospects = list(result.scalars().all())
 
@@ -2941,63 +2983,81 @@ class MembershipPipelineService:
     # =========================================================================
 
     async def get_pipeline_stats(
-        self, pipeline_id: str, organization_id: str
+        self,
+        pipeline_id: str,
+        organization_id: str,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Get statistics for a pipeline"""
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return None
 
-        # Count prospects by status
-        status_counts = {}
-        for status_val in ProspectStatus:
-            count_query = select(func.count(ProspectiveMember.id)).where(
-                and_(
-                    ProspectiveMember.pipeline_id == pipeline_id,
-                    ProspectiveMember.status == status_val,
-                )
-            )
-            result = await self.db.execute(count_query)
-            status_counts[status_val.value] = result.scalar() or 0
+        # One grouped query per axis rather than one per status and one per
+        # step: a 12-stage pipeline previously cost ~20 round trips to render
+        # a single stat header.
+        base_scope = and_(
+            ProspectiveMember.organization_id == organization_id,
+            ProspectiveMember.pipeline_id == pipeline_id,
+        )
+
+        status_query = self._apply_prospect_exclusions(
+            select(
+                ProspectiveMember.status,
+                func.count(ProspectiveMember.id),
+            ).where(base_scope),
+            exclude_prospect_ids,
+        ).group_by(ProspectiveMember.status)
+        status_rows = (await self.db.execute(status_query)).all()
+
+        status_counts = {s.value: 0 for s in ProspectStatus}
+        for status_val, count in status_rows:
+            key = status_val.value if hasattr(status_val, "value") else str(status_val)
+            status_counts[key] = count or 0
 
         total = sum(status_counts.values())
 
-        # Count prospects by current step
-        by_step = []
-        for step in sorted(pipeline.steps, key=lambda s: s.sort_order):
-            step_count_query = select(func.count(ProspectiveMember.id)).where(
-                and_(
-                    ProspectiveMember.pipeline_id == pipeline_id,
-                    ProspectiveMember.current_step_id == step.id,
-                    ProspectiveMember.status == ProspectStatus.ACTIVE,
-                )
-            )
-            result = await self.db.execute(step_count_query)
-            by_step.append(
-                {
-                    "stage_id": step.id,
-                    "stage_name": step.name,
-                    "count": result.scalar() or 0,
-                }
-            )
+        step_query = self._apply_prospect_exclusions(
+            select(
+                ProspectiveMember.current_step_id,
+                func.count(ProspectiveMember.id),
+            ).where(
+                and_(base_scope, ProspectiveMember.status == ProspectStatus.ACTIVE)
+            ),
+            exclude_prospect_ids,
+        ).group_by(ProspectiveMember.current_step_id)
+        step_rows = (await self.db.execute(step_query)).all()
+        step_counts = {str(step_id): count or 0 for step_id, count in step_rows}
+
+        by_step = [
+            {
+                "stage_id": step.id,
+                "stage_name": step.name,
+                "count": step_counts.get(str(step.id), 0),
+            }
+            for step in sorted(pipeline.steps, key=lambda s: s.sort_order)
+        ]
 
         # Calculate avg days to transfer
         avg_days = None
         transferred_count = status_counts.get("transferred", 0)
         if transferred_count > 0:
-            avg_query = select(
-                func.avg(
-                    func.datediff(
-                        ProspectiveMember.transferred_at,
-                        ProspectiveMember.created_at,
+            avg_query = self._apply_prospect_exclusions(
+                select(
+                    func.avg(
+                        func.datediff(
+                            ProspectiveMember.transferred_at,
+                            ProspectiveMember.created_at,
+                        )
                     )
-                )
-            ).where(
-                and_(
-                    ProspectiveMember.pipeline_id == pipeline_id,
-                    ProspectiveMember.status == ProspectStatus.TRANSFERRED,
-                    ProspectiveMember.transferred_at.isnot(None),
-                )
+                ).where(
+                    and_(
+                        base_scope,
+                        ProspectiveMember.status == ProspectStatus.TRANSFERRED,
+                        ProspectiveMember.transferred_at.isnot(None),
+                    )
+                ),
+                exclude_prospect_ids,
             )
             result = await self.db.execute(avg_query)
             avg_days = result.scalar()
@@ -3377,6 +3437,7 @@ class MembershipPipelineService:
         organization_id: str,
         pipeline_id: Optional[str] = None,
         status_filter: Optional[str] = None,
+        exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> List[ProspectElectionPackage]:
         """List election packages, optionally filtered by pipeline and status"""
         query = (
@@ -3387,6 +3448,7 @@ class MembershipPipelineService:
             )
             .where(ProspectiveMember.organization_id == organization_id)
         )
+        query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         if pipeline_id:
             query = query.where(ProspectElectionPackage.pipeline_id == pipeline_id)
         if status_filter:

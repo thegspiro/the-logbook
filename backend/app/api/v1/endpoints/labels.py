@@ -19,6 +19,7 @@ from app.api.dependencies import (
     _has_permission,
     get_current_user,
 )
+from app.api.prospect_privacy import get_hidden_prospect_ids
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
@@ -65,12 +66,16 @@ async def preview_labels(
     data: LabelPreviewBody,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """Read-only preview data (name, barcode value, subtitle) for *module*."""
     _authorize_module(current_user, data.module)
     try:
         items = await LabelService(db).preview(
-            current_user.organization_id, data.module, data.ids
+            current_user.organization_id,
+            data.module,
+            data.ids,
+            exclude_ids=hidden_prospect_ids,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -124,8 +129,12 @@ async def generate_labels(
     data: LabelGenerateBody,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
 ):
     """Generate a barcode-label PDF for records in *module*.
+
+    A prospect label carries the applicant's public status-check token, so
+    the caller's own application is filtered out of the id list here too.
 
     **Authentication required** · requires the module's view permission.
     """
@@ -140,6 +149,7 @@ async def generate_labels(
             custom_height=data.custom_height,
             auto_rotate=data.auto_rotate,
             extra_lines=data.extra_lines,
+            exclude_ids=hidden_prospect_ids,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
