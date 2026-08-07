@@ -103,7 +103,7 @@ export const ForgotPasswordPage: React.FC = () => {
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-red-200">{error}</p>
+                    <p className="text-sm font-medium text-red-800 dark:text-red-200">{error}</p>
                   </div>
                 </div>
               </div>
@@ -175,7 +175,7 @@ export const ForgotPasswordPage: React.FC = () => {
               <h4 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-1">
                 Security Note
               </h4>
-              <p className="text-sm text-blue-200">
+              <p className="text-sm text-blue-900 dark:text-blue-200">
                 For security reasons, we don't reveal whether an email exists in our system.
                 You'll receive an email only if the account exists.
               </p>

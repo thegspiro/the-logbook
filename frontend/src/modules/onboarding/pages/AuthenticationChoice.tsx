@@ -244,7 +244,7 @@ const AuthenticationChoice: React.FC = () => {
                 className={`relative bg-theme-surface backdrop-blur-xs rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
                   authPlatform === platform.id
                     ? 'border-theme-accent-red shadow-lg'
-                    : 'border-theme-surface-border hover:border-white/40'
+                    : 'border-theme-surface-border hover:border-theme-text-muted/40'
                 }`}
                 aria-pressed={authPlatform === platform.id}
               >

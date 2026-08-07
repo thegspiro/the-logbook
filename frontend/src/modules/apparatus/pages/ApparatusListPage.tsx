@@ -293,7 +293,7 @@ export const ApparatusListPage: React.FC = () => {
         {/* Apparatus Table */}
         {isLoading ? (
           <div className="card p-12 text-center" role="status" aria-live="polite">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
             <p className="text-theme-text-secondary">Loading apparatus...</p>
           </div>
         ) : apparatusList.length === 0 ? (
@@ -351,7 +351,7 @@ export const ApparatusListPage: React.FC = () => {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/10">
+                  <tbody className="divide-y divide-theme-surface-border">
                     {apparatusList.map((apparatus) => {
                       const apparatusType = apparatus.apparatusType || getTypeById(apparatus.apparatusTypeId);
                       const status = apparatus.statusRecord || getStatusById(apparatus.statusId);

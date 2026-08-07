@@ -588,7 +588,7 @@ export const ReportsPage: React.FC = () => {
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-blue-700 dark:text-blue-400" aria-hidden="true" />
             <div>
               <h4 className="mb-1 text-sm font-medium text-blue-700 dark:text-blue-300">Report Generation</h4>
-              <p className="text-sm text-blue-200">
+              <p className="text-sm text-blue-900 dark:text-blue-200">
                 Reports are generated in real-time. Use the date range presets or set a custom period for date-based
                 reports. All reports can be exported to CSV or printed to PDF. Use the Compare button in the report
                 modal to see period-over-period trends.

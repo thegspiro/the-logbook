@@ -198,7 +198,7 @@ export const ResetPasswordPage: React.FC = () => {
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <p className="text-sm font-medium text-red-200">{error}</p>
+                    <p className="text-sm font-medium text-red-800 dark:text-red-200">{error}</p>
                   </div>
                 </div>
               </div>

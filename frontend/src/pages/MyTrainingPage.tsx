@@ -766,7 +766,7 @@ const MyTrainingPage: React.FC = () => {
                         <th scope="col" className="px-4 py-2">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
+                    <tbody className="divide-y divide-theme-surface-border">
                       {filteredRecords.map((r) => (
                         <tr key={r.id} className="text-theme-text-secondary">
                           <td className="px-4 py-2 whitespace-nowrap">{r.course_name}</td>
@@ -849,7 +849,7 @@ const MyTrainingPage: React.FC = () => {
                       <th scope="col" className="px-4 py-2">Submitted</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-theme-surface-border">
                     {data.submissions.map((s) => (
                       <tr key={s.id} className="text-theme-text-secondary">
                         <td className="px-4 py-2 whitespace-nowrap">{s.course_name}</td>

@@ -618,7 +618,7 @@ const DocumentsPage: React.FC = () => {
                     disabled={!uploadForm.file || actionLoading}
                     className={`px-4 py-2 rounded-lg text-white transition-colors inline-flex items-center space-x-2 ${
                       !uploadForm.file || actionLoading
-                        ? 'bg-amber-600/50 text-white/50 cursor-not-allowed'
+                        ? 'bg-amber-600 opacity-50 cursor-not-allowed'
                         : 'bg-amber-600 hover:bg-amber-700'
                     }`}
                   >
@@ -687,7 +687,7 @@ const DocumentsPage: React.FC = () => {
                     disabled={!folderForm.name.trim() || actionLoading}
                     className={`px-4 py-2 rounded-lg text-white transition-colors inline-flex items-center space-x-2 ${
                       !folderForm.name.trim() || actionLoading
-                        ? 'bg-amber-600/50 text-white/50 cursor-not-allowed'
+                        ? 'bg-amber-600 opacity-50 cursor-not-allowed'
                         : 'bg-amber-600 hover:bg-amber-700'
                     }`}
                   >
