@@ -271,6 +271,7 @@ from app.models.notification import (
 )
 from app.models.onboarding import OnboardingStatus
 from app.models.operational_rank import OperationalRank
+from app.models.organization_officer import OrganizationOfficer
 from app.models.public_portal import (
     PublicPortalAccessLog,
     PublicPortalAPIKey,
@@ -580,6 +581,8 @@ __all__ = [
     "IPExceptionApprovalStatus",
     # Operational rank models
     "OperationalRank",
+    # Department office holders
+    "OrganizationOfficer",
     # Finance models
     "FiscalYear",
     "FiscalYearStatus",

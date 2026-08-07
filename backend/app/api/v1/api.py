@@ -46,6 +46,7 @@ from app.api.v1.endpoints import (
     messages,
     minutes,
     notifications,
+    officers,
     operational_ranks,
     organizations,
     platform_analytics,
@@ -131,6 +132,7 @@ api_router.include_router(
 api_router.include_router(
     email_templates.router, prefix="/email-templates", tags=["email-templates"]
 )
+api_router.include_router(officers.router, prefix="/officers", tags=["officers"])
 api_router.include_router(
     message_history.router, prefix="/message-history", tags=["message-history"]
 )
@@ -243,6 +245,7 @@ async def api_root():
             "security": "/api/v1/security",
             "ip_security": "/api/v1/ip-security",
             "email_templates": "/api/v1/email-templates",
+            "officers": "/api/v1/officers",
             "forms": "/api/v1/forms",
             "documents": "/api/v1/documents",
             "meetings": "/api/v1/meetings",

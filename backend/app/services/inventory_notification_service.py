@@ -413,7 +413,7 @@ class InventoryNotificationService:
                 )
                 if template:
                     subject, html_body, text_body = template_service.render(
-                        template, context
+                        template, context, organization=org
                     )
             except Exception as e:
                 logger.warning(f"Failed to load inventory change email template: {e}")

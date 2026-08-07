@@ -4,3 +4,4 @@ export { TemplatePreview } from './TemplatePreview';
 export { default as ScheduleEmailForm } from './ScheduleEmailForm';
 export { default as ScheduledEmailList } from './ScheduledEmailList';
 export { default as MessageHistoryList } from './MessageHistoryList';
+export { default as OfficersPanel } from './OfficersPanel';
