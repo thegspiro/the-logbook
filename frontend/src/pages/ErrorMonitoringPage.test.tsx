@@ -96,6 +96,31 @@ describe('ErrorMonitoringPage', () => {
     expect(screen.getByText('Client')).toBeInTheDocument();
   });
 
+  it('shows how many times a collapsed error occurred', async () => {
+    mockGetErrors.mockResolvedValue([
+      makeError({ context: { source: 'frontend', occurrences: 47 } }),
+    ]);
+
+    renderWithRouter(<ErrorMonitoringPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('×47')).toBeInTheDocument();
+    });
+  });
+
+  it('does not clutter a single occurrence with a count', async () => {
+    mockGetErrors.mockResolvedValue([
+      makeError({ context: { source: 'frontend', occurrences: 1 } }),
+    ]);
+
+    renderWithRouter(<ErrorMonitoringPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('API_SERVER_ERROR')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('×1')).not.toBeInTheDocument();
+  });
+
   it('reports a healthy system when there are no errors', async () => {
     mockGetErrors.mockResolvedValue([]);
 

@@ -14,7 +14,7 @@
 import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import type { AxiosResponse } from 'axios';
 import { API_TIMEOUT_MS } from '../constants/config';
-import { reportApiError } from './errorReporting';
+import { flushQueuedReports, reportApiError } from './errorReporting';
 import {
   getCacheKey,
   getCached,
@@ -137,6 +137,11 @@ let lastLoginAtMs = 0;
  */
 export function markLoginComplete(): void {
   lastLoginAtMs = Date.now();
+  // Errors raised on the login screen — a 500 from the auth endpoint, a failed
+  // password reset — are held until a session exists to attribute them to.
+  // This is that moment, and those are exactly the failures an administrator
+  // gets asked about.
+  flushQueuedReports();
 }
 
 /** Clear auth state on logout. */

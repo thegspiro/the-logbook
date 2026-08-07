@@ -148,6 +148,15 @@ export const ERROR_MAPPINGS: Record<string, ErrorMapping> = {
       'Report the error to your administrator if it repeats',
     ],
   },
+  REPORTING_THROTTLED: {
+    userMessage:
+      'Further errors occurred but were not individually reported (client rate cap).',
+    troubleshootingSteps: [
+      'A burst of errors hit this member — the surrounding entries show what',
+      'Treat the count as a floor, not a total',
+      'Check for a failing background poll or a repeated retry loop',
+    ],
+  },
   CHUNK_LOAD_ERROR: {
     userMessage: 'Part of the application failed to load.',
     troubleshootingSteps: [

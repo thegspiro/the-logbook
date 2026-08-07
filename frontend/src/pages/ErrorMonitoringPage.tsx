@@ -203,6 +203,15 @@ const ErrorMonitoringPage: React.FC = () => {
                       }`}>
                         {error.errorType}
                       </span>
+                      {/* A collapsed burst reports once with a count. Without
+                          showing it, "one error" and "one error that happened
+                          400 times in a minute" look identical. */}
+                      {typeof error.context.occurrences === 'number' &&
+                        error.context.occurrences > 1 && (
+                          <span className="ml-2 text-xs font-semibold text-theme-text-muted">
+                            ×{error.context.occurrences}
+                          </span>
+                        )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-xs text-theme-text-secondary">
                       {sourceLabel(error)}
