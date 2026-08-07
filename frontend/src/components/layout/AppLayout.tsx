@@ -10,6 +10,7 @@ import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
 import { useNavigationShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useNotificationPoller } from '../../hooks/useNotificationCount';
 import { useOfflineSyncEngine } from '../../hooks/useOfflineSyncEngine';
+import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import { usePullToRefreshContext } from '../../contexts/PullToRefreshContext';
 import { PullToRefreshIndicator } from '../PullToRefreshIndicator';
@@ -53,6 +54,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   // Drain the offline write queue when connectivity returns
   useOfflineSyncEngine();
+
+  // Publish the on-screen keyboard height so bottom action bars clear it
+  useKeyboardInset();
 
   // Layout-level pull-to-refresh: pages opt in via useRegisterPullToRefresh,
   // supplying their own data-refresh handler. The gesture stays disabled until

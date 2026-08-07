@@ -18,7 +18,12 @@ export const UpdateNotification: React.FC = () => {
   return (
     <div
       role="alert" aria-live="assertive"
-      className="bg-blue-600 text-white px-4 py-2 flex items-center justify-center gap-3 text-sm relative z-50"
+      /* Below md the banner is pinned to the bottom of the viewport. In normal
+         flow it sits at the top of the document, where the fixed mobile header
+         (z-50, and later in the DOM) paints straight over it — so on a phone
+         the update prompt was never visible. Bottom-pinning also keeps it clear
+         of the hamburger menu, which a top overlay would block. */
+      className="bg-blue-600 text-white px-4 py-2 flex items-center justify-center gap-3 text-sm relative z-50 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:pb-[calc(0.5rem+env(safe-area-inset-bottom))]"
     >
       <RefreshCw className="w-4 h-4 shrink-0" aria-hidden="true" />
       <span>A new version of The Logbook is available.</span>
@@ -30,7 +35,7 @@ export const UpdateNotification: React.FC = () => {
       </button>
       <button
         onClick={dismiss}
-        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-sm hover:bg-blue-700 transition-colors focus:outline-hidden focus:ring-2 focus:ring-white"
+        className="absolute right-1 top-1/2 -translate-y-1/2 p-2.5 rounded-sm hover:bg-blue-700 transition-colors focus:outline-hidden focus:ring-2 focus:ring-white"
         aria-label="Dismiss update notification"
       >
         <X className="w-4 h-4" aria-hidden="true" />

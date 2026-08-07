@@ -649,17 +649,22 @@
 
 @utility pb-safe {
   /* #27 Bottom padding equal to the device safe-area inset (0 on non-notched
-     devices). For fixed/sticky bars whose inner content already provides its
-     own visual padding. */
-  padding-bottom: env(safe-area-inset-bottom);
+     devices), plus the on-screen keyboard height. For fixed/sticky bars whose
+     inner content already provides its own visual padding. See
+     `--keyboard-inset` below. */
+  padding-bottom: calc(env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
 }
 
 @utility action-bar-safe {
   /* #28 Vertical padding for a sticky/fixed bottom action bar: a consistent gap
      on every device that grows to clear the home indicator on notched phones.
-     Owns both paddings, so use it instead of py-* (pair with px-4). */
+     Owns both paddings, so use it instead of py-* (pair with px-4).
+     `--keyboard-inset` is published by useKeyboardInset() and is non-zero only
+     while an on-screen keyboard is open on a browser that shrinks the visual
+     viewport rather than the layout viewport (i.e. iOS). Without it the bar —
+     and its submit button — sits behind the keyboard, unreachable. */
   padding-top: 0.75rem;
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
 }
 
 @utility safe-top {
