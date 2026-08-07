@@ -7,6 +7,7 @@ import type { CheckInMonitoringStats, CheckInRequest, Event, EventCancel, EventC
 import type { DocumentFolder } from './formsServices';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
+import { asArray } from '../utils/asArray';
 
 export interface CSVImportRowError {
   row: number;
@@ -34,7 +35,7 @@ export const eventService = {
     limit?: number;
   }): Promise<EventListItem[]> {
     const response = await api.get<EventListItem[]>('/events', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -157,7 +158,7 @@ export const eventService = {
   async getEventRSVPs(eventId: string, status_filter?: string): Promise<RSVP[]> {
     const params = status_filter ? { status_filter } : undefined;
     const response = await api.get<RSVP[]>(`/events/${eventId}/rsvps`, { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**

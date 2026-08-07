@@ -5,6 +5,7 @@
  */
 
 import { createApiClient } from '../../../utils/createApiClient';
+import { asArray } from '../../../utils/asArray';
 import type {
   Assignment,
   SwapRequest as SchedulingSwapRequest,
@@ -329,25 +330,6 @@ export interface ActiveChecklistRecord {
 // credentials, 401 refresh) across all modules.  Do not create manual axios
 // instances — drift from the global auth setup causes hard-to-debug 401/403s.
 const api = createApiClient();
-
-/**
- * Guarantees the array return type these methods declare.
- *
- * `api.get<T[]>` asserts the response shape rather than proving it, so a body
- * that is not an array — an error payload served with 200, a paginated
- * envelope after an endpoint changes shape — flows straight into callers that
- * immediately `.map`/`.filter`/spread it. Every consumer of this module treats
- * these results as arrays without checking, so one bad response takes a whole
- * page down through the error boundary rather than rendering as empty. This
- * makes the declared contract true at the boundary instead of asking each of
- * the ~20 call sites to defend itself.
- *
- * The parameter is typed as `T[]` so the element type is inferred from the
- * caller's own annotation; the runtime check is what actually matters.
- */
-function asArray<T>(value: T[]): T[] {
-  return Array.isArray(value) ? value : [];
-}
 
 // ============================================
 // Scheduling Service

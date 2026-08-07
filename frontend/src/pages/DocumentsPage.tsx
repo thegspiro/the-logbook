@@ -23,6 +23,7 @@ import {
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import { asArray } from '../utils/asArray';
 
 type ViewMode = 'grid' | 'list';
 
@@ -68,7 +69,10 @@ const DocumentsPage: React.FC = () => {
   const fetchFolders = useCallback(async () => {
     try {
       const response = await documentsService.getFolders();
-      setFolders(response.folders);
+      // Envelope responses put the array a level down, where the service's
+      // asArray guard does not reach — and `folders` is mapped and measured
+      // without checking, so an envelope missing the key crashes the page.
+      setFolders(asArray(response.folders));
     } catch {
       setError('Unable to load folders. Please check your connection and try again.');
     }
@@ -87,7 +91,7 @@ const DocumentsPage: React.FC = () => {
     setDocumentsLoading(true);
     try {
       const response = await documentsService.getDocuments({ folder_id: folderId });
-      setDocuments(response.documents);
+      setDocuments(asArray(response.documents));
     } catch {
       setError('Unable to load documents. Please check your connection and try again.');
     } finally {

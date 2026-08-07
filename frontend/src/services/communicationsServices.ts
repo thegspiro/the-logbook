@@ -8,6 +8,7 @@ import type {
   DepartmentMessageRecord, InboxMessage, MessageStats, AcknowledgmentReport, RoleOption,
   EmailTemplate, EmailAttachment, EmailTemplateUpdate, EmailTemplatePreview,
 } from './adminServices';
+import { asArray } from '../utils/asArray';
 
 export const notificationsService = {
   async getRules(params?: { category?: string; enabled?: boolean; search?: string }): Promise<{ rules: NotificationRuleRecord[]; total: number }> {
@@ -160,7 +161,7 @@ export interface ExpiringCertification {
 export const emailTemplatesService = {
   async getTemplates(): Promise<EmailTemplate[]> {
     const response = await api.get<EmailTemplate[]>('/email-templates');
-    return response.data;
+    return asArray(response.data);
   },
 
   async getTemplate(templateId: string): Promise<EmailTemplate> {
@@ -312,7 +313,7 @@ export const scheduledEmailsService = {
   async list(statusFilter?: string): Promise<ScheduledEmail[]> {
     const params = statusFilter ? { status_filter: statusFilter } : {};
     const response = await api.get<ScheduledEmail[]>('/email-templates/scheduled', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async update(id: string, data: ScheduledEmailUpdate): Promise<ScheduledEmail> {
@@ -459,7 +460,7 @@ export const messagesService = {
   },
   async getAvailableRoles(): Promise<RoleOption[]> {
     const response = await api.get<RoleOption[]>('/messages/roles');
-    return response.data;
+    return asArray(response.data);
   },
   async getMessageStats(messageId: string): Promise<MessageStats> {
     const response = await api.get<MessageStats>(`/messages/${messageId}/stats`);
@@ -473,7 +474,7 @@ export const messagesService = {
   // Member inbox
   async getInbox(params?: { include_read?: boolean; skip?: number; limit?: number }): Promise<InboxMessage[]> {
     const response = await api.get<InboxMessage[]>('/messages/inbox', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getUnreadCount(): Promise<{ unread_count: number }> {
     const response = await api.get<{ unread_count: number }>('/messages/inbox/unread-count');

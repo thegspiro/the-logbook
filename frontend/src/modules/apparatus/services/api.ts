@@ -43,6 +43,7 @@ import type {
   EvocLevelUpdate,
   EvocEligibilityCheck,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 
@@ -58,7 +59,7 @@ export const apparatusTypeService = {
         include_system: params?.includeSystem ?? true,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getType(typeId: string): Promise<ApparatusType> {
@@ -93,7 +94,7 @@ export const apparatusStatusService = {
         include_system: params?.includeSystem ?? true,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getStatus(statusId: string): Promise<ApparatusStatus> {
@@ -200,7 +201,7 @@ export const apparatusCustomFieldService = {
         apparatus_type_id: params?.apparatusTypeId,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createCustomField(fieldData: Partial<ApparatusCustomField>): Promise<ApparatusCustomField> {
@@ -230,7 +231,7 @@ export const apparatusMaintenanceTypeService = {
         include_system: params?.includeSystem ?? true,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createMaintenanceType(typeData: ApparatusMaintenanceTypeCreate): Promise<ApparatusMaintenanceType> {
@@ -271,7 +272,7 @@ export const apparatusMaintenanceService = {
         limit: params?.limit ?? 100,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getMaintenanceDue(params?: { daysAhead?: number; includeOverdue?: boolean }): Promise<ApparatusMaintenanceDue[]> {
@@ -281,7 +282,7 @@ export const apparatusMaintenanceService = {
         include_overdue: params?.includeOverdue ?? true,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getMaintenanceRecord(recordId: string): Promise<ApparatusMaintenance> {
@@ -325,7 +326,7 @@ export const apparatusFuelLogService = {
         limit: params?.limit ?? 100,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createFuelLog(fuelData: ApparatusFuelLogCreate): Promise<ApparatusFuelLog> {
@@ -351,7 +352,7 @@ export const apparatusOperatorService = {
         is_active: params?.isActive ?? true,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createOperator(operatorData: ApparatusOperatorCreate): Promise<ApparatusOperator> {
@@ -384,7 +385,7 @@ export const apparatusEquipmentService = {
         is_present: params?.isPresent,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createEquipment(equipmentData: ApparatusEquipmentCreate): Promise<ApparatusEquipment> {
@@ -409,7 +410,7 @@ export const apparatusEquipmentService = {
 export const apparatusPhotoService = {
   async getPhotos(apparatusId: string): Promise<ApparatusPhoto[]> {
     const response = await api.get<ApparatusPhoto[]>(`/apparatus/${apparatusId}/photos`);
-    return response.data;
+    return asArray(response.data);
   },
 
   async createPhoto(apparatusId: string, photoData: Partial<ApparatusPhoto>): Promise<ApparatusPhoto> {
@@ -429,7 +430,7 @@ export const apparatusPhotoService = {
 export const apparatusDocumentService = {
   async getDocuments(apparatusId: string): Promise<ApparatusDocument[]> {
     const response = await api.get<ApparatusDocument[]>(`/apparatus/${apparatusId}/documents`);
-    return response.data;
+    return asArray(response.data);
   },
 
   async createDocument(apparatusId: string, documentData: Partial<ApparatusDocument>): Promise<ApparatusDocument> {
@@ -453,7 +454,7 @@ export const evocLevelService = {
         active_only: params?.activeOnly ?? true,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getLevel(levelId: string): Promise<EvocLevel> {

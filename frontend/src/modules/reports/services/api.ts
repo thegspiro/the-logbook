@@ -13,6 +13,7 @@ import type {
   SavedReportCreate,
   SavedReportUpdate,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 
@@ -39,7 +40,7 @@ export const reportsApiService = {
 export const savedReportsService = {
   async list(): Promise<SavedReportConfig[]> {
     const response = await api.get<SavedReportConfig[]>('/reports/saved');
-    return response.data;
+    return asArray(response.data);
   },
 
   async create(data: SavedReportCreate): Promise<SavedReportConfig> {
