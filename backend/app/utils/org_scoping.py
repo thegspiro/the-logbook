@@ -16,7 +16,7 @@ per-service checkers that were added piecemeal after the audit. Prefer
 create/update method; use ``is_in_org`` when you need the boolean directly.
 """
 
-from typing import Any
+from typing import Any, Iterable, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,4 +82,45 @@ async def assert_in_org(
         name = label or getattr(model, "__name__", "referenced record")
         # Deliberately generic: do not reveal whether the id exists in another
         # org (avoids a cross-tenant existence oracle).
+        raise ValueError(f"Invalid {name}")
+
+
+async def assert_all_in_org(
+    db: AsyncSession,
+    model: Any,
+    entity_ids: Optional[Iterable[Any]],
+    organization_id: Any,
+    *,
+    label: Optional[str] = None,
+) -> None:
+    """Raise ``ValueError`` unless *every* id in ``entity_ids`` is in the org.
+
+    The list counterpart of ``assert_in_org``, for the JSON id arrays several
+    models store (``required_courses``, ``category_ids``, …). An empty or
+    missing collection is accepted — "no references" is a valid state; it is a
+    *present but foreign* id that is the XC-1 violation.
+
+    Resolved in a single query rather than one per id, and reports only that
+    something was invalid — never which id — so it cannot be used to probe
+    another org for existence.
+    """
+    if not entity_ids:
+        return
+
+    unique_ids = {str(eid) for eid in entity_ids if eid and str(eid).strip()}
+    if not unique_ids:
+        return
+
+    if not organization_id:
+        raise ValueError(f"Invalid {label or getattr(model, '__name__', 'reference')}")
+
+    result = await db.execute(
+        select(model.id).where(
+            model.id.in_(unique_ids),
+            model.organization_id == str(organization_id),
+        )
+    )
+    found = {str(row[0]) for row in result.all()}
+    if unique_ids - found:
+        name = label or getattr(model, "__name__", "referenced record")
         raise ValueError(f"Invalid {name}")

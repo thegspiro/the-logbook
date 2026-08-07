@@ -8,19 +8,20 @@ Adds personal_email field to users table for post-separation contact.
 Drop notification settings (CC roles, extra emails, personal email toggle)
 are stored in the organization's JSON settings column and require no migration.
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260214_0800'
-down_revision = '20260214_0700'
+revision = "20260214_0800"
+down_revision = "20260214_0700"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column('users', sa.Column('personal_email', sa.String(255), nullable=True))
+    op.add_column("users", sa.Column("personal_email", sa.String(255), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column('users', 'personal_email')
+    op.drop_column("users", "personal_email")

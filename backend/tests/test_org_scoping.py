@@ -11,7 +11,7 @@ dependency is SQLAlchemy statement compilation.
 import pytest
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.utils.org_scoping import assert_in_org, is_in_org
+from app.utils.org_scoping import assert_all_in_org, assert_in_org, is_in_org
 
 
 class _Base(DeclarativeBase):
@@ -31,6 +31,39 @@ class _FakeResult:
 
     def scalar_one_or_none(self):
         return self._val
+
+
+class _FakeMultiResult:
+    def __init__(self, ids):
+        self._ids = ids
+
+    def all(self):
+        return [(i,) for i in self._ids]
+
+
+class _FakeSetSession:
+    """Returns the subset of the queried ids that are seeded for the bound org.
+
+    Mirrors ``WHERE id IN (:ids) AND organization_id = :org`` so the test
+    asserts the list helper is genuinely org-scoping rather than just counting.
+    """
+
+    def __init__(self, seeded_ids, seeded_org):
+        self.seeded_ids = {str(i) for i in seeded_ids}
+        self.seeded_org = str(seeded_org)
+
+    async def execute(self, stmt):
+        # An IN clause compiles to a single expanding bindparam holding the
+        # whole list, so flatten before matching.
+        bound = set()
+        for value in stmt.compile().params.values():
+            if isinstance(value, (list, tuple, set)):
+                bound.update(str(v) for v in value)
+            else:
+                bound.add(str(value))
+        if self.seeded_org not in bound:
+            return _FakeMultiResult([])
+        return _FakeMultiResult(sorted(self.seeded_ids & bound))
 
 
 class _FakeSession:
@@ -90,3 +123,37 @@ async def test_assert_in_org_passes_for_same_org():
     db = _FakeSession("w1", "orgA")
     # Should not raise.
     await assert_in_org(db, _Widget, "w1", "orgA", label="widget")
+
+
+async def test_assert_all_in_org_passes_when_every_id_is_in_org():
+    db = _FakeSetSession(["w1", "w2", "w3"], "orgA")
+    # Should not raise.
+    await assert_all_in_org(db, _Widget, ["w1", "w3"], "orgA", label="widget")
+
+
+async def test_assert_all_in_org_raises_when_one_id_is_foreign():
+    db = _FakeSetSession(["w1"], "orgA")
+    with pytest.raises(ValueError, match="Invalid widget"):
+        await assert_all_in_org(db, _Widget, ["w1", "w-other"], "orgA", label="widget")
+
+
+async def test_assert_all_in_org_does_not_name_the_offending_id():
+    """The message must not confirm an id exists (or not) in another org."""
+    db = _FakeSetSession(["w1"], "orgA")
+    with pytest.raises(ValueError, match="Invalid widget") as exc:
+        await assert_all_in_org(db, _Widget, ["w-other"], "orgA", label="widget")
+    assert "w-other" not in str(exc.value)
+
+
+async def test_assert_all_in_org_accepts_empty_collections():
+    db = _FakeSetSession([], "orgA")
+    # No references is a valid state — only a *foreign* reference is a fault.
+    await assert_all_in_org(db, _Widget, None, "orgA", label="widget")
+    await assert_all_in_org(db, _Widget, [], "orgA", label="widget")
+    await assert_all_in_org(db, _Widget, ["", None], "orgA", label="widget")
+
+
+async def test_assert_all_in_org_fails_closed_without_an_org():
+    db = _FakeSetSession(["w1"], "orgA")
+    with pytest.raises(ValueError, match="Invalid widget"):
+        await assert_all_in_org(db, _Widget, ["w1"], None, label="widget")

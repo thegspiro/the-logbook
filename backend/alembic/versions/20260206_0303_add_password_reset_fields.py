@@ -8,15 +8,16 @@ Adds:
 - password_reset_token and password_reset_expires_at columns to users table
 - Seeds a default password reset email template per organization
 """
-from alembic import op
-import sqlalchemy as sa
-import uuid
-import json
 
+import json
+import uuid
+
+import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers
-revision = '20260206_0303'
-down_revision = '20260206_0302'
+revision = "20260206_0303"
+down_revision = "20260206_0302"
 branch_labels = None
 depends_on = None
 
@@ -72,19 +73,28 @@ If you did not request a password reset, you can safely ignore this email. Your 
 This is an automated message from {{organization_name}}.
 Please do not reply to this email."""
 
-RESET_VARIABLES = json.dumps([
-    {"name": "first_name", "description": "Recipient's first name"},
-    {"name": "reset_url", "description": "Password reset link"},
-    {"name": "organization_name", "description": "Organization name"},
-    {"name": "expiry_hours", "description": "Minutes until link expires"},
-])
+RESET_VARIABLES = json.dumps(
+    [
+        {"name": "first_name", "description": "Recipient's first name"},
+        {"name": "reset_url", "description": "Password reset link"},
+        {"name": "organization_name", "description": "Organization name"},
+        {"name": "expiry_hours", "description": "Minutes until link expires"},
+    ]
+)
 
 
 def upgrade() -> None:
     # Add password reset columns to users table
-    op.add_column('users', sa.Column('password_reset_token', sa.String(128), nullable=True))
-    op.add_column('users', sa.Column('password_reset_expires_at', sa.DateTime(timezone=True), nullable=True))
-    op.create_index('ix_users_password_reset_token', 'users', ['password_reset_token'])
+    op.add_column(
+        "users", sa.Column("password_reset_token", sa.String(128), nullable=True)
+    )
+    op.add_column(
+        "users",
+        sa.Column(
+            "password_reset_expires_at", sa.DateTime(timezone=True), nullable=True
+        ),
+    )
+    op.create_index("ix_users_password_reset_token", "users", ["password_reset_token"])
 
     # Seed a default password reset template for each existing organization
     conn = op.get_bind()
@@ -115,8 +125,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index('ix_users_password_reset_token', 'users')
-    op.drop_column('users', 'password_reset_expires_at')
-    op.drop_column('users', 'password_reset_token')
+    op.drop_index("ix_users_password_reset_token", "users")
+    op.drop_column("users", "password_reset_expires_at")
+    op.drop_column("users", "password_reset_token")
     # Remove seeded password_reset templates
     op.execute("DELETE FROM email_templates WHERE template_type = 'password_reset'")

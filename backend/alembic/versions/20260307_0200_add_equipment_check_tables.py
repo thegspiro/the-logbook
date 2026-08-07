@@ -5,8 +5,9 @@ Revises: 20260307_0100
 Create Date: 2026-03-07 02:00:00.000000
 
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260307_0200"
@@ -67,9 +68,7 @@ def upgrade() -> None:
         sa.Column(
             "template_id",
             sa.String(36),
-            sa.ForeignKey(
-                "equipment_check_templates.id", ondelete="CASCADE"
-            ),
+            sa.ForeignKey("equipment_check_templates.id", ondelete="CASCADE"),
             nullable=False,
             index=True,
         ),
@@ -80,9 +79,7 @@ def upgrade() -> None:
         sa.Column(
             "parent_compartment_id",
             sa.String(36),
-            sa.ForeignKey(
-                "check_template_compartments.id", ondelete="SET NULL"
-            ),
+            sa.ForeignKey("check_template_compartments.id", ondelete="SET NULL"),
             nullable=True,
         ),
         sa.Column(
@@ -110,9 +107,7 @@ def upgrade() -> None:
         sa.Column(
             "compartment_id",
             sa.String(36),
-            sa.ForeignKey(
-                "check_template_compartments.id", ondelete="CASCADE"
-            ),
+            sa.ForeignKey("check_template_compartments.id", ondelete="CASCADE"),
             nullable=False,
             index=True,
         ),
@@ -125,15 +120,11 @@ def upgrade() -> None:
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("description", sa.Text, nullable=True),
         sa.Column("sort_order", sa.Integer, default=0, nullable=False),
-        sa.Column(
-            "check_type", sa.String(30), nullable=False, default="pass_fail"
-        ),
+        sa.Column("check_type", sa.String(30), nullable=False, default="pass_fail"),
         sa.Column("is_required", sa.Boolean, default=False, nullable=False),
         sa.Column("required_quantity", sa.Integer, nullable=True),
         sa.Column("image_url", sa.String(500), nullable=True),
-        sa.Column(
-            "has_expiration", sa.Boolean, default=False, nullable=False
-        ),
+        sa.Column("has_expiration", sa.Boolean, default=False, nullable=False),
         sa.Column("expiration_date", sa.Date, nullable=True),
         sa.Column(
             "expiration_warning_days",
@@ -180,9 +171,7 @@ def upgrade() -> None:
         sa.Column(
             "template_id",
             sa.String(36),
-            sa.ForeignKey(
-                "equipment_check_templates.id", ondelete="SET NULL"
-            ),
+            sa.ForeignKey("equipment_check_templates.id", ondelete="SET NULL"),
             nullable=True,
         ),
         sa.Column(
@@ -239,9 +228,7 @@ def upgrade() -> None:
         sa.Column(
             "check_id",
             sa.String(36),
-            sa.ForeignKey(
-                "shift_equipment_checks.id", ondelete="CASCADE"
-            ),
+            sa.ForeignKey("shift_equipment_checks.id", ondelete="CASCADE"),
             nullable=False,
             index=True,
         ),
@@ -256,9 +243,7 @@ def upgrade() -> None:
         sa.Column("status", sa.String(30), nullable=False),
         sa.Column("quantity_found", sa.Integer, nullable=True),
         sa.Column("required_quantity", sa.Integer, nullable=True),
-        sa.Column(
-            "is_expired", sa.Boolean, default=False, nullable=False
-        ),
+        sa.Column("is_expired", sa.Boolean, default=False, nullable=False),
         sa.Column("expiration_date", sa.Date, nullable=True),
         sa.Column("notes", sa.Text, nullable=True),
         sa.Column(

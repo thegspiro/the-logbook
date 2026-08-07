@@ -34,9 +34,8 @@ reached by ordinary allocation, which increments by one from 0001.
 """
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
-
 from alembic import op
+from sqlalchemy.dialects import mysql
 
 # revision identifiers, used by Alembic.
 revision = "20260805_0101"

@@ -35,9 +35,7 @@ def upgrade() -> None:
 
     # Map (organization_id, role_name) -> role_id for every position.
     name_to_id = {}
-    for row in bind.execute(
-        sa.text("SELECT id, organization_id, name FROM positions")
-    ):
+    for row in bind.execute(sa.text("SELECT id, organization_id, name FROM positions")):
         name_to_id[(row.organization_id, row.name)] = row.id
 
     rows = bind.execute(

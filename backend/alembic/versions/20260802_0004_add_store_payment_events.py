@@ -10,7 +10,6 @@ Create Date: 2026-08-04
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 # revision identifiers

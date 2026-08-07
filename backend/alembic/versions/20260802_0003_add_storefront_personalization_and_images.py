@@ -10,9 +10,8 @@ Create Date: 2026-08-04
 """
 
 import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
-
 from alembic import op
+from sqlalchemy.dialects import mysql
 
 # revision identifiers
 revision = "20260802_0003"
