@@ -69,8 +69,7 @@ Click on any event to view its detail page. The detail page shows:
 > error in those cases. If you missed the window, use **check-in** at the event
 > or ask an officer to record your attendance.
 
-> **Screenshot placeholder:**
-> _[Screenshot of an event detail page showing the event header (title, date, location), description, RSVP buttons (Going/Maybe/Not Going with counts), and a list of attendees who have RSVP'd]_
+![Event detail page with the header, description, and RSVP controls](./images/04-02-event-detail.png)
 
 ---
 
@@ -229,8 +228,7 @@ Navigate to **Events > Analytics** to view department-wide event metrics:
 - **Top Events**: Table of highest-attendance events
 - **Date Range Filter**: Filter all analytics by custom date range
 
-> **Screenshot needed:**
-> _[Screenshot of the EventAnalyticsPage showing the summary cards at the top, the event type bar chart on the left, monthly trends line chart on the right, and the top events table below]_
+![Event analytics page with summary cards and attendance charts](./images/04-08-event-analytics.png)
 
 ### Event Templates Management
 
@@ -245,8 +243,7 @@ Navigate to **Events > Templates** to manage reusable event configurations:
 
 When creating a new event, the **Template Picker** lets you quick-select from active templates to pre-fill the event form.
 
-> **Screenshot needed:**
-> _[Screenshot of the EventTemplatesPage showing a list of templates with name, type, active toggle, and edit/delete buttons. Show the create template modal open with the form fields]_
+![Event Templates page listing templates with type and active state](./images/04-09-event-templates.png)
 
 ### Quick-Create Events
 

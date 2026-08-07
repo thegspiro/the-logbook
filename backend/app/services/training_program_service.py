@@ -1542,6 +1542,9 @@ class TrainingProgramService:
         # Create enrollment
         enrolled_now = datetime.now(timezone.utc)
         enrollment = ProgramEnrollment(
+            # organization_id is NOT NULL; omitting it made the INSERT fail
+            # outright once the row got as far as the database.
+            organization_id=str(organization_id),
             user_id=enrollment_data.user_id,
             program_id=enrollment_data.program_id,
             enrolled_at=enrolled_now,

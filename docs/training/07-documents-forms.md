@@ -101,8 +101,7 @@ Custom forms let you collect structured data for:
 - Surveys and feedback
 - Any custom data collection need
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Forms listing page showing created forms with name, status (Active/Draft), submission count, and action buttons (Edit, View Submissions, Share)]_
+![Forms listing page with status, submission counts, and actions](./images/07-04-forms-list.png)
 
 ---
 

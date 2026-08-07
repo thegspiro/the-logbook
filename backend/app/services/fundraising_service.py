@@ -23,6 +23,26 @@ from app.models.grant import (
     Pledge,
     PledgeStatus,
 )
+from app.utils.sql_ordering import nulls_last_asc
+
+
+def _json_safe_amounts(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Make ``suggested_amounts`` storable in its JSON column.
+
+    ``FundraisingCampaign.suggested_amounts`` is a plain ``JSON`` column, but the
+    schema types the field as ``List[Decimal]`` — so ``model_dump()`` hands the
+    service ``Decimal`` objects and the driver's JSON encoder rejects them
+    ("Object of type Decimal is not JSON serializable"), 500-ing any create or
+    update that includes suggested donation amounts.
+
+    Stored as strings rather than floats: the read side parses them straight
+    back into ``Decimal`` and currency values survive the round trip exactly,
+    which binary floating point cannot promise.
+    """
+    amounts = data.get("suggested_amounts")
+    if not amounts:
+        return data
+    return {**data, "suggested_amounts": [str(amount) for amount in amounts]}
 
 
 class FundraisingService:
@@ -70,7 +90,7 @@ class FundraisingService:
         campaign = FundraisingCampaign(
             organization_id=organization_id,
             created_by=user_id,
-            **data,
+            **_json_safe_amounts(data),
         )
         self.db.add(campaign)
         await self.db.flush()
@@ -93,7 +113,7 @@ class FundraisingService:
         campaign = await self.get_campaign(campaign_id, organization_id)
         if not campaign:
             return None
-        for key, value in data.items():
+        for key, value in _json_safe_amounts(data).items():
             setattr(campaign, key, value)
         await self.db.flush()
         return campaign
@@ -347,7 +367,7 @@ class FundraisingService:
             query = query.where(Pledge.status == status)
         if campaign_id:
             query = query.where(Pledge.campaign_id == campaign_id)
-        query = query.order_by(Pledge.due_date.asc().nulls_last())
+        query = query.order_by(*nulls_last_asc(Pledge.due_date))
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

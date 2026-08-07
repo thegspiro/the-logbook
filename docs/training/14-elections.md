@@ -53,7 +53,7 @@ Key pages:
 | `/elections/settings` | Election Settings | `elections.manage` |
 | `/ballot` | Public Ballot (token-based) | Public (rate-limited) |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Elections list page showing several elections with status badges (Draft in gray, Open in green, Closed in blue), election titles, dates, and vote counts._
+![Elections list showing elections with status badges](./images/14-01-elections-list.png)
 
 ---
 

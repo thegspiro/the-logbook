@@ -48,8 +48,7 @@ Templates are the reusable definitions of a skills test — the digital equivale
 - **Criteria within sections** — Individual scored items with descriptions and whether they are critical (required)
 - **Scoring configuration** — Passing percentage, whether all critical criteria must be met, optional time limit
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Skill Sheet Templates list page showing a table of templates with columns for name, category, status (draft/published/archived), version number, section count, and action buttons (edit, duplicate, publish)]_
+![Skill sheet templates list with category and publication status](./images/09-01-skill-templates.png)
 
 ### Template Statuses
 

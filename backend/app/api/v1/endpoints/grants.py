@@ -143,115 +143,6 @@ async def create_opportunity(
         )
 
 
-@router.get("/{opportunity_id}", response_model=GrantOpportunityResponse)
-async def get_opportunity(
-    opportunity_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("fundraising.view")),
-):
-    """
-    Get a single grant opportunity by ID
-
-    **Authentication required**
-    **Requires permission: fundraising.view**
-    """
-    try:
-        service = GrantService(db)
-        opportunity = await service.get_opportunity(
-            opportunity_id=str(opportunity_id),
-            organization_id=str(current_user.organization_id),
-        )
-        if not opportunity:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Grant opportunity not found",
-            )
-        return opportunity
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting grant opportunity: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=safe_error_detail(e),
-        )
-
-
-@router.put("/{opportunity_id}", response_model=GrantOpportunityResponse)
-async def update_opportunity(
-    opportunity_id: UUID,
-    data: GrantOpportunityUpdate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("fundraising.manage")),
-):
-    """
-    Update a grant opportunity
-
-    **Authentication required**
-    **Requires permission: fundraising.manage**
-    """
-    try:
-        service = GrantService(db)
-        opportunity = await service.update_opportunity(
-            opportunity_id=str(opportunity_id),
-            organization_id=str(current_user.organization_id),
-            data=data.model_dump(exclude_unset=True),
-        )
-        if not opportunity:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Grant opportunity not found",
-            )
-        return opportunity
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=safe_error_detail(e),
-        )
-    except Exception as e:
-        logger.error(f"Error updating grant opportunity: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=safe_error_detail(e),
-        )
-
-
-@router.delete("/{opportunity_id}", status_code=status.HTTP_200_OK)
-async def delete_opportunity(
-    opportunity_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("fundraising.manage")),
-):
-    """
-    Delete a grant opportunity
-
-    **Authentication required**
-    **Requires permission: fundraising.manage**
-    """
-    try:
-        service = GrantService(db)
-        deleted = await service.delete_opportunity(
-            opportunity_id=str(opportunity_id),
-            organization_id=str(current_user.organization_id),
-        )
-        if not deleted:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Grant opportunity not found",
-            )
-        return {"detail": "Grant opportunity deleted"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting grant opportunity: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=safe_error_detail(e),
-        )
-
-
 # ============================================
 # Grant Application Endpoints
 # ============================================
@@ -1836,6 +1727,128 @@ async def get_fundraising_report(
         )
     except Exception as e:
         logger.error(f"Error generating fundraising report: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+
+# ============================================
+# Grant Opportunity Endpoints (by id)
+#
+# Registered last on purpose. FastAPI matches routes in declaration order,
+# so a single-segment `/{opportunity_id}` declared above the literal paths
+# swallows every one of them: `GET /grants/applications` resolved here with
+# opportunity_id="applications" and 422'd on the UUID parse, taking
+# applications, campaigns, donors, donations, pledges, compliance-tasks,
+# fundraising-events and dashboard down with it. Keep these handlers below
+# every literal route in this file.
+# ============================================
+
+
+@router.get("/{opportunity_id}", response_model=GrantOpportunityResponse)
+async def get_opportunity(
+    opportunity_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("fundraising.view")),
+):
+    """
+    Get a single grant opportunity by ID
+
+    **Authentication required**
+    **Requires permission: fundraising.view**
+    """
+    try:
+        service = GrantService(db)
+        opportunity = await service.get_opportunity(
+            opportunity_id=str(opportunity_id),
+            organization_id=str(current_user.organization_id),
+        )
+        if not opportunity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Grant opportunity not found",
+            )
+        return opportunity
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting grant opportunity: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+
+@router.put("/{opportunity_id}", response_model=GrantOpportunityResponse)
+async def update_opportunity(
+    opportunity_id: UUID,
+    data: GrantOpportunityUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("fundraising.manage")),
+):
+    """
+    Update a grant opportunity
+
+    **Authentication required**
+    **Requires permission: fundraising.manage**
+    """
+    try:
+        service = GrantService(db)
+        opportunity = await service.update_opportunity(
+            opportunity_id=str(opportunity_id),
+            organization_id=str(current_user.organization_id),
+            data=data.model_dump(exclude_unset=True),
+        )
+        if not opportunity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Grant opportunity not found",
+            )
+        return opportunity
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        logger.error(f"Error updating grant opportunity: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+
+@router.delete("/{opportunity_id}", status_code=status.HTTP_200_OK)
+async def delete_opportunity(
+    opportunity_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("fundraising.manage")),
+):
+    """
+    Delete a grant opportunity
+
+    **Authentication required**
+    **Requires permission: fundraising.manage**
+    """
+    try:
+        service = GrantService(db)
+        deleted = await service.delete_opportunity(
+            opportunity_id=str(opportunity_id),
+            organization_id=str(current_user.organization_id),
+        )
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Grant opportunity not found",
+            )
+        return {"detail": "Grant opportunity deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting grant opportunity: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=safe_error_detail(e),

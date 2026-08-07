@@ -50,6 +50,39 @@ def block_end(lines: list[str], start: int) -> int:
     return end
 
 
+def normalize(text: str) -> str:
+    """Collapse whitespace and case so anchors survive re-wrapping."""
+    return " ".join(text.lower().split())
+
+
+def locate(lines: list[str], shot: dict) -> int | None:
+    """Index of the placeholder this shot fills, or None if it is gone.
+
+    ``line`` is only a hint. Replacing a placeholder removes several lines, so
+    every recorded line number below it shifts — a manifest written against the
+    original file goes stale the moment the first shot is applied. When the hint
+    misses, fall back to the shot's ``anchor``: a distinctive phrase from the
+    placeholder's own description, which does not move.
+    """
+    index = shot["line"] - 1
+    if 0 <= index < len(lines) and MARKER.match(lines[index]):
+        return index
+
+    anchor = normalize(shot.get("anchor") or "")
+    if not anchor:
+        return None
+
+    matches = [
+        start
+        for start, line in enumerate(lines)
+        if MARKER.match(line)
+        and anchor in normalize(" ".join(lines[start : block_end(lines, start)]))
+    ]
+    # Two placeholders sharing an anchor means the anchor is not distinctive
+    # enough; guessing between them would put the image in the wrong section.
+    return matches[0] if len(matches) == 1 else None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true")
@@ -83,9 +116,21 @@ def main() -> int:
             skipped.append(f"{doc}: file not found")
             continue
         lines = path.read_text().splitlines()
-        for shot in sorted(doc_shots, key=lambda s: s["line"], reverse=True):
-            index = shot["line"] - 1
-            if index >= len(lines) or not MARKER.match(lines[index]):
+        # Resolve every target before rewriting anything, then apply bottom-up
+        # so each replacement leaves the indexes above it untouched.
+        text = "\n".join(lines)
+        located = [
+            # A shot fills exactly one placeholder. Some guides repeat a
+            # near-identical description twice; once the first has been applied,
+            # the anchor search would match the leftover and stamp the same
+            # image in a second place, which reads as a copy-paste slip.
+            (None if f"./images/{shot['file']}" in text else locate(lines, shot), shot)
+            for shot in doc_shots
+        ]
+        for index, shot in sorted(
+            located, key=lambda pair: (pair[0] is None, pair[0] or 0), reverse=True
+        ):
+            if index is None:
                 # Already replaced on a previous run, or the guide moved on.
                 skipped.append(f"{doc}:{shot['line']}: no placeholder ({shot['id']})")
                 continue

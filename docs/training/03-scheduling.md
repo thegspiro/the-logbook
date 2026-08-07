@@ -40,8 +40,7 @@ Navigate to **Shift Scheduling** in the sidebar. The scheduling page is organize
 
 > **Note:** *(2026-04-11)* Departments that do not use the Scheduling module can file shift completion reports via the standalone **Manual Shift Report** page at `/training/manual-shift-report`. See [Training > Manual Shift Report Entry](./02-training.md#manual-shift-report-entry-2026-04-11) for details.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Scheduling page showing the tab bar at the top with all seven tabs, and the Schedule (calendar) tab active showing a monthly calendar view with color-coded shifts]_
+![Scheduling page tab bar with the schedule view below it](./images/03-01-scheduling-tabs.png)
 
 > **Note:** The scheduling module uses a dedicated state store and API service. All scheduling data (shifts, templates, patterns, members) is managed centrally and updates in real time across all tabs.
 
@@ -84,8 +83,7 @@ For each shift you can see:
 **Confirming an Assignment:**
 When you are assigned to a shift, you may need to confirm your availability. Click **Confirm** on the assignment to acknowledge.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the My Shifts tab showing a list of upcoming shifts with date, time, type, status badges (Confirmed in green, Pending in yellow), and a Confirm button on pending assignments]_
+![My Shifts tab listing upcoming shifts with status badges](./images/03-04-my-shifts.png)
 
 ---
 
@@ -99,8 +97,7 @@ The **Open Shifts** tab lists shifts that need additional coverage. Members can 
 
 You can also **withdraw** from an open shift you signed up for, as long as it has not been approved yet.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Open Shifts tab showing available shifts with date, time, positions needed, current sign-ups, and Sign Up/Withdraw buttons]_
+![Open Shifts tab showing shifts with vacant positions](./images/03-05-open-shifts.png)
 
 > **Hint:** Open shifts are a great way to pick up additional hours toward shift-based training requirements.
 
@@ -236,8 +233,7 @@ Shift templates define reusable shift configurations (name, times, positions, ap
 - **Create a template** with a name, start/end times, required positions, and linked apparatus.
 - **Reuse templates** when creating individual shifts to avoid entering the same details repeatedly.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Shift Templates tab showing a list of templates with name, start time, end time, positions, and edit/delete actions]_
+![Shift Templates tab listing templates with start and end times](./images/03-12-shift-templates.png)
 
 ### Patterns
 
@@ -257,8 +253,7 @@ To generate shifts from a pattern:
 3. Click **Generate Shifts**.
 4. Review and confirm the generated shifts.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the pattern creation form showing the pattern type selector (Daily, Weekly, Platoon, Custom), the linked template dropdown, start/end date pickers, and for Platoon type: days on / days off fields]_
+![Shift pattern creation page with the pattern type selector](./images/03-13-shift-patterns.png)
 
 ### Understanding Platoon Rotations
 
@@ -354,8 +349,7 @@ For each requirement, the report shows:
 - Compliance percentage
 - Whether the member is compliant
 
-> **Screenshot placeholder:**
-> _[Screenshot of the compliance report showing a requirement (e.g., "Monthly Minimum Shifts: 4") with a table of members, their completed shifts, percentage, and a compliant/non-compliant badge. Show one member with a "Leave: 2 months" annotation and a reduced requirement]_
+![Scheduling compliance report with per-member shift totals](./images/03-14-scheduling-reports.png)
 
 > **Hint:** Members with active leaves of absence will have their requirements pro-rated. The report shows the adjusted requirement and the number of leave months for transparency.
 

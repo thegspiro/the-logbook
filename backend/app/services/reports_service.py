@@ -32,6 +32,7 @@ from app.models.training import (
     TrainingStatus,
 )
 from app.models.user import User, UserStatus
+from app.utils.sql_ordering import nulls_last_asc
 
 
 def _safe_int(value: Any, default: int) -> int:
@@ -770,7 +771,7 @@ class ReportsService:
                 TrainingRecord.organization_id == str(organization_id),
                 TrainingRecord.status == TrainingStatus.COMPLETED,
             )
-            .order_by(TrainingRecord.expiration_date.asc().nullslast())
+            .order_by(*nulls_last_asc(TrainingRecord.expiration_date))
         )
         records_result = await self.db.execute(records_query)
         records = records_result.scalars().all()
