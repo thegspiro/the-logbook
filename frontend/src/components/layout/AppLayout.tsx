@@ -14,6 +14,7 @@ import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import { usePullToRefreshContext } from '../../contexts/PullToRefreshContext';
 import { PullToRefreshIndicator } from '../PullToRefreshIndicator';
+import { BottomNavigation } from './BottomNavigation';
 
 /** SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS.
  *  Only safe raster image data URIs are allowed — SVG can contain embedded JS. */
@@ -56,7 +57,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   useOfflineSyncEngine();
 
   // Publish the on-screen keyboard height so bottom action bars clear it
-  useKeyboardInset();
+  const keyboardInset = useKeyboardInset();
 
   // Layout-level pull-to-refresh: pages opt in via useRegisterPullToRefresh,
   // supplying their own data-refresh handler. The gesture stays disabled until
@@ -141,7 +142,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   if (navigationLayout === 'left') {
     return (
-      <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
+      <div className="min-h-screen flex flex-col has-bottom-nav" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
         <TopProgressBar />
         <PullToRefreshIndicator
           pulling={pulling}
@@ -167,8 +168,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               {content}
             </PageTransition>
           </div>
-          <div className="md:ml-0">{footer}</div>
+          {/* Reserve room so the fixed bottom bar never covers the footer. */}
+          <div className="md:ml-0 pb-[var(--bottom-nav-height,0px)]">{footer}</div>
         </div>
+        <BottomNavigation hidden={keyboardInset > 0} />
         <ConfirmDialog
           isOpen={showLogoutModal}
           onConfirm={() => { void handleLogoutConfirm(); }}
@@ -183,7 +186,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
+    <div className="min-h-screen flex flex-col has-bottom-nav" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
       <TopProgressBar />
       <PullToRefreshIndicator
         pulling={pulling}
@@ -208,7 +211,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           {content}
         </PageTransition>
       </div>
-      {footer}
+      {/* Reserve room so the fixed bottom bar never covers the footer. */}
+      <div className="pb-[var(--bottom-nav-height,0px)]">{footer}</div>
+      <BottomNavigation hidden={keyboardInset > 0} />
       <ConfirmDialog
         isOpen={showLogoutModal}
         onConfirm={() => { void handleLogoutConfirm(); }}

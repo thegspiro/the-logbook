@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
  * Publishes the on-screen keyboard's height as the `--keyboard-inset` CSS
@@ -14,9 +14,13 @@ import { useEffect } from 'react';
  * difference stays ~0 there and nothing shifts — the same rule is safe on
  * every platform.
  *
- * Mounted once, at the app root.
+ * Mounted once, at the app root. Returns the inset in CSS pixels for callers
+ * that need to react in JS rather than CSS — the bottom navigation hides while
+ * the keyboard is up rather than floating on top of it.
  */
-export function useKeyboardInset(): void {
+export function useKeyboardInset(): number {
+  const [inset, setInset] = useState(0);
+
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -26,10 +30,12 @@ export function useKeyboardInset(): void {
     const update = () => {
       // offsetTop covers the case where the visual viewport has been scrolled
       // within the layout viewport (iOS does this to reveal the focused field).
-      const inset = window.innerHeight - vv.height - vv.offsetTop;
+      const raw = window.innerHeight - vv.height - vv.offsetTop;
       // Small deltas show up from rubber-banding and toolbar transitions; only
       // react to something keyboard-sized so the layout doesn't twitch.
-      root.style.setProperty('--keyboard-inset', inset > 80 ? `${Math.round(inset)}px` : '0px');
+      const next = raw > 80 ? Math.round(raw) : 0;
+      root.style.setProperty('--keyboard-inset', `${next}px`);
+      setInset((prev) => (prev === next ? prev : next));
     };
 
     update();
@@ -41,4 +47,6 @@ export function useKeyboardInset(): void {
       root.style.removeProperty('--keyboard-inset');
     };
   }, []);
+
+  return inset;
 }
