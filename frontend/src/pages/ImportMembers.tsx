@@ -582,7 +582,7 @@ const ImportMembers: React.FC = () => {
             <FileText className="w-5 h-5 text-blue-700 dark:text-blue-400" />
             <span>How to Import Members</span>
           </h2>
-          <ol className="text-blue-200 text-sm space-y-2 ml-6 list-decimal">
+          <ol className="text-blue-900 dark:text-blue-200 text-sm space-y-2 ml-6 list-decimal">
             <li>Download the CSV template below</li>
             <li>
               Fill in member information — <strong>firstName</strong>, <strong>lastName</strong> and{' '}
@@ -629,7 +629,7 @@ const ImportMembers: React.FC = () => {
                     setPreviewData([]);
                     setImportResult(null);
                   }}
-                  className="mt-3 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm"
+                  className="mt-3 text-red-700 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 text-sm"
                 >
                   Remove file
                 </button>
@@ -653,7 +653,7 @@ const ImportMembers: React.FC = () => {
 
           {validating && (
             <div className="mt-4 flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-400">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400"></div>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-700 dark:border-blue-400"></div>
               <span>Validating file...</span>
             </div>
           )}
@@ -678,7 +678,7 @@ const ImportMembers: React.FC = () => {
                     <th scope="col" className="px-4 py-2 text-left text-theme-text-secondary">Emergency Contact</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/10">
+                <tbody className="divide-y divide-theme-surface-border">
                   {previewData.map((row, index) => (
                     <tr key={index} className="hover:bg-theme-surface-secondary">
                       <td className="px-4 py-2 text-theme-text-primary">
@@ -747,7 +747,7 @@ const ImportMembers: React.FC = () => {
                 <h3 className="text-red-700 dark:text-red-300 font-bold mb-2">Errors:</h3>
                 <div className="space-y-1 text-sm">
                   {importResult.errors.map((error, index) => (
-                    <p key={index} className="text-red-200">
+                    <p key={index} className="text-red-800 dark:text-red-200">
                       Row {error.row}: {error.error}
                     </p>
                   ))}
