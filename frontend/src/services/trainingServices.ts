@@ -18,7 +18,7 @@ export const trainingService = {
     const response = await api.get<TrainingCourse[]>('/training/courses', {
       params: { active_only: activeOnly },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -55,7 +55,7 @@ export const trainingService = {
     end_date?: string;
   }): Promise<TrainingRecord[]> {
     const response = await api.get<TrainingRecord[]>('/training/records', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -102,7 +102,7 @@ export const trainingService = {
     active_only?: boolean;
   }): Promise<TrainingRequirement[]> {
     const response = await api.get<TrainingRequirement[]>('/training/requirements', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -143,7 +143,7 @@ export const trainingService = {
     const response = await api.get<TrainingCategory[]>('/training/categories', {
       params: { active_only: activeOnly },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -224,7 +224,7 @@ export const trainingService = {
       `/training/requirements/progress/${userId}`,
       { params: { year } }
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -234,7 +234,7 @@ export const trainingService = {
     const response = await api.get<TrainingRecord[]>('/training/certifications/expiring', {
       params: { days_ahead: daysAhead },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getComplianceMatrix(): Promise<ComplianceMatrix> {
@@ -261,7 +261,7 @@ export const trainingService = {
     const response = await api.get<ExpiringCertification[]>('/training/expiring-certifications', {
       params: { days },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   // ==================== Historical Training Import ====================
@@ -298,7 +298,7 @@ export const externalTrainingService = {
     const response = await api.get<ExternalTrainingProvider[]>('/training/external/providers', {
       params: { active_only: activeOnly },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -369,7 +369,7 @@ export const externalTrainingService = {
       `/training/external/providers/${providerId}/sync-logs`,
       { params: { limit } }
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -395,7 +395,7 @@ export const externalTrainingService = {
       `/training/external/providers/${providerId}/category-mappings`,
       { params: { unmapped_only: unmappedOnly } }
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -426,7 +426,7 @@ export const externalTrainingService = {
       `/training/external/providers/${providerId}/user-mappings`,
       { params: { unmapped_only: unmappedOnly } }
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -461,7 +461,7 @@ export const externalTrainingService = {
       `/training/external/providers/${providerId}/imports`,
       { params }
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -504,7 +504,7 @@ export const trainingProgramService = {
     position?: string;
   }): Promise<TrainingRequirementEnhanced[]> {
     const response = await api.get<TrainingRequirementEnhanced[]>('/training/programs/requirements', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -541,7 +541,7 @@ export const trainingProgramService = {
     is_template?: boolean;
   }): Promise<TrainingProgram[]> {
     const response = await api.get<TrainingProgram[]>('/training/programs/programs', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -591,7 +591,7 @@ export const trainingProgramService = {
    */
   async getSampleTemplates(): Promise<SampleTemplateSummary[]> {
     const response = await api.get<SampleTemplateSummary[]>('/training/programs/sample-templates');
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -615,7 +615,7 @@ export const trainingProgramService = {
    */
   async getProgramPhases(programId: string): Promise<ProgramPhase[]> {
     const response = await api.get<ProgramPhase[]>(`/training/programs/programs/${programId}/phases`);
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -646,7 +646,7 @@ export const trainingProgramService = {
       `/training/programs/programs/${programId}/phases/reorder`,
       { phase_ids: phaseIds },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   // ==================== Program Requirements ====================
@@ -658,7 +658,7 @@ export const trainingProgramService = {
     const response = await api.get<ProgramRequirement[]>(`/training/programs/programs/${programId}/requirements`, {
       params: { phase_id: phaseId },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -695,7 +695,7 @@ export const trainingProgramService = {
       `/training/programs/programs/${programId}/requirements/reorder`,
       { program_requirement_ids: programRequirementIds },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   // ==================== Program Milestones ====================
@@ -739,7 +739,7 @@ export const trainingProgramService = {
     const response = await api.get<ProgramEnrollment[]>('/training/programs/enrollments/me', {
       params: { status },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -749,7 +749,7 @@ export const trainingProgramService = {
     const response = await api.get<ProgramEnrollment[]>(`/training/programs/enrollments/user/${userId}`, {
       params: { status },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -761,7 +761,7 @@ export const trainingProgramService = {
       `/training/programs/programs/${programId}/enrollments`,
       { params: { status } },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -878,7 +878,7 @@ export const trainingProgramService = {
     const response = await api.get<MemberEligibility[]>(
       `/training/programs/programs/${programId}/eligibility`,
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   // ==================== Registry Import ====================
@@ -888,7 +888,7 @@ export const trainingProgramService = {
    */
   async getRegistries(): Promise<RegistryInfo[]> {
     const response = await api.get<RegistryInfo[]>('/training/programs/requirements/registries');
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -898,7 +898,7 @@ export const trainingProgramService = {
     const response = await api.get<RegistryRequirementPreview[]>(
       `/training/programs/requirements/registries/${registryName}/preview`,
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -923,7 +923,7 @@ export const trainingProgramService = {
 export const trainingSessionService = {
   async getCalendar(params?: { start_after?: string; start_before?: string; training_type?: string; include_finalized?: boolean }): Promise<TrainingSessionResponse[]> {
     const response = await api.get<TrainingSessionResponse[]>('/training/sessions/calendar', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createSession(data: TrainingSessionCreate): Promise<TrainingSessionResponse> {
@@ -933,7 +933,7 @@ export const trainingSessionService = {
 
   async createRecurringSessions(data: RecurringTrainingSessionCreate): Promise<TrainingSessionResponse[]> {
     const response = await api.post<TrainingSessionResponse[]>('/training/sessions/recurring', data);
-    return response.data;
+    return asArray(response.data);
   },
 
   async finalizeSession(sessionId: string): Promise<{ message: string; approval_id: string }> {
@@ -964,6 +964,7 @@ import type {
   TrainingSubmissionUpdate,
   SubmissionReviewRequest,
 } from '../types/training';
+import { asArray } from '../utils/asArray';
 
 export const trainingSubmissionService = {
   // Config
@@ -1008,7 +1009,7 @@ export const trainingSubmissionService = {
     const response = await api.get<TrainingSubmission[]>('/training/submissions/my', {
       params: status ? { status } : undefined,
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getSubmission(submissionId: string): Promise<TrainingSubmission> {
@@ -1028,7 +1029,7 @@ export const trainingSubmissionService = {
   // Officer review
   async getPendingSubmissions(): Promise<TrainingSubmission[]> {
     const response = await api.get<TrainingSubmission[]>('/training/submissions/pending');
-    return response.data;
+    return asArray(response.data);
   },
 
   async getPendingCount(): Promise<{ pending_count: number }> {
@@ -1038,7 +1039,7 @@ export const trainingSubmissionService = {
 
   async getAllSubmissions(params?: { status?: string | undefined; user_id?: string; limit?: number; offset?: number }): Promise<TrainingSubmission[]> {
     const response = await api.get<TrainingSubmission[]>('/training/submissions/all', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async reviewSubmission(submissionId: string, review: SubmissionReviewRequest): Promise<TrainingSubmission> {
@@ -1118,7 +1119,7 @@ export const skillsTestingService = {
   // Templates
   async getTemplates(params?: { status?: string; category?: string }): Promise<SkillTemplateListItem[]> {
     const response = await api.get<SkillTemplateListItem[]>('/training/skills-testing/templates', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getTemplate(templateId: string): Promise<SkillTemplate> {
@@ -1153,7 +1154,7 @@ export const skillsTestingService = {
   // Tests
   async getTests(params?: { status?: string; candidate_id?: string; template_id?: string }): Promise<SkillTestListItem[]> {
     const response = await api.get<SkillTestListItem[]>('/training/skills-testing/tests', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getTest(testId: string): Promise<SkillTest> {
@@ -1503,7 +1504,7 @@ export const courseSyllabusService = {
     const response = await api.get<CourseClass[]>(
       `/training/courses/${courseId}/classes`,
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async addClass(courseId: string, data: CourseClassCreate): Promise<CourseClass> {
@@ -1535,7 +1536,7 @@ export const courseSyllabusService = {
       `/training/courses/${courseId}/classes/reorder`,
       { class_ids: classIds },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   /** Recompute every class's day offset from a weekly meeting pattern. */
@@ -1547,7 +1548,7 @@ export const courseSyllabusService = {
       `/training/courses/${courseId}/classes/autofill`,
       data,
     );
-    return response.data;
+    return asArray(response.data);
   },
 };
 
@@ -1569,13 +1570,13 @@ export const courseCohortService = {
     status?: string;
   }): Promise<CourseCohort[]> {
     const response = await api.get<CourseCohort[]>('/training/cohorts', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   /** Cohorts the signed-in member is on the roster for. */
   async getMyCohorts(): Promise<CourseCohort[]> {
     const response = await api.get<CourseCohort[]>('/training/cohorts/mine');
-    return response.data;
+    return asArray(response.data);
   },
 
   async getCohort(cohortId: string): Promise<CourseCohortDetail> {

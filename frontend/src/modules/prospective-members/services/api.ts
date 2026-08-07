@@ -62,6 +62,7 @@ import type {
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
 import { StageType as StageTypeConst, VotingMethod, VictoryCondition } from '../../../constants/enums';
+import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 
@@ -492,7 +493,7 @@ export const pipelineService = {
     const params: Record<string, unknown> = {};
     if (includeTemplates) params.include_templates = true;
     const response = await api.get<BackendPipelineListResponse[]>('/prospective-members/pipelines', { params });
-    return response.data.map(mapPipelineListItem);
+    return asArray(response.data).map(mapPipelineListItem);
   },
 
   async getTemplates(): Promise<PipelineListItem[]> {
@@ -588,7 +589,7 @@ export const pipelineService = {
       `/prospective-members/pipelines/${pipelineId}/steps/reorder`,
       { step_ids: stageIds }
     );
-    return response.data.map(mapStepToStage);
+    return asArray(response.data).map(mapStepToStage);
   },
 
   async updateInactivitySettings(pipelineId: string, config: InactivityConfig): Promise<Pipeline> {
@@ -920,7 +921,7 @@ export const applicantService = {
     const response = await api.get<BackendDocumentResponse[]>(
       `/prospective-members/prospects/${applicantId}/documents`
     );
-    const docs: BackendDocumentResponse[] = response.data || [];
+    const docs = asArray(response.data);
     return docs.map((d) => mapDocumentResponse(d, applicantId));
   },
 
@@ -1058,7 +1059,7 @@ export const interviewService = {
     const response = await api.get<Interview[]>(
       `/prospective-members/prospects/${applicantId}/interviews`
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async createInterview(applicantId: string, data: InterviewCreate): Promise<Interview> {
@@ -1091,7 +1092,7 @@ export const eventLinkService = {
     const response = await api.get<ProspectEventLink[]>(
       `/prospective-members/prospects/${applicantId}/events`
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async linkEvent(applicantId: string, eventId: string): Promise<ProspectEventLink> {
@@ -1114,7 +1115,7 @@ export const electionPackageService = {
     const response = await api.get<BackendElectionPackageResponse[]>('/prospective-members/election-packages', {
       params,
     });
-    return (response.data || []).map(mapElectionPackageResponse);
+    return asArray(response.data).map(mapElectionPackageResponse);
   },
 
   async getAllPackages(params?: {
@@ -1127,6 +1128,6 @@ export const electionPackageService = {
         status: params?.status,
       },
     });
-    return (response.data || []).map(mapElectionPackageResponse);
+    return asArray(response.data).map(mapElectionPackageResponse);
   },
 };

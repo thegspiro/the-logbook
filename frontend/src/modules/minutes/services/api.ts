@@ -15,6 +15,7 @@ import type {
   MinutesStats,
   MinutesSearchResult,
 } from '../types/minutes';
+import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 
@@ -101,6 +102,6 @@ export const minutesService = {
 
   async search(query: string, limit = 20): Promise<MinutesSearchResult[]> {
     const response = await api.get<MinutesSearchResult[]>('/minutes-records/search', { params: { q: query, limit } });
-    return response.data;
+    return asArray(response.data);
   },
 };

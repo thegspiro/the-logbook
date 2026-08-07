@@ -15,6 +15,7 @@ import type {
   ComplianceSummary,
   ExpiringScreening,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 const BASE = '/medical-screening';
@@ -30,7 +31,7 @@ export const medicalScreeningService = {
       `${BASE}/requirements`,
       { params }
     );
-    return data;
+    return asArray(data);
   },
 
   async getRequirement(id: string): Promise<ScreeningRequirement> {
@@ -76,7 +77,7 @@ export const medicalScreeningService = {
     const { data } = await api.get<ScreeningRecord[]>(`${BASE}/records`, {
       params,
     });
-    return data;
+    return asArray(data);
   },
 
   async getRecord(id: string): Promise<ScreeningRecord> {
@@ -132,6 +133,6 @@ export const medicalScreeningService = {
       `${BASE}/expiring`,
       { params: days ? { days } : undefined }
     );
-    return data;
+    return asArray(data);
   },
 };

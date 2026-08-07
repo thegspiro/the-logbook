@@ -22,6 +22,7 @@ import type {
   EventHourMappingUpdate,
   AdminHoursComplianceItem,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 
@@ -34,7 +35,7 @@ export const adminHoursCategoryService = {
     const response = await api.get<AdminHoursCategory[]>('/admin-hours/categories', {
       params: { include_inactive: params?.includeInactive ?? false },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async create(data: AdminHoursCategoryCreate): Promise<AdminHoursCategory> {
@@ -201,7 +202,7 @@ export const adminHoursEntryService = {
 
   async listActiveSessions(): Promise<AdminHoursActiveSessionAdmin[]> {
     const response = await api.get<AdminHoursActiveSessionAdmin[]>('/admin-hours/active-sessions');
-    return response.data;
+    return asArray(response.data);
   },
 
   async forceClockOut(entryId: string): Promise<AdminHoursEntry> {
@@ -223,7 +224,7 @@ export const adminHoursComplianceService = {
     const response = await api.get<AdminHoursComplianceItem[]>(`/admin-hours/compliance/${userId}`, {
       params: year ? { year } : undefined,
     });
-    return response.data;
+    return asArray(response.data);
   },
 };
 
@@ -232,7 +233,7 @@ export const eventHourMappingService = {
     const response = await api.get<EventHourMapping[]>('/admin-hours/event-mappings', {
       params: { include_inactive: params?.includeInactive ?? false },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async create(data: EventHourMappingCreate): Promise<EventHourMapping> {

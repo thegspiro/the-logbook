@@ -24,6 +24,7 @@ import type {
   StoreWindowSummary,
   Storefront,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 
@@ -73,7 +74,7 @@ export const storefrontService = {
 
   async getMyOrders(): Promise<StoreOrder[]> {
     const response = await api.get<StoreOrder[]>('/store/orders/mine');
-    return response.data;
+    return asArray(response.data);
   },
 
   async getMyOrder(orderId: string): Promise<StoreOrder> {
@@ -138,7 +139,7 @@ export const storefrontService = {
         include_archived: params?.includeArchived,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createProduct(payload: StoreProductInput): Promise<StoreProduct> {
@@ -174,7 +175,7 @@ export const storefrontService = {
     const response = await api.get<StoreOrderWindow[]>('/store/windows', {
       params: status ? { status } : {},
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createWindow(

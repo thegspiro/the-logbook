@@ -22,6 +22,7 @@ import type {
   PendingApproval,
   PurchaseRequest,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 
@@ -32,7 +33,7 @@ const api = createApiClient();
 export const fiscalYearService = {
   async list(): Promise<FiscalYear[]> {
     const response = await api.get<FiscalYear[]>('/finance/fiscal-years');
-    return response.data;
+    return asArray(response.data);
   },
 
   async get(id: string): Promise<FiscalYear> {
@@ -84,7 +85,7 @@ export const budgetCategoryService = {
     const response = await api.get<BudgetCategory[]>(
       '/finance/budget-categories',
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async create(data: {
@@ -132,7 +133,7 @@ export const budgetService = {
         category_id: params?.categoryId,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async get(id: string): Promise<Budget> {
@@ -173,7 +174,7 @@ export const approvalChainService = {
     const response = await api.get<ApprovalChain[]>(
       '/finance/approval-chains',
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async get(id: string): Promise<ApprovalChain> {
@@ -263,7 +264,7 @@ export const approvalService = {
     const response = await api.get<PendingApproval[]>(
       '/finance/approvals/pending',
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async approve(
@@ -307,7 +308,7 @@ export const purchaseRequestService = {
         },
       },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async get(id: string): Promise<PurchaseRequest> {
@@ -389,7 +390,7 @@ export const expenseReportService = {
       '/finance/expense-reports',
       { params: { status: params?.status } },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async get(id: string): Promise<ExpenseReport> {
@@ -459,7 +460,7 @@ export const checkRequestService = {
       '/finance/check-requests',
       { params: { status: params?.status } },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async get(id: string): Promise<CheckRequest> {
@@ -521,7 +522,7 @@ export const duesService = {
     const response = await api.get<DuesSchedule[]>(
       '/finance/dues-schedules',
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async createSchedule(
@@ -566,7 +567,7 @@ export const duesService = {
         status: params?.status,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async recordPayment(
