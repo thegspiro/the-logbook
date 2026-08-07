@@ -48,3 +48,35 @@ class TestRoleEditCeiling:
         caller = _user(["events.view"])
         db = MagicMock()
         await _enforce_role_edit_ceiling(caller, [], db, "1.2.3.4")
+
+    async def test_editing_a_role_within_your_authority_is_allowed(self):
+        """The ceiling must not block ordinary edits — otherwise it's a lockout."""
+        caller = _user(["roles.edit", "events.view"])
+        db = MagicMock()
+        with patch(
+            "app.api.v1.endpoints.roles.report_privilege_escalation_attempt",
+            new=AsyncMock(),
+        ) as reported:
+            await _enforce_role_edit_ceiling(caller, ["events.view"], db, None)
+        reported.assert_not_awaited()
+
+    async def test_module_wildcard_covers_actions_in_that_module(self):
+        """`settings.*` should satisfy a role currently holding `settings.edit`."""
+        caller = _user(["settings.*"])
+        db = MagicMock()
+        await _enforce_role_edit_ceiling(caller, ["settings.edit"], db, None)
+
+    async def test_one_out_of_ceiling_permission_is_enough_to_refuse(self):
+        """The check is per-permission: an in-ceiling majority must not pass it."""
+        caller = _user(["events.*"])
+        db = MagicMock()
+        with patch(
+            "app.api.v1.endpoints.roles.report_privilege_escalation_attempt",
+            new=AsyncMock(),
+        ):
+            with pytest.raises(HTTPException) as exc:
+                await _enforce_role_edit_ceiling(
+                    caller, ["events.view", "security.manage"], db, None
+                )
+        assert exc.value.status_code == 403
+        assert "security.manage" in exc.value.detail

@@ -262,6 +262,20 @@ class Settings(BaseSettings):
     # Set True only for a deployment that terminates TLS on a trusted, isolated
     # path and accepts the risk; it is logged loudly on every boot.
     SECURITY_ALLOW_UNVERIFIED_TLS: bool = False
+    # SEC: Promote "no transport TLS at all" from a warning to a startup blocker.
+    #
+    # DB_SSL/REDIS_SSL unset in production means PHI, session data and cached
+    # queries cross the network in cleartext. That has always been reported at
+    # boot, but only as a WARNING, so a HIPAA deployment can and does run that
+    # way indefinitely — a warning nobody reads is not a control.
+    #
+    # It stays opt-in and defaults to False because promoting it unconditionally
+    # would refuse to boot every existing deployment that terminates TLS
+    # elsewhere (a private VPC, a service mesh, a sidecar) or that simply has
+    # not configured it yet. Turning it on is the deployment owner's call.
+    #
+    # Set True once DB_SSL/REDIS_SSL are configured, to keep them that way.
+    SECURITY_REQUIRE_TLS: bool = False
     # SEC: Break-glass gate for the audit-chain rehash tool. Rehash rewrites the
     # single, cross-organization audit hash chain, so it must not be reachable by
     # an ordinary org admin who merely holds `audit.export`. It stays disabled
@@ -356,10 +370,16 @@ class Settings(BaseSettings):
             if not self.REDIS_PASSWORD:
                 warnings.append("CRITICAL: REDIS_PASSWORD must be set in production")
 
+            # No TLS at all: CRITICAL (blocks boot) only when the deployment
+            # has opted in via SECURITY_REQUIRE_TLS, so upgrading this release
+            # cannot refuse to start an existing prod that terminates TLS
+            # elsewhere.
+            tls_severity = "CRITICAL" if self.SECURITY_REQUIRE_TLS else "WARNING"
+
             if not self.DB_SSL:
                 warnings.append(
-                    "WARNING: DB_SSL should be enabled in production to encrypt "
-                    "database traffic and prevent man-in-the-middle attacks"
+                    f"{tls_severity}: DB_SSL should be enabled in production to "
+                    "encrypt database traffic and prevent man-in-the-middle attacks"
                 )
             elif not self.DB_SSL_CA:
                 # CRITICAL, not WARNING: this configuration *looks* secure and
@@ -377,8 +397,8 @@ class Settings(BaseSettings):
 
             if not self.REDIS_SSL:
                 warnings.append(
-                    "WARNING: REDIS_SSL should be enabled in production to encrypt "
-                    "Redis traffic and prevent man-in-the-middle attacks"
+                    f"{tls_severity}: REDIS_SSL should be enabled in production to "
+                    "encrypt Redis traffic and prevent man-in-the-middle attacks"
                 )
             elif not self.REDIS_SSL_CA:
                 severity = (
