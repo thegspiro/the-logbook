@@ -12,12 +12,13 @@ Fixes:
 - Adds missing column to program_phases: requires_manual_advancement
 - Adds missing column to program_milestones: notification_message
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260206_0300'
-down_revision = '20260205_0200'
+revision = "20260206_0300"
+down_revision = "20260205_0200"
 branch_labels = None
 depends_on = None
 
@@ -43,12 +44,12 @@ def upgrade() -> None:
     if has_is_mandatory:
         # Rename is_mandatory -> is_required
         op.alter_column(
-            'program_requirements',
-            'is_mandatory',
-            new_column_name='is_required',
+            "program_requirements",
+            "is_mandatory",
+            new_column_name="is_required",
             existing_type=sa.Boolean(),
             existing_nullable=True,
-            existing_server_default='1',
+            existing_server_default="1",
         )
 
     # Check if order column exists before renaming
@@ -64,9 +65,9 @@ def upgrade() -> None:
     if has_order:
         # Rename order -> sort_order
         op.alter_column(
-            'program_requirements',
-            'order',
-            new_column_name='sort_order',
+            "program_requirements",
+            "order",
+            new_column_name="sort_order",
             existing_type=sa.Integer(),
             existing_nullable=True,
         )
@@ -81,25 +82,27 @@ def upgrade() -> None:
     """))
     existing_columns = {row[0] for row in result}
 
-    if 'is_prerequisite' not in existing_columns:
+    if "is_prerequisite" not in existing_columns:
         op.add_column(
-            'program_requirements',
-            sa.Column('is_prerequisite', sa.Boolean(), nullable=True, server_default='0'),
+            "program_requirements",
+            sa.Column(
+                "is_prerequisite", sa.Boolean(), nullable=True, server_default="0"
+            ),
         )
-    if 'program_specific_description' not in existing_columns:
+    if "program_specific_description" not in existing_columns:
         op.add_column(
-            'program_requirements',
-            sa.Column('program_specific_description', sa.Text(), nullable=True),
+            "program_requirements",
+            sa.Column("program_specific_description", sa.Text(), nullable=True),
         )
-    if 'custom_deadline_days' not in existing_columns:
+    if "custom_deadline_days" not in existing_columns:
         op.add_column(
-            'program_requirements',
-            sa.Column('custom_deadline_days', sa.Integer(), nullable=True),
+            "program_requirements",
+            sa.Column("custom_deadline_days", sa.Integer(), nullable=True),
         )
-    if 'notification_message' not in existing_columns:
+    if "notification_message" not in existing_columns:
         op.add_column(
-            'program_requirements',
-            sa.Column('notification_message', sa.Text(), nullable=True),
+            "program_requirements",
+            sa.Column("notification_message", sa.Text(), nullable=True),
         )
 
     # ========================================
@@ -114,8 +117,13 @@ def upgrade() -> None:
     """))
     if result.scalar() == 0:
         op.add_column(
-            'program_phases',
-            sa.Column('requires_manual_advancement', sa.Boolean(), nullable=True, server_default='0'),
+            "program_phases",
+            sa.Column(
+                "requires_manual_advancement",
+                sa.Boolean(),
+                nullable=True,
+                server_default="0",
+            ),
         )
 
     # ========================================
@@ -130,37 +138,37 @@ def upgrade() -> None:
     """))
     if result.scalar() == 0:
         op.add_column(
-            'program_milestones',
-            sa.Column('notification_message', sa.Text(), nullable=True),
+            "program_milestones",
+            sa.Column("notification_message", sa.Text(), nullable=True),
         )
 
 
 def downgrade() -> None:
     # Remove added columns from program_milestones
-    op.drop_column('program_milestones', 'notification_message')
+    op.drop_column("program_milestones", "notification_message")
 
     # Remove added column from program_phases
-    op.drop_column('program_phases', 'requires_manual_advancement')
+    op.drop_column("program_phases", "requires_manual_advancement")
 
     # Remove added columns from program_requirements
-    op.drop_column('program_requirements', 'notification_message')
-    op.drop_column('program_requirements', 'custom_deadline_days')
-    op.drop_column('program_requirements', 'program_specific_description')
-    op.drop_column('program_requirements', 'is_prerequisite')
+    op.drop_column("program_requirements", "notification_message")
+    op.drop_column("program_requirements", "custom_deadline_days")
+    op.drop_column("program_requirements", "program_specific_description")
+    op.drop_column("program_requirements", "is_prerequisite")
 
     # Rename columns back
     op.alter_column(
-        'program_requirements',
-        'sort_order',
-        new_column_name='order',
+        "program_requirements",
+        "sort_order",
+        new_column_name="order",
         existing_type=sa.Integer(),
         existing_nullable=True,
     )
     op.alter_column(
-        'program_requirements',
-        'is_required',
-        new_column_name='is_mandatory',
+        "program_requirements",
+        "is_required",
+        new_column_name="is_mandatory",
         existing_type=sa.Boolean(),
         existing_nullable=True,
-        existing_server_default='1',
+        existing_server_default="1",
     )

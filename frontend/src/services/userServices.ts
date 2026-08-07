@@ -5,6 +5,7 @@
 import api from './apiClient';
 import type { Permission, PermissionCategory, Role, UserRoleResponse, UserWithRoles } from '../types/role';
 import type { AuthSettings, ContactInfoSettings, ContactInfoUpdate, EmailServiceSettings, FileStorageSettings, User, UserProfileUpdate } from '../types/user';
+import { asArray } from '../utils/asArray';
 
 export const userService = {
   /**
@@ -12,7 +13,7 @@ export const userService = {
    */
   async getUsers(): Promise<User[]> {
     const response = await api.get<User[]>('/users');
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -28,7 +29,7 @@ export const userService = {
    */
   async getUsersWithRoles(): Promise<UserWithRoles[]> {
     const response = await api.get<UserWithRoles[]>('/users/with-roles');
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -489,7 +490,7 @@ export const roleService = {
    */
   async getPermissions(): Promise<Permission[]> {
     const response = await api.get<Permission[]>('/roles/permissions');
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -497,7 +498,7 @@ export const roleService = {
    */
   async getPermissionsByCategory(): Promise<PermissionCategory[]> {
     const response = await api.get<PermissionCategory[]>('/roles/permissions/by-category');
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -505,7 +506,7 @@ export const roleService = {
    */
   async getRoles(): Promise<Role[]> {
     const response = await api.get<Role[]>('/roles');
-    return response.data;
+    return asArray(response.data);
   },
 
   /**
@@ -567,7 +568,7 @@ export const roleService = {
 
   async getMyRoles(): Promise<Role[]> {
     const response = await api.get<Role[]>('/roles/my/roles');
-    return response.data;
+    return asArray(response.data);
   },
 
   async getMyPermissions(): Promise<{ user_id: string; permissions: string[]; roles: string[] }> {

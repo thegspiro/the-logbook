@@ -243,6 +243,7 @@ async def review_submission(
                 organization_id=current_user.organization_id,
                 program_id=review.apply_to_program_id,
                 requirement_id=review.apply_to_requirement_id,
+                completed_on=preview.completion_date,
             )
             if not ok:
                 raise HTTPException(
@@ -270,6 +271,7 @@ async def review_submission(
                 hours=float(submission.hours_completed or 0),
                 verified_by=current_user.id,
                 source_id=str(submission_id),
+                completed_on=submission.completion_date,
             )
             await log_audit_event(
                 db=db,

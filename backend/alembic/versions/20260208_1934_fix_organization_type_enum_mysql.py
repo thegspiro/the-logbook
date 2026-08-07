@@ -16,13 +16,12 @@ We need to use raw SQL to modify the ENUM column.
 FIX:
 Use raw MySQL ALTER TABLE MODIFY COLUMN to directly change the enum values.
 """
-from alembic import op
-import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260208_1934'
-down_revision = '20260207_0501'
+revision = "20260208_1934"
+down_revision = "20260207_0501"
 branch_labels = None
 depends_on = None
 

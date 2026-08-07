@@ -55,12 +55,31 @@ async function settle(page) {
 const EMPTY_STATE =
   /\bno [a-z .'-]{2,40}\b(found|yet|scheduled|available|to show)|get started by (creating|adding)|nothing (here|to show)/i;
 
-async function detectEmptyState(page) {
-  const text = await page
+/**
+ * The app's ErrorBoundary renders this when a page throws during render. It is
+ * a normal-looking screenshot of a broken page — no exception reaches
+ * Playwright, the capture "succeeds", and without this check the error card
+ * gets published into a guide as though it were the feature. Treated as a hard
+ * failure rather than an empty state: an empty module is a fact about the demo
+ * data, a crash is a bug to fix.
+ */
+const CRASHED = /Oops! Something went wrong|Show error details/i;
+
+async function pageText(page) {
+  return page
     .locator("main, body")
     .first()
     .innerText()
     .catch(() => "");
+}
+
+async function detectCrash(page) {
+  const text = await pageText(page);
+  return CRASHED.test(text);
+}
+
+async function detectEmptyState(page) {
+  const text = await pageText(page);
   const match = text.match(EMPTY_STATE);
   return match ? match[0].trim() : null;
 }
@@ -144,6 +163,9 @@ async function main() {
       const emptyState = shot.allowEmptyState
         ? null
         : await detectEmptyState(page);
+      if (await detectCrash(page)) {
+        throw new Error("page hit the ErrorBoundary — the app crashed here");
+      }
       results.push({
         id: shot.id,
         status: "ok",

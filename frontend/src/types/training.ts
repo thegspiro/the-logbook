@@ -5,32 +5,17 @@
 import type { Event } from './event';
 
 export type TrainingType =
-  | 'certification'
-  | 'continuing_education'
-  | 'skills_practice'
-  | 'orientation'
-  | 'refresher'
-  | 'specialty';
+  'certification' | 'continuing_education' | 'skills_practice' | 'orientation' | 'refresher' | 'specialty';
 
-export type TrainingStatus =
-  | 'scheduled'
-  | 'in_progress'
-  | 'completed'
-  | 'cancelled'
-  | 'failed';
+export type TrainingStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
 
-export type RequirementFrequency =
-  | 'annual'
-  | 'biannual'
-  | 'quarterly'
-  | 'monthly'
-  | 'one_time';
+export type RequirementFrequency = 'annual' | 'biannual' | 'quarterly' | 'monthly' | 'one_time';
 
 export type DueDateType =
-  | 'calendar_period'   // Due by end of calendar period (e.g., Dec 31st)
-  | 'rolling'           // Due X months from last completion
-  | 'certification_period'  // Due when certification expires
-  | 'fixed_date';       // Due by a specific fixed date
+  | 'calendar_period' // Due by end of calendar period (e.g., Dec 31st)
+  | 'rolling' // Due X months from last completion
+  | 'certification_period' // Due when certification expires
+  | 'fixed_date'; // Due by a specific fixed date
 
 /**
  * Training Session
@@ -112,13 +97,13 @@ export interface TrainingSessionCreate {
 
   // Use existing course or create new
   use_existing_course?: boolean | undefined;
-  course_id?: string | undefined;  // If using existing course
+  course_id?: string | undefined; // If using existing course
 
   // Category and program linkage
-  category_id?: string | undefined;     // Training category (Fire, EMS, Hazmat, etc.)
-  program_id?: string | undefined;      // Training program (Recruit School, Driver Training, etc.)
-  phase_id?: string | undefined;        // Program phase
-  requirement_id?: string | undefined;  // Specific requirement this satisfies
+  category_id?: string | undefined; // Training category (Fire, EMS, Hazmat, etc.)
+  program_id?: string | undefined; // Training program (Recruit School, Driver Training, etc.)
+  phase_id?: string | undefined; // Program phase
+  requirement_id?: string | undefined; // Specific requirement this satisfies
 
   // Training details (for new course)
   course_name?: string | undefined;
@@ -138,9 +123,9 @@ export interface TrainingSessionCreate {
   materials_required?: string[] | undefined;
 
   // Auto-completion settings
-  counts_toward_certification?: boolean | undefined;  // Feed linked certificate requirements
-  auto_create_records?: boolean | undefined;  // Create TrainingRecords on check-in
-  require_completion_confirmation?: boolean | undefined;  // Instructor must confirm completion
+  counts_toward_certification?: boolean | undefined; // Feed linked certificate requirements
+  auto_create_records?: boolean | undefined; // Create TrainingRecords on check-in
+  require_completion_confirmation?: boolean | undefined; // Instructor must confirm completion
 }
 
 export interface RecurringTrainingSessionCreate extends TrainingSessionCreate {
@@ -160,7 +145,7 @@ export interface TrainingCategory {
   name: string;
   code?: string;
   description?: string;
-  color?: string;  // Hex color like #FF5733
+  color?: string; // Hex color like #FF5733
   parent_category_id?: string;
   sort_order: number;
   icon?: string;
@@ -205,8 +190,8 @@ export interface TrainingCourse {
   instructor?: string;
   max_participants?: number;
   materials_required?: string[];
-  category_ids?: string[];  // Categories this course belongs to
-  program_id?: string;      // Pipeline this course's cohorts enroll members in
+  category_ids?: string[]; // Categories this course belongs to
+  program_id?: string; // Pipeline this course's cohorts enroll members in
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -216,12 +201,7 @@ export interface TrainingCourse {
 // ==================== Multi-Class Courses (Syllabus & Cohorts) ====================
 
 // Status enums come from the canonical source in constants/enums.ts
-import type {
-  CohortClassStatus,
-  CohortMemberStatus,
-  CohortStatus,
-  DateRollPolicy,
-} from '../constants/enums';
+import type { CohortClassStatus, CohortMemberStatus, CohortStatus, DateRollPolicy } from '../constants/enums';
 export type { CohortClassStatus, CohortMemberStatus, CohortStatus, DateRollPolicy };
 
 /**
@@ -236,13 +216,13 @@ export interface CourseClass {
   id: string;
   organization_id: string;
   course_id: string;
-  class_course_id: string;   // Catalog course taught in this class (required)
+  class_course_id: string; // Catalog course taught in this class (required)
   sequence: number;
-  section_name?: string;     // Groups classes into pipeline phases
-  title?: string;            // Display override; defaults to the course name
+  section_name?: string; // Groups classes into pipeline phases
+  title?: string; // Display override; defaults to the course name
   description?: string;
-  day_offset: number;        // Days from the cohort start date
-  start_time?: string;       // Local wall clock, "HH:MM"
+  day_offset: number; // Days from the cohort start date
+  start_time?: string; // Local wall clock, "HH:MM"
   duration_minutes: number;
   credit_hours?: number;
   instructor_id?: string;
@@ -288,7 +268,7 @@ export interface CourseClassCreate {
 export type CourseClassUpdate = Partial<CourseClassCreate> & { active?: boolean };
 
 export interface CourseClassAutofill {
-  meeting_days: number[];    // Weekday numbers, 0 = Monday
+  meeting_days: number[]; // Weekday numbers, 0 = Monday
   start_weekday?: number | undefined;
   default_start_time?: string | undefined;
   default_duration_minutes?: number | undefined;
@@ -379,7 +359,7 @@ export interface CourseCohortClass {
   id: string;
   organization_id: string;
   cohort_id: string;
-  course_class_id?: string;  // Absent for ad-hoc classes
+  course_class_id?: string; // Absent for ad-hoc classes
   sequence: number;
   title: string;
   description?: string;
@@ -717,6 +697,8 @@ export interface TrainingRequirement {
   // Evaluation period: null = inherit org default, true = count current month,
   // false = stop at end of previous month
   include_current_month?: boolean | null;
+  // Freshness window: a completion older than this many days doesn't count
+  recency_days?: number;
   category_ids?: string[];
   active: boolean;
   created_at: string;
@@ -764,6 +746,8 @@ export interface TrainingRequirementCreate {
   period_end_month?: number | undefined;
   period_end_day?: number | undefined;
   include_current_month?: boolean | null | undefined;
+  // Freshness window: a completion older than this many days doesn't count
+  recency_days?: number | undefined;
   category_ids?: string[] | undefined;
 }
 
@@ -803,6 +787,8 @@ export interface TrainingRequirementUpdate {
   period_end_month?: number | undefined;
   period_end_day?: number | undefined;
   include_current_month?: boolean | null | undefined;
+  // Freshness window: a completion older than this many days doesn't count
+  recency_days?: number | undefined;
   category_ids?: string[] | undefined;
   active?: boolean;
 }
@@ -844,20 +830,13 @@ export interface RequirementProgress {
   is_complete: boolean;
   due_date?: string;
   due_date_type?: DueDateType;
-  days_until_due?: number;  // Negative if overdue
+  days_until_due?: number; // Negative if overdue
 }
 
 // ==================== Training Program Types ====================
 
 export type RequirementType =
-  | 'hours'
-  | 'courses'
-  | 'certification'
-  | 'shifts'
-  | 'calls'
-  | 'skills_evaluation'
-  | 'checklist'
-  | 'knowledge_test';
+  'hours' | 'courses' | 'certification' | 'shifts' | 'calls' | 'skills_evaluation' | 'checklist' | 'knowledge_test';
 
 export type RequirementSource = 'department' | 'state' | 'national';
 
@@ -917,11 +896,13 @@ export interface TrainingProgramCreate {
   allows_concurrent_enrollment?: boolean | undefined;
   time_limit_days?: number | undefined;
   warning_days_before?: number | undefined;
-  reminder_conditions?: {
-    milestone_threshold?: number | undefined;
-    days_before_deadline?: number | undefined;
-    send_if_below_percentage?: number | undefined;
-  } | undefined;
+  reminder_conditions?:
+    | {
+        milestone_threshold?: number | undefined;
+        days_before_deadline?: number | undefined;
+        send_if_below_percentage?: number | undefined;
+      }
+    | undefined;
   is_template?: boolean | undefined;
   recert_enabled?: boolean | undefined;
   recert_interval_months?: number | undefined;
@@ -1211,6 +1192,10 @@ export interface ProgramBuildRequirementInput {
   passing_score?: number | undefined;
   max_attempts?: number | undefined;
   checklist_items?: string[] | undefined;
+  // Course-library ids satisfying a `courses` or `certification` requirement.
+  required_courses?: string[] | undefined;
+  // Freshness window: a completion older than this many days doesn't count.
+  recency_days?: number | undefined;
   allows_external_credit?: boolean | undefined;
   is_required: boolean;
   sort_order: number;
@@ -1241,42 +1226,28 @@ export interface ProgramBuildRequest {
 // ==================== External Training Integration Types ====================
 
 export type ExternalProviderType =
-  | 'vector_solutions'
-  | 'target_solutions'
-  | 'lexipol'
-  | 'i_am_responding'
-  | 'custom_api';
+  'vector_solutions' | 'target_solutions' | 'lexipol' | 'i_am_responding' | 'custom_api';
 
-export type SyncStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-  | 'failed'
-  | 'partial';
+export type SyncStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'partial';
 
-export type ImportStatus =
-  | 'pending'
-  | 'imported'
-  | 'failed'
-  | 'skipped'
-  | 'duplicate';
+export type ImportStatus = 'pending' | 'imported' | 'failed' | 'skipped' | 'duplicate';
 
 export interface ExternalProviderConfig {
   // Vector Solutions / TargetSolutions specific
-  site_id?: string | undefined;  // Required for Vector Solutions - the TS site identifier
-  page_size?: number;            // Max records per page (Vector Solutions max: 1000)
-  date_filter_param?: string;    // Custom date filter parameter name
+  site_id?: string | undefined; // Required for Vector Solutions - the TS site identifier
+  page_size?: number; // Max records per page (Vector Solutions max: 1000)
+  date_filter_param?: string; // Custom date filter parameter name
 
   // General endpoint overrides
-  records_endpoint?: string;     // Override the default records endpoint path
-  users_endpoint?: string;       // Override the default users endpoint path
-  categories_endpoint?: string;  // Override the default categories endpoint path
-  test_endpoint?: string;        // Override the default connection test endpoint
+  records_endpoint?: string; // Override the default records endpoint path
+  users_endpoint?: string; // Override the default users endpoint path
+  categories_endpoint?: string; // Override the default categories endpoint path
+  test_endpoint?: string; // Override the default connection test endpoint
 
   // Custom API support
-  param_mapping?: Record<string, string>;   // Map standard param names to provider-specific names
-  field_mapping?: Record<string, string>;   // Map standard field names to provider-specific names
-  records_path?: string;                     // JSON path to records array in response (e.g. "data.records")
+  param_mapping?: Record<string, string>; // Map standard param names to provider-specific names
+  field_mapping?: Record<string, string>; // Map standard field names to provider-specific names
+  records_path?: string; // JSON path to records array in response (e.g. "data.records")
   additional_headers?: Record<string, string>;
   date_format?: string;
 }
@@ -1631,7 +1602,7 @@ export interface ShiftCompletionReport {
   data_sources?: Record<string, string>;
   enrollment_id?: string;
   requirements_progressed?: { requirement_progress_id: string; value_added: number }[];
-  review_status: string;  // draft, pending_review, approved, flagged
+  review_status: string; // draft, pending_review, approved, flagged
   reviewed_by?: string;
   reviewer_name?: string;
   reviewed_at?: string;
@@ -1725,7 +1696,6 @@ export interface OfficerShiftAnalytics {
   monthly: MonthlyShiftData[];
 }
 
-
 // ============================================
 // Training Module Configuration (Visibility)
 // ============================================
@@ -1750,8 +1720,8 @@ export interface TrainingModuleConfig {
   report_review_required: boolean;
   report_review_role: string;
   rating_label: string;
-  rating_scale_type: string;  // stars, competency, custom
-  rating_scale_labels?: Record<string, string>;  // {"1":"Unsatisfactory","2":"Developing",...}
+  rating_scale_type: string; // stars, competency, custom
+  rating_scale_labels?: Record<string, string>; // {"1":"Unsatisfactory","2":"Developing",...}
   apparatus_type_skills?: Record<string, string[]>;
   apparatus_type_tasks?: Record<string, string[]>;
   form_show_performance_rating: boolean;
@@ -1899,7 +1869,6 @@ export interface MyTrainingSummary {
     reviewed_at: string | null;
   }>;
 }
-
 
 // ==================== Historical Training Import ====================
 
@@ -2350,7 +2319,8 @@ export interface TrainingRecordAttachment {
 // ==================== Report Export Types ====================
 
 export interface ReportExportRequest {
-  report_type: 'compliance' | 'individual' | 'department' | 'certification' | 'hours_summary' | 'state_report' | 'member_records';
+  report_type:
+    'compliance' | 'individual' | 'department' | 'certification' | 'hours_summary' | 'state_report' | 'member_records';
   format: 'csv' | 'pdf';
   user_id?: string | undefined;
   start_date?: string | undefined;

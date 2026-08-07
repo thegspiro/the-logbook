@@ -1,5 +1,11 @@
 [tool.isort]
 profile = "black"
+# The migrations directory is named `alembic/`, so isort infers that `alembic`
+# is a local package and files it in the first-party section — splitting
+# `from alembic import op` away from `import sqlalchemy as sa` in every
+# migration. It is a third-party dependency; saying so keeps migrations
+# consistent with each other and with what the pre-commit hook checks.
+known_third_party = ["alembic"]
 
 [tool.black]
 line-length = 88

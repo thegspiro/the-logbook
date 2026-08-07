@@ -21,6 +21,7 @@ import type {
   GrantReport,
   FundraisingReport,
 } from '../types';
+import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
 
@@ -47,7 +48,7 @@ export const grantsService = {
         limit: params?.limit ?? 100,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getOpportunity(id: string): Promise<GrantOpportunity> {
@@ -97,7 +98,7 @@ export const grantsService = {
         },
       },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async getApplication(id: string): Promise<GrantApplication> {
@@ -138,7 +139,7 @@ export const grantsService = {
     const response = await api.get<GrantBudgetItem[]>(
       `/grants/applications/${applicationId}/budget-items`,
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async createBudgetItem(
@@ -177,7 +178,7 @@ export const grantsService = {
     const response = await api.get<GrantExpenditure[]>(
       `/grants/applications/${applicationId}/expenditures`,
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async createExpenditure(
@@ -219,7 +220,7 @@ export const grantsService = {
       '/grants/compliance-tasks',
       { params: { application_id: applicationId } },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async createComplianceTask(
@@ -258,7 +259,7 @@ export const grantsService = {
     const response = await api.get<GrantNote[]>(
       `/grants/applications/${applicationId}/notes`,
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async createNote(
@@ -335,7 +336,7 @@ export const fundraisingService = {
         },
       },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async getCampaign(id: string): Promise<FundraisingCampaign> {
@@ -388,7 +389,7 @@ export const fundraisingService = {
         limit: params?.limit ?? 100,
       },
     });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getDonor(id: string): Promise<Donor> {
@@ -439,7 +440,7 @@ export const fundraisingService = {
         },
       },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async createDonation(data: Partial<Donation>): Promise<Donation> {
@@ -482,7 +483,7 @@ export const fundraisingService = {
         },
       },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async createPledge(data: Partial<Pledge>): Promise<Pledge> {
@@ -520,7 +521,7 @@ export const fundraisingService = {
         },
       },
     );
-    return response.data;
+    return asArray(response.data);
   },
 
   async createFundraisingEvent(

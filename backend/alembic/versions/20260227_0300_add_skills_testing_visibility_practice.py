@@ -9,9 +9,8 @@ and practice mode flag for test sessions that should not be recorded.
 """
 
 import sqlalchemy as sa
-from sqlalchemy import inspect
-
 from alembic import op
+from sqlalchemy import inspect
 
 # revision identifiers
 revision = "20260227_0300"

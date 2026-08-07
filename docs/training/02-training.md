@@ -83,8 +83,7 @@ Navigate to **Training > Submit Training** to log a completed training activity.
 4. Optionally add **notes** or upload a **certificate file**.
 5. Click **Submit**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Submit Training form showing the course dropdown with search functionality, date picker, hours input field, notes textarea, file upload area, and the Submit button]_
+![Submit Training form with course, date, hours, and attachment fields](./images/02-03-submit-training.png)
 
 **After Submission:**
 - Your record enters a **Pending Review** state.

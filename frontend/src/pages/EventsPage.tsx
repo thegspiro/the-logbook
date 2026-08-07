@@ -666,7 +666,7 @@ export const EventsPage: React.FC = () => {
         <div className="inline-flex rounded-lg border border-theme-surface-border bg-theme-surface p-1">
           <button
             onClick={() => setViewMode('list')}
-            className={`p-1.5 rounded-md transition-colors ${
+            className={`p-1.5 max-md:min-h-[44px] max-md:min-w-[44px] max-md:inline-flex max-md:items-center max-md:justify-center rounded-md transition-colors ${
               viewMode === 'list'
                 ? 'bg-red-600 text-white shadow-sm'
                 : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -678,7 +678,7 @@ export const EventsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setViewMode('calendar')}
-            className={`p-1.5 rounded-md transition-colors ${
+            className={`p-1.5 max-md:min-h-[44px] max-md:min-w-[44px] max-md:inline-flex max-md:items-center max-md:justify-center rounded-md transition-colors ${
               viewMode === 'calendar'
                 ? 'bg-red-600 text-white shadow-sm'
                 : 'text-theme-text-secondary hover:text-theme-text-primary'

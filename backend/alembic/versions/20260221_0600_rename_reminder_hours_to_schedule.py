@@ -5,10 +5,11 @@ Revises: 20260221_0500
 Create Date: 2026-02-21 06:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "20260221_0600"
@@ -23,12 +24,10 @@ def upgrade() -> None:
         op.add_column(table, sa.Column("reminder_schedule", sa.JSON(), nullable=True))
 
         # Migrate existing integer value into a JSON array
-        op.execute(
-            f"""
+        op.execute(f"""
             UPDATE {table}
             SET reminder_schedule = json_array(COALESCE(reminder_hours_before, 24))
-            """
-        )
+            """)
 
         # Set NOT NULL now that data is populated. MySQL ALTERs are
         # CHANGE/MODIFY statements, so alembic requires the existing type.
@@ -44,18 +43,21 @@ def downgrade() -> None:
     for table in ("events", "event_templates"):
         op.add_column(
             table,
-            sa.Column("reminder_hours_before", sa.Integer(), nullable=False, server_default="24"),
+            sa.Column(
+                "reminder_hours_before",
+                sa.Integer(),
+                nullable=False,
+                server_default="24",
+            ),
         )
 
         # Extract first value from JSON array back to integer
-        op.execute(
-            f"""
+        op.execute(f"""
             UPDATE {table}
             SET reminder_hours_before = COALESCE(
                 json_extract(reminder_schedule, '$[0]'),
                 24
             )
-            """
-        )
+            """)
 
         op.drop_column(table, "reminder_schedule")

@@ -377,6 +377,141 @@ class Seeder:
             created.append(self.api.post("/apparatus", payload))
         return created
 
+    # -- apparatus: maintenance, fuel, equipment ---------------------
+
+    def seed_apparatus_activity(self, apparatus: list[dict]) -> dict[str, list[dict]]:
+        if not apparatus:
+            return {}
+
+        types = items(self.api.get("/apparatus/maintenance-types"), "types")
+        type_names = {t.get("name") for t in types}
+        for name, code, category in [
+            ("Preventive Maintenance", "PM", "preventive"),
+            ("Annual Pump Test", "PUMP", "certification"),
+            ("Repair", "REPAIR", "repair"),
+            ("Tire Replacement", "TIRE", "repair"),
+        ]:
+            if name in type_names:
+                continue
+            types.append(
+                self.api.post(
+                    "/apparatus/maintenance-types",
+                    {
+                        "name": name,
+                        "code": code,
+                        "category": category,
+                        "description": f"{name} performed on department apparatus.",
+                    },
+                )
+            )
+        if not types:
+            return {}
+
+        maintenance = items(self.api.get("/apparatus/maintenance"), "maintenance")
+        if not maintenance:
+            work = [
+                (
+                    "Annual pump service and flow test",
+                    "Atlantic Fire Apparatus",
+                    2_450,
+                    120,
+                ),
+                ("Oil and filter change", "In-house", 210, 75),
+                (
+                    "Brake inspection and pad replacement",
+                    "Commonwealth Truck",
+                    1_180,
+                    40,
+                ),
+                ("Aerial ladder annual certification", "Seagrave Service", 3_600, 200),
+                ("Replace front tires", "Tidewater Tire", 1_950, None),
+                ("Repair cab HVAC blower", "Commonwealth Truck", 640, None),
+            ]
+            for index, (description, vendor, cost, days_ago) in enumerate(work):
+                unit = apparatus[index % len(apparatus)]
+                payload = {
+                    "apparatus_id": pick(unit, "id"),
+                    "maintenance_type_id": pick(types[index % len(types)], "id"),
+                    "description": description,
+                    "vendor": vendor,
+                    "cost": cost,
+                    "mileage_at_service": 18_000 + index * 900,
+                }
+                if days_ago is None:
+                    # Leave a couple open so the tab shows scheduled work
+                    # alongside the completed history.
+                    payload["is_completed"] = False
+                    payload["scheduled_date"] = str(TODAY + timedelta(days=10 + index))
+                    payload["due_date"] = str(TODAY + timedelta(days=30))
+                else:
+                    payload["is_completed"] = True
+                    payload["completed_date"] = str(TODAY - timedelta(days=days_ago))
+                    payload["work_performed"] = description
+                    payload["next_due_date"] = str(
+                        TODAY + timedelta(days=365 - days_ago)
+                    )
+                maintenance.append(self.api.post("/apparatus/maintenance", payload))
+
+        fuel = items(self.api.get("/apparatus/fuel-logs"), "fuel_logs")
+        if not fuel:
+            # Several fills per unit, mileage climbing, so the tab can compute
+            # and chart MPG rather than showing a single row.
+            for unit_index, unit in enumerate(apparatus[:4]):
+                unit_id = pick(unit, "id")
+                fuel_type = pick(unit, "fuelType", "fuel_type") or "diesel"
+                mileage = 17_000 + unit_index * 1_200
+                for fill in range(6):
+                    mileage += 320 + fill * 25
+                    gallons = 28 + fill
+                    price = 3.85 + fill * 0.04
+                    fuel.append(
+                        self.api.post(
+                            "/apparatus/fuel-logs",
+                            {
+                                "apparatus_id": unit_id,
+                                "fuel_date": str(
+                                    TODAY - timedelta(days=(6 - fill) * 14)
+                                ),
+                                "fuel_type": fuel_type,
+                                "gallons": gallons,
+                                "price_per_gallon": round(price, 2),
+                                "total_cost": round(gallons * price, 2),
+                                "mileage_at_fill": mileage,
+                                "is_full_tank": True,
+                                "station_name": "Oakville Municipal Fuel Depot",
+                            },
+                        )
+                    )
+
+        equipment = items(self.api.get("/apparatus/equipment"), "equipment")
+        if not equipment:
+            carried = [
+                ('1 3/4" Attack Line', "Crosslay 1", 2, True),
+                ('2 1/2" Supply Line', "Rear hose bed", 1, True),
+                ("24' Extension Ladder", "Driver side", 1, True),
+                ("Thermal Imaging Camera", "Cab console", 1, False),
+                ("Hydraulic Rescue Tool", "Compartment 3", 1, True),
+                ("Portable Foam Eductor", "Compartment 2", 1, False),
+            ]
+            for index, (name, location, quantity, required) in enumerate(carried):
+                unit = apparatus[index % len(apparatus)]
+                equipment.append(
+                    self.api.post(
+                        "/apparatus/equipment",
+                        {
+                            "apparatus_id": pick(unit, "id"),
+                            "name": name,
+                            "description": f"{name} carried on {pick(unit, 'name')}.",
+                            "quantity": quantity,
+                            "location_on_apparatus": location,
+                            "is_mounted": required,
+                            "is_required": required,
+                            "is_present": True,
+                        },
+                    )
+                )
+        return {"maintenance": maintenance, "fuel": fuel, "equipment": equipment}
+
     # -- events ------------------------------------------------------
 
     def seed_events(self) -> list[dict]:
@@ -1838,6 +1973,67 @@ class Seeder:
                 if campaign_ids:
                     payload["campaignId"] = campaign_ids[index % len(campaign_ids)]
                 donations.append(self.api.post("/grants/donations", payload))
+        # Budget lines and compliance tasks are what the application detail
+        # page's Budget and Compliance tabs render; an application without them
+        # opens on an empty tab.
+        for application in applications:
+            app_id = pick(application, "id")
+            if not app_id:
+                continue
+            if not items(
+                self.api.get(f"/grants/applications/{app_id}/budget-items"),
+                "budget_items",
+            ):
+                for order, (category, description, budgeted) in enumerate(
+                    [
+                        ("equipment", "Thermal imaging cameras (4)", 40_000),
+                        ("equipment", "SCBA replacement packs (6)", 41_000),
+                        ("training", "Instructor certification travel", 6_500),
+                        ("supplies", "Replacement PPE consumables", 4_200),
+                    ]
+                ):
+                    self.api.post(
+                        f"/grants/applications/{app_id}/budget-items",
+                        {
+                            "applicationId": app_id,
+                            "category": category,
+                            "description": description,
+                            "amountBudgeted": budgeted,
+                            "federalShare": round(budgeted * 0.95, 2),
+                            "localMatch": round(budgeted * 0.05, 2),
+                            "sortOrder": order,
+                        },
+                    )
+            # Compliance tasks are created under the application but listed at
+            # the module-level collection; there is no per-application GET.
+            existing_tasks = items(
+                self.api.get(f"/grants/compliance-tasks?application_id={app_id}"),
+                "compliance_tasks",
+            )
+            if not existing_tasks:
+                for task_type, title, days_out, priority in [
+                    ("progress_update", "Quarterly progress update", 30, "medium"),
+                    ("financial_report", "Semi-annual financial report", 90, "high"),
+                    (
+                        "equipment_inventory",
+                        "Equipment inventory certification",
+                        150,
+                        "medium",
+                    ),
+                    ("closeout_report", "Final closeout report", 300, "critical"),
+                ]:
+                    self.api.post(
+                        f"/grants/applications/{app_id}/compliance-tasks",
+                        {
+                            "applicationId": app_id,
+                            "taskType": task_type,
+                            "title": title,
+                            "description": f"{title} required by the awarding agency.",
+                            "dueDate": str(TODAY + timedelta(days=days_out)),
+                            "priority": priority,
+                        },
+                    )
+
         return {
             "opportunities": opportunities,
             "applications": applications,
@@ -2159,6 +2355,7 @@ class Seeder:
         facilities = self.step("facilities", self.seed_facilities) or []
         stations = self.step("stations", lambda: self.seed_locations(facilities)) or []
         apparatus = self.step("apparatus", lambda: self.seed_apparatus(stations)) or []
+        self.step("apparatus activity", lambda: self.seed_apparatus_activity(apparatus))
         events = self.step("events", self.seed_events) or []
         self.step(
             "event rsvps",

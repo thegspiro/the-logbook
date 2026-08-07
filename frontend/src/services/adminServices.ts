@@ -8,6 +8,7 @@ import type { DashboardStats, AdminSummary, ActionItemSummary, CommunityEngageme
 import type { IntegrationConfig } from './trainingServices';
 import type { LeaveOfAbsenceResponse, TrainingWaiverResponse } from './facilitiesServices';
 import type { PlatformAnalytics } from '../types/platformAnalytics';
+import { asArray } from '../utils/asArray';
 
 export const securityService = {
   async getStatus(): Promise<SecurityStatus> {
@@ -281,7 +282,7 @@ export const dashboardService = {
   },
   async getActionItems(params?: { status_filter?: string | undefined; assigned_to_me?: boolean | undefined }): Promise<ActionItemSummary[]> {
     const response = await api.get<ActionItemSummary[]>('/dashboard/action-items', { params });
-    return response.data;
+    return asArray(response.data);
   },
   async getCommunityEngagement(): Promise<CommunityEngagement> {
     const response = await api.get<CommunityEngagement>('/dashboard/community-engagement');
@@ -461,17 +462,17 @@ export const memberStatusService = {
   // Leave of Absence
   async listLeavesOfAbsence(params?: { user_id?: string; active_only?: boolean }): Promise<LeaveOfAbsenceResponse[]> {
     const response = await api.get<LeaveOfAbsenceResponse[]>('/users/leaves-of-absence', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getMemberLeaves(userId: string, activeOnly = true): Promise<LeaveOfAbsenceResponse[]> {
     const response = await api.get<LeaveOfAbsenceResponse[]>(`/users/${userId}/leaves-of-absence`, { params: { active_only: activeOnly } });
-    return response.data;
+    return asArray(response.data);
   },
 
   async getMyLeaves(): Promise<LeaveOfAbsenceResponse[]> {
     const response = await api.get<LeaveOfAbsenceResponse[]>('/users/leaves-of-absence/me');
-    return response.data;
+    return asArray(response.data);
   },
 
   async createLeaveOfAbsence(data: {
@@ -505,7 +506,7 @@ export const memberStatusService = {
   // Training Waivers
   async listTrainingWaivers(params?: { user_id?: string; active_only?: boolean }): Promise<TrainingWaiverResponse[]> {
     const response = await api.get<TrainingWaiverResponse[]>('/training/waivers', { params });
-    return response.data;
+    return asArray(response.data);
   },
 
   async createTrainingWaiver(data: {
@@ -793,7 +794,7 @@ export interface SalesforcePreviewResult {
 export const integrationsService = {
   async getIntegrations(): Promise<IntegrationConfig[]> {
     const response = await api.get<IntegrationConfig[]>('/integrations');
-    return response.data;
+    return asArray(response.data);
   },
 
   async getIntegration(integrationId: string): Promise<IntegrationConfig> {
@@ -822,7 +823,7 @@ export const integrationsService = {
 
   async getCalcomBookings(): Promise<CalcomBooking[]> {
     const response = await api.get<{ bookings: CalcomBooking[] }>('/integrations/calcom/bookings');
-    return response.data.bookings;
+    return asArray(response.data?.bookings);
   },
 
   async salesforceSyncStatus(): Promise<SalesforceSyncStatus> {

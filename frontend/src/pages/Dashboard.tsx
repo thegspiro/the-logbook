@@ -1136,7 +1136,7 @@ const Dashboard: React.FC = () => {
                       </span>
                       <button
                         onClick={(e) => dismissNotification(e, notification.id)}
-                        className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                        className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors max-md:mobile-touch-target"
                         title="Dismiss"
                         aria-label={`Dismiss notification: ${notification.subject || "Notification"}`}
                       >

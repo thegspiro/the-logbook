@@ -1180,8 +1180,7 @@ The UI updates immediately (optimistic update). If the API call fails for any sh
 
 Swap and time-off request cards now show **Approve** and **Deny** buttons directly on the card, without needing to open a modal. A "+ Notes" link is still available to open the review modal if you want to add reviewer comments.
 
-> **Screenshot needed:**
-> _[Screenshot of the Requests tab showing a swap request card with inline "Approve" (green) and "Deny" (red) buttons, and a "+ Notes" link below them]_
+![Scheduling requests tab with swap and time-off requests](./images/03-11-swap-requests-tab.png)
 
 ### Staffing Status on Shift Cards
 
@@ -1326,8 +1325,7 @@ Equipment checks are no longer tied exclusively to active shifts. Members can no
 3. Complete the checklist as normal
 4. Submit — the check is saved without a shift association and appears in reports as "ad hoc"
 
-> **Screenshot needed:**
-> _[Screenshot of the Equipment Checks tab showing a list of apparatus with "Start Check" buttons, and one apparatus with a recent check timestamp and pass/fail badge]_
+![Equipment checks tab listing apparatus with their check status](./images/03-25-equipment-checks-tab.png)
 
 ### Flat Scrollable Check Form
 

@@ -31,13 +31,11 @@ def upgrade() -> None:
     # the single canonical scheme the application also uses at create time
     # (InventoryService._barcode_for_item / _format_barcode): INV- + first 8
     # uppercase hex of the dehyphenated row UUID.
-    op.execute(
-        """
+    op.execute("""
         UPDATE inventory_items
         SET barcode = CONCAT('INV-', UPPER(SUBSTRING(REPLACE(id, '-', ''), 1, 8)))
         WHERE barcode IS NULL OR barcode = ''
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

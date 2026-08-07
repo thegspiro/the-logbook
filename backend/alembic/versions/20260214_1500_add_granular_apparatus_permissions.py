@@ -8,13 +8,15 @@ Adds apparatus.view, apparatus.create, apparatus.edit, apparatus.delete,
 and apparatus.maintenance permissions to the default system roles. Fixes
 the apparatus_manager role which was missing all apparatus permissions.
 """
+
 import json
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260214_1500'
-down_revision = '20260214_1400'
+revision = "20260214_1500"
+down_revision = "20260214_1400"
 branch_labels = None
 depends_on = None
 
@@ -22,20 +24,31 @@ depends_on = None
 ROLE_PERMISSION_UPDATES = {
     # Full access roles get all granular + manage
     "chief": [
-        "apparatus.view", "apparatus.create", "apparatus.edit",
-        "apparatus.delete", "apparatus.maintenance",
+        "apparatus.view",
+        "apparatus.create",
+        "apparatus.edit",
+        "apparatus.delete",
+        "apparatus.maintenance",
     ],
     "assistant_chief": [
-        "apparatus.view", "apparatus.create", "apparatus.edit",
-        "apparatus.delete", "apparatus.maintenance",
+        "apparatus.view",
+        "apparatus.create",
+        "apparatus.edit",
+        "apparatus.delete",
+        "apparatus.maintenance",
     ],
     "president": [
-        "apparatus.view", "apparatus.create", "apparatus.edit",
-        "apparatus.delete", "apparatus.maintenance",
+        "apparatus.view",
+        "apparatus.create",
+        "apparatus.edit",
+        "apparatus.delete",
+        "apparatus.maintenance",
     ],
     # Apparatus manager gets day-to-day operations (no delete)
     "apparatus_manager": [
-        "apparatus.view", "apparatus.create", "apparatus.edit",
+        "apparatus.view",
+        "apparatus.create",
+        "apparatus.edit",
         "apparatus.maintenance",
     ],
     # View-only roles
@@ -84,8 +97,11 @@ def downgrade() -> None:
 
     # Remove the new granular permissions from all roles
     perms_to_remove = {
-        "apparatus.view", "apparatus.create", "apparatus.edit",
-        "apparatus.delete", "apparatus.maintenance",
+        "apparatus.view",
+        "apparatus.create",
+        "apparatus.edit",
+        "apparatus.delete",
+        "apparatus.maintenance",
     }
 
     for slug in ROLE_PERMISSION_UPDATES.keys():

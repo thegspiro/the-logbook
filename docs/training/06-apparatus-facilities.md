@@ -93,8 +93,7 @@ Each apparatus has a maintenance section showing:
 5. Enter the date, description, cost, and vendor.
 6. Save.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the maintenance tab showing a timeline of past maintenance entries and an "Add Maintenance" form with type dropdown, date, description, cost, and vendor fields]_
+![Apparatus maintenance tab with past records and the add-maintenance form](./images/06-04-apparatus-maintenance-tab.png)
 
 ---
 
@@ -110,8 +109,7 @@ Track fuel purchases and mileage readings:
 
 The system calculates fuel efficiency (miles per gallon) automatically.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the fuel logs tab showing a table of fuel entries with date, gallons, cost, mileage, and calculated MPG, plus a chart of fuel efficiency over time]_
+![Apparatus fuel logs tab with entries and calculated efficiency](./images/06-05-apparatus-fuel-tab.png)
 
 ---
 
@@ -124,8 +122,7 @@ Track equipment stored on each apparatus (tools, medical supplies, SCBA, etc.):
 3. Add or remove equipment items.
 4. Track equipment condition and last inspection date.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the equipment tab showing a list of items on the apparatus with name, quantity, condition, and last checked date]_
+![Apparatus equipment tab listing carried items with condition](./images/06-06-apparatus-equipment-tab.png)
 
 ---
 

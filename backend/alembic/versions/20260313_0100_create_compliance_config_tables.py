@@ -6,8 +6,8 @@ Create Date: 2026-03-13 01:00:00.000000
 
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260313_0100"
@@ -203,12 +203,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("idx_compliance_reports_status", table_name="compliance_reports")
-    op.drop_index(
-        "idx_compliance_reports_org_period", table_name="compliance_reports"
-    )
+    op.drop_index("idx_compliance_reports_org_period", table_name="compliance_reports")
     op.drop_table("compliance_reports")
-    op.drop_index(
-        "idx_compliance_profiles_config", table_name="compliance_profiles"
-    )
+    op.drop_index("idx_compliance_profiles_config", table_name="compliance_profiles")
     op.drop_table("compliance_profiles")
     op.drop_table("compliance_configs")

@@ -12,8 +12,8 @@ Adds:
 - New maintenance_type enum values for NFPA inspection levels
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260225_0100"
@@ -82,7 +82,11 @@ def upgrade() -> None:
         sa.Column(
             "contamination_level",
             sa.Enum(
-                "none", "light", "moderate", "heavy", "gross",
+                "none",
+                "light",
+                "moderate",
+                "heavy",
+                "gross",
                 name="contaminationlevel",
             ),
             server_default="none",
@@ -148,7 +152,11 @@ def upgrade() -> None:
         sa.Column(
             "contamination_level",
             sa.Enum(
-                "none", "light", "moderate", "heavy", "gross",
+                "none",
+                "light",
+                "moderate",
+                "heavy",
+                "gross",
                 name="contaminationlevel",
                 create_type=False,
             ),
@@ -215,12 +223,8 @@ def upgrade() -> None:
         sa.Column("incident_number", sa.String(100), nullable=True),
         sa.Column("description", sa.Text(), nullable=True),
         # Decontamination
-        sa.Column(
-            "decon_required", sa.Boolean(), nullable=False, server_default="0"
-        ),
-        sa.Column(
-            "decon_completed", sa.Boolean(), nullable=False, server_default="0"
-        ),
+        sa.Column("decon_required", sa.Boolean(), nullable=False, server_default="0"),
+        sa.Column("decon_completed", sa.Boolean(), nullable=False, server_default="0"),
         sa.Column("decon_completed_date", sa.Date(), nullable=True),
         sa.Column("decon_method", sa.String(255), nullable=True),
         # User

@@ -75,6 +75,7 @@ from app.services.training_compliance import (
 )
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
+from app.utils.org_scoping import assert_all_in_org
 
 router = APIRouter()
 
@@ -908,6 +909,21 @@ async def create_requirement(
     **Authentication required**
     **Requires permission: training.manage**
     """
+    # required_courses is a client-supplied array of course-library ids, so it
+    # must be checked against the caller's org before it is stored (XC-1).
+    try:
+        await assert_all_in_org(
+            db,
+            TrainingCourse,
+            requirement.required_courses,
+            current_user.organization_id,
+            label="linked course",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+
     new_requirement = TrainingRequirement(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
@@ -950,8 +966,24 @@ async def update_requirement(
             status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
         )
 
+    updates = requirement_update.model_dump(exclude_unset=True)
+
+    if "required_courses" in updates:
+        try:
+            await assert_all_in_org(
+                db,
+                TrainingCourse,
+                updates["required_courses"],
+                current_user.organization_id,
+                label="linked course",
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+            )
+
     # Update fields
-    for field, value in requirement_update.model_dump(exclude_unset=True).items():
+    for field, value in updates.items():
         setattr(requirement, field, value)
 
     await db.commit()

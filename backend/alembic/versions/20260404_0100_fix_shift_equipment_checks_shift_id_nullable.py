@@ -10,9 +10,8 @@ Revises: 20260328_0400
 Create Date: 2026-04-04
 """
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "20260404_0100"
 down_revision = "20260328_0400"

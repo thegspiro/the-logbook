@@ -8,12 +8,13 @@ Adds columns for monthly-by-weekday and annual-by-weekday recurrence
 patterns (e.g., "2nd Monday of every month", "4th Monday of July").
 Also extends the recurrence_pattern enum with new values.
 """
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '20260312_0100'
-down_revision = '20260308_0300'
+revision = "20260312_0100"
+down_revision = "20260308_0300"
 branch_labels = None
 depends_on = None
 

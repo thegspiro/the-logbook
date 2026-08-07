@@ -9,8 +9,8 @@ making rooms available to Events, Storage, and other modules that
 use the Location model as a universal "place picker".
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260306_0300"

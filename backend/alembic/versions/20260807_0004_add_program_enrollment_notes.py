@@ -15,13 +15,11 @@ enroll failed the same way.
 The model now declares the column, which fixes fresh installs built by
 ``create_all()``. This migration covers databases that already exist.
 
-This revision originally claimed the id ``20260807_0002``, which the Web Push
-migration had already taken when it was renumbered off the duplicated
-``20260807_0001`` (see ``20260807_0003_merge_push_and_officers_heads``). Two
-files answering to one id leaves the graph unresolvable — Alembic warned
-"Revision 20260807_0002 is present more than once" and reported two heads, so
-``upgrade head`` had nothing unambiguous to run. Renumbered to ``20260807_0004``
-and rebased onto the merge revision, which restores a single head.
+Originally numbered ``20260807_0002``, which a concurrently-merged pull
+request had already taken (the same collision ``20260807_0003`` was written to
+repair). Two files answering to one revision id leaves the graph unresolvable,
+so this one moves past the merge point instead. Adding a column is
+order-independent, so nothing about the chain below it matters here.
 
 Revision ID: 20260807_0004
 Revises: 20260807_0003
@@ -30,7 +28,6 @@ Create Date: 2026-08-07 00:00:00.000000
 """
 
 import sqlalchemy as sa
-
 from alembic import op
 
 # revision identifiers, used by Alembic.
