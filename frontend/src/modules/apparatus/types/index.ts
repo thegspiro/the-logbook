@@ -576,11 +576,15 @@ export interface ApparatusFuelLog {
   apparatusId: string;
   fuelDate: string;
   fuelType: FuelType;
-  gallons: number;
-  pricePerGallon: number | null;
-  totalCost: number | null;
+  // Decimal columns arrive as JSON strings ("33.000"), not numbers — Pydantic
+  // serializes SQL Numeric that way to avoid float rounding. Typed as declared
+  // rather than as wished: calling .toFixed() on the string form crashed the
+  // Fuel tab for every apparatus that had a fuel log.
+  gallons: number | string;
+  pricePerGallon: number | string | null;
+  totalCost: number | string | null;
   mileageAtFill: number | null;
-  hoursAtFill: number | null;
+  hoursAtFill: number | string | null;
   isFullTank: boolean;
   stationName: string | null;
   stationAddress: string | null;

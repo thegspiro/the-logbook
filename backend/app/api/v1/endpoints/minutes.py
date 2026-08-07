@@ -163,6 +163,40 @@ async def search_minutes(
     )
 
 
+# Declared above the catch-all `/{minutes_id}` on purpose: FastAPI
+# matches in declaration order, so below it `/templates` resolved as an id
+# and the endpoint was unreachable.
+@router.get("/templates", response_model=list[TemplateListItem])
+async def list_templates(
+    meeting_type: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("minutes.view")),
+):
+    """List available minutes templates"""
+    service = TemplateService(db)
+    templates = await service.list_templates(current_user.organization_id, meeting_type)
+    if not templates:
+        templates = await service.initialize_defaults(
+            current_user.organization_id, current_user.id
+        )
+
+    return [
+        TemplateListItem(
+            id=t.id,
+            name=t.name,
+            meeting_type=(
+                t.meeting_type
+                if isinstance(t.meeting_type, str)
+                else t.meeting_type.value
+            ),
+            is_default=t.is_default,
+            section_count=len(t.sections) if t.sections else 0,
+            created_at=t.created_at,
+        )
+        for t in templates
+    ]
+
+
 @router.get("/{minutes_id}", response_model=MinutesResponse)
 async def get_minutes(
     minutes_id: str,
@@ -617,37 +651,6 @@ async def publish_minutes(
 # ============================================
 # Templates
 # ============================================
-
-
-@router.get("/templates", response_model=list[TemplateListItem])
-async def list_templates(
-    meeting_type: str | None = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("minutes.view")),
-):
-    """List available minutes templates"""
-    service = TemplateService(db)
-    templates = await service.list_templates(current_user.organization_id, meeting_type)
-    if not templates:
-        templates = await service.initialize_defaults(
-            current_user.organization_id, current_user.id
-        )
-
-    return [
-        TemplateListItem(
-            id=t.id,
-            name=t.name,
-            meeting_type=(
-                t.meeting_type
-                if isinstance(t.meeting_type, str)
-                else t.meeting_type.value
-            ),
-            is_default=t.is_default,
-            section_count=len(t.sections) if t.sections else 0,
-            created_at=t.created_at,
-        )
-        for t in templates
-    ]
 
 
 @router.get("/templates/{template_id}", response_model=TemplateResponse)

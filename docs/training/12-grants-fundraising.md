@@ -181,7 +181,7 @@ Navigate to the **Expenditures** tab to record spending against the budget:
 4. Add receipt URL and approval info
 5. Save
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Budget tab showing a table of budget items (Equipment: $40,000 budgeted / $15,000 spent / $25,000 remaining; Training: $10,000 budgeted / $2,000 spent / $8,000 remaining) with a "Record Expenditure" button._
+![Grant application budget tab with budgeted, spent, and remaining columns](./images/12-06-application-budget-tab.png)
 
 ### Edge Cases
 
@@ -229,7 +229,7 @@ Awarded grants come with reporting and compliance obligations. The system tracks
 4. Set reminder days (e.g., remind 14 days before due date)
 5. Mark tasks complete when done
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Compliance Tasks tab showing tasks with due dates, status badges (green=completed, red=overdue, yellow=pending), assignee names, and a "Add Task" button._
+![Grant application compliance tasks tab with due dates and status badges](./images/12-07-application-compliance-tab.png)
 
 ### Edge Cases
 

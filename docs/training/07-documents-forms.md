@@ -282,8 +282,7 @@ The **Send Log** tab shows notification delivery history with:
 - **Channel filter** — filter by All, Email only, or In-App only
 - **Mark All Read** button to bulk-clear unread notifications
 
-> **Screenshot needed:**
-> _[Screenshot of the Send Log tab showing the channel filter buttons (All / Email / In-App), the Mark All Read button, and a table of notification entries with status indicators]_
+![Notification send log with channel filters and delivery status](./images/07-09-notification-send-log.png)
 
 ### Dashboard Notification Dismiss
 

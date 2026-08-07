@@ -660,6 +660,25 @@ async def list_event_requests(
     return items
 
 
+# Declared above the catch-all `/{request_id}` on purpose: FastAPI
+# matches in declaration order, so below it `/email-templates` resolved as an id
+# and the endpoint was unreachable.
+@router.get("/email-templates", response_model=list[EmailTemplateResponse])
+async def list_email_templates(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.manage")),
+):
+    """List all email templates for the organization."""
+    result = await db.execute(
+        select(EventRequestEmailTemplate)
+        .where(
+            EventRequestEmailTemplate.organization_id == current_user.organization_id
+        )
+        .order_by(EventRequestEmailTemplate.name)
+    )
+    return result.scalars().all()
+
+
 @router.get("/{request_id}", response_model=EventRequestResponse)
 async def get_event_request(
     request_id: str,
@@ -1298,22 +1317,6 @@ async def send_template_email(
 # ============================================
 # Email Template CRUD
 # ============================================
-
-
-@router.get("/email-templates", response_model=list[EmailTemplateResponse])
-async def list_email_templates(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("events.manage")),
-):
-    """List all email templates for the organization."""
-    result = await db.execute(
-        select(EventRequestEmailTemplate)
-        .where(
-            EventRequestEmailTemplate.organization_id == current_user.organization_id
-        )
-        .order_by(EventRequestEmailTemplate.name)
-    )
-    return result.scalars().all()
 
 
 @router.post(

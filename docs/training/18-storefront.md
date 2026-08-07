@@ -409,9 +409,7 @@ Opening a window can **email the membership**; closing it can **email everyone
 who ordered**. The window-closing reminder goes out automatically based on your
 notification settings.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Order Windows tab showing an open
-> window card with order count, gross sales, outstanding balance, and the
-> Close/Cancel actions._
+![Store order windows tab with the open window and its order totals](./images/18-03-order-windows.png)
 
 ---
 
