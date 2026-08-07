@@ -243,6 +243,9 @@ const MinutesPage: React.FC = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
             <label htmlFor="minutes-search" className="sr-only">Search meetings</label>
             <input
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               id="minutes-search"
               type="text"
               aria-label="Search meeting minutes..." placeholder="Search meeting minutes..."

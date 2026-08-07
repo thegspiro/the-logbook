@@ -398,6 +398,9 @@ const SystemOwnerCreation: React.FC = () => {
                   Membership Number <span className="text-theme-text-muted">(Optional)</span>
                 </label>
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   type="text"
                   id="membershipNumber"
                   name="membershipNumber"
@@ -424,6 +427,9 @@ const SystemOwnerCreation: React.FC = () => {
                   Username <span className="text-theme-accent-red">*</span>
                 </label>
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   type="text"
                   id="username"
                   name="username"

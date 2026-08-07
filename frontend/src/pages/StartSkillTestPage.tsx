@@ -178,6 +178,9 @@ export const StartSkillTestPage: React.FC = () => {
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   type="text"
                   aria-label="Search templates..." placeholder="Search templates..."
                   value={templateSearch}
@@ -284,6 +287,9 @@ export const StartSkillTestPage: React.FC = () => {
               <div className="relative mb-3">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
                 <input
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   type="text"
                   placeholder="Type a name to search..."
                   value={memberSearch}

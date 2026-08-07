@@ -704,7 +704,7 @@ export const MembersAdminPage: React.FC = () => {
       >
         <div className="space-y-4">
           {/* Name Fields */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">First Name</label>
               <input
@@ -762,7 +762,7 @@ export const MembersAdminPage: React.FC = () => {
           </div>
 
           {/* Department Fields */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">Membership #</label>
               <input

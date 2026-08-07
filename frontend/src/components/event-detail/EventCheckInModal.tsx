@@ -105,6 +105,9 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
                 Search Members
               </label>
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 type="text"
                 id="member-search"
                 value={memberSearch}

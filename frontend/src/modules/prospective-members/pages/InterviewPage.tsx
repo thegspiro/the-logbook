@@ -333,6 +333,9 @@ const InterviewForm: React.FC<InterviewFormProps> = ({
       <div>
         <label className={labelClass}>Your Role / Title</label>
         <input
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           type="text"
           className={inputClass}
           placeholder="e.g., Membership Coordinator, Chief, President"

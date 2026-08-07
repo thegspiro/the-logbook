@@ -143,7 +143,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
           </div>
 
           {(formData.pattern_type === 'platoon' || formData.pattern_type === 'custom') && (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label htmlFor="pattern-rotation" className="block text-sm font-medium text-theme-text-secondary mb-1">
                   Rotation Days

@@ -413,6 +413,9 @@ const MapCoursesStep: React.FC<MapCoursesStepProps> = ({
                       Search existing courses
                     </label>
                     <input
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       id={`course-search-${uc.csv_course_name}`}
                       type="text"
                       aria-label="Search existing courses..." placeholder="Search existing courses..."

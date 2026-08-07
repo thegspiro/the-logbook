@@ -408,6 +408,9 @@ export const LoginPage: React.FC = () => {
                 Username or Email
               </label>
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 id="username"
                 name="username"
                 type="text"

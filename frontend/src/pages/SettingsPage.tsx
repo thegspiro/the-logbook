@@ -636,7 +636,7 @@ export const SettingsPage: React.FC = () => {
                   placeholder="Address line 2 (optional)"
                   className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                 />
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <input
                     type="text"
                     value={profile?.mailing_address?.city || ''}
@@ -692,7 +692,7 @@ export const SettingsPage: React.FC = () => {
                     placeholder="Address line 2 (optional)"
                     className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
                   />
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <input
                       type="text"
                       value={profile?.physical_address?.city || ''}

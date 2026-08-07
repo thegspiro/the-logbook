@@ -25,7 +25,7 @@ function setStandalone(value: boolean) {
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
         dispatchEvent: vi.fn(),
-      }) as unknown as MediaQueryList,
+      }),
   );
 }
 

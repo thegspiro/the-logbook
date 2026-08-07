@@ -1268,6 +1268,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       New Serial #
                     </label>
                     <input
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       id={`new-serial-${item.id}`}
                       type="text"
                       className="w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
