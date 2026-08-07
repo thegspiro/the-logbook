@@ -141,7 +141,14 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Point-based scoring with configurable criterion weights
     - Data model, integration points, API endpoints, implementation phases
 
-16. **[TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md)** (Updated 2026-08-05)
+16. **[SKILLS_TESTING_OFFLINE_PLAN.md](./SKILLS_TESTING_OFFLINE_PLAN.md)** (2026-08-07)
+    - Scoping document — conducting a skills evaluation with no connectivity
+    - Why the read path (`NetworkOnly` on `/api`) blocks before the write path does
+    - Why the generic offline queue cannot carry repeated PUTs plus an ordered complete
+    - Server-created vs. client-minted test ids, and what each option costs
+    - Two open decisions: shared-device retention, and how far offline support must reach
+
+17. **[TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md)** (Updated 2026-08-05)
     - Complete Training module documentation
     - Multi-class courses: syllabus, cohorts, schedule generation, edge cases
     - Pipeline programs, requirements, phases, enrollments, progress tracking
@@ -153,7 +160,7 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Registry support (NFPA, NREMT, Pro Board)
     - API reference and database schema for all training tables
 
-17. **[DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md)** (New 2026-02-14)
+18. **[DROP_NOTIFICATIONS.md](./DROP_NOTIFICATIONS.md)** (New 2026-02-14)
     - Configurable drop/separation notification messages
     - Organization-level settings: CC roles, static CC emails, personal email toggle
     - Default MEMBER_DROPPED email template with 10 template variables
@@ -162,21 +169,21 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Template editing via Settings > Email Templates
     - API reference for organization settings and email template endpoints
 
-18. **Documents Module**
+19. **Documents Module**
     - Document storage with folder hierarchy (create, browse, upload, delete)
     - File metadata tracking (size, MIME type, upload date)
     - Document status workflow (draft, active, archived)
     - API endpoints: 8 endpoints for folder CRUD, document CRUD, summary
     - Permissions: `documents.view`, `documents.manage`
 
-19. **Meetings & Minutes Module**
+20. **Meetings & Minutes Module**
     - Meeting creation with type classification (regular, special, emergency, committee, board)
     - Attendee tracking and action item management
     - Meeting approval workflow (draft, approved, archived)
     - API endpoints: 12 endpoints for meeting CRUD, attendees, action items, summary
     - Permissions: `meetings.view`, `meetings.manage`
 
-20. **Scheduling Module** (Enhanced 2026-02-27)
+21. **Scheduling Module** (Enhanced 2026-02-27)
     - Shift creation, templates, and recurring patterns (daily/weekly/platoon/custom)
     - Auto-generation of shifts from patterns with pre-assigned members and correct JS weekday mapping
     - Duty roster: assign members to shifts with position and confirm/decline workflow
@@ -195,7 +202,7 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Permissions: `scheduling.view`, `scheduling.manage`, `scheduling.assign`, `scheduling.swap`, `scheduling.report`
     - Roles: Scheduling Officer with full scheduling access
 
-21. **Admin Hours Module** (New 2026-02-27)
+22. **Admin Hours Module** (New 2026-02-27)
     - Administrative hours tracking for committee meetings, building maintenance, fundraising, etc.
     - QR code clock-in/clock-out for hands-free time tracking at work locations
     - Manual hours entry with notes for retroactive logging
@@ -207,7 +214,7 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - API endpoints: 12 endpoints under `/api/v1/admin-hours/`
     - Permissions: `admin_hours.view`, `admin_hours.log`, `admin_hours.manage`
 
-22. **Facilities Module** (New 2026-02-14)
+23. **Facilities Module** (New 2026-02-14)
     - Building and property management with types, statuses, addresses, GPS, and photos
     - Maintenance scheduling with 20 default maintenance types and recommended frequencies
     - Facility inspections with pass/fail tracking and follow-up
@@ -224,7 +231,7 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - Permissions: `facilities.view`, `facilities.create`, `facilities.edit`, `facilities.delete`, `facilities.maintenance`, `facilities.manage`
     - Roles: Facilities Manager for day-to-day building management
 
-23. **Reports Module** (Updated 2026-02-14)
+24. **Reports Module** (Updated 2026-02-14)
     - Report generation: member roster, training summary, event attendance, training progress, annual training
     - Data aggregation from members, training records, events, shift reports, and pipeline enrollments
     - Customizable reporting period with date range picker (This Year, Last Year, Last 90 Days, Custom)
@@ -232,14 +239,14 @@ marked `[DEPARTMENT: ...]` wherever a department decision is required.
     - API endpoints: 2 endpoints (available reports list, generate report)
     - Permissions: `reports.view`, `reports.manage`
 
-24. **Notifications Module**
+25. **Notifications Module**
     - Notification rule creation with trigger/category configuration
     - Rule toggle (enable/disable) with persistence
     - Notification log tracking with delivery status and read state
     - API endpoints: 8 endpoints for rule CRUD, toggle, logs, mark-read, summary
     - Permissions: `notifications.view`, `notifications.manage`
 
-25. **Events Module** (Enhanced 2026-02-26)
+26. **Events Module** (Enhanced 2026-02-26)
     - Event creation with dedicated `EventCreatePage` and reusable `EventForm` component
     - Event edit/delete with `EventEditPage`, cancel notifications
     - Event duplication from detail page
@@ -439,6 +446,7 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Meeting quorum config                        | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#meeting-configuring-quorum)                                                                                    |
 | Peer skill eval sign-offs                    | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-configuring-peer-skill-evaluation-sign-offs)                                                          |
 | Skills testing / evaluations                 | [SKILLS_TESTING_FEATURE.md](./SKILLS_TESTING_FEATURE.md) and [Skills Testing Guide](./training/09-skills-testing.md)                                     |
+| Skills testing without signal                | [SKILLS_TESTING_OFFLINE_PLAN.md](./SKILLS_TESTING_OFFLINE_PLAN.md) (scoping — not yet implemented)                                                       |
 | Cert expiration alerts                       | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-certification-expiration-alert-pipeline)                                                              |
 | Competency matrix dashboard                  | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-using-the-competency-matrix-dashboard)                                                                |
 | Training calendar / booking                  | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#training-calendar-integration--double-booking-prevention)                                                      |
@@ -549,25 +557,26 @@ docker-compose ps
 
 ## 📝 Document Versions
 
-| Document                      | Version | Last Updated | Status                                                                                                                             |
-| ----------------------------- | ------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| SKILLS_TESTING_FEATURE.md     | 1.1     | 2026-02-28   | Current — added statement criteria, practice mode, visibility controls, post-completion review, test deletion, point-based scoring |
-| TROUBLESHOOTING.md            | 2.1     | 2026-02-26   | Current                                                                                                                            |
-| ERROR_MESSAGES_COMPLETE.md    | 1.0     | 2026-02-07   | Current                                                                                                                            |
-| ERROR_MESSAGES_LOGO_UPLOAD.md | 1.0     | 2026-02-07   | Current                                                                                                                            |
-| SECURITY_IMAGE_UPLOADS.md     | 1.0     | 2026-02-07   | Current                                                                                                                            |
-| ENUM_CONVENTIONS.md           | 1.0     | 2026-02-07   | Current                                                                                                                            |
-| FORMS_MODULE.md               | 1.0     | 2026-02-12   | Current                                                                                                                            |
-| PUBLIC_API_DOCUMENTATION.md   | 1.1     | 2026-02-12   | Current                                                                                                                            |
-| ONBOARDING_REVIEW.md          | 1.0     | 2026-02-07   | Current                                                                                                                            |
-| ELECTION_SECURITY_AUDIT.md    | 2.0     | 2026-02-12   | Current                                                                                                                            |
-| ASYNC_SQLALCHEMY_REVIEW.md    | 1.0     | 2026-02-10   | Current                                                                                                                            |
-| PROSPECTIVE_MEMBERS_MODULE.md | 1.0     | 2026-02-12   | Current                                                                                                                            |
-| MEETING_MINUTES_MODULE.md     | 1.0     | 2026-02-13   | Current                                                                                                                            |
-| COMMUNICATIONS_MODULE.md      | 1.0     | 2026-07-17   | Current                                                                                                                            |
-| ONBOARDING_FLOW.md            | 1.3     | 2026-06-25   | Current — login page guards against unconfigured installs, EMT operational rank, optional-module enabled-state visibility          |
-| DROP_NOTIFICATIONS.md         | 1.0     | 2026-02-14   | Current                                                                                                                            |
-| TYPESCRIPT_SAFEGUARDS.md      | 1.1     | 2026-02-14   | Current                                                                                                                            |
+| Document                       | Version | Last Updated | Status                                                                                                                             |
+| ------------------------------ | ------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| SKILLS_TESTING_FEATURE.md      | 1.1     | 2026-02-28   | Current — added statement criteria, practice mode, visibility controls, post-completion review, test deletion, point-based scoring |
+| SKILLS_TESTING_OFFLINE_PLAN.md | 1.0     | 2026-08-07   | Scoping proposal — awaiting two owner decisions (§5, §6); no implementation                                                        |
+| TROUBLESHOOTING.md             | 2.1     | 2026-02-26   | Current                                                                                                                            |
+| ERROR_MESSAGES_COMPLETE.md     | 1.0     | 2026-02-07   | Current                                                                                                                            |
+| ERROR_MESSAGES_LOGO_UPLOAD.md  | 1.0     | 2026-02-07   | Current                                                                                                                            |
+| SECURITY_IMAGE_UPLOADS.md      | 1.0     | 2026-02-07   | Current                                                                                                                            |
+| ENUM_CONVENTIONS.md            | 1.0     | 2026-02-07   | Current                                                                                                                            |
+| FORMS_MODULE.md                | 1.0     | 2026-02-12   | Current                                                                                                                            |
+| PUBLIC_API_DOCUMENTATION.md    | 1.1     | 2026-02-12   | Current                                                                                                                            |
+| ONBOARDING_REVIEW.md           | 1.0     | 2026-02-07   | Current                                                                                                                            |
+| ELECTION_SECURITY_AUDIT.md     | 2.0     | 2026-02-12   | Current                                                                                                                            |
+| ASYNC_SQLALCHEMY_REVIEW.md     | 1.0     | 2026-02-10   | Current                                                                                                                            |
+| PROSPECTIVE_MEMBERS_MODULE.md  | 1.0     | 2026-02-12   | Current                                                                                                                            |
+| MEETING_MINUTES_MODULE.md      | 1.0     | 2026-02-13   | Current                                                                                                                            |
+| COMMUNICATIONS_MODULE.md       | 1.0     | 2026-07-17   | Current                                                                                                                            |
+| ONBOARDING_FLOW.md             | 1.3     | 2026-06-25   | Current — login page guards against unconfigured installs, EMT operational rank, optional-module enabled-state visibility          |
+| DROP_NOTIFICATIONS.md          | 1.0     | 2026-02-14   | Current                                                                                                                            |
+| TYPESCRIPT_SAFEGUARDS.md       | 1.1     | 2026-02-14   | Current                                                                                                                            |
 
 ---
 
