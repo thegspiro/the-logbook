@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.email_template import MessageHistory
+from app.models.error_log import ErrorLog
 from app.models.forms import FormSubmission
 from app.models.ip_security import BlockedAccessAttempt
 from app.models.notification import NotificationLog
@@ -73,6 +74,20 @@ RECORD_CLASSES: list[RecordClass] = [
         model=NotificationLog,
         timestamp_attr="sent_at",
         default_days=None,
+        min_days=30,
+    ),
+    RecordClass(
+        key="error_logs",
+        description=(
+            "Application error reports shown on the Error Monitoring page. "
+            "Every failed request and uncaught exception writes one, so this "
+            "is the fastest-growing operational table in the platform — it "
+            "defaults to 180 days rather than forever. Errors are a "
+            "troubleshooting aid, not a business record."
+        ),
+        model=ErrorLog,
+        timestamp_attr="created_at",
+        default_days=180,
         min_days=30,
     ),
     RecordClass(

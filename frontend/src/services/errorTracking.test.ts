@@ -17,6 +17,13 @@ vi.mock('./api', () => ({
   },
 }));
 
+// The service persists through the shared transport, not the authenticated
+// axios client — see errorReporting.ts for why.
+const mockReportError = vi.fn();
+vi.mock('./errorReporting', () => ({
+  reportError: (...args: unknown[]) => mockReportError(...args) as unknown,
+}));
+
 // Import AFTER mocks
 import { errorTracker, getEnhancedError } from './errorTracking';
 import type { ErrorLog } from './errorTracking';
@@ -162,29 +169,38 @@ describe('ErrorTrackingService', () => {
       expect(result.troubleshootingSteps).toEqual(['Please try again or contact support']);
     });
 
-    it('should persist error to backend via errorLogsService.logError', () => {
-      mockLogError.mockResolvedValue(undefined);
-
+    it('should persist error to backend via the shared reporting transport', () => {
       errorTracker.logError('Test error', {
         errorType: 'NETWORK_ERROR',
         eventId: 'evt-42',
       });
 
-      expect(mockLogError).toHaveBeenCalledWith(
+      expect(mockReportError).toHaveBeenCalledWith(
         expect.objectContaining({
-          error_type: 'NETWORK_ERROR',
-          error_message: 'Test error',
-          user_message: 'Unable to connect to the server. Please check your internet connection.',
-          event_id: 'evt-42',
+          errorType: 'NETWORK_ERROR',
+          errorMessage: 'Test error',
+          userMessage: 'Unable to connect to the server. Please check your internet connection.',
+          eventId: 'evt-42',
+          troubleshootingSteps: expect.arrayContaining([
+            'Try refreshing the page',
+          ]) as unknown,
           context: expect.objectContaining({ eventId: 'evt-42' }) as unknown,
         }),
       );
     });
 
-    it('should not throw when backend persistence fails', () => {
-      mockLogError.mockRejectedValue(new Error('Backend unavailable'));
+    it('should send troubleshooting steps so the monitoring page shows guidance', () => {
+      errorTracker.logError('Event not found', { errorType: 'EVENT_NOT_FOUND' });
 
-      // This should not throw
+      const payload = mockReportError.mock.calls[0]?.[0] as {
+        troubleshootingSteps: string[];
+      };
+      expect(payload.troubleshootingSteps.length).toBeGreaterThan(0);
+    });
+
+    it('should return the enriched log even when reporting is unavailable', () => {
+      mockReportError.mockImplementationOnce(() => undefined);
+
       const result = errorTracker.logError('Some error');
 
       expect(result).toBeDefined();
