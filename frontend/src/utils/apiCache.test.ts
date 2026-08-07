@@ -412,6 +412,16 @@ describe('apiCache', () => {
       expect(isCacheable('/inventory/checkout/overdue')).toBe(false);
     });
 
+    it('returns false for storefront endpoints (member order PII)', () => {
+      // Orders carry member names, shipping addresses, payment references and
+      // outstanding balances — the same class as /inventory/charges.
+      expect(isCacheable('/store/orders')).toBe(false);
+      expect(isCacheable('/store/orders/abc123')).toBe(false);
+      expect(isCacheable('/store/storefront')).toBe(false);
+      expect(isCacheable('/store/payment-events')).toBe(false);
+      expect(isCacheable('/store/dashboard')).toBe(false);
+    });
+
     it('still caches the general inventory catalog', () => {
       expect(isCacheable('/inventory/items')).toBe(true);
       expect(isCacheable('/inventory/categories')).toBe(true);

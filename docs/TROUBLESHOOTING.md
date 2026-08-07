@@ -5907,6 +5907,131 @@ required fields.
 any version, keep commas inside double quotes — a spreadsheet exporting to CSV
 does this for you.
 
+### Problem: Rows fail with "Invalid value. Invalid value" and nothing else
+
+**Cause (Fixed 2026-08-06):** Not a CSV problem at all — the API's 422 body was
+being rendered by a reader that did not understand it. `main.py` replaces
+Pydantic's `{loc, msg, type}` validation entries with `{field, message}`, but
+`toAppError()` read the Pydantic spelling, found neither key, and fell back to
+the literal string "Invalid value" for every failed field. The row error
+therefore named neither the field nor the reason, and one "Invalid value" per
+broken field was all you got.
+
+**Fix:** Pull the latest frontend. Both spellings are now read, so the same
+response reads `date_of_birth: Invalid date format. emergency_contacts.0.email:
+Invalid value.` This affected every 422 in the application, not only the member
+import.
+
+### Problem: An import sent welcome emails I did not want sent
+
+**Cause (Fixed 2026-08-07):** The importer hardcoded `send_welcome_email: true`,
+so every created member was emailed a password-setup link immediately. Loading a
+roster for staging, or from a list with stale addresses, put mail in front of
+every one of them, and it cannot be recalled.
+
+**Fix:** The review step now carries a **Send welcome emails now** checkbox,
+**off by default** for imports. Left off, the roster loads quietly and no mail
+is sent; issue credentials afterwards from **Member Management → Reset
+Password**. Tick it to restore the previous behavior. Creating a member
+one-at-a-time from **Add Member** is unchanged.
+
+### Problem: "Email already exists" halfway through an import
+
+**Cause:** The member is already on the roster. The importer only found out when
+the API rejected that row, partway through a write — the usual outcome of
+re-uploading a file after correcting a few rows.
+
+**Fix (2026-08-07):** The current roster is loaded when the file is selected,
+and any row whose email, username or membership number belongs to an existing
+member is reported before the import runs, naming who owns the value. If the
+roster cannot be loaded the import still proceeds and the server catches the
+duplicate as before. Note that emails are omitted from the roster response when
+the organization hides contact information, in which case that one check is
+skipped.
+
+### Problem: An import created a member called John Doe
+
+**Cause (Fixed 2026-08-07):** The downloaded template ships with a filled-in
+example row so its columns are self-explanatory. The instructions say to replace
+it, and if it was left in it imported as a real member.
+
+**Fix:** The importer recognizes its own example row and rejects it, naming it
+as the template example. All three of first name, last name and email must match
+the example, so a real member who happens to be called John Doe is unaffected.
+
+### Problem: A large import appears to hang, or was started by mistake
+
+**Cause:** Members are created one request at a time, and the only feedback was
+a spinner reading "Importing...". A 500-row roster is 500 sequential requests
+with nothing to watch, and no way to stop.
+
+**Fix (2026-08-07):** The review step shows live progress ("Importing 23 of
+47") and a **Stop importing** button. Members already created stay created —
+stopping does not roll back. Rows not reached are listed in the error report as
+"Not imported — the import was stopped before this row", so the downloaded file
+is exactly what is left to do and can be uploaded to finish the job.
+
+### Problem: A row was rejected and the reason does not say what to fix
+
+**Cause (Fixed 2026-08-07):** Validation ran one row at a time inside the
+import loop and stopped at the first problem it found, so a row with three bad
+cells took three upload-fix-upload cycles. Anything the client did not check —
+a malformed email, an over-long cell — reached the API instead and came back as
+a 422 that named no column.
+
+**Fix:** Every row is now checked before any member is created, and every
+problem in a row is reported at once, each naming the column and the offending
+value. The check covers required fields, email shape, date format, field
+lengths, the 3-character username minimum, partial emergency contacts, unmatched
+role names, and values repeated within the file.
+
+Rejected rows come back as a downloadable CSV: the original row, unchanged,
+with the reasons in a leading `errorReason` column. Fix them in Excel, delete
+column A, and upload that file. Because it holds only the failures, re-uploading
+it cannot collide with the members that imported successfully.
+
+### Problem: A phone number was imported into the email field
+
+**Cause (Fixed 2026-08-07):** A comma inside an *unquoted* value splits one
+column into two and slides every later column one place right, so
+`secondaryPhone` lands in `email`. Quoted commas have parsed correctly since
+2026-08-04, but nothing compared a row's value count against the header's
+column count, so an unquoted one was accepted in silence.
+
+**Fix:** A row carrying more values than the header has columns is rejected,
+naming both counts and the quoting rule. Two further checks catch the damage a
+count alone cannot: a *missing* comma shifts columns left while leaving the
+count plausible, so every email column is also checked for shape — and a value
+holding seven or more digits and no `@` is called out as a probable phone
+number in a shifted row.
+
+The importer does not guess at the intended split. A shifted row is always
+rejected, never repaired.
+
+### Problem: "Email already exists" on a member who is not in the system
+
+**Cause:** The address appears twice in the file being uploaded. The first row
+created the member; the second collided with it.
+
+**Fix (2026-08-07):** Repeats of `email`, `username` and `membershipNumber`
+within one file are now caught before the import runs, and the message names the
+line the value was first used on. Note that two different addresses can still
+collide on username, because an omitted username is derived from the part before
+the `@` — `j.doe@a.com` and `j.doe@b.org` both yield `j_doe`. Add a `username`
+column to separate them.
+
+### Problem: A column in the spreadsheet was ignored
+
+**Cause:** The importer reads the template's columns and discards the rest. A
+roster exported from another system routinely carries extra columns
+(`status`, `certifications`, `notes`) that looked imported because the upload
+succeeded.
+
+**Fix (2026-08-06):** Selecting the file now names every unrecognized column,
+and calls out `status` specifically — the create endpoint has no status field,
+so every member is created Active regardless of what the column says. Move the
+data into a template column, or set it on the member after importing.
+
 ### Problem: Imported members have no position/role
 
 **Cause (Fixed 2026-08-04):** The `role` column was read from the CSV and then
@@ -5916,6 +6041,14 @@ never sent — roles are assigned by id, and the import never resolved the name.
 against the roles configured under **Roles**, and a name matching none is
 reported against its row instead of being silently ignored. Use the exact role
 name as it appears in the system.
+
+Since 2026-08-06 unmatched names are reported when the file is selected rather
+than one row at a time after the import runs — a roster whose `role` column
+holds assignments ("Engine Operator", "EMT", "Shift Commander") instead of
+configured role names imports nothing at all, and that is worth knowing before
+pressing Import. Put those values in the `rank` column, or create matching
+roles. When no roles are configured at all the column is skipped rather than
+failing every row.
 
 ### Problem: A row fails with "Username already exists" though no username was given
 

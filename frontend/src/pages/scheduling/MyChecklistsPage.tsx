@@ -572,6 +572,9 @@ export const MyChecklistsPage: React.FC = () => {
               <label htmlFor="history-search" className="sr-only">Search history</label>
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-muted" aria-hidden="true" />
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 id="history-search"
                 type="text"
                 aria-label="Search history..." placeholder="Search history..."

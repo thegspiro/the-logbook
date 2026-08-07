@@ -1125,7 +1125,7 @@ export const PipelineSettingsPage: React.FC = () => {
           aria-labelledby="template-gallery-title"
           onKeyDown={(e) => { if (e.key === 'Escape') setShowTemplateGallery(false); }}
         >
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-lg w-full max-h-[80vh] flex flex-col">
+          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-lg w-full max-h-[80dvh] flex flex-col">
             <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
               <h2 id="template-gallery-title" className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
                 <BookTemplate className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />

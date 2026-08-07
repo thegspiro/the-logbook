@@ -202,7 +202,7 @@ const LegalPage: React.FC = () => {
 
   return (
     <main
-      className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to px-4 py-12 sm:px-6 lg:px-8"
+      className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to px-4 pt-[max(3rem,env(safe-area-inset-top))] pb-12 sm:px-6 lg:px-8"
       id="main-content"
     >
       <div className="mx-auto max-w-3xl">

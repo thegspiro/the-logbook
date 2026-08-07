@@ -110,6 +110,70 @@ describe('errorHandling', () => {
       expect(result.message).not.toBe('Request failed');
     });
 
+    // Regression: main.py's RequestValidationError handler rewrites Pydantic's
+    // {loc, msg} into {field, message}, so reading only the Pydantic spelling
+    // rendered every field error as a bare "Invalid value". A CSV member import
+    // surfaced 50 rows of "Invalid value. Invalid value" with no field named.
+    it('reads the {field, message} 422 shape the API actually returns', () => {
+      const axiosError = {
+        response: {
+          data: {
+            detail: [
+              { field: 'date_of_birth', message: 'Invalid date format.' },
+              { field: 'emergency_contacts.0.email', message: 'Invalid value.' },
+            ],
+          },
+          status: 422,
+          statusText: 'Unprocessable Entity',
+        },
+      };
+
+      const result = toAppError(axiosError);
+
+      expect(result.status).toBe(422);
+      expect(result.message).toBe(
+        'date_of_birth: Invalid date format. emergency_contacts.0.email: Invalid value.'
+      );
+    });
+
+    it('does not double the period on messages that already carry one', () => {
+      const axiosError = {
+        response: {
+          data: {
+            detail: [
+              { field: 'a', message: 'Invalid value.' },
+              { field: 'b', message: 'Invalid value.' },
+            ],
+          },
+          status: 422,
+        },
+      };
+
+      expect(toAppError(axiosError).message).not.toContain('..');
+    });
+
+    it('omits the "request" placeholder the API uses for unattributed errors', () => {
+      const axiosError = {
+        response: {
+          data: { detail: [{ field: 'request', message: 'Invalid value.' }] },
+          status: 422,
+        },
+      };
+
+      expect(toAppError(axiosError).message).toBe('Invalid value.');
+    });
+
+    it('names the field for a Pydantic-shaped 422 that bypasses the handler', () => {
+      const axiosError = {
+        response: {
+          data: { detail: [{ loc: ['body', 'email'], msg: 'field required' }] },
+          status: 422,
+        },
+      };
+
+      expect(toAppError(axiosError).message).toBe('email: field required.');
+    });
+
     it('extracts the message from a structured object detail (not "[object Object]")', () => {
       // Some endpoints raise HTTPException with a dict detail, e.g. a 409
       // { message, ... }. toAppError must surface the message string.

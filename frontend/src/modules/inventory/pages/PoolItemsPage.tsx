@@ -434,6 +434,9 @@ const PoolItemsPage: React.FC = () => {
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted" />
           <input
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             type="text"
             aria-label="Search pool items..." placeholder="Search pool items..."
             className="form-input w-full pl-9"
@@ -515,6 +518,9 @@ const PoolItemsPage: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-1">Member</label>
             <input
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               type="text"
               className="form-input w-full"
               aria-label="Search members..." placeholder="Search members..."

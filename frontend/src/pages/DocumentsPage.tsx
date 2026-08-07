@@ -318,6 +318,9 @@ const DocumentsPage: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
               <label htmlFor="doc-search" className="sr-only">Search documents</label>
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 id="doc-search"
                 type="text"
                 placeholder={selectedFolder ? 'Search documents in this folder...' : 'Select a folder to browse documents...'}

@@ -1156,6 +1156,9 @@ const SchedulingPage: React.FC = () => {
                       </label>
                       {effectiveTemplates.length > 5 && (
                         <input
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
                           type="text"
                           placeholder="Search templates..."
                           value={templateSearch}

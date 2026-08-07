@@ -111,7 +111,7 @@ const RegistryImportModal: React.FC<Props> = ({ registryKey, registryName, onClo
       aria-label={`Import from ${registryName}`}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] flex flex-col">
+      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90dvh] flex flex-col">
         <div className="p-5 border-b border-theme-surface-border flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-theme-text-primary">Import from {registryName}</h2>

@@ -41,17 +41,75 @@ describe('TemplateList', () => {
 
   it('highlights selected template', () => {
     const templates = [
-      makeTemplate({ id: '1', name: 'Welcome Email' }),
-      makeTemplate({ id: '2', name: 'Password Reset', template_type: 'password_reset' }),
+      makeTemplate({ id: '1', name: 'Our Welcome Note' }),
+      makeTemplate({ id: '2', name: 'Our Reset Note', template_type: 'password_reset' }),
     ];
 
     render(
       <TemplateList templates={templates} selectedId="1" onSelect={vi.fn()} />,
     );
 
-    // The selected button should have the orange highlight class
-    const buttons = screen.getAllByRole('button');
-    expect(buttons[0]).toHaveClass('bg-orange-500/10');
+    // The selected template's button carries the orange highlight class
+    const selected = screen.getByRole('button', { name: /Our Welcome Note/ });
+    expect(selected).toHaveClass('bg-orange-500/10');
+  });
+
+  it('groups templates under category headers', () => {
+    const templates = [
+      makeTemplate({ id: '1', name: 'Welcome', template_type: 'welcome' }),
+      makeTemplate({ id: '2', name: 'Reminder', template_type: 'event_reminder' }),
+      makeTemplate({ id: '3', name: 'Ballot', template_type: 'ballot_notification' }),
+    ];
+
+    render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
+
+    expect(screen.getByText('Members & Accounts')).toBeInTheDocument();
+    expect(screen.getByText('Events & Scheduling')).toBeInTheDocument();
+    expect(screen.getByText('Elections & Voting')).toBeInTheDocument();
+  });
+
+  it('files an unrecognised template type under Other', () => {
+    const templates = [
+      makeTemplate({ id: '1', name: 'Ad-hoc Notice', template_type: 'custom' }),
+    ];
+
+    render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
+
+    expect(screen.getByText('Other')).toBeInTheDocument();
+    expect(screen.getByText('Ad-hoc Notice')).toBeInTheDocument();
+  });
+
+  it('collapses and re-expands a category', async () => {
+    const user = userEvent.setup();
+    const templates = [
+      makeTemplate({ id: '1', name: 'Welcome', template_type: 'welcome' }),
+    ];
+
+    render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
+
+    const header = screen.getByText('Members & Accounts');
+    await user.click(header);
+    expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
+
+    await user.click(header);
+    expect(screen.getByText('Welcome')).toBeInTheDocument();
+  });
+
+  it('keeps the selected template visible by expanding its category', async () => {
+    const user = userEvent.setup();
+    const templates = [
+      makeTemplate({ id: '1', name: 'Welcome', template_type: 'welcome' }),
+    ];
+
+    const { rerender } = render(
+      <TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />,
+    );
+
+    await user.click(screen.getByText('Members & Accounts'));
+    expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
+
+    rerender(<TemplateList templates={templates} selectedId="1" onSelect={vi.fn()} />);
+    expect(screen.getByText('Welcome')).toBeInTheDocument();
   });
 
   it('calls onSelect when clicking a template', async () => {

@@ -202,6 +202,71 @@ export const emailTemplatesService = {
 };
 
 // ============================================
+// Department Offices (email signature holders)
+// ============================================
+
+export interface OfficerCandidate {
+  id: string;
+  name: string;
+}
+
+export interface OfficerVariable {
+  name: string;
+  description: string;
+}
+
+export interface DepartmentOfficer {
+  office_key: string;
+  label: string;
+  category: string;
+  default_title: string;
+  position_slugs: string[];
+  user_id?: string | null;
+  name: string;
+  title: string;
+  email: string;
+  phone: string;
+  /** 'assigned' = pinned by an admin, 'auto' = inferred from the member's position, 'unset' = vacant */
+  source: 'assigned' | 'auto' | 'unset';
+  /** Raw admin overrides, distinct from the resolved values above. */
+  override_name?: string | null;
+  override_title?: string | null;
+  override_email?: string | null;
+  override_phone?: string | null;
+  auto_candidates: OfficerCandidate[];
+}
+
+export interface OfficerDirectory {
+  offices: DepartmentOfficer[];
+  variables: OfficerVariable[];
+}
+
+export interface OfficerUpdate {
+  user_id?: string | undefined;
+  display_name?: string | undefined;
+  title?: string | undefined;
+  email?: string | undefined;
+  phone?: string | undefined;
+}
+
+export const officersService = {
+  async getOfficers(): Promise<OfficerDirectory> {
+    const response = await api.get<OfficerDirectory>('/officers');
+    return response.data;
+  },
+
+  async setOfficer(officeKey: string, data: OfficerUpdate): Promise<OfficerDirectory> {
+    const response = await api.put<OfficerDirectory>(`/officers/${officeKey}`, data);
+    return response.data;
+  },
+
+  async clearOfficer(officeKey: string): Promise<OfficerDirectory> {
+    const response = await api.delete<OfficerDirectory>(`/officers/${officeKey}`);
+    return response.data;
+  },
+};
+
+// ============================================
 // Scheduled Emails
 // ============================================
 

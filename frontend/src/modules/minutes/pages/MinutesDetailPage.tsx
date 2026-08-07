@@ -830,7 +830,7 @@ export const MinutesDetailPage: React.FC = () => {
               aria-label="Motion text"
               className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             />
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label htmlFor="moved-by" className="sr-only">Moved by</label>
                 <input
@@ -871,7 +871,7 @@ export const MinutesDetailPage: React.FC = () => {
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label htmlFor="votes-for" className="sr-only">Votes for</label>
                 <input
@@ -989,7 +989,7 @@ export const MinutesDetailPage: React.FC = () => {
               aria-label="Action item description"
               className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
             />
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label htmlFor="action-assignee" className="sr-only">Assignee name</label>
                 <input

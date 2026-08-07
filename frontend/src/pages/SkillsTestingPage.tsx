@@ -164,7 +164,7 @@ export const SkillsTestingPage: React.FC = () => {
 
         {/* Tab Navigation */}
         <div className="border-theme-surface-border mb-6 border-b">
-          <nav className="flex gap-6" aria-label="Skills Testing Tabs">
+          <nav className="hscroll flex gap-6" aria-label="Skills Testing Tabs">
             <button
               onClick={() => {
                 setActiveTab('available');

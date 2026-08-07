@@ -28,6 +28,7 @@ import {
   Rocket,
   Package,
   Smartphone,
+  Share,
   UserPlus,
   Loader2,
   CreditCard,
@@ -86,13 +87,23 @@ import { useNotificationCountStore } from "../hooks/useNotificationCount";
  * Member-focused landing page showing notifications, upcoming shifts,
  * training progress, and recorded hours.
  */
+const INSTALL_BANNER_DISMISSED_KEY = 'installBannerDismissed';
+
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
   const { user: currentUser, checkPermission } = useAuthStore();
   const [departmentName, setDepartmentName] = useState("Fire Department");
-  const { canInstall, install } = usePWAInstall();
-  const [dismissedInstall, setDismissedInstall] = useState(false);
+  const { canInstall, needsManualInstall, install } = usePWAInstall();
+  // Persisted so the banner doesn't reappear on every dashboard visit — it is
+  // purely informational, and on iOS there is no "installed" event to hide it.
+  const [dismissedInstall, setDismissedInstall] = useState(
+    () => localStorage.getItem(INSTALL_BANNER_DISMISSED_KEY) === '1',
+  );
+  const dismissInstallBanner = () => {
+    localStorage.setItem(INSTALL_BANNER_DISMISSED_KEY, '1');
+    setDismissedInstall(true);
+  };
 
   // Admin summary (only loaded for users with settings.manage)
   const isAdmin = checkPermission("settings.manage");
@@ -685,35 +696,47 @@ const Dashboard: React.FC = () => {
           <ChevronRight className="w-6 h-6 opacity-80 group-hover:translate-x-0.5 transition-transform shrink-0" aria-hidden="true" />
         </button>
 
-        {/* PWA Install Banner */}
-        {canInstall && !dismissedInstall && (
-          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 flex items-center justify-between mb-6 sm:mb-8">
-            <div className="flex items-center gap-3">
-              <Smartphone className="w-5 h-5 text-blue-500" aria-hidden="true" />
+        {/* PWA Install Banner. Two variants: browsers that fire
+            `beforeinstallprompt` get a one-tap Install button; iOS Safari has
+            no such event, so it gets Share-sheet instructions instead. */}
+        {(canInstall || needsManualInstall) && !dismissedInstall && (
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6 sm:mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <Smartphone className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" aria-hidden="true" />
               <div>
                 <p className="text-sm font-medium text-theme-text-primary">
                   Install The Logbook
                 </p>
-                <p className="text-xs text-theme-text-muted">
-                  Add to your home screen for quick access
-                </p>
+                {needsManualInstall ? (
+                  <p className="text-xs text-theme-text-muted">
+                    Tap the Share button{' '}
+                    <Share className="inline w-3.5 h-3.5 -mt-0.5" aria-hidden="true" />{' '}
+                    in Safari, then choose &ldquo;Add to Home Screen&rdquo;.
+                  </p>
+                ) : (
+                  <p className="text-xs text-theme-text-muted">
+                    Add to your home screen for quick access
+                  </p>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={() => setDismissedInstall(true)}
-                className="text-sm text-theme-text-muted hover:text-theme-text-primary px-3 py-2 rounded"
+                onClick={dismissInstallBanner}
+                className="text-sm text-theme-text-muted hover:text-theme-text-primary px-3 rounded mobile-touch-target"
               >
                 Dismiss
               </button>
-              <button
-                onClick={() => {
-                  void install();
-                }}
-                className="btn-info font-medium px-4 py-2 rounded-md text-sm"
-              >
-                Install
-              </button>
+              {canInstall && (
+                <button
+                  onClick={() => {
+                    void install();
+                  }}
+                  className="btn-info font-medium px-4 rounded-md text-sm mobile-touch-target"
+                >
+                  Install
+                </button>
+              )}
             </div>
           </div>
         )}

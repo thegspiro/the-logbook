@@ -2076,7 +2076,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           <button
             type="button"
-            className="p-0.5 flex-shrink-0 text-theme-text-muted hover:text-blue-600 opacity-0 group-hover/item:opacity-100 transition-opacity"
+            className="p-0.5 flex-shrink-0 text-theme-text-muted hover:text-blue-600 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity"
             onClick={(e) => { e.stopPropagation(); startInlineEdit(itemKey, item.name, e); }}
             aria-label={`Rename ${item.name.trim() || 'item'}`}
           >
@@ -2290,7 +2290,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <>
                   <div>
                     <label className={labelClass}>Serial #</label>
-                    <input type="text" className={inputClass} placeholder="Serial number" value={item.serialNumber} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { serialNumber: e.target.value })} />
+                    <input autoCapitalize="none" autoCorrect="off" spellCheck={false} type="text" className={inputClass} placeholder="Serial number" value={item.serialNumber} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { serialNumber: e.target.value })} />
                   </div>
                   <div>
                     <label className={labelClass}>Lot #</label>
@@ -3380,7 +3380,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="max-h-[60vh] overflow-auto px-6 py-4">
+            <div className="max-h-[60dvh] overflow-auto px-6 py-4">
               {changelogLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
@@ -3454,7 +3454,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="max-h-[60vh] overflow-auto px-6 py-4">
+            <div className="max-h-[60dvh] overflow-auto px-6 py-4">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-theme-surface-border text-left text-theme-text-secondary">

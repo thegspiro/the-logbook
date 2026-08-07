@@ -472,7 +472,7 @@ const InventoryItemsPage: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
           <div className="relative lg:col-span-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
-            <input type="text" aria-label="Search items..." placeholder="Search items..." className="form-input pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input autoCapitalize="none" autoCorrect="off" spellCheck={false} type="text" aria-label="Search items..." placeholder="Search items..." className="form-input pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <select aria-label="Filter by category" className="form-input" value={fCat} onChange={(e) => setFCat(e.target.value)}>
             <option value="">All Categories</option>

@@ -15,6 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings as app_settings
+from app.core.constants import (
+    OFFICE_CATALOG,
+    OFFICE_VARIABLE_NAMES,
+    ORG_SETTINGS_OFFICER_KEY,
+)
 from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.services import email_templates_storefront as _storefront_templates
 
@@ -349,6 +354,32 @@ _SAMPLE_ORG_CONTEXT: Dict[str, str] = {
     "organization_website": "https://www.samplefd.org",
     "login_url": "https://example.com/login",
 }
+
+# Placeholder officeholders so a preview shows a plausible signature block
+# before the department has filled in its Officers screen.  Live values
+# overwrite these in the preview endpoint for every office that is actually
+# assigned, so a configured department previews its real signatures.
+_SAMPLE_OFFICER_NAMES: Dict[str, str] = {
+    "chief": "Robert Hayes",
+    "deputy_chief": "Alan Pierce",
+    "assistant_chief": "Maria Delgado",
+    "safety_officer": "Karen Boyle",
+    "training_officer": "Daniel Ruiz",
+    "president": "Susan Whitfield",
+    "vice_president": "Marcus Bell",
+    "secretary": "Elena Novak",
+    "assistant_secretary": "Priya Raman",
+    "treasurer": "Thomas Grady",
+    "quartermaster": "Wesley Kim",
+}
+
+for _office in OFFICE_CATALOG:
+    _key = str(_office["key"])
+    _name = _SAMPLE_OFFICER_NAMES.get(_key, f"Sample {_office['label']}")
+    _SAMPLE_ORG_CONTEXT[f"{_key}_name"] = _name
+    _SAMPLE_ORG_CONTEXT[f"{_key}_title"] = str(_office["default_title"])
+    _SAMPLE_ORG_CONTEXT[f"{_key}_email"] = f"{_key.replace('_', '')}@samplefd.org"
+    _SAMPLE_ORG_CONTEXT[f"{_key}_phone"] = "(555) 555-1234"
 
 
 def _sample(*dicts: Dict[str, str]) -> Dict[str, str]:
@@ -2315,6 +2346,20 @@ class EmailTemplateService:
                         getattr(organization, "physical_zip", None),
                     ),
                 )
+            # Office signature variables ({{president_name}}, {{chief_title}},
+            # ...). These come from the flat directory that OfficerService
+            # keeps on the organization row precisely so this synchronous
+            # render path needs no extra query — every send site already
+            # passes the organization. Unknown keys are filtered out so a
+            # hand-edited settings blob cannot inject arbitrary variables.
+            org_settings = getattr(organization, "settings", None) or {}
+            if isinstance(org_settings, dict):
+                directory = org_settings.get(ORG_SETTINGS_OFFICER_KEY) or {}
+                if isinstance(directory, dict):
+                    for var_name, var_value in directory.items():
+                        if var_name in OFFICE_VARIABLE_NAMES:
+                            ctx.setdefault(var_name, var_value or "")
+
         # login_url: always available regardless of organization
         frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
         ctx.setdefault("login_url", f"{frontend_url}/login" if frontend_url else "")

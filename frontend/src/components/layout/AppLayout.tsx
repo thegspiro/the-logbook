@@ -10,6 +10,7 @@ import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
 import { useNavigationShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useNotificationPoller } from '../../hooks/useNotificationCount';
 import { useOfflineSyncEngine } from '../../hooks/useOfflineSyncEngine';
+import { useKeyboardInset } from '../../hooks/useKeyboardInset';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import { usePullToRefreshContext } from '../../contexts/PullToRefreshContext';
 import { PullToRefreshIndicator } from '../PullToRefreshIndicator';
@@ -53,6 +54,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   // Drain the offline write queue when connectivity returns
   useOfflineSyncEngine();
+
+  // Publish the on-screen keyboard height so bottom action bars clear it
+  useKeyboardInset();
 
   // Layout-level pull-to-refresh: pages opt in via useRegisterPullToRefresh,
   // supplying their own data-refresh handler. The gesture stays disabled until
@@ -157,7 +161,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           logoPreview={logoPreview}
           onLogout={handleLogoutClick}
         />
-        <div className="md:ml-64 min-h-screen flex flex-col pt-16 md:pt-0">
+        <div className="md:ml-64 min-h-screen flex flex-col mobile-header-offset">
           <div className="flex-1" id="main-content" role="main">
             <PageTransition>
               {content}
@@ -181,6 +185,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
       <TopProgressBar />
+      <PullToRefreshIndicator
+        pulling={pulling}
+        refreshing={refreshing}
+        pullDistance={pullDistance}
+      />
       <CommandPalette />
       {/* Skip to main content link for keyboard users */}
       <a

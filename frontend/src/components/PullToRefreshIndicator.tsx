@@ -28,7 +28,7 @@ export const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-40 flex justify-center pointer-events-none"
+      className="fixed top-0 left-0 right-0 z-40 flex justify-center pointer-events-none safe-top"
       style={{ transform: `translateY(${refreshing ? 48 : pullDistance * 0.5}px)` }}
       aria-live="polite"
       aria-label={refreshing ? 'Refreshing' : 'Pull to refresh'}

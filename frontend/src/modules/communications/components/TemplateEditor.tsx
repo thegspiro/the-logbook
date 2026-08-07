@@ -14,6 +14,7 @@ import {
   ChevronUp,
   Info,
   Undo2,
+  UserCheck,
 } from 'lucide-react';
 import type { EmailTemplate, EmailTemplateUpdate, TemplateVariable } from '../types';
 import { validateEmailList, parseEmailList } from '../../../hooks/useEmailListInput';
@@ -23,6 +24,12 @@ interface TemplateEditorProps {
   isSaving: boolean;
   onSave: (data: EmailTemplateUpdate) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Signature variables from the department office directory. Kept separate
+   * from the template's own variables: they apply to every template, so
+   * folding them into one list would bury the type-specific ones.
+   */
+  officerVariables?: TemplateVariable[];
 }
 
 export const TemplateEditor: React.FC<TemplateEditorProps> = ({
@@ -30,6 +37,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   isSaving,
   onSave,
   onDirtyChange,
+  officerVariables = [],
 }) => {
   const [subject, setSubject] = useState(template.subject);
   const [htmlBody, setHtmlBody] = useState(template.html_body);
@@ -40,6 +48,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   const [showCss, setShowCss] = useState(false);
   const [showTextBody, setShowTextBody] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
+  const [showOfficerVariables, setShowOfficerVariables] = useState(false);
   const [showRecipients, setShowRecipients] = useState(
     () => (template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0,
   );
@@ -297,6 +306,46 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                     onClick={() => insertVariable(v)}
                     title={v.description}
                     className="inline-flex items-center px-2.5 py-1 bg-orange-500/10 border border-orange-500/30 rounded-sm text-xs text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors font-mono"
+                  >
+                    {`{{${v.name}}}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Officer signature variables (available to every template) */}
+      {officerVariables.length > 0 && (
+        <div className="card-secondary">
+          <button
+            onClick={() => setShowOfficerVariables(!showOfficerVariables)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+          >
+            <span className="flex items-center space-x-2">
+              <UserCheck className="w-4 h-4" />
+              <span>Officer Signature Variables ({officerVariables.length})</span>
+            </span>
+            {showOfficerVariables ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
+          </button>
+          {showOfficerVariables && (
+            <div className="px-4 pb-3 border-t border-theme-surface-border pt-3">
+              <p className="text-theme-text-muted text-xs mb-2 flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                Resolved from the Officers tab, so a message is signed by whoever holds the office.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {officerVariables.map((v) => (
+                  <button
+                    key={v.name}
+                    onClick={() => insertVariable(v)}
+                    title={v.description}
+                    className="inline-flex items-center px-2.5 py-1 bg-blue-500/10 border border-blue-500/30 rounded-sm text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors font-mono"
                   >
                     {`{{${v.name}}}`}
                   </button>

@@ -437,6 +437,9 @@ export const GrantApplicationsPage: React.FC = () => {
           <div className="relative min-w-[240px] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-secondary" />
             <input
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               type="text"
               aria-label="Search programs, agencies, assignees..." placeholder="Search programs, agencies, assignees..."
               value={searchText}

@@ -164,4 +164,71 @@ describe('usePullToRefresh', () => {
 
     expect(result.current.pullDistance).toBe(threshold * 1.5);
   });
+
+  describe('gesture ownership guards', () => {
+    afterEach(() => {
+      document.body.style.overflow = '';
+      document.body.innerHTML = '';
+    });
+
+    it('does not arm while body scroll is locked by a modal or drawer', () => {
+      document.body.style.overflow = 'hidden';
+      const { result } = renderHook(() => usePullToRefresh({ onRefresh }));
+
+      act(() => {
+        simulatePull(0, 200);
+      });
+
+      expect(result.current.pulling).toBe(false);
+      expect(onRefresh).not.toHaveBeenCalled();
+    });
+
+    it('ignores a drag that starts inside an already-scrolled container', () => {
+      const panel = document.createElement('div');
+      // jsdom does not lay out, so drive both inputs the guard reads.
+      Object.defineProperty(panel, 'scrollTop', { value: 120, writable: true });
+      vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+        overflowY: 'auto',
+      } as CSSStyleDeclaration);
+      document.body.appendChild(panel);
+
+      const { result } = renderHook(() => usePullToRefresh({ onRefresh }));
+
+      act(() => {
+        panel.dispatchEvent(
+          new TouchEvent('touchstart', {
+            bubbles: true,
+            touches: [{ clientY: 0 } as Touch],
+          }),
+        );
+        document.dispatchEvent(
+          new TouchEvent('touchmove', { touches: [{ clientY: 200 } as Touch] }),
+        );
+      });
+
+      expect(result.current.pulling).toBe(false);
+    });
+
+    it('still arms when the container under the finger is at its top', () => {
+      const panel = document.createElement('div');
+      Object.defineProperty(panel, 'scrollTop', { value: 0, writable: true });
+      document.body.appendChild(panel);
+
+      const { result } = renderHook(() => usePullToRefresh({ onRefresh }));
+
+      act(() => {
+        panel.dispatchEvent(
+          new TouchEvent('touchstart', {
+            bubbles: true,
+            touches: [{ clientY: 0 } as Touch],
+          }),
+        );
+        document.dispatchEvent(
+          new TouchEvent('touchmove', { touches: [{ clientY: 200 } as Touch] }),
+        );
+      });
+
+      expect(result.current.pulling).toBe(true);
+    });
+  });
 });

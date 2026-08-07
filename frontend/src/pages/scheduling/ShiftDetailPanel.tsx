@@ -1561,7 +1561,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   {/* Step 2: Member search + select */}
                   <div>
                     <label htmlFor="assign-member-search" className="block text-xs font-medium text-theme-text-secondary mb-1">Member</label>
-                    <input id="assign-member-search" type="text" aria-label="Search members" placeholder="Search members..."
+                    <input
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      id="assign-member-search" type="text" aria-label="Search members" placeholder="Search members..."
                       value={memberSearch}
                       onChange={e => setMemberSearch(e.target.value)}
                       className={inputCls}

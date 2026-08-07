@@ -236,8 +236,8 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                       This action is PERMANENT and cannot be undone.
                     </p>
                     <p className="text-sm text-red-700 dark:text-red-400/80 mt-1">
-                      All records including training history, inventory assignments, and documents
-                      will be permanently deleted.
+                      Training history and inventory assignments will be permanently deleted.
+                      Uploaded documents are kept, but will no longer show an uploader.
                     </p>
                   </div>
                 </div>
@@ -246,7 +246,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
               {/* Impact Details */}
               <div className="bg-theme-surface-secondary rounded-lg p-3">
                 <p className="text-xs text-theme-text-muted uppercase font-medium mb-2">
-                  Records to be deleted
+                  Records affected
                 </p>
                 <ul className="space-y-1 text-sm text-theme-text-secondary">
                   <li className="flex justify-between">
@@ -262,7 +262,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                     </span>
                   </li>
                   <li className="flex justify-between">
-                    <span>Documents</span>
+                    <span>Documents (uploader cleared)</span>
                     <span className="font-medium text-theme-text-primary">
                       {impact.documents}
                     </span>
