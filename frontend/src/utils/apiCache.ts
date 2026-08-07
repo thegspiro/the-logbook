@@ -75,6 +75,7 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/members/',     // member size preferences — body measurements (PII)
   '/inventory/my/',          // current user's own size preferences (PII)
   '/inventory/charges',      // per-member cost-recovery / financial liability (PII)
+  '/store/',               // member orders: names, shipping addresses, payment references, amounts owed (PII)
   '/documents/',           // private organizational documents
   '/compliance/',          // compliance attestations, member compliance data (PII)
   '/integrations/',        // integration config may contain API keys, webhook URLs, secrets
