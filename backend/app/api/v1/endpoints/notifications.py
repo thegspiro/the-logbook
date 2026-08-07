@@ -348,9 +348,7 @@ async def get_push_config(
     """
     if not PushService.is_configured():
         return PushConfigResponse(enabled=False, public_key=None)
-    return PushConfigResponse(
-        enabled=True, public_key=settings.VAPID_PUBLIC_KEY
-    )
+    return PushConfigResponse(enabled=True, public_key=settings.VAPID_PUBLIC_KEY)
 
 
 @router.post(
