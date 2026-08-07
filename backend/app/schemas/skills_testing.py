@@ -181,6 +181,17 @@ class SkillTestUpdate(BaseModel):
     requirement_id: Optional[UUID] = None
 
 
+class SkillTestCancelRequest(BaseModel):
+    """Schema for cancelling a test abandoned before it was scored.
+
+    The reason is optional — unlike a void, a cancellation withdraws no result
+    and makes no claim about the candidate, so there is nothing a reader needs
+    explained. It is appended to the test's notes when given.
+    """
+
+    reason: Optional[str] = Field(None, max_length=1000)
+
+
 class SkillTestVoidRequest(BaseModel):
     """Schema for voiding an official test result.
 

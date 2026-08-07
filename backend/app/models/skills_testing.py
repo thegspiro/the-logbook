@@ -183,6 +183,23 @@ class SkillTest(Base):
     result = Column(String(20), default="incomplete")
     is_practice = Column(Boolean, default=False)
 
+    # Frozen copy of the template as it stood when this test was created:
+    # {version, sections, passing_percentage, require_all_critical,
+    #  time_limit_seconds}.
+    #
+    # Criterion identity is positional ("criterion-{section}-{index}"), and
+    # updating a published template rewrites skill_templates.sections in place.
+    # Without this snapshot, inserting or deleting a criterion re-binds every
+    # historical result to different criteria — a recorded pass would display
+    # against whichever criterion later took that slot, and deleted criteria
+    # would drop recorded evidence off the scorecard entirely. Scoring rules are
+    # frozen alongside the structure so a result is never re-derived against a
+    # passing threshold that didn't apply at the time.
+    #
+    # Nullable for rows created before the column existed; readers fall back to
+    # the live template.
+    template_snapshot = Column(JSON, nullable=True)
+
     # Results — JSON array of SectionResult[] with nested CriterionResult[]
     section_results = Column(JSON, nullable=True)
     overall_score = Column(Float, nullable=True)

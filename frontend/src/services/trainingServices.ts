@@ -1272,6 +1272,15 @@ export const skillsTestingService = {
     await api.delete(`/training/skills-testing/tests/${testId}/discard`);
   },
 
+  async cancelTest(testId: string, reason?: string): Promise<SkillTest> {
+    const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/cancel`, {
+      // `||` not `??`: an untouched textarea sends '', which the backend's
+      // Optional[str] would store as an empty reason line in the notes.
+      reason: reason?.trim() || undefined,
+    });
+    return response.data;
+  },
+
   async voidTest(testId: string, reason: string): Promise<SkillTest> {
     const response = await api.post<SkillTest>(`/training/skills-testing/tests/${testId}/void`, { reason });
     return response.data;

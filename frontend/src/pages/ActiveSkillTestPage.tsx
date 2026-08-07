@@ -13,7 +13,7 @@
  * - High contrast, minimal scrolling per section
  */
 
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   ChevronLeft,
@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
+import { useAutoSave } from '../hooks/useAutoSave';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
@@ -838,6 +839,27 @@ export const ActiveSkillTestPage: React.FC = () => {
     };
   }, [activeTestRunning, setActiveTestTimer]);
 
+  // Restore the clock when reopening a test that was already under way. The
+  // timer lives in the store, which is memory-only, so a refresh or a return
+  // trip through the dashboard used to restart an in-progress evaluation at
+  // 00:00 — and that reading is what gets recorded as the test's duration.
+  // Runs once per test id, and never while the clock is running, so it can't
+  // stamp on a live count.
+  const hydratedTimerForTestRef = useRef<string | undefined>(undefined);
+  const loadedTestId = currentTest?.id;
+  const loadedElapsedSeconds = currentTest?.elapsed_seconds;
+  useEffect(() => {
+    if (!loadedTestId || hydratedTimerForTestRef.current === loadedTestId) return;
+    hydratedTimerForTestRef.current = loadedTestId;
+
+    // The running flag is read from the store rather than the render closure so
+    // it stays out of the dependency list — this is a one-shot restore keyed on
+    // the test, not something to redo when the examiner starts or pauses.
+    if (!useSkillsTestingStore.getState().activeTestRunning && loadedElapsedSeconds) {
+      setActiveTestTimer(loadedElapsedSeconds);
+    }
+  }, [loadedTestId, loadedElapsedSeconds, setActiveTestTimer]);
+
   // Hydrate template sections from the API response (must be before callbacks that reference it)
   const templateSections = hydrateTemplateSections(
     currentTest?.template_sections as Record<string, unknown>[] | undefined
@@ -864,6 +886,41 @@ export const ActiveSkillTestPage: React.FC = () => {
       toast.error('Failed to save progress');
     }
   }, [currentTest, activeTestTimer, updateTest]);
+
+  // Autosave. This screen is used one-handed on a phone, outdoors, often with
+  // gloves — and until now it only persisted on an explicit Save or on entering
+  // review. A locked screen, a dropped call, or a killed tab partway through an
+  // evaluation lost every criterion scored since the examiner last thought to
+  // press Save, with the candidate already dismissed.
+  //
+  // Silent by design: no toast. An autosave the examiner didn't ask for should
+  // not interrupt them mid-evaluation, and the failure path is already covered
+  // — a save that never lands leaves the work in memory, where the next manual
+  // Save or Complete will report the error properly.
+  const autoSavePayload = useMemo(
+    () => ({
+      section_results: currentTest?.section_results ?? [],
+      elapsed_seconds: activeTestTimer,
+    }),
+    [currentTest?.section_results, activeTestTimer]
+  );
+
+  const persistAutoSave = useCallback(
+    async (payload: { section_results: SectionResult[]; elapsed_seconds: number }) => {
+      if (!currentTest) return;
+      await updateTest(currentTest.id, payload);
+    },
+    [currentTest, updateTest]
+  );
+
+  useAutoSave({
+    data: autoSavePayload,
+    onSave: persistAutoSave,
+    // Only while the evaluation is live. A completed or voided test is
+    // read-only, and update_test rejects writes to it.
+    enabled:
+      currentTest != null && !reviewing && (currentTest.status === 'draft' || currentTest.status === 'in_progress'),
+  });
 
   /** "Complete Test" — stops the clock, saves progress, and enters review mode */
   const handleComplete = useCallback(async () => {

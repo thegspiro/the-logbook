@@ -12,7 +12,10 @@ pure-scoring path stays import-light.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import copy
+from datetime import datetime
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from loguru import logger
@@ -20,6 +23,70 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from app.models.skills_testing import SkillTemplate, SkillTest
+
+
+def build_template_snapshot(template: SkillTemplate) -> dict[str, Any]:
+    """Freeze the parts of a template a test must be scored and displayed against.
+
+    Deep-copied because ``sections`` is a JSON column: storing the live list
+    would leave the snapshot aliasing the template's own value, so a later edit
+    to that template would mutate the "frozen" copy too — exactly the bug this
+    exists to prevent (Pitfall #12).
+    """
+    return {
+        "version": template.version,
+        "sections": copy.deepcopy(template.sections or []),
+        "passing_percentage": template.passing_percentage,
+        "require_all_critical": template.require_all_critical,
+        "time_limit_seconds": template.time_limit_seconds,
+    }
+
+
+def resolve_test_template(
+    test: SkillTest, template: SkillTemplate | None
+) -> SimpleNamespace | SkillTemplate | None:
+    """The structure and scoring rules a given test must be judged by.
+
+    Prefers the test's own snapshot, so editing a published template never
+    re-scores or re-labels a test taken against the old one. Falls back to the
+    live template for rows created before snapshots existed and for any row the
+    backfill could not reach.
+    """
+    snapshot = getattr(test, "template_snapshot", None)
+    if not snapshot:
+        return template
+
+    return SimpleNamespace(
+        sections=snapshot.get("sections") or [],
+        passing_percentage=snapshot.get("passing_percentage"),
+        require_all_critical=snapshot.get("require_all_critical"),
+        time_limit_seconds=snapshot.get("time_limit_seconds"),
+        # Display name always comes from the live template — a renamed template
+        # is the same template, and the snapshot exists to freeze structure and
+        # scoring rules, not identity.
+        name=getattr(template, "name", None),
+    )
+
+
+def resolve_elapsed_seconds(
+    measured_seconds: int | None,
+    started_at: datetime | None,
+    completed_at: datetime | None,
+) -> int | None:
+    """How long the evaluation took, preferring the examiner's stopwatch.
+
+    The test screen runs a timer the examiner starts, pauses between attempts,
+    and stops while equipment resets; its reading is saved before the test is
+    completed. Wall clock (``completed_at - started_at``) measures the whole
+    sitting instead — a test begun at 09:00 and finished after lunch logged
+    seven hours — and time limits are pass/fail criteria here, so it is only a
+    fallback for tests completed without a measured value.
+    """
+    if measured_seconds is not None:
+        return measured_seconds
+    if started_at and completed_at:
+        return int((completed_at - started_at).total_seconds())
+    return None
 
 
 def calculate_test_result(

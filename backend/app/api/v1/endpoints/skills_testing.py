@@ -33,6 +33,7 @@ from app.schemas.skills_testing import (
     SkillTemplateListResponse,
     SkillTemplateResponse,
     SkillTemplateUpdate,
+    SkillTestCancelRequest,
     SkillTestCreate,
     SkillTestingSummaryResponse,
     SkillTestListResponse,
@@ -46,7 +47,10 @@ from app.services.separation_of_duties import (
 )
 from app.services.skills_testing_service import (
     apply_test_pass_to_pipeline,
+    build_template_snapshot,
     calculate_test_result,
+    resolve_elapsed_seconds,
+    resolve_test_template,
     revert_test_pass_from_pipeline,
 )
 
@@ -768,6 +772,9 @@ async def create_test(
         result="incomplete",
         notes=test_data.notes,
         is_practice=test_data.is_practice,
+        # Freeze the structure and scoring rules now. A later edit to this
+        # published template must not re-label or re-score this test.
+        template_snapshot=build_template_snapshot(template),
     )
 
     db.add(new_test)
@@ -1032,21 +1039,24 @@ async def complete_test(
             detail="Associated template not found",
         )
 
-    # Calculate results
-    overall_score, test_result = calculate_test_result(test, template)
+    # Score against the structure this test was taken under, not whatever the
+    # template says now.
+    overall_score, test_result = calculate_test_result(
+        test, resolve_test_template(test, template)
+    )
 
     test.status = "completed"
     test.result = test_result
     test.overall_score = overall_score
     test.completed_at = datetime.now(timezone.utc)
 
-    # Calculate elapsed time if started_at is set
-    if test.started_at:
-        started = _ensure_utc(test.started_at)
-        completed = _ensure_utc(test.completed_at)
-        if started and completed:
-            elapsed = completed - started
-            test.elapsed_seconds = int(elapsed.total_seconds())
+    # The examiner's stopwatch reading wins over wall clock; see
+    # resolve_elapsed_seconds for why.
+    test.elapsed_seconds = resolve_elapsed_seconds(
+        test.elapsed_seconds,
+        _ensure_utc(test.started_at),
+        _ensure_utc(test.completed_at),
+    )
 
     await db.commit()
     await db.refresh(test)
@@ -1217,6 +1227,109 @@ async def discard_practice_test(
 
     await db.delete(test)
     await db.commit()
+
+
+@router.post("/tests/{test_id}/cancel", response_model=SkillTestResponse)
+async def cancel_test(
+    test_id: UUID,
+    cancel_data: SkillTestCancelRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cancel a test that was started but never finished.
+
+    For evaluations abandoned mid-session — the candidate withdrew, equipment
+    failed, weather stopped the drill. The test keeps whatever partial results
+    were recorded but is closed out, so it stops sitting in the active list.
+
+    Distinct from voiding: a cancelled test was never scored, so there is no
+    result to withdraw and nothing to release from the training pipeline. A
+    *completed* test cannot be cancelled — use void for that.
+
+    Officers may cancel any test; a non-officer may only cancel a practice test
+    they are running as examiner.
+
+    **Authentication required**
+    """
+    result = await db.execute(
+        select(SkillTest)
+        .where(SkillTest.id == str(test_id))
+        .where(SkillTest.organization_id == current_user.organization_id)
+    )
+    test = result.scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    _authorize_test_write(test, current_user)
+
+    if test.status == SkillTestStatus.COMPLETED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This test has already been scored. Void it instead to withdraw "
+                "the result."
+            ),
+        )
+
+    if test.status == SkillTestStatus.VOIDED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot cancel a voided test",
+        )
+
+    if test.status == SkillTestStatus.CANCELLED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Test is already cancelled",
+        )
+
+    test.status = SkillTestStatus.CANCELLED.value
+    if cancel_data.reason:
+        test.notes = (
+            f"{test.notes}\n\nCancelled: {cancel_data.reason}"
+            if test.notes
+            else f"Cancelled: {cancel_data.reason}"
+        )
+
+    await db.commit()
+    await db.refresh(test)
+
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
+    template = template_result.scalar_one_or_none()
+
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
+    examiner = examiner_result.scalar_one_or_none()
+
+    # Practice attempts are not logged, matching create/complete.
+    if not test.is_practice:
+        await log_audit_event(
+            db=db,
+            event_type="skill_test_cancelled",
+            event_category="training",
+            severity="info",
+            event_data={
+                "test_id": str(test_id),
+                "template_name": template.name if template else None,
+                "candidate_id": test.candidate_id,
+                "candidate_name": _format_user_name(candidate) if candidate else None,
+                "reason": cancel_data.reason,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return _build_test_response(test, template, candidate, examiner)
 
 
 @router.post("/tests/{test_id}/void", response_model=SkillTestResponse)
@@ -1400,7 +1513,10 @@ async def email_test_results(
 
     # Build section summaries
     sections_html = ""
-    template_sections = template.sections or [] if template else []
+    # Same rule as the API response: the emailed scorecard must reflect the
+    # structure the test was taken under, not the template's current state.
+    scored_against = resolve_test_template(test, template)
+    template_sections = scored_against.sections or [] if scored_against else []
     section_results = test.section_results or []
     for si, section_def in enumerate(template_sections):
         if not isinstance(section_def, dict):
@@ -1676,6 +1792,11 @@ def _build_test_response(
     voider: User | None = None,
 ) -> SkillTestResponse:
     """Build a SkillTestResponse with denormalized names and template structure."""
+    # The structure the client renders the scorecard from must be the one this
+    # test was taken under — the live template may have been edited since, and
+    # criterion identity is positional.
+    scored_against = resolve_test_template(test, template)
+
     return SkillTestResponse(
         id=test.id,
         organization_id=test.organization_id,
@@ -1701,6 +1822,8 @@ def _build_test_response(
         candidate_name=_format_user_name(candidate) if candidate else None,
         examiner_name=_format_user_name(examiner) if examiner else None,
         voided_by_name=_format_user_name(voider) if voider else None,
-        template_sections=template.sections if template else None,
-        template_time_limit_seconds=template.time_limit_seconds if template else None,
+        template_sections=scored_against.sections if scored_against else None,
+        template_time_limit_seconds=(
+            scored_against.time_limit_seconds if scored_against else None
+        ),
     )

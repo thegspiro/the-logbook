@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Ban, Plus, Search, Trash2 } from 'lucide-react';
+import { Ban, CircleSlash, Plus, Search, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDate } from '../utils/dateFormatting';
@@ -48,7 +48,8 @@ const TestCard: React.FC<{
   onClick: () => void;
   onDelete: () => void;
   onVoid: () => void;
-}> = ({ test, onClick, onDelete, onVoid }) => {
+  onCancel: () => void;
+}> = ({ test, onClick, onDelete, onVoid, onCancel }) => {
   const tz = useTimezone();
   return (
     <div
@@ -85,11 +86,15 @@ const TestCard: React.FC<{
               {test.completed_at ? formatDate(test.completed_at, tz) : test.started_at ? 'In Progress' : 'Not Started'}
             </p>
           </div>
-          {/* Practice attempts were never recorded, so they are simply deleted.
-            An official result is an evaluation record the member's
-            certification may rest on — it is withdrawn by voiding, which keeps
-            the row, its reason, and its author. Already-voided rows offer
-            neither action. */}
+          {/* Three different ways a test leaves the active list, and they are
+            not interchangeable:
+              practice  → delete. It was never recorded, so nothing is lost.
+              scored    → void. An evaluation record the member's certification
+                          may rest on; withdrawing it keeps the row, its reason,
+                          and its author.
+              unscored  → cancel. Abandoned mid-session, so there is no result
+                          to withdraw and nothing to release from the pipeline.
+            Already-closed rows (voided/cancelled) offer no action. */}
           {test.is_practice ? (
             <button
               onClick={(e) => {
@@ -101,7 +106,7 @@ const TestCard: React.FC<{
             >
               <Trash2 className="h-4 w-4" />
             </button>
-          ) : test.status !== 'voided' ? (
+          ) : test.status === 'completed' ? (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -111,6 +116,17 @@ const TestCard: React.FC<{
               aria-label={`Void test for ${test.candidate_name}`}
             >
               <Ban className="h-4 w-4" />
+            </button>
+          ) : test.status === 'draft' || test.status === 'in_progress' ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancel();
+              }}
+              className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/20"
+              aria-label={`Cancel unfinished test for ${test.candidate_name}`}
+            >
+              <CircleSlash className="h-4 w-4" />
             </button>
           ) : null}
         </div>
@@ -123,7 +139,8 @@ const TestCard: React.FC<{
 
 const SkillsTestingTestRecordsTab: React.FC = () => {
   const navigate = useNavigate();
-  const { tests, testsLoading, loadTests, deleteTest, voidTest, templates, loadTemplates } = useSkillsTestingStore();
+  const { tests, testsLoading, loadTests, deleteTest, voidTest, cancelTest, templates, loadTemplates } =
+    useSkillsTestingStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [voidTarget, setVoidTarget] = useState<SkillTestListItem | null>(null);
@@ -153,6 +170,25 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
       toast.success('Practice attempt deleted');
     } catch {
       toast.error('Failed to delete practice attempt');
+    }
+  };
+
+  const handleCancel = async (test: SkillTestListItem) => {
+    // A plain confirm rather than the void modal: cancelling withdraws no
+    // result and makes no claim about the candidate, so the reason is optional
+    // and there is nothing for a reader to need explained.
+    const reason = window.prompt(
+      `Cancel the unfinished test for ${test.candidate_name} (${test.template_name})?\n\n` +
+        'Any partial results are kept, but the test is closed out. ' +
+        'Optionally note why:'
+    );
+    if (reason === null) return;
+
+    try {
+      await cancelTest(test.id, reason);
+      toast.success('Test cancelled');
+    } catch {
+      toast.error('Failed to cancel test');
     }
   };
 
@@ -248,6 +284,7 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
               onClick={() => void navigate(`/training/skills-testing/test/${test.id}`)}
               onDelete={() => void handleDelete(test)}
               onVoid={() => setVoidTarget(test)}
+              onCancel={() => void handleCancel(test)}
             />
           ))}
         </div>

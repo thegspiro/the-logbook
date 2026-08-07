@@ -69,6 +69,7 @@ interface SkillsTestingState {
   deleteTest: (id: string) => Promise<void>;
   discardPracticeTest: (id: string) => Promise<void>;
   voidTest: (id: string, reason: string) => Promise<SkillTest>;
+  cancelTest: (id: string, reason?: string) => Promise<SkillTest>;
   emailTestResults: (id: string) => Promise<string>;
 
   // Active test session actions
@@ -327,6 +328,24 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
       return voided;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to void test');
+      set({ error: msg });
+      throw err;
+    }
+  },
+
+  cancelTest: async (id: string, reason?: string) => {
+    set({ error: null });
+    try {
+      const cancelled = await skillsTestingService.cancelTest(id, reason);
+      // Like voiding, this closes a test out rather than removing it, so the
+      // row is patched in place.
+      set((state: SkillsTestingState) => ({
+        tests: state.tests.map((t: SkillTestListItem) => (t.id === id ? { ...t, status: cancelled.status } : t)),
+        currentTest: state.currentTest?.id === id ? cancelled : state.currentTest,
+      }));
+      return cancelled;
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to cancel test');
       set({ error: msg });
       throw err;
     }
