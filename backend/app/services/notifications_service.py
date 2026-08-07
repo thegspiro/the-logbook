@@ -5,6 +5,7 @@ Business logic for notification management including rules,
 sending, logging, and preferences.
 """
 
+import logging
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
@@ -19,6 +20,8 @@ from app.models.notification import (
     NotificationLog,
     NotificationRule,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationsService:
@@ -144,16 +147,51 @@ class NotificationsService:
     async def log_notification(
         self, organization_id: UUID, log_data: Dict[str, Any]
     ) -> Tuple[Optional[NotificationLog], Optional[str]]:
-        """Log a sent notification"""
+        """Log a sent notification.
+
+        In-app notifications are additionally pushed to the recipient's
+        registered devices. Hooking in here rather than at each of the dozen
+        call sites means every existing notification source (events, training,
+        maintenance, elections, ...) reaches a phone with no further changes.
+        """
         try:
             log = NotificationLog(organization_id=organization_id, **log_data)
             self.db.add(log)
             await self.db.commit()
             await self.db.refresh(log)
-            return log, None
         except Exception as e:
             await self.db.rollback()
             return None, safe_error_detail(e)
+
+        await self._maybe_push(organization_id, log)
+        return log, None
+
+    async def _maybe_push(
+        self, organization_id: UUID, log: NotificationLog
+    ) -> None:
+        """Best-effort web push for an in-app notification.
+
+        Deliberately runs after the log row is committed and swallows all
+        errors: the notification is already durably recorded, and a push
+        service outage must not fail the action that produced it.
+        """
+        if log.channel != NotificationChannel.IN_APP or not log.recipient_id:
+            return
+        try:
+            from app.services.push_service import PushService
+
+            push = PushService(self.db)
+            if not push.is_configured():
+                return
+            await push.send_to_user(
+                organization_id=organization_id,
+                user_id=log.recipient_id,
+                title=log.subject or "The Logbook",
+                body=log.message or "",
+                tag=log.category or "logbook",
+            )
+        except Exception:
+            logger.exception("Web push dispatch failed for notification %s", log.id)
 
     async def get_logs(
         self,

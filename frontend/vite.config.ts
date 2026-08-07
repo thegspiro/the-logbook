@@ -36,6 +36,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
       workbox: {
+        // Web Push handlers. Kept as a separate plain-JS file so the build can
+        // stay on generateSW — moving to injectManifest just to register two
+        // event listeners would mean hand-maintaining everything below.
+        importScripts: ['/push-sw.js'],
         // Precache the app SHELL only, not all ~275 route chunks.
         //
         // Precaching everything made installing the PWA a ~6.1MB download, most

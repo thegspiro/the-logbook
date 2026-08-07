@@ -67,14 +67,19 @@ describe('BottomNavigation', () => {
 
   it('marks the active route with aria-current', () => {
     renderBar({}, '/events');
-    const events = screen.getByText('Events').closest('button');
-    expect(events).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByText('Home').closest('button')).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByRole('button', { name: 'Home' })).not.toHaveAttribute('aria-current');
   });
 
   it('treats nested routes as active', () => {
     renderBar({}, '/events/abc123');
-    expect(screen.getByText('Events').closest('button')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 
   it('asks the drawer to open instead of navigating when More is tapped', async () => {
@@ -85,7 +90,9 @@ describe('BottomNavigation', () => {
 
     await user.click(screen.getByText('More'));
 
-    expect(listener).toHaveBeenCalled();
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ type: OPEN_MOBILE_NAV_EVENT }),
+    );
     expect(mockNavigate).not.toHaveBeenCalled();
     window.removeEventListener(OPEN_MOBILE_NAV_EVENT, listener);
   });

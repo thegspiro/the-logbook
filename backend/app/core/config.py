@@ -666,6 +666,23 @@ class Settings(BaseSettings):
     TWILIO_PHONE_NUMBER: str | None = None
 
     # ============================================
+    # Web Push (PWA notifications)
+    # ============================================
+    # VAPID keypair identifying this server to the browser push services.
+    # Generate with:
+    #   python3 -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); \
+    #     print(v.private_key_urlsafe_base64(), v.public_key_urlsafe_base64())"
+    # The public key is served to clients; the private key signs push requests
+    # and must never leave the server. Rotating the pair invalidates every
+    # existing subscription, so clients have to re-subscribe.
+    PUSH_ENABLED: bool = False
+    VAPID_PUBLIC_KEY: str | None = None
+    VAPID_PRIVATE_KEY: str | None = None
+    # mailto: or https: URL the push service can use to contact the operator
+    # about problems with this application server. Required by RFC 8292.
+    VAPID_SUBJECT: str = "mailto:admin@example.com"
+
+    # ============================================
     # OAuth Providers
     # ============================================
     # Microsoft / Azure AD

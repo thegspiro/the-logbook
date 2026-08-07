@@ -60,6 +60,13 @@ jinja2==3.1.6
 twilio==9.10.9
 
 # ============================================
+# Web Push (PWA notifications)
+# ============================================
+# Optional at runtime: push_service degrades to "unavailable" if absent, so a
+# deployment with PUSH_ENABLED=false need not have it installed.
+pywebpush==2.0.3
+
+# ============================================
 # File Storage
 # ============================================
 boto3==1.43.61  # AWS S3
