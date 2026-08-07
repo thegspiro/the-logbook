@@ -1380,4 +1380,97 @@ export const SHOTS = [
     route: "/scheduling?tab=requests",
     fullPage: true,
   },
+
+  // ── Fourth batch: modals and creation forms ────────────────────────
+  {
+    id: "07-02-new-folder-dialog",
+    doc: "07-documents-forms.md",
+    line: 65,
+    anchor:
+      "Screenshot of the New Folder dialog showing the folder name field and",
+    alt: "New folder dialog with the name field and parent folder selector",
+    route: "/documents",
+    prepare: clickByName(/new folder/i),
+  },
+  {
+    id: "14-02-create-election",
+    doc: "14-elections.md",
+    line: 96,
+    anchor:
+      "Screenshot of the Create Election form showing title, description, type selector, date",
+    alt: "Create Election form with title, dates, and voting method",
+    route: "/elections",
+    prepare: clickByName(/create election/i),
+    fullPage: true,
+  },
+  {
+    id: "13-05-add-requirement",
+    doc: "13-medical-screening.md",
+    line: 112,
+    anchor:
+      "The Add Requirement form/modal showing all fields filled out for an annual",
+    alt: "Add screening requirement form with type, frequency, and grace period",
+    route: "/medical-screening",
+    prepare: clickByName(/add requirement/i),
+    fullPage: true,
+  },
+  {
+    id: "15-03-create-applicant",
+    doc: "15-prospective-members.md",
+    line: 150,
+    anchor:
+      "Screenshot of the Create Applicant form showing name, email, phone fields, membership",
+    alt: "Create applicant form with contact fields and membership type",
+    route: "/prospective-members",
+    prepare: clickByName(/add applicant/i),
+    fullPage: true,
+  },
+  {
+    id: "01-19-create-waiver",
+    doc: "01-membership.md",
+    line: 485,
+    anchor:
+      "Screenshot of the Create Waiver form showing the member dropdown, 'Applies To'",
+    alt: "Create waiver form with member, scope, and date range",
+    route: "/members/admin/waivers",
+    prepare: clickByName(/^create waiver$/i),
+    fullPage: true,
+  },
+  {
+    id: "02-03-submit-training",
+    doc: "02-training.md",
+    line: 86,
+    anchor:
+      "Screenshot of the Submit Training form showing the course dropdown with search",
+    alt: "Submit Training form with course, date, hours, and attachment fields",
+    route: "/training/my-training",
+    prepare: clickByName(/submit training/i),
+    fullPage: true,
+  },
+  {
+    id: "05-04-variant-group-form",
+    doc: "05-inventory.md",
+    line: 146,
+    anchor:
+      "Screenshot of the Variant Group creation form showing the base product name",
+    alt: "Variant group creation form with the size and colour matrix",
+    route: "/inventory/admin/variant-groups",
+    prepare: clickByName(/add group/i),
+    fullPage: true,
+  },
+  {
+    id: "07-06-form-builder",
+    doc: "07-documents-forms.md",
+    line: 160,
+    anchor:
+      "Screenshot of the form builder showing a form being designed with a",
+    alt: "Form builder with the field palette, canvas, and field settings",
+    route: "/forms",
+    // "Create Form" only opens a name/category dialog; the builder this
+    // placeholder describes is behind "Edit Fields" on an existing form.
+    prepare: clickByName(/edit fields/i),
+    // Viewport only: the builder opens over the list page, and a full-page
+    // capture trails the taller page underneath it below the fold.
+    fullPage: false,
+  },
 ];

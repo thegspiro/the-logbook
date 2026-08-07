@@ -109,7 +109,7 @@ Navigate to **Medical Screening > Requirements** tab to view all requirements.
 
 4. Click **Save**.
 
-> **[SCREENSHOT NEEDED]:** _The Add Requirement form/modal showing all fields filled out for an annual physical requirement, with the Screening Type dropdown open displaying all six options._
+![Add screening requirement form with type, frequency, and grace period](./images/13-05-add-requirement.png)
 
 ### Editing and Deleting Requirements
 
