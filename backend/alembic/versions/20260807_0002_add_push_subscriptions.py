@@ -1,6 +1,6 @@
 """Add push_subscriptions table for Web Push delivery.
 
-Revision ID: 20260807_0001
+Revision ID: 20260807_0002
 Revises: 20260805_0011
 Create Date: 2026-08-07
 
@@ -8,11 +8,11 @@ Stores one Web Push endpoint per browser/device per user, so a member who
 installs the PWA on both a phone and a station tablet is reached on both.
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
-revision = "20260807_0001"
+revision = "20260807_0002"
 down_revision = "20260805_0011"
 branch_labels = None
 depends_on = None
@@ -47,6 +47,15 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("endpoint_hash", name="uq_push_sub_endpoint"),
         mysql_charset="utf8mb4",
+        # Naming a charset without a collation is not the same as naming
+        # neither: the table then takes that charset's *server* default
+        # collation (utf8mb4_general_ci on MariaDB, utf8mb4_0900_ai_ci on
+        # MySQL 8) instead of the database default. organizations.id and
+        # users.id are utf8mb4_unicode_ci, and a foreign key requires the
+        # referencing and referenced columns to agree on collation as well as
+        # type — without this line the table cannot be created at all
+        # (errno 150).
+        mysql_collate="utf8mb4_unicode_ci",
     )
     op.create_index(
         "idx_push_sub_org_user",
@@ -64,7 +73,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_push_subscriptions_user_id"), table_name="push_subscriptions")
+    op.drop_index(
+        op.f("ix_push_subscriptions_user_id"), table_name="push_subscriptions"
+    )
     op.drop_index(
         op.f("ix_push_subscriptions_organization_id"),
         table_name="push_subscriptions",

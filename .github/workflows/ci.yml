@@ -46,14 +46,32 @@ jobs:
       # let 85 violations accumulate unseen: lint-staged only lints *staged*
       # files, so a test file's problems surfaced to whoever next happened to
       # touch it rather than to the person who introduced them.
+      # The three checks below are independent, so each runs even when an
+      # earlier one fails. Under the default fail-fast, a single flake8
+      # violation skipped black and isort entirely — for the two days that
+      # PT018 sat on main, every PR reported "Backend Lint failed" having
+      # never checked formatting or import order at all. One run should
+      # surface every lint problem, not just the first.
       - name: Run flake8
         run: flake8 app/ tests/
 
       - name: Check formatting with black
+        if: '!cancelled()'
         run: black --check app/ tests/
 
       - name: Check import order with isort
+        if: '!cancelled()'
         run: isort --check-only app/ tests/
+
+      # Repo-root Python (generate_registry.py, scripts/) is outside the
+      # backend working-directory and was linted by nothing, which let five
+      # unused imports and an empty f-string accumulate. flake8 only — these
+      # files predate black/isort adoption and reformatting them is a
+      # separate change.
+      - name: Run flake8 (repo-root scripts)
+        if: '!cancelled()'
+        working-directory: .
+        run: flake8 --config backend/.flake8 generate_registry.py scripts/
 
   backend-security:
     name: Backend Security Scan

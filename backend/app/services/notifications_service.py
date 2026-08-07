@@ -166,9 +166,7 @@ class NotificationsService:
         await self._maybe_push(organization_id, log)
         return log, None
 
-    async def _maybe_push(
-        self, organization_id: UUID, log: NotificationLog
-    ) -> None:
+    async def _maybe_push(self, organization_id: UUID, log: NotificationLog) -> None:
         """Best-effort web push for an in-app notification.
 
         Deliberately runs after the log row is committed and swallows all
