@@ -53,9 +53,7 @@ organization in Organization/Admin Settings > Modules (`enabled_modules`).
 | `storefront.order` | Place orders |
 | `storefront.manage` | Catalog, order windows, everyone's orders, payments, settings |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the member storefront at `/store`
-> showing the open window banner, a product grid with photos and prices, and
-> the cart summary._
+![Member storefront with the order window banner and product grid](./images/18-01-member-storefront.png)
 
 ---
 
@@ -308,9 +306,7 @@ Everything the store sends is logged in **Communications → Message History**
 under a `storefront_` type, so "did she ever get the reminder?" is a question
 with an answer.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Settings tab showing the payment
-> method checkboxes with the Venmo, PayPal, Cash App and Zelle fields revealed
-> beneath them._
+![Store administration settings with the payment method options](./images/18-02-store-admin.png)
 
 ---
 

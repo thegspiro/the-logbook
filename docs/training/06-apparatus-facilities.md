@@ -40,8 +40,7 @@ The apparatus list shows all vehicles with:
 - Station assignment
 - Year and make/model
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Apparatus listing page showing a grid or list of vehicles with unit number, photo thumbnail, type badge, status badge (green for In Service, red for Out of Service), and station assignment]_
+![Apparatus listing with unit numbers, type badges, and status badges](./images/06-01-apparatus-list.png)
 
 > **Hint:** If your department has the full Apparatus module disabled, you will see a simplified **Apparatus Basic** view that provides a lightweight list of apparatus for shift scheduling purposes.
 
@@ -164,8 +163,7 @@ The facilities dashboard shows:
 - **Recent activity feed**: Latest maintenance completions, inspection results, and status changes
 - **Facility card grid**: Searchable and filterable cards showing each facility's name, type, address, and status
 
-> **Screenshot needed:**
-> _[Screenshot of the Facilities Dashboard showing four summary statistic cards at the top (Total Facilities: 3, Pending Maintenance: 2, Upcoming Inspections: 1, Overdue: 0), a recent activity feed in the left column, and a grid of facility cards on the right showing station names, types (Fire Station, Admin Building), addresses, and status badges (Operational in green)]_
+![Facilities dashboard with summary cards and facility cards](./images/06-09-facilities-dashboard.png)
 
 > **Hint:** If your department has the Facilities module disabled, you will see a simplified **Locations** page that provides basic location management for events and meetings.
 

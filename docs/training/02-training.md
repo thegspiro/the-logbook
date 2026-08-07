@@ -108,8 +108,7 @@ The library shows all courses created by your department, organized by category.
 - Required hours
 - Whether it is a certification course
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Course Library page showing course cards organized by category, with each card displaying the course name, category badge, hours, and a brief description]_
+![Course Library showing course cards grouped by category](./images/02-04-course-library.png)
 
 **Officers** can create new courses from the **Training Admin > Officer Dashboard** or directly from the course management area.
 
@@ -435,8 +434,7 @@ department-defined rules.
 | **Certification Period** | Based on certification expiry dates |
 | **Fixed Date** | Specific due date |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Requirements management page showing a table of requirements with columns for name, type, frequency, required value, due date type, and status (active/inactive)]_
+![Training requirements management table](./images/02-16-requirements.png)
 
 ### Rolling Period Requirements and Leave of Absence
 
@@ -459,8 +457,7 @@ Navigate to **Training Admin > Officer Dashboard** for a department-wide overvie
 - Upcoming deadlines
 - Recent submissions awaiting review
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Training Officer Dashboard showing summary cards (completion rate, pending reviews, upcoming expirations), a chart of monthly training hours, and a list of members needing attention]_
+![Training Officer Dashboard with summary cards and pending review queue](./images/02-17-officer-dashboard.png)
 
 > **Automatic "falling behind" alerts.** A weekly check flags members who are behind pace or approaching a deadline and notifies **both the member and the training officers** so someone can step in. A member isn't re-alerted every week while they stay behind (the alert is throttled), and a member who just started a fresh recertification cycle isn't flagged as overdue on day one — pace is measured from the current cycle, not their original enrollment date.
 
@@ -477,8 +474,7 @@ Navigate to **Training Admin > Review Submissions** to see training records pend
 3. Click **Approve** to accept or **Reject** to deny.
 4. If rejecting, provide a reason so the member understands what needs to be corrected.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Review Submissions page showing a list of pending submissions with member name, course, date, and hours. Show one expanded submission with the approve/reject buttons and the attached certificate preview]_
+![Review Submissions page listing pending training submissions](./images/02-18-review-submissions.png)
 
 > **You can't approve your own submission.** If you self-report training, a **different** officer has to approve it — you can't sign off your own hours or credit. (You can still reject or request revision on your own submission.)
 
@@ -913,7 +909,7 @@ For departments that do not use the Scheduling module, The Logbook provides a st
    - Individual remarks
 9. Click **Submit Report** or **Save as Draft**
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Manual Shift Report page showing the date/time entry at the top, apparatus selector, hours display, crew member list with checkboxes, and an expanded trainee evaluation section with rating stars and text fields._
+![Manual Shift Report page with date, apparatus, and hours entry](./images/02-38-manual-shift-report.png)
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the apparatus selector on the manual entry form, showing the dropdown with apparatus types and the auto-populated skills section below it._
 

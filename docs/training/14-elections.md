@@ -697,7 +697,7 @@ nomination-deadline auto-close. Closing finalizes results and runs the
 anonymous-election privacy purge — a privacy guarantee, not a convenience —
 and an in-flight nomination phase must always be closeable.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Election Settings page showing toggle switches for each setting, the default voting method dropdown, and the Features section with its toggles and attestation-count selector._
+![Election settings page with the default rule toggles](./images/14-16-election-settings.png)
 
 ---
 

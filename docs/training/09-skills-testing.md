@@ -81,8 +81,7 @@ Fill in the basic information:
 | **Time Limit** | Optional time limit in minutes | 10 |
 | **Linked Training Requirement** | Optional. A training-program requirement that passing a test from this template completes | "Recruit Academy — Phase 3: Trauma Assessment" |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Create Template form showing the metadata fields: name input, category dropdown, description textarea, passing percentage slider set to 70%, "Require All Critical" toggle switch (on), and time limit input showing 10 minutes]_
+![Create skill sheet template form with metadata fields](./images/09-02-create-template.png)
 
 ### Step 2: Define Sections and Criteria
 

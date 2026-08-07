@@ -64,8 +64,7 @@ Navigate to **Administration > Organization Settings > Organization** to manage 
 - **Mailing and Physical Addresses**
 - **Logo** upload
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Organization Settings page showing the department name, type selector, timezone dropdown, and the contact information section with phone, email, and address fields]_
+![Organization Settings page with department name, type, and timezone](./images/08-02-organization-settings.png)
 
 ### Contact Info Visibility
 
@@ -206,8 +205,7 @@ Permission categories include:
 - `settings.*` - System settings
 - `analytics.*` - Analytics access
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Role Management page showing a list of positions on the left, and when one is selected, a permissions grid on the right with checkboxes grouped by category]_
+![Role Management page listing positions and their permissions](./images/08-04-role-management.png)
 
 ### Assigning Positions to Members
 
@@ -258,8 +256,7 @@ The **Pipeline Overview** report shows prospect counts per pipeline stage with c
 
 Stage groups with zero prospects are still shown in the report for completeness. Ungrouped stages appear individually.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Reports page showing the category filter buttons at the top, date range presets and a custom date picker, a list of available reports, and a generated report preview with an Export CSV button]_
+![Reports page with category filters and date range presets](./images/08-06-reports.png)
 
 > **Hint:** Reports can be saved as bookmarks for quick access. Common reports like the annual training summary should be generated at the end of each year for compliance records.
 
@@ -278,8 +275,7 @@ The dashboard provides:
 - **Event Metrics** - Event counts, attendance rates, RSVP patterns
 - **Activity Trends** - Charts showing activity over time
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Analytics Dashboard showing metric cards at the top (total members, training compliance %, events this month), and charts below showing trends over time (line chart of monthly training hours, bar chart of event attendance)]_
+![Analytics dashboard with metric cards and trend charts](./images/08-07-analytics-dashboard.png)
 
 ---
 
@@ -302,8 +298,7 @@ The public portal allows external access to:
 - **API keys** for external integrations
 - **Access logging** for security
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Public Portal configuration page showing the enable toggle, domain settings, branding options, and a list of public API keys with creation dates and last-used timestamps]_
+![Public Portal configuration page with the enable toggle and domain settings](./images/08-08-public-portal.png)
 
 ---
 
@@ -364,8 +359,7 @@ This page shows:
 - Error details and stack traces
 - Trends and patterns
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Error Monitor page showing a table of recent errors with columns for timestamp, severity (color-coded badges), message, and a count of occurrences]_
+![Error Monitor page listing recent application errors](./images/08-11-error-monitor.png)
 
 > **Hint:** Regular errors about failed login attempts are normal (they indicate the rate limiting is working). Focus on Critical and Error severity items for actual system issues.
 
@@ -529,7 +523,7 @@ Admins with the `audit.view` permission can read the audit trail directly. Navig
 3. Click a row to **expand** it and see the full event details for that entry.
 4. Use the pagination controls at the bottom to page through older entries.
 
-> **[SCREENSHOT NEEDED]:** _Audit Log page showing the Total / Critical / Warnings / Info stats cards, the filter bar (search box, severity and category dropdowns, Reset button), and the table with one row expanded to reveal its event detail JSON_
+![Audit Log page with summary stat cards and the filter bar](./images/08-19-audit-log.png)
 
 > **Note:** The audit log is scoped to your organization — events for your department's users only. System-level events (such as scheduled jobs that have no acting user) are deliberately excluded from this view.
 
@@ -856,8 +850,7 @@ The Medical Screening module tracks health screenings, physicals, drug tests, an
    - **Grace Period** — days after expiration before marking non-compliant (default: 30)
 5. Click **Save**
 
-> **Screenshot needed:**
-> _[Screenshot of the Medical Screening page showing the Requirements tab with a list of configured requirements (Annual Physical, Drug Screening, Fitness Test) with columns for type, frequency, applicable roles, and active toggle]_
+![Medical Screening page showing the configured requirements](./images/08-21-medical-screening.png)
 
 ### Recording Screenings
 

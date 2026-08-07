@@ -90,7 +90,7 @@ The dashboard provides a high-level summary of your department's financial healt
 - **Dues Collection Rate** -- Percentage of expected dues that have been collected
 - **Recent Transactions** -- A feed of recent financial activity across the department
 
-> **[SCREENSHOT NEEDED]:** _The Finance Dashboard showing budget health summary cards at the top (total budgeted, spent, encumbered, remaining with a percent-used gauge), pending approval counts in the middle row, and the recent transactions feed below._
+![Finance dashboard with budget health cards and recent transactions](./images/11-01-finance-dashboard.png)
 
 > **Hint:** The dashboard automatically scopes to the active fiscal year. If no fiscal year is active, the budget health section displays zeroes. Set up your fiscal year first (see [Fiscal Years](#fiscal-years)).
 
@@ -122,7 +122,7 @@ A fiscal year defines the accounting period for your department. All budgets, pu
 
 The new fiscal year is created in **Draft** status.
 
-> **[SCREENSHOT NEEDED]:** _The Fiscal Year Settings page showing a list of fiscal years with status badges (Draft, Active, Closed), start/end dates, and action buttons (Activate, Lock)._
+![Fiscal year settings listing fiscal years with status badges](./images/11-02-fiscal-year-settings.png)
 
 ### Activating a Fiscal Year
 
@@ -349,7 +349,7 @@ The chain with the highest score wins. If no chain matches at all, the request t
 8. Optionally add **steps** inline during creation.
 9. Click **Save**.
 
-> **[SCREENSHOT NEEDED]:** _The Create Approval Chain form showing the name field, applies-to dropdown (Purchase Request selected), min/max amount fields, budget category dropdown, is-default checkbox, and the steps builder below with an "Add Step" button._
+![Approval chain configuration page with the chain list and step builder](./images/11-06-approval-chains.png)
 
 ### Adding Steps to a Chain
 
@@ -495,7 +495,7 @@ Purchase request numbers are auto-generated in the format **PR-YYYY-0001**, wher
 
 4. Click **Save as Draft** to save without submitting, or click **Submit** to send it into the approval workflow.
 
-> **[SCREENSHOT NEEDED]:** _The Create Purchase Request form showing all fields: title, fiscal year dropdown, budget dropdown, estimated amount, vendor, priority selector (Low/Medium/High/Urgent), description textarea, apparatus and facility dropdowns, notes, and the Save Draft / Submit buttons at the bottom._
+![Create Purchase Request form with budget, vendor, and priority fields](./images/11-08-create-purchase-request.png)
 
 ### Submitting a Purchase Request
 
@@ -608,7 +608,7 @@ Expense report numbers are auto-generated in the format **ER-YYYY-0001**, where 
 
 5. Click **Save as Draft** or **Submit**. The total amount is automatically calculated as the sum of all line items.
 
-> **[SCREENSHOT NEEDED]:** _The Create Expense Report form showing the header fields at the top (title, fiscal year, description) and a line items section below with an "Add Line Item" button. Show one completed line item row with description, amount, date, expense type dropdown, merchant, and receipt fields._
+![Create Expense Report form with header fields and the line items section](./images/11-10-create-expense-report.png)
 
 ### Expense Types
 
@@ -725,7 +725,7 @@ Check request numbers are auto-generated in the format **CK-YYYY-0001**, where Y
 
 4. Click **Save as Draft** or **Submit**.
 
-> **[SCREENSHOT NEEDED]:** _The Create Check Request form showing payee name, amount, fiscal year dropdown, budget dropdown, payee address textarea, memo, purpose, notes, and Save Draft / Submit buttons._
+![Create Check Request form with payee, amount, and budget fields](./images/11-12-create-check-request.png)
 
 ### Issuing a Check
 

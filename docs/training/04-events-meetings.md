@@ -42,8 +42,7 @@ You can filter events by type and date range using the controls at the top of th
 
 **Past Events:** All users can toggle between **Upcoming** and **Past** events using the toggle at the top of the page. Results are paginated for easy browsing.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Events listing page showing upcoming events as cards or rows, with type badges (color-coded), dates, times, and RSVP status indicators. Show the filter controls and Past Events tab at the top]_
+![Events listing page with upcoming events and type badges](./images/04-01-events-list.png)
 
 ---
 
@@ -123,8 +122,7 @@ Navigate to **Events Admin > Create Event** or click **Create Event** on the eve
 5. Optionally attach files (agendas, maps, etc.).
 6. Click **Create Event**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Create Event form showing fields for type, title, date/time, location, description, reminder schedule, check-in configuration options, and file attachment area]_
+![Create Event form with type, title, date, location, and reminder fields](./images/04-05-create-event.png)
 
 ### Event Reminders
 
@@ -420,8 +418,7 @@ Navigate to **Minutes** in the sidebar to access meeting minutes management.
    - Discussions
    - Adjournment
 
-> **Screenshot placeholder:**
-> _[Screenshot of the minutes creation/editing page showing the meeting type selector, date, attendee list with checkboxes, and the minutes content area with sections for motions, discussions, and action items]_
+![Meeting minutes page with the meeting type selector and attendee list](./images/04-14-meeting-minutes.png)
 
 ### Motions
 
@@ -451,8 +448,7 @@ Action items have:
 - **Priority** - Low, Medium, High
 - **Status** - Open, In Progress, Completed, Cancelled
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Action Items page showing a filterable list of tasks with columns for title, assigned member, due date, priority (color-coded badges), and status. Show filter controls for status and assignee at the top]_
+![Action Items page listing tasks with assignee, due date, and status](./images/04-15-action-items.png)
 
 > **Hint:** Members see their own action items prominently. Officers can view and manage all action items across the department.
 

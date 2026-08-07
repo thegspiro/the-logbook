@@ -35,7 +35,7 @@ The Medical Screening page uses a **three-tab layout**:
 | **Records** | Log individual screening results for members and prospects |
 | **Compliance** | View department-wide compliance status, identify gaps, and track upcoming expirations |
 
-> **[SCREENSHOT NEEDED]:** _The Medical Screening landing page showing the three-tab navigation (Requirements, Records, Compliance) with the Requirements tab active, displaying a table of screening requirements._
+![Medical Screening landing page with its three-tab navigation](./images/13-01-medical-landing.png)
 
 ### Permissions
 
