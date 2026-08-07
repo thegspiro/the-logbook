@@ -120,7 +120,7 @@ before that change retain their IPs permanently: `ip_address` is part of the
 audit hash-chain input, so scrubbing them would break `verify_integrity` —
 which is exactly the tamper-evidence the chain exists to provide.
 
-### ELEC-7 — LOW — `create_candidate` stores client-supplied `user_id` unvalidated (XC-1)
+### ELEC-7 — LOW — `create_candidate` stores client-supplied `user_id` unvalidated (XC-1) — ✅ FIXED (zero-trust review; verified app-review B5, 2026-08-06)
 `Candidate(..., **candidate.model_dump())` persists `user_id` with no in-org
 check. Same low-severity pattern tracked in CROSS-CUTTING XC-1.
 

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.models.error_log import ErrorLog
 from app.models.user import User
 
@@ -213,7 +214,7 @@ async def clear_errors(
             "entries_deleted": deleted_count,
         },
         user_id=str(current_user.id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
 
     await db.commit()
@@ -251,7 +252,7 @@ async def export_errors(
             "event_id_filter": event_id,
         },
         user_id=str(current_user.id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
 
     return [

@@ -10,20 +10,57 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends
 from loguru import logger
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_active_user, require_permission
+from app.api.dependencies import (
+    get_current_active_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.database import get_db
 from app.models.admin_hours import AdminHoursEntry, AdminHoursEntryStatus
 from app.models.event import Event, EventExternalAttendee, EventRSVP, EventType
 from app.models.meeting import ActionItemStatus, MeetingActionItem
-from app.models.minute import ActionItem, MeetingMinutes, MinutesActionItemStatus
+from app.models.minute import (
+    ActionItem,
+    MeetingMinutes,
+    MinutesActionItemStatus,
+    MinutesMeetingType,
+    MinutesStatus,
+)
 from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import User, UserStatus
 from app.services.training_compliance import compute_org_compliance_pct
 
 router = APIRouter()
+
+
+def minutes_visibility_filter(current_user: User):
+    """WHERE clause confining minutes action items to what *user* may see.
+
+    Returns ``None`` for a ``minutes.manage`` holder (no restriction).
+
+    MM-3 restricted draft and executive-session minutes to `minutes.manage`
+    holders in the minutes module's own reads, but an action item carries that
+    minutes record's free text in its ``description`` — an executive-session
+    item can name a member alongside a disciplinary or legal matter. Any
+    endpoint that reads `ActionItem` across the organization has to apply the
+    same gate or it re-opens what MM-3 closed.
+
+    The assignee carve-out is deliberate: an item assigned *to* the caller is
+    work they are expected to do, and without it ``assigned_to_me`` would hide
+    a member's own tasks from them.
+    """
+    if user_has_permission(current_user, "minutes.manage"):
+        return None
+    return or_(
+        and_(
+            MeetingMinutes.status == MinutesStatus.APPROVED.value,
+            MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
+        ),
+        ActionItem.assignee_id == current_user.id,
+    )
 
 
 class DashboardStats(BaseModel):
@@ -352,6 +389,11 @@ async def get_unified_action_items(
         .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
         .where(MeetingMinutes.organization_id == org_id)
     )
+
+    restriction = minutes_visibility_filter(current_user)
+    if restriction is not None:
+        query2 = query2.where(restriction)
+
     if status_filter:
         query2 = query2.where(ActionItem.status == status_filter)
     if assigned_to_me:

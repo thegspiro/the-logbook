@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
+from app.models.event import Event
 from app.models.grant import (
     CampaignStatus,
     Donation,
@@ -350,9 +351,23 @@ class FundraisingService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def _validate_pledge_fks(
+        self, data: Dict[str, Any], organization_id: str
+    ) -> None:
+        """GF-6: campaign_id / donor_id on a pledge must be in the caller's org."""
+        if data.get("campaign_id") and not await self._entity_in_org(
+            FundraisingCampaign, data["campaign_id"], organization_id
+        ):
+            raise ValueError("Campaign not found")
+        if data.get("donor_id") and not await self._entity_in_org(
+            Donor, data["donor_id"], organization_id
+        ):
+            raise ValueError("Donor not found")
+
     async def create_pledge(
         self, organization_id: str, data: Dict[str, Any], user_id: str
     ) -> Pledge:
+        await self._validate_pledge_fks(data, organization_id)
         pledge = Pledge(
             organization_id=organization_id,
             created_by=user_id,
@@ -374,6 +389,7 @@ class FundraisingService:
         pledge = result.scalar_one_or_none()
         if not pledge:
             return None
+        await self._validate_pledge_fks(data, organization_id)
         for key, value in data.items():
             setattr(pledge, key, value)
         await self.db.flush()
@@ -400,9 +416,28 @@ class FundraisingService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def _validate_fundraising_event_fks(
+        self, data: Dict[str, Any], organization_id: str
+    ) -> None:
+        """GF-6: campaign_id / event_id on a fundraising event must be in-org.
+
+        ``event_id`` links to a calendar ``Event`` row; validating it in-org
+        prevents attaching a fundraiser to another org's event (a mis-attributed
+        FK, and a potential read of that event via the link).
+        """
+        if data.get("campaign_id") and not await self._entity_in_org(
+            FundraisingCampaign, data["campaign_id"], organization_id
+        ):
+            raise ValueError("Campaign not found")
+        if data.get("event_id") and not await self._entity_in_org(
+            Event, data["event_id"], organization_id
+        ):
+            raise ValueError("Event not found")
+
     async def create_fundraising_event(
         self, organization_id: str, data: Dict[str, Any], user_id: str
     ) -> FundraisingEvent:
+        await self._validate_fundraising_event_fks(data, organization_id)
         event = FundraisingEvent(
             organization_id=organization_id,
             created_by=user_id,
@@ -427,6 +462,7 @@ class FundraisingService:
         event = result.scalar_one_or_none()
         if not event:
             return None
+        await self._validate_fundraising_event_fks(data, organization_id)
         for key, value in data.items():
             setattr(event, key, value)
         await self.db.flush()

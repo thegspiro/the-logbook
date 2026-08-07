@@ -26,6 +26,7 @@ from app.core.audit import (
 )
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
 from app.models.user import User
@@ -74,7 +75,7 @@ async def get_security_status(
         severity="info",
         event_data={"viewer": current_user.username},
         user_id=str(current_user.id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
 
     return status
@@ -160,7 +161,7 @@ async def acknowledge_alert(
             "acknowledged_by": current_user.username,
         },
         user_id=str(current_user.id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
 
     return {"status": "acknowledged", "alert_id": alert_id}
@@ -196,7 +197,7 @@ async def resolve_alert(
             "resolved_by": current_user.username,
         },
         user_id=str(current_user.id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
 
     return {"status": "resolved", "alert_id": alert_id}
@@ -282,7 +283,7 @@ async def create_audit_checkpoint(
                 "created_by": current_user.username,
             },
             user_id=str(current_user.id),
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
         )
 
         return {
@@ -342,7 +343,7 @@ async def rehash_audit_chain(
                 "entries_rehashed": count,
             },
             user_id=str(current_user.id),
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
         )
 
         await db.commit()
@@ -441,7 +442,7 @@ async def get_audit_log_entries(
             "results_count": len(logs),
         },
         user_id=str(current_user.id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
 
     return {
@@ -532,7 +533,7 @@ async def export_audit_logs(
             },
         },
         user_id=str(current_user.id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
 
     return {
@@ -671,7 +672,7 @@ async def trigger_manual_security_check(
             "alerts_found": status["alerts"]["total_last_hour"],
         },
         user_id=str(current_user.id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
 
     return {

@@ -110,6 +110,47 @@ describe('errorHandling', () => {
       expect(result.message).not.toBe('Request failed');
     });
 
+    it('extracts the message from a structured object detail (not "[object Object]")', () => {
+      // Some endpoints raise HTTPException with a dict detail, e.g. a 409
+      // { message, ... }. toAppError must surface the message string.
+      const axiosError = {
+        response: {
+          data: {
+            detail: {
+              message: 'A previously archived member matches this prospect.',
+              warning_type: 'archived_match',
+            },
+          },
+          status: 409,
+          statusText: 'Conflict',
+        },
+      };
+
+      const result = toAppError(axiosError);
+
+      expect(result.status).toBe(409);
+      expect(result.message).toBe(
+        'A previously archived member matches this prospect.',
+      );
+      expect(result.message).not.toContain('[object Object]');
+    });
+
+    it('falls back cleanly when an object detail has no message', () => {
+      const axiosError = {
+        response: {
+          data: { detail: { warning_type: 'x' }, message: 'top-level message' },
+          status: 400,
+          statusText: 'Bad Request',
+        },
+      };
+
+      const result = toAppError(axiosError);
+
+      // No detail.message -> falls through to data.message.
+      expect(result.message).toBe('top-level message');
+      expect(result.message).not.toContain('[object Object]');
+    });
+
     it('handles Axios network error (request but no response)', () => {
       const axiosError = {
         message: 'Network Error',

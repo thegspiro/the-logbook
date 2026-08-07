@@ -5,8 +5,20 @@ who happen to open the app. This service fans a posted message out across the
 channels members actually watch:
 
 * an in-app notification (bell inbox) for every targeted member;
-* an email when the message is urgent or requires acknowledgment;
-* an SMS when the message is urgent (and Twilio is configured).
+* an email to every targeted member — always;
+* an SMS when the message is urgent, Twilio is configured, and the member has
+  granted SMS consent.
+
+**Email is the channel of record and is deliberately unconditional.** It is not
+gated by consent and not gated by the member's notification preferences: a
+member must not be able to opt out of the record that they were told something,
+or the department loses its answer to "I never got that update". SMS, by
+contrast, *is* consent-gated — US TCPA requires express consent for text
+messaging, and consent that is collected but never checked is worse than none,
+because the UI represents to the member that their choice took effect.
+
+That pairing is the invariant to preserve if this is ever changed: SMS may be
+suppressed for a member, but the same message always reaches them by email.
 
 The fan-out is dispatched to FastAPI ``BackgroundTasks`` so the HTTP response
 returns immediately, and runs on its own database session (the request's
@@ -90,21 +102,21 @@ class MessageDeliveryService:
 
             priority = _priority_value(message)
             is_urgent = priority == "urgent"
-            escalate_email = is_urgent or bool(message.requires_acknowledgment)
 
             await self._create_in_app(message, recipients)
 
-            org = None
-            if escalate_email or is_urgent:
-                org_result = await self.db.execute(
-                    select(Organization).where(
-                        Organization.id == str(message.organization_id)
-                    )
+            org_result = await self.db.execute(
+                select(Organization).where(
+                    Organization.id == str(message.organization_id)
                 )
-                org = org_result.scalar_one_or_none()
+            )
+            org = org_result.scalar_one_or_none()
 
-            if escalate_email:
-                await self._send_email(message, recipients, org)
+            # Unconditional: email is the channel of record (see module
+            # docstring). It must run before the SMS branch so that a member
+            # whose SMS is suppressed for want of consent has already been
+            # reached by email.
+            await self._send_email(message, recipients, org)
 
             if is_urgent:
                 await self._send_sms(message, recipients, org)
@@ -155,11 +167,11 @@ class MessageDeliveryService:
         org: Optional[Organization],
     ) -> None:
         try:
-            to_emails = [
-                u.email
-                for u in recipients
-                if u.email and _wants(u.notification_preferences, "email_notifications")
-            ]
+            # Deliberately NOT filtered by the email_notifications preference
+            # or by consent: this is the record-of-notice channel, so a member
+            # cannot opt out of being told. Channel preferences still govern
+            # SMS and the in-app inbox.
+            to_emails = [u.email for u in recipients if u.email]
             if not to_emails:
                 return
 
@@ -217,10 +229,23 @@ class MessageDeliveryService:
             if not sms_svc.enabled:
                 return
 
+            # TCPA: text messaging requires express consent, so the recorded
+            # consent gates the send in addition to the channel preference.
+            # granted_user_ids fails closed — a member who was never asked is
+            # simply absent from the set, i.e. treated as having refused. They
+            # still receive this message by email (see deliver()).
+            from app.models.consent import ConsentType
+            from app.services.consent_service import ConsentService
+
+            consented = await ConsentService(self.db).granted_user_ids(
+                [str(u.id) for u in recipients], ConsentType.SMS_NOTIFICATIONS
+            )
+
             numbers = [
                 (u.mobile or u.phone)
                 for u in recipients
                 if (u.mobile or u.phone)
+                and str(u.id) in consented
                 and _wants(u.notification_preferences, "sms_notifications")
             ]
             if not numbers:

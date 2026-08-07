@@ -11,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.services.messaging_service import MessagingService
 
 
@@ -415,7 +417,54 @@ class TestRescheduleGuard:
         assert err is None
 
 
-if __name__ == "__main__":  # pragma: no cover
-    import pytest
+class TestValidateTargeting:
+    """MSG-2: create/update reject target member/role ids not in the caller's
+    org (data hygiene — delivery is already org-safe via _is_targeted)."""
 
+    def _svc(self, execute_results):
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=execute_results)
+        return MessagingService(db), db
+
+    def _members_result(self, ids):
+        return MagicMock(
+            scalars=MagicMock(
+                return_value=MagicMock(all=MagicMock(return_value=list(ids)))
+            )
+        )
+
+    def _roles_result(self, rows):
+        return MagicMock(all=MagicMock(return_value=list(rows)))
+
+    async def test_empty_lists_issue_no_query(self):
+        svc, db = self._svc([])
+        await svc._validate_targeting("org1", None, None)
+        await svc._validate_targeting("org1", [], [])
+        db.execute.assert_not_called()
+
+    async def test_in_org_member_ids_pass(self):
+        svc, _ = self._svc([self._members_result(["u1", "u2"])])
+        await svc._validate_targeting("org1", ["u1", "u2"], None)
+
+    async def test_foreign_member_id_rejected(self):
+        # Only u1 is in-org; the foreign id is not returned by the query.
+        svc, _ = self._svc([self._members_result(["u1"])])
+        with pytest.raises(ValueError, match="target members"):
+            await svc._validate_targeting("org1", ["u1", "u2-foreign"], None)
+
+    async def test_role_id_and_name_both_pass(self):
+        row = SimpleNamespace(id="r1", name="Officer")
+        svc, _ = self._svc([self._roles_result([row])])
+        await svc._validate_targeting("org1", None, ["r1"])  # by id
+        svc2, _ = self._svc([self._roles_result([row])])
+        await svc2._validate_targeting("org1", None, ["Officer"])  # rename-safe
+
+    async def test_foreign_role_rejected(self):
+        row = SimpleNamespace(id="r1", name="Officer")
+        svc, _ = self._svc([self._roles_result([row])])
+        with pytest.raises(ValueError, match="target roles"):
+            await svc._validate_targeting("org1", None, ["r2-foreign"])
+
+
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

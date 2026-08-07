@@ -66,12 +66,16 @@ re-validated at accept time, and the accept path's approver-identity check is
 looser than the manual-review path. Behavior-change — flagged rather than
 auto-applied. **Status:** flagged (M1/M2).
 
-### SCH-6 — LOW (flagged) — `finalize_shift` manual_hours & apparatus/station/template FKs
-`finalize_shift` trusts a client-supplied `manual_hours` override, and
-`create_shift`/`update_shift` accept `apparatus_id` / `station_id` /
-`template_id` FKs without an in-org check (all currently backstopped by
-org-scoped downstream reads, so not live cross-tenant writes — defense-in-depth
-only). **Status:** flagged (F3/F4).
+### SCH-6 — MEDIUM/LOW — `finalize_shift` manual_hours & apparatus FKs — ✅ FIXED (app-review B19)
+**Real gap fixed:** `finalize_shift` created a `ShiftAttendance` row from a
+client-supplied `manual_hours[].user_id` with no in-org check — a foreign user
+could be credited hours on this org's shift. Now validated via `_user_in_org`
+(rejects before writing). The manual `hours` *value* was already bounded at the
+schema (`ManualHoursEntry.hours: Field(gt=0, le=48)`), so that half was already
+closed. **Also:** `create_shift`/`update_shift` now validate `apparatus_id` in-org
+via `is_in_org` (DiD — was backstopped by the org-scoped min-staffing lookup).
+`station_id` is an unwired placeholder (no reads); `template_id` isn't a `Shift`
+field. 2 regression tests added. See `docs/app-review/scheduling.md`.
 
 ## Notes
 - Large-module caveat: `scheduling_service.py` (~5,000 L) was reviewed for

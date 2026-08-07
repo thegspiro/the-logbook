@@ -296,7 +296,17 @@ def _validate_config(integration_type: str, config: dict[str, Any]) -> dict[str,
     if schema_cls and config:
         try:
             validated = schema_cls(**config)
-            return validated.model_dump()
+            # INT-4: emit ONLY the keys the caller actually supplied. A bare
+            # model_dump() re-emits every field at its schema default, and the
+            # connect/update handlers merge that over the stored config — so a
+            # partial PATCH would silently reset omitted fields (e.g.
+            # match_strategy, sync_direction) to their defaults, and empty
+            # secret-named defaults (api_key="") would leak into public config.
+            # Construction above still enforces required fields and validators;
+            # omitted keys keep their stored value via the handler's merge, and
+            # every service reads config with .get(key, default) so a partial
+            # stored config stays usable.
+            return validated.model_dump(exclude_unset=True)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

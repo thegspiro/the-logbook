@@ -213,7 +213,7 @@ class EventService:
 
         if not include_drafts:
             query = query.where(
-                or_(Event.is_draft == False, Event.is_draft.is_(None))  # noqa: E712
+                or_(Event.is_draft.is_(False), Event.is_draft.is_(None))
             )
 
         if event_type:
@@ -226,7 +226,7 @@ class EventService:
             query = query.where(Event.event_type.notin_(exclude_event_types))
 
         if not include_cancelled:
-            query = query.where(Event.is_cancelled == False)  # noqa: E712
+            query = query.where(Event.is_cancelled.is_(False))
 
         if start_after:
             query = query.where(Event.start_datetime >= start_after)
@@ -391,7 +391,7 @@ class EventService:
         result = await self.db.execute(
             select(Event).where(
                 Event.organization_id == str(organization_id),
-                Event.is_cancelled == False,  # noqa: E712
+                Event.is_cancelled.is_(False),
                 or_(
                     Event.id == str(parent_id),
                     Event.recurrence_parent_id == str(parent_id),
@@ -482,7 +482,7 @@ class EventService:
         # Build query for all events in the series (parent + children)
         conditions = [
             Event.organization_id == str(organization_id),
-            Event.is_cancelled == False,  # noqa: E712
+            Event.is_cancelled.is_(False),
         ]
 
         if cancel_future_only:
@@ -741,8 +741,23 @@ class EventService:
         if event.is_cancelled:
             return None, "Cannot RSVP to cancelled event"
 
+        # EV-6: a draft (unpublished) event isn't RSVP-able. get_event filters
+        # drafts for normal reads, but this path fetches the event directly, so
+        # a member who knows a draft's id could otherwise RSVP before publication.
+        if event.is_draft:
+            return None, "Cannot RSVP to an unpublished event"
+
         if not event.requires_rsvp:
             return None, "Event does not require RSVP"
+
+        # EV-6: an event that has already ended is not RSVP-able. The rsvp_deadline
+        # check below only fires when a deadline is set; without one, a past event
+        # would otherwise still accept RSVPs.
+        event_end = event.end_datetime
+        if event_end and event_end.tzinfo is None:
+            event_end = event_end.replace(tzinfo=dt_timezone.utc)
+        if event_end and datetime.now(dt_timezone.utc) > event_end:
+            return None, "Cannot RSVP to an event that has already ended"
 
         # Check RSVP deadline — ensure deadline is timezone-aware before comparing
         rsvp_deadline = event.rsvp_deadline
@@ -2114,7 +2129,7 @@ class EventService:
         eligible_members_result = await self.db.execute(
             select(func.count(User.id))
             .where(User.organization_id == str(organization_id))
-            .where(User.is_active == True)  # noqa: E712
+            .where(User.is_active.is_(True))
         )
         total_eligible_members = eligible_members_result.scalar() or 0
 
@@ -2214,7 +2229,7 @@ class EventService:
             EventTemplate.organization_id == str(organization_id)
         )
         if not include_inactive:
-            query = query.where(EventTemplate.is_active == True)  # noqa: E712
+            query = query.where(EventTemplate.is_active.is_(True))
         query = query.order_by(EventTemplate.name).offset(skip).limit(limit)
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -2737,7 +2752,7 @@ class EventService:
         members_result = await self.db.execute(
             select(User.id).where(
                 User.organization_id == str(organization_id),
-                User.is_active == True,  # noqa: E712
+                User.is_active.is_(True),
             )
         )
         all_member_ids = [str(row[0]) for row in members_result.all()]
@@ -3002,7 +3017,7 @@ class EventService:
         members_result = await self.db.execute(
             select(User.id).where(
                 User.organization_id == str(organization_id),
-                User.is_active == True,  # noqa: E712
+                User.is_active.is_(True),
             )
         )
         all_member_ids = {str(row[0]) for row in members_result.all()}

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.utils import generate_uuid
+from app.models.event import Event
 from app.models.minute import (
     DEFAULT_ANNUAL_SECTIONS,
     DEFAULT_BUSINESS_SECTIONS,
@@ -39,6 +40,7 @@ from app.schemas.minute import (
     MotionCreate,
     MotionUpdate,
 )
+from app.utils.org_scoping import assert_in_org
 
 
 class MinuteService:
@@ -56,6 +58,27 @@ class MinuteService:
     ) -> MeetingMinutes:
         """Create new meeting minutes with optional motions and action items"""
         minutes_dict = data.model_dump(exclude={"motions", "action_items"})
+
+        # MM-4 (XC-1): validate client-supplied FKs are in-org before storing.
+        # event_id links the minutes to a meeting event; each action item may
+        # name an assignee. None is allowed (both are optional).
+        await assert_in_org(
+            self.db,
+            Event,
+            minutes_dict.get("event_id"),
+            organization_id,
+            allow_none=True,
+            label="event",
+        )
+        for item_data in data.action_items or []:
+            await assert_in_org(
+                self.db,
+                User,
+                item_data.assignee_id,
+                organization_id,
+                allow_none=True,
+                label="assignee",
+            )
 
         # Serialize attendees to dicts for JSON storage
         if minutes_dict.get("attendees"):
@@ -301,6 +324,16 @@ class MinuteService:
         if "event_id" in update_data and not update_data["event_id"]:
             update_data["event_id"] = None
 
+        # MM-4 (XC-1): validate a re-pointed event_id is in-org before applying.
+        if update_data.get("event_id"):
+            await assert_in_org(
+                self.db,
+                Event,
+                update_data["event_id"],
+                organization_id,
+                label="event",
+            )
+
         # Serialize attendees
         if "attendees" in update_data and update_data["attendees"]:
             update_data["attendees"] = [
@@ -526,6 +559,16 @@ class MinuteService:
         minutes = await self.get_minutes(minutes_id, organization_id)
         if not minutes:
             return None
+
+        # MM-4 (XC-1): validate the assignee is in-org (None allowed).
+        await assert_in_org(
+            self.db,
+            User,
+            data.assignee_id,
+            organization_id,
+            allow_none=True,
+            label="assignee",
+        )
 
         item = ActionItem(
             minutes_id=minutes_id,

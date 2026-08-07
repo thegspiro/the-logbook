@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import PaginationParams, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.medical_screening import (
     ComplianceSummary,
@@ -193,7 +194,11 @@ async def list_records(
         screening_type=screening_type,
         status=record_status,
     )
-    return records[pagination.skip : pagination.skip + pagination.limit]
+    page = records[pagination.skip : pagination.skip + pagination.limit]
+    # Enrich only the returned page — resolves the name fields the response
+    # schema promises (else the UI shows "Unknown" for every row).
+    await service.attach_record_names(current_user.organization_id, page)
+    return page
 
 
 @router.get(
@@ -213,6 +218,7 @@ async def get_record(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Screening record not found",
         )
+    await service.attach_record_names(current_user.organization_id, [record])
     return record
 
 
@@ -228,10 +234,16 @@ async def create_record(
 ):
     """Create a new screening record."""
     service = MedicalScreeningService(db)
-    record = await service.create_record(
-        organization_id=current_user.organization_id,
-        data=data,
-    )
+    try:
+        record = await service.create_record(
+            organization_id=current_user.organization_id,
+            data=data,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(exc),
+        )
     await log_audit_event(
         db=db,
         event_type="medical_screening.record_created",
@@ -245,6 +257,7 @@ async def create_record(
         username=current_user.username,
     )
     await db.commit()
+    await service.attach_record_names(current_user.organization_id, [record])
     return record
 
 
@@ -281,6 +294,7 @@ async def update_record(
         username=current_user.username,
     )
     await db.commit()
+    await service.attach_record_names(current_user.organization_id, [record])
     return record
 
 

@@ -27,6 +27,7 @@ from app.models.document import (
     FolderVisibility,
 )
 from app.models.user import User
+from app.utils.org_scoping import assert_in_org
 
 # Permissions that grant leadership-level access to all folders
 LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
@@ -66,6 +67,23 @@ class DocumentsService:
         self, organization_id: UUID, folder_data: Dict[str, Any], created_by: UUID
     ) -> DocumentFolder:
         """Create a new document folder. Raises on failure."""
+        # DOC-6 (XC-1): validate client-supplied FKs are in-org before storing.
+        await assert_in_org(
+            self.db,
+            DocumentFolder,
+            folder_data.get("parent_id"),
+            organization_id,
+            allow_none=True,
+            label="parent folder",
+        )
+        await assert_in_org(
+            self.db,
+            User,
+            folder_data.get("owner_user_id"),
+            organization_id,
+            allow_none=True,
+            label="owner",
+        )
         folder = DocumentFolder(
             organization_id=organization_id, created_by=created_by, **folder_data
         )
@@ -225,6 +243,26 @@ class DocumentsService:
         if not folder:
             return None
 
+        # DOC-6 (XC-1): validate re-pointed FKs are in-org before applying.
+        if "parent_id" in update_data:
+            await assert_in_org(
+                self.db,
+                DocumentFolder,
+                update_data["parent_id"],
+                organization_id,
+                allow_none=True,
+                label="parent folder",
+            )
+        if "owner_user_id" in update_data:
+            await assert_in_org(
+                self.db,
+                User,
+                update_data["owner_user_id"],
+                organization_id,
+                allow_none=True,
+                label="owner",
+            )
+
         for key, value in update_data.items():
             setattr(folder, key, value)
 
@@ -378,6 +416,19 @@ class DocumentsService:
         document = await self.get_document_by_id(document_id, organization_id)
         if not document:
             return None
+
+        # DOC-6 (XC-1): a reassigned folder_id is client-supplied — validate it
+        # is in-org so a document can't be moved into another org's folder.
+        # None is allowed (moves the document to org level).
+        if "folder_id" in update_data:
+            await assert_in_org(
+                self.db,
+                DocumentFolder,
+                update_data["folder_id"],
+                organization_id,
+                allow_none=True,
+                label="folder",
+            )
 
         for key, value in update_data.items():
             setattr(document, key, value)

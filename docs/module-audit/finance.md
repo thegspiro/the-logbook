@@ -158,6 +158,11 @@ flagged as behavior-change or schema/sequence-change (per original triage).
   by `entity_type`+`entity_id` with no org filter, **but** are not reachable from
   any endpoint — every internal caller resolves the parent entity org-scoped
   first. Verified not live; noted for future defense-in-depth.
+  **Re-verified (app-review B20):** still not live across all 7 call sites.
+  Deliberately **not** threaded — adding `org_id` through these two helpers plus
+  `_advance_notification_steps`/`_check_all_steps_complete` and 7 call sites would
+  churn the critical money-approval path for zero live benefit; the regression risk
+  outweighs a redundant filter. Left flagged.
 - Large-module caveat: `finance_service.py` (~1,930 L) was reviewed for security
   invariants (org-scoping, XC-1/3, financial correctness), not line-by-line. The
   invariants held on every path examined.

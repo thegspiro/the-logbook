@@ -47,7 +47,7 @@ when `maintenance_type_id` is missing, then validate it resolves in-org. Success
 path unchanged (the column has always required a value, so no existing row could
 have been created without one). The Update schema stays optional (correct).
 
-### FAC-3 — LOW — Create/update paths don't validate referenced FK ids are in-org (XC-1 class)
+### FAC-3 — LOW — Create/update paths don't validate referenced FK ids are in-org (XC-1 class) — ✅ FIXED (app-review B4, 2026-08-06)
 Client-supplied FK ids stored without an in-org check:
 - `create_photo` / `create_document` — `facility_id` stored with no `get_facility`
   ownership check (every other child-create verifies the facility).

@@ -351,10 +351,15 @@ to the channels members actually watch when they're not in the app:
 | Requires acknowledgment | ✅ | ✅ | — |
 | Urgent | ✅ | ✅ | ✅ |
 
-Email and SMS respect each member's **notification preferences** (see
-[Member notification controls](#member-notification-controls)). SMS is only sent
-when the department has SMS (Twilio) configured and the member has a mobile
-number on file. The author of a message is not notified about their own post.
+When a message escalates, **email is always sent** to targeted members — it is
+the department's record that they were notified, so it is *not* suppressed by a
+member's email preference or by consent (a member can never opt out of being
+informed of an important/urgent notice). **SMS** is different: it is only sent
+when the department has SMS (Twilio) configured, the member has a mobile number
+on file, the member has granted **express SMS consent** (US TCPA rules — a member
+who was never asked counts as *not* consented), **and** their text-message
+preference is on. A member who turns off or never grants SMS still receives the
+email. The author of a message is not notified about their own post.
 
 ### Requiring acknowledgment
 
@@ -411,10 +416,15 @@ Lt. Smith to schedule").
 ### Member notification controls
 
 Members manage how they're reached under **Settings → Notifications**:
-- **Email Notifications** — receive escalation emails for important/urgent
-  messages.
-- **Urgent Text Messages** — receive an SMS for urgent messages (requires a
-  mobile number on file and the department to have SMS enabled).
+- **Email Notifications** — governs the department's **reminder and alert**
+  emails (event reminders, low-stock alerts, etc.). Note that important/urgent
+  **department-message escalations are always emailed** regardless of this toggle,
+  because that email is the official record that the member was notified.
+- **Urgent Text Messages** — receive an SMS for urgent messages. Requires a mobile
+  number on file, the department to have SMS (Twilio) enabled, **and** the
+  member's express **SMS consent** under **Settings → Security → Privacy Choices**
+  (a member who has never granted consent will not receive texts, per US TCPA
+  rules). Turning this off — or never granting SMS consent — never stops the email.
 
 Both default to on; turning one off opts the member out of that channel. The
 in-app notification is always delivered regardless of these settings.

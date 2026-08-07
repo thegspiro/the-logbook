@@ -7,10 +7,22 @@ tamper-evident audit log (``consent_updated``), which is the immutable
 ledger a privacy audit wants.
 
 Consumers of a consent (photo publishing, public roster, SMS sending) must
-call ``has_consent`` and treat "never asked" exactly like "refused".
+call ``has_consent`` (or ``granted_user_ids`` for fan-out) and treat "never
+asked" exactly like "refused".
+
+**Email is deliberately not a consent-gated channel.** Consent governs the
+*optional* processing above; it does not govern the department's ability to
+notify a member of something that concerns them. Email is the channel of
+record precisely so that suppressing SMS can never leave a member able to say
+they were never told. See ``message_delivery_service``.
+
+Enforcement status: ``SMS_NOTIFICATIONS`` is enforced at the send path.
+``PHOTO_USE`` and ``PUBLIC_ROSTER_LISTING`` have **no consumer yet** — nothing
+in the app publishes member photos or a public roster today. Whoever builds
+those must gate them here; the consent is already being collected.
 """
 
-from typing import Any
+from typing import Any, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,3 +94,24 @@ class ConsentService:
         )
         granted = result.scalar_one_or_none()
         return bool(granted)
+
+    async def granted_user_ids(
+        self, user_ids: Sequence[str], consent_type: ConsentType
+    ) -> set[str]:
+        """The subset of *user_ids* that granted *consent_type*.
+
+        The bulk form of ``has_consent``, for fan-out paths (a department
+        message can target the whole roster, and a per-recipient query there
+        would be an N+1 against the send path). Fails closed the same way:
+        an id with no row is simply absent from the returned set.
+        """
+        if not user_ids:
+            return set()
+        result = await self.db.execute(
+            select(UserConsent.user_id).where(
+                UserConsent.user_id.in_([str(uid) for uid in user_ids]),
+                UserConsent.consent_type == consent_type,
+                UserConsent.granted.is_(True),
+            )
+        )
+        return {str(row) for row in result.scalars().all()}

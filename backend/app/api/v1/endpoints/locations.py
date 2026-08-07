@@ -4,7 +4,6 @@ Location API Endpoints
 Endpoints for location management including CRUD operations and event queries.
 """
 
-from datetime import timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -22,6 +21,7 @@ from app.schemas.location import (
     LocationResponse,
     LocationUpdate,
 )
+from app.services.event_service import EventService
 from app.services.location_service import LocationService
 
 router = APIRouter()
@@ -261,9 +261,12 @@ async def get_location_display_info(
     # Build event data for display
     current_events = []
     for event in events:
-        # Calculate check-in window
-        check_in_start = event.start_datetime - timedelta(hours=1)
-        check_in_end = event.actual_end_time or event.end_datetime
+        # Use the canonical window calculation rather than a local copy. The
+        # window is per-event configurable (check_in_window_type, and
+        # check_in_minutes_before which defaults to 30) — a hardcoded
+        # "start minus one hour" both contradicts that default and ignores
+        # STRICT events, whose window opens at actual_start_time.
+        check_in_start, check_in_end = EventService._get_check_in_window(event)
 
         current_events.append(
             QRCheckInData(

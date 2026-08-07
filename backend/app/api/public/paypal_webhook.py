@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
+from app.core.utils import safe_error_detail
 from app.models.integration import Integration
 from app.services.integration_services.paypal_service import (
     extract_capture,
@@ -125,7 +126,10 @@ async def paypal_inbound_webhook(
         )
     except ValueError as exc:
         logger.error(f"PayPal webhook could not be recorded: {exc}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(exc),
+        )
 
     await log_audit_event(
         db=db,

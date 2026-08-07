@@ -16,6 +16,7 @@ from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.ip_security import BlockedAccessAttempt, CountryBlockRule, IPException
 from app.models.user import User
@@ -86,7 +87,7 @@ async def request_ip_exception(
             requested_duration_days=data.requested_duration_days,
             use_case=data.use_case,
             description=data.description or None,
-            requester_ip=request.client.host if request.client else None,
+            requester_ip=get_client_ip(request),
         )
 
         await log_audit_event(
@@ -100,7 +101,7 @@ async def request_ip_exception(
                 "duration_days": data.requested_duration_days,
             },
             user_id=str(current_user.id),
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
         )
 
         return exception
@@ -234,7 +235,7 @@ async def approve_exception(
             organization_id=str(current_user.organization_id),
             approved_duration_days=data.approved_duration_days,
             approval_notes=data.approval_notes or None,
-            admin_ip=request.client.host if request.client else None,
+            admin_ip=get_client_ip(request),
         )
 
         await log_audit_event(
@@ -248,7 +249,7 @@ async def approve_exception(
                 "approved_duration_days": data.approved_duration_days,
             },
             user_id=str(current_user.id),
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
         )
 
         return exception
@@ -281,7 +282,7 @@ async def reject_exception(
             admin_id=str(current_user.id),
             organization_id=str(current_user.organization_id),
             rejection_reason=data.rejection_reason,
-            admin_ip=request.client.host if request.client else None,
+            admin_ip=get_client_ip(request),
         )
 
         await log_audit_event(
@@ -294,7 +295,7 @@ async def reject_exception(
                 "rejection_reason": data.rejection_reason,
             },
             user_id=str(current_user.id),
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
         )
 
         return exception
@@ -327,7 +328,7 @@ async def revoke_exception(
             admin_id=str(current_user.id),
             organization_id=str(current_user.organization_id),
             revoke_reason=data.revoke_reason,
-            admin_ip=request.client.host if request.client else None,
+            admin_ip=get_client_ip(request),
         )
 
         await log_audit_event(
@@ -340,7 +341,7 @@ async def revoke_exception(
                 "revoke_reason": data.revoke_reason,
             },
             user_id=str(current_user.id),
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
         )
 
         return exception
@@ -493,7 +494,7 @@ async def add_blocked_country(
                 "risk_level": data.risk_level,
             },
             user_id=str(current_user.id),
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
         )
 
         return rule
@@ -548,7 +549,7 @@ async def remove_blocked_country(
             severity="warning",
             event_data={"country_code": country_code.upper()},
             user_id=str(current_user.id),
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
         )
 
         return {"message": f"Country {country_code.upper()} unblocked"}

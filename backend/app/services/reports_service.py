@@ -55,7 +55,7 @@ class ReportsService:
         result = await self.db.execute(
             select(OperationalRank.rank_code, OperationalRank.display_name).where(
                 OperationalRank.organization_id == str(organization_id),
-                OperationalRank.is_active == True,  # noqa: E712
+                OperationalRank.is_active.is_(True),
             )
         )
         return {row.rank_code: row.display_name for row in result}
@@ -211,7 +211,7 @@ class ReportsService:
             select(User).where(
                 User.organization_id == str(organization_id),
                 User.status == UserStatus.ACTIVE,
-                User.compliance_exempt == False,  # noqa: E712
+                User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
         )
@@ -238,9 +238,15 @@ class ReportsService:
             }
 
         completed_count = 0
+        # RPT-5: the numerator only counts records belonging to a tracked
+        # (active, non-exempt) member, so the denominator must too — dividing by
+        # len(records) (which includes departed/exempt members' records) skewed
+        # the rate low. Count the records actually attributed to a member.
+        counted_records = 0
         for record in records:
             uid = str(record.user_id)
             if uid in member_stats:
+                counted_records += 1
                 member_stats[uid]["total_courses"] += 1
                 status_val = (
                     record.status.value
@@ -254,7 +260,9 @@ class ReportsService:
                     member_stats[uid]["total_hours"] += float(record.hours_completed)
 
         entries = list(member_stats.values())
-        completion_rate = (completed_count / len(records) * 100) if records else 0
+        completion_rate = (
+            (completed_count / counted_records * 100) if counted_records else 0
+        )
 
         # ── Per-course breakdown (TC3) ──
         course_stats: Dict[str, Dict[str, Any]] = {}
@@ -287,7 +295,7 @@ class ReportsService:
         req_result = await self.db.execute(
             select(TrainingRequirement).where(
                 TrainingRequirement.organization_id == str(organization_id),
-                TrainingRequirement.active == True,  # noqa: E712
+                TrainingRequirement.active.is_(True),
             )
         )
         requirements = req_result.scalars().all()
@@ -417,9 +425,7 @@ class ReportsService:
                 select(
                     EventRSVP.event_id,
                     func.count(EventRSVP.id),
-                    func.sum(
-                        case((EventRSVP.checked_in == True, 1), else_=0)
-                    ),  # noqa: E712
+                    func.sum(case((EventRSVP.checked_in.is_(True), 1), else_=0)),
                 )
                 .where(EventRSVP.event_id.in_(event_ids))
                 .group_by(EventRSVP.event_id)
@@ -610,9 +616,11 @@ class ReportsService:
         users_result = await self.db.execute(
             select(User)
             .where(
-                User.organization_id == organization_id,
+                # RPT-4: the column is String(36); compare against str() like
+                # every other method, not the raw UUID (dialect-fragile).
+                User.organization_id == str(organization_id),
                 User.status == UserStatus.ACTIVE,
-                User.compliance_exempt == False,  # noqa: E712
+                User.compliance_exempt.is_(False),
             )
             .order_by(User.last_name, User.first_name)
         )
@@ -623,7 +631,7 @@ class ReportsService:
         # Get training records in period
         records_result = await self.db.execute(
             select(TrainingRecord).where(
-                TrainingRecord.organization_id == organization_id,
+                TrainingRecord.organization_id == str(organization_id),
                 TrainingRecord.completion_date >= start_date,
                 TrainingRecord.completion_date <= end_date,
             )
@@ -771,7 +779,7 @@ class ReportsService:
             select(User).where(
                 User.organization_id == str(organization_id),
                 User.status == UserStatus.ACTIVE,
-                User.compliance_exempt == False,  # noqa: E712
+                User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
         )
@@ -871,7 +879,7 @@ class ReportsService:
             )
             .where(
                 Apparatus.organization_id == str(organization_id),
-                Apparatus.is_archived == False,  # noqa: E712
+                Apparatus.is_archived.is_(False),
             )
             .order_by(Apparatus.unit_number)
         )
@@ -1058,7 +1066,7 @@ class ReportsService:
         req_result = await self.db.execute(
             select(TrainingRequirement).where(
                 TrainingRequirement.organization_id == str(organization_id),
-                TrainingRequirement.active == True,  # noqa: E712
+                TrainingRequirement.active.is_(True),
             )
         )
         requirements = req_result.scalars().all()
@@ -1068,7 +1076,7 @@ class ReportsService:
             select(User).where(
                 User.organization_id == str(organization_id),
                 User.status == UserStatus.ACTIVE,
-                User.compliance_exempt == False,  # noqa: E712
+                User.compliance_exempt.is_(False),
                 User.deleted_at.is_(None),
             )
         )
@@ -1419,15 +1427,28 @@ class ReportsService:
                 <= datetime.combine(
                     period_end, datetime.max.time(), tzinfo=timezone.utc
                 ),
-                Event.is_cancelled == False,  # noqa: E712
+                Event.is_cancelled.is_(False),
             )
         )
         total_events = events_result.scalar() or 0
 
         checkins_result = await self.db.execute(
-            select(func.count(EventRSVP.id)).where(
+            select(func.count(EventRSVP.id))
+            .join(Event, EventRSVP.event_id == Event.id)
+            .where(
                 EventRSVP.organization_id == org_id,
-                EventRSVP.checked_in == True,  # noqa: E712
+                EventRSVP.checked_in.is_(True),
+                # RPT-5: bound check-ins to the report period like total_events
+                # above — this metric was counting all-time while the rest of
+                # the department overview is period-scoped.
+                Event.start_datetime
+                >= datetime.combine(
+                    period_start, datetime.min.time(), tzinfo=timezone.utc
+                ),
+                Event.start_datetime
+                <= datetime.combine(
+                    period_end, datetime.max.time(), tzinfo=timezone.utc
+                ),
             )
         )
         total_checkins = checkins_result.scalar() or 0
@@ -1649,8 +1670,8 @@ class ReportsService:
             # Use the default pipeline
             pipeline_query = select(MembershipPipeline).where(
                 MembershipPipeline.organization_id == org_id,
-                MembershipPipeline.is_default == True,  # noqa: E712
-                MembershipPipeline.is_active == True,  # noqa: E712
+                MembershipPipeline.is_default.is_(True),
+                MembershipPipeline.is_active.is_(True),
             )
         pipeline_result = await self.db.execute(pipeline_query)
         pipeline = pipeline_result.scalar_one_or_none()
@@ -1659,7 +1680,7 @@ class ReportsService:
             # Fallback: any active pipeline
             fallback_query = select(MembershipPipeline).where(
                 MembershipPipeline.organization_id == org_id,
-                MembershipPipeline.is_active == True,  # noqa: E712
+                MembershipPipeline.is_active.is_(True),
             )
             fallback_result = await self.db.execute(fallback_query)
             pipeline = fallback_result.scalars().first()

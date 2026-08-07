@@ -1564,6 +1564,23 @@ class InventoryService:
     ) -> Tuple[Optional[MaintenanceRecord], Optional[str]]:
         """Create a maintenance record"""
         try:
+            # INV-3 (XC-1 + silent no-op): item_id is client-supplied. Validate
+            # it is in-org before writing. Without this, a foreign item_id was
+            # stored on the org-stamped record, and — worse — a record created
+            # with is_completed=True against a foreign/missing item hit the
+            # `if item:` guard below, so _get_item_locked returned None and the
+            # condition/inspection-date update was silently skipped: a
+            # "completed" maintenance record that updated nothing and reported
+            # success.
+            exists = await self.db.execute(
+                select(InventoryItem.id).where(
+                    InventoryItem.id == str(item_id),
+                    InventoryItem.organization_id == str(organization_id),
+                )
+            )
+            if exists.scalar_one_or_none() is None:
+                return None, "Item not found"
+
             safe_data = {
                 k: v
                 for k, v in maintenance_data.items()
@@ -4026,7 +4043,12 @@ class InventoryService:
         if urgency:
             q = q.where(ReorderRequest.urgency == urgency)
         if search:
-            q = q.where(ReorderRequest.item_name.ilike(f"%{search}%"))
+            # INV-5: escape LIKE wildcards, matching the other search methods —
+            # otherwise a literal % or _ in the box is treated as a wildcard.
+            safe_search = (
+                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
+            q = q.where(ReorderRequest.item_name.ilike(f"%{safe_search}%"))
         q = q.options(
             selectinload(ReorderRequest.requester),
             selectinload(ReorderRequest.approver),
@@ -4367,7 +4389,14 @@ class InventoryService:
                         UUID(kit_item.item_id), organization_id
                     )
                     if not item:
-                        if not kit_item.optional:
+                        # INV-6: EquipmentKitItem has no `optional` column, so a
+                        # bare `kit_item.optional` raised AttributeError on this
+                        # (error-only) branch — caught by the outer except and
+                        # surfaced as a confusing generic failure. getattr with a
+                        # False default makes every item required (the intended
+                        # behavior until the `optional` field is actually
+                        # persisted — see the flagged follow-up).
+                        if not getattr(kit_item, "optional", False):
                             return (
                                 None,
                                 f"Required kit item not found: {kit_item.item_id}",
@@ -4390,7 +4419,7 @@ class InventoryService:
                             assigned_by=issued_by,
                         )
 
-                    if err and not kit_item.optional:
+                    if err and not getattr(kit_item, "optional", False):
                         return None, f"Failed to issue kit item: {err}"
                     if result:
                         issuances.append(result)

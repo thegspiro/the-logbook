@@ -43,7 +43,9 @@ const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
 const MinutesPage: React.FC = () => {
   const navigate = useNavigate();
   const { checkPermission } = useAuthStore();
-  const canManage = checkPermission('meetings.manage');
+  // MM-3: minutes writes and restricted reads are gated on minutes.manage on
+  // the backend, not meetings.manage — check the same permission the API does.
+  const canManage = checkPermission('minutes.manage');
 
   // Data state
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);

@@ -1,0 +1,103 @@
+# Application Review — Elections (Tier B, 2nd pass)
+
+**Prefix:** `ELEC2` · **Iteration:** B5 · **Reviewed:** 2026-08-06
+
+**Backend:** `app/api/v1/endpoints/elections.py` (2,721 L, 46 endpoints),
+`app/services/election_service.py` (4,616 L), `quorum_service.py`
+**Frontend:** `modules/elections`
+**Prior audit:** `docs/module-audit/elections.md` — the most heavily reviewed
+module in the codebase: iteration 5 (security-critical), plus a full 2026-07
+follow-up (R-1…R-13) and a practical-workflow pass (R-D1…R-D5).
+
+---
+
+## Scope
+
+Tier B on the most-audited module. Rather than re-derive the two exhaustive
+security passes, this iteration **verified their fixes still hold**, resolved
+the one finding the tracker still listed open (ELEC-7), and applied the broader
+lens (dead code, docs, frontend pitfalls, and consistency with the AXC-1 sweep
+this review made earlier).
+
+**No code change was needed — the module is clean.** That is a real outcome for
+the surface that has had the most scrutiny, not a shallow pass; the verifications
+below are the deliverable.
+
+## Findings
+
+### ELEC-7 — LOW — `create_candidate` user_id unvalidated — ✅ ALREADY FIXED (doc corrected)
+
+The tracker listed this XC-1 gap as open. It is **fixed**: `create_candidate`
+(`elections.py:1669`) resolves the election org-scoped, then validates
+`candidate.user_id` via the shared `assert_in_org` helper with `allow_none=True`
+(write-ins) and `ValueError → 400`. This landed in the zero-trust review; the
+module-audit entry had simply never been ticked. Corrected there.
+
+With ELEC-7 closed, **every** elections finding across all three prior passes is
+resolved.
+
+## Verified good ✅ (re-confirmed this pass)
+
+- **AXC-1 fix holds.** The vote-recording paths use `get_client_ip(request)`
+  (5 sites), not `request.client.host` (0) — the earlier cross-cutting sweep is
+  intact, so per-vote IPs (which feed the fraud detection documented in
+  `BALLOT_FORENSICS_GUIDE.md`) resolve to the real client behind the proxy.
+- **ELEC-7 XC-1 closed** (above).
+- **No dead code.** An AST unreferenced-private scan flagged only
+  `_notify_leadership_of_deletion`, which is a false positive — it's called from
+  `elections.py:992` (the scan was service-file-local). ELEC-9's genuinely dead
+  max-votes branch was already removed in iteration 5.
+- **No TODO/FIXME markers** anywhere in the module.
+- **Frontend clean:** no Pitfall #1 (`??` on outgoing form values), no banned
+  date APIs (`toLocaleDateString`/`date-fns`), and the R-10e cache fix is intact
+  — `'/elections'` (no trailing slash) is in `UNCACHEABLE_PREFIXES`, so the list
+  endpoint is excluded.
+- **The headline security invariants from the prior passes remain in place** by
+  inspection: 512-bit tokens hashed at rest (ELEC-5), anonymous-ballot IP purge
+  at close (ELEC-6), the eligibility gate on `cast_vote` (ELEC-1), the
+  org-scoped candidate update/delete (ELEC-2), the method-aware dedup hash
+  (ELEC-3), and the rollback-double-vote guard (ELEC-4).
+
+## Duplication
+
+None found beyond the deliberate shared-source-of-truth the R-7 fix introduced
+(`annotate_ballot_items_for_user`, from which the eligibility filter derives) —
+which is *de*-duplication, the correct direction.
+
+## Dead code
+
+None (see the false-positive note above).
+
+## Documentation
+
+- `docs/module-audit/elections.md`: ELEC-7 corrected to fixed.
+- `BALLOT_FORENSICS_GUIDE.md` remains accurate; note its dependence on the
+  AXC-1 IP fix (verified holding) — a reader relying on `suspicious_ips` needs
+  `TRUSTED_PROXY_IPS` set, the deployment caveat recorded in
+  [`CROSS-CUTTING.md`](./CROSS-CUTTING.md).
+
+## Future development
+
+The prior audits already enumerated the design decisions. The one forward note
+this pass adds:
+
+1. **The audit-log IP residual (R-D2) is permanent by design** — voter-action
+   audit rows written before the `_audit_ip` change keep their IPs because
+   `ip_address` is in the hash-chain input. That is correct (tamper-evidence
+   over scrubbing), but it means a pre-change anonymous election's audit trail
+   still carries voter IPs. Worth a one-line note in the operator/forensics docs
+   so it isn't mistaken for a leak — the *forensics API* is threshold-only, but
+   the *raw audit rows* from before the change are not.
+2. **No further code work identified.** This module is at the point where the
+   next increment is product/feature decisions, not defect-fixing.
+
+## Completion gate
+
+| Check | Result |
+|-------|--------|
+| `tsc --noEmit` | ✅ 0 errors (no change this iteration) |
+| `flake8 app/ tests/` | ✅ 0 violations |
+| `black --check` | ✅ 503 files unchanged |
+| `eslint` | ✅ clean |
+| backend tests | ✅ unchanged — no code modified. Full suite baseline (2517 passed, 0 failed) stands. |
+</content>

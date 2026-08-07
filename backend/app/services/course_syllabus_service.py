@@ -106,9 +106,19 @@ class CourseSyllabusService:
         if not course:
             raise ValueError("Training course not found")
 
+        # The org predicate belongs on the JOIN, not the WHERE: this is an
+        # outer join, so a row whose class_course_id somehow pointed out of the
+        # org yields NULL for the course (name/code simply absent) instead of
+        # rendering another organization's catalog entry into the response.
+        # add_class validates the FK in-org, so this is defence in depth against
+        # the MM-1 shape rather than a live leak.
         result = await self.db.execute(
             select(CourseClass, TrainingCourse)
-            .outerjoin(TrainingCourse, CourseClass.class_course_id == TrainingCourse.id)
+            .outerjoin(
+                TrainingCourse,
+                (CourseClass.class_course_id == TrainingCourse.id)
+                & (TrainingCourse.organization_id == str(organization_id)),
+            )
             .where(
                 CourseClass.course_id == str(course_id),
                 CourseClass.organization_id == str(organization_id),

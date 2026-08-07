@@ -19,6 +19,7 @@ from app.core.public_portal_security import (
     log_access,
     validate_ip_rate_limit,
 )
+from app.core.security_middleware import get_client_ip
 from app.models.apparatus import Apparatus
 from app.models.event import Event, EventType
 from app.models.public_portal import (
@@ -71,7 +72,7 @@ async def check_field_whitelisted(
                 PublicPortalDataWhitelist.organization_id == organization_id,
                 PublicPortalDataWhitelist.data_category == category,
                 PublicPortalDataWhitelist.field_name == field,
-                PublicPortalDataWhitelist.is_enabled == True,  # noqa: E712
+                PublicPortalDataWhitelist.is_enabled.is_(True),
             )
         )
     )
@@ -100,7 +101,7 @@ async def filter_data_by_whitelist(
             and_(
                 PublicPortalDataWhitelist.organization_id == organization_id,
                 PublicPortalDataWhitelist.data_category == category,
-                PublicPortalDataWhitelist.is_enabled == True,  # noqa: E712
+                PublicPortalDataWhitelist.is_enabled.is_(True),
             )
         )
     )
@@ -137,7 +138,7 @@ async def log_public_api_request(
         db: Database session
     """
     response_time_ms = int((time.time() - start_time) * 1000)
-    ip_address = request.client.host if request.client else "unknown"
+    ip_address = get_client_ip(request)
 
     # Detect anomalies
     is_suspicious, flag_reason = await detect_anomalies(ip_address, str(api_key.id), db)
@@ -320,7 +321,7 @@ async def get_organization_stats(
         members_result = await db.execute(
             select(func.count(User.id))
             .where(User.organization_id == org_id_str)
-            .where(User.is_active == True)  # noqa: E712
+            .where(User.is_active.is_(True))
         )
         total_members = members_result.scalar() or 0
 
@@ -406,7 +407,7 @@ async def get_public_events(
         events_query = (
             select(Event)
             .where(Event.organization_id == org_id_str)
-            .where(Event.is_cancelled == False)  # noqa: E712
+            .where(Event.is_cancelled.is_(False))
             .where(Event.event_type == EventType.PUBLIC_EDUCATION)
             .where(Event.start_datetime >= datetime.now(timezone.utc))
             .order_by(Event.start_datetime.asc())

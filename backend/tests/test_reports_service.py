@@ -31,6 +31,18 @@ def org_id():
     return uuid4()
 
 
+def _scalars_all(items):
+    r = MagicMock()
+    r.scalars.return_value.all.return_value = items
+    return r
+
+
+def _scalar(value):
+    r = MagicMock()
+    r.scalar.return_value = value
+    return r
+
+
 class TestGenerateReport:
     """Tests for the report routing method."""
 
@@ -166,6 +178,48 @@ class TestCallVolumeReport:
 
         assert result["period_start"] == "2025-01-01"
         assert result["period_end"] == "2025-06-30"
+
+
+class TestTrainingSummaryCompletionRate:
+    """RPT-5: completion_rate divides completed by records attributed to a
+    tracked member, not by all records (which include departed/exempt members'
+    records and skewed the rate low)."""
+
+    async def test_untracked_records_excluded_from_denominator(self, org_id):
+        from types import SimpleNamespace
+
+        from app.models.training import TrainingStatus
+
+        user = SimpleNamespace(id="u1", first_name="A", last_name="B", status=None)
+
+        def rec(user_id, status_value):
+            return SimpleNamespace(
+                user_id=user_id,
+                status=SimpleNamespace(value=status_value),
+                hours_completed=None,
+                course_id=None,
+                course_name=None,
+            )
+
+        records = [
+            rec("u1", TrainingStatus.COMPLETED.value),  # tracked + completed
+            rec("u1", "in_progress"),  # tracked + not completed
+            rec("ghost", TrainingStatus.COMPLETED.value),  # untracked -> excluded
+        ]
+
+        db = AsyncMock()
+        # Sequence with no requirements: records, users, course-count, requirements.
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalars_all(records),
+                _scalars_all([user]),
+                _scalar(5),
+                _scalars_all([]),
+            ]
+        )
+        out = await ReportsService(db)._generate_training_summary(org_id)
+        # 1 completed / 2 tracked records = 50.0 (not 1/3 = 33.3 over all records).
+        assert out["completion_rate"] == 50.0
 
 
 class TestComplianceStatusReport:

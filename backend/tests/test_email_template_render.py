@@ -54,6 +54,84 @@ class TestReplaceVariables:
         assert out == "<table><tr></tr></table>"
 
 
+class TestNonMarkupDestinations:
+    """The Subject: header and the text/plain alternative are not markup.
+
+    Escaping them does not add safety — nothing parses them as HTML — and it
+    actively corrupts ordinary content: apostrophes and ampersands are common
+    in member names and department names.
+    """
+
+    def test_plain_text_keeps_apostrophes_and_ampersands(self):
+        out = _svc()._replace_variables(
+            "Hi {{name}} at {{org}}",
+            {"name": "Sean O'Brien", "org": "Falls Church Fire & Rescue"},
+            escape_html=False,
+        )
+        assert out == "Hi Sean O'Brien at Falls Church Fire & Rescue"
+        assert "&" in out and "&amp;" not in out
+        assert "&#x27;" not in out
+
+    def test_html_still_escapes_when_flag_defaults(self):
+        # The flag must not weaken the HTML path, which is the XSS boundary.
+        out = _svc()._replace_variables("{{v}}", {"v": "<script>alert(1)</script>"})
+        assert "<script>" not in out
+
+
+class TestRenderEscapesOnlyTheHtmlBody:
+    """render() has three outputs with different escaping rules."""
+
+    @staticmethod
+    def _template():
+        tpl = MagicMock()
+        tpl.subject = "Results for {{title}}"
+        tpl.html_body = "<p>Hi {{name}} — {{title}}</p>"
+        tpl.text_body = "Hi {{name}} — {{title}}"
+        tpl.css_styles = None
+        return tpl
+
+    def _render(self):
+        svc = EmailTemplateService.__new__(EmailTemplateService)
+        return svc.render(
+            self._template(),
+            {"name": "Sean O'Brien", "title": 'Chief & "Deputy"'},
+        )
+
+    def test_subject_is_not_html_escaped(self):
+        subject, _, _ = self._render()
+        assert subject == 'Results for Chief & "Deputy"'
+
+    def test_text_body_is_not_html_escaped(self):
+        _, _, text_body = self._render()
+        assert text_body == 'Hi Sean O\'Brien — Chief & "Deputy"'
+
+    def test_html_body_is_still_escaped(self):
+        _, html, _ = self._render()
+        assert "O&#x27;Brien" in html
+        assert "Chief &amp;" in html
+
+    def test_html_body_still_blocks_injection(self):
+        tpl = self._template()
+        svc = EmailTemplateService.__new__(EmailTemplateService)
+        _, html, _ = svc.render(
+            tpl, {"name": "x", "title": "<img src=x onerror=alert(1)>"}
+        )
+        assert "onerror=alert(1)>" not in html
+        assert "&lt;img" in html
+
+    def test_title_tag_is_escaped_exactly_once(self):
+        # The subject reaching render() is now raw, so the <title>/aria-label
+        # escape is the only one applied. Previously it was the second, and
+        # an ampersand arrived as &amp;amp;.
+        import re
+
+        _, html, _ = self._render()
+        title = re.search(r"<title>(.*?)</title>", html, re.S).group(1)
+        assert "&amp;quot;" not in title
+        assert "&amp;amp;" not in title
+        assert "&amp;" in title
+
+
 class TestBuildItemsListHtml:
     def _items(self):
         return [

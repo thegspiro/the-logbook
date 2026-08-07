@@ -84,41 +84,41 @@ async def _enforce_permission_grant_ceiling(
             )
 
 
-async def _enforce_role_modification_ceiling(
+async def _enforce_role_edit_ceiling(
     current_user: User,
-    role,
+    existing_permissions: list[str] | None,
     db: AsyncSession,
     ip_address: str | None,
 ) -> None:
-    """Prevent editing a role that is more privileged than the caller.
+    """Prevent a lower-privileged caller from editing a MORE-privileged role.
 
-    The grant ceiling above only inspects the *incoming* permission list, and
-    returns early when that list is empty or absent. That leaves the
-    destructive direction open: a ``roles.edit`` holder who is not a ``*``
-    holder could ``PUT`` the org's only "System Owner" role with
-    ``permissions: []`` (ceiling skipped entirely) or with a small in-ceiling
-    set (ceiling satisfied, since it only checks the new values) and thereby
-    wipe or downgrade the tenant's sole administrator role. That is a
-    tenant-lockout / sabotage path, not a privilege *escalation* path, which
-    is why checking only the new list never caught it.
-
-    So the existing permissions are the thing to gate on: you may only modify
-    a role whose current permissions are already within your own authority.
+    ORU-7: the grant ceiling only validates the *new* permission list, and it
+    early-returns on an empty list — so a caller who cannot grant ``*`` could
+    still set the ``*`` "System Owner" role's permissions to ``[]`` (the
+    early-return bypass), or downgrade it to their own subset, gutting the
+    tenant's wildcard admin (availability/sabotage). Editing a role's
+    permissions therefore also requires the caller's own ceiling to already
+    cover the role's CURRENT permissions — i.e. you cannot edit a role more
+    privileged than you could have created. (The separate last-admin guard
+    ensures *some* admin survives; this stops the downgrade/sabotage of a
+    specific higher role.)
     """
-    existing = list(getattr(role, "permissions", None) or [])
-    if not existing:
+    if not existing_permissions:
         return
     caller_perms = _collect_user_permissions(current_user)
-    for perm in existing:
+    for perm in existing_permissions:
         if not permission_matches(perm, caller_perms):
             await report_privilege_escalation_attempt(
-                db, str(current_user.id), f"modify-role-permission:{perm}", ip_address
+                db,
+                str(current_user.id),
+                f"edit-role-permission:{perm}",
+                ip_address,
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    "You cannot modify a role that holds permissions beyond "
-                    f"your own (offending permission: {perm})."
+                    "You cannot edit a role that holds permissions beyond your "
+                    f"own (offending permission: {perm})."
                 ),
             )
 
@@ -307,23 +307,26 @@ async def update_role(
 
     **Authentication required**
     """
-    client_ip = get_client_ip(request)
-
     # Prevent privilege escalation: cannot raise a role's permissions above your
     # own (guards the org-wide "member" system role in particular).
     await _enforce_permission_grant_ceiling(
-        current_user, role_update.permissions, db, client_ip
+        current_user, role_update.permissions, db, get_client_ip(request)
     )
 
-    # Prevent sabotage in the other direction: cannot wipe or downgrade a role
-    # that is more privileged than you (e.g. the sole "*" System Owner role).
-    existing_role = ensure_found(
-        await role_service.get_role(
-            db, str(role_id), str(current_user.organization_id)
-        ),
-        "Role",
-    )
-    await _enforce_role_modification_ceiling(current_user, existing_role, db, client_ip)
+    # ORU-7: and you cannot EDIT a role whose current permissions already exceed
+    # your ceiling (only when actually changing the permission set) — otherwise
+    # the empty-list early-return above lets a non-`*` caller wipe/downgrade the
+    # `*` System Owner role.
+    if role_update.permissions is not None:
+        existing_role = ensure_found(
+            await role_service.get_role(
+                db, str(role_id), str(current_user.organization_id)
+            ),
+            "Role",
+        )
+        await _enforce_role_edit_ceiling(
+            current_user, existing_role.permissions, db, get_client_ip(request)
+        )
 
     async with handle_service_errors("Failed to update role"):
         role = await role_service.update_role(
