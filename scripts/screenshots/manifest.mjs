@@ -1215,4 +1215,262 @@ export const SHOTS = [
     ),
     fullPage: true,
   },
+
+  // ── Third batch: tab-reachable views ───────────────────────────────
+  {
+    id: "06-04-apparatus-maintenance-tab",
+    doc: "06-apparatus-facilities.md",
+    line: 96,
+    anchor:
+      "Screenshot of the maintenance tab showing a timeline of past maintenance entries",
+    alt: "Apparatus maintenance tab with past records and the add-maintenance form",
+    route: "/apparatus",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}`,
+        "apparatus",
+      )(page);
+      await clickByName(/maintenance/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-05-apparatus-fuel-tab",
+    doc: "06-apparatus-facilities.md",
+    line: 113,
+    anchor: "Screenshot of the fuel logs tab showing a table of fuel entries",
+    alt: "Apparatus fuel logs tab with entries and calculated efficiency",
+    route: "/apparatus",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}`,
+        "apparatus",
+      )(page);
+      await clickByName(/fuel/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "06-06-apparatus-equipment-tab",
+    doc: "06-apparatus-facilities.md",
+    line: 127,
+    anchor: "Screenshot of the equipment tab showing a list of items on the",
+    alt: "Apparatus equipment tab listing carried items with condition",
+    route: "/apparatus",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/apparatus",
+        (id) => `/apparatus/${id}`,
+        "apparatus",
+      )(page);
+      await clickByName(/equipment/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "13-02-requirements-tab",
+    doc: "13-medical-screening.md",
+    line: 71,
+    anchor:
+      "The Requirements tab showing a table of requirements with columns: Name, Screening",
+    alt: "Medical screening requirements tab with frequency and grace period",
+    route: "/medical-screening",
+    prepare: clickByName(/requirements/i),
+    fullPage: true,
+  },
+  {
+    id: "13-03-records-tab",
+    doc: "13-medical-screening.md",
+    line: 147,
+    anchor:
+      "The Records tab showing a table of screening records with columns: Member/Prospect",
+    alt: "Medical screening records tab listing completed screenings",
+    route: "/medical-screening",
+    prepare: clickByName(/records/i),
+    fullPage: true,
+  },
+  {
+    id: "13-04-compliance-tab",
+    doc: "13-medical-screening.md",
+    line: 248,
+    anchor:
+      "The Compliance tab showing summary cards at the top (Total Requirements, Compliant,",
+    alt: "Medical screening compliance tab with summary cards and per-member status",
+    route: "/medical-screening",
+    prepare: clickByName(/compliance/i),
+    fullPage: true,
+  },
+  {
+    id: "12-06-application-budget-tab",
+    doc: "12-grants-fundraising.md",
+    line: 184,
+    anchor:
+      "Screenshot of the Budget tab showing a table of budget items (Equipment:",
+    alt: "Grant application budget tab with budgeted, spent, and remaining columns",
+    route: "/grants/applications",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/grants/applications",
+        (id) => `/grants/applications/${id}`,
+        "applications",
+      )(page);
+      await clickByName(/budget/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "12-07-application-compliance-tab",
+    doc: "12-grants-fundraising.md",
+    line: 232,
+    anchor:
+      "Screenshot of the Compliance Tasks tab showing tasks with due dates, status",
+    alt: "Grant application compliance tasks tab with due dates and status badges",
+    route: "/grants/applications",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/grants/applications",
+        (id) => `/grants/applications/${id}`,
+        "applications",
+      )(page);
+      await clickByName(/compliance/i)(page);
+    },
+    fullPage: true,
+  },
+  {
+    id: "18-03-order-windows",
+    doc: "18-storefront.md",
+    line: 412,
+    anchor:
+      "Screenshot of the Order Windows tab showing an open window card with",
+    alt: "Store order windows tab with the open window and its order totals",
+    route: "/store/admin",
+    prepare: clickByName(/window/i),
+    fullPage: true,
+  },
+  {
+    id: "07-09-notification-send-log",
+    doc: "07-documents-forms.md",
+    line: 285,
+    anchor:
+      "Screenshot of the Send Log tab showing the channel filter buttons (All",
+    alt: "Notification send log with channel filters and delivery status",
+    route: "/notifications",
+    prepare: clickByName(/log/i),
+    fullPage: true,
+  },
+  {
+    id: "03-25-equipment-checks-tab",
+    doc: "03-scheduling.md",
+    line: 1329,
+    anchor:
+      "Screenshot of the Equipment Checks tab showing a list of apparatus with",
+    alt: "Equipment checks tab listing apparatus with their check status",
+    route: "/scheduling?tab=equipment-checks",
+    fullPage: true,
+  },
+  {
+    id: "03-11-swap-requests-tab",
+    doc: "03-scheduling.md",
+    line: 1183,
+    anchor:
+      "Screenshot of the Requests tab showing a swap request card with inline",
+    alt: "Scheduling requests tab with swap and time-off requests",
+    route: "/scheduling?tab=requests",
+    fullPage: true,
+  },
+
+  // ── Fourth batch: modals and creation forms ────────────────────────
+  {
+    id: "07-02-new-folder-dialog",
+    doc: "07-documents-forms.md",
+    line: 65,
+    anchor:
+      "Screenshot of the New Folder dialog showing the folder name field and",
+    alt: "New folder dialog with the name field and parent folder selector",
+    route: "/documents",
+    prepare: clickByName(/new folder/i),
+  },
+  {
+    id: "14-02-create-election",
+    doc: "14-elections.md",
+    line: 96,
+    anchor:
+      "Screenshot of the Create Election form showing title, description, type selector, date",
+    alt: "Create Election form with title, dates, and voting method",
+    route: "/elections",
+    prepare: clickByName(/create election/i),
+    fullPage: true,
+  },
+  {
+    id: "13-05-add-requirement",
+    doc: "13-medical-screening.md",
+    line: 112,
+    anchor:
+      "The Add Requirement form/modal showing all fields filled out for an annual",
+    alt: "Add screening requirement form with type, frequency, and grace period",
+    route: "/medical-screening",
+    prepare: clickByName(/add requirement/i),
+    fullPage: true,
+  },
+  {
+    id: "15-03-create-applicant",
+    doc: "15-prospective-members.md",
+    line: 150,
+    anchor:
+      "Screenshot of the Create Applicant form showing name, email, phone fields, membership",
+    alt: "Create applicant form with contact fields and membership type",
+    route: "/prospective-members",
+    prepare: clickByName(/add applicant/i),
+    fullPage: true,
+  },
+  {
+    id: "01-19-create-waiver",
+    doc: "01-membership.md",
+    line: 485,
+    anchor:
+      "Screenshot of the Create Waiver form showing the member dropdown, 'Applies To'",
+    alt: "Create waiver form with member, scope, and date range",
+    route: "/members/admin/waivers",
+    prepare: clickByName(/^create waiver$/i),
+    fullPage: true,
+  },
+  {
+    id: "02-03-submit-training",
+    doc: "02-training.md",
+    line: 86,
+    anchor:
+      "Screenshot of the Submit Training form showing the course dropdown with search",
+    alt: "Submit Training form with course, date, hours, and attachment fields",
+    route: "/training/my-training",
+    prepare: clickByName(/submit training/i),
+    fullPage: true,
+  },
+  {
+    id: "05-04-variant-group-form",
+    doc: "05-inventory.md",
+    line: 146,
+    anchor:
+      "Screenshot of the Variant Group creation form showing the base product name",
+    alt: "Variant group creation form with the size and colour matrix",
+    route: "/inventory/admin/variant-groups",
+    prepare: clickByName(/add group/i),
+    fullPage: true,
+  },
+  {
+    id: "07-06-form-builder",
+    doc: "07-documents-forms.md",
+    line: 160,
+    anchor:
+      "Screenshot of the form builder showing a form being designed with a",
+    alt: "Form builder with the field palette, canvas, and field settings",
+    route: "/forms",
+    // "Create Form" only opens a name/category dialog; the builder this
+    // placeholder describes is behind "Edit Fields" on an existing form.
+    prepare: clickByName(/edit fields/i),
+    // Viewport only: the builder opens over the list page, and a full-page
+    // capture trails the taller page underneath it below the fold.
+    fullPage: false,
+  },
 ];

@@ -482,8 +482,7 @@ Navigate to **Members > Admin > Waivers** to access the unified Waiver Managemen
 5. Optionally provide a **reason**.
 6. Click **Create Waiver**.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Create Waiver form showing the member dropdown, "Applies To" radio buttons (All, Training Only, Meetings & Shifts Only), leave type selector, date range pickers, and reason text area]_
+![Create waiver form with member, scope, and date range](./images/01-19-create-waiver.png)
 
 ### Training Waivers Officer View
 

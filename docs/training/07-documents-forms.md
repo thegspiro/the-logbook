@@ -62,8 +62,7 @@ Documents are organized into folders. The system provides default folders, and a
 3. Optionally set a parent folder for nesting.
 4. Save.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the New Folder dialog showing the folder name field and parent folder dropdown]_
+![New folder dialog with the name field and parent folder selector](./images/07-02-new-folder-dialog.png)
 
 ---
 
@@ -157,8 +156,7 @@ The form builder includes advanced capabilities:
 
 > **Hint:** If a field is highlighted in yellow or red, it means the field configuration is incomplete. Click on the field to see what's missing.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the form builder showing a form being designed with a drag-and-drop field list on the left, the form preview in the center with several fields already placed, and the field configuration panel on the right showing label, type, required toggle, and validation options]_
+![Form builder with the field palette, canvas, and field settings](./images/07-06-form-builder.png)
 
 ### Form Templates
 
@@ -282,8 +280,7 @@ The **Send Log** tab shows notification delivery history with:
 - **Channel filter** — filter by All, Email only, or In-App only
 - **Mark All Read** button to bulk-clear unread notifications
 
-> **Screenshot needed:**
-> _[Screenshot of the Send Log tab showing the channel filter buttons (All / Email / In-App), the Mark All Read button, and a table of notification entries with status indicators]_
+![Notification send log with channel filters and delivery status](./images/07-09-notification-send-log.png)
 
 ### Dashboard Notification Dismiss
 

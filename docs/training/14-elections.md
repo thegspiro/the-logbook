@@ -93,7 +93,7 @@ Key pages:
 | **Supermajority** | Must reach the configured percentage (`victory_percentage`, default 67) |
 | **Threshold** | Must reach a configured absolute vote count (`victory_threshold`) |
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Create Election form showing title, description, type selector, date range, voting method dropdown, anonymous toggle, and write-in toggle._
+![Create Election form with title, dates, and voting method](./images/14-02-create-election.png)
 
 > **Hint:** For bylaw amendments requiring a 2/3 supermajority, set the victory condition to **Supermajority** with **victory_percentage = 67**.
 

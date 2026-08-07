@@ -147,7 +147,7 @@ The system automatically checks for existing members or applicants with the same
 - If an **archived member** exists → suggestion to reactivate instead
 - If another **applicant** exists → warning with applicant details
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of the Create Applicant form showing name, email, phone fields, membership type toggle (Regular/Administrative), and pipeline selector dropdown._
+![Create applicant form with contact fields and membership type](./images/15-03-create-applicant.png)
 
 ### Edge Cases
 
