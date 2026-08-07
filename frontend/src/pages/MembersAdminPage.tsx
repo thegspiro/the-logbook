@@ -19,6 +19,7 @@ import type { UserWithRoles, Role } from '../types/role';
 import type { UserProfileUpdate } from '../types/user';
 import { useAuthStore } from '../stores/authStore';
 import { validatePasswordStrength } from '../utils/passwordValidation';
+import { getErrorMessage } from '../utils/errorHandling';
 import { Modal } from '../components/Modal';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
@@ -329,8 +330,8 @@ export const MembersAdminPage: React.FC = () => {
       await userService.deleteUserWithMode(userId, false);
       setDeleteModalUser(null);
       await fetchData();
-    } catch (_err) {
-      setError('Unable to deactivate the member. Please try again.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to deactivate the member. Please try again.'));
     }
   };
 
@@ -340,8 +341,8 @@ export const MembersAdminPage: React.FC = () => {
       await userService.deleteUserWithMode(userId, true);
       setDeleteModalUser(null);
       await fetchData();
-    } catch (_err) {
-      setError('Unable to permanently delete the member. Please try again.');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to permanently delete the member. Please try again.'));
     }
   };
 
