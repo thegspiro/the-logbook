@@ -19,10 +19,7 @@ The script will:
 
 import os
 import sys
-import json
 import random
-import string
-import hashlib
 from datetime import date, timedelta
 from typing import Optional
 
@@ -372,13 +369,17 @@ def create_training_records(user: dict):
 
 # ─── Main ─────────────────────────────────────────────────────────────
 def main():
+    # Must precede the reads below: Python rejects a `global` declaration that
+    # follows any use of the name in the same scope (SyntaxError at compile
+    # time, which ast-based linters like pyflakes do not catch).
+    global ADMIN_USERNAME, ADMIN_PASSWORD
+
     if not ADMIN_USERNAME or not ADMIN_PASSWORD:
         print("=" * 60)
         print("  Test Data Seed Script")
         print("=" * 60)
         print()
         print("Please provide admin credentials to authenticate with the API.\n")
-        global ADMIN_USERNAME, ADMIN_PASSWORD
         ADMIN_USERNAME = input("  Admin username: ").strip()
         ADMIN_PASSWORD = input("  Admin password: ").strip()
         if not ADMIN_USERNAME or not ADMIN_PASSWORD:
@@ -418,7 +419,7 @@ def main():
     # Summary
     print()
     print("=" * 60)
-    print(f"  Done!")
+    print("  Done!")
     print(f"  Members created:  {success}/100")
     print(f"  Courses available: {len(course_ids)}")
     print(f"  Training records:  ~{total_records} (3-8 per member)")

@@ -14,7 +14,6 @@ Options:
 
 import secrets
 import sys
-import os
 from pathlib import Path
 
 
