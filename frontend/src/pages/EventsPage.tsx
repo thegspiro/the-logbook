@@ -252,7 +252,13 @@ export const EventsPage: React.FC = () => {
     void fetchEvents();
     eventService.getVisibleEventTypesWithCategories()
       .then((data) => {
-        setVisibleTypes(data.visible_event_types);
+        // The axios response generic asserts this field exists rather than
+        // proving it, so a payload without it would replace the default with
+        // undefined and crash the whole page on the `.includes` below. `??`
+        // rather than `||` so an explicitly empty list still means "no standard
+        // types configured" (everything groups under the Other tab) instead of
+        // silently re-enabling all of them.
+        setVisibleTypes(data.visible_event_types ?? ALL_EVENT_TYPES);
         setCustomCategories(data.custom_event_categories || []);
         setVisibleCustomCategories(data.visible_custom_categories || []);
       })

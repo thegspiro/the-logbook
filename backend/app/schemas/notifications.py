@@ -123,3 +123,46 @@ class NotificationsSummary(BaseModel):
     active_rules: int
     emails_sent_this_month: int
     notifications_sent_this_month: int
+
+
+# ============================================
+# Web Push
+# ============================================
+
+
+class PushSubscriptionKeys(BaseModel):
+    """The `keys` object exactly as the browser's PushSubscription exposes it."""
+
+    p256dh: str = Field(..., max_length=255)
+    auth: str = Field(..., max_length=255)
+
+
+class PushSubscriptionCreate(BaseModel):
+    """Mirrors PushSubscription.toJSON() so the client can post it unchanged."""
+
+    endpoint: str = Field(..., min_length=1, max_length=2048)
+    keys: PushSubscriptionKeys
+
+
+class PushUnsubscribeRequest(BaseModel):
+    endpoint: str = Field(..., min_length=1, max_length=2048)
+
+
+class PushConfigResponse(BaseModel):
+    """Tells the client whether to offer push, and the key needed to subscribe.
+
+    `public_key` is null when push is not configured, so the UI can hide the
+    toggle rather than offering something that will fail on tap.
+    """
+
+    enabled: bool
+    public_key: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PushSubscriptionResponse(BaseModel):
+    id: str
+    endpoint: str
+
+    model_config = ConfigDict(from_attributes=True)

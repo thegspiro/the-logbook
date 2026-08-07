@@ -46,7 +46,19 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // Escape hatch for images with a preinstalled Chromium whose build
+        // number does not match the local Playwright package, where
+        // `playwright install` is unavailable or undesirable.
+        ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
+          ? {
+              launchOptions: {
+                executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH,
+              },
+            }
+          : {}),
+      },
     },
 
     {

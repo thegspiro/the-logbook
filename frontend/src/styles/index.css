@@ -649,10 +649,12 @@
 
 @utility pb-safe {
   /* #27 Bottom padding equal to the device safe-area inset (0 on non-notched
-     devices), plus the on-screen keyboard height. For fixed/sticky bars whose
-     inner content already provides its own visual padding. See
-     `--keyboard-inset` below. */
-  padding-bottom: calc(env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
+     devices), plus the on-screen keyboard height, plus the mobile bottom
+     navigation bar. For fixed/sticky bars whose inner content already provides
+     its own visual padding. See `--keyboard-inset` and `--bottom-nav-height`. */
+  padding-bottom: calc(
+    env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + var(--bottom-nav-height, 0px)
+  );
 }
 
 @utility action-bar-safe {
@@ -664,7 +666,25 @@
      viewport rather than the layout viewport (i.e. iOS). Without it the bar —
      and its submit button — sits behind the keyboard, unreachable. */
   padding-top: 0.75rem;
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
+  padding-bottom: calc(
+    0.75rem + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) +
+      var(--bottom-nav-height, 0px)
+  );
+}
+
+/* Set on the AppLayout root, so `--bottom-nav-height` is non-zero only where
+ * the mobile bottom navigation is actually rendered — page-level bottom action
+ * bars then lift clear of it automatically instead of each one hard-coding the
+ * bar's height. Public pages (login, onboarding, legal) never see the bar and
+ * so never inherit the offset. Must stay in step with BottomNavigation's own
+ * min-h-[56px] rows. */
+.has-bottom-nav {
+  --bottom-nav-height: 3.5rem;
+}
+@media (min-width: 768px) {
+  .has-bottom-nav {
+    --bottom-nav-height: 0px;
+  }
 }
 
 @utility safe-top {

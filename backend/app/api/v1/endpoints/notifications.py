@@ -7,11 +7,14 @@ logs, and preferences.
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.core.audit import log_audit_event
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.notifications import (
     NotificationLogResponse,
@@ -21,8 +24,13 @@ from app.schemas.notifications import (
     NotificationRulesListResponse,
     NotificationRuleUpdate,
     NotificationsSummary,
+    PushConfigResponse,
+    PushSubscriptionCreate,
+    PushSubscriptionResponse,
+    PushUnsubscribeRequest,
 )
 from app.services.notifications_service import NotificationsService
+from app.services.push_service import PushService
 
 router = APIRouter()
 
@@ -322,3 +330,89 @@ async def get_notifications_summary(
     """Get notifications module summary statistics"""
     service = NotificationsService(db)
     return await service.get_summary(current_user.organization_id)
+
+
+# ============================================
+# Web Push Subscriptions
+# ============================================
+
+
+@router.get("/push/config", response_model=PushConfigResponse)
+async def get_push_config(
+    current_user: User = Depends(get_current_user),
+) -> PushConfigResponse:
+    """Whether this deployment can send push, and the VAPID public key.
+
+    Any authenticated member may read this: the public key is public by
+    definition, and the client needs it before it can subscribe.
+    """
+    if not PushService.is_configured():
+        return PushConfigResponse(enabled=False, public_key=None)
+    return PushConfigResponse(
+        enabled=True, public_key=settings.VAPID_PUBLIC_KEY
+    )
+
+
+@router.post(
+    "/push/subscribe",
+    response_model=PushSubscriptionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def subscribe_to_push(
+    payload: PushSubscriptionCreate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PushSubscriptionResponse:
+    """Register the caller's browser for push.
+
+    Scoped to the caller — a member registers their own device and cannot
+    subscribe on someone else's behalf, so there is no id in the payload.
+    """
+    if not PushService.is_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Push notifications are not configured on this server.",
+        )
+    service = PushService(db)
+    try:
+        sub = await service.subscribe(
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            endpoint=payload.endpoint,
+            p256dh=payload.keys.p256dh,
+            auth=payload.keys.auth,
+            user_agent=request.headers.get("user-agent", "")[:500] or None,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+
+    await log_audit_event(
+        db,
+        user_id=current_user.id,
+        organization_id=current_user.organization_id,
+        action="push_subscription.create",
+        resource_type="push_subscription",
+        resource_id=str(sub.id),
+    )
+    return PushSubscriptionResponse(id=str(sub.id), endpoint=sub.endpoint)
+
+
+@router.post("/push/unsubscribe", status_code=status.HTTP_204_NO_CONTENT)
+async def unsubscribe_from_push(
+    payload: PushUnsubscribeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Drop a device endpoint. Org-scoped, so a known endpoint belonging to
+    another tenant cannot be deleted by submitting it here."""
+    service = PushService(db)
+    try:
+        await service.unsubscribe(
+            organization_id=current_user.organization_id,
+            endpoint=payload.endpoint,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
