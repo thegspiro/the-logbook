@@ -995,4 +995,224 @@ export const SHOTS = [
     ),
     fullPage: true,
   },
+
+  // ── Second batch: module sub-pages and detail views ────────────────
+  {
+    id: "05-02-inventory-dashboard",
+    doc: "05-inventory.md",
+    line: 580,
+    anchor:
+      "Screenshot of the inventory summary/dashboard showing alert cards for low stock items",
+    alt: "Inventory dashboard with low-stock, maintenance, and assignment alert cards",
+    route: "/inventory",
+    fullPage: true,
+  },
+  {
+    id: "05-06-item-detail",
+    doc: "05-inventory.md",
+    line: 403,
+    anchor:
+      "Screenshot of the Item Detail page showing the two-column layout. Left sidebar",
+    alt: "Inventory item detail with its barcode, quick info, and history panels",
+    route: "/inventory/items",
+    prepare: openFirstFromApi(
+      "/inventory/items?limit=1",
+      (id) => `/inventory/items/${id}`,
+      "items",
+    ),
+    fullPage: true,
+  },
+  {
+    id: "05-08-checkouts",
+    doc: "05-inventory.md",
+    line: 457,
+    anchor:
+      "Screenshot of the checkout form showing the item being checked out, the",
+    alt: "Equipment checkout page with the item, member, and expected return date",
+    route: "/inventory/checkouts",
+    fullPage: true,
+  },
+  {
+    id: "05-11-allowances",
+    doc: "05-inventory.md",
+    line: 287,
+    anchor:
+      "Screenshot of the Issuance Allowances admin page showing a list of allowance",
+    alt: "Issuance allowances with per-category limits and periods",
+    route: "/inventory/admin/allowances",
+  },
+  {
+    id: "05-14-reorder-requests",
+    doc: "05-inventory.md",
+    line: 367,
+    anchor:
+      "Screenshot of the Reorder Requests page showing a table of reorder requests",
+    alt: "Reorder requests table with requested quantities and status",
+    route: "/inventory/admin/reorder",
+  },
+  {
+    id: "05-24-member-inventory",
+    doc: "05-inventory.md",
+    line: 765,
+    anchor:
+      "Screenshot of the Members inventory tab showing a list of members with",
+    alt: "Members inventory tab listing each member and their assigned item count",
+    route: "/inventory/admin/members",
+  },
+  {
+    id: "05-25-admin-hub",
+    doc: "05-inventory.md",
+    line: 792,
+    anchor:
+      "Screenshot of the Inventory Admin Hub showing the three prominent cards at",
+    alt: "Inventory admin hub with its grouped navigation cards",
+    route: "/inventory/admin",
+    fullPage: true,
+  },
+  {
+    id: "05-31-equipment-kits",
+    doc: "05-inventory.md",
+    line: 1250,
+    anchor:
+      "Screenshot of the Equipment Kits admin page showing a list of kits",
+    alt: "Equipment kits admin page listing kits with their component counts",
+    route: "/inventory/admin/kits",
+  },
+  {
+    id: "05-32-variant-groups",
+    doc: "05-inventory.md",
+    line: 1258,
+    anchor:
+      "Screenshot of the Variant Groups admin page showing variant groups with base",
+    alt: "Variant groups admin page with base products and per-size stock",
+    route: "/inventory/admin/variant-groups",
+  },
+  {
+    id: "05-33-label-printing",
+    doc: "05-inventory.md",
+    line: 1271,
+    anchor:
+      "Screenshot of the label printing page showing the format dropdown (Letter, Dymo",
+    alt: "Inventory label printing page with format presets and preview",
+    route: "/inventory/print-labels",
+    fullPage: true,
+  },
+  {
+    id: "05-36-storage-areas",
+    doc: "05-inventory.md",
+    line: 1307,
+    anchor:
+      "Screenshot of the Storage Areas page showing an expanded storage area panel",
+    alt: "Storage areas page with an expanded area listing its items",
+    route: "/inventory/storage-areas",
+  },
+  {
+    id: "05-45-impact-planner",
+    // the planner shows its filter panel before an analysis is run, which is the
+    // state this section describes
+    allowEmptyState: true,
+    doc: "05-inventory.md",
+    line: 1595,
+    anchor:
+      "Screenshot of the Impact Planner page showing the filter panel on the",
+    alt: "Inventory impact planner with its filter panel and member analysis",
+    route: "/inventory/admin/impact-planner",
+    fullPage: true,
+  },
+  {
+    id: "03-15-scheduling-settings",
+    doc: "03-scheduling.md",
+    line: 549,
+    anchor:
+      "Screenshot of Scheduling Settings showing the 'Platoons' toggle enabled, with a note",
+    alt: "Scheduling settings with the platoons toggle and related options",
+    route: "/scheduling/settings",
+    fullPage: true,
+  },
+  {
+    id: "03-22-equipment-check-builder",
+    // a builder opened on a new template correctly starts with no compartments;
+    // the shot is of the builder layout
+    allowEmptyState: true,
+    doc: "03-scheduling.md",
+    line: 668,
+    anchor:
+      "Screenshot of the Equipment Check Template Builder showing the template header (name,",
+    alt: "Equipment check template builder with the template header and sections",
+    route: "/scheduling/equipment-check-templates/new",
+    fullPage: true,
+  },
+  {
+    id: "04-04-event-qr-code",
+    doc: "04-events-meetings.md",
+    line: 86,
+    anchor: "Screenshot of the QR code display page showing a large QR code",
+    alt: "Event QR code display page for member self check-in",
+    route: "/events",
+    prepare: openFirstFromApi(
+      "/events?limit=1",
+      (id) => `/events/${id}/qr-code`,
+      "events",
+    ),
+  },
+  {
+    id: "04-06-check-in-monitoring",
+    doc: "04-events-meetings.md",
+    line: 104,
+    anchor:
+      "Screenshot of the check-in monitoring page showing a real-time list of checked-in",
+    alt: "Event check-in monitoring page with the live attendee list",
+    route: "/events",
+    prepare: openFirstFromApi(
+      "/events?limit=1",
+      (id) => `/events/${id}/monitoring`,
+      "events",
+    ),
+    fullPage: true,
+  },
+  {
+    id: "04-20-event-requests",
+    doc: "04-events-meetings.md",
+    line: 633,
+    anchor:
+      "Screenshot of the Event Requests tab showing a list of requests with",
+    alt: "Event requests tab listing incoming requests with status badges",
+    route: "/events/admin",
+    fullPage: true,
+  },
+  {
+    id: "08-01-setup-checklist",
+    doc: "08-admin-reports.md",
+    line: 43,
+    anchor:
+      "Screenshot of the Department Setup Checklist page showing a vertical checklist of",
+    alt: "Department setup checklist with each step and its completion state",
+    route: "/setup",
+    fullPage: true,
+  },
+  {
+    id: "02-41-training-admin-reports",
+    doc: "02-training.md",
+    line: 959,
+    anchor:
+      "The Training Admin Reports tab showing the Compliance, Hours Summary, and Certification",
+    alt: "Training admin reports tab with the compliance, hours, and certification cards",
+    route: "/training/admin",
+    fullPage: true,
+  },
+  {
+    id: "09-05-template-detail",
+    doc: "09-skills-testing.md",
+    line: 138,
+    anchor:
+      "Screenshot of the template detail page for a published template showing the",
+    alt: "Published skill sheet template detail with its sections and criteria",
+    route: "/training/skills-testing",
+    prepare: openFirstFromApi(
+      "/training/skills-testing/templates",
+      (id) => `/training/skills-testing/templates/${id}`,
+      "templates",
+    ),
+    fullPage: true,
+  },
 ];

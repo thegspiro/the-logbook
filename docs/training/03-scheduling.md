@@ -546,7 +546,7 @@ Platoons are **off by default**. To enable them:
 2. Enable the **Platoons** toggle
 3. The platoon fields and management UI become visible across the scheduling module
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of Scheduling Settings showing the "Platoons" toggle enabled, with a note explaining that this adds platoon fields to member profiles and shift generation._
+![Scheduling settings with the platoons toggle and related options](./images/03-15-scheduling-settings.png)
 
 ### Assigning Members to Platoons
 
@@ -665,8 +665,7 @@ Navigate to **Scheduling > Settings > Equipment** to see the template list, then
 7. Use **drag-and-drop** to reorder compartments and items
 8. Use **vehicle check presets** to import common inspection categories for engine, ladder, or ambulance types
 
-> **Screenshot needed:**
-> _[Screenshot of the Equipment Check Template Builder showing the template header (name, timing, type), a compartment ("Cab Interior") expanded with several check items of different types (pass/fail, quantity, date/lot), and the drag-handle icons for reordering]_
+![Equipment check template builder with the template header and sections](./images/03-22-equipment-check-builder.png)
 
 > **Screenshot needed:**
 > _[Screenshot of the vehicle check preset picker showing preset categories (Engine, Ladder, Ambulance) with preview of included compartments and items]_

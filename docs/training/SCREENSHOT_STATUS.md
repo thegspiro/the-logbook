@@ -4,20 +4,20 @@ Which training-guide screenshot placeholders have been captured. Generated
 by `scripts/screenshots/status_report.py`; see that directory's README for
 how to capture more.
 
-**83 of 462 placeholders filled** (379 remaining).
+**100 of 462 placeholders filled** (362 remaining).
 
 | Guide                                                      | Captured | Remaining |
 | ---------------------------------------------------------- | -------: | --------: |
 | [00-getting-started.md](./00-getting-started.md)           |        4 |         8 |
 | [01-membership.md](./01-membership.md)                     |        6 |        23 |
-| [02-training.md](./02-training.md)                         |       10 |        68 |
-| [03-scheduling.md](./03-scheduling.md)                     |        7 |        61 |
-| [04-events-meetings.md](./04-events-meetings.md)           |        7 |        31 |
-| [05-inventory.md](./05-inventory.md)                       |        2 |        51 |
+| [02-training.md](./02-training.md)                         |       11 |        67 |
+| [03-scheduling.md](./03-scheduling.md)                     |        9 |        59 |
+| [04-events-meetings.md](./04-events-meetings.md)           |        9 |        29 |
+| [05-inventory.md](./05-inventory.md)                       |       12 |        41 |
 | [06-apparatus-facilities.md](./06-apparatus-facilities.md) |        6 |        14 |
 | [07-documents-forms.md](./07-documents-forms.md)           |        4 |         9 |
-| [08-admin-reports.md](./08-admin-reports.md)               |        8 |        32 |
-| [09-skills-testing.md](./09-skills-testing.md)             |        2 |         9 |
+| [08-admin-reports.md](./08-admin-reports.md)               |        9 |        31 |
+| [09-skills-testing.md](./09-skills-testing.md)             |        3 |         8 |
 | [10-mobile-pwa.md](./10-mobile-pwa.md)                     |        3 |         9 |
 | [11-finance.md](./11-finance.md)                           |        8 |         9 |
 | [12-grants-fundraising.md](./12-grants-fundraising.md)     |        7 |         7 |
@@ -27,4 +27,4 @@ how to capture more.
 | [16-integrations.md](./16-integrations.md)                 |        1 |        11 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md)   |        1 |         1 |
 | [18-storefront.md](./18-storefront.md)                     |        2 |         3 |
-| **Total**                                                  |   **83** |   **379** |
+| **Total**                                                  |  **100** |   **362** |

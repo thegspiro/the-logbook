@@ -956,7 +956,7 @@ Navigate to **Training Admin > Reports** for department-wide exports:
 3. **Certification Report** — A CSV of all certifications with their valid / expiring-soon / expired status for renewal tracking.
 4. **Compliance Report** — Department-wide compliance status across all members and requirements.
 
-> **[SCREENSHOT NEEDED]:** _The Training Admin Reports tab showing the Compliance, Hours Summary, and Certification report cards above the "Member Records (All Members)" period selector with CSV / PDF buttons._
+![Training admin reports tab with the compliance, hours, and certification cards](./images/02-41-training-admin-reports.png)
 
 > **Hint:** A bulk PDF for a period with no matching records still produces a valid (placeholder) PDF rather than failing — useful as proof that a quiet period was reviewed.
 

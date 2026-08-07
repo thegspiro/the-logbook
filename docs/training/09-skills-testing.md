@@ -135,8 +135,7 @@ When a template is ready for use:
 
 **Duplicating a template:** Click **Duplicate** on any template to create a draft copy with " (Copy)" appended to the name. This is useful for creating variants (e.g., adapting an NREMT template for department-specific requirements).
 
-> **Screenshot placeholder:**
-> _[Screenshot of the template detail page for a published template showing the "Published" status badge in green, version "v2", and action buttons: Edit, Duplicate, Archive. The template sections and criteria are displayed in read-only view below]_
+![Published skill sheet template detail with its sections and criteria](./images/09-05-template-detail.png)
 
 ---
 

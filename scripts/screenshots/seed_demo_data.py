@@ -449,9 +449,7 @@ class Seeder:
                 "open_to_all_members": True,
             }
             if apparatus:
-                payload["apparatus_id"] = pick(
-                    apparatus[index % len(apparatus)], "id"
-                )
+                payload["apparatus_id"] = pick(apparatus[index % len(apparatus)], "id")
             templates.append(self.api.post("/scheduling/templates", payload))
 
         patterns = items(self.api.get("/scheduling/patterns"), "patterns")
@@ -794,6 +792,141 @@ class Seeder:
             existing_items.append(self.api.post("/inventory/items", payload))
         return {"categories": categories, "items": existing_items}
 
+    # -- inventory: kits, storage, allowances, assignments -----------
+
+    def seed_inventory_operations(
+        self,
+        categories: list[dict],
+        inventory_items: list[dict],
+        stations: list[dict],
+        members: list[dict],
+    ) -> dict[str, list[dict]]:
+        category_ids = {c.get("name"): pick(c, "id") for c in categories}
+        items_by_name = {i.get("name"): i for i in inventory_items}
+
+        areas = items(self.api.get("/inventory/storage-areas"), "storage_areas")
+        area_names = {a.get("name") for a in areas}
+        location_id = pick(stations[0], "id") if stations else None
+        for order, (name, label, storage_type) in enumerate(
+            [
+                ("Turnout Gear Racks", "TG-01", "rack"),
+                ("SCBA Cabinet", "SCBA-01", "cabinet"),
+                ("Quartermaster Shelving", "QM-01", "shelf"),
+                ("Uniform Bins", "UNI-01", "bin"),
+            ]
+        ):
+            if name in area_names:
+                continue
+            payload = {
+                "name": name,
+                "label": label,
+                "description": f"{name} in the Station 1 quartermaster room.",
+                "storage_type": storage_type,
+                "sort_order": order,
+            }
+            if location_id:
+                payload["location_id"] = location_id
+            areas.append(self.api.post("/inventory/storage-areas", payload))
+
+        kits = items(self.api.get("/inventory/kits"), "kits")
+        kit_names = {k.get("name") for k in kits}
+        for name, description, line_items in [
+            (
+                "New Recruit PPE Kit",
+                "Issued to every probationary member on day one.",
+                [
+                    ("Bunker Coat", "Structural PPE", 1),
+                    ("Bunker Pants", "Structural PPE", 1),
+                    ("Structural Helmet", "Structural PPE", 1),
+                    ("Firefighting Gloves", "Structural PPE", 2),
+                ],
+            ),
+            (
+                "Duty Uniform Kit",
+                "Standard duty uniform issue.",
+                [
+                    ("Job Shirt", "Uniforms", 2),
+                    ("Class B Uniform Shirt", "Uniforms", 3),
+                ],
+            ),
+        ]:
+            if name in kit_names:
+                continue
+            kits.append(
+                self.api.post(
+                    "/inventory/kits",
+                    {
+                        "name": name,
+                        "description": description,
+                        "line_items": [
+                            {
+                                "item_name": item_name,
+                                "quantity": quantity,
+                                "size_selectable": True,
+                                **(
+                                    {"item_id": pick(items_by_name[item_name], "id")}
+                                    if item_name in items_by_name
+                                    else {}
+                                ),
+                                **(
+                                    {"category_id": category_ids[category]}
+                                    if category_ids.get(category)
+                                    else {}
+                                ),
+                            }
+                            for item_name, category, quantity in line_items
+                        ],
+                    },
+                )
+            )
+
+        allowances = items(self.api.get("/inventory/allowances"), "allowances")
+        if not allowances:
+            for category, quantity, period in [
+                ("Structural PPE", 1, "career"),
+                ("Uniforms", 3, "annual"),
+                ("Portable Radios", 1, "career"),
+            ]:
+                category_id = category_ids.get(category)
+                if not category_id:
+                    continue
+                allowances.append(
+                    self.api.post(
+                        "/inventory/allowances",
+                        {
+                            "category_id": category_id,
+                            "max_quantity": quantity,
+                            "period_type": period,
+                        },
+                    )
+                )
+
+        # Assign individually-tracked gear so "My Equipment", the member
+        # inventory tab, and the item detail page all show a holder.
+        assignable = [
+            i
+            for i in inventory_items
+            if (i.get("tracking_type") or i.get("trackingType")) == "individual"
+        ]
+        for index, item in enumerate(assignable):
+            status = (item.get("status") or "").lower()
+            if status and status != "available":
+                continue
+            user_id = pick(members[index % len(members)], "id")
+            item_id = pick(item, "id")
+            if not user_id or not item_id:
+                continue
+            self.api.post(
+                f"/inventory/items/{item_id}/assign",
+                {
+                    "item_id": item_id,
+                    "user_id": user_id,
+                    "assignment_type": "permanent",
+                    "assignment_reason": "Initial issue",
+                },
+            )
+        return {"storage_areas": areas, "kits": kits, "allowances": allowances}
+
     # -- documents ---------------------------------------------------
 
     def seed_documents(self) -> list[dict]:
@@ -913,9 +1046,7 @@ class Seeder:
     # -- training programs (pipelines) -------------------------------
 
     def seed_training_programs(self, members: list[dict]) -> list[dict]:
-        programs = items(
-            self.api.get("/training/programs/programs"), "programs"
-        )
+        programs = items(self.api.get("/training/programs/programs"), "programs")
         names = {p.get("name") for p in programs}
         blueprint = [
             (
@@ -1312,9 +1443,7 @@ class Seeder:
             schedules.append(schedule)
             # Generating turns the schedule into one dues row per member,
             # which is what the Dues Management table lists.
-            self.api.post(
-                f"/finance/dues-schedules/{pick(schedule, 'id')}/generate"
-            )
+            self.api.post(f"/finance/dues-schedules/{pick(schedule, 'id')}/generate")
         return schedules
 
     # -- forms -------------------------------------------------------
@@ -1496,9 +1625,7 @@ class Seeder:
     ]
 
     def seed_prospective_members(self) -> dict[str, list[dict]]:
-        pipelines = items(
-            self.api.get("/prospective-members/pipelines"), "pipelines"
-        )
+        pipelines = items(self.api.get("/prospective-members/pipelines"), "pipelines")
         if not any(p.get("name") == "Volunteer Membership Pipeline" for p in pipelines):
             pipelines.append(
                 self.api.post(
@@ -1553,9 +1680,7 @@ class Seeder:
             }
             if pipeline_id:
                 payload["pipeline_id"] = pipeline_id
-            prospect = self.api.post(
-                "/prospective-members/prospects", payload
-            )
+            prospect = self.api.post("/prospective-members/prospects", payload)
             prospects.append(prospect)
             # Spread applicants across the board so the kanban shows movement
             # rather than a single stacked first column.
@@ -1574,7 +1699,13 @@ class Seeder:
             ("Assistance to Firefighters Grant", "FEMA", "equipment", 25_000, 750_000),
             ("SAFER Grant", "FEMA", "staffing", 50_000, 1_500_000),
             ("Fire Prevention & Safety Grant", "FEMA", "prevention", 10_000, 250_000),
-            ("State Rescue Squad Assistance Fund", "Virginia OEMS", "vehicles", 15_000, 200_000),
+            (
+                "State Rescue Squad Assistance Fund",
+                "Virginia OEMS",
+                "vehicles",
+                15_000,
+                200_000,
+            ),
         ]:
             if name in names:
                 continue
@@ -1598,11 +1729,20 @@ class Seeder:
             )
 
         applications = items(self.api.get("/grants/applications"), "applications")
-        applied = {a.get("grantProgramName") or a.get("grant_program_name") for a in applications}
+        applied = {
+            a.get("grantProgramName") or a.get("grant_program_name")
+            for a in applications
+        }
         for program, agency, status, requested, awarded in [
             ("Assistance to Firefighters Grant", "FEMA", "submitted", 180_000, None),
             ("Fire Prevention & Safety Grant", "FEMA", "awarded", 42_000, 42_000),
-            ("State Rescue Squad Assistance Fund", "Virginia OEMS", "preparing", 96_000, None),
+            (
+                "State Rescue Squad Assistance Fund",
+                "Virginia OEMS",
+                "preparing",
+                96_000,
+                None,
+            ),
         ]:
             if program in applied:
                 continue
@@ -1797,7 +1937,12 @@ class Seeder:
         if not maintenance:
             for index, (description, vendor, cost, days_ago) in enumerate(
                 [
-                    ("Replace bay door opener motor", "Tidewater Door Service", 1_840, 45),
+                    (
+                        "Replace bay door opener motor",
+                        "Tidewater Door Service",
+                        1_840,
+                        45,
+                    ),
                     ("Annual generator load bank test", "PowerGen Services", 950, 30),
                     ("HVAC filter replacement — dorm wing", "In-house", 120, 12),
                     ("Repair kitchen exhaust hood", "Chesapeake Mechanical", 640, None),
@@ -1821,16 +1966,46 @@ class Seeder:
                     payload["is_completed"] = True
                     payload["completed_date"] = str(TODAY - timedelta(days=days_ago))
                     payload["work_performed"] = description
-                    payload["next_due_date"] = str(TODAY + timedelta(days=365 - days_ago))
+                    payload["next_due_date"] = str(
+                        TODAY + timedelta(days=365 - days_ago)
+                    )
                 maintenance.append(self.api.post("/facilities/maintenance", payload))
 
         if not inspections:
             for index, (title, kind, inspector, agency, passed, days_ago) in enumerate(
                 [
-                    ("Annual Fire Marshal Inspection", "fire", "L. Ferreira", "Oakville Fire Marshal", True, 60),
-                    ("Building Code Compliance Review", "building_code", "D. Whitmore", "County Building Office", True, 120),
-                    ("Insurance Loss-Control Survey", "insurance", "R. Alvarez", "Commonwealth Mutual", False, 20),
-                    ("ADA Accessibility Audit", "ada", "K. Berhane", "Access Consultants LLC", None, None),
+                    (
+                        "Annual Fire Marshal Inspection",
+                        "fire",
+                        "L. Ferreira",
+                        "Oakville Fire Marshal",
+                        True,
+                        60,
+                    ),
+                    (
+                        "Building Code Compliance Review",
+                        "building_code",
+                        "D. Whitmore",
+                        "County Building Office",
+                        True,
+                        120,
+                    ),
+                    (
+                        "Insurance Loss-Control Survey",
+                        "insurance",
+                        "R. Alvarez",
+                        "Commonwealth Mutual",
+                        False,
+                        20,
+                    ),
+                    (
+                        "ADA Accessibility Audit",
+                        "ada",
+                        "K. Berhane",
+                        "Access Consultants LLC",
+                        None,
+                        None,
+                    ),
                 ]
             ):
                 facility = facilities[index % len(facilities)]
@@ -1897,9 +2072,21 @@ class Seeder:
         products = items(self.api.get("/store/products"), "products")
         names = {p.get("name") for p in products}
         blueprint = [
-            ("Department Job Shirt", "SHIRT-JOB", "Apparel", 48.00, ["S", "M", "L", "XL", "XXL"]),
+            (
+                "Department Job Shirt",
+                "SHIRT-JOB",
+                "Apparel",
+                48.00,
+                ["S", "M", "L", "XL", "XXL"],
+            ),
             ("Duty Polo", "SHIRT-POLO", "Apparel", 32.00, ["S", "M", "L", "XL", "XXL"]),
-            ("Department Hoodie", "HOOD-01", "Apparel", 54.00, ["S", "M", "L", "XL", "XXL"]),
+            (
+                "Department Hoodie",
+                "HOOD-01",
+                "Apparel",
+                54.00,
+                ["S", "M", "L", "XL", "XXL"],
+            ),
             ("Ball Cap", "CAP-01", "Headwear", 22.00, []),
             ("Challenge Coin", "COIN-01", "Accessories", 12.00, []),
             ("Travel Mug", "MUG-01", "Accessories", 18.00, []),
@@ -1989,7 +2176,16 @@ class Seeder:
         self.step("training programs", lambda: self.seed_training_programs(members))
         templates = self.step("skills testing", self.seed_skills_testing) or []
         self.step("skills tests", lambda: self.seed_skills_tests(templates, members))
-        self.step("inventory", lambda: self.seed_inventory(stations))
+        inventory = self.step("inventory", lambda: self.seed_inventory(stations)) or {}
+        self.step(
+            "inventory operations",
+            lambda: self.seed_inventory_operations(
+                inventory.get("categories", []),
+                inventory.get("items", []),
+                stations,
+                members,
+            ),
+        )
         self.step("documents", self.seed_documents)
         self.step("forms", self.seed_forms)
         self.step("event templates", self.seed_event_templates)
@@ -1997,9 +2193,7 @@ class Seeder:
         self.step("prospective members", self.seed_prospective_members)
         self.step("grants & fundraising", self.seed_grants)
         self.step("medical screening", lambda: self.seed_medical_screening(members))
-        self.step(
-            "facility activity", lambda: self.seed_facility_activity(facilities)
-        )
+        self.step("facility activity", lambda: self.seed_facility_activity(facilities))
         self.step("storefront", self.seed_storefront)
         finance = self.step("finance", self.seed_finance) or {}
         self.step("dues", lambda: self.seed_dues(finance.get("fiscal_year")))

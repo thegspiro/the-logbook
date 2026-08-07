@@ -83,8 +83,7 @@ Events support QR code-based check-in for tracking attendance:
 2. Click **QR Code** to display or print the check-in QR code.
 3. Display the QR code on a screen or print it for the venue entrance.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the QR code display page showing a large QR code in the center, the event name above it, and instructions below ("Scan to check in")]_
+![Event QR code display page for member self check-in](./images/04-04-event-qr-code.png)
 
 ### For Members (Checking In)
 
@@ -630,8 +629,7 @@ Here are examples of outreach programs departments commonly configure:
 
 For detailed program descriptions, pipeline task suggestions, and sample email templates for each, see [Public Programs How-To](../../wiki/Public-Programs.md).
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Event Requests tab showing a list of requests with status badges, assigned coordinator, and expand arrow. Below: expanded request detail showing contact info, comment thread, pipeline task checklist, and action buttons (Schedule, Postpone, Cancel)]_
+![Event requests tab listing incoming requests with status badges](./images/04-20-event-requests.png)
 
 ---
 
