@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation, Link } from "react-router";
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router';
 import {
   Home,
   Users,
@@ -40,18 +40,18 @@ import {
   ScanLine,
   Stethoscope,
   Store,
-} from "lucide-react";
-import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from "lucide-react";
-import { useFocusTrap } from "../../hooks/useFocusTrap";
-import { useTheme } from "../../contexts/ThemeContext";
-import { useAuthStore } from "../../stores/authStore";
-import { useEnabledModules } from "../../hooks/useEnabledModules";
-import { OPEN_MOBILE_NAV_EVENT } from "./BottomNavigation";
-import { prefetchRoute } from "../../utils/routePrefetch";
-import { useNotificationCountStore } from "../../hooks/useNotificationCount";
-import { useOnlineStatus } from "../../hooks/useOnlineStatus";
-import { usePendingSyncStore } from "../../stores/pendingSyncStore";
-import { triggerOfflineDrain } from "../../hooks/useOfflineSyncEngine";
+} from 'lucide-react';
+import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useAuthStore } from '../../stores/authStore';
+import { useEnabledModules } from '../../hooks/useEnabledModules';
+import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
+import { prefetchRoute } from '../../utils/routePrefetch';
+import { useNotificationCountStore } from '../../hooks/useNotificationCount';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { usePendingSyncStore } from '../../stores/pendingSyncStore';
+import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 
 interface SideNavigationProps {
   departmentName: string;
@@ -76,11 +76,7 @@ interface NavItem {
   isSectionLabel?: boolean;
 }
 
-export const SideNavigation: React.FC<SideNavigationProps> = ({
-  departmentName,
-  logoPreview,
-  onLogout,
-}) => {
+export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, logoPreview, onLogout }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
@@ -91,7 +87,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const pendingSyncStatus = usePendingSyncStore((s) => s.status);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(["Settings"]);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['Settings']);
   const sideNavRef = useFocusTrap<HTMLElement>(mobileMenuOpen);
   const { isModuleOn } = useEnabledModules();
 
@@ -109,7 +105,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   useEffect(() => {
     if (!mobileMenuOpen) return;
     const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = previous;
     };
@@ -119,11 +115,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   useEffect(() => {
     setExpandedMenus((prev) => {
       const activeParent = navItems.find((item) =>
-        item.subItems?.some(
-          (sub) =>
-            location.pathname === sub.path ||
-            location.pathname.startsWith(sub.path + "/"),
-        ),
+        item.subItems?.some((sub) => location.pathname === sub.path || location.pathname.startsWith(sub.path + '/'))
       );
       if (activeParent && !prev.includes(activeParent.label)) {
         return [...prev, activeParent.label];
@@ -134,161 +126,135 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   }, [location.pathname]);
 
   const cycleTheme = () => {
-    const order = ["light", "dark", "system", "high-contrast"] as const;
+    const order = ['light', 'dark', 'system', 'high-contrast'] as const;
     const currentIndex = order.indexOf(theme);
     const nextIndex = (currentIndex + 1) % order.length;
-    setTheme(order[nextIndex] ?? "system");
+    setTheme(order[nextIndex] ?? 'system');
   };
 
   // Quick toggle for high-contrast mode — one tap, restorable.
   const toggleHighContrast = () => {
-    if (theme === "high-contrast") {
-      const previous = (localStorage.getItem("preHighContrastTheme") as
-        | "light"
-        | "dark"
-        | "system"
-        | null) || "system";
+    if (theme === 'high-contrast') {
+      const previous = (localStorage.getItem('preHighContrastTheme') as 'light' | 'dark' | 'system' | null) || 'system';
       setTheme(previous);
     } else {
-      localStorage.setItem("preHighContrastTheme", theme);
-      setTheme("high-contrast");
+      localStorage.setItem('preHighContrastTheme', theme);
+      setTheme('high-contrast');
     }
   };
 
-  const ThemeIcon =
-    theme === "dark"
-      ? Moon
-      : theme === "light"
-        ? Sun
-        : theme === "high-contrast"
-          ? Contrast
-          : Monitor;
+  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : theme === 'high-contrast' ? Contrast : Monitor;
   const themeLabel =
-    theme === "dark"
-      ? "Dark"
-      : theme === "light"
-        ? "Light"
-        : theme === "high-contrast"
-          ? "High Contrast"
-          : "System";
+    theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
   // Determine if user has any admin permission (to show/hide Administration section)
   const hasAnyAdminPermission =
-    checkPermission("members.manage") ||
-    checkPermission("prospective_members.manage") ||
-    checkPermission("events.manage") ||
-    checkPermission("training.manage") ||
-    checkPermission("inventory.manage") ||
-    checkPermission("admin_hours.manage") ||
-    checkPermission("positions.manage_permissions") ||
-    checkPermission("settings.manage") ||
-    checkPermission("forms.view") ||
-    checkPermission("analytics.view");
+    checkPermission('members.manage') ||
+    checkPermission('prospective_members.manage') ||
+    checkPermission('events.manage') ||
+    checkPermission('training.manage') ||
+    checkPermission('inventory.manage') ||
+    checkPermission('admin_hours.manage') ||
+    checkPermission('positions.manage_permissions') ||
+    checkPermission('settings.manage') ||
+    checkPermission('forms.view') ||
+    checkPermission('analytics.view');
 
   const navItems: NavItem[] = [
     // ── Member-facing pages ──
-    { label: "Dashboard", path: "/dashboard", icon: Home },
-    { label: "Members", path: "/members", icon: Users },
-    { label: "Events", path: "/events", icon: Calendar },
-    { label: "Documents", path: "/documents", icon: FileText },
-    ...(isModuleOn("training")
+    { label: 'Dashboard', path: '/dashboard', icon: Home },
+    { label: 'Members', path: '/members', icon: Users },
+    { label: 'Events', path: '/events', icon: Calendar },
+    { label: 'Documents', path: '/documents', icon: FileText },
+    ...(isModuleOn('training')
       ? [
           {
-            label: "Training",
-            path: "#",
+            label: 'Training',
+            path: '#',
             icon: GraduationCap,
             subItems: [
               {
-                label: "My Training",
-                path: "/training/my-training",
+                label: 'My Training',
+                path: '/training/my-training',
                 icon: GraduationCap,
               },
               {
-                label: "Submit Training",
-                path: "/training/submit",
+                label: 'Submit Training',
+                path: '/training/submit',
                 icon: ClipboardList,
               },
               {
-                label: "Course Library",
-                path: "/training/courses",
+                label: 'Course Library',
+                path: '/training/courses',
                 icon: BookOpen,
               },
-              { label: "Programs", path: "/training/programs", icon: Layers },
+              { label: 'Programs', path: '/training/programs', icon: Layers },
               {
-                label: "Skills Testing",
-                path: "/training/skills-testing",
+                label: 'Skills Testing',
+                path: '/training/skills-testing',
                 icon: ClipboardCheck,
-                permission: "training.manage",
               },
             ],
           } as NavItem,
         ]
       : []),
     {
-      label: "Admin Hours",
-      path: "/admin-hours",
+      label: 'Admin Hours',
+      path: '/admin-hours',
       icon: ClipboardCheck,
     },
-    ...(isModuleOn("scheduling")
+    ...(isModuleOn('scheduling')
       ? [
           {
-            label: "Shift Scheduling",
-            path: "/scheduling",
+            label: 'Shift Scheduling',
+            path: '/scheduling',
             icon: Clock,
           } as NavItem,
         ]
       : []),
     {
-      label: "Operations",
-      path: "#",
+      label: 'Operations',
+      path: '#',
       icon: Package,
       subItems: [
-        ...(isModuleOn("inventory")
+        ...(isModuleOn('inventory')
           ? [
               {
-                label: "My Equipment",
-                path: "/inventory/my-equipment",
+                label: 'My Equipment',
+                path: '/inventory/my-equipment',
                 icon: Package,
               },
-              { label: "Inventory", path: "/inventory", icon: Package },
+              { label: 'Inventory', path: '/inventory', icon: Package },
             ]
           : []),
-        ...(isModuleOn("storefront")
-          ? [{ label: "Department Store", path: "/store", icon: Store }]
-          : []),
+        ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store', icon: Store }] : []),
         // Full apparatus module or lightweight version
-        ...(isModuleOn("apparatus")
-          ? [{ label: "Apparatus", path: "/apparatus", icon: Truck }]
-          : [{ label: "Apparatus", path: "/apparatus-basic", icon: Truck }]),
-        ...(isModuleOn("facilities")
-          ? [{ label: "Facilities", path: "/facilities", icon: Building2 }]
-          : []),
+        ...(isModuleOn('apparatus')
+          ? [{ label: 'Apparatus', path: '/apparatus', icon: Truck }]
+          : [{ label: 'Apparatus', path: '/apparatus-basic', icon: Truck }]),
+        ...(isModuleOn('facilities') ? [{ label: 'Facilities', path: '/facilities', icon: Building2 }] : []),
       ],
     },
     // When Facilities module is off, show a lightweight Locations page
-    ...(isModuleOn("facilities")
-      ? []
-      : [{ label: "Locations", path: "/locations", icon: MapPin } as NavItem]),
-    ...(isModuleOn("elections") || isModuleOn("minutes")
+    ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations', icon: MapPin } as NavItem]),
+    ...(isModuleOn('elections') || isModuleOn('minutes')
       ? [
           {
-            label: "Governance",
-            path: "#",
+            label: 'Governance',
+            path: '#',
             icon: Vote,
             subItems: [
-              ...(isModuleOn("elections")
-                ? [{ label: "Elections", path: "/elections", icon: Vote }]
-                : []),
-              ...(isModuleOn("minutes")
+              ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections', icon: Vote }] : []),
+              ...(isModuleOn('minutes')
                 ? [
                     {
-                      label: "Minutes",
-                      path: "/minutes",
+                      label: 'Minutes',
+                      path: '/minutes',
                       icon: ClipboardList,
                     },
                     {
-                      label: "Action Items",
-                      path: "/action-items",
+                      label: 'Action Items',
+                      path: '/action-items',
                       icon: AlertTriangle,
                     },
                   ]
@@ -297,17 +263,17 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           } as NavItem,
         ]
       : []),
-    ...(isModuleOn("notifications")
-      ? [{ label: "Notifications", path: "/notifications?tab=inbox", icon: Bell } as NavItem]
+    ...(isModuleOn('notifications')
+      ? [{ label: 'Notifications', path: '/notifications?tab=inbox', icon: Bell } as NavItem]
       : []),
-    { label: "Messages", path: "/messages", icon: Megaphone },
+    { label: 'Messages', path: '/messages', icon: Megaphone },
 
     // ── Personal settings (always visible) ──
-    { label: "My Account", path: "/account", icon: UserCog },
+    { label: 'My Account', path: '/account', icon: UserCog },
     ...(currentUser?.id
       ? [
           {
-            label: "My ID Card",
+            label: 'My ID Card',
             path: `/members/${currentUser.id}/id-card`,
             icon: CreditCard,
           } as NavItem,
@@ -318,198 +284,198 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     ...(hasAnyAdminPermission
       ? [
           {
-            label: "Administration",
-            path: "#",
+            label: 'Administration',
+            path: '#',
             icon: Shield,
             isSectionLabel: true,
           } as NavItem,
           {
-            label: "Department Setup",
-            path: "/setup",
+            label: 'Department Setup',
+            path: '/setup',
             icon: Rocket,
-            permission: "settings.manage",
+            permission: 'settings.manage',
           } as NavItem,
           {
-            label: "Members",
-            path: "#",
+            label: 'Members',
+            path: '#',
             icon: Users,
-            permission: "members.manage",
+            permission: 'members.manage',
             subItems: [
-              ...(isModuleOn("prospective_members")
+              ...(isModuleOn('prospective_members')
                 ? [
                     {
-                      label: "Prospective",
-                      path: "/prospective-members",
+                      label: 'Prospective',
+                      path: '/prospective-members',
                       icon: UserPlus,
-                      permission: "prospective_members.manage",
+                      permission: 'prospective_members.manage',
                     },
                     {
-                      label: "Pipeline Settings",
-                      path: "/prospective-members/settings",
+                      label: 'Pipeline Settings',
+                      path: '/prospective-members/settings',
                       icon: Settings,
-                      permission: "prospective_members.manage",
+                      permission: 'prospective_members.manage',
                     },
                   ]
                 : []),
               {
-                label: "Member Management",
-                path: "/members/admin",
+                label: 'Member Management',
+                path: '/members/admin',
                 icon: UserCog,
-                permission: "members.manage",
+                permission: 'members.manage',
               },
               {
-                label: "Scan Member ID",
-                path: "/members/scan",
+                label: 'Scan Member ID',
+                path: '/members/scan',
                 icon: ScanLine,
-                permission: "members.manage",
+                permission: 'members.manage',
               },
               {
-                label: "Waivers",
-                path: "/members/admin/waivers",
+                label: 'Waivers',
+                path: '/members/admin/waivers',
                 icon: ShieldCheck,
-                permission: "members.manage",
+                permission: 'members.manage',
               },
-              ...(isModuleOn("medical_screening")
+              ...(isModuleOn('medical_screening')
                 ? [
                     {
-                      label: "Medical Screening",
-                      path: "/medical-screening",
+                      label: 'Medical Screening',
+                      path: '/medical-screening',
                       icon: Stethoscope,
-                      permission: "medical_screening.view",
+                      permission: 'medical_screening.view',
                     },
                   ]
                 : []),
             ],
           } as NavItem,
           {
-            label: "Events Admin",
-            path: "/events/admin",
+            label: 'Events Admin',
+            path: '/events/admin',
             icon: Calendar,
-            permission: "events.manage",
+            permission: 'events.manage',
           } as NavItem,
-          ...(isModuleOn("training")
+          ...(isModuleOn('training')
             ? [
                 {
-                  label: "Training Admin",
-                  path: "/training/admin",
+                  label: 'Training Admin',
+                  path: '/training/admin',
                   icon: GraduationCap,
-                  permission: "training.manage",
+                  permission: 'training.manage',
                 } as NavItem,
               ]
             : []),
-          ...(isModuleOn("inventory")
+          ...(isModuleOn('inventory')
             ? [
                 {
-                  label: "Inventory Admin",
-                  path: "/inventory/admin",
+                  label: 'Inventory Admin',
+                  path: '/inventory/admin',
                   icon: Package,
-                  permission: "inventory.manage",
+                  permission: 'inventory.manage',
                 } as NavItem,
               ]
             : []),
-          ...(isModuleOn("storefront")
+          ...(isModuleOn('storefront')
             ? [
                 {
-                  label: "Store Admin",
-                  path: "/store/admin",
+                  label: 'Store Admin',
+                  path: '/store/admin',
                   icon: Store,
-                  permission: "storefront.manage",
+                  permission: 'storefront.manage',
                 } as NavItem,
               ]
             : []),
           {
-            label: "Admin Hours",
-            path: "/admin-hours/manage",
+            label: 'Admin Hours',
+            path: '/admin-hours/manage',
             icon: ClipboardCheck,
-            permission: "admin_hours.manage",
+            permission: 'admin_hours.manage',
           } as NavItem,
           {
-            label: "Forms & Comms",
-            path: "#",
+            label: 'Forms & Comms',
+            path: '#',
             icon: FormInput,
             subItems: [
               {
-                label: "Email Templates",
-                path: "/communications/email-templates",
+                label: 'Email Templates',
+                path: '/communications/email-templates',
                 icon: Mail,
-                permission: "settings.manage",
+                permission: 'settings.manage',
               },
               {
-                label: "Messages",
-                path: "/communications/messages",
+                label: 'Messages',
+                path: '/communications/messages',
                 icon: Megaphone,
-                permission: "notifications.manage",
+                permission: 'notifications.manage',
               },
-              ...(isModuleOn("forms")
-                ? [{ label: "Forms", path: "/forms", icon: FormInput, permission: "forms.view" }]
+              ...(isModuleOn('forms')
+                ? [{ label: 'Forms', path: '/forms', icon: FormInput, permission: 'forms.view' }]
                 : []),
-              ...(isModuleOn("integrations")
+              ...(isModuleOn('integrations')
                 ? [
                     {
-                      label: "Integrations",
-                      path: "/integrations",
+                      label: 'Integrations',
+                      path: '/integrations',
                       icon: Plug,
-                      permission: "settings.manage",
+                      permission: 'settings.manage',
                     },
                   ]
                 : []),
             ],
           } as NavItem,
-          ...(isModuleOn("reports")
+          ...(isModuleOn('reports')
             ? [
                 {
-                  label: "Reports",
-                  path: "/reports",
+                  label: 'Reports',
+                  path: '/reports',
                   icon: BarChart3,
                 } as NavItem,
               ]
             : []),
           {
-            label: "Organization Settings",
-            path: "/settings",
+            label: 'Organization Settings',
+            path: '/settings',
             icon: Settings,
-            permission: "settings.manage",
+            permission: 'settings.manage',
             subItems: [
-              { label: "Organization", path: "/settings", icon: Building2 },
+              { label: 'Organization', path: '/settings', icon: Building2 },
               {
-                label: "Role Management",
-                path: "/settings/roles",
+                label: 'Role Management',
+                path: '/settings/roles',
                 icon: Shield,
-                permission: "positions.manage_permissions",
+                permission: 'positions.manage_permissions',
               },
-              ...(isModuleOn("public_info")
+              ...(isModuleOn('public_info')
                 ? [
                     {
-                      label: "Public Portal",
-                      path: "/admin/public-portal",
+                      label: 'Public Portal',
+                      path: '/admin/public-portal',
                       icon: Globe,
-                      permission: "settings.manage",
+                      permission: 'settings.manage',
                     },
                   ]
                 : []),
               {
-                label: "Platform Analytics",
-                path: "/admin/platform-analytics",
+                label: 'Platform Analytics',
+                path: '/admin/platform-analytics',
                 icon: Activity,
-                permission: "settings.manage",
+                permission: 'settings.manage',
               },
               {
-                label: "QR Code Analytics",
-                path: "/admin/analytics",
+                label: 'QR Code Analytics',
+                path: '/admin/analytics',
                 icon: BarChart3,
-                permission: "analytics.view",
+                permission: 'analytics.view',
               },
               {
-                label: "Audit Log",
-                path: "/admin/audit-log",
+                label: 'Audit Log',
+                path: '/admin/audit-log',
                 icon: ShieldCheck,
-                permission: "audit.view",
+                permission: 'audit.view',
               },
               {
-                label: "Error Monitor",
-                path: "/admin/errors",
+                label: 'Error Monitor',
+                path: '/admin/errors',
                 icon: AlertTriangle,
-                permission: "settings.manage",
+                permission: 'settings.manage',
               },
             ],
           } as NavItem,
@@ -518,24 +484,21 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   ];
 
   const isActive = (path: string) => {
-    if (path === "#") return false;
-    const pathOnly = path.split("?")[0] ?? path;
-    return (
-      location.pathname === pathOnly || location.pathname.startsWith(pathOnly + "/")
-    );
+    if (path === '#') return false;
+    const pathOnly = path.split('?')[0] ?? path;
+    return location.pathname === pathOnly || location.pathname.startsWith(pathOnly + '/');
   };
 
   const isSubItemActive = (path: string, siblings: { path: string }[]) => {
-    if (path === "#") return false;
+    if (path === '#') return false;
     if (location.pathname === path) return true;
-    if (!location.pathname.startsWith(path + "/")) return false;
+    if (!location.pathname.startsWith(path + '/')) return false;
     // Don't prefix-match if a sibling is a more specific match
     return !siblings.some(
       (s) =>
         s.path !== path &&
         s.path.length > path.length &&
-        (location.pathname === s.path ||
-          location.pathname.startsWith(s.path + "/")),
+        (location.pathname === s.path || location.pathname.startsWith(s.path + '/'))
     );
   };
 
@@ -547,21 +510,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   };
 
   const toggleMenu = (label: string) => {
-    setExpandedMenus((prev) =>
-      prev.includes(label) ? prev.filter((m) => m !== label) : [...prev, label],
-    );
+    setExpandedMenus((prev) => (prev.includes(label) ? prev.filter((m) => m !== label) : [...prev, label]));
   };
 
-  const handleNavigation = (
-    path: string,
-    hasSubItems?: boolean,
-    label?: string,
-  ) => {
+  const handleNavigation = (path: string, hasSubItems?: boolean, label?: string) => {
     if (hasSubItems && !collapsed) {
       if (label) toggleMenu(label);
       return;
     }
-    if (path !== "#") {
+    if (path !== '#') {
       void navigate(path);
       setMobileMenuOpen(false);
     }
@@ -571,40 +528,38 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     <>
       {/* Mobile Header */}
       <header
-        className="md:hidden bg-theme-nav-bg border-b border-theme-surface-border fixed top-0 left-0 right-0 z-50 safe-top"
+        className="bg-theme-nav-bg border-theme-surface-border safe-top fixed top-0 right-0 left-0 z-50 border-b md:hidden"
         role="banner"
       >
-        <div className="flex items-center justify-between h-16 px-4">
+        <div className="flex h-16 items-center justify-between px-4">
           <Link
             to="/dashboard"
-            className="flex min-h-[44px] items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+            className="focus:ring-theme-focus-ring flex min-h-[44px] items-center rounded-lg focus:ring-2 focus:outline-hidden"
           >
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg">
               <img
                 src={logoPreview || '/logo-128.png'}
                 alt={`${departmentName} logo`}
-                className="max-w-full max-h-full object-contain"
+                className="max-h-full max-w-full object-contain"
               />
             </div>
             <div className="ml-3 min-w-0 flex-1">
-              <span className="text-theme-text-primary text-lg font-semibold wrap-break-word leading-tight">
+              <span className="text-theme-text-primary text-lg leading-tight font-semibold wrap-break-word">
                 {departmentName}
               </span>
             </div>
           </Link>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="text-theme-text-primary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring mobile-touch-target"
+            className="text-theme-text-primary hover:bg-theme-surface-hover focus:ring-theme-focus-ring mobile-touch-target rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden"
             aria-expanded={mobileMenuOpen}
             aria-controls="side-navigation"
-            aria-label={
-              mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"
-            }
+            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
           >
             {mobileMenuOpen ? (
-              <X className="w-6 h-6" aria-hidden="true" />
+              <X className="h-6 w-6" aria-hidden="true" />
             ) : (
-              <Menu className="w-6 h-6" aria-hidden="true" />
+              <Menu className="h-6 w-6" aria-hidden="true" />
             )}
           </button>
         </div>
@@ -613,7 +568,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div
-          className="md:hidden fixed mobile-header-inset left-0 right-0 bottom-0 bg-black/50 z-40"
+          className="mobile-header-inset fixed right-0 bottom-0 left-0 z-40 bg-black/50 md:hidden"
           onClick={() => setMobileMenuOpen(false)}
           aria-hidden="true"
         />
@@ -625,57 +580,52 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         id="side-navigation"
         role="navigation"
         aria-label="Main navigation"
-        className={`fixed top-0 left-0 h-full safe-top bg-theme-nav-bg border-r border-theme-surface-border transition-all duration-300 z-40 overscroll-contain ${
-          collapsed ? "w-20" : "w-64"
-        } ${
-          mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0`}
+        className={`safe-top bg-theme-nav-bg border-theme-surface-border fixed top-0 left-0 z-40 h-full overscroll-contain border-r transition-all duration-300 ${
+          collapsed ? 'w-20' : 'w-64'
+        } ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
       >
-        <div className="flex flex-col h-full">
+        <div className="flex h-full flex-col">
           {/* Logo Section */}
-          <div className="p-4 border-b border-theme-surface-border">
+          <div className="border-theme-surface-border border-b p-4">
             {collapsed ? (
               <>
                 <div className="flex items-center justify-center">
                   <Link
                     to="/dashboard"
-                    className="flex min-h-[44px] items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+                    className="focus:ring-theme-focus-ring flex min-h-[44px] items-center overflow-hidden rounded-lg focus:ring-2 focus:outline-hidden"
                   >
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg">
                       <img
                         src={logoPreview || '/logo-128.png'}
                         alt={`${departmentName} logo`}
-                        className="max-w-full max-h-full object-contain"
+                        className="max-h-full max-w-full object-contain"
                       />
                     </div>
                   </Link>
                 </div>
                 <button
                   onClick={() => setCollapsed(false)}
-                  className="hidden md:block mt-2 w-full text-theme-text-secondary hover:text-theme-text-primary p-2 rounded-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring mt-2 hidden w-full rounded-sm p-2 transition-colors focus:ring-2 focus:outline-hidden md:block"
                   aria-label="Expand navigation"
                 >
-                  <ChevronRight
-                    className="w-5 h-5 mx-auto"
-                    aria-hidden="true"
-                  />
+                  <ChevronRight className="mx-auto h-5 w-5" aria-hidden="true" />
                 </button>
               </>
             ) : (
               <div className="flex items-center justify-between">
                 <Link
                   to="/dashboard"
-                  className="flex min-h-[44px] items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+                  className="focus:ring-theme-focus-ring flex min-h-[44px] items-center overflow-hidden rounded-lg focus:ring-2 focus:outline-hidden"
                 >
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg">
                     <img
                       src={logoPreview || '/logo-128.png'}
                       alt={`${departmentName} logo`}
-                      className="max-w-full max-h-full object-contain"
+                      className="max-h-full max-w-full object-contain"
                     />
                   </div>
                   <div className="ml-3 min-w-0">
-                    <span className="text-theme-text-primary text-sm font-semibold block wrap-break-word leading-tight">
+                    <span className="text-theme-text-primary block text-sm leading-tight font-semibold wrap-break-word">
                       {departmentName}
                     </span>
                     <p className="text-theme-text-muted text-xs">Dashboard</p>
@@ -683,13 +633,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 </Link>
                 <button
                   onClick={() => setCollapsed(true)}
-                  className="hidden md:block text-theme-text-secondary hover:text-theme-text-primary p-2 rounded-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring flex hidden min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-sm p-2 transition-colors focus:ring-2 focus:outline-hidden md:block"
                   aria-label="Collapse navigation"
                 >
-                  <ChevronRight
-                    className="w-5 h-5 rotate-180"
-                    aria-hidden="true"
-                  />
+                  <ChevronRight className="h-5 w-5 rotate-180" aria-hidden="true" />
                 </button>
               </div>
             )}
@@ -697,7 +644,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
 
           {/* Navigation Items */}
           <nav
-            className="flex-1 p-4 space-y-1 overflow-y-auto overscroll-contain -webkit-overflow-scrolling-touch"
+            className="-webkit-overflow-scrolling-touch flex-1 space-y-1 overflow-y-auto overscroll-contain p-4"
             aria-label="Side navigation"
           >
             <ul role="list" className="space-y-1">
@@ -707,15 +654,15 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                   return (
                     <li key={`section-${item.label}`} aria-hidden="true">
                       {!collapsed ? (
-                        <div className="pt-5 pb-2 px-4">
-                          <div className="border-t border-theme-surface-border" />
-                          <span className="block mt-3 text-[10px] font-bold uppercase tracking-widest text-theme-text-muted/70">
+                        <div className="px-4 pt-5 pb-2">
+                          <div className="border-theme-surface-border border-t" />
+                          <span className="text-theme-text-muted/70 mt-3 block text-[10px] font-bold tracking-widest uppercase">
                             {item.label}
                           </span>
                         </div>
                       ) : (
-                        <div className="pt-3 pb-1 px-3">
-                          <div className="border-t border-theme-surface-border" />
+                        <div className="px-3 pt-3 pb-1">
+                          <div className="border-theme-surface-border border-t" />
                         </div>
                       )}
                     </li>
@@ -724,24 +671,17 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
 
                 // Filter sub-items by permission
                 const visibleSubItems = item.subItems?.filter(
-                  (sub) => !sub.permission || checkPermission(sub.permission),
+                  (sub) => !sub.permission || checkPermission(sub.permission)
                 );
 
                 // Skip top-level permission-gated items
-                if (item.permission && !checkPermission(item.permission))
-                  return null;
+                if (item.permission && !checkPermission(item.permission)) return null;
 
                 // Skip parent groups where all sub-items are hidden
-                if (
-                  item.subItems &&
-                  visibleSubItems &&
-                  visibleSubItems.length === 0
-                )
-                  return null;
+                if (item.subItems && visibleSubItems && visibleSubItems.length === 0) return null;
 
                 const Icon = item.icon;
-                const hasSubItems =
-                  !!visibleSubItems && visibleSubItems.length > 0;
+                const hasSubItems = !!visibleSubItems && visibleSubItems.length > 0;
                 const isExpanded = expandedMenus.includes(item.label);
                 const parentActive = isParentActive(item);
 
@@ -751,62 +691,53 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 return (
                   <li key={itemKey}>
                     <button
-                      onClick={() =>
-                        handleNavigation(item.path, hasSubItems, item.label)
-                      }
+                      onClick={() => handleNavigation(item.path, hasSubItems, item.label)}
                       onMouseEnter={() => {
-                        if (item.path !== "#") prefetchRoute(item.path);
+                        if (item.path !== '#') prefetchRoute(item.path);
                         // Also prefetch sub-item routes on parent hover
-                        visibleSubItems?.forEach((sub) =>
-                          prefetchRoute(sub.path),
-                        );
+                        visibleSubItems?.forEach((sub) => prefetchRoute(sub.path));
                       }}
                       onFocus={() => {
-                        if (item.path !== "#") prefetchRoute(item.path);
+                        if (item.path !== '#') prefetchRoute(item.path);
                       }}
-                      aria-current={
-                        parentActive && !hasSubItems ? "page" : undefined
-                      }
+                      aria-current={parentActive && !hasSubItems ? 'page' : undefined}
                       aria-expanded={hasSubItems ? isExpanded : undefined}
-                      aria-controls={
-                        hasSubItems ? `submenu-${item.label}` : undefined
-                      }
-                      className={`w-full flex items-center rounded-lg transition-all duration-150 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
-                        collapsed ? "justify-center p-3" : "px-4 py-3"
+                      aria-controls={hasSubItems ? `submenu-${item.label}` : undefined}
+                      className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg transition-all duration-150 focus:ring-2 focus:outline-hidden ${
+                        collapsed ? 'justify-center p-3' : 'px-4 py-3'
                       } ${
                         parentActive && !hasSubItems
-                          ? "bg-red-600 text-white shadow-sm"
+                          ? 'bg-red-600 text-white shadow-sm'
                           : parentActive && hasSubItems
-                            ? "bg-theme-surface-secondary text-theme-text-primary"
-                            : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]"
+                            ? 'bg-theme-surface-secondary text-theme-text-primary'
+                            : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]'
                       }`}
                       title={collapsed ? item.label : undefined}
-                      aria-label={collapsed ? (item.label === "Notifications" && notifUnreadCount > 0 ? `Notifications (${notifUnreadCount} unread)` : item.label) : undefined}
+                      aria-label={
+                        collapsed
+                          ? item.label === 'Notifications' && notifUnreadCount > 0
+                            ? `Notifications (${notifUnreadCount} unread)`
+                            : item.label
+                          : undefined
+                      }
                     >
                       <span className="relative">
-                        <Icon
-                          className={`w-5 h-5 shrink-0 ${collapsed ? "" : "mr-3"}`}
-                          aria-hidden="true"
-                        />
-                        {collapsed && item.label === "Notifications" && notifUnreadCount > 0 && (
-                          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-theme-nav-bg" />
+                        <Icon className={`h-5 w-5 shrink-0 ${collapsed ? '' : 'mr-3'}`} aria-hidden="true" />
+                        {collapsed && item.label === 'Notifications' && notifUnreadCount > 0 && (
+                          <span className="border-theme-nav-bg absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border-2 bg-red-500" />
                         )}
                       </span>
                       {!collapsed && (
                         <>
-                          <span className="text-sm font-medium flex-1 text-left">
-                            {item.label}
-                          </span>
-                          {item.label === "Notifications" && notifUnreadCount > 0 && !parentActive && (
-                            <span className="bg-red-500 text-white text-[10px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1 mr-1">
-                              {notifUnreadCount > 99 ? "99+" : notifUnreadCount}
+                          <span className="flex-1 text-left text-sm font-medium">{item.label}</span>
+                          {item.label === 'Notifications' && notifUnreadCount > 0 && !parentActive && (
+                            <span className="mr-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                              {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
                             </span>
                           )}
                           {hasSubItems && (
                             <ChevronDown
-                              className={`w-4 h-4 transition-transform ${
-                                isExpanded ? "rotate-180" : ""
-                              }`}
+                              className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                               aria-hidden="true"
                             />
                           )}
@@ -816,34 +747,24 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
 
                     {/* Sub Items */}
                     {hasSubItems && isExpanded && !collapsed && (
-                      <ul
-                        id={`submenu-${item.label}`}
-                        className="mt-1 ml-4 space-y-1"
-                        role="list"
-                      >
+                      <ul id={`submenu-${item.label}`} className="mt-1 ml-4 space-y-1" role="list">
                         {visibleSubItems.map((subItem) => {
                           const SubIcon = subItem.icon;
-                          const subActive = isSubItemActive(
-                            subItem.path,
-                            item.subItems || [],
-                          );
+                          const subActive = isSubItemActive(subItem.path, item.subItems || []);
                           return (
                             <li key={subItem.path}>
                               <button
                                 onClick={() => handleNavigation(subItem.path)}
                                 onMouseEnter={() => prefetchRoute(subItem.path)}
                                 onFocus={() => prefetchRoute(subItem.path)}
-                                aria-current={subActive ? "page" : undefined}
-                                className={`w-full flex items-center px-4 py-2 max-md:min-h-[44px] rounded-lg transition-all duration-150 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                                aria-current={subActive ? 'page' : undefined}
+                                className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden max-md:min-h-[44px] ${
                                   subActive
-                                    ? "bg-red-600 text-white shadow-sm"
-                                    : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]"
+                                    ? 'bg-red-600 text-white shadow-sm'
+                                    : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]'
                                 }`}
                               >
-                                <SubIcon
-                                  className="w-4 h-4 mr-3 shrink-0"
-                                  aria-hidden="true"
-                                />
+                                <SubIcon className="mr-3 h-4 w-4 shrink-0" aria-hidden="true" />
                                 <span className="text-sm">{subItem.label}</span>
                               </button>
                             </li>
@@ -858,114 +779,98 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
           </nav>
 
           {/* Theme Toggle & Logout */}
-          <div className="p-4 border-t border-theme-surface-border space-y-1">
+          <div className="border-theme-surface-border space-y-1 border-t p-4">
             {!isOnline && (
               <div
                 className={`flex items-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 ${
-                  collapsed ? "justify-center p-2" : "px-3 py-2"
+                  collapsed ? 'justify-center p-2' : 'px-3 py-2'
                 }`}
                 role="status"
                 aria-live="polite"
                 title={
                   pendingSyncCount > 0
                     ? `Offline · ${pendingSyncCount} pending. Will sync when reconnected.`
-                    : "You are offline. Submissions will queue and sync when reconnected."
+                    : 'You are offline. Submissions will queue and sync when reconnected.'
                 }
               >
-                <WifiOff
-                  className={`w-4 h-4 shrink-0 ${collapsed ? "" : "mr-2"}`}
-                  aria-hidden="true"
-                />
+                <WifiOff className={`h-4 w-4 shrink-0 ${collapsed ? '' : 'mr-2'}`} aria-hidden="true" />
                 {!collapsed && (
                   <span className="text-xs font-medium">
                     {pendingSyncCount > 0
                       ? `Offline · ${pendingSyncCount} pending`
-                      : "Offline — will sync when reconnected"}
+                      : 'Offline — will sync when reconnected'}
                   </span>
                 )}
               </div>
             )}
             {isOnline && pendingSyncCount > 0 && (
               <button
-                onClick={() => { void triggerOfflineDrain(); }}
-                className={`w-full flex items-center rounded-lg bg-blue-500/15 text-blue-700 dark:text-blue-300 hover:bg-blue-500/25 transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring max-md:min-h-[44px] ${
-                  collapsed ? "justify-center p-2" : "px-3 py-2"
+                onClick={() => {
+                  void triggerOfflineDrain();
+                }}
+                className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg bg-blue-500/15 text-blue-700 transition-colors hover:bg-blue-500/25 focus:ring-2 focus:outline-hidden max-md:min-h-[44px] dark:text-blue-300 ${
+                  collapsed ? 'justify-center p-2' : 'px-3 py-2'
                 }`}
                 title={collapsed ? `${pendingSyncCount} pending sync — click to retry` : undefined}
                 aria-label={`${pendingSyncCount} pending sync. Click to retry now.`}
               >
                 {pendingSyncStatus === 'syncing' ? (
-                  <Loader2 className={`w-4 h-4 shrink-0 animate-spin ${collapsed ? "" : "mr-2"}`} aria-hidden="true" />
+                  <Loader2 className={`h-4 w-4 shrink-0 animate-spin ${collapsed ? '' : 'mr-2'}`} aria-hidden="true" />
                 ) : (
-                  <RefreshCw className={`w-4 h-4 shrink-0 ${collapsed ? "" : "mr-2"}`} aria-hidden="true" />
+                  <RefreshCw className={`h-4 w-4 shrink-0 ${collapsed ? '' : 'mr-2'}`} aria-hidden="true" />
                 )}
-                {!collapsed && (
-                  <span className="text-xs font-medium">{pendingSyncCount} pending sync — retry</span>
-                )}
+                {!collapsed && <span className="text-xs font-medium">{pendingSyncCount} pending sync — retry</span>}
               </button>
             )}
             <button
               onClick={cycleTheme}
-              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
-                collapsed ? "justify-center p-3" : "px-4 py-3"
+              className={`text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary focus:ring-theme-focus-ring flex w-full items-center rounded-lg transition-all focus:ring-2 focus:outline-hidden ${
+                collapsed ? 'justify-center p-3' : 'px-4 py-3'
               }`}
               title={collapsed ? `Theme: ${themeLabel}` : undefined}
               aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
             >
-              <ThemeIcon
-                className={`w-5 h-5 shrink-0 ${collapsed ? "" : "mr-3"}`}
-                aria-hidden="true"
-              />
-              {!collapsed && (
-                <span className="text-sm font-medium">Theme: {themeLabel}</span>
-              )}
+              <ThemeIcon className={`h-5 w-5 shrink-0 ${collapsed ? '' : 'mr-3'}`} aria-hidden="true" />
+              {!collapsed && <span className="text-sm font-medium">Theme: {themeLabel}</span>}
             </button>
             <button
               onClick={toggleHighContrast}
-              aria-pressed={theme === "high-contrast"}
-              className={`w-full flex items-center rounded-lg transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
-                theme === "high-contrast"
-                  ? "text-amber-600 dark:text-amber-400 bg-amber-500/10"
-                  : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
-              } ${collapsed ? "justify-center p-3" : "px-4 py-3"}`}
+              aria-pressed={theme === 'high-contrast'}
+              className={`focus:ring-theme-focus-ring flex w-full items-center rounded-lg transition-all focus:ring-2 focus:outline-hidden ${
+                theme === 'high-contrast'
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                  : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
+              } ${collapsed ? 'justify-center p-3' : 'px-4 py-3'}`}
               title={
                 collapsed
-                  ? theme === "high-contrast"
-                    ? "High contrast on — click to restore"
-                    : "Turn on high contrast"
+                  ? theme === 'high-contrast'
+                    ? 'High contrast on — click to restore'
+                    : 'Turn on high contrast'
                   : undefined
               }
               aria-label={
-                theme === "high-contrast"
-                  ? "High contrast on — click to restore previous theme"
-                  : "Turn on high contrast"
+                theme === 'high-contrast'
+                  ? 'High contrast on — click to restore previous theme'
+                  : 'Turn on high contrast'
               }
             >
-              <Contrast
-                className={`w-5 h-5 shrink-0 ${collapsed ? "" : "mr-3"}`}
-                aria-hidden="true"
-              />
+              <Contrast className={`h-5 w-5 shrink-0 ${collapsed ? '' : 'mr-3'}`} aria-hidden="true" />
               {!collapsed && (
                 <span className="text-sm font-medium">
-                  {theme === "high-contrast" ? "High contrast on" : "High contrast"}
+                  {theme === 'high-contrast' ? 'High contrast on' : 'High contrast'}
                 </span>
               )}
             </button>
             <button
               onClick={onLogout}
-              className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
-                collapsed ? "justify-center p-3" : "px-4 py-3"
+              className={`text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary focus:ring-theme-focus-ring flex w-full items-center rounded-lg transition-all focus:ring-2 focus:outline-hidden ${
+                collapsed ? 'justify-center p-3' : 'px-4 py-3'
               }`}
-              title={collapsed ? "Logout" : undefined}
-              aria-label={collapsed ? "Logout" : undefined}
+              title={collapsed ? 'Logout' : undefined}
+              aria-label={collapsed ? 'Logout' : undefined}
             >
-              <LogOut
-                className={`w-5 h-5 shrink-0 ${collapsed ? "" : "mr-3"}`}
-                aria-hidden="true"
-              />
-              {!collapsed && (
-                <span className="text-sm font-medium">Logout</span>
-              )}
+              <LogOut className={`h-5 w-5 shrink-0 ${collapsed ? '' : 'mr-3'}`} aria-hidden="true" />
+              {!collapsed && <span className="text-sm font-medium">Logout</span>}
             </button>
           </div>
         </div>

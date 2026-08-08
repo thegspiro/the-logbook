@@ -86,6 +86,14 @@ vi.mock('../stores/skillsTestingStore', () => ({
   ),
 }));
 
+const mockToastError = vi.fn<(message: string) => void>();
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: vi.fn(),
+    error: (message: string) => mockToastError(message),
+  },
+}));
+
 // Mock react-router
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -249,6 +257,65 @@ describe('ActiveSkillTestPage', () => {
       await user.click(await screen.findByRole('button', { name: /view results/i }));
 
       await waitFor(() => expect(mockCompleteTest).toHaveBeenCalledWith('test-1'));
+    });
+
+    // Regression: the pre-submit save sends elapsed_seconds, which update_test
+    // refuses on a completed test. If a previous attempt completed server-side
+    // but its response never arrived (a dropped connection mid-drill), retrying
+    // re-ran that save and failed permanently on a test that had gone through.
+    it('should show existing results instead of re-saving an already-completed test', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockInProgressPracticeTest;
+      mockUpdateTest.mockResolvedValue(mockInProgressPracticeTest);
+      // The server completes the test but the response never reaches the client.
+      mockCompleteTest.mockImplementation(() => {
+        currentMockTest = mockCompletedPracticeTest;
+        return Promise.reject(new Error('Network Error'));
+      });
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: /complete test/i }));
+      await user.click(await screen.findByRole('button', { name: /view results/i }));
+      await waitFor(() => expect(mockCompleteTest).toHaveBeenCalledWith('test-1'));
+
+      const savesBeforeRetry = mockUpdateTest.mock.calls.length;
+      await user.click(screen.getByRole('button', { name: /view results/i }));
+
+      // The retry must not re-run the save the server would now reject; it
+      // shows the results that already exist.
+      expect(mockUpdateTest.mock.calls.length).toBe(savesBeforeRetry);
+      expect(mockCompleteTest).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith('/training/skills-testing/test/test-1');
+    });
+
+    it('should report the server error rather than a fixed string', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockInProgressPracticeTest;
+      mockUpdateTest.mockResolvedValue(mockInProgressPracticeTest);
+      mockCompleteTest.mockRejectedValue(
+        Object.assign(new Error('Maximum attempts (2) reached for this requirement.'), {
+          status: 400,
+        })
+      );
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: /complete test/i }));
+      await user.click(await screen.findByRole('button', { name: /view results/i }));
+
+      await waitFor(() =>
+        expect(mockToastError).toHaveBeenCalledWith('Maximum attempts (2) reached for this requirement.')
+      );
+    });
+
+    it('should name a concurrent edit when the server reports a conflict', async () => {
+      const user = userEvent.setup();
+      currentMockTest = mockInProgressPracticeTest;
+      mockUpdateTest.mockRejectedValue(Object.assign(new Error('conflict'), { status: 409 }));
+
+      renderWithRouter(<ActiveSkillTestPage />);
+      await user.click(screen.getByRole('button', { name: /complete test/i }));
+
+      await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Failed to save progress'));
     });
   });
 });

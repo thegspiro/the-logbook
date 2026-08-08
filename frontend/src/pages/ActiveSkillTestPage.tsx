@@ -39,13 +39,14 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
+import { useAuthStore } from '../stores/authStore';
 import { useAutoSave } from '../hooks/useAutoSave';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
 import { hydrateTemplateSections } from '../utils/skillTemplateSections';
 import { TestViewersPanel } from '../components/training/TestViewersPanel';
-import { toAppError } from '../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../utils/errorHandling';
 import type {
   SkillCriterion,
   SkillTemplateSection,
@@ -784,6 +785,8 @@ export const ActiveSkillTestPage: React.FC = () => {
     clearCurrentTest,
   } = useSkillsTestingStore();
 
+  const isOfficer = useAuthStore((state) => state.checkPermission('training.manage'));
+
   const tz = useTimezone();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [reviewing, setReviewing] = useState(false);
@@ -999,9 +1002,50 @@ export const ActiveSkillTestPage: React.FC = () => {
     }
   }, [currentTest, activeTestTimer, saveTest, templateSections, setActiveTestRunning]);
 
+  /** Leave review mode and show the scored result.
+   *
+   * Both the active and detail routes render THIS component, so react-router
+   * swaps the URL without remounting and `reviewing` would survive the
+   * transition — pinning the page on the review screen even though the test is
+   * finished. Clearing the flag is what actually reveals the results view,
+   * which is gated on `!reviewing`.
+   */
+  const showResults = useCallback(
+    (id: string) => {
+      setReviewing(false);
+      void navigate(`/training/skills-testing/test/${id}`);
+    },
+    [navigate]
+  );
+
+  /** Report a failed finalize with the server's own message.
+   *
+   * These paths used to swallow the error and print a fixed string, which meant
+   * an examiner (and anyone debugging from their report) was told "failed" with
+   * no indication of whether the test was already submitted, someone else had
+   * edited it, or the network had dropped.
+   */
+  const reportFinalizeError = useCallback((err: unknown, fallback: string) => {
+    toast.error(
+      toAppError(err).status === 409
+        ? 'This test changed elsewhere — reload before submitting'
+        : getErrorMessage(err, fallback)
+    );
+  }, []);
+
   /** "Submit Test" — finalizes the test with notes from review, calculates results */
   const handleSubmit = useCallback(async () => {
     if (!currentTest) return;
+
+    // Already finalized — nothing left to save. Reachable when a previous
+    // attempt completed server-side but its response never arrived (a dropped
+    // connection on a phone, mid-drill). Without this the retry re-runs the
+    // pre-submit save, which update_test refuses on a completed test, so the
+    // screen would fail permanently on a test that had in fact gone through.
+    if (currentTest.status === 'completed') {
+      showResults(currentTest.id);
+      return;
+    }
 
     if (!window.confirm('Submit this test? Results will be finalized and cannot be changed.')) return;
 
@@ -1046,23 +1090,38 @@ export const ActiveSkillTestPage: React.FC = () => {
 
       // Then finalize
       const completed = await completeTest(currentTest.id);
-      toast.success(`Test submitted: ${completed.result.toUpperCase()}`);
-      // Leave review mode before navigating. Both the active and detail routes
-      // render THIS component, so react-router swaps the URL without remounting
-      // and `reviewing` would survive the transition — pinning the page on the
-      // review screen even though the test is now complete.
-      setReviewing(false);
-      void navigate(`/training/skills-testing/test/${currentTest.id}`);
-    } catch {
-      toast.error('Failed to submit test');
+      toast.success(
+        completed.pending_validation
+          ? 'Test submitted — a training officer will validate the result'
+          : `Test submitted: ${completed.result.toUpperCase()}`
+      );
+      showResults(currentTest.id);
+    } catch (err: unknown) {
+      reportFinalizeError(err, 'Failed to submit test');
     } finally {
       setSubmitting(false);
     }
-  }, [currentTest, activeTestTimer, saveTest, completeTest, navigate, templateSections, reviewNotes]);
+  }, [
+    currentTest,
+    activeTestTimer,
+    saveTest,
+    completeTest,
+    templateSections,
+    reviewNotes,
+    showResults,
+    reportFinalizeError,
+  ]);
 
   /** Practice: complete the test (calculate results) but keep in review mode */
   const handlePracticeViewResults = useCallback(async () => {
     if (!currentTest) return;
+
+    // See handleSubmit: a completed test is read-only, so re-running the save
+    // would fail every time. Show the results that already exist instead.
+    if (currentTest.status === 'completed') {
+      showResults(currentTest.id);
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -1097,20 +1156,22 @@ export const ActiveSkillTestPage: React.FC = () => {
         elapsed_seconds: activeTestTimer,
       });
       await completeTest(currentTest.id);
-
-      // Leaving review mode is what actually reveals the results: the completed
-      // view below is gated on `!reviewing`, and navigating between the active
-      // and detail routes does not remount this component (both routes render
-      // it), so without this the page re-renders the identical review screen
-      // and the button appears to do nothing.
-      setReviewing(false);
-      void navigate(`/training/skills-testing/test/${currentTest.id}`);
-    } catch {
-      toast.error('Failed to calculate results');
+      showResults(currentTest.id);
+    } catch (err: unknown) {
+      reportFinalizeError(err, 'Failed to calculate results');
     } finally {
       setSubmitting(false);
     }
-  }, [currentTest, activeTestTimer, saveTest, completeTest, navigate, templateSections, reviewNotes]);
+  }, [
+    currentTest,
+    activeTestTimer,
+    saveTest,
+    completeTest,
+    templateSections,
+    reviewNotes,
+    showResults,
+    reportFinalizeError,
+  ]);
 
   /** Practice: email results to candidate */
   const handleEmailResults = useCallback(async () => {
@@ -1194,7 +1255,9 @@ export const ActiveSkillTestPage: React.FC = () => {
             <button
               onClick={() =>
                 void navigate(
-                  currentTest.is_practice ? '/training/skills-testing' : '/training/admin?page=skills-testing&tab=tests'
+                  currentTest.is_practice || !isOfficer
+                    ? '/training/skills-testing'
+                    : '/training/admin?page=skills-testing&tab=tests'
                 )
               }
               className="hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg p-2 text-sm transition-colors"
@@ -1221,6 +1284,22 @@ export const ActiveSkillTestPage: React.FC = () => {
               </p>
             </div>
           )}
+          {/* Pending-validation banner. The examiner sees the marks they
+              recorded — withholding them from their author would be pointless —
+              but must not leave thinking the result already counts. */}
+          {currentTest.pending_validation && (
+            <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-900/20">
+              <p className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                Awaiting a training officer&apos;s validation
+              </p>
+              <p className="mt-1 text-sm text-purple-700/90 dark:text-purple-300/90">
+                Until then this result doesn&apos;t count toward {currentTest.candidate_name}&apos;s record, credit a
+                program requirement, or use one of their attempts. They can see the test is under review, but not the
+                score.
+              </p>
+            </div>
+          )}
+
           {/* Result banner */}
           <div
             className={`mb-4 flex items-center gap-3 rounded-xl p-4 ${
@@ -1315,9 +1394,10 @@ export const ActiveSkillTestPage: React.FC = () => {
           {/* Named viewers. Official results only: a practice attempt is the
               candidate's own drill note, discardable by them at will and purged
               after a year, so a durable grant on one would outlive the thing it
-              points at. The route is already gated on training.manage, so
-              anyone reading this screen may manage the grants. */}
-          {!currentTest.is_practice && (
+              points at. Officers only — the viewer endpoints require
+              training.manage, so a member examiner would see a panel whose every
+              call 403s. */}
+          {!currentTest.is_practice && isOfficer && (
             <div className="mt-4">
               <TestViewersPanel
                 testId={currentTest.id}

@@ -29,13 +29,14 @@ from app.models.skills_testing import (
     SkillTestStatus,
     SkillTestViewer,
 )
-from app.models.user import User
+from app.models.user import User, UserStatus
 from app.schemas.skills_testing import (
     SkillTemplateCreate,
     SkillTemplateListResponse,
     SkillTemplateResponse,
     SkillTemplateUpdate,
     SkillTestCancelRequest,
+    SkillTestCandidateResponse,
     SkillTestCreate,
     SkillTestingSummaryResponse,
     SkillTestListResponse,
@@ -50,11 +51,13 @@ from app.services.separation_of_duties import (
     assert_different_person,
 )
 from app.services.skills_testing_service import (
+    RESULT_VIEW_PENDING,
     AttemptLimitReached,
     apply_test_pass_to_pipeline,
     assert_attempts_remaining,
     build_template_snapshot,
     calculate_test_result,
+    is_pending_validation,
     redact_test_for_view,
     resolve_disclosure_policy,
     resolve_elapsed_seconds,
@@ -102,15 +105,20 @@ def _can_manage_tests(user: User) -> bool:
 def _authorize_test_write(test: SkillTest, user: User) -> None:
     """Guard a mutation on ``test``.
 
-    Officers may work any test. Everyone else may only drive a *practice* test
-    they are running as examiner — the peer-drill case, where no officer is in
-    the room. A candidate gets no write access even to their own practice
-    attempt: they are being evaluated in it, so letting them edit criteria would
-    make the record self-scored.
+    Officers may work any test. Everyone else may drive a test they are running
+    as examiner — practice or official — because departments routinely have a
+    senior member hold the clipboard. What a member cannot do is decide the
+    result stands: an official test they run stays unvalidated until an officer
+    signs it off, and once it is signed off this closes to them, so a member
+    cannot reopen and rewrite a record an officer has accepted.
+
+    A candidate gets no write access even to their own practice attempt: they
+    are being evaluated in it, so letting them edit criteria would make the
+    record self-scored.
     """
     if _can_manage_tests(user):
         return
-    if test.is_practice and test.examiner_id == str(user.id):
+    if test.examiner_id == str(user.id) and not getattr(test, "validated_at", None):
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
@@ -644,6 +652,39 @@ async def duplicate_template(
 # ============================================
 
 
+@router.get("/candidates", response_model=list[SkillTestCandidateResponse])
+async def list_candidates(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Active members of the caller's organization, as candidate options.
+
+    Examining is open to every member, so every member needs to be able to name
+    the person they are testing — and ``GET /users`` requires ``users.view``,
+    which the baseline member position does not carry. Rather than widen that
+    permission (it opens the full member admin payload, contact details
+    included), this returns the minimum the picker needs: id and display name,
+    inside the caller's own organization.
+
+    **Authentication required**
+    """
+    rows = await db.execute(
+        select(User)
+        .where(
+            User.organization_id == current_user.organization_id,
+            User.status == UserStatus.ACTIVE,
+            User.deleted_at.is_(None),
+        )
+        .order_by(User.last_name, User.first_name)
+    )
+
+    return [
+        SkillTestCandidateResponse(id=u.id, name=_format_user_name(u))
+        for u in rows.scalars().all()
+    ]
+
+
 @router.get("/tests", response_model=list[SkillTestListResponse])
 async def list_tests(
     status_filter: str | None = Query(
@@ -654,6 +695,10 @@ async def list_tests(
     include_practice: bool = Query(
         False, description="Include practice attempts in results"
     ),
+    pending_validation: bool = Query(
+        False,
+        description="Only official results still awaiting an officer's sign-off",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -662,6 +707,8 @@ async def list_tests(
 
     Supports filtering by status, candidate, and template.
     Practice tests are excluded by default; pass include_practice=true to see them.
+    Pass pending_validation=true for the officer review queue — member-run
+    official results nobody has signed off yet.
     Returns summary items with denormalized names.
 
     **Authentication required**
@@ -732,6 +779,13 @@ async def list_tests(
     if not include_practice:
         query = query.where(SkillTest.is_practice == False)  # noqa: E712
 
+    if pending_validation:
+        query = query.where(
+            SkillTest.is_practice == False,  # noqa: E712
+            SkillTest.status == SkillTestStatus.COMPLETED.value,
+            SkillTest.validated_at.is_(None),
+        )
+
     if status_filter:
         query = query.where(SkillTest.status == status_filter)
 
@@ -798,6 +852,7 @@ async def list_tests(
         candidate = users_map.get(t.candidate_id)
         examiner = users_map.get(t.examiner_id)
         tmpl = templates_map.get(t.template_id)
+        view = ResultDisclosure.FULL.value
 
         if not is_officer:
             reader_id = str(viewer_context["uid"])
@@ -822,6 +877,11 @@ async def list_tests(
         examiner_name = _format_user_name(examiner) if examiner else None
         template_name = tmpl.name if tmpl else None
 
+        # A reader awaiting someone else's sign-off is told the test is under
+        # review, not how it went — the same withholding the detail endpoint
+        # applies, repeated here because a list row carries the score too.
+        awaiting_review = view == RESULT_VIEW_PENDING
+
         items.append(
             SkillTestListResponse(
                 id=t.id,
@@ -832,13 +892,17 @@ async def list_tests(
                 examiner_id=t.examiner_id,
                 examiner_name=examiner_name,
                 status=t.status,
-                result=t.result,
+                result=(
+                    SkillTestResult.INCOMPLETE.value if awaiting_review else t.result
+                ),
                 is_practice=t.is_practice or False,
-                overall_score=t.overall_score,
+                overall_score=None if awaiting_review else t.overall_score,
                 started_at=t.started_at,
                 completed_at=t.completed_at,
                 created_at=t.created_at,
                 voided_at=t.voided_at,
+                validated_at=t.validated_at,
+                pending_validation=is_pending_validation(t),
             )
         )
 
@@ -861,20 +925,15 @@ async def create_test(
     The current user becomes the examiner. The template must be published
     and the candidate must exist in the same organization.
 
-    Official tests require ``training.manage``. Practice attempts need only
-    authentication, so two members can drill together without an officer
-    present — they are never recorded, credited, or counted.
+    Any member may examine, official or practice — departments routinely use
+    senior members as evaluators. The officer's authority sits at validation
+    instead: an official test run by a member is submitted for review and
+    credits nothing until an officer signs it off. Practice attempts are never
+    recorded, credited, or counted at all.
 
     **Authentication required**
-    **Requires permission: training.manage (official tests only)**
     """
     is_officer = _can_manage_tests(current_user)
-
-    if not test_data.is_practice and not is_officer:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only a training officer can start an official skills test",
-        )
 
     # Verify template exists, is published, and belongs to org
     template_result = await db.execute(
@@ -919,11 +978,12 @@ async def create_test(
         )
 
     # SEC (CS-8): the examiner is always the caller and the candidate comes
-    # from the request body, so without this an instructor could examine
-    # themselves and record a pass — which then satisfies the linked program
-    # requirement and counts toward certification. Practice attempts are
-    # exempt: they are not logged, not credited, and self-drilling is the
-    # point of them.
+    # from the request body, so without this anyone could examine themselves
+    # and record a pass — which then satisfies the linked program requirement
+    # and counts toward certification. Still enforced now that members may
+    # examine: opening the examiner seat widens who may evaluate someone else,
+    # not whether anyone may evaluate themselves. Practice attempts are exempt —
+    # they are not logged, not credited, and self-drilling is the point of them.
     if not test_data.is_practice:
         try:
             assert_different_person(
@@ -1062,8 +1122,21 @@ async def get_test(
         voider_result = await db.execute(select(User).where(User.id == test.voided_by))
         voider = voider_result.scalar_one_or_none()
 
+    validator = None
+    if test.validated_by:
+        validator_result = await db.execute(
+            select(User).where(User.id == test.validated_by)
+        )
+        validator = validator_result.scalar_one_or_none()
+
     return _build_test_response(
-        test, template, candidate, examiner, voider, view=result_view
+        test,
+        template,
+        candidate,
+        examiner,
+        voider,
+        view=result_view,
+        validator=validator,
     )
 
 
@@ -1211,8 +1284,13 @@ async def complete_test(
     - Checks if all critical (required) criteria passed when require_all_critical is enabled
     - Sets result to pass or fail accordingly
 
-    Officers may complete any test; a non-officer may only complete a practice
-    test they are running as examiner.
+    Officers may complete any test; anyone else may complete a test they are
+    running as examiner, up until an officer has validated it.
+
+    Completion by an officer validates the result in the same step — they are
+    the authority the separate step exists to obtain. Completion by a member
+    leaves the official result pending an officer's review: it is scored and
+    stored, but credits no requirement and consumes no attempt until then.
 
     **Authentication required**
     """
@@ -1260,11 +1338,16 @@ async def complete_test(
             detail="Associated template not found",
         )
 
+    # An officer's completion is also the sign-off, so the result counts from
+    # here. A member's completion is a submission awaiting review.
+    auto_validate = not test.is_practice and _can_manage_tests(current_user)
+
     # Checked again at submission, not only at creation: several tests can be
     # started before any is completed, so the cap can fall between the two
-    # points. This is what actually protects the credit — completing is where a
-    # pass reaches the pipeline.
-    if not test.is_practice:
+    # points. Only when this completion also validates — that is the point the
+    # attempt is spent and a pass reaches the pipeline. A member's submission is
+    # checked later, when an officer validates it.
+    if auto_validate:
         try:
             await assert_attempts_remaining(
                 db=db,
@@ -1287,6 +1370,10 @@ async def complete_test(
     test.overall_score = overall_score
     test.completed_at = datetime.now(timezone.utc)
 
+    if auto_validate:
+        test.validated_at = test.completed_at
+        test.validated_by = str(current_user.id)
+
     # The examiner's stopwatch reading wins over wall clock; see
     # resolve_elapsed_seconds for why.
     test.elapsed_seconds = resolve_elapsed_seconds(
@@ -1299,11 +1386,14 @@ async def complete_test(
     await db.refresh(test)
 
     # A passing, non-practice test linked to a pipeline requirement marks that
-    # requirement complete on the candidate's enrollment. Runs after the commit
-    # above because the progress updater commits internally.
+    # requirement complete on the candidate's enrollment — but only once it has
+    # been validated, which for a member-run test happens later via /validate.
+    # Runs after the commit above because the progress updater commits
+    # internally.
     if (
         test.result == SkillTestResult.PASS.value
         and not test.is_practice
+        and test.validated_at
         and test.requirement_id
     ):
         await apply_test_pass_to_pipeline(
@@ -1337,6 +1427,7 @@ async def complete_test(
                 "candidate_name": _format_user_name(candidate) if candidate else None,
                 "result": test_result,
                 "overall_score": overall_score,
+                "validated": bool(test.validated_at),
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -1464,6 +1555,142 @@ async def discard_practice_test(
 
     await db.delete(test)
     await db.commit()
+
+
+@router.post("/tests/{test_id}/validate", response_model=SkillTestResponse)
+async def validate_test(
+    test_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Accept a member-run official result against the candidate's record.
+
+    Examining is open to any member, so an official test submitted by a peer is
+    scored and stored but credits nothing on its own. This is where an officer
+    decides the result stands: from here it counts toward the candidate's
+    record, credits its linked pipeline requirement if it passed, spends one of
+    the requirement's attempts, and becomes visible to the candidate under the
+    template's normal disclosure rules.
+
+    The rejection path is ``/void``, which keeps the record and its reason
+    rather than deleting an evaluation someone sat for.
+
+    Idempotent: validating an already-validated result returns it unchanged.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    result = await db.execute(
+        select(SkillTest)
+        .where(SkillTest.id == str(test_id))
+        .where(SkillTest.organization_id == current_user.organization_id)
+    )
+    test = result.scalar_one_or_none()
+
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+        )
+
+    if test.is_practice:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Practice attempts are never recorded, so there is nothing to validate",
+        )
+
+    if test.status == SkillTestStatus.VOIDED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot validate a voided test",
+        )
+
+    if test.status != SkillTestStatus.COMPLETED.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only a completed test has a result to validate",
+        )
+
+    template_result = await db.execute(
+        select(SkillTemplate).where(SkillTemplate.id == test.template_id)
+    )
+    template = template_result.scalar_one_or_none()
+
+    candidate_result = await db.execute(
+        select(User).where(User.id == test.candidate_id)
+    )
+    candidate = candidate_result.scalar_one_or_none()
+
+    examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
+    examiner = examiner_result.scalar_one_or_none()
+
+    if test.validated_at:
+        return _build_test_response(test, template, candidate, examiner)
+
+    # SEC (CS-8): validation is the step that makes a result count, so it is the
+    # step self-dealing has to be blocked at. Without this an officer could have
+    # a peer "examine" them and then sign off their own pass — the same
+    # certification fraud the examiner-side check prevents, one hop removed.
+    try:
+        assert_different_person(
+            current_user.id,
+            str(test.candidate_id),
+            action="validate",
+            record="skills test",
+        )
+    except SeparationOfDutiesError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    # The cap is spent here rather than at completion, so it is enforced here.
+    try:
+        await assert_attempts_remaining(
+            db=db,
+            candidate_id=test.candidate_id,
+            requirement_id=test.requirement_id,
+            organization_id=current_user.organization_id,
+        )
+    except AttemptLimitReached as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    test.validated_at = datetime.now(timezone.utc)
+    test.validated_by = str(current_user.id)
+    test.version = (test.version or 1) + 1
+
+    await db.commit()
+    await db.refresh(test)
+
+    # Now that the result stands, feed a pass into the pipeline — the step
+    # complete_test skips for a member-run test. After the commit, because the
+    # progress updater commits internally.
+    if test.result == SkillTestResult.PASS.value and test.requirement_id:
+        await apply_test_pass_to_pipeline(
+            db=db,
+            candidate_id=test.candidate_id,
+            requirement_id=test.requirement_id,
+            organization_id=current_user.organization_id,
+            verified_by=current_user.id,
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="skill_test_validated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "test_id": str(test_id),
+            "template_name": template.name if template else None,
+            "candidate_id": test.candidate_id,
+            "candidate_name": _format_user_name(candidate) if candidate else None,
+            "examiner_id": test.examiner_id,
+            "examiner_name": _format_user_name(examiner) if examiner else None,
+            "result": test.result,
+            "overall_score": test.overall_score,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return _build_test_response(test, template, candidate, examiner)
 
 
 @router.post("/tests/{test_id}/release", response_model=SkillTestResponse)
@@ -1913,6 +2140,10 @@ async def void_test(
     - drops the test out of totals, pass rate, and average-score math
     - releases any training-pipeline requirement the pass had credited
 
+    This is also the rejection path for a member-run result an officer declines
+    to validate: the submission and the reason it was refused stay on the
+    record, and because it never counted, nothing has to be released.
+
     Practice attempts are not voidable — they were never recorded in the first
     place, so they are simply discarded.
 
@@ -1947,8 +2178,13 @@ async def void_test(
     # was withdrawn, which is the whole point of voiding over deleting.
     prior_status = test.status
     prior_result = test.result
+    # Only a validated pass ever reached the pipeline. Rejecting a member-run
+    # submission has nothing to release, and calling the revert anyway would
+    # clear a requirement the candidate satisfied by some other route.
     credited_requirement = (
-        test.requirement_id if test.result == SkillTestResult.PASS.value else None
+        test.requirement_id
+        if test.result == SkillTestResult.PASS.value and test.validated_at
+        else None
     )
 
     test.status = SkillTestStatus.VOIDED.value
@@ -2292,11 +2528,15 @@ async def get_testing_summary(
     )
     tests_this_month = tests_this_month_result.scalar() or 0
 
-    # Pass rate (completed non-practice tests only)
+    # Pass rate (validated non-practice tests only). A member-run result nobody
+    # has signed off is a submission, not yet the department's finding — folding
+    # it into the pass rate would let the headline number move on evaluations an
+    # officer may still reject.
     completed_tests_result = await db.execute(
         select(func.count(SkillTest.id)).where(
             SkillTest.organization_id == org_id,
             SkillTest.status == "completed",
+            SkillTest.validated_at.isnot(None),
             SkillTest.is_practice == False,  # noqa: E712
         )
     )
@@ -2308,6 +2548,7 @@ async def get_testing_summary(
             select(func.count(SkillTest.id)).where(
                 SkillTest.organization_id == org_id,
                 SkillTest.status == "completed",
+                SkillTest.validated_at.isnot(None),
                 SkillTest.result == "pass",
                 SkillTest.is_practice == False,  # noqa: E712
             )
@@ -2315,11 +2556,12 @@ async def get_testing_summary(
         passed_count = passed_tests_result.scalar() or 0
         pass_rate = round((passed_count / completed_count) * 100, 1)
 
-    # Average score (completed non-practice tests with scores)
+    # Average score (validated non-practice tests with scores)
     avg_score_result = await db.execute(
         select(func.avg(SkillTest.overall_score)).where(
             SkillTest.organization_id == org_id,
             SkillTest.status == "completed",
+            SkillTest.validated_at.isnot(None),
             SkillTest.overall_score.isnot(None),
             SkillTest.is_practice == False,  # noqa: E712
         )
@@ -2329,6 +2571,21 @@ async def get_testing_summary(
         round(float(avg_score_raw), 1) if avg_score_raw is not None else None
     )
 
+    # Review queue depth. Only meaningful to someone who can act on it, and it
+    # is an org-wide count — a member would learn how many other people's
+    # evaluations are outstanding, which is not theirs to see.
+    pending_validation_count = 0
+    if _can_manage_tests(current_user):
+        pending_validation_result = await db.execute(
+            select(func.count(SkillTest.id)).where(
+                SkillTest.organization_id == org_id,
+                SkillTest.status == "completed",
+                SkillTest.validated_at.is_(None),
+                SkillTest.is_practice == False,  # noqa: E712
+            )
+        )
+        pending_validation_count = pending_validation_result.scalar() or 0
+
     return SkillTestingSummaryResponse(
         total_templates=total_templates,
         published_templates=published_templates,
@@ -2336,6 +2593,7 @@ async def get_testing_summary(
         tests_this_month=tests_this_month,
         pass_rate=pass_rate,
         average_score=average_score,
+        pending_validation=pending_validation_count,
     )
 
 
@@ -2381,6 +2639,7 @@ def _build_test_response(
     examiner: User | None,
     voider: User | None = None,
     view: str = ResultDisclosure.FULL.value,
+    validator: User | None = None,
 ) -> SkillTestResponse:
     """Build a SkillTestResponse with denormalized names and template structure.
 
@@ -2421,10 +2680,14 @@ def _build_test_response(
         voided_at=_ensure_utc(test.voided_at),
         voided_by=test.voided_by,
         void_reason=test.void_reason,
+        validated_at=_ensure_utc(test.validated_at),
+        validated_by=test.validated_by,
+        pending_validation=is_pending_validation(test),
         template_name=template.name if template else None,
         candidate_name=_format_user_name(candidate) if candidate else None,
         examiner_name=_format_user_name(examiner) if examiner else None,
         voided_by_name=_format_user_name(voider) if voider else None,
+        validated_by_name=_format_user_name(validator) if validator else None,
         template_sections=scored_against.sections if scored_against else None,
         template_time_limit_seconds=(
             scored_against.time_limit_seconds if scored_against else None

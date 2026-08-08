@@ -149,11 +149,18 @@ export const getTrainingRoutes = () => {
         }
       />
 
-      {/* Skills Testing Module - examiner/officer administered (training.manage) */}
+      {/* Skills Testing Module.
+          Template authoring stays officer-only (training.manage). Taking and
+          running tests is auth-only: any member may drill on their own and any
+          member may examine, because departments routinely use senior members
+          as evaluators. The officer's authority is at validation, which the
+          backend enforces — as it does per-record read access, so a member
+          reaching a test they are not party to gets a 404 from the API rather
+          than a route they should not have been able to open. */}
       <Route
         path="/training/skills-testing"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute>
             <SkillsTestingPage />
           </ProtectedRoute>
         }
@@ -185,7 +192,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/test/new"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute>
             <StartSkillTestPage />
           </ProtectedRoute>
         }
@@ -193,7 +200,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/test/:testId"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute>
             <ActiveSkillTestPage />
           </ProtectedRoute>
         }
@@ -201,7 +208,7 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/test/:testId/active"
         element={
-          <ProtectedRoute requiredPermission="training.manage">
+          <ProtectedRoute>
             <ActiveSkillTestPage />
           </ProtectedRoute>
         }
