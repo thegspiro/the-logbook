@@ -869,11 +869,18 @@ async def create_prospect(
     if "referred_by" in prospect_data and prospect_data["referred_by"]:
         prospect_data["referred_by"] = str(prospect_data["referred_by"])
 
-    prospect = await service.create_prospect(
-        organization_id=current_user.organization_id,
-        data=prospect_data,
-        created_by=current_user.id,
-    )
+    try:
+        prospect = await service.create_prospect(
+            organization_id=current_user.organization_id,
+            data=prospect_data,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        # Rejected foreign keys (pipeline, referring member) are client errors.
+        # Without this they reached the catch-all handler as a 500.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     await log_audit_event(
         db=db,
         event_type="membership_pipeline.prospect_created",
@@ -928,12 +935,17 @@ async def update_prospect(
     **Requires permission: members.manage**
     """
     service = MembershipPipelineService(db)
-    prospect = await service.update_prospect(
-        str(prospect_id),
-        current_user.organization_id,
-        data.model_dump(exclude_unset=True),
-        updated_by=current_user.id,
-    )
+    try:
+        prospect = await service.update_prospect(
+            str(prospect_id),
+            current_user.organization_id,
+            data.model_dump(exclude_unset=True),
+            updated_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not prospect:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
