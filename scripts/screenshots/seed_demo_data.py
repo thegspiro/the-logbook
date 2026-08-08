@@ -3081,6 +3081,8 @@ class Seeder:
                         },
                     )
 
+        self._seed_grant_notes(applications)
+
         return {
             "opportunities": opportunities,
             "applications": applications,
@@ -3088,6 +3090,43 @@ class Seeder:
             "donors": donors,
             "donations": donations,
         }
+
+    #: (note type, content, days before today). The Activity Log is a timeline,
+    #: so a single note reads as a list of one — these give it a shape, and the
+    #: types drive the per-entry icons the tab renders.
+    GRANT_NOTES = [
+        ("status_change", "Status changed to Preparing.", 62),
+        ("contact_made", "Contacted the program officer to confirm scope.", 55),
+        ("document_added", "Uploaded the department's audited financials.", 48),
+        ("status_change", "Status changed to Submitted.", 40),
+        ("milestone", "Application acknowledged by the awarding agency.", 33),
+        ("financial", "Budget item added: training equipment, $10,000.", 21),
+        ("status_change", "Status changed to Awarded.", 9),
+    ]
+
+    def _seed_grant_notes(self, applications: list[dict]) -> None:
+        """Give one application a populated Activity Log.
+
+        Only the first: the tab is pictured once in the guides, and writing a
+        timeline onto every application would slow the seeder for no gain.
+        """
+        if not applications:
+            return
+        app_id = pick(applications[0], "id")
+        if not app_id:
+            return
+        if items(self.api.get(f"/grants/applications/{app_id}/notes"), "notes"):
+            return
+        for note_type, content, days_ago in self.GRANT_NOTES:
+            self.api.post(
+                f"/grants/applications/{app_id}/notes",
+                {
+                    "applicationId": app_id,
+                    "noteType": note_type,
+                    "content": content,
+                    "metadata": {"seededDaysAgo": days_ago},
+                },
+            )
 
     # -- medical screening -------------------------------------------
 

@@ -2162,4 +2162,21 @@ export const SHOTS = [
     // shooting the whole page for one button.
     selector: 'div:has(> h2:text-is("Your Data"))',
   },
+  {
+    id: "12-08-application-activity-log",
+    doc: "12-grants-fundraising.md",
+    line: 268,
+    anchor: "Screenshot of the Activity tab showing a timeline of events",
+    alt: "Grant application activity log with its timeline of status changes and notes",
+    route: "/grants/applications",
+    prepare: async (page) => {
+      await openFirstFromApi(
+        "/grants/applications?limit=20",
+        (id) => `/grants/applications/${id}`,
+        "applications",
+      )(page);
+      await clickByName(/activity log/i)(page);
+    },
+    fullPage: true,
+  },
 ];

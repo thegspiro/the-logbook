@@ -346,6 +346,79 @@ The guide text has **not** been rewritten here. Two of these are one component
 away from being true, and deciding between "build the screen" and "cut the
 section" is a product call, not a documentation fix.
 
+## Medical Screening — The Add Record Form Attaches to Nobody (2026-08-08)
+
+**A screening record created through the UI is attached to no member and no
+prospect.** `ScreeningRecordForm` builds its create payload from nine fields —
+requirement, type, status, three dates, provider, result, notes — and sets
+neither `user_id` nor `prospect_id`. Both are on the frontend
+`ScreeningRecordCreate` type and both are accepted by
+`POST /medical-screening/records`; the form simply has no control for either,
+so the value can never be supplied. `MedicalScreeningPage` is the only caller,
+and it passes the payload straight through.
+
+This is worse than a missing field. Every compliance view keys off `user_id`:
+`getUserCompliance`, `getProspectCompliance` and the expiring-screenings list
+all resolve records by the member they belong to. A record entered by hand
+therefore counts toward nobody's compliance and shows as "Unknown" wherever
+records are listed — a physical exam that was really performed, recorded in the
+system, and invisible to the report that decides whether the member is cleared
+for duty.
+
+The demo data does not exhibit this because the seeder posts `user_id` to the
+API directly, bypassing the form. That is worth knowing before anyone concludes
+from a screenshot that the linkage works.
+
+`docs/training/13-medical-screening.md` describes the missing controls in two
+places — "the member dropdown" (Add Record, completed physical) and "the
+Prospect field populated with a prospective member name, the Member field
+blank". Both placeholders are left open.
+
+Two further placeholders in that guide picture per-member compliance screens
+that do not exist:
+
+| Guide section                       | What exists                                                                                                                                                        | State                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
+| Member compliance detail view       | `fetchUserCompliance` / `fetchProspectCompliance` are defined in `medicalScreeningStore` and called by **no component**. `ComplianceDashboard` lists expiring screenings only. | ❌ Store action only  |
+| Compliance tab filtered to overdue  | `ComplianceDashboard` has no filter controls of any kind.                                                                                                          | ❌ Not built          |
+
+## Grants & Fundraising — Pledges and Fundraising Events (2026-08-08)
+
+Same shape, found while capturing `docs/training/12-grants-fundraising.md`.
+
+- **Pledges.** `fundraisingService.listPledges` / `createPledge` /
+  `updatePledge` exist over a working API. The only consumer is a
+  `grantsStore` action that no component calls. The grants dashboard's
+  "Outstanding Pledges" KPI card linked to `/grants/pledges`, which has no
+  route — and because the router's catch-all redirects unknown paths to `/`,
+  clicking it bounced the user to the home dashboard with no error. The link
+  has been removed (the figure is real, the destination was not); restore it
+  when the page ships.
+- **Fundraising events.** `listFundraisingEvents` / `createFundraisingEvent` /
+  `updateFundraisingEvent`: zero consumers, no route, no page.
+- **Recording a donation.** `DonationsPage`'s primary action, "Record
+  Donation", linked to `/grants/donations/new` — also routeless, also
+  redirected to `/`. No component calls `createDonation` either, so the form
+  behind it was never built. The button has been removed; donations reach the
+  system through the API (which is how the demo seeder loads them) and through
+  no screen. This is the more serious of the two dead links: the pledges one was
+  a KPI tile, this was the page's only call to action.
+
+**The module has no navigation entry at all.** Neither `SideNavigation.tsx` nor
+`TopNavigation.tsx` mentions grants, and nothing outside the module links to
+`/grants` — the only references anywhere in `frontend/src` are the module
+catalogue in `types/modules.ts`, the route registration in `App.tsx`, and a
+cache prefix in `utils/apiCache.ts`. Enabling the module makes its pages
+routable and reachable by typing the URL, and by nothing else. That is why
+`docs/training/12-grants-fundraising.md` opens by picturing "the Grants &
+Fundraising sidebar navigation showing Dashboard, Opportunities, Applications,
+Campaigns, Donors, Donations, and Reports": the guide describes the navigation
+the module is missing. That placeholder is left open too.
+
+Verified 2026-08-08 by counting non-test call sites under `frontend/src` for
+each service method and each store action, and by searching both navigation
+components for the module's route.
+
 ## Skills Testing — Offline Support (2026-08-07)
 
 Autosave shipped (2026-08-08) and covers the common data-loss case — a locked
