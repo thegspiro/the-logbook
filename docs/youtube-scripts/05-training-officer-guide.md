@@ -168,7 +168,54 @@ form pre-filled with its values]**
 
 **[SCREEN: Show several requirements created in a list]**
 
-### LINKING REQUIREMENTS TO PROGRAMS (7:30 – 8:00)
+### PICKING THE COURSE, NOT TYPING ITS NAME (7:00 – 7:20)
+
+**[SCREEN: A Course requirement; the course library picker open, filtering to
+"CPR".]**
+
+> "If the requirement type is Courses or Certification, you pick from your course
+> library. Don't type a course name — pick it."
+
+**[CALLOUT: "Check any Course requirement you built before August 2026"]**
+
+> "And this is worth pausing on if you've been running The Logbook a while. This
+> page used to take typed-in course names, one per line. But compliance matches on
+> the course **record**, not on the text — so a typed name never matched anything,
+> and the requirement showed **everyone** as permanently incomplete. If you've got
+> a course requirement with a whole column of red that you can't explain, that's
+> almost certainly it. Re-open it, pick the courses, done."
+
+> "The same picker is in the pipeline wizard, which means a recruit-school phase
+> and your department-wide rule can point at the _same_ CPR course. One completion
+> satisfies both."
+
+### "TAKEN WITHIN THE LAST 180 DAYS" (7:20 – 7:45)
+
+**[SCREEN: The freshness window field beside the course picker; set it to 180.]**
+
+> "Next to the picker there's a freshness window. 'Taken within the last hundred
+> and eighty days.' It's off by default."
+
+> "This is the thing a one-time requirement genuinely can't express. One-time
+> means done once, done forever — so somebody's 2023 CPR reads as satisfied. For
+> your annual roster that might be fine. For a recruit school it's exactly wrong."
+
+**[CALLOUT: "Rolling period = how often. Freshness window = how old."]**
+
+> "Don't mix it up with a rolling period. Rolling asks _how often must this be
+> redone_ — that's an obligation on the member. Freshness asks _how old may this
+> completion be_ — that's about one record. They're independent on purpose, so
+> your department's one-time CPR rule and a recruit pipeline's 180-day one can
+> point at the same course and disagree about the same record."
+
+**[SCREEN: Attempt to apply an old record to the requirement; refused before
+saving.]**
+
+> "And you can't sign around it. Applying a three-year-old record to a 180-day
+> requirement gets refused before anything saves — which is the point, since
+> otherwise the officer sign-off quietly defeats the rule the officer set."
+
+### LINKING REQUIREMENTS TO PROGRAMS (7:45 – 8:00)
 
 > "Once your requirements exist, add them to your program. Open the program,
 > click 'Add Requirements,' and select the ones that belong."
@@ -355,8 +402,13 @@ action]**
 
 **[SCREEN: Show marking skills and adding notes]**
 
+> "Your scoring saves itself as you go — that screen's meant to be used
+> one-handed, outdoors, while you're actually watching somebody, so it doesn't
+> wait for you to remember to press Save."
+
 > "When the test is complete, the results are saved to the member's training
-> record. You can see a history of all their skills test results over time."
+> record. You can see a history of all their skills test results over time — and
+> so can **they**, on My Training."
 
 ### TEST RECORDS (15:30 – 16:00)
 
@@ -370,6 +422,23 @@ action]**
 
 > "This is your documentation for NFPA compliance — proof that your members are
 > tested and proficient."
+
+**[SCREEN: Hover three rows showing Delete, Void and Cancel respectively.]**
+
+> "And notice each row offers exactly one way to take it off the books. Practice
+> attempts you delete. A scored official result you **void** — the record stays,
+> with a reason you type and your name on it, and any training requirement that
+> pass had completed goes back to incomplete. An evaluation you abandoned
+> mid-session you **cancel**. You can't delete an official result: an examiner
+> observed something, so you withdraw it rather than erase it."
+
+**[CALLOUT: "Full deep-dive: Script 15 — Skills Testing"]**
+
+> "There's a lot more here than fits in this chapter — deciding how much of a
+> result the candidate sees and when, attempt limits, and one genuinely nasty bug
+> that used to let editing a published sheet rewrite scorecards you'd already
+> finished. That's all in **Script 15**, the skills-testing deep dive. If you've
+> been running skills testing since before August 2026, watch that one."
 
 **[TRANSITION: Compliance and reporting]**
 

@@ -17,13 +17,15 @@ docker-compose logs redis
 
 ### Common Causes
 
-| Symptom                               | Cause                            | Fix                                                        |
-| ------------------------------------- | -------------------------------- | ---------------------------------------------------------- |
-| Backend crashes on startup            | Missing or invalid `.env`        | Check required env vars (SECRET_KEY, ENCRYPTION_KEY, etc.) |
-| Backend exits with "SECURITY FAILURE" | Default secrets in production    | Generate real secrets: `openssl rand -hex 32`              |
-| MySQL fails to start                  | Port conflict or data corruption | Check port 3306, try `docker-compose down -v` (loses data) |
-| Redis marked unhealthy                | Health check warning suppression | Add `--no-auth-warning` to Redis health check              |
-| Frontend exits immediately            | Build failure                    | Rebuild: `docker-compose build --no-cache frontend`        |
+| Symptom                                                              | Cause                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Fix                                                        |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| Backend crashes on startup                                           | Missing or invalid `.env`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Check required env vars (SECRET_KEY, ENCRYPTION_KEY, etc.) |
+| Backend exits with "SECURITY FAILURE"                                | Default secrets in production                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Generate real secrets: `openssl rand -hex 32`              |
+| MySQL fails to start                                                 | Port conflict or data corruption                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Check port 3306, try `docker-compose down -v` (loses data) |
+| Redis marked unhealthy                                               | Health check warning suppression                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Add `--no-auth-warning` to Redis health check              |
+| Frontend exits immediately                                           | Build failure                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Rebuild: `docker-compose build --no-cache frontend`        |
+| Frontend container **reports unhealthy** while nginx is running fine | _(Fixed 2026-08-07)_ nginx binds IPv4 only (`listen 80;`), but the container resolves `localhost` to both `127.0.0.1` and `::1`, and musl returns the IPv6 address first — so the healthcheck was refused. Both the image's `HEALTHCHECK` and the container test now name `127.0.0.1` literally. **This affected production, not just CI.** Pull latest and rebuild the frontend image                                                                                                                       |
+| Frontend build pulls unpinned dependencies                           | _(Fixed 2026-08-07)_ The image used to copy only `frontend/package.json` and run `npm install --legacy-peer-deps`, re-resolving 604 packages from the registry on every build — so production shipped versions no test had run against. The build context is now the **repository root** (`docker build -f frontend/Dockerfile .`) so the single root `package-lock.json` is in reach, and the install is `npm ci`. Update any script or compose override that still names `./frontend` as the build context |
 
 ### Full Rebuild
 
@@ -52,12 +54,12 @@ docker inspect --format='{{json .State.Health}}' logbook-backend | jq
 
 ### Expected Health States
 
-| Container          | Expected | Health Check              |
-| ------------------ | -------- | ------------------------- |
-| `logbook-backend`  | healthy  | HTTP GET /health          |
-| `logbook-frontend` | healthy  | wget http://localhost:80/ |
-| `logbook-db`       | healthy  | mysqladmin ping           |
-| `logbook-redis`    | healthy  | redis-cli ping            |
+| Container          | Expected | Health Check                                                                          |
+| ------------------ | -------- | ------------------------------------------------------------------------------------- |
+| `logbook-backend`  | healthy  | HTTP GET /health                                                                      |
+| `logbook-frontend` | healthy  | `wget http://127.0.0.1:80/` — the literal address, **not** `localhost` _(2026-08-07)_ |
+| `logbook-db`       | healthy  | mysqladmin ping                                                                       |
+| `logbook-redis`    | healthy  | redis-cli ping                                                                        |
 
 ---
 

@@ -117,6 +117,48 @@ Use these variables instead of the SMTP variables above to send email via Cloudf
 
 ---
 
+## Web Push Notifications _(2026-08-07)_
+
+Push delivers notifications to a member's **lock screen** while the app is
+closed — the channel an installed PWA exists for. It hooks in where notifications
+are recorded, so **every** existing source (event reminders, training expiry,
+schedule changes, maintenance due, elections) is covered with no per-source
+configuration.
+
+| Variable            | Description                                                                            | Default |
+| ------------------- | -------------------------------------------------------------------------------------- | ------- |
+| `PUSH_ENABLED`      | Enable Web Push delivery                                                               | `false` |
+| `VAPID_PUBLIC_KEY`  | VAPID public key (application server key)                                              | —       |
+| `VAPID_PRIVATE_KEY` | VAPID private key                                                                      | —       |
+| `VAPID_SUBJECT`     | Contact URI the push services can reach you at, e.g. `mailto:admin@yourdepartment.org` | —       |
+
+Generate the keypair **once per deployment** and keep it stable — rotating it
+invalidates every existing device subscription:
+
+```bash
+python3 -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); print(v.public_key, v.private_key)"
+```
+
+**Operational notes:**
+
+- The optional `pywebpush` dependency is imported **behind a guard**, so a
+  deployment that does not want push need not install it. With it absent, or with
+  `PUSH_ENABLED=false`, the service reports itself unconfigured and **the client
+  hides the toggle** rather than offering a control that would fail on tap.
+- **Subscriptions are per device**, not per user — a member with the app on a
+  phone and a station tablet is reached on both.
+- Browsers provide no unsubscribe callback, so a subscription is pruned when the
+  push service answers `404`/`410` on a send. That is the only signal that an app
+  was uninstalled or its site data cleared.
+- Delivery **swallows every error**. The notification is already durably
+  recorded, so a push-service outage must never fail the action that produced it
+  or roll back its transaction.
+- **iOS requires the app to be installed** to the home screen (16.4+). The push
+  API does not exist while browsing in Safari, so no toggle appears there — this is
+  correct behaviour, not a misconfiguration.
+
+---
+
 ## Frontend (Build-Time)
 
 These variables are baked into the frontend at build time via Vite.
@@ -170,6 +212,19 @@ organization's settings (`enabled_modules`), configured inside the app
 | `GEOIP_FAIL_CLOSED`                   | When `true`, block any IP whose country cannot be resolved (including a missing/corrupt MaxMind DB). Private/reserved and allowlisted IPs are always allowed, so an internal/allowlisted operator can still recover. Default `false` preserves fail-open _(2026-07)_                                                                                                                                                                                                                  | `false`               |
 | `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` | Gate for runtime country block/unblock via the API (`POST`/`DELETE /api/v1/ip-security/blocked-countries`). Off by default because the blocklist is a platform-edge control affecting every tenant — set it at deploy time via `BLOCKED_COUNTRIES`, or enable this to manage it at runtime _(2026-07)_                                                                                                                                                                                | `false`               |
 | `AUDIT_ALLOW_CHAIN_REHASH`            | Break-glass gate for the audit-log rehash recovery operation, which rewrites the single cross-organization audit hash chain. Kept off so an ordinary admin cannot trigger it; a server operator enables it only for a one-time legacy-hash repair _(2026-07)_                                                                                                                                                                                                                         | `false`               |
+| `SECURITY_REQUIRE_TLS`                | Promote **absent** `DB_SSL`/`REDIS_SSL` in production/staging from a boot **warning** to a **CRITICAL** finding, which the application refuses to start on. Without it, PHI, sessions and cached queries can cross the network in cleartext and nothing blocks the deployment _(2026-08-07)_                                                                                                                                                                                          | `false`               |
+
+> **Turn `SECURITY_REQUIRE_TLS` on unless something else terminates TLS**
+> _(2026-08-07)_. It defaults to `false` **only** so that upgrading cannot refuse
+> to boot an existing deployment that terminates TLS elsewhere — a private VPC, a
+> service mesh, a sidecar proxy. If your database and Redis traffic crosses any
+> network the application does not control, this should be `true`. The decision is
+> the deployment owner's, which is exactly why it is not made for you.
+>
+> The distinct **"TLS on but peer unverified"** case (`DB_SSL`/`REDIS_SSL` set
+> with no CA, giving `CERT_NONE`) remains CRITICAL **regardless** of this flag,
+> waivable only via `SECURITY_ALLOW_UNVERIFIED_TLS`. That configuration looks
+> secure and is not, which is worse than honest plaintext.
 
 > **`TRUSTED_PROXY_IPS` is security-critical** _(2026-05-29)_: forwarded
 > `X-Forwarded-For` / `X-Real-IP` headers are only trusted when the direct peer

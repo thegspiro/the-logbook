@@ -793,6 +793,84 @@ Require completion of specific courses.
 > compliance evaluator matches a member's completed `course_id` against these
 > values directly.
 
+**Pick from the course library, don't type names** _(2026-08-07)_. All three
+places a requirement is defined — the create-pipeline wizard, the pipeline
+requirement modal, and the department requirements page — now offer a
+`CourseLibraryPicker` over the department's course catalog, so a real course id
+is stored rather than an id list nobody could supply by hand.
+
+> **This fixed a requirement that could never be completed.** The department
+> requirements page used to collect `required_courses` as **free-text course
+> names**, one per line, while every evaluator compares that column against a
+> record's `course_id`. A typed-in name matched nothing, so the requirement read
+> as permanently incomplete for everyone. If you have department requirements
+> created before 2026-08-07 that never show anyone compliant, re-open them and
+> pick the courses from the library.
+>
+> The NIMS/ICS starter template seeded four such names. It now names them in its
+> description for the officer to link, since course-library ids are per-department
+> and a template cannot know them in advance.
+
+`required_courses` is a client-supplied array of foreign keys, so every write
+path (program build, requirement create/update, and the department requirement
+endpoints) validates the ids against the caller's organization. An invalid id is
+reported only as invalid — it cannot be used to probe another tenant for the
+existence of a course (XC-1).
+
+**Switching a requirement away from `courses`/`certification` clears its
+links**, since a leftover course id silently narrows the hours evaluator to only
+that course's records.
+
+#### 2a. Freshness Window — `recency_days` _(2026-08-07)_
+
+Course and certification requirements can demand that the completion itself be
+**recent**:
+
+```json
+{
+  "requirement_type": "courses",
+  "required_courses": ["cpr-course-uuid"],
+  "recency_days": 180
+}
+```
+
+Off by default (`null`), so nothing changes for existing requirements.
+
+**This is the case a `one_time` requirement could not express.** Its frequency
+window is unbounded, so a member who took CPR three years ago read as satisfied
+forever — exactly what a recruit school needs to reject.
+
+> **`recency_days` is not `rolling_period_months`.** They are easy to confuse and
+> they answer different questions:
+>
+> |                         | Question it answers              | Scope                                         |
+> | ----------------------- | -------------------------------- | --------------------------------------------- |
+> | `rolling_period_months` | "How often must this be redone?" | A recurring **obligation** on the member      |
+> | `recency_days`          | "How old may the completion be?" | A validity **window on an individual record** |
+>
+> Because they are independent, a department's one-time CPR requirement and a
+> recruit pipeline's 180-day one can point at **the same course** and disagree
+> about **the same record**. That is intended.
+
+**Evaluation order.** The window narrows the record pool _before_ the frequency
+window in every evaluator (compliance matrix, member compliance summary,
+competency matrix), so it can only ever _remove_ records — the narrower of the
+two always wins.
+
+**It also gates the officer apply-training-record path.** That path is an
+explicit sign-off and bypasses the external-credit flag by design, but it must
+not bypass this: crediting a three-year-old record to a "within 180 days"
+requirement would quietly defeat the rule the officer set. Both callers (record
+apply, submission approval) pass the completion date and are rejected pre-flight,
+before anything is committed.
+
+> **Edge case — a record with no completion date fails the check** rather than
+> slipping through, because the window cannot be verified against it.
+
+> **The window can be lifted again.** `recency_days` is in the update path's
+> clearable set; without that the shared update loop would read "unset" as "leave
+> alone" and make the setting one-way.
+
 #### 3. Certification Requirements
 
 Require obtaining certifications.
@@ -816,6 +894,15 @@ Require obtaining certifications.
   "category_ids": ["bls-uuid"]
 }
 ```
+
+**Linking to a library course** _(2026-08-07)_. A certification requirement may
+also carry `required_courses`, which matches a record **exactly** by course id.
+This is an _additional_ match on top of the existing name / `training_type` /
+registry-code heuristics — those must keep working for requirements created
+before the link existed. The predicate was duplicated across three evaluators and
+is now a single shared `certification_record_matches`.
+
+`recency_days` (see above) applies to certification requirements too.
 
 #### 4. Shift Requirements
 
@@ -888,6 +975,21 @@ enforces `max_attempts`.
 > There is no built-in test-taking engine (question bank, delivery, auto-grading)
 > yet — see [Remaining Planned Features](#remaining-planned-features). The current
 > support records officer-entered scores and attempt history only.
+
+> **`max_attempts` is enforced by skills testing too** _(2026-08-08)_. It used to
+> be honoured only on the officer-entered knowledge-test path, so a candidate
+> capped at two attempts could be given a third **skills** evaluation and have the
+> pass credited to the pipeline. Both creating and completing an official skills
+> test now check the cap — creation, so an examiner is refused before running an
+> evaluation that could not count; completion, because several tests can be
+> started before any is submitted.
+>
+> An attempt is a **completed, official, non-voided** test against that
+> requirement, **pass or fail**. Voided results do not consume a chance (the
+> department withdrew them) and practice attempts never do. A requirement already
+> **completed, verified or waived** is exempt, matching the knowledge-test path
+> and keeping recertification testing possible. See
+> [SKILLS_TESTING_FEATURE.md §14.5](./SKILLS_TESTING_FEATURE.md).
 
 ### Requirement Sources
 

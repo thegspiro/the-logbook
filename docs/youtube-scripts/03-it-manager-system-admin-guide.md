@@ -161,24 +161,60 @@ application briefly to show the columns.]**
 
 > "**Empty optional fields are fine** — just leave them blank, don't put 'N/A.'"
 
+> "**Delete the example row.** The template ships a filled-in John Doe so the
+> columns explain themselves. Leaving it in used to create a real member with a
+> live password-setup link; the import now catches its own example and rejects
+> that row — but delete it anyway."
+
 **[SCREEN: Show uploading the completed CSV file]**
 
-> "Upload your CSV and the system checks the header row, then shows you a
-> preview of the first five members so you can confirm the columns landed
-> where you expect."
+> "Upload your CSV and **every row is checked before a single member is
+> created.** That ordering is the whole point. It used to validate inside the
+> import loop, so row twenty-one's bad date surfaced after rows one through twenty
+> had already been created — and then you're fighting duplicates on the
+> re-upload."
 
-**[SCREEN: Show the preview table]**
+**[SCREEN: Show the review step — a summary bar and the rejected-rows table,
+one row carrying three separate reasons]**
 
-> "If you left out optional columns, you'll get a note saying which ones — that's
-> a heads-up, not an error. A missing required column stops the upload and names
-> the column."
+> "Rows that pass import. Rows that fail are reported and skipped. And each bad
+> row tells you **everything** wrong with it at once, naming the column and the
+> value — not 'invalid.' Bad date, a role matching nothing, and a duplicate email?
+> All three, first time."
 
-**[SCREEN: Click Import, then show the results panel with the error list]**
+**[CALLOUT: "Checked up front: required fields · email shape · dates · lengths ·
+username minimum · emergency contacts · roles · duplicates in-file AND against
+your roster · row width"]**
 
-> "After the import, you get a count of successes and failures, and every failed
-> row is listed by row number with the reason — a duplicate email, an
-> unrecognized role, a bad date. Fix those rows in your spreadsheet and
-> re-upload just them."
+> "It also checks against your existing roster, so a taken email, username or
+> membership number is caught before the import runs — naming who owns it."
+
+> "And it checks each row's width against the header. That catches the ugly one:
+> an unquoted comma in a street address shifts every later column one place along,
+> so a phone number lands in the email field. A shifted row is rejected, never
+> guessed at."
+
+**[SCREEN: The "Send welcome emails" checkbox, unchecked, in the review step]**
+
+> "Look at this checkbox before you confirm. Creating a member queues a
+> password-setup email immediately, and an import creates them by the dozen —
+> loading a roster for testing, or from a list with stale addresses, used to put
+> unrecallable mail in front of every one of them. It's **off by default** for
+> imports now. Load the roster quietly, check it, then issue credentials from
+> Member Management."
+
+**[SCREEN: Click Import; the row counter advances; click Stop part-way]**
+
+> "During the import you get a count, and a Stop button. Rows you didn't reach get
+> listed in the error report as stopped — so that download is exactly the work
+> left, and you can upload it to finish."
+
+**[SCREEN: Click Download error report; open the CSV showing the leading
+errorReason column]**
+
+> "The error report is your original rows, unchanged, with the reasons in the
+> first column. It holds **only** the failures, so the corrected file can't
+> collide with the members that already imported."
 
 **[SCREEN: Show the completion summary — successful and failed counts]**
 
@@ -476,6 +512,49 @@ thresholds]**
 > to their personal Google Calendar, Apple Calendar, or Outlook. This is a
 > one-way sync — events from The Logbook appear in their external calendar."
 
+### WEB PUSH NOTIFICATIONS (24:30 – 25:00)
+
+**[SCREEN: A `.env` file; `PUSH_ENABLED`, `VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`.]**
+
+> "This one's a deployment-level switch, not an in-app one. **Web Push** delivers
+> notifications to a member's lock screen with the app closed. Set
+> `PUSH_ENABLED=true`, generate a VAPID keypair, set a contact address, restart."
+
+**[CALLOUT: "Generate VAPID keys ONCE. Rotating them kills every subscription."]**
+
+> "Generate the keypair once per deployment and then leave it alone — rotating it
+> invalidates every device your members have already registered."
+
+> "It's off by default, and the optional Python dependency is loaded behind a
+> guard, so if you don't want push you don't install anything. With it off, the
+> app **hides** the toggle rather than offering members a control that would fail
+> when they tapped it."
+
+> "It covers every notification the platform already sends — event reminders,
+> training expiry, schedule changes, maintenance due, elections. There's nothing
+> to configure per category."
+
+**[SCREEN: An iPhone home screen with the installed app.]**
+
+> "One support question you will get: an iPhone member says there's no toggle.
+> They're browsing in Safari. The push API only exists once the app is installed
+> to the home screen. That's Apple's rule."
+
+**[SCREEN: `SECURITY_REQUIRE_TLS=true` in the `.env`.]**
+
+> "While you're in that file — `SECURITY_REQUIRE_TLS`. If your database and Redis
+> traffic crosses any network you don't control, turn it on. Without it, a
+> deployment running those connections in cleartext gets a boot **warning**, which
+> blocks nothing, so it can run that way indefinitely. Turned on, it becomes a
+> refusal to start."
+
+**[CALLOUT: "Defaults to false so upgrading can't refuse to boot your instance"]**
+
+> "It ships off deliberately — plenty of deployments terminate TLS somewhere else,
+> in a VPC or a service mesh, and forcing it on would refuse to start a perfectly
+> secure setup. That makes it your call, which is why it's worth making."
+
 ### MONITORING WITH SENTRY (24:30 – 25:00)
 
 > "If you want error monitoring and performance tracking, enable the Sentry
@@ -519,6 +598,49 @@ thresholds]**
 > "This is your first stop when a member reports something isn't working. Check
 > the error log, see what happened, and either fix it or report it to the
 > community."
+
+**[CALLOUT: "As of August 2026 this page actually receives things"]**
+
+> "Be straight with your audience about one thing here: before August 2026 this
+> page was close to empty. It only ever received errors that some part of the app
+> explicitly chose to report, and the app made exactly one such call. A server
+> error became a toast on one member's screen and then it was gone — so
+> investigating 'the site is broken for Dave' meant asking Dave."
+
+> "Now it collects, automatically: every server 5xx, failed API requests from the
+> browser, uncaught JavaScript errors, unhandled promise rejections, and
+> chunk-load failures. Routine things are deliberately excluded — session expiry,
+> not-founds, validation errors — so the real failures aren't buried."
+
+**[SCREEN: Point at the Source column, and a row showing method/path/status.]**
+
+> "The **Source** column tells you whether the browser or the server saw it. One
+> failure often produces two rows and that's intentional: the server row has the
+> traceback and the endpoint, the browser row has the member and the page they
+> were on. You get the server row for a failure that never reached the app —
+> a gateway error — and the browser row for a failure outside any request."
+
+**[SCREEN: A row showing an occurrence count of 400+; then a REPORTING_THROTTLED
+row.]**
+
+> "Repeats are counted rather than collapsed, so 'one error' and 'one error that
+> happened four hundred times in a minute' stop looking identical. And when the
+> rate cap discards reports, that gets recorded too — a burst reads as truncated,
+> not as a quiet minute."
+
+**[SCREEN: An error message with an email address visibly redacted.]**
+
+> "One thing to tell your board if they ask: error text is scrubbed in the browser
+> before it's sent — emails, phone numbers, SSNs, tokens. These rows are readable
+> by everyone with audit access and downloadable as an export, so an identifier
+> landing here would have left every access control that governs it elsewhere.
+> Rows are kept a hundred and eighty days."
+
+**[CALLOUT: "Not covered: background task failures — see KNOWN_LIMITATIONS.md"]**
+
+> "The gap worth knowing: scheduled background jobs — nightly emails, report
+> generation — don't report here, because a worker has no request to resolve a
+> department from. Those are in the server logs."
 
 ### DEPARTMENT SETUP & CONFIGURATION (27:00 – 28:00)
 

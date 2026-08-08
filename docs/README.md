@@ -610,6 +610,59 @@ docker-compose ps
 
 ## 🔄 Recent Updates
 
+### 2026-08-08 - Skills Testing: Disclosure, Scorecard Integrity & Result Lifecycle
+
+**What Changed**:
+
+- **Result disclosure** — three axes resolved test → template → organization: **what** (`full` / `scores` / `none`), **when** (`on_completion` / `on_release`), **who** (candidate, `skill_test_viewers`, `result_viewer_positions`). Defaults match previous behaviour. Redaction lives in the single response builder every read funnels through; refusals are `404`, never `403`; emailing results resolves policy for the _recipient_
+- **Result lifecycle** — `POST /tests/{id}/void` (scored official, reason required, reverts the pipeline requirement), `POST /tests/{id}/cancel` (unscored, previously a dead status), `POST /tests/{id}/release`. `DELETE` now refuses official tests
+- **Template snapshots** — each test freezes the structure and scoring rules it was created against. Editing a published template could previously shift recorded marks onto their neighbours, drop a criterion's result, or re-grade a completed test
+- **Measured elapsed time** — the examiner's stopwatch is recorded; wall clock is a fallback only. `started_at` is stamped once, so wall clock over-reported by hours
+- **Autosave + optimistic concurrency** — a version counter with `409` on a stale `expected_version`; autosave suspends on conflict instead of retrying a doomed write
+- **`max_attempts` enforced** on both create and complete; voided and practice attempts do not consume an attempt
+- **Practice attempts belong to the member** — any member may run one on a peer, the candidate can view and discard their own, one-year retention
+- **Member-facing results** — **My Training → Skills Tests** and `/training/my-skill-tests/:testId`
+
+**New Documentation**:
+
+- Updated [SKILLS_TESTING_FEATURE.md](./SKILLS_TESTING_FEATURE.md) — §14.5 attempt limits, §15 result lifecycle, §16 disclosure, §17 scorecard integrity, §18 member-facing results, an as-built endpoint table, and a status note correcting §7's aspirational offline claims
+- Updated [docs/training/09-skills-testing.md](./training/09-skills-testing.md) — disclosure, void/cancel/delete, attempt limits, autosave/concurrency/timer, the frozen scorecard, and ten new troubleshooting rows
+- Updated [docs/training/02-training.md](./training/02-training.md) — the Skills Tests section on My Training
+- Updated [wiki/Module-Training.md](../wiki/Module-Training.md) — key capabilities, endpoint block, edge cases
+- Created [docs/youtube-scripts/15-skills-testing-evaluations.md](./youtube-scripts/15-skills-testing-evaluations.md) — full deep-dive script plus a shorts pack (15a–15h)
+- Updated [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md) — offline-support scope and the two decisions it needs from an owner
+
+---
+
+### 2026-08-07 - Web Push, Mobile/PWA Pass, Error Monitoring & Member CSV Import
+
+**What Changed**:
+
+- **Web Push** — lock-screen delivery for the installed PWA (iOS 16.4+ and Android), hooked in at `log_notification` so every existing notification source is covered. Per-device subscriptions, pruned on 404/410. `PUSH_ENABLED` defaults to `false`; `pywebpush` is imported behind a guard
+- **Mobile/PWA** — bottom tab bar on phones, correct safe-area handling, keyboard-aware action bars, scanner camera release on background, pull-to-refresh gesture ownership, iOS launch screens, `start_url` at `/dashboard`, precache cut from 275 entries / 6.1 MB to 15 / 1.8 MB, 44px icon-only tap targets, iOS autocorrect opt-out on 54 identifier and search inputs
+- **Error Monitoring** — client and server failures now reported automatically (5xx from both handlers, transport failures, uncaught exceptions and rejections, chunk-load failures); queued/retried delivery with page-hide flush and pre-session hold; occurrence counts and a `REPORTING_THROTTLED` row for anything the caps drop; PII scrubbing before send; 180-day retention; per-user ingest limit
+- **Member CSV import** — full pre-flight validation with all problems per row at once, a rejected-rows CSV, roster-collision detection, welcome emails off by default, progress and Stop, template example-row rejection, row-width checks. Plus a 422 rendering fix affecting **every** validation error in the app
+- **Training requirements** — course-library picker replacing free-text course names (which could never match), and a `recency_days` freshness window
+- **Prospective members** — an applicant can no longer read their own record; full-name search
+- **Communications** — email-template categories and officer signature variables
+- **Members** — hard-delete refusal with named blockers, and a fix for role saves silently stripping positions
+- **Security** — ORU-7 role-modification ceiling, `SECURITY_REQUIRE_TLS`, storefront search escaping (SF-1) and cache exclusion (SF-2)
+- **Reliability** — 166 service methods now verify the arrays they promise; apparatus route-ordering fix restoring 16 unreachable endpoints
+
+**New Documentation**:
+
+- Updated [docs/training/10-mobile-pwa.md](./training/10-mobile-pwa.md) — push setup and its edge cases, the bottom tab bar, precache trade-off, and nine new troubleshooting rows
+- Updated [docs/training/01-membership.md](./training/01-membership.md) — the pre-flight import walkthrough, the rejected-rows report, welcome-email default, and the deletion-refusal path
+- Updated [docs/training/08-admin-reports.md](./training/08-admin-reports.md) — what now reaches Error Monitoring, template categories, officer signature variables
+- Updated [docs/training/02-training.md](./training/02-training.md) and [TRAINING_PROGRAMS.md](./TRAINING_PROGRAMS.md) — course-library links and the freshness window
+- Updated [docs/training/15-prospective-members.md](./training/15-prospective-members.md), [docs/training/06-apparatus-facilities.md](./training/06-apparatus-facilities.md), [docs/training/03-scheduling.md](./training/03-scheduling.md)
+- Updated [wiki/Configuration-Environment.md](../wiki/Configuration-Environment.md) — Web Push and `SECURITY_REQUIRE_TLS`
+- Updated [wiki/Module-Communications.md](../wiki/Module-Communications.md), [wiki/Troubleshooting-Containers.md](../wiki/Troubleshooting-Containers.md), [wiki/Home.md](../wiki/Home.md)
+- Updated [docs/youtube-scripts/](./youtube-scripts/) — new shorts 8r–8z, plus beats in Scripts 3, 5, 6 and 7
+- Updated [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md) — the equipment-check apparatus-id blocker, missing frontend routes, and the tier-configuration docs mismatch
+
+---
+
 ### 2026-08-05 - Multi-Class Courses & Cohorts
 
 **What Changed**:

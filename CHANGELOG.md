@@ -7,6 +7,731 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Skills testing: the member can see their own results, and a scorecard can no longer drift (2026-08-08)
+
+**Added**
+
+- **A member can now see their own skills-test results.** Every skills-testing
+  route was gated on `training.manage`, so a result lived on the examiner's
+  device and had to be read over their shoulder. **My Training** now carries a
+  **Skills Tests** section listing that member's own official and practice
+  results, with a read-only detail page at `/training/my-skill-tests/:testId`.
+  The API scopes non-officers to tests they are party to, so nobody can reach
+  anyone else's scorecard.
+- **A department decides how much of a result the person tested may see.** A
+  new **Skills-Test Results** group in the training configuration editor sets
+  the department default on three axes, each of which a single template — or a
+  single test — may override:
+  - **What** (`result_disclosure`): `full` (every mark, point and written
+    note), `scores` (marks and points, no written commentary), or `none`.
+  - **When** (`result_release`): `on_completion`, or `on_release` — a finished
+    result stays invisible until an officer releases it, so a chief can review
+    it, or deliver a failure in person, first. Mirrors the shift-report review
+    workflow.
+  - **Who**: the candidate; anyone named on the test (a preceptor, an FTO —
+    `skill_test_viewers`); and holders of listed corporate positions
+    (`result_viewer_positions`).
+
+  Defaults are `full` / `on_completion` — exactly what members saw before — so
+  nobody silently loses sight of a result they can read today.
+
+- **`POST /training/skills-testing/tests/{id}/release`** releases a withheld
+  result. Officers get a **Release** action beside **Void** in the records tab;
+  it is idempotent and refuses tests whose results are never shown, so an
+  officer does not have to work out which mode a template inherits first.
+- **`POST /training/skills-testing/tests/{id}/void`** withdraws an official
+  result. Official results are no longer deletable — `DELETE` refuses them.
+  Voiding keeps the row with a required reason and its author, drops it from
+  totals, pass rate and average score, and releases any training-pipeline
+  requirement the pass had credited. The member sees the reason on their own
+  result.
+- **`POST /training/skills-testing/tests/{id}/cancel`** closes out an
+  evaluation abandoned mid-session, keeping partial results. `cancelled` was
+  previously a filter option and a badge that nothing ever set. The records tab
+  now offers **delete** for practice, **void** for scored, **cancel** for
+  unscored.
+- **Any member can run a practice test on a peer** without `training.manage`;
+  official tests still require it. Practice attempts are the candidate's own
+  drill notes — discardable by the candidate, the examiner or an officer, never
+  recorded or credited, and purged after a year via a new `practice_skill_tests`
+  retention class. Official results share the table and are excluded by a row
+  filter. Practice creation follows the template's own visibility rule, so an
+  `officers_only` template is not leaked through it.
+- **Autosave on the active test screen.** Scoring persisted only on an explicit
+  **Save** or on entering review, on a screen used one-handed outdoors — a
+  locked phone or a killed tab lost every criterion scored since the last save.
+  Saving is now automatic and silent while the evaluation is live.
+
+**Changed**
+
+- **Each test freezes the template it was scored against.** Criterion identity
+  is positional, and editing a published template rewrote the one stored
+  structure — so inserting a criterion shifted recorded pass/fail marks onto
+  their neighbours, deleting one dropped its result off the scorecard, and
+  raising the passing percentage could turn a recorded pass into a fail. Every
+  test now carries a `template_snapshot` (structure plus scoring rules) written
+  at creation and used for scoring, for the API response and for the emailed
+  scorecard. Tests predating the column fall back to the live template; the
+  migration backfills them from it, which changes nothing visible and freezes
+  them against future edits.
+- **The examiner's stopwatch is trusted.** Completing a test overwrote the
+  measured time with `completed_at - started_at`. `started_at` is stamped once,
+  when the test first goes in progress, so a test begun at 09:00 and finished
+  after lunch recorded seven hours — and time limits are pass/fail criteria
+  here. Wall clock is now only a fallback for tests completed without a
+  measured value, and reopening an in-progress test restores the timer instead
+  of restarting it at 00:00.
+- **Emailing results obeys the same disclosure policy**, resolved for the
+  recipient rather than for the officer sending it. Otherwise "email results"
+  is a one-click bypass of the department's decision to withhold or redact
+  them.
+- **A viewer never sees more of a result than its subject**, and a withheld
+  result reads as absent, not forbidden — every refusal is a `404`, and a
+  withheld test is dropped from the list rather than shown as an entry that
+  cannot be opened.
+- **Passing Points is now shown only on critical criteria.** A non-critical
+  criterion contributes its points to the overall score and cannot fail the
+  test on its own, so the field was asking for a number the scorer ignored. The
+  "passing score cannot exceed max score" validation moved with it, so a value
+  left behind from before a criterion was un-marked critical no longer blocks
+  saving over a field the editor does not show. The stored value is kept rather
+  than cleared, since the threshold defaults to 0 when absent and an accidental
+  toggle would otherwise leave the criterion passing at any score.
+
+**Fixed**
+
+- **`max_attempts` is now enforced by skills testing.** A passing test
+  completes its linked pipeline requirement, but nothing stopped a candidate
+  capped at two attempts being tested a third time and having the pass
+  credited — only the officer-entered knowledge-test path enforced the cap. The
+  guard runs both when an official test is created (so an examiner is refused
+  before running an evaluation that could not count) and when one is completed
+  (since several can be started before any is submitted). An attempt is a
+  completed, official, non-voided test against that requirement, pass or fail.
+  Voided results and practice attempts do not consume a chance, and a
+  requirement already completed, verified or waived is exempt so recertification
+  testing stays possible.
+- **Concurrent edits are detected instead of silently lost.** Two examiners on
+  one test — or an officer editing the scorecard while a phone held unsaved
+  criteria — lost one side's work, and the losing side got a success response.
+  Tests now carry a version counter, and an update sent against a stale version
+  is refused with `409`. Clients that send no version keep the old behavior. The
+  test screen suspends autosave on conflict and says so, rather than retrying a
+  doomed write every 30 seconds and leaving the examiner believing their scoring
+  is still being saved.
+- **The examiner's "View Results" button did nothing.** Both `/test/:id/active`
+  and `/test/:id` render the same page, so the router swapped the URL without
+  remounting and the review flag survived, re-rendering the identical review
+  screen.
+- **A retake no longer inherits the previous attempt's review notes**, and
+  opening a test from the bottom of a list no longer lands the examiner below
+  the questions (pages kept the previous page's scroll offset).
+
+### Members: every CSV row is checked before anything is created (2026-08-07)
+
+**Added**
+
+- **Full pre-flight validation.** Validation used to run inside the import loop
+  and stop at the first problem in a row, so a row with three bad cells took
+  three upload-fix-upload cycles, and row 21's problem surfaced only after rows
+  1–20 had already been created. Every data row is now judged before a single
+  member is created; rows that pass are imported, rows that fail are reported
+  and skipped, and each row reports **all** of its problems at once, naming the
+  column and the offending value: required fields, email shape, date format,
+  field lengths, the 3-character username minimum (including a username derived
+  from a short email local part — a column the file never had), partial
+  emergency contacts, role names matching nothing under Roles, and values
+  repeated inside the file, naming the line the value was first used on.
+- **A downloadable rejected-rows CSV.** The original row, unchanged, with the
+  reasons in a leading `errorReason` column. It holds only the failures, so the
+  corrected file cannot collide with the members that did import.
+- **Welcome emails are now a choice, off by default for imports.** Creating a
+  member queues a password-setup link immediately, so loading a roster for
+  staging — or from a list with stale addresses — put unrecallable mail in front
+  of every one of them. The review step now carries a checkbox; left off, the
+  roster loads quietly and credentials are issued afterwards from Member
+  Management. **Add Member**, which creates one member deliberately, is
+  unchanged.
+- **Collisions with the existing roster are caught up front.** The roster is
+  loaded once when the file is selected, and a row whose email, username or
+  membership number is taken is reported before the import runs, naming who owns
+  it. If that request fails the check is skipped rather than blocking the
+  upload, since the server still rejects a genuine duplicate. Where the
+  organization hides contact information, emails are absent from the response
+  and that dimension simply goes unchecked.
+- **Progress and a Stop button.** An import gave no sign of progress and could
+  not be stopped: 50 sequential requests behind a spinner reading
+  "Importing…". It now shows the count and can be stopped; rows not reached are
+  listed in the error report as stopped, so the downloaded file is exactly the
+  work left and can be uploaded to finish.
+
+**Fixed**
+
+- **A shifted row is now rejected instead of guessed at.** Nothing compared a
+  row's value count to the header's column count, so an unquoted comma shifted
+  every later column in silence and a phone number could land in the email
+  field. Row width is now checked (naming both counts), email columns are
+  shape-checked, and a value with seven or more digits and no `@` is called out
+  as a probable phone number in a shifted row.
+- **Errors name a findable line.** A quoted newline puts record 12 well below
+  line 13, so records now carry the line they started on. The file is also
+  parsed once rather than separately for preview and for import, removing the
+  chance of the two disagreeing.
+- **The template's own example row is rejected.** The template ships a
+  filled-in example so its columns explain themselves, but leaving it in created
+  a John Doe with a live password-setup link. First name, last name and email
+  must all match, so a real John Doe is unaffected.
+- **Two silent data losses are now reported when the file is selected.** A
+  `status` column is dropped (the create endpoint has no status field and every
+  member is created Active), as is any column outside the template; and role
+  names are now resolved at upload time, so a roster whose role column holds
+  assignments ("Engine Operator", "EMT") rather than configured role names is
+  known to import no roles before Import is pressed rather than after.
+- **Validation errors read as English again.** The server rewrites Pydantic's
+  `{loc, msg, type}` entries into `{field, message}`, but the shared error
+  handler read only the Pydantic spelling and fell back to the literal string
+  "Invalid value" for every failed field — a member import reported 50 rows of
+  "Invalid value. Invalid value". The same response now reads
+  `date_of_birth: Invalid date format. emergency_contacts.0.email: Invalid
+value.` Both spellings are accepted, since a 422 raised outside that handler
+  still arrives in the original form. **This affected every 422 in the
+  application, not just the import**; the onboarding module's own copy of the
+  assumption is fixed alongside it.
+- **The Add Member button on `/members/admin` went to the dashboard.** It linked
+  to a path that matches no route, and the catch-all turned the failure into a
+  silent redirect. It now selects the admin hub's existing Add Member tab. A new
+  route-integrity test walks the source and checks every literal navigation
+  target against the declared routes, so the next dead link fails a test instead
+  of a user. The same sweep found two more, both in Grants — **Record Donation**
+  and **Add Opportunity** point at create screens that were never built; they
+  are recorded in `KNOWN_MISSING_ROUTES` with a test that fails if either route
+  appears, so the allowance cannot outlive the gap.
+
+### Notifications: Web Push reaches an installed app on the lock screen (2026-08-07)
+
+**Added**
+
+- **Web Push.** The notification system had a rules engine plus in-app and email
+  channels, but nothing that reached a member with the app closed — which is
+  what an installed PWA is for. Delivery hooks into the notification service
+  rather than the dozen call sites that produce notifications, so **every
+  existing source** — event reminders, training expiry, schedule changes,
+  maintenance due, elections — reaches a phone with no further change. It fires
+  only for in-app rows, after the row is committed, and swallows every error: the
+  notification is already durably recorded and a push-service outage must not
+  fail the action that produced it.
+- **Subscriptions are per device, not per user**, so a member with the app on
+  both a phone and a station tablet is reached on both. Rows are pruned when the
+  push service answers 404/410 on send — the only signal that an app was
+  uninstalled or its site data cleared.
+- **iOS 16.4+ is covered** for home-screen PWAs. The push API only exists once
+  the PWA is installed, so Safari browsing correctly shows no toggle rather than
+  offering something that fails on tap.
+
+**Changed**
+
+- Push is **off by default**. `PUSH_ENABLED` defaults to `false` and `pywebpush`
+  is imported behind a guard, so deployments that do not want push need not
+  install it; the service reports itself unconfigured and the UI hides the
+  toggle. Enabling it also needs `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and
+  `VAPID_SUBJECT`.
+
+### Error Monitoring: the platform now reports its own failures (2026-08-07)
+
+**Added**
+
+- **Client and server failures reach the Error Monitoring page.** Most failures
+  were visible only to the member who hit them — an API 500 became a toast, an
+  unhandled rejection became a console line, and an administrator investigating
+  "the site is broken for Dave" had nothing to look at. The page only ever
+  received explicit `logError` calls, of which the app made exactly one.
+  - **Server:** 5xx responses are now persisted. The unhandled-exception handler
+    resolved the caller's organization from the `Authorization` header, but
+    browsers authenticate by the httpOnly cookie, so the organization was always
+    unknown and the row was skipped every time — identity now resolves from the
+    cookie first. A new handler also persists the 5xx raised through the
+    established `HTTPException` pattern, which converts a failure into a normal
+    response the unhandled-exception handler never sees. 4xx is deliberately not
+    persisted.
+  - **Client:** failed API requests are reported from the shared axios
+    interceptors that every module client funnels through (5xx, transport
+    failures and timeouts, and 403 — 401, 404 and validation failures are not,
+    so real failures are not buried), along with uncaught exceptions and
+    unhandled rejections, which previously reached nothing at all.
+  - Chunk-load failures are reported under their own type: they mean a
+    deployment landed mid-session, which is resolved differently.
+- **A Source column, the technical message beside the user-facing one, and
+  method/path/status** for any error carrying request context.
+
+**Changed**
+
+- **Reports survive the failures they report.** A report was one request: if it
+  failed, it was gone — and the failures most worth recording are the ones that
+  break their own delivery. Reports are now queued and retried (4 attempts, 2s
+  / 8s / 30s) and delivered serially so a queue draining on reconnect does not
+  stampede a recovering server; flushed on page hide with `keepalive`, so a
+  member who hit an error and closed the tab still reports it; and held rather
+  than dropped when raised without a session, then delivered on the next login —
+  errors on the login screen are exactly what administrators get asked about.
+- **Repeats are counted rather than collapsed into silence.** "One error" and
+  "one error that happened 400 times in a minute" no longer look identical, and
+  the page shows the count. What the rate cap and the queue bound discard is
+  itself reported as a `REPORTING_THROTTLED` row carrying the counts, so a burst
+  reads as truncated rather than quiet.
+- **Error text is scrubbed before it leaves the browser** — emails, phone
+  numbers, SSNs, bearer tokens and JWTs. Error messages quote user input and API
+  payloads, and these rows are readable by every `audit.view` holder and
+  downloadable as an export.
+- **The table is bounded.** `error_logs` is registered with the retention service
+  (180 days default, 30-day floor), and ingest is rate-limited per user
+  (120/min) — per user rather than per IP, since a department's members share one
+  public address and an IP bucket would let one failing tab silence the whole
+  station's reports.
+
+### Mobile & PWA: an installed app that behaves like one (2026-08-07)
+
+**Added**
+
+- **A bottom tab bar on phones.** Every destination previously sat behind a
+  hamburger drawer anchored to the top-left — two taps to reach anything, from
+  the corner hardest to reach one-handed, across 59 nav entries. Four
+  destinations plus **More** now sit within thumb reach below `md`; at wider
+  widths the side or top navigation is already visible. Tabs are chosen from a
+  priority list and filtered by the organization's enabled modules, so a
+  department with scheduling switched off gets Members promoted into the freed
+  slot rather than a gap. The bar hides while the on-screen keyboard is up.
+- **iOS launch screens.** iOS does not derive one from the manifest, so the
+  installed app flashed blank white on every cold start. 14
+  `apple-touch-startup-image` variants now cover iPhone SE through 16 Pro Max
+  and the iPad sizes; `npm run generate:pwa-assets` rebuilds them.
+- **Manifest screenshots**, so Android shows the richer install dialog instead of
+  the minimal card. Regenerate with `npm run generate:screenshots`.
+
+**Changed**
+
+- **The app launches at the dashboard.** `start_url` pointed at `/`, the
+  onboarding Welcome splash — it reached the dashboard only by mounting, reading
+  the session flag and redirecting, and a logged-out offline launch fell through
+  to the "Get Started" screen, which reads as though the department was never set
+  up. Now `/dashboard`, behind the route guard, so an unauthenticated launch goes
+  to login. The "Dashboard" manifest shortcut had the same wrong target.
+- **The precache went from 275 entries / 6.1 MB to 15 / 1.8 MB.** Installing the
+  app used to download admin surfaces — finance, grants, elections, onboarding —
+  that a given member will never open, over the rural cellular connections this
+  gets used on. The shell is precached; other route chunks are cached on first
+  visit. Barcode scanning stays precached so it works on a cold offline start.
+  The trade-off is that a page never visited online is no longer available
+  offline.
+
+**Fixed**
+
+- **Safe-area insets were applied to `<body>`**, but a fixed element's containing
+  block is the viewport — so the padding did nothing for the fixed mobile header
+  and nav drawer (which rendered under the status bar) while still making every
+  full-height page overflow by the inset height. Insets now live on the elements
+  that need them. The top route-progress bar, the last fixed element without one,
+  rendered entirely underneath the status bar on notched devices, so route
+  transitions gave no loading feedback at all.
+- **Action bars stayed behind the software keyboard on iOS**, which shrinks the
+  visual viewport but leaves the layout viewport alone — the Save button in the
+  equipment-check and skill-test flows among them. The viewport delta is now
+  published as a CSS variable that the bottom-bar utilities add to their padding.
+  Android and desktop resize the layout viewport instead, so nothing moves there.
+- **The barcode scanner never released the camera when the page was
+  backgrounded.** Switching apps or locking the screen mid-scan left the capture
+  track held; iOS suspends it without resuming, so the user returned to a
+  permanently frozen preview with the OS camera indicator still lit.
+- **Pull-to-refresh hijacked scrolling inside modals and side panels**, gated only
+  on window scroll position, so a downward drag inside an already-scrolled
+  container refreshed the page and discarded whatever was in the open dialog. It
+  now yields to a scrolled scrollable ancestor, and never arms while body scroll
+  is locked.
+- **The "new version available" banner was invisible on a phone**, painted over by
+  the fixed mobile header. For an installed PWA that stays open for weeks that is
+  the primary update channel; it is now pinned to the bottom of the viewport
+  below `md`.
+- **iOS autocorrect rewrote values that must be taken literally.** 54 inputs
+  across 47 files now opt out of autocapitalize and autocorrect: identifiers
+  (username, VIN, serial, asset tag, license plate, SKU, barcode, membership
+  number) and every search box, where autocorrect was mangling member surnames
+  mid-query. Login is included — autocorrect substitution is not case-related and
+  would break a login outright.
+- **Grids that stayed multi-column at phone width.** The notification log's
+  12-column grid had gutters alone exceeding a 360px viewport; 11 form grids
+  (city/state/zip, first/middle/last name, moved-by/seconded-by,
+  rotation/days-on/days-off) put text inputs at ~104px, narrower than their own
+  labels; shift-report stat tiles went 4-up. The calendar's seven columns are
+  left alone — seven columns is what a week is.
+- **Hover-only controls never appeared on touch**, including a drag handle that
+  made reordering undiscoverable on a phone and an actionable button in the
+  equipment-check builder. The skills-testing tab bar now scrolls rather than
+  overflows.
+- **Icon-only tap targets below 44px**, measured from rendered geometry rather
+  than read from source: the list/calendar view toggles on Events rendered 28×28
+  and the dashboard's notification dismiss button 32×32. Raised below `md` only,
+  so desktop density is unchanged. Wide text buttons in the 30–36px range remain
+  and are recorded rather than pushed through in bulk.
+
+### Reliability: an unexpected response no longer takes a whole page down (2026-08-07)
+
+**Fixed**
+
+- **166 service methods across 20 files now verify the array they promise.**
+  `api.get<T[]>` asserts the wire format without checking it, and ~190 methods
+  handed that straight to callers that spread, `.map`, `.filter` or read
+  `.length` off it — so one unexpected body took a whole page down to the error
+  boundary instead of rendering empty. This matters more on a phone than a
+  desktop: a captive portal on station Wi-Fi, or a carrier interception page,
+  answers 200 with an HTML body. Driving 13 routes at 390px found six pages
+  crashing this way; after the sweep, none do.
+- **Envelope reads, where the array sits one level below the response body and
+  the service-level guard cannot reach**, are guarded at the four consumers that
+  had them: the apparatus list, the minutes page's meetings, the inventory items
+  list (including the append-on-scroll path), and Documents.
+- **Two crashes of a different shape** — reading a property off an undefined
+  object rather than a non-array: `SubmitTrainingPage` indexed a per-field config
+  that a response might omit entirely, and `AdminHoursPage` read `.length` off a
+  value set from an envelope.
+- **Events and Scheduling** each replaced a defaulted list with whatever the
+  settings or templates endpoint returned; a payload missing the field made it
+  undefined and the next call killed the page.
+- **A standing guard:** `src/e2e/mobile-resilience.spec.ts` walks all 29
+  authenticated routes at 390px and asserts none reaches the error boundary and
+  none scrolls horizontally, against a mock that answers unmatched endpoints
+  permissively — exactly the degraded-payload case these crashes came from.
+
+### Training: requirements point at real courses, and can demand a recent one (2026-08-07)
+
+**Added**
+
+- **Course and certification requirements now pick from the course library**
+  instead of expecting an id list nobody could supply. A recruit-school phase can
+  point its "CPR" requirement straight at the CPR course in the catalog — the
+  same course the department-wide requirement uses — so one completion satisfies
+  both. The picker is shared by all three places a requirement is defined: the
+  create-pipeline wizard, the pipeline requirement modal, and the department
+  requirements page.
+- **A freshness window (`recency_days`).** A requirement can now demand that the
+  completion itself be recent — "CPR taken within the last 180 days" —
+  configurable next to the course picker in all three of those places. Off by
+  default, so nothing changes for existing requirements.
+
+  This is the case a `one_time` requirement could not express: its frequency
+  window is unbounded, so a member who took CPR three years ago read as satisfied
+  forever. It is deliberately distinct from `rolling_period_months`, which sets a
+  recurring obligation ("redo it every N months"); this is a validity window on
+  an individual completion, so a department's one-time CPR requirement and a
+  recruit pipeline's 180-day one can point at the same course and disagree about
+  the same record. The window narrows the record pool _before_ the frequency
+  window in every evaluator, so it can only ever remove records.
+
+**Fixed**
+
+- **A department requirement built from typed-in course names could never be
+  completed.** The department requirements page collected `required_courses` as
+  free-text course names, one per line, but every evaluator compares that column
+  against a record's course id — so a typed name never matched and the
+  requirement read as permanently incomplete. Picking from the library stores
+  real ids. The NIMS/ICS starter template seeded four such names and now names
+  them in its description for the officer to link, since library ids are
+  per-department and a template cannot know them.
+- **The officer apply-training-record path now respects the freshness window.**
+  That path is an explicit sign-off and bypasses the external-credit flag by
+  design, but crediting a three-year-old record to a "within 180 days"
+  requirement would quietly defeat the rule the officer set. A record with no
+  completion date fails the check rather than slipping through.
+- **A freshness window can be lifted again** — `recency_days` is in the update
+  path's clearable set, where the shared loop would otherwise treat "unset" as
+  "leave alone" and make the setting one-way.
+- **Switching a requirement away from the course/certification types clears its
+  links**, since a leftover course id silently narrows the hours evaluator to only
+  that course's records.
+- Certification requirements gain the course link as an **additional, exact**
+  match on top of the existing name / training-type / registry-code heuristics,
+  which must keep working for requirements created before the link existed.
+
+### Apparatus: sixteen unreachable endpoints, and a fuel tab that crashed (2026-08-07)
+
+**Fixed**
+
+- **Sixteen `GET` endpoints were unreachable.** Routes match in declaration
+  order, and a single-segment `/{id}` declared above the literal paths swallows
+  all of them — `GET /apparatus/maintenance-types` resolved as an apparatus id
+  and 404'd "Apparatus not found", taking maintenance, fuel logs, equipment,
+  operators, NFPA compliance, components, component notes, service providers,
+  report configs, custom fields and EVOC levels with it. That is the whole
+  apparatus detail read API. The by-id handlers now sit below the literal routes;
+  `documents/my-folder`, `event-requests/email-templates` and
+  `minutes/templates` move above theirs. A scan of every endpoint module confirms
+  none are left.
+- **Creating an apparatus maintenance record always returned a server error.**
+  The response reaches into the maintenance type, which the create path did not
+  load, so serialization triggered a lazy load in async context and raised
+  _after_ the row was written — the record existed but the caller saw an error.
+  Create and update now re-read through the getter that loads it.
+- **The Fuel Logs tab crashed for any apparatus with a fuel log.** `gallons` is a
+  SQL numeric, which serializes as the JSON string `"33.000"`; the response type
+  declared a number and the component called `.toFixed(2)` on it. The type now
+  says what the API sends, both render sites coerce, and the currency formatter
+  accepts the string form so the next field of this shape does not repeat it.
+
+### Prospective members: an applicant cannot read their own file (2026-08-07)
+
+**Added**
+
+- **A prospective-membership record is not the applicant's copy of their
+  application.** It carries interview notes, recommendations, reference checks,
+  election-package commentary and coordinator notes written in confidence by
+  other members, and it stays sensitive after the applicant is elected — at which
+  point they may hold `prospective_members.view` in their own right and, until
+  now, could read the file that decided their own membership vote.
+
+  A member is now matched to their own record by the transferred-user back-link,
+  by an email address they own (department or personal), or by full name paired
+  with a matching date of birth. Matching is deliberately conservative — name
+  alone collides (two J. Smiths in one department is routine) and a false
+  positive would hide a real applicant from a coordinator.
+
+  The guard is registered on the whole prospective-members router rather than per
+  endpoint, so all 20 `{prospect_id}` routes — and any added later — inherit it.
+  It answers `404`; a `403` would confirm what the caller must not learn anything
+  about. Collection surfaces filter instead, so the caller simply never sees the
+  row: prospect list (and its total), kanban board, pipeline stats, the
+  election-package list, and label generation — a prospect label encodes the
+  public status-check token.
+
+**Fixed**
+
+- **Prospect search now matches a full name.** The search box matched the raw
+  query against first name, last name and email individually, so "John Smith" —
+  the thing a coordinator actually types — matched no column and returned
+  nothing, while "John" alone worked. Every whitespace-separated term must now hit
+  some field, which also makes "smith john" find the same person.
+- **Pipeline stats went from ~20 queries to two.** A 12-stage pipeline was
+  costing one count query per status plus one per step to render a single stat
+  header.
+
+### Communications: categorised email templates and officer signature variables (2026-08-07)
+
+**Added**
+
+- **The email template catalogue is grouped into collapsible categories** —
+  Members & Accounts, Events & Scheduling, Training, Elections, Inventory,
+  Department Store, Other — with per-category counts. It had grown past three
+  dozen entries rendered as one flat scroll. An active search expands every group
+  so a hit is never hidden behind a collapsed header, and the category holding
+  the selected template is force-expanded.
+- **A department office directory.** A notice sent by a member-services clerk, or
+  by a nightly scheduled task, had no way to be signed by the officer whose name
+  belongs on it. Each office — President, Vice President, Chief, Deputy/Assistant
+  Chief, Secretary, Assistant Secretary, Treasurer, Safety Officer, Training
+  Officer, Quartermaster — resolves to a holder and exposes `{{<office>_name}}`,
+  `{{<office>_title}}`, `{{<office>_email}}` and `{{<office>_phone}}` to **every**
+  template.
+
+  A holder is resolved by, in order: an admin override on the office; the member
+  the office is linked to (so the values track that member's profile); or
+  auto-detection from members carrying the matching position slug — so a
+  department that never opens the new **Officers** tab still signs its notices
+  correctly. Values are refreshed on every office write, when the Officers tab is
+  loaded, and nightly, which catches changes made to the member behind an office
+  rather than to the assignment. Only catalogued variable names are injected.
+
+**Fixed**
+
+- **Inventory change emails silently dropped every `{{organization_*}}`
+  variable** — the notification service passed no organization to the renderer.
+
+### Members: hard delete, and role saves that quietly stripped positions (2026-08-07)
+
+**Fixed**
+
+- **Saving a member's roles silently wiped their positions.** The endpoint loaded
+  the member with their roles, ran a hand-written `DELETE` over every assignment,
+  then reassigned the collection — so the ORM diffed against a stale collection,
+  positions present in both the old and new set looked unchanged and were never
+  re-inserted, and dropping one raised a stale-data error. Both raw deletes are
+  gone; the collection assignment does the whole job.
+- **Permanently deleting a member returned a server error.** The same pattern:
+  the continuity guard that runs first loads every active member _with_ their
+  positions, so the raw delete removed rows behind the ORM's back and the flush
+  aborted the transaction. Deleting the member is itself what removes those rows.
+- **A member who had ever created a record could not be deleted at all.** Only
+  165 of the ~280 foreign keys into members declare SET NULL and 41 CASCADE; 74
+  attribution columns (`created_by`, `approved_by`, `issued_by`, …) were never
+  given a delete rule, so the database treats them as RESTRICT. Deletion now
+  clears the 62 nullable ones first, matching the SET NULL intent the rest of the
+  schema declares. The 12 that are NOT NULL (budgets, purchase requests, expense
+  reports, IP exceptions and friends) cannot be cleared without falsifying who
+  requested or filed the record, so the request is **refused with a `409` naming
+  them**, pointing at deactivate + anonymize — which strips personal information
+  while leaving those records owned. Both lists are derived from the schema at
+  delete time, so tables added later are covered without editing the service.
+- **The admin page discarded the server's explanation** and always showed "Unable
+  to permanently delete the member", so the `409` never reached the admin.
+- **The deletion-impact modal declared a documents count it never computed**
+  (always 0). It now counts documents by uploader, and no longer claims documents
+  are deleted — they are kept with the uploader cleared.
+
+### Security: role sabotage, transport TLS, and storefront search (2026-08-07)
+
+**Fixed**
+
+- **A `roles.edit` holder could destroy a role more powerful than their own
+  (ORU-7).** The existing grant ceiling only inspects the permission list being
+  _written_, and returns early when that list is empty — so an admin without full
+  access could save the organization's only System Owner role with no permissions
+  and wipe it, or with a small in-ceiling set and downgrade it, locking the tenant
+  out of its own administration. Checking the new values could never catch this,
+  because it is sabotage rather than escalation. Modifying a role now requires that
+  your own access already covers everything that role **currently** holds. Blocked
+  attempts raise a CRITICAL security alert, matching the grant ceiling.
+- **Storefront search treated `%` and `_` as wildcards (SF-1).** Product and order
+  search built the pattern with no escaping, so searching `%` returned the whole
+  catalog — and the whole order list, every member's name and email, to a
+  `storefront.manage` holder. The escape transform had been copy-pasted into seven
+  services and is now a shared utility with unit tests, taking the explicit route
+  rather than relying on the server's implicit default escape character.
+- **`/store/` was missing from the API response cache exclusion list (SF-2).**
+  Store order data is the same class of personal information the cache already
+  excludes for finance and inventory charges: member names, shipping addresses,
+  payment references and outstanding balances. There was no live exposure — the
+  storefront's client does not install the cache interceptor — but this closes the
+  gap before any storefront call is routed through the cached global client.
+- **A variant group could be created against another organization's category
+  (XC-1).** `category_id` arrived from the client with no organization check on
+  create, and update reached it through a blind attribute write. Both are now
+  validated.
+
+**Added**
+
+- **`SECURITY_REQUIRE_TLS`** promotes unset `DB_SSL`/`REDIS_SSL` in production
+  from a boot warning to a CRITICAL finding, which the application already refuses
+  to start on in production and staging. Without it, protected health information,
+  sessions and cached queries cross the network in cleartext and nothing blocks
+  the deployment. It **defaults to `false`**, so upgrading cannot refuse to boot an
+  existing deployment that terminates TLS elsewhere — turning it on is the
+  deployment owner's call. The distinct "TLS on but peer unverified" case stays
+  CRITICAL regardless.
+
+**Changed**
+
+- The storefront module has been audited end to end (`docs/module-audit/storefront.md`) —
+  it was added after the audit table was written and never got a row, so the newest
+  module, and the only one that moves money, was unreviewed while the tracker read
+  "complete". All 47 endpoints are authed, no unscoped by-id queries, exports use the
+  safe CSV writer, and the money path prices every line from the catalog, locks
+  products before counting limits, refuses to let self-reported payment move the paid
+  amount, and requires an exact balance match on inbound captures.
+- `docs/KNOWN_LIMITATIONS.md`: six MED rows described code that had since been fixed
+  (the CSRF no-cookie branch, ORU-7's grant ceiling and last-admin guard, FIN-4, the
+  self-certification half of CS-8, FE-6/FE-7, and the Black pin). Corrected, with the
+  date each was verified against the code.
+
+### Interface: colors that follow the theme, everywhere (2026-08-07)
+
+**Fixed**
+
+- **An app-wide scan for Tailwind color tokens with no counterpart for the other
+  theme** surfaced 76 unpaired tokens; each was checked against the background it
+  actually renders on, since a pale token on a fixed saturated surface is correct.
+  The ones that genuinely rendered illegibly are fixed: pale text on theme-tinted
+  panels (Reports, Forgot Password, Reset Password), white row dividers and page
+  spinners on light surfaces (Apparatus list and form, My Training, Meeting
+  Attendance), hover borders that gave no feedback in light mode (Minutes,
+  Authentication Choice) and a selected-swatch halo that vanished into the surface,
+  disabled buttons that washed out to unreadable (Documents, Scheduling, Shift
+  Report settings) — now signalling disabled state with opacity, matching the
+  button utilities — the check-in QR print page's URL, rendered at 10px in light
+  gray on white and not reliably legible on paper or on the kiosk display, and the
+  star-rating hover shade.
+- **The CSV import page** carried several colors picked for a dark background:
+  the instruction list and the per-row error list — the very messages a failed
+  import needs read — were effectively invisible in light mode, the preview
+  table's row separators vanished, the "Remove file" link had no hover feedback,
+  and the validating spinner washed out on white.
+- **The info/success/danger panels now take their colors from the stylesheet's
+  alert tokens** rather than from per-page classes, so retuning an alert color is
+  a one-line change instead of a sweep through the pages. This also picks up the
+  tuned high-contrast values: a hardcoded dark-theme red was legible under
+  high-contrast only because that theme also sets the dark class.
+
+### Tooling, build and CI (2026-08-07 → 2026-08-08)
+
+**Fixed**
+
+- **`pypdf` bumped to 6.15.0** for CVE-2026-71852 and CVE-2026-71870, which were
+  failing the Backend Security Scan on every pull request.
+- **Two duplicate Alembic revision ids** (`20260807_0001`, then `20260807_0002`)
+  from same-day pull requests merged without being rebased onto each other. A
+  revision id is what Alembic writes to the version table, so a duplicate leaves
+  the graph unresolvable rather than merely forked — the application cannot build
+  the revision map at all, which crashes startup and so breaks deploys from
+  `main`, not just tests. Renumbered and merged to a single head, with a new
+  single-head assertion added to the migration-chain guard: the existing tests
+  catch duplicate ids, dangling parents and multiple roots, but a fork passes all
+  three while still leaving `upgrade head` ambiguous.
+- **The push-subscriptions table could not be created on a fresh install.** The
+  migration named a character set without a collation, so the table took the
+  server's default collation rather than the database's, and a foreign key
+  requires both sides to agree on collation as well as type.
+- **The frontend image now installs from the lockfile.** It copied only
+  `frontend/package.json` and re-resolved 604 unpinned packages from the registry
+  on every build, so production shipped dependency versions no test had ever run
+  against — and nothing pinned what landed in the image. The build context is now
+  the repository root, which puts the single root lockfile in reach; every compose
+  file and documented build command that named `./frontend` as the context is
+  updated, including the two Unraid files.
+- **The frontend container has been reporting unhealthy in production as well as
+  CI.** nginx binds IPv4 only, the container resolves `localhost` to both
+  families, and musl returns the IPv6 address first — so the healthcheck was
+  refused. Both the image's healthcheck and the test now name `127.0.0.1`.
+- **The pre-commit hook had never fired for anyone.** There was no `prepare`
+  script, so the hooks path was never set — which is how a lint violation reached
+  `main` and broke Backend Lint on every open pull request. Three further faults
+  would have kept it from working once installed (a removed v8 idiom, repo-root
+  paths passed to tools run from `backend/`, and every tool's stderr discarded).
+  It now delegates to the lint-staged config that was already declared, and runs
+  ESLint from `frontend/`, where the flat config lives — previously every commit
+  touching a TypeScript file aborted with "couldn't find an eslint.config".
+- **Backend Lint stopped at the first failing tool**, so for the two days a
+  violation sat on `main`, no pull request verified formatting or import order at
+  all. The three checks now run independently. Repo-root Python (`scripts/`,
+  `generate_registry.py`) was linted by nothing and is now in scope; `alembic/` is
+  now covered by both `lint:backend` and CI, which previously disagreed with the
+  pre-commit hook about which files exist.
+- **The test suite ran against the developer's own working database**, since that
+  is what `.env` points at. The per-test transaction is rolled back so nothing is
+  written, but tests still _read_ it, and several assert on an empty slate — 37 of
+  46 apparent "pre-existing failures" were this. `pytest` now points at
+  `intranet_test` and creates it if absent, so it stays a single command on a
+  fresh checkout; CI can still name the database by exporting `DB_NAME`.
+- **Node floor corrected to >= 22.** The root install builds the frontend
+  workspace, so the frontend's floor is the real floor; the old `>= 18` / npm
+  `>= 9` range understated it.
+
+**Changed**
+
+- **Documentation screenshots are quantized at capture** rather than stored in Git
+  LFS, which this environment's network policy blocks — pointers would commit fine
+  and then be unresolvable for anyone cloning. A typical capture drops from ~500 KB
+  to ~125 KB with no visible difference on flat UI screenshots; the existing 123
+  images went from 42 MB to 12 MB. The capture tool now also detects an error-boundary
+  page and fails the shot, after one crash was applied into a guide as though it
+  were the feature.
+- **`./dev_env.sh`** starts the database, cache, API and dev server and blocks until
+  they answer, and the demo seeder is now self-healing over repeated runs.
+
+**Known issue**
+
+- **Submitting a shift equipment check fails** for any shift with an apparatus
+  assigned. `shifts.apparatus_id` is an unconstrained string carrying a scheduling
+  apparatus id, while the equipment-check table's column is a real foreign key to the
+  apparatus table, and the create path copies one straight into the other. Every route
+  to a fix means picking a side in a two-apparatus-tables inconsistency, which is a
+  design decision rather than a patch, so it is reported rather than guessed at. See
+  `docs/KNOWN_LIMITATIONS.md`.
+
 ### Medical screening: the Records list now shows the member's name (2026-08-06)
 
 **Fixed**

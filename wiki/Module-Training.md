@@ -8,6 +8,8 @@ The Training module tracks courses, certifications, training requirements, progr
 
 - **Training Requirements** — Hours, courses, certifications, shifts, calls, skills evaluations, checklists, and knowledge tests with annual/quarterly/monthly/rolling frequencies. Requirements can target specific member categories (Active, Administrative, Probationary, Life, Retired, Honorary) or apply to all members. _(2026-07-08)_ The create form collects the matching quantity field per type and blocks requirements that would apply to nobody
 - **Requirement Templates** — _(2026-07-08)_ Ten built-in templates for common standards (NFPA 1001/1500, NREMT recertification, CPR/BLS, OSHA hazmat/bloodborne pathogens/respiratory protection, HIPAA awareness, NIMS/ICS courses, new-member onboarding checklist). Selecting a template pre-fills the create form for review; standards-based templates carry source attribution with the standard or CFR citation as registry code
+- **Course-Library Requirement Links** — _(2026-08-07)_ Course and certification requirements pick from the department's course catalog (`CourseLibraryPicker`, shared by the create-pipeline wizard, the pipeline requirement modal, and the department requirements page) rather than taking free text. This also **fixed a class of requirement that could never be completed**: the department requirements page collected `required_courses` as typed course _names_, while every evaluator compares against a record's `course_id`. Certification requirements gain the link as an _additional_ exact match on top of the existing name/`training_type`/registry-code heuristics. Every write path validates the ids against the caller's org via `assert_all_in_org`, reporting only "invalid" so it cannot be used to probe another tenant (XC-1). Changing a requirement's type away from courses/certification clears the links
+- **Requirement Freshness Window** — _(2026-08-07)_ `recency_days` demands that the completion itself be recent ("CPR taken within the last 180 days"), off by default. Distinct from `rolling_period_months`: that sets a recurring **obligation**, this is a validity window on an **individual record**, so a department's one-time requirement and a recruit pipeline's 180-day one can point at the same course and disagree about the same record. It narrows the record pool _before_ the frequency window in every evaluator, so it can only remove records. It also gates the officer apply-training-record path (an explicit sign-off that bypasses `allows_external_credit` by design, but must not bypass this), rejects a record with no completion date, and is in the update path's clearable set so the setting is not one-way
 - **Training Programs** — Structured multi-phase curricula (Flexible, Sequential, Phase-based) with milestone tracking
 - **Pipeline Recert Cycle** — _(2026-07-15)_ Training pipelines can reset an enrolled member's accumulated progress for a new certification cycle. Officers reset a single requirement or a whole enrollment manually; a pipeline can also carry a stored recurring deadline (cycle length in months plus an optional fixed anchor date, e.g. NREMT's March 30) that auto-resets each enrollment when it passes — applied lazily on progress load and via a daily 5 AM scheduled sweep (`recert_resets`, also exposed as the `recert/run-due` endpoint)
 - **Self-Service Withdrawal** — _(2026-07-16)_ A member can leave a program from their progression view (e.g. after downgrading from Paramedic to EMT); officers can withdraw anyone. Soft withdrawal keeps the record but removes it from the active dashboard and its warnings, and the member can be re-enrolled later
@@ -319,11 +321,25 @@ POST   /api/v1/training/skills-testing/tests                  # Create test
 GET    /api/v1/training/skills-testing/tests/{id}             # Get test detail
 PUT    /api/v1/training/skills-testing/tests/{id}             # Update test (save progress)
 POST   /api/v1/training/skills-testing/tests/{id}/complete    # Complete test & calculate results
-DELETE /api/v1/training/skills-testing/tests/{id}             # Delete test record (training.manage)
-DELETE /api/v1/training/skills-testing/tests/{id}/discard     # Discard practice test
-POST   /api/v1/training/skills-testing/tests/{id}/email-results  # Email test results
-GET    /api/v1/training/skills-testing/summary                # Department-wide statistics
+DELETE /api/v1/training/skills-testing/tests/{id}             # Delete — PRACTICE ONLY (refuses official tests)
+DELETE /api/v1/training/skills-testing/tests/{id}/discard     # Discard practice test (candidate, examiner or officer)
+POST   /api/v1/training/skills-testing/tests/{id}/release     # Release a withheld result (2026-08-08, idempotent)
+POST   /api/v1/training/skills-testing/tests/{id}/cancel      # Close out an UNSCORED evaluation (2026-08-08)
+POST   /api/v1/training/skills-testing/tests/{id}/void        # Withdraw a SCORED official result; reason required (2026-08-08)
+GET    /api/v1/training/skills-testing/tests/{id}/viewers     # Named viewers (2026-08-08)
+POST   /api/v1/training/skills-testing/tests/{id}/viewers     # Add a named viewer
+DELETE /api/v1/training/skills-testing/tests/{id}/viewers/{user_id}  # Remove a named viewer
+POST   /api/v1/training/skills-testing/tests/{id}/email-results  # Email test results (disclosure resolved for the RECIPIENT)
+GET    /api/v1/training/skills-testing/summary                # Department-wide statistics (excludes voided)
 ```
+
+> **`PUT /tests/{id}` accepts `expected_version`** _(2026-08-08)_. A stale value
+> is refused with **`409`**; clients that omit it keep the previous behaviour.
+> **A refusal to read a withheld or out-of-scope test is always `404`, never
+> `403`** — a 403 would announce that a result exists and is being withheld.
+> **Creating a _practice_ test needs no `training.manage`**; creating or
+> completing an _official_ one does, and both ends check the requirement's
+> `max_attempts`.
 
 ### Recertification Tracking
 
@@ -509,10 +525,15 @@ The Training module includes a **Skills Testing** sub-module for conducting stru
 - **Critical Criteria** — Required criteria that trigger automatic failure, mirroring NREMT auto-fail rules
 - **Point-Based Scoring** — Criteria with configurable point values for weighted scoring. Section point subtotals and overall percentage calculated from total points
 - **Test Administration** — Examiner selects template + candidate, scores criteria in real time, system calculates pass/fail
-- **Practice Mode** — Non-graded practice tests with email results, discard, and retake flow
-- **Test Visibility Controls** — Admin-controlled visibility toggle per test to show/hide results from candidates
+- **Practice Mode** — Non-graded practice tests with email results, discard, and retake flow. _(2026-08-08)_ Any member may run one on a peer; the candidate can see and discard their own; retained one year
+- **Result Disclosure** _(2026-08-08)_ — Three axes resolved test → template → organization: **what** (`full` / `scores` / `none`), **when** (`on_completion` / `on_release`), and **who** (candidate, named viewers, position holders). Supersedes the earlier single show/hide toggle. Defaults (`full` / `on_completion`) match previous behaviour
 - **Post-Completion Review** — Section-by-section review screen with notes before finalizing, auto-stop clock
-- **Test Record Deletion** — Training officers can permanently delete test records with audit logging
+- **Result Lifecycle** _(2026-08-08)_ — **Delete** (practice only), **Void** (withdraw a scored official result with a required reason, reverting the pipeline requirement it credited), **Cancel** (close out an unscored, abandoned evaluation)
+- **Template Snapshots** _(2026-08-08)_ — Each test freezes the template structure and scoring rules it was created against, so editing a published template can no longer shift, drop or re-grade a completed scorecard
+- **Autosave & Optimistic Concurrency** _(2026-08-08)_ — Scoring saves itself while a test is live; a save against a stale version is refused with `409` and autosave suspends rather than silently losing one examiner's work
+- **Measured Elapsed Time** _(2026-08-08)_ — The examiner's stopwatch is recorded; wall clock is only a fallback. Time limits are pass/fail criteria, and `started_at` is stamped once, so wall clock over-reported badly
+- **Attempt Limits** _(2026-08-08)_ — A linked requirement's `max_attempts` is enforced on both create and complete. Voided results and practice attempts do not consume an attempt
+- **Member-Facing Results** _(2026-08-08)_ — **My Training → Skills Tests** plus a read-only detail page at `/training/my-skill-tests/:testId`
 - **Scoring Engine** — Automatic section scores, overall percentage, critical criteria compliance, elapsed time
 - **Summary Dashboard** — Department-wide statistics (pass rate, average score, tests this month)
 
@@ -535,6 +556,12 @@ A candidate **fails** if ANY of the following are true:
 - Archived templates cannot be used for new tests, but historical test results always reference the template version they were administered under
 - Non-critical criteria that are unchecked display as "Not Completed" (not "FAIL")
 - Score is calculated from points, not simple criterion count — criteria with higher point values carry more weight
+- **Passing Points renders only on critical criteria** _(2026-08-08)_. A non-critical criterion cannot fail the test on its own, so the scorer never read its threshold. Un-marking Critical **keeps** the stored value rather than clearing it — the threshold falls back to `0` when absent, so clearing would leave an accidentally-toggled criterion passing at any score
+- **A named viewer never sees more of a result than the candidate does** — sharing resolves to the candidate's tier, not the officer's
+- **A withheld result is dropped from the member's list entirely** and reads as `404`, not `403`; "no results" therefore does not reliably mean "none taken", and the member's empty state says so
+- **Emailing results resolves disclosure for the recipient**, so it cannot be used as a one-click bypass of a department's decision to withhold or redact
+- **Practice attempts are exempt from the release gate** — they are the candidate's own drill notes, not the department's record to hold back
+- **Genuine offline test administration is not implemented.** Autosave covers a locked phone or killed tab with signal up; the blocker for true offline is the _read_ path (`/api/*` is `NetworkOnly` by design). Scoped in [SKILLS_TESTING_OFFLINE_PLAN.md](../docs/SKILLS_TESTING_OFFLINE_PLAN.md)
 
 ---
 

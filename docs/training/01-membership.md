@@ -144,10 +144,14 @@ For bulk onboarding, you can import members from a CSV file:
 
 1. Navigate to **Administration > Members > Import Members**.
 2. Download the **CSV template** to see the required column format.
-3. Fill in the spreadsheet with your member data.
-4. Upload the completed CSV file.
-5. Review the **preview** to verify the data looks correct.
-6. Confirm the import.
+3. Fill in the spreadsheet with your member data. **Delete the example row** —
+   see the note below.
+4. Upload the completed CSV file. Every row is checked immediately.
+5. Review the results: how many rows will import, which will not, and why.
+6. Decide whether to **send welcome emails** (off by default).
+7. Confirm the import, watching the row counter. You can **Stop** part-way.
+8. If any rows were rejected, download the **error report** and re-upload the
+   corrected file.
 
 ![Import Members page with the file upload area and template download link](./images/01-06-import-members.png)
 
@@ -175,9 +179,94 @@ ignored, including `departmentId`, which older templates used as the name for
 `membershipNumber` and which is still accepted.
 
 Imported members are always created with **Active** status; there is no status
-column. Adjust status afterwards from the member's admin edit page.
+column. Adjust status afterwards from the member's admin edit page. If your file
+_has_ a `status` column, the import now tells you it is being dropped when you
+select the file, rather than letting it vanish behind a successful upload.
 
-> **Troubleshooting:** If rows fail validation, the results panel lists each failing row number and the reason. Common problems include duplicate emails, a `role` that does not match a configured role name, a partially filled emergency contact, or incorrectly formatted dates.
+### Every Row Is Checked Before Anyone Is Created _(2026-08-07)_
+
+Validation used to run **inside** the import loop and stop at the first problem
+in a row. That meant a row with three bad cells took three upload-fix-upload
+cycles, and row 21's problem only surfaced after rows 1–20 had already been
+created — leaving you with a half-imported roster and a file you could not simply
+re-upload.
+
+Now the whole file is judged first. Rows that pass are imported; rows that fail
+are reported and skipped. **Each row reports all of its problems at once**, and
+each reason names the column and the offending value.
+
+What is checked before anything is created:
+
+| Check                                      | Example message                                                                               |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Required fields present                    | `lastName: required`                                                                          |
+| Email shape                                | `email: "5715551212" looks like a phone number`                                               |
+| Date format                                | `dateOfBirth: Invalid date format`                                                            |
+| Field lengths                              | `rank: exceeds 50 characters`                                                                 |
+| Username minimum (3 characters)            | Including a username **derived** from a short email local part — a column your file never had |
+| Emergency contacts complete                | Names both columns by number                                                                  |
+| `role` matches a configured role           | `role: "Engine Operator" matches no configured role`                                          |
+| Duplicates **inside the file**             | `email: already used on line 14`                                                              |
+| Duplicates **against the existing roster** | `membershipNumber: 214 belongs to J. Alvarez`                                                 |
+| Row width vs. header width                 | `row has 19 values, header has 21`                                                            |
+
+> **Screenshot placeholder:**
+> _[Screenshot of the Import Members review step showing a summary bar reading "58 rows will import, 4 will be skipped", a "Send welcome emails" checkbox left unchecked, and a rejected-rows table listing line numbers with multiple reasons per row]_
+
+### The Rejected-Rows Report
+
+Failing rows download as a CSV: **your original row, unchanged**, with the
+reasons in a leading `errorReason` column.
+
+- It leads rather than trails so it cannot collide with a row that has more cells
+  than the header — the very case it exists to explain.
+- It holds **only** the failures, so the corrected file cannot collide with the
+  members that did import. Fix the rows, re-upload the same file, done.
+- If you **stopped** an import part-way, the rows never reached are listed as
+  stopped — so the downloaded file is exactly the work left.
+
+### Welcome Emails Are Off by Default for Imports
+
+Creating a member queues a password-setup link **immediately**, and an import
+creates them by the dozen. Loading a roster for staging, or from a list with
+stale addresses, used to put unrecallable mail in front of every one of them.
+
+The review step now carries a **Send welcome emails** checkbox, unchecked by
+default. Left off, the roster loads quietly and you issue credentials afterwards
+from Member Management.
+
+> **Add Member** — which creates one member deliberately — is unchanged and still
+> offers the checkbox on by default.
+
+### Edge Cases Worth Knowing
+
+- **Delete the template's example row.** The template ships a filled-in John Doe
+  so the columns explain themselves. Leaving it in used to create a real member
+  with a live password-setup link. The importer now recognises its own example
+  and rejects that row — first name, last name **and** email must all match, so a
+  real John Doe on your roster is unaffected.
+- **A shifted row is rejected, never guessed at.** An unquoted comma in an
+  address pushes every later column one place along, so a phone number can land
+  in the email field. The import compares each row's value count to the header's
+  and rejects a mismatch, naming both counts. A _missing_ comma shifts the other
+  way while keeping the count plausible, so email columns are shape-checked too.
+- **Line numbers account for quoted newlines.** A value containing a line break
+  puts record 12 well below line 13; errors name the line the record actually
+  started on, so you can find it.
+- **Roles are resolved when you select the file, not row by row during the
+  import.** A roster whose `role` column holds job assignments ("Engine
+  Operator", "EMT") rather than configured role names imports **no roles at all**
+  — worth knowing beforehand. If no roles are configured at all, the column is
+  skipped silently, matching what the import does.
+- **The roster collision check is best-effort.** If loading the existing roster
+  fails, the check is skipped rather than blocking your upload — the server still
+  rejects a genuine duplicate. Where your department **hides contact
+  information**, emails are absent from that response, so the email dimension
+  simply goes unchecked.
+- **Any column outside the template is dropped**, and you are told which ones
+  when you select the file.
+
+> **Troubleshooting:** If rows fail validation, the results panel lists each failing row number and every reason for it, naming the column and value. Download the error report, fix those rows, and re-upload. Common problems include duplicate emails, a `role` that does not match a configured role name, a partially filled emergency contact, incorrectly formatted dates, and an unquoted comma inside an address.
 
 ---
 
@@ -245,7 +334,35 @@ To permanently delete a member:
 - Event attendance records
 - Shift assignments
 
+**What is kept, with the member's name removed:**
+
+- Records the member **created, approved, issued or uploaded** — documents,
+  approvals, and similar attribution — keep the record and clear the reference.
+  The impact preview no longer claims uploaded documents are deleted; they are
+  not.
+
 > **Important:** Deletion is permanent and cannot be undone. Consider changing the member's status to **Archived** instead if you may need their records in the future. Archived members can be reactivated from the Member Lifecycle page.
+
+### When Deletion Is Refused _(2026-08-07)_
+
+Some records cannot have their owner cleared without falsifying who requested or
+filed them — **budgets, purchase requests, expense reports and IP exceptions**
+among them. If the member owns any of these, permanent deletion is **refused**,
+and the message names exactly which ones.
+
+That is not a failure to work around. The correct route for a member with
+financial history is **Deactivate, then Anonymize**: it strips their personal
+information while leaving those records owned, so the department's financial
+trail stays intelligible.
+
+> **If you tried to permanently delete a member before 2026-08-07 and got
+> "Unable to permanently delete the member" with no detail, that was this — the
+> page was discarding the server's explanation.** It now shows you the reason and
+> the affected record types. Two related bugs were fixed at the same time: a
+> member who had ever created _any_ record could fail deletion outright, and
+> **saving a member's roles silently stripped all of their positions**. If a
+> member's positions disappeared after a role save, re-add them; the save now
+> keeps them.
 
 ---
 
@@ -532,6 +649,13 @@ Membership tiers classify members by their years of service and grant benefits l
 ### Configuring Tiers
 
 Navigate to the **Member Lifecycle Management** page and select the **Tier Configuration** tab.
+
+> **Known discrepancy (2026-08-07).** There is no Tier Configuration tab on the
+> Member Lifecycle page — membership tiers are configured under **organization
+> settings**. One of the two has to change, and it is not yet settled which, so
+> this section and its screenshot placeholder are deliberately left as written
+> rather than silently repointed. Tracked in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#frontend-routes--navigation-2026-08-07).
 
 1. Click **Add Tier** to create a new tier.
 2. Set the **tier name** (e.g., "Senior Member", "Life Member").

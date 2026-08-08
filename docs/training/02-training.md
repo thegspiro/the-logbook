@@ -49,6 +49,11 @@ This page shows:
 - **Active Program Enrollments** - Programs you are enrolled in with progress bars
 - **Requirement Progress** - Your progress toward department training requirements
 - **Recent Training Records** - Your latest completed training entries
+- **Skills Tests** _(2026-08-08)_ - Your own official and practice skills-test
+  results, each opening a read-only scorecard. Previously these lived on the
+  examiner's device and had to be read over their shoulder. What appears here —
+  and how much of each result you see — is set by your department; see
+  [Who Sees a Result](./09-skills-testing.md#who-sees-a-result--disclosure-settings-2026-08-08).
 
 ![My Training page with stat cards and the personal training record list](./images/02-01-my-training.png)
 
@@ -371,7 +376,7 @@ Navigate to **Training Admin > Requirements** to manage department-wide training
 | Type                  | Description                                 | Required Value                           |
 | --------------------- | ------------------------------------------- | ---------------------------------------- |
 | **Hours**             | Accumulate a number of training hours       | Required hours                           |
-| **Courses**           | Complete a specific list of courses         | Course list (one per line)               |
+| **Courses**           | Complete a specific list of courses         | Courses picked from the course library   |
 | **Certification**     | Obtain or maintain a specific certification | —                                        |
 | **Shifts**            | Complete a number of qualifying shifts      | Required shifts                          |
 | **Calls**             | Respond to a number of qualifying calls     | Required calls                           |
@@ -387,6 +392,68 @@ compliance engine needs.
 > is unchecked, at least one member category must be selected — the form blocks
 > saving a requirement that would apply to nobody (it would silently disappear
 > from every member's compliance view).
+
+### Picking Courses from the Library _(2026-08-07)_
+
+**Course** and **Certification** requirements now pick from the department's
+course library instead of taking typed-in text. The same picker appears in all
+three places a requirement is defined: the **create-pipeline wizard**, the
+**pipeline requirement modal**, and this **department requirements page**.
+
+This means one completion can satisfy two rules. A recruit-school phase can point
+its "CPR" requirement straight at the CPR course in the catalog — the same course
+the department-wide requirement uses — so a member who takes CPR once is credited
+against both.
+
+> **If you created a Course requirement before 2026-08-07, check it.** This page
+> used to collect course _names_ as free text, one per line, but compliance is
+> evaluated against the record's **course id** — so a typed name matched nothing
+> and the requirement showed **everyone as permanently incomplete**. Re-open any
+> such requirement and pick the courses from the library.
+>
+> The **NIMS/ICS Initial Certification** template shipped four typed names for
+> this reason. It now lists them in its description for you to link, because
+> course-library ids differ per department and a shared template cannot know them.
+
+> **Changing a requirement's type away from Courses or Certification clears its
+> course links.** A leftover link would silently narrow the hours evaluator to
+> only that course's records.
+
+### Freshness Window — "taken within the last N days" _(2026-08-07)_
+
+Beside the course picker is an optional **freshness window**: a requirement can
+demand that the completion itself be recent — _"CPR taken within the last 180
+days"_. It is off by default, so existing requirements are unaffected.
+
+This is the case a **One-Time** requirement could not express. A one-time
+requirement's window is unbounded, so a member who took CPR three years ago reads
+as satisfied forever — which is exactly what a recruit school needs to reject.
+
+> **This is not the same thing as a rolling period**, and mixing them up is the
+> easy mistake:
+>
+> |                      | Asks                             | Applies to                                    |
+> | -------------------- | -------------------------------- | --------------------------------------------- |
+> | **Rolling period**   | "How often must this be redone?" | A recurring obligation on the **member**      |
+> | **Freshness window** | "How old may the completion be?" | A validity window on an **individual record** |
+>
+> Because they are independent, your department's one-time CPR requirement and a
+> recruit pipeline's 180-day one can point at the **same course** and disagree
+> about the **same record**. That is intended, not a bug.
+
+**Edge cases:**
+
+- The window only ever _removes_ records — it narrows the pool before the
+  frequency window, so the narrower of the two always wins.
+- **An officer signing off a training record cannot bypass it.** Applying a
+  record and approving a submission both check the completion date up front, so
+  crediting a three-year-old record to a 180-day requirement is refused before
+  anything is saved. That path deliberately bypasses the external-credit flag,
+  but not this.
+- **A record with no completion date fails the check**, rather than slipping
+  through — the window cannot be verified against it.
+- **The window can be removed again** by clearing the field; it is not a one-way
+  setting.
 
 ### Requirement Templates
 

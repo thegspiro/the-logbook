@@ -695,6 +695,17 @@ During a shift, members see pending equipment checks on their dashboard or via *
 > **Screenshot needed:**
 > _[Screenshot of the equipment check form on a mobile device showing a compartment heading, several check items with pass/fail toggle buttons, a quantity field, and the photo attachment button]_
 
+> **⚠️ Known issue (found 2026-08-08): submitting a check fails on any shift that
+> has an apparatus assigned.** The submission returns a server error. This is not
+> a permission or data problem on your side and there is no workaround from the
+> UI — checks currently only submit for shifts with **no** apparatus assigned.
+>
+> The cause is that two different apparatus tables are in play and the shift's
+> apparatus reference is not the one the equipment-check record expects. Fixing it
+> means choosing which of the two is authoritative, which is a design decision
+> rather than a patch, so it is being reported rather than guessed at. Tracked in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#scheduling-module).
+
 **Auto-fail rules:**
 
 - Items with `has_expiration: true` and a past expiration date auto-fail regardless of the submitted result

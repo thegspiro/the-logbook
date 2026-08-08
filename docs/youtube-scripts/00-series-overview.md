@@ -25,14 +25,15 @@ services.
 
 ### Feature Deep Dives (Medium/Short-Form, focused on one subsystem)
 
-| #   | Title                                                                     | Target Audience                                       | Est. Length |
-| --- | ------------------------------------------------------------------------- | ----------------------------------------------------- | ----------- |
-| 9   | Training Pipelines — An Officer's Guide                                   | Training officers, RTOs/FTOs                          | 21–26 min   |
-| 10  | Your Training Pipeline — A Member's Guide                                 | Recruits, probationary & enrolled members             | 8–12 min    |
-| 11  | Building a Training Pipeline — Step-by-Step Setup                         | Training officers (first-time setup)                  | 12–16 min   |
-| 12  | Creating, Running & Auditing Elections — The Complete Guide               | Secretaries, presidents, election admins              | 38–42 min   |
-| 13  | The Department Store — Selling Merch Without Becoming a Payment Processor | Quartermasters, secretaries, treasurers, members      | 17–21 min   |
-| 14  | Multi-Class Courses & Cohorts — Scheduling a Whole Class Series           | Training officers running recruit schools / academies | 10–14 min   |
+| #   | Title                                                                     | Target Audience                                              | Est. Length |
+| --- | ------------------------------------------------------------------------- | ------------------------------------------------------------ | ----------- |
+| 9   | Training Pipelines — An Officer's Guide                                   | Training officers, RTOs/FTOs                                 | 21–26 min   |
+| 10  | Your Training Pipeline — A Member's Guide                                 | Recruits, probationary & enrolled members                    | 8–12 min    |
+| 11  | Building a Training Pipeline — Step-by-Step Setup                         | Training officers (first-time setup)                         | 12–16 min   |
+| 12  | Creating, Running & Auditing Elections — The Complete Guide               | Secretaries, presidents, election admins                     | 38–42 min   |
+| 13  | The Department Store — Selling Merch Without Becoming a Payment Processor | Quartermasters, secretaries, treasurers, members             | 17–21 min   |
+| 14  | Multi-Class Courses & Cohorts — Scheduling a Whole Class Series           | Training officers running recruit schools / academies        | 10–14 min   |
+| 15  | Skills Testing — Running an Evaluation the Member Can Actually See        | Training officers, evaluators, FTOs/preceptors, EMS officers | 18–22 min   |
 
 > Scripts 9–11 form a **training-pipeline mini-series**: 11 builds a pipeline, 9
 > runs it day to day, and 10 shows the member's side. They complement Script 5
@@ -55,47 +56,72 @@ services.
 > results, receipts, proxies, runoffs, quorum, the rollback rule, dispute
 > forensics, voting-method selection, and the pre-meeting package.
 
+> Script 15 is the canonical skills-testing deep-dive, superseding the brief
+> mention in Script 5. It ships with a **shorts pack (15a–15h)**. Two of those
+> shorts — 15f and 15g — describe historical data that was **not** retroactively
+> corrected (elapsed times recorded before 2026-08-08, and scorecards altered by
+> template edits before the same date), so they are the priority cut for existing
+> users rather than for prospects. Chapters 4–7 are entirely new as of 2026-08-08;
+> any older skills-testing footage past chapter 3 is out of date.
+
 ### Quick Tips / Shorts (1–3 minutes, extracted from role guides or standalone)
 
-| #   | Title                                                                            | Clip Source |
-| --- | -------------------------------------------------------------------------------- | ----------- |
-| 8a  | How to RSVP for an Event in 30 Seconds                                           | Script 6    |
-| 8b  | Checking Your Training Compliance Status                                         | Script 6    |
-| 8c  | Submitting a Shift Swap Request                                                  | Script 6    |
-| 8d  | Creating an Event with QR Check-In                                               | Script 4/7  |
-| 8e  | Running a Department Election                                                    | Script 4    |
-| 8f  | Adding a New Member to the System                                                | Script 3/7  |
-| 8g  | Setting Up Two-Factor Authentication                                             | Script 3    |
-| 8h  | Viewing the Scheduling Dashboard                                                 | Script 5/7  |
-| 8i  | Put Your Shifts in Your Phone Calendar                                           | Script 6    |
-| 8j  | Require End-of-Shift Checks Before Finalizing                                    | Script 5    |
-| 8k  | Download Everything The Logbook Knows About You                                  | Script 6    |
-| 8l  | Why You're Not Getting Department Texts                                          | Script 6    |
-| 8m  | You Waived Dues by Mistake — Undo It ⚠️ _(hold: needs the dues UI)_              | Script 7    |
-| 8n  | Recording a Dues Payment Twice Won't Charge Twice ⚠️ _(hold: needs the dues UI)_ | Script 7    |
-| 8o  | Schedule a Whole Recruit School in One Shot                                      | Script 14   |
-| 8p  | Reordering Classes Doesn't Reschedule Them                                       | Script 14   |
-| 8q  | Cohort or Recurring Session — Which Do I Want?                                   | Script 14   |
-| 12a | "Why Can't This Member Vote?" — Eligibility Debugging                            | Script 12   |
-| 12b | Test Ballots — Practice Without Polluting the Results                            | Script 12   |
-| 12c | Closed Early? Here's Why Results Are Hidden                                      | Script 12   |
-| 12d | Your Vote Receipt — Proof Without Exposure                                       | Script 12   |
-| 12e | Proxy Voting in Two Minutes                                                      | Script 12   |
-| 12f | Nobody Won — Automatic Runoffs                                                   | Script 12   |
-| 12g | Quorum — Making Elections Count (Literally)                                      | Script 12   |
-| 12h | Why You Can't Reopen a Closed Election                                           | Script 12   |
-| 12i | Investigating a Disputed Election                                                | Script 12   |
-| 12j | Choosing a Voting Method                                                         | Script 12   |
-| 12k | The Pre-Meeting Package                                                          | Script 12   |
-| 13a | Pay Your Store Order From Your Phone                                             | Script 13   |
-| 13b | Why There's No Zelle Button                                                      | Script 13   |
-| 13c | "I've Sent Payment" Doesn't Mean Paid                                            | Script 13   |
-| 13d | Close a Window, Get Your Vendor Order                                            | Script 13   |
-| 13e | Let PayPal Mark Your Orders Paid                                                 | Script 13   |
-| 13f | Paid But Not Ordered — Why Two Statuses                                          | Script 13   |
-| 13g | Your Department's Rule on Unpaid Orders                                          | Script 13   |
-| 13h | They Said Venmo and Paid Cash — Record It Right                                  | Script 13   |
-| 13i | Tell the Vendor, Tell the Members, One Click                                     | Script 13   |
+| #   | Title                                                                            | Clip Source  |
+| --- | -------------------------------------------------------------------------------- | ------------ |
+| 8a  | How to RSVP for an Event in 30 Seconds                                           | Script 6     |
+| 8b  | Checking Your Training Compliance Status                                         | Script 6     |
+| 8c  | Submitting a Shift Swap Request                                                  | Script 6     |
+| 8d  | Creating an Event with QR Check-In                                               | Script 4/7   |
+| 8e  | Running a Department Election                                                    | Script 4     |
+| 8f  | Adding a New Member to the System                                                | Script 3/7   |
+| 8g  | Setting Up Two-Factor Authentication                                             | Script 3     |
+| 8h  | Viewing the Scheduling Dashboard                                                 | Script 5/7   |
+| 8i  | Put Your Shifts in Your Phone Calendar                                           | Script 6     |
+| 8j  | Require End-of-Shift Checks Before Finalizing                                    | Script 5     |
+| 8k  | Download Everything The Logbook Knows About You                                  | Script 6     |
+| 8l  | Why You're Not Getting Department Texts                                          | Script 6     |
+| 8m  | You Waived Dues by Mistake — Undo It ⚠️ _(hold: needs the dues UI)_              | Script 7     |
+| 8n  | Recording a Dues Payment Twice Won't Charge Twice ⚠️ _(hold: needs the dues UI)_ | Script 7     |
+| 8o  | Schedule a Whole Recruit School in One Shot ⚠️ _(planned — not yet scripted)_    | Script 14    |
+| 8p  | Reordering Classes Doesn't Reschedule Them ⚠️ _(planned — not yet scripted)_     | Script 14    |
+| 8q  | Cohort or Recurring Session — Which Do I Want? ⚠️ _(planned — not yet scripted)_ | Script 14    |
+| 8r  | Get Department Alerts on Your Lock Screen                                        | Script 6 / 3 |
+| 8s  | Everything's Within Thumb Reach Now                                              | Script 6     |
+| 8t  | Fix the Whole CSV Before You Import Anyone                                       | Script 7 / 3 |
+| 8u  | Don't Email Sixty People a Password Link by Accident                             | Script 7     |
+| 8v  | "Can't Delete This Member" — Here's Why                                          | Script 3 / 7 |
+| 8w  | Sign Your Notices With the Right Officer's Name                                  | Script 7     |
+| 8x  | An Applicant Can't Read Their Own File                                           | Script 7     |
+| 8y  | "Taken Within the Last 180 Days"                                                 | Script 5     |
+| 8z  | Your Course Requirement Shows Everyone Incomplete                                | Script 5     |
+| 15a | Your Skills Test Results Are on My Training Now                                  | Script 15    |
+| 15b | Void, Cancel, Delete — Which One?                                                | Script 15    |
+| 15c | Deliver a Failure in Person                                                      | Script 15    |
+| 15d | Your Notes Aren't Always for the Candidate                                       | Script 15    |
+| 15e | Stop Losing Scoring When Your Phone Locks                                        | Script 15    |
+| 15f | Why Your Old Test Says Seven Hours                                               | Script 15    |
+| 15g | Editing a Skill Sheet Used to Rewrite Old Scorecards                             | Script 15    |
+| 15h | Any Member Can Run a Practice Test                                               | Script 15    |
+| 12a | "Why Can't This Member Vote?" — Eligibility Debugging                            | Script 12    |
+| 12b | Test Ballots — Practice Without Polluting the Results                            | Script 12    |
+| 12c | Closed Early? Here's Why Results Are Hidden                                      | Script 12    |
+| 12d | Your Vote Receipt — Proof Without Exposure                                       | Script 12    |
+| 12e | Proxy Voting in Two Minutes                                                      | Script 12    |
+| 12f | Nobody Won — Automatic Runoffs                                                   | Script 12    |
+| 12g | Quorum — Making Elections Count (Literally)                                      | Script 12    |
+| 12h | Why You Can't Reopen a Closed Election                                           | Script 12    |
+| 12i | Investigating a Disputed Election                                                | Script 12    |
+| 12j | Choosing a Voting Method                                                         | Script 12    |
+| 12k | The Pre-Meeting Package                                                          | Script 12    |
+| 13a | Pay Your Store Order From Your Phone                                             | Script 13    |
+| 13b | Why There's No Zelle Button                                                      | Script 13    |
+| 13c | "I've Sent Payment" Doesn't Mean Paid                                            | Script 13    |
+| 13d | Close a Window, Get Your Vendor Order                                            | Script 13    |
+| 13e | Let PayPal Mark Your Orders Paid                                                 | Script 13    |
+| 13f | Paid But Not Ordered — Why Two Statuses                                          | Script 13    |
+| 13g | Your Department's Rule on Unpaid Orders                                          | Script 13    |
+| 13h | They Said Venmo and Paid Cash — Record It Right                                  | Script 13    |
+| 13i | Tell the Vendor, Tell the Members, One Click                                     | Script 13    |
 
 ---
 

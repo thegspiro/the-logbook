@@ -368,13 +368,88 @@ This page shows:
 - Error severity levels (Info, Warning, Error, Critical)
 - Error details and stack traces
 - Trends and patterns
+- **Source** — whether the failure was seen by the browser or the server _(2026-08-07)_
+- **The technical message beside the user-facing one**, so you see the same
+  guidance the member saw _(2026-08-07)_
+- **Method, path and status** for any error carrying request context _(2026-08-07)_
+- **Occurrence count** — repeats are counted, not collapsed into one row
 
 ![Error Monitor page listing recent application errors](./images/08-11-error-monitor.png)
 
 > **Hint:** Regular errors about failed login attempts are normal (they indicate the rate limiting is working). Focus on Critical and Error severity items for actual system issues.
 
 > **Screenshot placeholder:**
-> _[Screenshot of the Error Monitor page showing a table of recent errors with columns for timestamp, severity (color-coded badges), message, and a count of occurrences]_
+> _[Screenshot of the Error Monitor page showing a table of recent errors with columns for timestamp, Source, severity (color-coded badges), the user-facing message with the technical message beneath it, method/path/status, and an occurrence count]_
+
+### What Now Reaches This Page _(2026-08-07)_
+
+Before this, the page received almost nothing. Most failures were visible only to
+the member who hit them — a server error became a toast on their screen, a
+JavaScript failure became a line in a console nobody was reading — so
+investigating _"the site is broken for Dave"_ meant asking Dave.
+
+What is now recorded automatically:
+
+| Source      | Recorded                                                                                                          |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Server**  | Every 5xx, including the ones raised as a normal error response (which is where most server errors actually live) |
+| **Browser** | Failed API requests — 5xx, transport failures and timeouts, and 403                                               |
+| **Browser** | Uncaught exceptions and unhandled promise rejections, which previously reached nothing at all                     |
+| **Browser** | Chunk-load failures, under their own type                                                                         |
+
+Deliberately **not** recorded: 401 (routine session expiry), 404, and validation
+failures. They are ordinary and would bury the real failures.
+
+> **A chunk-load failure means a deployment landed while somebody had the app
+> open.** It is resolved differently from a genuine error — the member reloads
+> and it is gone. It is typed separately so you can tell the two apart at a
+> glance.
+
+> **One server failure often produces two rows** — one from the server with the
+> traceback and endpoint, one from the browser with the member and the page they
+> were on. Neither is redundant: the server row is missing when the failure never
+> reached the application (a gateway error), and the browser row is missing for a
+> failure outside any request a user made. The **Source** column distinguishes
+> them.
+
+### Reliability of the Reports Themselves
+
+The failures most worth recording are often the ones that break their own
+delivery — a report about a network outage has to travel over the network that is
+out. So:
+
+- Reports are **queued and retried** (four attempts) and delivered one at a time,
+  so a queue draining on reconnect does not stampede a server that is still
+  recovering.
+- They are **flushed when the page is hidden**, so a member who hits an error and
+  closes the tab — the most common way an error is seen and then lost — still
+  reports it.
+- Errors raised **before sign-in** are held and delivered on the next login.
+  Errors on the login screen are exactly what you get asked about, and they occur
+  before there is a session to attribute them to.
+- **Nothing is discarded silently.** When the per-minute cap or the queue bound
+  drops reports, that fact is itself recorded as a `REPORTING_THROTTLED` row
+  carrying the counts — so a burst reads as _"20 reports plus 340 suppressed"_
+  rather than as a quiet minute.
+
+### Privacy and Retention
+
+- **Error text is scrubbed in the browser before it is sent** — email addresses,
+  phone numbers, SSNs, bearer tokens and JWTs. Error messages quote user input and
+  API payloads, and these rows are readable by every `audit.view` holder and
+  downloadable as an export, so an identifier landing here would have left the
+  access controls that govern it everywhere else.
+- **Rows are retained 180 days by default** (30-day minimum) through the records
+  retention service, so the fastest-growing operational table in the platform
+  stays bounded.
+- **Ingest is rate-limited per member** (120/minute) — per member rather than per
+  IP address, because a department's members share one public address and an IP
+  bucket would let one member's failing tab silence the whole station's reports.
+
+> **Known gaps** are documented in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#error-monitoring-coverage-2026-08-07) —
+> chiefly that background (Celery) task failures are not reported here, since a
+> worker has no request to resolve a department from.
 
 ---
 
@@ -1281,6 +1356,84 @@ Use these in templates to provide consistent branding links. For example: `<a hr
 | Search with no matches                  | Empty list with "No templates match" message                |
 | Footer with no contact info configured  | Footer section omitted entirely                             |
 | Ctrl+S with no changes                  | No-op; no unnecessary save triggered                        |
+
+---
+
+## Email Template Categories (2026-08-07)
+
+The template catalogue has grown past three dozen entries, and the sidebar
+rendered all of them as one flat scroll. Templates are now grouped into
+**collapsible categories**, each showing how many templates it holds:
+
+| Category                | Contains                                                    |
+| ----------------------- | ----------------------------------------------------------- |
+| **Members & Accounts**  | Welcome, password reset, account status, membership changes |
+| **Events & Scheduling** | Event invitations, reminders, shift and swap notices        |
+| **Training**            | Course notices, expiry warnings, pipeline and cohort mail   |
+| **Elections**           | Nomination, ballot, and result notices                      |
+| **Inventory**           | Checkout, return, reorder and low-stock notices             |
+| **Department Store**    | Storefront order and payment notices                        |
+| **Other**               | Anything that does not fall into the above                  |
+
+Two behaviours worth knowing:
+
+- **Searching expands every group**, so a match is never hidden behind a
+  collapsed header.
+- **The category holding the template you are editing is forced open**, so your
+  selection cannot scroll out of view while you work.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Email Templates sidebar showing seven collapsible category headers with counts (e.g. "Members & Accounts (9)"), one expanded with its templates listed and the currently-selected template highlighted._
+
+---
+
+## Signing Notices with an Officer's Name (2026-08-07)
+
+A notice sent by a member-services clerk — or by a nightly automated task — had
+no way to carry the name of the officer it should come from. A password-reset
+notice signed by whoever happened to run the import is not what a department
+wants going out over its name.
+
+**Every email template can now use officer variables.** For each office, four
+variables are available anywhere in a template:
+
+```
+{{president_name}}       {{president_title}}
+{{president_email}}      {{president_phone}}
+```
+
+The catalogued offices are: **President, Vice President, Chief, Deputy Chief,
+Assistant Chief, Secretary, Assistant Secretary, Treasurer, Safety Officer,
+Training Officer, Quartermaster**.
+
+### Who Holds an Office
+
+A holder is resolved in this order:
+
+1. **An admin override** set on the office (a typed name/title/email/phone).
+2. **The member the office is linked to** — the values then track that member's
+   profile, so a phone number change flows through without anyone editing a
+   template.
+3. **Auto-detection** from members carrying the matching position.
+
+> **A department that never opens the Officers tab still signs its notices
+> correctly**, because of step 3. You only need to visit the tab if
+> auto-detection gets it wrong or an office has no matching position.
+
+### Keeping It Current
+
+The resolved values refresh when an office is edited, when the **Officers** tab
+is loaded, and **nightly** — that last one is what catches a change made to the
+_member_ behind an office rather than to the assignment itself.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Officers tab showing the office list with holders, a "Linked member" column, an override indicator on one row, and the variables each office exposes._
+
+See [DEPARTMENT_OFFICERS.md](../DEPARTMENT_OFFICERS.md) for the full variable
+catalogue and the API.
+
+> **Also fixed 2026-08-07:** inventory change emails were silently dropping every
+> `{{organization_*}}` variable, because that notification path never passed the
+> organization to the renderer. If your inventory notices have been going out with
+> blanks where the department name should be, that was why.
 
 ---
 

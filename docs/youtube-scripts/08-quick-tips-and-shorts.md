@@ -511,6 +511,326 @@ reference field]**
 
 ---
 
+## SHORT 8R: Get Department Alerts on Your Lock Screen
+
+**Length:** 55 seconds
+**Extracted From:** Script 6 / Script 3
+**Audience:** All members
+
+---
+
+**[B-ROLL: A phone face-down on a nightstand. It lights up with a notification.]**
+
+> "Notifications that reach you with the app closed. Every alert The Logbook
+> already sends — event reminders, training expiring, schedule changes,
+> maintenance due, elections. All of it."
+
+**[SCREEN: My Account > Notifications; the Push notifications toggle]**
+
+> "My Account, Notifications, switch on **Push notifications**, accept the
+> permission prompt. That's it — you don't turn it on per category."
+
+**[SCREEN: iPhone — Safari share sheet > Add to Home Screen]**
+
+> "On an iPhone there's one step first: **you have to install the app.** Share
+> button, Add to Home Screen. Open it from your home screen, then look for the
+> toggle."
+
+**[CALLOUT: "No toggle on iPhone? You're in Safari, not the app."]**
+
+> "If you don't see a toggle at all, either you're still in the browser — or your
+> department hasn't turned push on. Ask your IT manager."
+
+**[SCREEN: Two devices side by side, both receiving the same notification]**
+
+> "It's per device, not per account. Phone and station tablet? Turn it on in
+> both, get it on both."
+
+---
+
+## SHORT 8S: Everything's Within Thumb Reach Now
+
+**Length:** 30 seconds
+**Extracted From:** Script 6
+**Audience:** All members on phones
+
+---
+
+**[SCREEN: Old behaviour — reaching for the hamburger menu in the top-left of a
+large phone, one-handed, awkwardly]**
+
+> "Every screen in The Logbook used to live behind that menu. Top-left corner.
+> The single hardest place to reach with one thumb."
+
+**[SCREEN: The bottom tab bar on a phone]**
+
+> "There's a bar at the bottom now. Four destinations plus **More**."
+
+**[SCREEN: Tap More; the full navigation drawer opens]**
+
+> "More opens everything else."
+
+**[CALLOUT: "Your four tabs depend on which modules your department uses"]**
+
+> "The four aren't the same everywhere — they're picked from what your department
+> actually has switched on. Phones only. On a tablet or a desktop the side menu is
+> already there."
+
+---
+
+## SHORT 8T: Fix the Whole CSV Before You Import Anyone
+
+**Length:** 70 seconds
+**Extracted From:** Script 7 / Script 3
+**Audience:** Secretaries, membership coordinators, IT managers
+
+---
+
+**[SCREEN: A 60-row member CSV in a spreadsheet]**
+
+> "Importing a roster used to go like this: upload, it creates twenty members,
+> then row twenty-one has a bad date and it stops. Fix that row, re-upload, and
+> now you're fighting duplicates of the twenty that worked."
+
+**[SCREEN: Upload the file; the review step appears with a summary bar]**
+
+> "Now every row is checked **before a single member is created.**"
+
+**[SCREEN: The rejected rows table, one row showing three separate reasons]**
+
+> "And each bad row tells you **everything** that's wrong with it at once — the
+> column and the value, not just 'invalid'. Bad date, role that doesn't match
+> anything, and a duplicate email? You see all three."
+
+**[SCREEN: Click Download error report; open the CSV showing the errorReason
+column]**
+
+> "Download the rejects. It's your original rows, unchanged, with the reasons in
+> the first column — and **only** the failures, so you fix them and re-upload that
+> same file. No collisions with what already went in."
+
+**[CALLOUT: "Delete the example row from the template"]**
+
+> "One thing: the template ships a filled-in John Doe so the columns explain
+> themselves. Delete it. If you don't, the import catches it and rejects that row
+> — but it used to create him, with a live password link."
+
+---
+
+## SHORT 8U: Don't Email Sixty People a Password Link by Accident
+
+**Length:** 45 seconds
+**Extracted From:** Script 7
+**Audience:** Secretaries, membership coordinators
+
+---
+
+**[SCREEN: An import in progress; then an inbox full of "Set your password"
+emails]**
+
+> "Creating a member queues a password-setup email immediately. An import creates
+> them by the dozen. Load a roster for testing — or from a list with old addresses
+> — and that mail is out. You can't recall it."
+
+**[SCREEN: The import review step; the "Send welcome emails" checkbox, unchecked]**
+
+> "That checkbox is now **off by default** for imports."
+
+**[SCREEN: Complete the import silently; then Member Management, sending
+credentials to one member]**
+
+> "Load the roster quietly. Check it. Then issue credentials from Member
+> Management when you're actually ready."
+
+**[CALLOUT: "Off for imports. On for Add Member."]**
+
+> "Add Member is unchanged — you're creating one person deliberately there, so it
+> still offers to email them."
+
+---
+
+## SHORT 8V: "Can't Delete This Member" — Here's Why
+
+**Length:** 50 seconds
+**Extracted From:** Script 3 / Script 7
+**Audience:** IT managers, administrators
+
+---
+
+**[SCREEN: Attempt a permanent delete; a 409 message naming budgets and purchase
+requests]**
+
+> "Trying to permanently delete a member and getting refused? Read the message —
+> it now names exactly what's blocking it."
+
+**[SCREEN: Highlight the named record types]**
+
+> "Budgets. Purchase requests. Expense reports. Records where somebody had to
+> have requested or filed them. You can't just blank out who did that without
+> making the record a lie."
+
+**[SCREEN: Member Lifecycle > Deactivate, then Anonymize]**
+
+> "The right move is **Deactivate, then Anonymize**. It strips their personal
+> information and leaves those records owned, so your financial trail still makes
+> sense."
+
+**[CALLOUT: "Anonymize ≠ delete — and that's the point"]**
+
+> "Records they created, approved, issued or uploaded are kept either way, with
+> their name cleared. Documents aren't deleted — the impact preview used to claim
+> they were. They're not."
+
+---
+
+## SHORT 8W: Sign Your Notices With the Right Officer's Name
+
+**Length:** 50 seconds
+**Extracted From:** Script 7
+**Audience:** Secretaries, administrators
+
+---
+
+**[SCREEN: A department email ending with a generic signature]**
+
+> "A notice sent by a clerk — or by a nightly automated job — going out with
+> nobody's name on it. Or worse, the wrong name."
+
+**[SCREEN: The email template editor; type {{president_name}} and
+{{president_title}} into the signature block]**
+
+> "Every template can use officer variables now. President, Chief, Secretary,
+> Treasurer, Training Officer, Quartermaster — name, title, email and phone for
+> each."
+
+**[SCREEN: Send a test; the rendered signature shows the real holder]**
+
+> "It fills in whoever currently holds the office."
+
+**[SCREEN: The Officers tab]**
+
+> "And here's the part people miss: **you probably don't have to set anything
+> up.** It finds the holder from the positions your members already carry. Open the
+> Officers tab only if it's got one wrong, or an office has nobody matching."
+
+**[CALLOUT: "{{chief_name}} · {{secretary_email}} · {{treasurer_phone}}"]**
+
+---
+
+## SHORT 8X: An Applicant Can't Read Their Own File
+
+**Length:** 55 seconds
+**Extracted From:** Script 7
+**Audience:** Membership coordinators, secretaries, chiefs
+
+---
+
+**[B-ROLL: A membership file on a desk — interview notes, a reference letter,
+handwriting in the margins.]**
+
+> "A prospective-membership record is not the applicant's copy of their
+> application. It's interview notes, references, and what people said about them
+> in confidence before the vote."
+
+**[SCREEN: A newly elected member's account, now holding
+prospective_members.view]**
+
+> "Here's the problem it used to have. That applicant gets elected. Six months
+> later they're the membership coordinator — and they can open **the file that
+> decided their own membership vote.**"
+
+**[SCREEN: The same account opening their own prospect record; "not found"]**
+
+> "They can't anymore. Not the detail page, not the board, not the statistics, not
+> the label printer. It reads as not found — not 'forbidden', which would confirm
+> there's something in there about them."
+
+**[CALLOUT: "Matched by conversion link, by email, or by name + date of birth"]**
+
+> "One thing to know as a coordinator: matching needs **name and date of birth
+> together**, never name alone. If a prospect vanishes off your board and you can
+> account for who they are, check whether two records share both."
+
+---
+
+## SHORT 8Y: "Taken Within the Last 180 Days"
+
+**Length:** 55 seconds
+**Extracted From:** Script 5
+**Audience:** Training officers
+
+---
+
+**[SCREEN: A member showing green on a CPR requirement; their record dated three
+years ago]**
+
+> "Your one-time CPR requirement says this member is compliant. Their CPR is from 2023. Both of those are true, and that's the problem."
+
+**[SCREEN: The requirement editor; the freshness window field beside the course
+picker]**
+
+> "A one-time requirement's window is unbounded — done once, done forever. For a
+> recruit school that's exactly wrong."
+
+**[SCREEN: Set the freshness window to 180 days; the member flips to
+non-compliant]**
+
+> "Set a **freshness window**. 'Within the last 180 days.' Off by default, so
+> nothing you already built changes."
+
+**[CALLOUT: "Freshness window ≠ rolling period"]**
+
+> "Don't confuse it with a rolling period. Rolling asks _how often must this be
+> redone_ — that's an obligation on the member. Freshness asks _how old may the
+> completion be_ — that's about one record. Your department's one-time CPR
+> requirement and a recruit pipeline's 180-day one can point at the same course
+> and disagree about the same record. On purpose."
+
+**[SCREEN: An officer attempting to apply an old record; refused]**
+
+> "And you can't sign around it. Applying a three-year-old record to a 180-day
+> requirement gets refused before it saves."
+
+---
+
+## SHORT 8Z: Your Course Requirement Shows Everyone Incomplete
+
+**Length:** 50 seconds
+**Extracted From:** Script 5
+**Audience:** Training officers
+
+---
+
+**[SCREEN: A compliance matrix column, entirely red, for a course requirement]**
+
+> "Whole column red on a course requirement, and you know people have taken it?
+> There's a specific reason, and it's fixable in about a minute."
+
+**[SCREEN: The old free-text field with course names typed one per line]**
+
+> "The department requirements page used to take course **names**, typed in, one
+> per line. But compliance is matched on the course **id** — so a typed name never
+> matched anything, and the requirement read as permanently incomplete for
+> everybody."
+
+**[SCREEN: Open the requirement; the course library picker]**
+
+> "Re-open it and pick the courses from your library. Real ids, real matches."
+
+**[CALLOUT: "Check any Course requirement built before Aug 2026"]**
+
+> "Worth checking every course requirement you built before August 2026. And the
+> NIMS/ICS template shipped four typed names for the same reason — it now lists
+> them in its description so you can link them."
+
+**[SCREEN: The same picker in the pipeline wizard]**
+
+> "Same picker in the pipeline wizard and the requirement modal, so a recruit
+> phase and your department rule can point at the same CPR course — one completion
+> satisfies both."
+
+---
+
 ## Production Notes for Shorts
 
 ### Format Guidelines

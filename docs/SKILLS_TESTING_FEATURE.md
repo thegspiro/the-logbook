@@ -194,6 +194,11 @@ Training officers can control which test results are visible to candidates:
 - **Officer-only view**: Tests marked as hidden are visible to training officers but not to the candidate member
 - **Bulk visibility**: Officers can toggle visibility for multiple tests at once
 
+> **Superseded by §16 (2026-08-08).** The single show/hide toggle is now the
+> coarsest of three axes — _what_ is shown, _when_ it is shown, and _who_ may see
+> it — resolved test → template → organization. Read §16 for the model that
+> actually governs disclosure.
+
 ### 2.9 Test Record Deletion (Added 2026-02-28)
 
 Training officers with `training.manage` permission can permanently delete test records:
@@ -201,6 +206,13 @@ Training officers with `training.manage` permission can permanently delete test 
 - **Confirmation dialog**: Requires explicit confirmation before deletion
 - **Audit trail**: Deletion is logged via `log_audit_event` for accountability
 - **Cascade**: Deleting a test removes all associated section results, criteria scores, and notes
+
+> **Narrowed by §15 (2026-08-08).** `DELETE` now refuses **official** tests — a
+> scored evaluation is a record, not a draft. It is withdrawn with
+> `POST /tests/{id}/void`, which keeps the row and its reason. Deletion remains
+> the right verb for a **practice** attempt, which is nobody's record. An
+> unscored evaluation abandoned mid-session is closed with
+> `POST /tests/{id}/cancel`, which is neither.
 
 ---
 
@@ -479,6 +491,18 @@ SkillTestCriticalResult
 | Export/print results         | Training Officer, Admin, Examiner (own tests)  |
 | View reporting dashboard     | Training Officer, Admin                        |
 
+**As built, 2026-08-08.** Most routes gate on `training.manage`. Three
+deliberately do not:
+
+| Action                                                                         | Gate                 | Why                                                                                                                 |
+| ------------------------------------------------------------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Run a **practice** test on a peer                                              | Authenticated member | A drill is not an evaluation. Template visibility still applies, so an `officers_only` sheet is not exposed (§15.1) |
+| Read **your own** results (`/training/my-skill-tests/:testId`)                 | Authenticated member | The API already scopes non-officers to tests they are party to, so the route needs no permission of its own (§18)   |
+| Read a result you are a **named viewer** of, or hold a listed **position** for | Authenticated member | Bounded by §16.3, and never above the candidate's own tier (§16.4)                                                  |
+
+Creating or completing an **official** test still requires `training.manage`, as
+does releasing, voiding or cancelling one.
+
 ---
 
 ## 7. Offline & PWA Considerations
@@ -490,6 +514,18 @@ Since the app is a PWA and skills testing often occurs in field environments (tr
 - **Sync on reconnect**: Completed tests queue for submission when connectivity returns
 - **Conflict resolution**: If the same test is somehow modified on two devices, last-write-wins with full audit log
 - **Template caching**: Downloaded templates are cached for offline use via service worker
+
+> **Status (2026-08-08) — read this before quoting the list above.** It is the
+> original target, not what ships. What exists today is **autosave** (§17.3) and
+> **optimistic-concurrency detection** (§17.4) — not last-write-wins — which
+> together cover the common data-loss case: a locked phone or a killed tab with
+> signal still up. Genuine no-connectivity operation is **not** implemented; the
+> obstacle is the _read_ path, not the write path, since `/api/*` is
+> `NetworkOnly` in the service worker by design and `GET /tests/{id}` is the only
+> source of the template structure. Scope, the two decisions it needs from an
+> owner, and a 4–6 day estimate are in
+> [SKILLS_TESTING_OFFLINE_PLAN.md](./SKILLS_TESTING_OFFLINE_PLAN.md) and summarized
+> in [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md).
 
 ---
 
@@ -549,6 +585,39 @@ Each preset includes the full section/step/point structure and critical criteria
 - `GET    /api/v1/training/skill-tests/reports/pass-rates` — Aggregate pass rates
 - `GET    /api/v1/training/skill-tests/reports/missed-steps` — Common missed steps
 - `GET    /api/v1/training/skill-tests/reports/examiner-activity` — Examiner stats
+
+### As Built _(verified 2026-08-08)_
+
+The routes above are the original design sketch. The shipped router is mounted at
+**`/api/v1/training/skills-testing`** and is the authoritative list:
+
+| Method   | Path                                 | Notes                                                                                                                              |
+| -------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/templates`                         | List                                                                                                                               |
+| `POST`   | `/templates`                         | Create                                                                                                                             |
+| `GET`    | `/templates/{template_id}`           | Detail; `officers_only` templates are filtered here                                                                                |
+| `PUT`    | `/templates/{template_id}`           | Update                                                                                                                             |
+| `DELETE` | `/templates/{template_id}`           |                                                                                                                                    |
+| `POST`   | `/templates/{template_id}/publish`   |                                                                                                                                    |
+| `POST`   | `/templates/{template_id}/duplicate` |                                                                                                                                    |
+| `GET`    | `/tests`                             | List; filter by `candidate_id`, status, practice                                                                                   |
+| `POST`   | `/tests`                             | Create. Official requires `training.manage` and passes the attempt-limit guard (§14.5); **practice is open to any member** (§15.1) |
+| `GET`    | `/tests/{test_id}`                   | Detail; redacted per §16                                                                                                           |
+| `PUT`    | `/tests/{test_id}`                   | Update / autosave. Accepts `expected_version`; stale → **`409`** (§17.4)                                                           |
+| `POST`   | `/tests/{test_id}/complete`          | Scores, applies the pipeline requirement on pass, re-checks the attempt limit                                                      |
+| `DELETE` | `/tests/{test_id}`                   | **Practice only** — refuses official tests (§15)                                                                                   |
+| `DELETE` | `/tests/{test_id}/discard`           | Practice discard — candidate, examiner or officer                                                                                  |
+| `POST`   | `/tests/{test_id}/release`           | Release a withheld result (§16.2). Idempotent                                                                                      |
+| `GET`    | `/tests/{test_id}/viewers`           | Named viewers (§16.3)                                                                                                              |
+| `POST`   | `/tests/{test_id}/viewers`           | Add a named viewer                                                                                                                 |
+| `DELETE` | `/tests/{test_id}/viewers/{user_id}` | Remove one                                                                                                                         |
+| `POST`   | `/tests/{test_id}/cancel`            | Close out an **unscored** evaluation (§15)                                                                                         |
+| `POST`   | `/tests/{test_id}/void`              | Withdraw a **scored official** result; requires a reason; reverts the pipeline (§15)                                               |
+| `POST`   | `/tests/{test_id}/email-results`     | Disclosure resolved **for the recipient** (§16.5)                                                                                  |
+| `GET`    | `/summary`                           | Dashboard aggregates; excludes voided results                                                                                      |
+
+> A refusal to read a withheld or out-of-scope test is always **`404`**, never
+> `403` (§16.4).
 
 ---
 
@@ -705,3 +774,269 @@ requirement/phase completion, program-level rollup, and phase advancement.
 
 A **failing** test (or a practice test, or a test with no `requirement_id`) has
 **no** effect on the pipeline.
+
+### 14.5 Attempt Limits _(2026-08-08)_
+
+A `TrainingRequirement` may cap attempts (`max_attempts`). Until now only the
+officer-entered **knowledge-test** path enforced that cap, so a candidate limited
+to two attempts could be given a third skills evaluation and have the pass
+credited to the pipeline.
+
+`assert_attempts_remaining` now guards **both ends**:
+
+- **On create** (`POST /tests`), so an examiner is refused _before_ running an
+  evaluation that could not count — the expensive failure is the one discovered
+  after the drill.
+- **On complete** (`POST /tests/{id}/complete`), because several tests can be
+  started before any is submitted, so the create-time check alone is not
+  sufficient.
+
+What counts as an attempt:
+
+| Case                                               | Consumes an attempt? | Why                            |
+| -------------------------------------------------- | -------------------- | ------------------------------ |
+| Completed, official, not voided — **pass or fail** | **Yes**              | A failed attempt is an attempt |
+| Voided (`POST /tests/{id}/void`)                   | No                   | The department withdrew it     |
+| Practice (`is_practice`)                           | No                   | Never recorded, never credited |
+| Started but not completed                          | No                   | Nothing was evaluated          |
+
+A requirement already **completed, verified or waived** is exempt, matching the
+knowledge-test path — otherwise recertification testing against a satisfied
+requirement would be impossible.
+
+---
+
+## 15. Result Lifecycle: Void, Cancel, Delete _(2026-08-08)_
+
+Three different things can happen to a test that should not stand as a normal
+result, and they are deliberately three different verbs rather than one
+"delete".
+
+| Verb       | Endpoint                  | Applies to                                     | Effect                                                                                                                                                                                                          |
+| ---------- | ------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Delete** | `DELETE /tests/{id}`      | **Practice only**                              | Row removed. Refused for official tests.                                                                                                                                                                        |
+| **Void**   | `POST /tests/{id}/void`   | Completed **official** tests                   | Row kept, with a **required reason** and its author. Dropped from totals, pass rate and average score. Releases any pipeline requirement the pass had credited. The member sees the reason on their own result. |
+| **Cancel** | `POST /tests/{id}/cancel` | **Unscored** evaluations abandoned mid-session | Partial results kept, test closed out.                                                                                                                                                                          |
+
+Why they are distinct: an unscored test has no result to withdraw and nothing to
+release from the pipeline, so cancelling is not voiding; and a scored evaluation
+is a record of what an examiner observed, so it is withdrawn rather than erased.
+`cancelled` had been a dead status since the feature shipped — the filter option
+and the badge rendered it, but nothing ever set it.
+
+The records tab offers exactly one of the three per row: **delete** for practice,
+**void** for scored, **cancel** for unscored.
+
+**Void releases the pipeline.** `revert_test_pass_from_pipeline` is the mirror of
+`apply_test_pass_to_pipeline` (§14.4): a requirement completed by a pass that is
+later voided returns to incomplete, with the same downstream recalculation.
+
+### 15.1 Practice Attempts Are the Member's Own Notes
+
+- **Any member may run a practice test on a peer** — no `training.manage`.
+  Official tests still require it. Practice creation follows the same visibility
+  rule as reading a template, since the test response carries the full template
+  body and would otherwise leak an `officers_only` sheet.
+- **Discardable by the candidate, the examiner, or an officer.** Previously only
+  the examiner could, which is why a member could never clear their own record.
+- **Retained one year**, via a `practice_skill_tests` retention class registered
+  with the records-retention service. Official results share the table and are
+  excluded by a row filter.
+- **Exempt from the release gate** (§16.2). They are the candidate's own drill
+  notes, not the department's evaluation record to hold back.
+
+---
+
+## 16. Result Disclosure _(2026-08-08)_
+
+Completing a test used to make the whole scorecard visible to the candidate at
+once, including every criterion note. That is right for a routine drill and wrong
+for a promotional evaluation — and examiner notes are often candid working notes
+for the training file ("hesitant, needed two prompts") rather than feedback
+drafted for the member to read.
+
+Disclosure is now **three independent axes**, each resolved **test → template →
+organization**, so a department sets a norm and a single skill, or a single test,
+can depart from it.
+
+### 16.1 What — `result_disclosure`
+
+| Value    | The candidate sees                                        |
+| -------- | --------------------------------------------------------- |
+| `full`   | Every mark, every point, every written note. **Default.** |
+| `scores` | Every mark and point. **All written commentary removed.** |
+| `none`   | Nothing — the result does not appear at all.              |
+
+### 16.2 When — `result_release`
+
+| Value           | Behaviour                                                                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `on_completion` | Visible as soon as the test is completed. **Default.**                                                                               |
+| `on_release`    | The finished result stays invisible until an officer releases it, so a chief can review it — or deliver a failure in person — first. |
+
+This mirrors the shift-report review workflow, which already gates trainee
+visibility the same way.
+
+`POST /tests/{id}/release` releases one. It is **idempotent**, and refuses tests
+whose results are never shown (`result_disclosure: none`), so the UI offers it on
+any unreleased official result rather than making an officer work out which mode
+a given template inherits before they can act.
+
+### 16.3 Who
+
+- **The candidate.**
+- **Anyone named on the test** — `skill_test_viewers`, e.g. a preceptor or an
+  FTO. Managed via `GET/POST/DELETE /tests/{id}/viewers`.
+- **Holders of listed corporate positions** — `result_viewer_positions`,
+  mirroring `InventoryItem.restricted_to_positions`.
+
+### 16.4 Two Rules the Implementation Holds To
+
+1. **A viewer never sees more than the candidate.** Sharing a result has no
+   reading under which the observer sees more of it than its subject, so named
+   viewers and position holders get the _candidate's_ tier, not the officer's.
+2. **Withheld reads as absent, never as forbidden.** Every refusal is a `404`,
+   never a `403` — a 403 on a withheld result announces "you were evaluated and
+   may not know how it went." A withheld test is dropped from the list entirely,
+   since an entry that cannot be opened only invites the member to ask why.
+
+### 16.5 Where Redaction Lives
+
+Redaction is applied in `_build_test_response` — the single point every read
+funnels through — rather than at each endpoint. A new endpoint that forgets to
+redact is a leak, and this way there is nothing to forget. It **rebuilds**
+section results rather than editing them, so the ORM's loaded JSON is never
+mutated (see Pitfall #12 in `CLAUDE.md`), and it drops the per-section review
+note entirely: that one is stored as a pseudo-criterion, so clearing the obvious
+`notes` keys alone would leak it.
+
+**Emailing results obeys the same policy**, resolved for the _recipient_ rather
+than for the officer sending it. Otherwise "email results" is a one-click bypass
+of the department's decision to withhold or redact them.
+
+### 16.6 Configuration
+
+| Level                  | Where                                                   | Fields                                                           |
+| ---------------------- | ------------------------------------------------------- | ---------------------------------------------------------------- |
+| Organization (default) | Training configuration editor → **Skills-Test Results** | `skills_result_disclosure`, `skills_result_release`              |
+| Template               | Template editor                                         | `result_disclosure`, `result_release`, `result_viewer_positions` |
+| Test                   | Per test                                                | same three, plus `skill_test_viewers`                            |
+
+Unset at a level means "inherit". Defaults are `full` / `on_completion` — exactly
+what members saw before this shipped — so the change is additive and nobody
+silently loses sight of a result they can currently read.
+
+The "when" question is hidden in the editor when disclosure is `none`, since
+there is then nothing to time. The member's empty state reads honestly: a
+withheld result is omitted from the list entirely, so "no results" no longer
+reliably means "none taken" — the copy says results the department does not share
+will not appear, without asserting that one is being withheld, which usually it
+is not.
+
+---
+
+## 17. Scorecard Integrity _(2026-08-08)_
+
+### 17.1 Every Test Freezes Its Template
+
+Criterion identity is **positional** (`criterion-{section}-{index}`), and
+updating a template rewrites `skill_templates.sections` **in place on the one
+row**. The version counter incremented but no prior version was kept, so every
+completed test read its structure from the _live_ template. The consequences were
+silent and severe:
+
+- Inserting a criterion **shifted recorded pass/fail marks onto their
+  neighbours**.
+- Deleting one **dropped its recorded result off the scorecard** while leaving it
+  in the stored JSON.
+- Raising `passing_percentage` could **turn a recorded pass into a fail**.
+
+Each test now carries a **`template_snapshot`** — structure plus scoring rules,
+deep-copied so it cannot alias the template's own JSON — written at creation and
+used for scoring, for the API response, and for the emailed scorecard. Rows
+predating the column fall back to the live template.
+
+The migration backfills from the current template. The structure those tests were
+actually scored against was overwritten in place and is unrecoverable, so the
+current template is the best available value **and is already what they
+display** — the backfill changes nothing visible; it freezes them against future
+edits.
+
+> A useful side effect: the client now holds the full test structure locally,
+> which is most of what offline support would need to cache.
+
+### 17.2 The Examiner's Stopwatch Is Trusted
+
+`complete_test` unconditionally overwrote `elapsed_seconds` with
+`completed_at - started_at`, throwing away the timer reading the client had just
+saved. `started_at` is stamped **once**, when the test first goes `in_progress`,
+so a test begun at 09:00 and finished after lunch recorded seven hours — and
+**time limits are pass/fail criteria here**.
+
+Wall clock is now only a fallback for tests completed _without_ a measured value,
+via `resolve_elapsed_seconds`, which keeps a measured `0` rather than treating it
+as absent. Reopening an in-progress test restores the on-screen timer from
+`elapsed_seconds` instead of restarting the evaluation at 00:00.
+
+### 17.3 Autosave
+
+The active test screen persisted only on an explicit **Save** or on entering
+review — on a screen used one-handed outdoors. A locked phone or a killed tab
+lost every criterion scored since the examiner last thought to press Save.
+
+Scoring is now autosaved, silently and only while the evaluation is live, through
+the shared `useAutoSave` hook. Full offline queueing is deliberately **not**
+attempted here; see §7.
+
+### 17.4 Optimistic Concurrency
+
+`skill_tests` carried no version and no ETag, so two examiners on one test — or
+an officer editing the scorecard while a phone held unsaved criteria — lost one
+side's work, and **the losing side got a success response**.
+
+Tests now carry an **integer version counter**, bumped on every mutation.
+`PUT /tests/{id}` refuses a stale `expected_version` with **`409`**. Clients that
+send no `expected_version` keep the old behaviour, so this is additive.
+
+> An integer rather than `updated_at`: MySQL `DATETIME` has no fractional seconds
+> by default, so two writes in the same second compare equal and the conflict
+> would go undetected — autosave plus a manual **Save** is exactly that case.
+
+On conflict the test screen **suspends autosave and says so**, rather than
+retrying a doomed write every 30 seconds while the examiner believes their
+scoring is still being saved.
+
+### 17.5 Passing Points Is a Critical-Criteria Field
+
+`passing_score` is read by the scorer **only when `criterion.required` is set**.
+The field nonetheless rendered for every numeric-score criterion, with a
+"(critical only)" hint doing the explaining — so it asked for a number the scorer
+then ignored. It is now shown only on **critical** criteria.
+
+Validation moved with it. The "passing score cannot exceed max score" check ran
+for any score criterion, so a value left behind from before a criterion was
+un-marked critical would block saving over a field the editor no longer shows —
+an error with no reachable cause.
+
+The stored value is deliberately **kept, not cleared**, when Critical is
+unchecked. Clearing would look tidier, but the threshold defaults to `0` when
+absent, so an accidental toggle off and back on would silently leave the
+criterion passing at any score. Inert data is the safer of the two.
+
+---
+
+## 18. Member-Facing Results _(2026-08-08)_
+
+Every skills-testing route was gated on `training.manage`, so a result lived on
+the examiner's device and had to be read over their shoulder. A practice attempt
+in particular was a dead end for the person taking it.
+
+- **My Training → Skills Tests** lists the member's own official and practice
+  results.
+- **`/training/my-skill-tests/:testId`** is a read-only detail page. The route is
+  **auth-only by design**: the API already scopes non-officers to tests they are
+  party to, so it cannot expose anyone else's scorecard. The list is fetched by
+  `candidate_id` — without it, an officer opening the page would see the whole
+  organization here.
+- Voided results show the member the reason.
+- Withheld results (§16) are simply absent.

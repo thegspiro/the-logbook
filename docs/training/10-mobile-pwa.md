@@ -94,6 +94,38 @@ Once installed, The Logbook runs in **standalone** mode:
 - **Persistent login** — your session persists between app launches (subject to your department's session timeout policy)
 - **App icon** — the Logbook icon (or your department's logo) appears on your home screen
 - **PWA shortcuts** — long-press the app icon to see quick shortcuts to Dashboard, Events, and Scheduling (supported on Android and some desktop platforms)
+- **Bottom tab bar** _(2026-08-07)_ — on phones, four destinations plus **More**
+  sit within thumb reach at the bottom of the screen. See
+  [Getting Around on a Phone](#getting-around-on-a-phone-2026-08-07).
+- **Launches straight to your dashboard** _(2026-08-07)_ — the app used to open
+  on the onboarding welcome splash and then redirect, which cost an extra hop
+  every launch and, offline while signed out, showed a "Get Started" screen that
+  read as though the department had never been set up.
+- **A proper launch screen on iOS** _(2026-08-07)_ — iOS does not derive one from
+  the app manifest, so the installed app used to flash blank white on every cold
+  start. Launch images now cover iPhone SE through 16 Pro Max and the iPad sizes.
+
+### Getting Around on a Phone _(2026-08-07)_
+
+Every destination used to sit behind the hamburger drawer in the **top-left**
+corner — two taps to reach anything, from the corner of the screen hardest to
+reach one-handed, across 59 navigation entries.
+
+On phones there is now a **bottom tab bar**: four destinations plus a **More**
+button, within thumb reach. Tap **More** to open the full navigation drawer.
+
+- The four tabs are chosen for your department, filtered by the modules it has
+  enabled. If your department has scheduling switched off, you get a different
+  fourth tab rather than a gap.
+- Four plus More is the ceiling — labels stop fitting on a 320px phone beyond
+  that.
+- The bar **hides while the on-screen keyboard is up**, so it never covers the
+  field you are typing into.
+- On tablets and desktop it does not appear at all: the side or top navigation is
+  already visible there, so the bar would be redundant.
+
+> **Screenshot placeholder:**
+> _[Screenshot of the app on a phone in standalone mode showing the bottom tab bar with four labelled icons and a "More" button, and the top mobile header clear of the status bar]_
 
 ### Automatic Updates
 
@@ -108,10 +140,18 @@ In addition, the app includes a **proactive version detection** system:
 
 1. A build timestamp is embedded in the app at build time
 2. The `useAppUpdate` hook periodically checks if a newer version has been deployed
-3. If a new version is detected, an **Update Available** notification bar appears at the top of the screen
+3. If a new version is detected, an **Update Available** notification bar appears
+   — at the **top** of the screen on desktop and tablet, and at the **bottom** on
+   phones _(2026-08-07)_
 4. Click the notification to refresh and load the new version
 
 > **Hint:** If you don't see the update notification and suspect you're on an old version, you can always force a refresh with `Ctrl+Shift+R` (desktop) or by closing and reopening the app (mobile).
+
+> **Fixed 2026-08-07:** on a phone the update banner was rendered _behind_ the
+> fixed mobile header and was therefore invisible. For an installed app that
+> stays open for weeks, that banner is the primary update channel — so if your
+> phone has been running a stale version for a while, that is why. It is now
+> pinned to the bottom of the viewport, clear of the hamburger menu.
 
 ---
 
@@ -123,6 +163,20 @@ The Logbook is designed as an **online-first** application. The PWA caches the a
 
 - **App shell loads** — the navigation, layout, and UI framework display even without a connection
 - **Previously viewed pages** may show cached content (depending on what you last viewed)
+- **Barcode scanning** works on a cold offline start — it is deliberately kept
+  available, because scanning in a bay with no signal is a real workflow
+
+> **Changed 2026-08-07 — a page you have never opened online is no longer
+> available offline.** Installing the app used to download _every_ screen up
+> front, including finance, grants, elections and onboarding, which most members
+> never open: 275 files and 6.1 MB over whatever rural cellular connection the
+> install happened on. It is now 15 files and 1.8 MB — the shell, which carries
+> login and the dashboard — and each other screen is stored the first time you
+> visit it.
+>
+> **What this means in practice:** if you know you will be somewhere with no
+> signal, open the screens you will need **once** while you still have a
+> connection. After that they are cached like before.
 
 ### What Requires a Connection
 
@@ -163,10 +217,14 @@ likely to sign out mid-shift.
 
 ## Push Notifications on Mobile
 
-The Logbook sends notifications through email and the in-app notification system. On mobile devices:
+The Logbook delivers notifications three ways:
 
-- **Email notifications** work as configured in your notification preferences (event reminders, training expiry, schedule changes)
-- **In-app notifications** appear when you open the app — a badge count shows unread notifications
+- **Push notifications** _(2026-08-07)_ — reach your phone's **lock screen** even
+  when the app is closed. This is the one an installed app is actually for.
+- **Email notifications** work as configured in your notification preferences
+  (event reminders, training expiry, schedule changes)
+- **In-app notifications** appear when you open the app — a badge count shows
+  unread notifications
 
 ### Enabling Notifications
 
@@ -179,6 +237,44 @@ The Logbook sends notifications through email and the in-app notification system
 3. Choose delivery method: **Email**, **In-App**, or **Both**
 
 > **Hint:** For time-sensitive alerts (shift changes, urgent messages), enable email delivery so you receive them even when the app is not open.
+
+### Turning On Push _(2026-08-07)_
+
+1. Open **My Account > Notifications**.
+2. Switch on **Push notifications**.
+3. Accept your device's permission prompt.
+
+**Every existing notification source is covered.** Event reminders, training
+expiry, schedule changes, apparatus maintenance due, election notices — all of
+them. Nothing had to be enabled per category, because push hooks in where
+notifications are recorded rather than at each source.
+
+**Push is per device, not per account.** If you have the app on both your phone
+and the station tablet, turn it on in both — and you will be reached on both.
+
+### Edge Cases Worth Knowing
+
+- **iPhone/iPad: you must install the app first.** Web Push on iOS (16.4 and
+  later) only exists for a PWA that has been added to the home screen. If you are
+  browsing the site in Safari, **the toggle will not appear at all** — that is
+  correct, not a bug. Install the app (see
+  [Installing on iPhone / iPad](#installing-on-iphone--ipad-safari)), open it from
+  your home screen, then look again.
+- **No toggle on any platform?** Your department may not have push enabled on its
+  deployment. It is off by default and an administrator has to turn it on. The
+  app deliberately hides the control rather than offering something that would
+  fail when you tapped it.
+- **Uninstalling the app, or clearing site data, stops push.** There is no
+  callback to tell the server, so the subscription is cleaned up the first time a
+  notification cannot be delivered to that device. Re-installing means turning the
+  toggle on again.
+- **A push failure never blocks the thing that triggered it.** If the push
+  service is down, the notification is still recorded and still reaches you
+  in-app and by email.
+
+> **For administrators:** push requires `PUSH_ENABLED=true` plus VAPID keys —
+> see [Configuration-Environment](../../wiki/Configuration-Environment.md) and
+> the IT guide.
 
 ---
 
@@ -254,26 +350,35 @@ Quick RSVP from the events list — tap **Going**, **Maybe**, or **Not Going** w
 
 ## Troubleshooting
 
-| Issue                                              | Solution                                                                                                                                                                                                                                 |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Add to Home Screen" not appearing (iOS)           | You must use **Safari**. Chrome, Firefox, and other browsers on iOS cannot install PWAs. Also verify you are on the actual Logbook URL, not a redirect page.                                                                             |
-| "Add to Home Screen" not appearing (Android)       | Ensure you are using Chrome. The option may be in the three-dot menu under "Install app" or "Add to Home screen." Some browsers use different wording.                                                                                   |
-| App shows blank screen after install               | Close the app completely and reopen. If it persists, uninstall from home screen, clear browser cache for the site, and reinstall.                                                                                                        |
-| App stuck on old version                           | The autoUpdate service worker should handle this. If it doesn't: close the app completely, wait 30 seconds, reopen. On iOS, you can also clear Safari's website data for the Logbook URL in Settings > Safari > Advanced > Website Data. |
-| QR code scan not opening the app                   | On iOS, the camera app opens QR links in Safari, not the installed PWA. This is an iOS limitation. The check-in still works — it just opens in Safari instead.                                                                           |
-| Member ID scan not finding member                  | Verify the member has a `membership_number` assigned and the ID card was generated by The Logbook. Fall back to name search if scanning fails.                                                                                           |
-| Barcode scanner not activating                     | Your browser needs camera permission. Go to your phone's Settings > Privacy > Camera and ensure the browser (or the PWA) has camera access. On desktop, verify your webcam is not in use by another app.                                 |
-| Scanner not working on Firefox/Safari              | The scanner automatically falls back to the html5-qrcode library when the native BarcodeDetector API is unavailable. Ensure camera permissions are granted.                                                                              |
-| Desktop scan shows rear camera error then recovers | This is expected — the scanner tries the rear camera first, then falls back to the front-facing webcam. The brief error is normal on desktop.                                                                                            |
-| Login session expires too quickly on mobile        | Session timeout is configured by your department administrator. Ask your IT Manager to review the session duration in Settings > Security.                                                                                               |
-| Notifications not appearing                        | The Logbook uses email and in-app notifications, not native push notifications. Check your notification preferences in My Account > Notifications and verify your email address.                                                         |
-| Page not loading — "Network error"                 | The app requires an internet connection for all data operations. Check your Wi-Fi or cellular signal. Try refreshing the page.                                                                                                           |
-| Form submission failed                             | Check your connection. The app does not queue submissions — if the network is unavailable at the moment you tap Submit, the submission fails. Wait for connectivity and try again.                                                       |
-| App icon disappeared from home screen              | Some devices remove PWA icons after system updates or storage cleanups. Reinstall following the steps above.                                                                                                                             |
-| Dark mode not applying in PWA                      | Dark mode follows the app's theme setting (My Account > Appearance), not the device's system setting. Toggle it from within the app.                                                                                                     |
-| "Update Available" notification not appearing      | The version detection checks periodically. If you suspect you're on an old version, force refresh with Ctrl+Shift+R or close and reopen the app.                                                                                         |
-| Layout looks wrong on mobile                       | Mobile responsiveness has been significantly improved (major update 2026-03-22). Clear your browser cache to load the latest styles. Use landscape orientation for complex tables.                                                       |
-| Login page shows "Too many attempts"               | Rate limiting is active. Wait for the countdown timer to expire before trying again.                                                                                                                                                     |
+| Issue                                                               | Solution                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Add to Home Screen" not appearing (iOS)                            | You must use **Safari**. Chrome, Firefox, and other browsers on iOS cannot install PWAs. Also verify you are on the actual Logbook URL, not a redirect page.                                                                                                                                                                                                                                                     |
+| "Add to Home Screen" not appearing (Android)                        | Ensure you are using Chrome. The option may be in the three-dot menu under "Install app" or "Add to Home screen." Some browsers use different wording.                                                                                                                                                                                                                                                           |
+| App shows blank screen after install                                | Close the app completely and reopen. If it persists, uninstall from home screen, clear browser cache for the site, and reinstall.                                                                                                                                                                                                                                                                                |
+| App stuck on old version                                            | The autoUpdate service worker should handle this. If it doesn't: close the app completely, wait 30 seconds, reopen. On iOS, you can also clear Safari's website data for the Logbook URL in Settings > Safari > Advanced > Website Data.                                                                                                                                                                         |
+| QR code scan not opening the app                                    | On iOS, the camera app opens QR links in Safari, not the installed PWA. This is an iOS limitation. The check-in still works — it just opens in Safari instead.                                                                                                                                                                                                                                                   |
+| Member ID scan not finding member                                   | Verify the member has a `membership_number` assigned and the ID card was generated by The Logbook. Fall back to name search if scanning fails.                                                                                                                                                                                                                                                                   |
+| Barcode scanner not activating                                      | Your browser needs camera permission. Go to your phone's Settings > Privacy > Camera and ensure the browser (or the PWA) has camera access. On desktop, verify your webcam is not in use by another app.                                                                                                                                                                                                         |
+| Scanner not working on Firefox/Safari                               | The scanner automatically falls back to the html5-qrcode library when the native BarcodeDetector API is unavailable. Ensure camera permissions are granted.                                                                                                                                                                                                                                                      |
+| Desktop scan shows rear camera error then recovers                  | This is expected — the scanner tries the rear camera first, then falls back to the front-facing webcam. The brief error is normal on desktop.                                                                                                                                                                                                                                                                    |
+| Login session expires too quickly on mobile                         | Session timeout is configured by your department administrator. Ask your IT Manager to review the session duration in Settings > Security.                                                                                                                                                                                                                                                                       |
+| Notifications not appearing                                         | Check your preferences in My Account > Notifications. If you expected a **lock-screen** notification, see the push section above — push must be enabled by your department, switched on per device, and on iPhone/iPad the app must be installed to the home screen before the toggle even appears.                                                                                                              |
+| No "Push notifications" toggle at all                               | On iPhone/iPad: you are browsing in Safari rather than running the installed app — install it first. On any platform: your department may not have push enabled on its deployment.                                                                                                                                                                                                                               |
+| Push stopped after reinstalling the app                             | Subscriptions are tied to the app install on that device. Turn the toggle back on.                                                                                                                                                                                                                                                                                                                               |
+| Page not loading — "Network error"                                  | The app requires an internet connection for all data operations. Check your Wi-Fi or cellular signal. Try refreshing the page.                                                                                                                                                                                                                                                                                   |
+| Form submission failed                                              | Check your connection. The app does not queue submissions — if the network is unavailable at the moment you tap Submit, the submission fails. Wait for connectivity and try again.                                                                                                                                                                                                                               |
+| App icon disappeared from home screen                               | Some devices remove PWA icons after system updates or storage cleanups. Reinstall following the steps above.                                                                                                                                                                                                                                                                                                     |
+| Dark mode not applying in PWA                                       | Dark mode follows the app's theme setting (My Account > Appearance), not the device's system setting. Toggle it from within the app.                                                                                                                                                                                                                                                                             |
+| "Update Available" notification not appearing                       | The version detection checks periodically. If you suspect you're on an old version, force refresh with Ctrl+Shift+R or close and reopen the app.                                                                                                                                                                                                                                                                 |
+| Layout looks wrong on mobile                                        | Mobile responsiveness has been significantly improved (major updates 2026-03-22 and 2026-08-07). Clear your browser cache to load the latest styles. Use landscape orientation for complex tables.                                                                                                                                                                                                               |
+| Login page shows "Too many attempts"                                | Rate limiting is active. Wait for the countdown timer to expire before trying again.                                                                                                                                                                                                                                                                                                                             |
+| A page went blank / "Something went wrong"                          | Fixed 2026-08-07/08. An unexpected response from the server used to take a whole screen down instead of showing an empty list — most often on station Wi-Fi behind a captive portal or a carrier interception page, which answer with a web page where the app expects data. If it still happens, note the page and report it; those failures are now recorded on the Error Monitoring page for your IT manager. |
+| Camera stayed frozen after switching apps mid-scan                  | Fixed 2026-08-07. The scanner used to keep the camera held when the app was backgrounded — iOS suspends it without resuming, so you came back to a frozen preview with the camera indicator still lit. It now releases the camera when you leave and resumes when you return.                                                                                                                                    |
+| Save button hidden behind the keyboard                              | Fixed 2026-08-07 (iOS). Bottom action bars — including Save in the equipment-check and skill-test flows — stayed pinned behind the software keyboard. They now sit above it.                                                                                                                                                                                                                                     |
+| Pull-to-refresh fired while scrolling inside a dialog               | Fixed 2026-08-07. Dragging down inside an already-scrolled panel or modal used to refresh the page and discard whatever was open. The gesture now yields to the scrollable area under your finger.                                                                                                                                                                                                               |
+| iOS changed what I typed into a username / serial / VIN             | Fixed 2026-08-07. iOS applies autocapitalisation and autocorrect to text fields by default, which was rewriting identifiers and mangling member surnames mid-search. Identifier and search fields now opt out.                                                                                                                                                                                                   |
+| Header or progress bar hidden under the status bar (notched iPhone) | Fixed 2026-08-07. Safe-area insets were applied to the page body, which does nothing for fixed elements.                                                                                                                                                                                                                                                                                                         |
+| A button is too small to hit reliably                               | Improved 2026-08-07 — icon-only controls now meet the 44px minimum on phones. Some wide text buttons remain in the 30–36px range; they are known and tracked.                                                                                                                                                                                                                                                    |
 
 ---
 

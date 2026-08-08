@@ -209,6 +209,11 @@ The default view shows applicants as **cards on a kanban board** with one column
 - Cards show: applicant name, email, time in current stage, and status badge
 - Switch to **Table View** for a sortable, paginated list format
 - Filter by status: Active, On Hold, Withdrawn
+- **Search accepts a full name** _(2026-08-07)_. Typing "John Smith" used to
+  return nothing, because the query was matched against first name, last name and
+  email **individually** — so only "John" or "Smith" alone worked. Every
+  whitespace-separated word must now match some field, which also means "smith
+  john" finds the same person.
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the kanban board showing 4-5 columns (pipeline stages) with applicant cards. Show one card being dragged between columns. Include the Active/On Hold/Withdrawn filter tabs at the top._
 
@@ -341,6 +346,38 @@ When an applicant has completed all pipeline stages:
 | Email already exists as a member          | Conversion blocked; shows existing member details     |
 | Auto-transfer enabled on pipeline         | Conversion happens automatically at final stage       |
 | Applicant converted without election vote | Allowed if pipeline doesn't include an election stage |
+
+### After Conversion, the File Stays Confidential _(2026-08-07)_
+
+A prospective-membership record is **not the applicant's copy of their
+application**. It carries interview notes, recommendations, reference checks,
+election-package commentary and coordinator notes written in confidence by other
+members — and it stays sensitive after the applicant is elected.
+
+That is precisely when it used to become readable. A newly elected member who is
+given `prospective_members.view` in their own right — a membership coordinator,
+an officer — could open **the file that decided their own membership vote**.
+
+A member can no longer see their own prospect record, at all:
+
+- The detail page and every action on it return **"not found"**.
+- The record is filtered out of the **prospect list** (and its total), the
+  **kanban board**, the **pipeline statistics**, the **election-package list**,
+  and **label generation**.
+
+> **Why "not found" rather than "you may not view this"?** A permission error
+> would confirm the record exists and that there is something in it about them —
+> which is itself the thing being protected.
+
+**How you are matched to your own record.** By the conversion link
+(`converted_to_member_id`); by an email address you own, department or personal;
+or by full name **paired with a matching date of birth**.
+
+> **Matching is deliberately conservative.** Name alone is not enough — two
+> J. Smiths in one department is routine, and a false positive would hide a **real
+> applicant** from the coordinator working their file. If a member reports that a
+> prospect has vanished from the board and you can account for who they are, check
+> whether the two records share a name _and_ a date of birth.
 
 ---
 

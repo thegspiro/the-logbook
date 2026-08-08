@@ -187,6 +187,26 @@ Administrative]**
 > "Click on any certification to see the details — when you completed it, who
 > recorded it, and any attached documentation like scanned certificates."
 
+**[SCREEN: Scroll down the same page to the Skills Tests section.]**
+
+> "Scroll down and there's a **Skills Tests** section too. If somebody's run you
+> through a skill sheet — a psychomotor evaluation, an NREMT-style checkoff —
+> your scorecard is here. Official results and your own practice attempts."
+
+> "That's newer than it sounds like it should be. Those used to live on the
+> examiner's phone, and reading yours meant asking them to turn it around."
+
+**[SCREEN: Open a result; the read-only scorecard.]**
+
+> "Tap one for the section-by-section breakdown."
+
+**[CALLOUT: "Empty? Either you've taken none — or your department doesn't share them"]**
+
+> "If there's nothing there, it's one of two things: you haven't taken one, or
+> your department has chosen not to share results with the person tested. Both
+> look the same, deliberately — the alternative is a screen that announces 'you
+> were evaluated and you may not know how it went,' which helps nobody."
+
 ### SUBMITTING EXTERNAL TRAINING (9:30 – 11:00)
 
 **[SCREEN: Navigate to Submit Training (SubmitTrainingPage)]**
@@ -493,9 +513,29 @@ Copy button, and Reset link]**
 **[SCREEN: Show adding The Logbook to the home screen on a mobile device.
 Show the app opening full-screen like a native app.]**
 
-> "You get push notifications, offline access to recently viewed content, and
-> the full interface optimized for your screen size. It's the same platform,
-> same data, just on your phone."
+> "Installing it is worth the twenty seconds. You get the full interface on your
+> screen size, offline access to pages you've already opened — and, if your
+> department has it switched on, **notifications on your lock screen** while the
+> app is closed."
+
+**[SCREEN: A phone face-down; it lights up with a Logbook notification. Then
+My Account > Notifications, showing the Push notifications toggle.]**
+
+> "My Account, Notifications, switch on Push notifications. Event reminders,
+> training about to expire, schedule changes, election notices — all of it, no
+> per-category setup."
+
+**[CALLOUT: "iPhone: install the app FIRST, or the toggle won't be there"]**
+
+> "One iPhone-specific thing: the toggle only exists once the app is on your home
+> screen. If you're looking for it in Safari, you won't find it — that's Apple's
+> rule, not ours. And it's per device, so turn it on on the station tablet too."
+
+**[SCREEN: The bottom tab bar on a phone.]**
+
+> "You'll also notice there's a bar across the bottom on a phone now — four
+> destinations plus More. Everything used to live behind that menu button in the
+> top-left corner, which is the hardest place on a big phone to reach one-handed."
 
 **[CALLOUT: "Add to Home Screen = full app experience on your phone"]**
 

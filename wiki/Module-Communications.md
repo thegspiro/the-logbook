@@ -106,3 +106,55 @@ track per-user `read_at` / `acknowledged_at` and is retained on soft delete.
 
 See the member/officer how-to in the
 [Documents, Forms & Communications training guide](../docs/training/07-documents-forms.md#department-messages).
+
+## Email Templates (2026-08-07)
+
+### Catalogue Categories
+
+The template catalogue had grown past three dozen entries rendered as a single
+flat scroll. Templates are now grouped into collapsible categories with
+per-category counts: **Members & Accounts, Events & Scheduling, Training,
+Elections, Inventory, Department Store, Other**.
+
+Two behaviours that keep the grouping from getting in the way:
+
+- An active **search expands every group**, so a hit is never hidden behind a
+  collapsed header.
+- The category holding the **selected** template is force-expanded, so the
+  selection cannot scroll out of view.
+
+### Officer Signature Variables
+
+A notice sent by a member-services clerk, or by a nightly scheduled task, had no
+way to be signed by the officer whose name belongs on it.
+
+A **department office directory** now backs every template. Each catalogued
+office — President, Vice President, Chief, Deputy Chief, Assistant Chief,
+Secretary, Assistant Secretary, Treasurer, Safety Officer, Training Officer,
+Quartermaster — exposes `{{<office>_name}}`, `{{<office>_title}}`,
+`{{<office>_email}}` and `{{<office>_phone}}`.
+
+**Resolution order** for a holder: an admin override on the office → the member
+the office is linked to (so the values track that member's profile) →
+auto-detection from members carrying the matching position slug. The last of
+these means a department that never opens the Officers tab still signs its
+notices correctly.
+
+**Caching.** The resolved values are flattened into
+`Organization.settings["officer_directory"]`, which the _synchronous_
+`EmailTemplateService.render()` reads from the organization it already receives —
+avoiding an async lookup threaded through all ten render call sites. Only
+catalogued variable names are injected, so a hand-edited settings blob cannot
+introduce arbitrary template variables. The cache is rebuilt on every office
+write, when the Officers tab loads, and nightly by `officer_directory_sync` — the
+last of which catches a change made to the _member behind_ an office rather than
+to the assignment.
+
+See [DEPARTMENT_OFFICERS.md](../docs/DEPARTMENT_OFFICERS.md) for the full catalogue
+and API.
+
+### Fixed
+
+- `inventory_notification_service` passed **no organization** to `render()`, so
+  every `{{organization_*}}` variable was silently dropped from inventory change
+  emails.
