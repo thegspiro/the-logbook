@@ -20,7 +20,6 @@ from app.core.utils import generate_uuid
 from app.models.notification import NotificationLog
 from app.models.training import (
     AssignmentStatus,
-    BasicApparatus,
     DueDateType,
     EnrollmentStatus,
     PatternType,
@@ -51,7 +50,10 @@ from app.models.user import (
     user_positions,
 )
 from app.services.member_leave_service import MemberLeaveService
-from app.utils.org_scoping import is_in_org
+from app.utils.apparatus_ref import (
+    apparatus_ref_exists,
+    resolve_apparatus_display_map,
+)
 
 
 class SchedulingService:
@@ -295,15 +297,16 @@ class SchedulingService:
     async def _get_apparatus_map(
         self, organization_id: UUID, apparatus_ids: List[str]
     ) -> Dict[str, Any]:
-        """Load BasicApparatus rows for a set of IDs, returning a dict keyed by id."""
-        if not apparatus_ids:
-            return {}
-        result = await self.db.execute(
-            select(BasicApparatus)
-            .where(BasicApparatus.organization_id == str(organization_id))
-            .where(BasicApparatus.id.in_(apparatus_ids))
+        """Load apparatus display fields for a set of shift apparatus IDs.
+
+        Covers both apparatus tables: a shift carries whichever id the shift
+        form was served, so loading only ``BasicApparatus`` left every shift on
+        a full-Apparatus department with a blank unit number and no min-staffing
+        fallback. See utils/apparatus_ref.
+        """
+        return await resolve_apparatus_display_map(
+            self.db, apparatus_ids, organization_id
         )
-        return {str(a.id): a for a in result.scalars().all()}
 
     async def _get_user_name_map(self, user_ids: List[str]) -> Dict[str, str]:
         """Load user display names for a set of user IDs, returning {id: full_name}."""
@@ -575,9 +578,16 @@ class SchedulingService:
             # SCH-6: validate a client-supplied apparatus_id is in-org (it drives
             # the min-staffing lookup) so a shift can't carry a foreign apparatus
             # reference. station_id is an unwired placeholder column (no reads).
+            #
+            # Accepts an id from *either* apparatus table. GET /apparatus-options
+            # serves full Apparatus ids when that module has records and
+            # BasicApparatus ids otherwise, so checking BasicApparatus alone
+            # rejected the very ids the shift form had just been given — a
+            # department on the Apparatus module could not assign an apparatus to
+            # a shift at all. See utils/apparatus_ref.
             apparatus_id = shift_data.get("apparatus_id")
-            if apparatus_id and not await is_in_org(
-                self.db, BasicApparatus, apparatus_id, organization_id
+            if apparatus_id and not await apparatus_ref_exists(
+                self.db, apparatus_id, organization_id
             ):
                 return None, "Apparatus not found"
             shift = Shift(
@@ -699,16 +709,18 @@ class SchedulingService:
                 and not required_by_shift[str(s.id)]
             }
         )
-        apparatus_min_staffing: Dict[str, int] = {}
-        if apparatus_ids:
-            app_result = await self.db.execute(
-                select(BasicApparatus.id, BasicApparatus.min_staffing)
-                .where(BasicApparatus.id.in_(apparatus_ids))
-                .where(BasicApparatus.organization_id == str(organization_id))
-            )
-            for row in app_result.all():
-                if row[1] is not None:
-                    apparatus_min_staffing[row[0]] = row[1]
+        # Resolved across both apparatus tables — a shift's apparatus_id may name
+        # either, and an id that fails to resolve silently drops the
+        # understaffing badge for that shift. See utils/apparatus_ref.
+        apparatus_min_staffing: Dict[str, int] = {
+            key: value.min_staffing
+            for key, value in (
+                await resolve_apparatus_display_map(
+                    self.db, apparatus_ids, organization_id
+                )
+            ).items()
+            if value.min_staffing is not None
+        }
 
         open_shifts: List[Shift] = []
         for shift in shifts:
@@ -1128,8 +1140,8 @@ class SchedulingService:
 
             # SCH-6: validate a (re)set apparatus_id is in-org (see create_shift).
             new_apparatus = update_data.get("apparatus_id")
-            if new_apparatus and not await is_in_org(
-                self.db, BasicApparatus, new_apparatus, organization_id
+            if new_apparatus and not await apparatus_ref_exists(
+                self.db, new_apparatus, organization_id
             ):
                 return None, "Apparatus not found"
 
@@ -3914,16 +3926,18 @@ class SchedulingService:
 
         # Build apparatus min_staffing lookup for shifts that have an apparatus_id
         apparatus_ids = list({s.apparatus_id for s in all_shifts if s.apparatus_id})
-        apparatus_min_staffing: Dict[str, int] = {}
-        if apparatus_ids:
-            app_result = await self.db.execute(
-                select(BasicApparatus.id, BasicApparatus.min_staffing)
-                .where(BasicApparatus.id.in_(apparatus_ids))
-                .where(BasicApparatus.organization_id == str(organization_id))
-            )
-            for row in app_result.all():
-                if row[1] is not None:
-                    apparatus_min_staffing[row[0]] = row[1]
+        # Resolved across both apparatus tables — a shift's apparatus_id may name
+        # either, and an id that fails to resolve silently drops the
+        # understaffing badge for that shift. See utils/apparatus_ref.
+        apparatus_min_staffing: Dict[str, int] = {
+            key: value.min_staffing
+            for key, value in (
+                await resolve_apparatus_display_map(
+                    self.db, apparatus_ids, organization_id
+                )
+            ).items()
+            if value.min_staffing is not None
+        }
 
         # Group shifts by date
         shifts_by_date: Dict[date, list] = {}

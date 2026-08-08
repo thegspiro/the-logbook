@@ -695,16 +695,14 @@ During a shift, members see pending equipment checks on their dashboard or via *
 > **Screenshot needed:**
 > _[Screenshot of the equipment check form on a mobile device showing a compartment heading, several check items with pass/fail toggle buttons, a quantity field, and the photo attachment button]_
 
-> **⚠️ Known issue (found 2026-08-08): submitting a check fails on any shift that
-> has an apparatus assigned.** The submission returns a server error. This is not
-> a permission or data problem on your side and there is no workaround from the
-> UI — checks currently only submit for shifts with **no** apparatus assigned.
->
-> The cause is that two different apparatus tables are in play and the shift's
-> apparatus reference is not the one the equipment-check record expects. Fixing it
-> means choosing which of the two is authoritative, which is a design decision
-> rather than a patch, so it is being reported rather than guessed at. Tracked in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#scheduling-module).
+> **Fixed 2026-08-08.** Submitting a check used to return a server error on
+> **any shift with an apparatus assigned** — so in practice, on any real shift.
+> If your department hit this, no action is needed beyond updating; nothing was
+> saved, so there are no half-written checks to clean up. Two related problems
+> went with it: **equipment-check templates never resolved** for departments that
+> set their apparatus up during onboarding (the checklist came back empty), and
+> departments running the full Apparatus module **could not assign an apparatus
+> to a shift at all**.
 
 **Auto-fail rules:**
 
@@ -1622,8 +1620,9 @@ the old one and get a new one.
 > **Note:** The feed is read-only and shows roughly the last two months through
 > the next year of your assigned (non-cancelled) shifts.
 
-> **[SCREENSHOT NEEDED]:** _[The "Subscribe to my shifts" card on My Shifts,
-> > expanded to show the calendar URL, Copy button, and Reset link.]_
+> **[SCREENSHOT NEEDED]:** \_[The "Subscribe to my shifts" card on My Shifts,
+>
+> > expanded to show the calendar URL, Copy button, and Reset link.]\_
 
 ### The On-Duty Officer Can Run Their Own Shift
 
@@ -1698,9 +1697,10 @@ Under **Scheduling → Settings**, a department can turn on **automatic shift
 generation** so active patterns keep producing shifts a chosen number of weeks
 ahead — no need to press "Generate" each cycle.
 
-> **[SCREENSHOT NEEDED]:** _[Scheduling Settings → General showing the Close-out
+> **[SCREENSHOT NEEDED]:** \_[Scheduling Settings → General showing the Close-out
+>
 > > rules card (require end-of-shift checks, restrict check-in), the overtime cap,
-> > and the automatic shift generation toggle.]_
+> > and the automatic shift generation toggle.]\_
 
 ### Edge Cases
 
