@@ -61,6 +61,7 @@ interface SkillsTestingState {
     candidate_id?: string;
     template_id?: string;
     include_practice?: boolean;
+    pending_validation?: boolean;
   }) => Promise<void>;
   loadTest: (id: string) => Promise<void>;
   createTest: (data: SkillTestCreate) => Promise<SkillTest>;
@@ -70,6 +71,7 @@ interface SkillsTestingState {
   discardPracticeTest: (id: string) => Promise<void>;
   voidTest: (id: string, reason: string) => Promise<SkillTest>;
   cancelTest: (id: string, reason?: string) => Promise<SkillTest>;
+  validateTest: (id: string) => Promise<SkillTest>;
   releaseTest: (id: string) => Promise<SkillTest>;
   emailTestResults: (id: string) => Promise<string>;
 
@@ -329,6 +331,35 @@ export const useSkillsTestingStore = create<SkillsTestingState>((set, get) => ({
       return voided;
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to void test');
+      set({ error: msg });
+      throw err;
+    }
+  },
+
+  validateTest: async (id: string) => {
+    set({ error: null });
+    try {
+      const validated = await skillsTestingService.validateTest(id);
+      set((state: SkillsTestingState) => ({
+        tests: state.tests.map((t: SkillTestListItem) =>
+          t.id === id
+            ? {
+                ...t,
+                validated_at: validated.validated_at,
+                pending_validation: false,
+                // The list row carried a withheld outcome while the test was
+                // pending; the validated response is the first time this reader
+                // sees the real one.
+                result: validated.result,
+                overall_score: validated.overall_score,
+              }
+            : t
+        ),
+        currentTest: state.currentTest?.id === id ? validated : state.currentTest,
+      }));
+      return validated;
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, 'Failed to validate test');
       set({ error: msg });
       throw err;
     }

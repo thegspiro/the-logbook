@@ -5,6 +5,12 @@
  * chooses between an official evaluation or practice run, then picks
  * a candidate via search to start a new skill evaluation session.
  *
+ * Open to every member, not just training officers. A member may drill on their
+ * own (practice, candidate defaulted to themselves) and may examine a colleague
+ * officially — departments routinely use senior members as evaluators. What a
+ * member cannot do is make the result count: an official test they run is
+ * submitted for a training officer to validate, which the backend enforces.
+ *
  * Entry points that already know which test the user picked (the member-facing
  * Skills Testing list, for example) pass `?template=<id>` so step 1 arrives
  * pre-filled instead of asking the same question twice. `?from=member` sends
@@ -13,17 +19,17 @@
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router';
-import { ArrowLeft, ClipboardCheck, Search, User, FileText, Play, Award, BookOpen } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, Search, User, FileText, Play, Award, BookOpen, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
-import { userService, trainingProgramService } from '../services/api';
+import { useAuthStore } from '../stores/authStore';
+import { skillsTestingService, trainingProgramService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import type { TrainingRequirementEnhanced } from '../types/training';
 
 interface MemberOption {
   id: string;
   name: string;
-  email: string;
 }
 
 const MIN_SEARCH_CHARS = 2;
@@ -38,12 +44,21 @@ export const StartSkillTestPage: React.FC = () => {
       ? '/training/skills-testing'
       : '/training/admin?page=skills-testing&tab=tests';
   const { templates, templatesLoading, loadTemplates, createTest } = useSkillsTestingStore();
+  const { user, checkPermission } = useAuthStore();
+  const isOfficer = checkPermission('training.manage');
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
   // The `?template=` hand-off applies exactly once, so hitting "Change" isn't
   // undone by the next render.
   const preselectApplied = useRef(false);
+  // Same one-shot rule for defaulting a member's practice run to themselves —
+  // otherwise re-picking a candidate would be overwritten on the next render.
+  const selfCandidateApplied = useRef(false);
+
+  // Set as soon as the user picks a mode themselves, so the member default
+  // below never overrides a deliberate choice.
+  const modeChosen = useRef(false);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [selectedCandidateId, setSelectedCandidateId] = useState('');
@@ -76,6 +91,25 @@ export const StartSkillTestPage: React.FC = () => {
     }
   }, [templateParam, templatesLoaded, templates]);
 
+  // A member arriving here is most often drilling on their own, and practice is
+  // the mode that needs no sign-off — so it is the safer default to land on.
+  // Officers keep official, which is what they come here to run.
+  useEffect(() => {
+    if (modeChosen.current || isOfficer) return;
+    setIsPractice(true);
+  }, [isOfficer]);
+
+  // "Practice on your own" should be one tap, not a search for your own name.
+  // Officers are excluded: an officer running a practice drill is almost always
+  // drilling someone else.
+  useEffect(() => {
+    if (selfCandidateApplied.current || isOfficer) return;
+    if (!isPractice || !user?.id || membersLoading || selectedCandidateId) return;
+    if (!members.some((m) => m.id === user.id)) return;
+    selfCandidateApplied.current = true;
+    setSelectedCandidateId(user.id);
+  }, [isOfficer, isPractice, user?.id, members, membersLoading, selectedCandidateId]);
+
   // Load training requirements for the optional per-test override.
   useEffect(() => {
     void (async () => {
@@ -89,14 +123,9 @@ export const StartSkillTestPage: React.FC = () => {
 
   const loadMembers = async () => {
     try {
-      const users = await userService.getUsers();
-      setMembers(
-        users.map((u) => ({
-          id: u.id,
-          name: `${u.first_name} ${u.last_name}`.trim(),
-          email: u.email ?? '',
-        }))
-      );
+      // Not userService.getUsers(): that needs `users.view`, which the baseline
+      // member position does not carry, and every member can examine now.
+      setMembers(await skillsTestingService.getCandidates());
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load members'));
     } finally {
@@ -113,13 +142,18 @@ export const StartSkillTestPage: React.FC = () => {
   const filteredMembers = useMemo(() => {
     if (memberSearch.length < MIN_SEARCH_CHARS) return [];
     return members
-      .filter(
-        (m) =>
-          m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
-          m.email.toLowerCase().includes(memberSearch.toLowerCase())
-      )
+      .filter((m) => m.name.toLowerCase().includes(memberSearch.toLowerCase()))
       .slice(0, MAX_SEARCH_RESULTS);
   }, [members, memberSearch]);
+
+  // The backend refuses an official test whose examiner and candidate are the
+  // same person (separation of duties — a self-recorded pass would satisfy a
+  // program requirement). Caught here so a member who defaulted into their own
+  // name and then switched to Official is told why, rather than being handed a
+  // 400 after filling the form in.
+  const isSelfCandidate = !!user?.id && selectedCandidateId === user.id;
+  const selfOfficialBlocked = !isPractice && isSelfCandidate;
+  const showRequirementStep = !isPractice && isOfficer;
 
   const handleStart = async () => {
     if (!selectedTemplateId) {
@@ -128,6 +162,10 @@ export const StartSkillTestPage: React.FC = () => {
     }
     if (!selectedCandidateId) {
       toast.error('Please select a candidate');
+      return;
+    }
+    if (selfOfficialBlocked) {
+      toast.error('An official evaluation needs a different examiner and candidate');
       return;
     }
 
@@ -142,7 +180,13 @@ export const StartSkillTestPage: React.FC = () => {
         ...(!isPractice && overrideRequirementId ? { requirement_id: overrideRequirementId } : {}),
         is_practice: isPractice,
       });
-      toast.success(isPractice ? 'Practice session started' : 'Test session started');
+      toast.success(
+        isPractice
+          ? 'Practice session started'
+          : isOfficer
+            ? 'Test session started'
+            : 'Test session started — a training officer will validate the result'
+      );
       void navigate(`/training/skills-testing/test/${test.id}/active`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to start test'));
@@ -243,7 +287,10 @@ export const StartSkillTestPage: React.FC = () => {
           <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">2. Test Mode</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
-              onClick={() => setIsPractice(false)}
+              onClick={() => {
+                modeChosen.current = true;
+                setIsPractice(false);
+              }}
               className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
                 !isPractice
                   ? 'border-red-600 bg-red-50 shadow-md dark:bg-red-900/20'
@@ -257,12 +304,17 @@ export const StartSkillTestPage: React.FC = () => {
                 Official Evaluation
               </span>
               <span className="text-theme-text-muted text-center text-xs leading-tight">
-                Results are recorded and count toward certifications
+                {isOfficer
+                  ? 'Results are recorded and count toward certifications'
+                  : 'Recorded, then sent to a training officer to validate'}
               </span>
               {!isPractice && <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-red-600" />}
             </button>
             <button
-              onClick={() => setIsPractice(true)}
+              onClick={() => {
+                modeChosen.current = true;
+                setIsPractice(true);
+              }}
               className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${
                 isPractice
                   ? 'border-blue-600 bg-blue-50 shadow-md dark:bg-blue-900/20'
@@ -281,6 +333,17 @@ export const StartSkillTestPage: React.FC = () => {
               {isPractice && <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-blue-600" />}
             </button>
           </div>
+
+          {!isOfficer && !isPractice && (
+            <div className="alert-info mt-3 flex items-start gap-2">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <p className="text-sm">
+                You can run this evaluation, but it doesn&apos;t count until a training officer reviews and validates
+                it. Until then it won&apos;t credit a program requirement or use up one of the candidate&apos;s
+                attempts.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Step 3: Select Candidate (search-only) */}
@@ -293,8 +356,10 @@ export const StartSkillTestPage: React.FC = () => {
           {selectedCandidate ? (
             <div className="flex items-center justify-between rounded-lg border border-green-500/30 bg-green-100 p-3 dark:bg-green-900/30">
               <div>
-                <p className="font-medium text-green-800 dark:text-green-200">{selectedCandidate.name}</p>
-                <p className="text-sm text-green-700 dark:text-green-300">{selectedCandidate.email}</p>
+                <p className="font-medium text-green-800 dark:text-green-200">
+                  {selectedCandidate.name}
+                  {isSelfCandidate && <span className="ml-2 text-sm font-normal">(you)</span>}
+                </p>
               </div>
               <button
                 onClick={() => setSelectedCandidateId('')}
@@ -337,8 +402,10 @@ export const StartSkillTestPage: React.FC = () => {
                       }}
                       className="border-theme-surface-border w-full rounded-lg border p-3 text-left transition-colors hover:border-red-500/50"
                     >
-                      <p className="text-theme-text-primary font-medium">{m.name}</p>
-                      <p className="text-theme-text-muted text-xs">{m.email}</p>
+                      <p className="text-theme-text-primary font-medium">
+                        {m.name}
+                        {m.id === user?.id && <span className="text-theme-text-muted ml-2 text-xs">(you)</span>}
+                      </p>
                     </button>
                   ))}
                   {filteredMembers.length === 0 && (
@@ -353,10 +420,23 @@ export const StartSkillTestPage: React.FC = () => {
               )}
             </>
           )}
+
+          {selfOfficialBlocked && (
+            <div className="alert-warning mt-3 flex items-start gap-2">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <p className="text-sm">
+                You can&apos;t examine yourself on an official evaluation — someone else has to hold the clipboard.
+                Switch to Practice Run, or pick a different candidate.
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* Step 4: Pipeline requirement (real tests only) */}
-        {!isPractice && (
+        {/* Step 4: Pipeline requirement — official tests, officers only. Which
+            requirement a result credits is the officer's call, and they make it
+            when they validate; showing the picker to a member invites them to
+            re-point a test whose credit they cannot grant anyway. */}
+        {showRequirementStep && (
           <div className="bg-theme-surface border-theme-surface-border mb-4 rounded-lg border p-4 sm:p-6">
             <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">
               4. Counts Toward Requirement (optional)
@@ -388,9 +468,12 @@ export const StartSkillTestPage: React.FC = () => {
           </div>
         )}
 
-        {/* Step 5: Notes (optional) */}
+        {/* Notes (optional) — numbered off the requirement step, which is hidden
+            for practice runs and for members. */}
         <div className="bg-theme-surface border-theme-surface-border mb-6 rounded-lg border p-4 sm:p-6">
-          <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">5. Notes (optional)</h2>
+          <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">
+            {showRequirementStep ? '5' : '4'}. Notes (optional)
+          </h2>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -403,7 +486,7 @@ export const StartSkillTestPage: React.FC = () => {
         {/* Start Button */}
         <button
           onClick={() => void handleStart()}
-          disabled={!selectedTemplateId || !selectedCandidateId || isStarting}
+          disabled={!selectedTemplateId || !selectedCandidateId || selfOfficialBlocked || isStarting}
           className={`flex w-full items-center justify-center gap-3 rounded-xl py-4 text-lg font-bold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
             isPractice ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'
           }`}

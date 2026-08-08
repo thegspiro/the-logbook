@@ -207,6 +207,18 @@ class SkillTestUpdate(BaseModel):
     expected_version: Optional[int] = None
 
 
+class SkillTestCandidateResponse(BaseModel):
+    """One selectable candidate for the start-test picker.
+
+    Deliberately just an id and a display name. Every member can call the
+    endpoint that returns these, so it carries none of the contact information
+    the member admin payload governs behind organization visibility settings.
+    """
+
+    id: UUID
+    name: str
+
+
 class SkillTestViewerCreate(BaseModel):
     """Grant one member sight of a single test's result."""
 
@@ -284,11 +296,21 @@ class SkillTestResponse(UTCResponseBase):
     voided_by: Optional[UUID] = None
     void_reason: Optional[str] = None
 
+    # Validation trail — an official result counts only once a training officer
+    # signs it off. Unset while a member-run test awaits review; set in the same
+    # step when an officer completes the test themselves.
+    validated_at: Optional[datetime] = None
+    validated_by: Optional[UUID] = None
+    # Derived: a completed official test with no sign-off yet. Sent so the UI
+    # does not have to re-derive the rule from three separate fields.
+    pending_validation: bool = False
+
     # Denormalized display names (populated in endpoint)
     template_name: Optional[str] = None
     candidate_name: Optional[str] = None
     examiner_name: Optional[str] = None
     voided_by_name: Optional[str] = None
+    validated_by_name: Optional[str] = None
 
     # Template structure for active test rendering
     template_sections: Optional[list] = None
@@ -315,6 +337,8 @@ class SkillTestListResponse(UTCResponseBase):
     completed_at: Optional[datetime] = None
     created_at: datetime
     voided_at: Optional[datetime] = None
+    validated_at: Optional[datetime] = None
+    pending_validation: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -333,3 +357,6 @@ class SkillTestingSummaryResponse(BaseModel):
     tests_this_month: int = 0
     pass_rate: Optional[float] = None
     average_score: Optional[float] = None
+    # Member-run official results waiting on an officer's sign-off. Drives the
+    # review queue badge; 0 for readers who cannot validate.
+    pending_validation: int = 0

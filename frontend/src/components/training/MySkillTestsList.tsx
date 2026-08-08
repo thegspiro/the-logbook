@@ -2,10 +2,10 @@
  * My Skill Tests List
  *
  * The member's own skills-test results, shown on My Training. Covers both
- * official results and practice attempts — before this existed, a candidate had
- * no way to see either from their own account, because every skills-testing
- * route is gated on training.manage. A member evaluated by a peer or officer
- * had to read the outcome off the examiner's device.
+ * official results and practice attempts, including ones still awaiting a
+ * training officer's validation — those are listed without their outcome,
+ * because until an officer signs a member-run evaluation off, nobody has
+ * decided that its result stands.
  *
  * Fetched through the service rather than the shared skills-testing store: that
  * store's `tests` array backs the officer records tab, and an officer viewing
@@ -88,7 +88,11 @@ export const MySkillTestsList: React.FC<MySkillTestsListProps> = ({ userId }) =>
     <div className="space-y-2">
       {tests.map((test) => {
         const isVoided = test.status === 'voided';
-        const isComplete = test.status === 'completed';
+        const isPending = !!test.pending_validation;
+        // A pending test is "completed" in status but has no outcome to show:
+        // the API withholds the score and reports the result as incomplete, so
+        // treating it as scored here would render every one of them as Failed.
+        const isComplete = test.status === 'completed' && !isPending;
         return (
           <button
             key={test.id}
@@ -108,6 +112,11 @@ export const MySkillTestsList: React.FC<MySkillTestsListProps> = ({ userId }) =>
                     Voided
                   </span>
                 )}
+                {isPending && (
+                  <span className="badge bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">
+                    Awaiting validation
+                  </span>
+                )}
               </div>
               <p className="text-theme-text-muted text-xs">
                 Examiner: {test.examiner_name} · {formatDate(test.completed_at ?? test.created_at, tz)}
@@ -124,7 +133,9 @@ export const MySkillTestsList: React.FC<MySkillTestsListProps> = ({ userId }) =>
                     {test.result === 'pass' ? 'Passed' : 'Failed'}
                   </p>
                 ) : (
-                  <p className="text-theme-text-muted text-sm">{isVoided ? 'Withdrawn' : 'In progress'}</p>
+                  <p className="text-theme-text-muted text-sm">
+                    {isVoided ? 'Withdrawn' : isPending ? 'Under review' : 'In progress'}
+                  </p>
                 )}
                 {test.overall_score != null && isComplete && (
                   <p className="text-theme-text-muted text-xs">{Math.round(test.overall_score)}%</p>

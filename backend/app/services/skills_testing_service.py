@@ -242,6 +242,33 @@ def calculate_test_result(
     return overall_score, test_result
 
 
+# A view tier that is not a disclosure setting: the reader may see that the
+# test exists and is awaiting an officer's sign-off, but none of its marks. It
+# sits outside ResultDisclosure deliberately — disclosure is what the
+# department configured, this is a transient state of one test.
+RESULT_VIEW_PENDING = "pending"
+
+
+def is_pending_validation(test: SkillTest) -> bool:
+    """Whether ``test`` is a completed official result no officer has signed off.
+
+    Practice attempts are never validated (there is nothing to credit), and a
+    test that is still in progress, cancelled, or voided is not waiting on
+    anyone.
+
+    Read through ``getattr`` like the rest of this module's pure helpers, so it
+    accepts any object shaped like a test — the disclosure rules are unit-tested
+    against lightweight stand-ins rather than ORM rows.
+    """
+    from app.models.skills_testing import SkillTestStatus
+
+    if getattr(test, "is_practice", False):
+        return False
+    if getattr(test, "status", None) != SkillTestStatus.COMPLETED.value:
+        return False
+    return getattr(test, "validated_at", None) is None
+
+
 class AttemptLimitReached(Exception):
     """Raised when a candidate has used every attempt a requirement allows."""
 
@@ -261,11 +288,16 @@ async def assert_attempts_remaining(
     thing. This mirrors that check: attempts already spent, the cap, and an
     exemption once the requirement is satisfied.
 
-    An attempt is a *completed*, official, non-voided test against this
+    An attempt is a *validated*, official, non-voided test against this
     requirement — pass or fail, because a failure is an attempt. Voided results
     are excluded: the department withdrew them, so they should not consume a
     candidate's remaining chances. Tests still in progress do not count, which
     means the test currently being completed is not counted against itself.
+
+    Validation, not completion, is what spends the attempt. A peer-run test an
+    officer has not signed off is not yet a result, and one the officer
+    ultimately rejects must cost the candidate nothing — the same reasoning that
+    excludes voided tests.
 
     Callers must skip practice attempts before calling — they are never
     recorded or credited, so they never consume an attempt.
@@ -333,6 +365,7 @@ async def assert_attempts_remaining(
                 SkillTest.requirement_id == str(requirement_id),
                 SkillTest.is_practice == False,  # noqa: E712
                 SkillTest.status == SkillTestStatus.COMPLETED.value,
+                SkillTest.validated_at.isnot(None),
             )
         )
     ).scalar() or 0
@@ -553,7 +586,7 @@ def resolve_result_view(
     named_viewer_ids: set[str] | None = None,
     user_position_slugs: set[str] | None = None,
 ) -> str:
-    """How much of ``test`` this user may see: "none", "scores" or "full".
+    """How much of ``test`` this user may see: "none", "pending", "scores" or "full".
 
     Officers and the examiner who ran the test always get the full scorecard —
     the policy exists to govern what the person *being evaluated* sees, not to
@@ -563,6 +596,12 @@ def resolve_result_view(
     the resolved policy, and by release: under ``on_release`` a completed
     result stays invisible until an officer releases it. A viewer never sees
     more than the candidate does.
+
+    "pending" is returned for an official result still awaiting an officer's
+    validation: the reader is told the test exists and is under review, but no
+    marks are shown. It is resolved *after* the disclosure and release gates, so
+    a test those gates hide stays hidden rather than surfacing as a pending row
+    that would vanish again the moment it was validated.
     """
     from app.models.skills_testing import ResultDisclosure, ResultRelease
 
@@ -597,23 +636,40 @@ def resolve_result_view(
         if not getattr(test, "released_at", None):
             return ResultDisclosure.NONE.value
 
+    if is_pending_validation(test):
+        return RESULT_VIEW_PENDING
+
     return disclosure
 
 
 def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
     """Strip from a test response whatever ``view`` does not permit.
 
-    Only ``scores`` redacts: it removes every piece of written commentary while
-    leaving the marks and points intact. That covers the test's own notes, each
-    criterion's note, and the synthetic per-section review-notes entries the
-    examiner writes on the review screen — which live inside criteria_results
-    rather than in a field of their own, so dropping the obvious `notes` keys
-    alone would leak them.
+    ``scores`` removes every piece of written commentary while leaving the marks
+    and points intact. That covers the test's own notes, each criterion's note,
+    and the synthetic per-section review-notes entries the examiner writes on
+    the review screen — which live inside criteria_results rather than in a
+    field of their own, so dropping the obvious `notes` keys alone would leak
+    them.
+
+    ``pending`` removes the outcome entirely. The reader may know an official
+    test was taken and is awaiting an officer's sign-off; they may not know how
+    it went, because until it is validated nobody has decided that it stands.
+    The result reads as ``incomplete`` — the same value an unfinished test
+    carries — rather than a pass/fail the officer may yet reject.
 
     Mutates nothing the caller passed in: section results are rebuilt rather
     than edited, so the ORM's loaded JSON is never touched (Pitfall #12).
     """
-    from app.models.skills_testing import ResultDisclosure
+    from app.models.skills_testing import ResultDisclosure, SkillTestResult
+
+    if view == RESULT_VIEW_PENDING:
+        withheld = dict(payload)
+        withheld["result"] = SkillTestResult.INCOMPLETE.value
+        withheld["overall_score"] = None
+        withheld["section_results"] = []
+        withheld["notes"] = None
+        return withheld
 
     if view != ResultDisclosure.SCORES.value:
         return payload

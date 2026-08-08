@@ -88,7 +88,19 @@ const TestHistoryCard: React.FC<{
           <div className="mb-1 flex items-center gap-2">
             <p className="text-theme-text-primary truncate font-medium">{test.template_name}</p>
             <ResultBadge result={test.status} />
-            {test.result !== 'incomplete' && <ResultBadge result={test.result} />}
+            {/* The score is withheld server-side until an officer signs the
+                result off, so the badge explains the blank rather than leaving
+                the member to wonder whether they failed. */}
+            {test.pending_validation ? (
+              <span
+                role="status"
+                className="inline-flex items-center rounded-full bg-purple-500/10 px-2.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-500/20 dark:text-purple-400"
+              >
+                awaiting validation
+              </span>
+            ) : (
+              test.result !== 'incomplete' && <ResultBadge result={test.result} />
+            )}
           </div>
           <p className="text-theme-text-muted text-sm">
             Examiner: {test.examiner_name}
@@ -96,7 +108,12 @@ const TestHistoryCard: React.FC<{
           </p>
         </div>
         <div className="ml-4 shrink-0 text-right">
-          {test.overall_score != null ? (
+          {test.pending_validation ? (
+            <span className="text-theme-text-muted flex items-center gap-1 text-sm">
+              <Clock className="h-4 w-4" />
+              Under review
+            </span>
+          ) : test.overall_score != null ? (
             <div className="flex items-center gap-1.5">
               {test.result === 'pass' ? (
                 <CheckCircle2 className="h-5 w-5 text-green-500" />
