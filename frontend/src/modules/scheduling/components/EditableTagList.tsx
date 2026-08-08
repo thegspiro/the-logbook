@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Plus, X, Pencil, ChevronUp, ChevronDown } from "lucide-react";
+import React, { useState } from 'react';
+import { Plus, X, Pencil, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface EditingState {
   index: number;
@@ -21,22 +21,22 @@ interface EditableTagListProps {
 const EditableTagList: React.FC<EditableTagListProps> = ({
   items,
   onItemsChange,
-  placeholder = "Add item...",
+  placeholder = 'Add item...',
   defaultSuggestions,
   suggestionsLabel,
-  tagColorClass = "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20",
+  tagColorClass = 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20',
   getTagClassName,
   getTagTitle,
   reorderable = false,
 }) => {
-  const [newValue, setNewValue] = useState("");
+  const [newValue, setNewValue] = useState('');
   const [editing, setEditing] = useState<EditingState | null>(null);
 
   const addItem = (value: string) => {
     const trimmed = value.trim();
     if (!trimmed || items.includes(trimmed)) return;
     onItemsChange([...items, trimmed]);
-    setNewValue("");
+    setNewValue('');
   };
 
   const removeItem = (index: number) => {
@@ -66,7 +66,7 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5 mb-2">
+      <div className="mb-2 flex flex-wrap gap-1.5">
         {items.map((item, i) => {
           if (editing?.index === i) {
             return (
@@ -75,44 +75,50 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
                 autoFocus
                 type="text"
                 value={editing.value}
-                onChange={(e) =>
-                  setEditing({ ...editing, value: e.target.value })
-                }
+                onChange={(e) => setEditing({ ...editing, value: e.target.value })}
                 onBlur={commitEdit}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+                  if (e.key === 'Enter') {
                     (e.target as HTMLInputElement).blur();
                   }
-                  if (e.key === "Escape") {
+                  if (e.key === 'Escape') {
                     setEditing(null);
                   }
                 }}
-                className="px-2.5 py-1 rounded-full text-xs font-medium border-2 border-violet-500 bg-theme-surface text-theme-text-primary w-48 focus:outline-hidden"
+                className="bg-theme-surface text-theme-text-primary w-48 rounded-full border-2 border-violet-500 px-2.5 py-1 text-xs font-medium focus:outline-hidden"
               />
             );
           }
 
-          const className = getTagClassName
-            ? getTagClassName(item)
-            : tagColorClass;
+          const className = getTagClassName ? getTagClassName(item) : tagColorClass;
           const title = getTagTitle ? getTagTitle(item) : undefined;
 
           return (
             <span
               key={i}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${className}`}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${className}`}
               title={title}
             >
               {item}
               {reorderable && (
                 <>
-                  <button type="button" onClick={() => moveItem(i, -1)} disabled={i === 0}
-                    className="hover:text-violet-500 disabled:opacity-30" title="Move up">
-                    <ChevronUp className="w-3 h-3" />
+                  <button
+                    type="button"
+                    onClick={() => moveItem(i, -1)}
+                    disabled={i === 0}
+                    className="hover:text-violet-500 disabled:opacity-30"
+                    title="Move up"
+                  >
+                    <ChevronUp className="h-3 w-3" />
                   </button>
-                  <button type="button" onClick={() => moveItem(i, 1)} disabled={i === items.length - 1}
-                    className="hover:text-violet-500 disabled:opacity-30" title="Move down">
-                    <ChevronDown className="w-3 h-3" />
+                  <button
+                    type="button"
+                    onClick={() => moveItem(i, 1)}
+                    disabled={i === items.length - 1}
+                    className="hover:text-violet-500 disabled:opacity-30"
+                    title="Move down"
+                  >
+                    <ChevronDown className="h-3 w-3" />
                   </button>
                 </>
               )}
@@ -122,14 +128,10 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
                 className="hover:text-violet-500"
                 title="Edit"
               >
-                <Pencil className="w-3 h-3" />
+                <Pencil className="h-3 w-3" />
               </button>
-              <button
-                type="button"
-                onClick={() => removeItem(i)}
-                className="hover:text-red-500"
-              >
-                <X className="w-3 h-3" />
+              <button type="button" onClick={() => removeItem(i)} className="hover:text-red-500">
+                <X className="h-3 w-3" />
               </button>
             </span>
           );
@@ -142,36 +144,33 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
           value={newValue}
           onChange={(e) => setNewValue(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === 'Enter') {
               e.preventDefault();
               addItem(newValue);
             }
           }}
           placeholder={placeholder}
-          className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
+          className="border-theme-surface-border bg-theme-surface text-theme-text-primary flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
         />
         <button
           type="button"
           onClick={() => addItem(newValue)}
           disabled={!newValue.trim()}
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-theme-surface-hover text-theme-text-secondary hover:bg-theme-surface-secondary disabled:opacity-40 transition-colors"
+          className="bg-theme-surface-hover text-theme-text-secondary hover:bg-theme-surface-secondary inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm transition-colors disabled:opacity-40"
         >
-          <Plus className="w-3.5 h-3.5" /> Add
+          <Plus className="h-3.5 w-3.5" /> Add
         </button>
       </div>
 
-      {defaultSuggestions &&
-        defaultSuggestions.length > 0 &&
-        items.length === 0 && (
-          <button
-            type="button"
-            onClick={() => onItemsChange([...defaultSuggestions])}
-            className="mt-2 text-xs text-violet-600 dark:text-violet-400 hover:underline"
-          >
-            {suggestionsLabel ||
-              `Copy from defaults (${defaultSuggestions.length} items)`}
-          </button>
-        )}
+      {defaultSuggestions && defaultSuggestions.length > 0 && items.length === 0 && (
+        <button
+          type="button"
+          onClick={() => onItemsChange([...defaultSuggestions])}
+          className="mt-2 text-xs text-violet-600 hover:underline dark:text-violet-400"
+        >
+          {suggestionsLabel || `Copy from defaults (${defaultSuggestions.length} items)`}
+        </button>
+      )}
     </div>
   );
 };

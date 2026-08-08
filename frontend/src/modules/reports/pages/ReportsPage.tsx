@@ -501,13 +501,16 @@ export const ReportsPage: React.FC = () => {
 
         {/* Error Banner */}
         {error && !activeCard && (
-          <div className="mb-6 rounded-lg border border-theme-alert-danger-border bg-theme-alert-danger-bg p-4">
+          <div className="border-theme-alert-danger-border bg-theme-alert-danger-bg mb-6 rounded-lg border p-4">
             <div className="flex items-start space-x-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-theme-alert-danger-icon" aria-hidden="true" />
+              <AlertCircle className="text-theme-alert-danger-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
               <div className="flex-1">
-                <p className="text-sm text-theme-alert-danger-text">{error}</p>
+                <p className="text-theme-alert-danger-text text-sm">{error}</p>
               </div>
-              <button onClick={() => setError(null)} className="text-theme-alert-danger-icon hover:text-theme-alert-danger-title">
+              <button
+                onClick={() => setError(null)}
+                className="text-theme-alert-danger-icon hover:text-theme-alert-danger-title"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -576,19 +579,19 @@ export const ReportsPage: React.FC = () => {
         {/* Empty State */}
         {filteredReports.length === 0 && (
           <div className="py-12 text-center">
-            <FileText className="mx-auto mb-4 h-16 w-16 text-theme-text-muted" aria-hidden="true" />
+            <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" aria-hidden="true" />
             <h3 className="text-theme-text-primary mb-2 text-xl font-semibold">No reports found</h3>
             <p className="text-theme-text-muted">Try selecting a different category</p>
           </div>
         )}
 
         {/* Info Banner */}
-        <div className="mt-8 rounded-lg border border-theme-alert-info-border bg-theme-alert-info-bg p-4">
+        <div className="border-theme-alert-info-border bg-theme-alert-info-bg mt-8 rounded-lg border p-4">
           <div className="flex items-start space-x-3">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-theme-alert-info-icon" aria-hidden="true" />
+            <AlertCircle className="text-theme-alert-info-icon mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
-              <h4 className="mb-1 text-sm font-medium text-theme-alert-info-title">Report Generation</h4>
-              <p className="text-sm text-theme-alert-info-text">
+              <h4 className="text-theme-alert-info-title mb-1 text-sm font-medium">Report Generation</h4>
+              <p className="text-theme-alert-info-text text-sm">
                 Reports are generated in real-time. Use the date range presets or set a custom period for date-based
                 reports. All reports can be exported to CSV or printed to PDF. Use the Compare button in the report
                 modal to see period-over-period trends.

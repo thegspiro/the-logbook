@@ -56,19 +56,19 @@ const AdminHoursManagePage: React.FC = () => {
   }, [error, clearError]);
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="mx-auto max-w-6xl p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-theme-text-primary">Admin Hours Management</h1>
+        <h1 className="text-theme-text-primary text-3xl font-bold">Admin Hours Management</h1>
         <p className="text-theme-text-secondary mt-1">Manage categories, review entries, and view summaries</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-theme-surface rounded-lg p-1">
+      <div className="bg-theme-surface mb-6 flex gap-1 rounded-lg p-1">
         {TAB_KEYS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition relative ${
+            className={`relative flex-1 rounded-md px-4 py-2 text-sm font-medium transition ${
               activeTab === tab
                 ? 'bg-blue-600 text-white'
                 : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -76,12 +76,12 @@ const AdminHoursManagePage: React.FC = () => {
           >
             {TAB_LABELS[tab]}
             {tab === 'active' && activeSessions.length > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none bg-blue-500 text-white rounded-full">
+              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-blue-500 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
                 {activeSessions.length}
               </span>
             )}
             {tab === 'pending' && pendingCount > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none bg-red-500 text-white rounded-full">
+              <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs leading-none font-bold text-white">
                 {pendingCount}
               </span>
             )}

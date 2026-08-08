@@ -308,17 +308,13 @@ describe('trainingService', () => {
     it('should propagate errors from createRecord', async () => {
       mockPost.mockRejectedValueOnce(new Error('Validation error'));
 
-      await expect(
-        trainingService.createRecord({ course_name: 'Test' } as never),
-      ).rejects.toThrow('Validation error');
+      await expect(trainingService.createRecord({ course_name: 'Test' } as never)).rejects.toThrow('Validation error');
     });
 
     it('should propagate errors from deleteRequirement', async () => {
       mockDelete.mockRejectedValueOnce(new Error('Not found'));
 
-      await expect(
-        trainingService.deleteRequirement('nonexistent'),
-      ).rejects.toThrow('Not found');
+      await expect(trainingService.deleteRequirement('nonexistent')).rejects.toThrow('Not found');
     });
   });
 });

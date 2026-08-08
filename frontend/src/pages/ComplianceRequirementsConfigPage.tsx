@@ -45,7 +45,8 @@ import type {
 const inputClass = 'form-input';
 const selectClass = 'form-input';
 const labelClass = 'form-label';
-const checkboxClass = 'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800';
+const checkboxClass =
+  'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800';
 
 type ActiveTab = 'thresholds' | 'profiles' | 'reports' | 'schedule';
 
@@ -222,12 +223,8 @@ export default function ComplianceRequirementsConfigPage() {
     setProfileMembershipTypes(profile.membershipTypes ?? []);
     setProfileRequiredReqs(profile.requiredRequirementIds ?? []);
     setProfileOptionalReqs(profile.optionalRequirementIds ?? []);
-    setProfileCompliantOverride(
-      profile.compliantThresholdOverride?.toString() ?? '',
-    );
-    setProfileAtRiskOverride(
-      profile.atRiskThresholdOverride?.toString() ?? '',
-    );
+    setProfileCompliantOverride(profile.compliantThresholdOverride?.toString() ?? '');
+    setProfileAtRiskOverride(profile.atRiskThresholdOverride?.toString() ?? '');
     setProfilePriority(profile.priority);
     setShowProfileForm(true);
   };
@@ -243,18 +240,11 @@ export default function ComplianceRequirementsConfigPage() {
       const profileData: ComplianceProfileCreate = {
         name: profileName.trim(),
         description: profileDescription.trim() || undefined,
-        membership_types:
-          profileMembershipTypes.length > 0 ? profileMembershipTypes : undefined,
-        required_requirement_ids:
-          profileRequiredReqs.length > 0 ? profileRequiredReqs : undefined,
-        optional_requirement_ids:
-          profileOptionalReqs.length > 0 ? profileOptionalReqs : undefined,
-        compliant_threshold_override: profileCompliantOverride
-          ? parseFloat(profileCompliantOverride)
-          : undefined,
-        at_risk_threshold_override: profileAtRiskOverride
-          ? parseFloat(profileAtRiskOverride)
-          : undefined,
+        membership_types: profileMembershipTypes.length > 0 ? profileMembershipTypes : undefined,
+        required_requirement_ids: profileRequiredReqs.length > 0 ? profileRequiredReqs : undefined,
+        optional_requirement_ids: profileOptionalReqs.length > 0 ? profileOptionalReqs : undefined,
+        compliant_threshold_override: profileCompliantOverride ? parseFloat(profileCompliantOverride) : undefined,
+        at_risk_threshold_override: profileAtRiskOverride ? parseFloat(profileAtRiskOverride) : undefined,
         priority: profilePriority,
       };
 
@@ -346,18 +336,12 @@ export default function ComplianceRequirementsConfigPage() {
 
   const toggleMembershipType = (type: string) => {
     setProfileMembershipTypes((prev: string[]) =>
-      prev.includes(type) ? prev.filter((t: string) => t !== type) : [...prev, type],
+      prev.includes(type) ? prev.filter((t: string) => t !== type) : [...prev, type]
     );
   };
 
-  const toggleRequirement = (
-    reqId: string,
-    list: string[],
-    setter: (v: string[]) => void,
-  ) => {
-    setter(
-      list.includes(reqId) ? list.filter((id: string) => id !== reqId) : [...list, reqId],
-    );
+  const toggleRequirement = (reqId: string, list: string[], setter: (v: string[]) => void) => {
+    setter(list.includes(reqId) ? list.filter((id: string) => id !== reqId) : [...list, reqId]);
   };
 
   const getRequirementName = (id: string) => {
@@ -374,7 +358,7 @@ export default function ComplianceRequirementsConfigPage() {
   if (isLoading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center" role="status" aria-live="polite">
-        <RefreshCw className="h-8 w-8 animate-spin text-theme-text-secondary" />
+        <RefreshCw className="text-theme-text-secondary h-8 w-8 animate-spin" />
       </div>
     );
   }
@@ -386,10 +370,8 @@ export default function ComplianceRequirementsConfigPage() {
         <div className="flex items-center gap-3">
           <Shield className="h-8 w-8 text-blue-600" />
           <div>
-            <h1 className="text-2xl font-bold text-theme-text-primary">
-              Compliance Requirements Configuration
-            </h1>
-            <p className="text-sm text-theme-text-secondary">
+            <h1 className="text-theme-text-primary text-2xl font-bold">Compliance Requirements Configuration</h1>
+            <p className="text-theme-text-secondary text-sm">
               Define what makes members compliant, configure profiles, and schedule reports
             </p>
           </div>
@@ -397,15 +379,13 @@ export default function ComplianceRequirementsConfigPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 rounded-lg border border-theme-surface-border bg-theme-surface p-1">
+      <div className="border-theme-surface-border bg-theme-surface flex gap-1 rounded-lg border p-1">
         {tabs.map((tab: { id: ActiveTab; label: string; icon: ReactElement }) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'bg-blue-600 text-white'
-                : 'text-theme-text-secondary hover:bg-theme-surface-hover'
+              activeTab === tab.id ? 'bg-blue-600 text-white' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
             }`}
           >
             {tab.icon}
@@ -416,12 +396,10 @@ export default function ComplianceRequirementsConfigPage() {
 
       {/* Tab Content */}
       {activeTab === 'thresholds' && (
-        <div className="space-y-6 rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+        <div className="border-theme-surface-border bg-theme-surface space-y-6 rounded-lg border p-6">
           <div className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-theme-text-secondary" />
-            <h2 className="text-lg font-semibold text-theme-text-primary">
-              Compliance Thresholds
-            </h2>
+            <Settings className="text-theme-text-secondary h-5 w-5" />
+            <h2 className="text-theme-text-primary text-lg font-semibold">Compliance Thresholds</h2>
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -435,7 +413,7 @@ export default function ComplianceRequirementsConfigPage() {
                 <option value="percentage">Percentage Based</option>
                 <option value="all_required">All Requirements Must Be Met</option>
               </select>
-              <p className="mt-1 text-xs text-theme-text-secondary">
+              <p className="text-theme-text-secondary mt-1 text-xs">
                 {thresholdType === 'percentage'
                   ? 'Members are compliant when they meet the configured percentage of their requirements'
                   : 'Members must meet 100% of their assigned requirements to be compliant'}
@@ -445,41 +423,35 @@ export default function ComplianceRequirementsConfigPage() {
             {thresholdType === 'percentage' && (
               <>
                 <div>
-                  <label className={labelClass}>
-                    Compliant Threshold (%)
-                  </label>
+                  <label className={labelClass}>Compliant Threshold (%)</label>
                   <input
                     type="number"
                     className={inputClass}
                     min={0}
                     max={100}
                     value={compliantThreshold}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setCompliantThreshold(Number(e.target.value))
-                    }
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setCompliantThreshold(Number(e.target.value))}
                   />
-                  <p className="mt-1 text-xs text-theme-text-secondary">
-                    Members at or above this percentage are marked <span className="font-medium text-green-600">compliant</span>
+                  <p className="text-theme-text-secondary mt-1 text-xs">
+                    Members at or above this percentage are marked{' '}
+                    <span className="font-medium text-green-600">compliant</span>
                   </p>
                 </div>
 
                 <div>
-                  <label className={labelClass}>
-                    At-Risk Threshold (%)
-                  </label>
+                  <label className={labelClass}>At-Risk Threshold (%)</label>
                   <input
                     type="number"
                     className={inputClass}
                     min={0}
                     max={100}
                     value={atRiskThreshold}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setAtRiskThreshold(Number(e.target.value))
-                    }
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setAtRiskThreshold(Number(e.target.value))}
                   />
-                  <p className="mt-1 text-xs text-theme-text-secondary">
-                    Members between this and the compliant threshold are <span className="font-medium text-yellow-600">at risk</span>.
-                    Below this = <span className="font-medium text-red-600">non-compliant</span>
+                  <p className="text-theme-text-secondary mt-1 text-xs">
+                    Members between this and the compliant threshold are{' '}
+                    <span className="font-medium text-yellow-600">at risk</span>. Below this ={' '}
+                    <span className="font-medium text-red-600">non-compliant</span>
                   </p>
                 </div>
               </>
@@ -493,11 +465,9 @@ export default function ComplianceRequirementsConfigPage() {
                 min={0}
                 max={365}
                 value={gracePeriodDays}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setGracePeriodDays(Number(e.target.value))
-                }
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setGracePeriodDays(Number(e.target.value))}
               />
-              <p className="mt-1 text-xs text-theme-text-secondary">
+              <p className="text-theme-text-secondary mt-1 text-xs">
                 Days after a requirement deadline before marking non-compliant
               </p>
             </div>
@@ -509,48 +479,42 @@ export default function ComplianceRequirementsConfigPage() {
                   type="checkbox"
                   className={`${checkboxClass} mt-0.5`}
                   checked={includeCurrentMonth}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    setIncludeCurrentMonth(e.target.checked)
-                  }
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setIncludeCurrentMonth(e.target.checked)}
                 />
-                <span className="text-sm text-theme-text-primary">
-                  Count the current (in-progress) month in compliance
-                  calculations
+                <span className="text-theme-text-primary text-sm">
+                  Count the current (in-progress) month in compliance calculations
                 </span>
               </label>
-              <p className="mt-1 text-xs text-theme-text-secondary">
+              <p className="text-theme-text-secondary mt-1 text-xs">
                 {includeCurrentMonth
                   ? 'Dashboards include the current month, so members must complete this month’s training to show as compliant.'
                   : 'Calculations stop at the end of last month. Members are measured against where they stood when this month began — useful when drills are held late in the month.'}{' '}
-                This is the department-wide default; individual requirements can
-                override it.
+                This is the department-wide default; individual requirements can override it.
               </p>
             </div>
           </div>
 
           {/* Threshold preview */}
           <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
-            <h3 className="mb-3 text-sm font-medium text-theme-text-secondary">
-              Status Preview
-            </h3>
+            <h3 className="text-theme-text-secondary mb-3 text-sm font-medium">Status Preview</h3>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <div className="h-3 w-3 rounded-full bg-green-500" />
-                <span className="text-sm text-theme-text-primary">
+                <span className="text-theme-text-primary text-sm">
                   Compliant: {thresholdType === 'all_required' ? '100%' : `≥ ${compliantThreshold}%`}
                 </span>
               </div>
               {thresholdType === 'percentage' && (
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 rounded-full bg-yellow-500" />
-                  <span className="text-sm text-theme-text-primary">
+                  <span className="text-theme-text-primary text-sm">
                     At Risk: {atRiskThreshold}% – {compliantThreshold - 1}%
                   </span>
                 </div>
               )}
               <div className="flex items-center gap-2">
                 <div className="h-3 w-3 rounded-full bg-red-500" />
-                <span className="text-sm text-theme-text-primary">
+                <span className="text-theme-text-primary text-sm">
                   Non-Compliant: {thresholdType === 'all_required' ? '< 100%' : `< ${atRiskThreshold}%`}
                 </span>
               </div>
@@ -558,10 +522,8 @@ export default function ComplianceRequirementsConfigPage() {
           </div>
 
           {/* Notification settings */}
-          <div className="border-t border-theme-surface-border pt-4">
-            <h3 className="mb-3 text-sm font-semibold text-theme-text-primary">
-              Notifications
-            </h3>
+          <div className="border-theme-surface-border border-t pt-4">
+            <h3 className="text-theme-text-primary mb-3 text-sm font-semibold">Notifications</h3>
             <div className="space-y-3">
               <label className="flex items-center gap-2">
                 <input
@@ -570,15 +532,11 @@ export default function ComplianceRequirementsConfigPage() {
                   checked={notifyNonCompliant}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setNotifyNonCompliant(e.target.checked)}
                 />
-                <span className="text-sm text-theme-text-primary">
-                  Notify members when they become non-compliant
-                </span>
+                <span className="text-theme-text-primary text-sm">Notify members when they become non-compliant</span>
               </label>
 
               <div>
-                <label className={labelClass}>
-                  Reminder Days Before Deadline
-                </label>
+                <label className={labelClass}>Reminder Days Before Deadline</label>
                 <input
                   type="text"
                   className={inputClass}
@@ -586,7 +544,7 @@ export default function ComplianceRequirementsConfigPage() {
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setNotifyDaysBefore(e.target.value)}
                   placeholder="30, 14, 7"
                 />
-                <p className="mt-1 text-xs text-theme-text-secondary">
+                <p className="text-theme-text-secondary mt-1 text-xs">
                   Comma-separated list of days before a requirement deadline to send reminders
                 </p>
               </div>
@@ -610,10 +568,8 @@ export default function ComplianceRequirementsConfigPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-theme-text-secondary" />
-              <h2 className="text-lg font-semibold text-theme-text-primary">
-                Compliance Profiles
-              </h2>
+              <Users className="text-theme-text-secondary h-5 w-5" />
+              <h2 className="text-theme-text-primary text-lg font-semibold">Compliance Profiles</h2>
             </div>
             {!showProfileForm && config && (
               <button
@@ -640,15 +596,15 @@ export default function ComplianceRequirementsConfigPage() {
             </div>
           )}
 
-          <p className="text-sm text-theme-text-secondary">
-            Profiles let you define different compliance rules for different member groups.
-            Assign specific training requirements as mandatory or optional for each group.
+          <p className="text-theme-text-secondary text-sm">
+            Profiles let you define different compliance rules for different member groups. Assign specific training
+            requirements as mandatory or optional for each group.
           </p>
 
           {/* Profile Form */}
           {showProfileForm && (
-            <div className="rounded-lg border border-blue-200 bg-theme-surface p-6 dark:border-blue-800">
-              <h3 className="mb-4 text-base font-semibold text-theme-text-primary">
+            <div className="bg-theme-surface rounded-lg border border-blue-200 p-6 dark:border-blue-800">
+              <h3 className="text-theme-text-primary mb-4 text-base font-semibold">
                 {editingProfileId ? 'Edit Profile' : 'New Profile'}
               </h3>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -668,12 +624,10 @@ export default function ComplianceRequirementsConfigPage() {
                     type="number"
                     className={inputClass}
                     value={profilePriority}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setProfilePriority(Number(e.target.value))
-                    }
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProfilePriority(Number(e.target.value))}
                     min={0}
                   />
-                  <p className="mt-1 text-xs text-theme-text-secondary">
+                  <p className="text-theme-text-secondary mt-1 text-xs">
                     Higher = evaluated first when a member matches multiple profiles
                   </p>
                 </div>
@@ -690,9 +644,7 @@ export default function ComplianceRequirementsConfigPage() {
 
                 {/* Membership Types */}
                 <div className="md:col-span-2">
-                  <label className={labelClass}>
-                    Applies to Membership Types
-                  </label>
+                  <label className={labelClass}>Applies to Membership Types</label>
                   <div className="flex flex-wrap gap-2">
                     {MEMBERSHIP_TYPES.map((type: string) => (
                       <button
@@ -708,39 +660,29 @@ export default function ComplianceRequirementsConfigPage() {
                       </button>
                     ))}
                   </div>
-                  <p className="mt-1 text-xs text-theme-text-secondary">
-                    Leave empty to apply to all membership types
-                  </p>
+                  <p className="text-theme-text-secondary mt-1 text-xs">Leave empty to apply to all membership types</p>
                 </div>
 
                 {/* Threshold Overrides */}
                 <div>
-                  <label className={labelClass}>
-                    Compliant Threshold Override (%)
-                  </label>
+                  <label className={labelClass}>Compliant Threshold Override (%)</label>
                   <input
                     type="number"
                     className={inputClass}
                     value={profileCompliantOverride}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setProfileCompliantOverride(e.target.value)
-                    }
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileCompliantOverride(e.target.value)}
                     placeholder="Use org default"
                     min={0}
                     max={100}
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>
-                    At-Risk Threshold Override (%)
-                  </label>
+                  <label className={labelClass}>At-Risk Threshold Override (%)</label>
                   <input
                     type="number"
                     className={inputClass}
                     value={profileAtRiskOverride}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setProfileAtRiskOverride(e.target.value)
-                    }
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileAtRiskOverride(e.target.value)}
                     placeholder="Use org default"
                     min={0}
                     max={100}
@@ -749,39 +691,29 @@ export default function ComplianceRequirementsConfigPage() {
 
                 {/* Required Requirements */}
                 <div className="md:col-span-2">
-                  <label className={labelClass}>
-                    Required Training Requirements
-                  </label>
-                  <p className="mb-2 text-xs text-theme-text-secondary">
+                  <label className={labelClass}>Required Training Requirements</label>
+                  <p className="text-theme-text-secondary mb-2 text-xs">
                     Members MUST complete these to be considered compliant
                   </p>
                   {requirements.length === 0 ? (
-                    <p className="text-sm text-theme-text-secondary italic">
+                    <p className="text-theme-text-secondary text-sm italic">
                       No training requirements found. Create training requirements first.
                     </p>
                   ) : (
-                    <div className="max-h-48 space-y-1 overflow-y-auto rounded border border-theme-surface-border p-2">
+                    <div className="border-theme-surface-border max-h-48 space-y-1 overflow-y-auto rounded border p-2">
                       {requirements.map((req: AvailableRequirement) => (
                         <label
                           key={req.id}
-                          className="flex items-center gap-2 rounded p-1 hover:bg-theme-surface-hover"
+                          className="hover:bg-theme-surface-hover flex items-center gap-2 rounded p-1"
                         >
                           <input
                             type="checkbox"
                             className={checkboxClass}
                             checked={profileRequiredReqs.includes(req.id)}
-                            onChange={() =>
-                              toggleRequirement(
-                                req.id,
-                                profileRequiredReqs,
-                                setProfileRequiredReqs,
-                              )
-                            }
+                            onChange={() => toggleRequirement(req.id, profileRequiredReqs, setProfileRequiredReqs)}
                           />
-                          <span className="text-sm text-theme-text-primary">
-                            {req.name}
-                          </span>
-                          <span className="text-xs text-theme-text-secondary">
+                          <span className="text-theme-text-primary text-sm">{req.name}</span>
+                          <span className="text-theme-text-secondary text-xs">
                             ({req.requirement_type}
                             {req.source ? ` · ${req.source}` : ''})
                           </span>
@@ -793,39 +725,27 @@ export default function ComplianceRequirementsConfigPage() {
 
                 {/* Optional Requirements */}
                 <div className="md:col-span-2">
-                  <label className={labelClass}>
-                    Optional/Tracked Requirements
-                  </label>
-                  <p className="mb-2 text-xs text-theme-text-secondary">
+                  <label className={labelClass}>Optional/Tracked Requirements</label>
+                  <p className="text-theme-text-secondary mb-2 text-xs">
                     Tracked for reporting but not required for compliance status
                   </p>
                   {requirements.length > 0 && (
-                    <div className="max-h-48 space-y-1 overflow-y-auto rounded border border-theme-surface-border p-2">
+                    <div className="border-theme-surface-border max-h-48 space-y-1 overflow-y-auto rounded border p-2">
                       {requirements
                         .filter((req: AvailableRequirement) => !profileRequiredReqs.includes(req.id))
                         .map((req: AvailableRequirement) => (
                           <label
                             key={req.id}
-                            className="flex items-center gap-2 rounded p-1 hover:bg-theme-surface-hover"
+                            className="hover:bg-theme-surface-hover flex items-center gap-2 rounded p-1"
                           >
                             <input
                               type="checkbox"
                               className={checkboxClass}
                               checked={profileOptionalReqs.includes(req.id)}
-                              onChange={() =>
-                                toggleRequirement(
-                                  req.id,
-                                  profileOptionalReqs,
-                                  setProfileOptionalReqs,
-                                )
-                              }
+                              onChange={() => toggleRequirement(req.id, profileOptionalReqs, setProfileOptionalReqs)}
                             />
-                            <span className="text-sm text-theme-text-primary">
-                              {req.name}
-                            </span>
-                            <span className="text-xs text-theme-text-secondary">
-                              ({req.requirement_type})
-                            </span>
+                            <span className="text-theme-text-primary text-sm">{req.name}</span>
+                            <span className="text-theme-text-secondary text-xs">({req.requirement_type})</span>
                           </label>
                         ))}
                     </div>
@@ -836,7 +756,7 @@ export default function ComplianceRequirementsConfigPage() {
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   onClick={resetProfileForm}
-                  className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm"
                 >
                   Cancel
                 </button>
@@ -854,16 +774,11 @@ export default function ComplianceRequirementsConfigPage() {
 
           {/* Existing Profiles */}
           {config?.profiles.map((profile: ComplianceProfile) => (
-            <div
-              key={profile.id}
-              className="rounded-lg border border-theme-surface-border bg-theme-surface p-4"
-            >
+            <div key={profile.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-theme-text-primary">
-                      {profile.name}
-                    </h3>
+                    <h3 className="text-theme-text-primary font-semibold">{profile.name}</h3>
                     {!profile.isActive && (
                       <span className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-400">
                         Inactive
@@ -874,15 +789,13 @@ export default function ComplianceRequirementsConfigPage() {
                     </span>
                   </div>
                   {profile.description && (
-                    <p className="mt-1 text-sm text-theme-text-secondary">
-                      {profile.description}
-                    </p>
+                    <p className="text-theme-text-secondary mt-1 text-sm">{profile.description}</p>
                   )}
                 </div>
                 <div className="flex gap-1">
                   <button
                     onClick={() => startEditProfile(profile)}
-                    className="rounded p-1 text-theme-text-secondary hover:bg-theme-surface-hover"
+                    className="text-theme-text-secondary hover:bg-theme-surface-hover rounded p-1"
                     title="Edit"
                   >
                     <Settings className="h-4 w-4" />
@@ -897,35 +810,25 @@ export default function ComplianceRequirementsConfigPage() {
                 </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-4 text-xs text-theme-text-secondary">
+              <div className="text-theme-text-secondary mt-3 flex flex-wrap gap-4 text-xs">
                 {profile.membershipTypes && profile.membershipTypes.length > 0 && (
-                  <span>
-                    Types: {profile.membershipTypes.join(', ')}
-                  </span>
+                  <span>Types: {profile.membershipTypes.join(', ')}</span>
                 )}
                 {profile.compliantThresholdOverride != null && (
-                  <span>
-                    Compliant: ≥{profile.compliantThresholdOverride}%
-                  </span>
+                  <span>Compliant: ≥{profile.compliantThresholdOverride}%</span>
                 )}
                 {profile.requiredRequirementIds && profile.requiredRequirementIds.length > 0 && (
-                  <span>
-                    Required: {profile.requiredRequirementIds.length} requirement(s)
-                  </span>
+                  <span>Required: {profile.requiredRequirementIds.length} requirement(s)</span>
                 )}
                 {profile.optionalRequirementIds && profile.optionalRequirementIds.length > 0 && (
-                  <span>
-                    Optional: {profile.optionalRequirementIds.length} requirement(s)
-                  </span>
+                  <span>Optional: {profile.optionalRequirementIds.length} requirement(s)</span>
                 )}
               </div>
 
               {/* Show requirement names */}
               {profile.requiredRequirementIds && profile.requiredRequirementIds.length > 0 && (
                 <div className="mt-2">
-                  <span className="text-xs font-medium text-theme-text-secondary">
-                    Required:
-                  </span>
+                  <span className="text-theme-text-secondary text-xs font-medium">Required:</span>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {profile.requiredRequirementIds.map((id: string) => (
                       <span
@@ -942,11 +845,11 @@ export default function ComplianceRequirementsConfigPage() {
           ))}
 
           {config && config.profiles.length === 0 && !showProfileForm && (
-            <div className="rounded-lg border border-dashed border-theme-surface-border p-8 text-center">
-              <Users className="mx-auto mb-3 h-10 w-10 text-theme-text-secondary opacity-50" />
-              <p className="text-sm text-theme-text-secondary">
-                No compliance profiles configured yet. Create a profile to define
-                which requirements apply to different member groups.
+            <div className="border-theme-surface-border rounded-lg border border-dashed p-8 text-center">
+              <Users className="text-theme-text-secondary mx-auto mb-3 h-10 w-10 opacity-50" />
+              <p className="text-theme-text-secondary text-sm">
+                No compliance profiles configured yet. Create a profile to define which requirements apply to different
+                member groups.
               </p>
             </div>
           )}
@@ -954,12 +857,10 @@ export default function ComplianceRequirementsConfigPage() {
       )}
 
       {activeTab === 'schedule' && (
-        <div className="space-y-6 rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+        <div className="border-theme-surface-border bg-theme-surface space-y-6 rounded-lg border p-6">
           <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-theme-text-secondary" />
-            <h2 className="text-lg font-semibold text-theme-text-primary">
-              Automated Report Scheduling
-            </h2>
+            <Clock className="text-theme-text-secondary h-5 w-5" />
+            <h2 className="text-theme-text-primary text-lg font-semibold">Automated Report Scheduling</h2>
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -976,7 +877,7 @@ export default function ComplianceRequirementsConfigPage() {
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-theme-text-secondary">
+              <p className="text-theme-text-secondary mt-1 text-xs">
                 Reports are automatically generated, stored, and emailed
               </p>
             </div>
@@ -984,38 +885,30 @@ export default function ComplianceRequirementsConfigPage() {
             {autoReportFrequency !== 'none' && (
               <>
                 <div>
-                  <label className={labelClass}>
-                    Day of Month to Generate
-                  </label>
+                  <label className={labelClass}>Day of Month to Generate</label>
                   <input
                     type="number"
                     className={inputClass}
                     min={1}
                     max={28}
                     value={reportDayOfMonth}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setReportDayOfMonth(Number(e.target.value))
-                    }
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setReportDayOfMonth(Number(e.target.value))}
                   />
-                  <p className="mt-1 text-xs text-theme-text-secondary">
+                  <p className="text-theme-text-secondary mt-1 text-xs">
                     Report covers the previous period (e.g., day 1 = report for last month)
                   </p>
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className={labelClass}>
-                    Email Recipients
-                  </label>
+                  <label className={labelClass}>Email Recipients</label>
                   <input
                     type="text"
                     className={inputClass}
                     value={reportEmailRecipients}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setReportEmailRecipients(e.target.value)
-                    }
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setReportEmailRecipients(e.target.value)}
                     placeholder="chief@dept.com, training@dept.com"
                   />
-                  <p className="mt-1 text-xs text-theme-text-secondary">
+                  <p className="text-theme-text-secondary mt-1 text-xs">
                     Comma-separated email addresses. Reports are automatically emailed when generated.
                   </p>
                 </div>
@@ -1030,8 +923,8 @@ export default function ComplianceRequirementsConfigPage() {
                 <div className="text-sm text-blue-800 dark:text-blue-200">
                   <p className="font-medium">Schedule Summary</p>
                   <p className="mt-1">
-                    A {autoReportFrequency} compliance report will be automatically generated on
-                    day {reportDayOfMonth} of each{' '}
+                    A {autoReportFrequency} compliance report will be automatically generated on day {reportDayOfMonth}{' '}
+                    of each{' '}
                     {autoReportFrequency === 'monthly'
                       ? 'month'
                       : autoReportFrequency === 'quarterly'
@@ -1063,12 +956,10 @@ export default function ComplianceRequirementsConfigPage() {
       {activeTab === 'reports' && (
         <div className="space-y-6">
           {/* Generate Report */}
-          <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+          <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
             <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-theme-text-secondary" />
-              <h2 className="text-lg font-semibold text-theme-text-primary">
-                Generate Report
-              </h2>
+              <FileText className="text-theme-text-secondary h-5 w-5" />
+              <h2 className="text-theme-text-primary text-lg font-semibold">Generate Report</h2>
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
@@ -1118,25 +1009,19 @@ export default function ComplianceRequirementsConfigPage() {
                     checked={reportSendEmail}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setReportSendEmail(e.target.checked)}
                   />
-                  <span className="text-sm text-theme-text-primary">
-                    Email report
-                  </span>
+                  <span className="text-theme-text-primary text-sm">Email report</span>
                 </label>
               </div>
             </div>
 
             {reportSendEmail && (
               <div className="mt-3">
-                <label className={labelClass}>
-                  Additional Recipients (optional)
-                </label>
+                <label className={labelClass}>Additional Recipients (optional)</label>
                 <input
                   type="text"
                   className={inputClass}
                   value={reportAdditionalRecipients}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    setReportAdditionalRecipients(e.target.value)
-                  }
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setReportAdditionalRecipients(e.target.value)}
                   placeholder="extra@dept.com"
                 />
               </div>
@@ -1148,25 +1033,19 @@ export default function ComplianceRequirementsConfigPage() {
                 disabled={isGenerating}
                 className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
               >
-                {isGenerating ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <BarChart3 className="h-4 w-4" />
-                )}
+                {isGenerating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
                 {isGenerating ? 'Generating...' : 'Generate Report'}
               </button>
             </div>
           </div>
 
           {/* Report History */}
-          <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+          <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-theme-text-primary">
-                Report History ({reportsTotal})
-              </h2>
+              <h2 className="text-theme-text-primary text-lg font-semibold">Report History ({reportsTotal})</h2>
               <button
                 onClick={() => void loadReports()}
-                className="rounded p-1 text-theme-text-secondary hover:bg-theme-surface-hover"
+                className="text-theme-text-secondary hover:bg-theme-surface-hover rounded p-1"
                 title="Refresh"
               >
                 <RefreshCw className="h-4 w-4" />
@@ -1174,9 +1053,9 @@ export default function ComplianceRequirementsConfigPage() {
             </div>
 
             {reports.length === 0 ? (
-              <div className="mt-4 rounded-lg border border-dashed border-theme-surface-border p-8 text-center">
-                <FileText className="mx-auto mb-3 h-10 w-10 text-theme-text-secondary opacity-50" />
-                <p className="text-sm text-theme-text-secondary">
+              <div className="border-theme-surface-border mt-4 rounded-lg border border-dashed p-8 text-center">
+                <FileText className="text-theme-text-secondary mx-auto mb-3 h-10 w-10 opacity-50" />
+                <p className="text-theme-text-secondary text-sm">
                   No reports generated yet. Use the form above to generate your first report.
                 </p>
               </div>
@@ -1185,7 +1064,7 @@ export default function ComplianceRequirementsConfigPage() {
                 {reports.map((report: ComplianceReportSummary) => (
                   <div
                     key={report.id}
-                    className="flex items-center justify-between rounded-lg border border-theme-surface-border p-4"
+                    className="border-theme-surface-border flex items-center justify-between rounded-lg border p-4"
                   >
                     <div className="flex items-center gap-3">
                       <div
@@ -1206,33 +1085,28 @@ export default function ComplianceRequirementsConfigPage() {
                         )}
                       </div>
                       <div>
-                        <p className="font-medium text-theme-text-primary">
+                        <p className="text-theme-text-primary font-medium">
                           {report.periodLabel}
-                          <span className="ml-2 text-xs font-normal text-theme-text-secondary">
+                          <span className="text-theme-text-secondary ml-2 text-xs font-normal">
                             {report.reportType}
                           </span>
                         </p>
-                        <p className="text-xs text-theme-text-secondary">
-                          Generated{' '}
-                          {formatDate(report.generatedAt, tz)}
+                        <p className="text-theme-text-secondary text-xs">
+                          Generated {formatDate(report.generatedAt, tz)}
                           {report.generationDurationMs != null &&
                             ` · ${(report.generationDurationMs / 1000).toFixed(1)}s`}
                           {report.emailedTo && report.emailedTo.length > 0 && (
-                            <span className="ml-2">
-                              · Emailed to {report.emailedTo.length} recipient(s)
-                            </span>
+                            <span className="ml-2">· Emailed to {report.emailedTo.length} recipient(s)</span>
                           )}
                         </p>
                         {report.summary && (
-                          <p className="mt-1 text-xs text-theme-text-secondary">
-                            Compliance: {report.summary.overall_compliance_pct.toFixed(1)}%
-                            · {report.summary.fully_compliant_members}/{report.summary.total_members} members compliant
+                          <p className="text-theme-text-secondary mt-1 text-xs">
+                            Compliance: {report.summary.overall_compliance_pct.toFixed(1)}% ·{' '}
+                            {report.summary.fully_compliant_members}/{report.summary.total_members} members compliant
                           </p>
                         )}
                         {report.errorMessage && (
-                          <p className="mt-1 text-xs text-red-600">
-                            Error: {report.errorMessage}
-                          </p>
+                          <p className="mt-1 text-xs text-red-600">Error: {report.errorMessage}</p>
                         )}
                       </div>
                     </div>
@@ -1242,7 +1116,7 @@ export default function ComplianceRequirementsConfigPage() {
                           setEmailModalReportId(report.id);
                           setEmailRecipients('');
                         }}
-                        className="rounded p-2 text-theme-text-secondary hover:bg-theme-surface-hover"
+                        className="text-theme-text-secondary hover:bg-theme-surface-hover rounded p-2"
                         title="Email report"
                       >
                         <Send className="h-4 w-4" />
@@ -1266,14 +1140,12 @@ export default function ComplianceRequirementsConfigPage() {
       {/* Email Modal */}
       {emailModalReportId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="mx-4 w-full max-w-md rounded-lg bg-theme-surface p-6 shadow-xl">
+          <div className="bg-theme-surface mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-theme-text-primary">
-                Email Report
-              </h3>
+              <h3 className="text-theme-text-primary text-lg font-semibold">Email Report</h3>
               <button
                 onClick={() => setEmailModalReportId(null)}
-                className="rounded p-1 text-theme-text-secondary hover:bg-theme-surface-hover"
+                className="text-theme-text-secondary hover:bg-theme-surface-hover rounded p-1"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1287,14 +1159,12 @@ export default function ComplianceRequirementsConfigPage() {
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setEmailRecipients(e.target.value)}
                 placeholder="chief@dept.com, training@dept.com"
               />
-              <p className="mt-1 text-xs text-theme-text-secondary">
-                Comma-separated email addresses
-              </p>
+              <p className="text-theme-text-secondary mt-1 text-xs">Comma-separated email addresses</p>
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => setEmailModalReportId(null)}
-                className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm"
               >
                 Cancel
               </button>

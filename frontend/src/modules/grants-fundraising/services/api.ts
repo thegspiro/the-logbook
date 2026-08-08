@@ -56,17 +56,12 @@ export const grantsService = {
     return response.data;
   },
 
-  async createOpportunity(
-    data: Partial<GrantOpportunity>,
-  ): Promise<GrantOpportunity> {
+  async createOpportunity(data: Partial<GrantOpportunity>): Promise<GrantOpportunity> {
     const response = await api.post<GrantOpportunity>('/grants', data);
     return response.data;
   },
 
-  async updateOpportunity(
-    id: string,
-    data: Partial<GrantOpportunity>,
-  ): Promise<GrantOpportunity> {
+  async updateOpportunity(id: string, data: Partial<GrantOpportunity>): Promise<GrantOpportunity> {
     const response = await api.put<GrantOpportunity>(`/grants/${id}`, data);
     return response.data;
   },
@@ -85,47 +80,31 @@ export const grantsService = {
     skip?: number;
     limit?: number;
   }): Promise<GrantApplication[]> {
-    const response = await api.get<GrantApplication[]>(
-      '/grants/applications',
-      {
-        params: {
-          status: params?.status,
-          priority: params?.priority,
-          assigned_to: params?.assignedTo,
-          search: params?.search,
-          skip: params?.skip ?? 0,
-          limit: params?.limit ?? 100,
-        },
+    const response = await api.get<GrantApplication[]>('/grants/applications', {
+      params: {
+        status: params?.status,
+        priority: params?.priority,
+        assigned_to: params?.assignedTo,
+        search: params?.search,
+        skip: params?.skip ?? 0,
+        limit: params?.limit ?? 100,
       },
-    );
+    });
     return asArray(response.data);
   },
 
   async getApplication(id: string): Promise<GrantApplication> {
-    const response = await api.get<GrantApplication>(
-      `/grants/applications/${id}`,
-    );
+    const response = await api.get<GrantApplication>(`/grants/applications/${id}`);
     return response.data;
   },
 
-  async createApplication(
-    data: Partial<GrantApplication>,
-  ): Promise<GrantApplication> {
-    const response = await api.post<GrantApplication>(
-      '/grants/applications',
-      data,
-    );
+  async createApplication(data: Partial<GrantApplication>): Promise<GrantApplication> {
+    const response = await api.post<GrantApplication>('/grants/applications', data);
     return response.data;
   },
 
-  async updateApplication(
-    id: string,
-    data: Partial<GrantApplication>,
-  ): Promise<GrantApplication> {
-    const response = await api.put<GrantApplication>(
-      `/grants/applications/${id}`,
-      data,
-    );
+  async updateApplication(id: string, data: Partial<GrantApplication>): Promise<GrantApplication> {
+    const response = await api.put<GrantApplication>(`/grants/applications/${id}`, data);
     return response.data;
   },
 
@@ -136,100 +115,66 @@ export const grantsService = {
   // --- Budget Items ---
 
   async listBudgetItems(applicationId: string): Promise<GrantBudgetItem[]> {
-    const response = await api.get<GrantBudgetItem[]>(
-      `/grants/applications/${applicationId}/budget-items`,
-    );
+    const response = await api.get<GrantBudgetItem[]>(`/grants/applications/${applicationId}/budget-items`);
     return asArray(response.data);
   },
 
-  async createBudgetItem(
-    applicationId: string,
-    data: Partial<GrantBudgetItem>,
-  ): Promise<GrantBudgetItem> {
-    const response = await api.post<GrantBudgetItem>(
-      `/grants/applications/${applicationId}/budget-items`,
-      data,
-    );
+  async createBudgetItem(applicationId: string, data: Partial<GrantBudgetItem>): Promise<GrantBudgetItem> {
+    const response = await api.post<GrantBudgetItem>(`/grants/applications/${applicationId}/budget-items`, data);
     return response.data;
   },
 
   async updateBudgetItem(
     _applicationId: string,
     itemId: string,
-    data: Partial<GrantBudgetItem>,
+    data: Partial<GrantBudgetItem>
   ): Promise<GrantBudgetItem> {
-    const response = await api.put<GrantBudgetItem>(
-      `/grants/budget-items/${itemId}`,
-      data,
-    );
+    const response = await api.put<GrantBudgetItem>(`/grants/budget-items/${itemId}`, data);
     return response.data;
   },
 
-  async deleteBudgetItem(
-    _applicationId: string,
-    itemId: string,
-  ): Promise<void> {
+  async deleteBudgetItem(_applicationId: string, itemId: string): Promise<void> {
     await api.delete(`/grants/budget-items/${itemId}`);
   },
 
   // --- Expenditures ---
 
   async listExpenditures(applicationId: string): Promise<GrantExpenditure[]> {
-    const response = await api.get<GrantExpenditure[]>(
-      `/grants/applications/${applicationId}/expenditures`,
-    );
+    const response = await api.get<GrantExpenditure[]>(`/grants/applications/${applicationId}/expenditures`);
     return asArray(response.data);
   },
 
-  async createExpenditure(
-    applicationId: string,
-    data: Partial<GrantExpenditure>,
-  ): Promise<GrantExpenditure> {
-    const response = await api.post<GrantExpenditure>(
-      `/grants/applications/${applicationId}/expenditures`,
-      data,
-    );
+  async createExpenditure(applicationId: string, data: Partial<GrantExpenditure>): Promise<GrantExpenditure> {
+    const response = await api.post<GrantExpenditure>(`/grants/applications/${applicationId}/expenditures`, data);
     return response.data;
   },
 
   async updateExpenditure(
     _applicationId: string,
     expenditureId: string,
-    data: Partial<GrantExpenditure>,
+    data: Partial<GrantExpenditure>
   ): Promise<GrantExpenditure> {
-    const response = await api.put<GrantExpenditure>(
-      `/grants/expenditures/${expenditureId}`,
-      data,
-    );
+    const response = await api.put<GrantExpenditure>(`/grants/expenditures/${expenditureId}`, data);
     return response.data;
   },
 
-  async deleteExpenditure(
-    _applicationId: string,
-    expenditureId: string,
-  ): Promise<void> {
+  async deleteExpenditure(_applicationId: string, expenditureId: string): Promise<void> {
     await api.delete(`/grants/expenditures/${expenditureId}`);
   },
 
   // --- Compliance Tasks ---
 
-  async listComplianceTasks(
-    applicationId?: string,
-  ): Promise<GrantComplianceTask[]> {
-    const response = await api.get<GrantComplianceTask[]>(
-      '/grants/compliance-tasks',
-      { params: { application_id: applicationId } },
-    );
+  async listComplianceTasks(applicationId?: string): Promise<GrantComplianceTask[]> {
+    const response = await api.get<GrantComplianceTask[]>('/grants/compliance-tasks', {
+      params: { application_id: applicationId },
+    });
     return asArray(response.data);
   },
 
-  async createComplianceTask(
-    applicationId: string,
-    data: Partial<GrantComplianceTask>,
-  ): Promise<GrantComplianceTask> {
+  async createComplianceTask(applicationId: string, data: Partial<GrantComplianceTask>): Promise<GrantComplianceTask> {
     const response = await api.post<GrantComplianceTask>(
       `/grants/applications/${applicationId}/compliance-tasks`,
-      data,
+      data
     );
     return response.data;
   },
@@ -237,39 +182,25 @@ export const grantsService = {
   async updateComplianceTask(
     _applicationId: string,
     taskId: string,
-    data: Partial<GrantComplianceTask>,
+    data: Partial<GrantComplianceTask>
   ): Promise<GrantComplianceTask> {
-    const response = await api.put<GrantComplianceTask>(
-      `/grants/compliance-tasks/${taskId}`,
-      data,
-    );
+    const response = await api.put<GrantComplianceTask>(`/grants/compliance-tasks/${taskId}`, data);
     return response.data;
   },
 
-  async deleteComplianceTask(
-    _applicationId: string,
-    taskId: string,
-  ): Promise<void> {
+  async deleteComplianceTask(_applicationId: string, taskId: string): Promise<void> {
     await api.delete(`/grants/compliance-tasks/${taskId}`);
   },
 
   // --- Notes ---
 
   async listNotes(applicationId: string): Promise<GrantNote[]> {
-    const response = await api.get<GrantNote[]>(
-      `/grants/applications/${applicationId}/notes`,
-    );
+    const response = await api.get<GrantNote[]>(`/grants/applications/${applicationId}/notes`);
     return asArray(response.data);
   },
 
-  async createNote(
-    applicationId: string,
-    data: Partial<GrantNote>,
-  ): Promise<GrantNote> {
-    const response = await api.post<GrantNote>(
-      `/grants/applications/${applicationId}/notes`,
-      data,
-    );
+  async createNote(applicationId: string, data: Partial<GrantNote>): Promise<GrantNote> {
+    const response = await api.post<GrantNote>(`/grants/applications/${applicationId}/notes`, data);
     return response.data;
   },
 
@@ -280,10 +211,7 @@ export const grantsService = {
     return response.data;
   },
 
-  async getGrantReport(params?: {
-    startDate?: string;
-    endDate?: string;
-  }): Promise<GrantReport> {
+  async getGrantReport(params?: { startDate?: string; endDate?: string }): Promise<GrantReport> {
     const response = await api.get<GrantReport>('/grants/reports/grants', {
       params: {
         start_date: params?.startDate,
@@ -293,19 +221,13 @@ export const grantsService = {
     return response.data;
   },
 
-  async getFundraisingReport(params?: {
-    startDate?: string;
-    endDate?: string;
-  }): Promise<FundraisingReport> {
-    const response = await api.get<FundraisingReport>(
-      '/grants/reports/fundraising',
-      {
-        params: {
-          start_date: params?.startDate,
-          end_date: params?.endDate,
-        },
+  async getFundraisingReport(params?: { startDate?: string; endDate?: string }): Promise<FundraisingReport> {
+    const response = await api.get<FundraisingReport>('/grants/reports/fundraising', {
+      params: {
+        start_date: params?.startDate,
+        end_date: params?.endDate,
       },
-    );
+    });
     return response.data;
   },
 };
@@ -324,46 +246,30 @@ export const fundraisingService = {
     skip?: number;
     limit?: number;
   }): Promise<FundraisingCampaign[]> {
-    const response = await api.get<FundraisingCampaign[]>(
-      '/grants/campaigns',
-      {
-        params: {
-          status: params?.status,
-          campaign_type: params?.campaignType,
-          search: params?.search,
-          skip: params?.skip ?? 0,
-          limit: params?.limit ?? 100,
-        },
+    const response = await api.get<FundraisingCampaign[]>('/grants/campaigns', {
+      params: {
+        status: params?.status,
+        campaign_type: params?.campaignType,
+        search: params?.search,
+        skip: params?.skip ?? 0,
+        limit: params?.limit ?? 100,
       },
-    );
+    });
     return asArray(response.data);
   },
 
   async getCampaign(id: string): Promise<FundraisingCampaign> {
-    const response = await api.get<FundraisingCampaign>(
-      `/grants/campaigns/${id}`,
-    );
+    const response = await api.get<FundraisingCampaign>(`/grants/campaigns/${id}`);
     return response.data;
   },
 
-  async createCampaign(
-    data: Partial<FundraisingCampaign>,
-  ): Promise<FundraisingCampaign> {
-    const response = await api.post<FundraisingCampaign>(
-      '/grants/campaigns',
-      data,
-    );
+  async createCampaign(data: Partial<FundraisingCampaign>): Promise<FundraisingCampaign> {
+    const response = await api.post<FundraisingCampaign>('/grants/campaigns', data);
     return response.data;
   },
 
-  async updateCampaign(
-    id: string,
-    data: Partial<FundraisingCampaign>,
-  ): Promise<FundraisingCampaign> {
-    const response = await api.put<FundraisingCampaign>(
-      `/grants/campaigns/${id}`,
-      data,
-    );
+  async updateCampaign(id: string, data: Partial<FundraisingCampaign>): Promise<FundraisingCampaign> {
+    const response = await api.put<FundraisingCampaign>(`/grants/campaigns/${id}`, data);
     return response.data;
   },
 
@@ -393,25 +299,17 @@ export const fundraisingService = {
   },
 
   async getDonor(id: string): Promise<Donor> {
-    const response = await api.get<Donor>(
-      `/grants/donors/${id}`,
-    );
+    const response = await api.get<Donor>(`/grants/donors/${id}`);
     return response.data;
   },
 
   async createDonor(data: Partial<Donor>): Promise<Donor> {
-    const response = await api.post<Donor>(
-      '/grants/donors',
-      data,
-    );
+    const response = await api.post<Donor>('/grants/donors', data);
     return response.data;
   },
 
   async updateDonor(id: string, data: Partial<Donor>): Promise<Donor> {
-    const response = await api.put<Donor>(
-      `/grants/donors/${id}`,
-      data,
-    );
+    const response = await api.put<Donor>(`/grants/donors/${id}`, data);
     return response.data;
   },
 
@@ -426,39 +324,27 @@ export const fundraisingService = {
     skip?: number;
     limit?: number;
   }): Promise<Donation[]> {
-    const response = await api.get<Donation[]>(
-      '/grants/donations',
-      {
-        params: {
-          campaign_id: params?.campaignId,
-          donor_id: params?.donorId,
-          payment_method: params?.paymentMethod,
-          start_date: params?.startDate,
-          end_date: params?.endDate,
-          skip: params?.skip ?? 0,
-          limit: params?.limit ?? 100,
-        },
+    const response = await api.get<Donation[]>('/grants/donations', {
+      params: {
+        campaign_id: params?.campaignId,
+        donor_id: params?.donorId,
+        payment_method: params?.paymentMethod,
+        start_date: params?.startDate,
+        end_date: params?.endDate,
+        skip: params?.skip ?? 0,
+        limit: params?.limit ?? 100,
       },
-    );
+    });
     return asArray(response.data);
   },
 
   async createDonation(data: Partial<Donation>): Promise<Donation> {
-    const response = await api.post<Donation>(
-      '/grants/donations',
-      data,
-    );
+    const response = await api.post<Donation>('/grants/donations', data);
     return response.data;
   },
 
-  async updateDonation(
-    id: string,
-    data: Partial<Donation>,
-  ): Promise<Donation> {
-    const response = await api.put<Donation>(
-      `/grants/donations/${id}`,
-      data,
-    );
+  async updateDonation(id: string, data: Partial<Donation>): Promise<Donation> {
+    const response = await api.put<Donation>(`/grants/donations/${id}`, data);
     return response.data;
   },
 
@@ -471,34 +357,25 @@ export const fundraisingService = {
     skip?: number;
     limit?: number;
   }): Promise<Pledge[]> {
-    const response = await api.get<Pledge[]>(
-      '/grants/pledges',
-      {
-        params: {
-          campaign_id: params?.campaignId,
-          donor_id: params?.donorId,
-          status: params?.status,
-          skip: params?.skip ?? 0,
-          limit: params?.limit ?? 100,
-        },
+    const response = await api.get<Pledge[]>('/grants/pledges', {
+      params: {
+        campaign_id: params?.campaignId,
+        donor_id: params?.donorId,
+        status: params?.status,
+        skip: params?.skip ?? 0,
+        limit: params?.limit ?? 100,
       },
-    );
+    });
     return asArray(response.data);
   },
 
   async createPledge(data: Partial<Pledge>): Promise<Pledge> {
-    const response = await api.post<Pledge>(
-      '/grants/pledges',
-      data,
-    );
+    const response = await api.post<Pledge>('/grants/pledges', data);
     return response.data;
   },
 
   async updatePledge(id: string, data: Partial<Pledge>): Promise<Pledge> {
-    const response = await api.put<Pledge>(
-      `/grants/pledges/${id}`,
-      data,
-    );
+    const response = await api.put<Pledge>(`/grants/pledges/${id}`, data);
     return response.data;
   },
 
@@ -510,38 +387,24 @@ export const fundraisingService = {
     skip?: number;
     limit?: number;
   }): Promise<FundraisingEvent[]> {
-    const response = await api.get<FundraisingEvent[]>(
-      '/grants/fundraising-events',
-      {
-        params: {
-          campaign_id: params?.campaignId,
-          status: params?.status,
-          skip: params?.skip ?? 0,
-          limit: params?.limit ?? 100,
-        },
+    const response = await api.get<FundraisingEvent[]>('/grants/fundraising-events', {
+      params: {
+        campaign_id: params?.campaignId,
+        status: params?.status,
+        skip: params?.skip ?? 0,
+        limit: params?.limit ?? 100,
       },
-    );
+    });
     return asArray(response.data);
   },
 
-  async createFundraisingEvent(
-    data: Partial<FundraisingEvent>,
-  ): Promise<FundraisingEvent> {
-    const response = await api.post<FundraisingEvent>(
-      '/grants/fundraising-events',
-      data,
-    );
+  async createFundraisingEvent(data: Partial<FundraisingEvent>): Promise<FundraisingEvent> {
+    const response = await api.post<FundraisingEvent>('/grants/fundraising-events', data);
     return response.data;
   },
 
-  async updateFundraisingEvent(
-    id: string,
-    data: Partial<FundraisingEvent>,
-  ): Promise<FundraisingEvent> {
-    const response = await api.put<FundraisingEvent>(
-      `/grants/fundraising-events/${id}`,
-      data,
-    );
+  async updateFundraisingEvent(id: string, data: Partial<FundraisingEvent>): Promise<FundraisingEvent> {
+    const response = await api.put<FundraisingEvent>(`/grants/fundraising-events/${id}`, data);
     return response.data;
   },
 };

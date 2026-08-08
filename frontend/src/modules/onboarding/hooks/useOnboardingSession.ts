@@ -27,14 +27,16 @@ interface OrganizationData {
     country?: string | undefined;
   };
   physical_address_same: boolean;
-  physical_address?: {
-    line1: string;
-    line2?: string | undefined;
-    city: string;
-    state: string;
-    zip_code: string;
-    country?: string | undefined;
-  } | undefined;
+  physical_address?:
+    | {
+        line1: string;
+        line2?: string | undefined;
+        city: string;
+        state: string;
+        zip_code: string;
+        country?: string | undefined;
+      }
+    | undefined;
   identifier_type: 'fdid' | 'state_id' | 'department_id';
   fdid?: string | undefined;
   state_id?: string | undefined;

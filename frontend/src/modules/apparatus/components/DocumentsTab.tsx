@@ -23,7 +23,9 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
   const [photos, setPhotos] = useState<ApparatusPhoto[]>([]);
   const [documents, setDocuments] = useState<ApparatusDocument[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'photo' | 'document'; id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'photo' | 'document'; id: string; name: string } | null>(
+    null
+  );
   const tz = useTimezone();
 
   const loadData = useCallback(async () => {
@@ -66,8 +68,8 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
   if (loading) {
     return (
       <div className="card p-6">
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
+        <div className="py-8 text-center">
+          <div className="border-theme-text-primary mx-auto h-8 w-8 animate-spin rounded-full border-b-2"></div>
         </div>
       </div>
     );
@@ -77,49 +79,47 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
     <div className="space-y-6">
       {/* Photos Section */}
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
-            <Camera className="w-5 h-5" />
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-theme-text-primary flex items-center gap-2 font-bold">
+            <Camera className="h-5 w-5" />
             Photos ({photos.length})
           </h2>
         </div>
 
         {photos.length === 0 ? (
-          <p className="text-theme-text-muted text-center py-8">No photos uploaded yet.</p>
+          <p className="text-theme-text-muted py-8 text-center">No photos uploaded yet.</p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
             {photos.map((photo) => (
-              <div key={photo.id} className="card-secondary rounded-lg overflow-hidden">
-                <div className="aspect-video bg-theme-surface-secondary flex items-center justify-center">
+              <div key={photo.id} className="card-secondary overflow-hidden rounded-lg">
+                <div className="bg-theme-surface-secondary flex aspect-video items-center justify-center">
                   {photo.filePath ? (
                     <img
                       src={photo.filePath}
                       alt={photo.title || photo.fileName}
                       loading="lazy"
                       decoding="async"
-                      className="w-full h-full object-cover"
+                      className="h-full w-full object-cover"
                     />
                   ) : (
-                    <Image className="w-12 h-12 text-theme-text-muted" />
+                    <Image className="text-theme-text-muted h-12 w-12" />
                   )}
                 </div>
                 <div className="p-3">
-                  <p className="text-theme-text-primary text-sm font-medium truncate">
+                  <p className="text-theme-text-primary truncate text-sm font-medium">
                     {photo.title || photo.fileName}
                   </p>
-                  {photo.photoType && (
-                    <p className="text-theme-text-muted text-xs capitalize">{photo.photoType}</p>
-                  )}
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-theme-text-muted text-xs">
-                      {formatDate(photo.uploadedAt, tz)}
-                    </span>
+                  {photo.photoType && <p className="text-theme-text-muted text-xs capitalize">{photo.photoType}</p>}
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-theme-text-muted text-xs">{formatDate(photo.uploadedAt, tz)}</span>
                     <button
-                      onClick={() => setDeleteTarget({ type: 'photo', id: photo.id, name: photo.title || photo.fileName })}
-                      className="p-1 text-theme-text-muted hover:text-red-600 transition-colors"
+                      onClick={() =>
+                        setDeleteTarget({ type: 'photo', id: photo.id, name: photo.title || photo.fileName })
+                      }
+                      className="text-theme-text-muted p-1 transition-colors hover:text-red-600"
                       title="Delete photo"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -131,29 +131,26 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
 
       {/* Documents Section */}
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
-            <FileText className="w-5 h-5" />
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-theme-text-primary flex items-center gap-2 font-bold">
+            <FileText className="h-5 w-5" />
             Documents ({documents.length})
           </h2>
         </div>
 
         {documents.length === 0 ? (
-          <p className="text-theme-text-muted text-center py-8">No documents uploaded yet.</p>
+          <p className="text-theme-text-muted py-8 text-center">No documents uploaded yet.</p>
         ) : (
           <div className="space-y-3">
             {documents.map((doc) => (
-              <div
-                key={doc.id}
-                className="card-secondary flex items-center justify-between p-4"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex-shrink-0 w-10 h-10 bg-theme-surface-secondary rounded-lg flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-theme-text-muted" />
+              <div key={doc.id} className="card-secondary flex items-center justify-between p-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="bg-theme-surface-secondary flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg">
+                    <FileText className="text-theme-text-muted h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-theme-text-primary font-medium truncate">{doc.title}</p>
-                    <div className="flex items-center gap-2 text-xs text-theme-text-muted">
+                    <p className="text-theme-text-primary truncate font-medium">{doc.title}</p>
+                    <div className="text-theme-text-muted flex items-center gap-2 text-xs">
                       <span className="capitalize">{doc.documentType}</span>
                       <span>&middot;</span>
                       <span>{formatDate(doc.uploadedAt, tz)}</span>
@@ -165,28 +162,28 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
                       )}
                     </div>
                     {doc.description && (
-                      <p className="text-theme-text-muted text-xs mt-1 truncate">{doc.description}</p>
+                      <p className="text-theme-text-muted mt-1 truncate text-xs">{doc.description}</p>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                <div className="ml-4 flex flex-shrink-0 items-center gap-2">
                   {doc.filePath && (
                     <a
                       href={doc.filePath}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                      className="text-theme-text-muted hover:text-theme-text-primary p-1 transition-colors"
                       title="Open document"
                     >
-                      <ExternalLink className="w-4 h-4" />
+                      <ExternalLink className="h-4 w-4" />
                     </a>
                   )}
                   <button
                     onClick={() => setDeleteTarget({ type: 'document', id: doc.id, name: doc.title })}
-                    className="p-1 text-theme-text-muted hover:text-red-600 transition-colors"
+                    className="text-theme-text-muted p-1 transition-colors hover:text-red-600"
                     title="Delete document"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>

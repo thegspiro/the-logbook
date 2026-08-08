@@ -18,9 +18,7 @@ interface InventoryItemPickerProps {
 
 const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChange }) => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<
-    { id: string; name: string; sub?: string }[]
-  >([]);
+  const [results, setResults] = useState<{ id: string; name: string; sub?: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -77,11 +75,9 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChan
       .then((res) => {
         setResults(
           res.items.map((i) => {
-            const sub = [i.manufacturer, i.model_number || i.serial_number]
-              .filter(Boolean)
-              .join(' · ');
+            const sub = [i.manufacturer, i.model_number || i.serial_number].filter(Boolean).join(' · ');
             return { id: i.id, name: i.name, ...(sub ? { sub } : {}) };
-          }),
+          })
         );
       })
       .catch(() => setResults([]))
@@ -97,11 +93,9 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChan
 
   if (value) {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface-secondary px-3 py-2">
-        <Package className="h-4 w-4 text-theme-text-muted shrink-0" />
-        <span className="flex-1 min-w-0 truncate text-sm text-theme-text-primary">
-          {selectedName ?? 'Linked item'}
-        </span>
+      <div className="border-theme-surface-border bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2">
+        <Package className="text-theme-text-muted h-4 w-4 shrink-0" />
+        <span className="text-theme-text-primary min-w-0 flex-1 truncate text-sm">{selectedName ?? 'Linked item'}</span>
         <button
           type="button"
           onClick={() => {
@@ -120,25 +114,25 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChan
 
   return (
     <div className="relative" ref={containerRef}>
-      <div className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2">
-        <Search className="h-4 w-4 text-theme-text-muted shrink-0" />
+      <div className="border-theme-surface-border bg-theme-surface flex items-center gap-2 rounded-md border px-3 py-2">
+        <Search className="text-theme-text-muted h-4 w-4 shrink-0" />
         <input
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
           type="text"
-          className="flex-1 min-w-0 bg-transparent text-sm text-theme-text-primary outline-none placeholder:text-theme-text-muted"
+          className="text-theme-text-primary placeholder:text-theme-text-muted min-w-0 flex-1 bg-transparent text-sm outline-none"
           placeholder="Search inventory to link…"
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
           onFocus={() => setOpen(true)}
         />
-        {loading && <Loader2 className="h-4 w-4 animate-spin text-theme-text-muted" />}
+        {loading && <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />}
       </div>
       {open && query.trim() && (
-        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border border-theme-surface-border bg-theme-surface shadow-lg">
+        <div className="border-theme-surface-border bg-theme-surface absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border shadow-lg">
           {results.length === 0 && !loading ? (
-            <p className="px-3 py-2 text-xs text-theme-text-muted">No matching items.</p>
+            <p className="text-theme-text-muted px-3 py-2 text-xs">No matching items.</p>
           ) : (
             results.map((r) => (
               <button
@@ -151,12 +145,10 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChan
                   setQuery('');
                   setResults([]);
                 }}
-                className="block w-full px-3 py-2 text-left hover:bg-theme-surface-secondary"
+                className="hover:bg-theme-surface-secondary block w-full px-3 py-2 text-left"
               >
-                <span className="block text-sm text-theme-text-primary">{r.name}</span>
-                {r.sub && (
-                  <span className="block text-xs text-theme-text-muted">{r.sub}</span>
-                )}
+                <span className="text-theme-text-primary block text-sm">{r.name}</span>
+                {r.sub && <span className="text-theme-text-muted block text-xs">{r.sub}</span>}
               </button>
             ))
           )}

@@ -185,10 +185,7 @@ const SCRUB_PATTERNS: Array<[RegExp, string]> = [
  * Remove identifiers from free text bound for the error log.
  */
 export function scrubSensitive(text: string): string {
-  return SCRUB_PATTERNS.reduce(
-    (scrubbed, [pattern, replacement]) => scrubbed.replace(pattern, replacement),
-    text,
-  );
+  return SCRUB_PATTERNS.reduce((scrubbed, [pattern, replacement]) => scrubbed.replace(pattern, replacement), text);
 }
 
 // ---------------------------------------------------------------------------
@@ -340,10 +337,7 @@ function classifyResponse(status: number): DeliveryOutcome {
 
 async function deliver(item: QueuedReport): Promise<DeliveryOutcome> {
   try {
-    const response = await fetch(
-      ERROR_LOG_ENDPOINT,
-      buildRequestInit(item.payload, false),
-    );
+    const response = await fetch(ERROR_LOG_ENDPOINT, buildRequestInit(item.payload, false));
     if (response.ok) return 'sent';
     return classifyResponse(response.status);
   } catch {
@@ -356,8 +350,7 @@ async function deliver(item: QueuedReport): Promise<DeliveryOutcome> {
 
 function scheduleRetry(attempts: number): void {
   if (retryTimer) return;
-  const delay =
-    RETRY_DELAYS_MS[Math.min(attempts - 1, RETRY_DELAYS_MS.length - 1)] ?? 30_000;
+  const delay = RETRY_DELAYS_MS[Math.min(attempts - 1, RETRY_DELAYS_MS.length - 1)] ?? 30_000;
   retryTimer = setTimeout(() => {
     retryTimer = null;
     void drain();
@@ -473,10 +466,7 @@ function flushOnHide(): void {
  */
 export function reportError(report: ErrorReport): void {
   const errorType = report.errorType.slice(0, MAX_ERROR_TYPE_LENGTH);
-  const errorMessage = scrubSensitive(report.errorMessage || 'Unknown error').slice(
-    0,
-    MAX_ERROR_MESSAGE_LENGTH,
-  );
+  const errorMessage = scrubSensitive(report.errorMessage || 'Unknown error').slice(0, MAX_ERROR_MESSAGE_LENGTH);
   // The path is part of the dedupe key so the same status failing on two
   // different endpoints is two distinct reports.
   const rawPath = report.context?.['path'];
@@ -514,11 +504,7 @@ export function reportError(report: ErrorReport): void {
 
 /** True once this error has been reported, so handlers don't duplicate it. */
 function isAlreadyReported(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as Record<string, unknown>)[REPORTED_FLAG] === true
-  );
+  return typeof error === 'object' && error !== null && (error as Record<string, unknown>)[REPORTED_FLAG] === true;
 }
 
 function markReported(error: unknown): void {
@@ -544,9 +530,7 @@ function markReported(error: unknown): void {
  * from; and 4xx validation failures, which are the user being told to correct
  * a field. Logging those would bury the failures that matter.
  */
-function classifyApiError(
-  error: AxiosError,
-): { errorType: string; message: string } | null {
+function classifyApiError(error: AxiosError): { errorType: string; message: string } | null {
   const status = error.response?.status;
 
   if (status !== undefined) {
@@ -663,11 +647,7 @@ export function setupGlobalErrorHandlers(): void {
 
     markReported(reason);
     const message =
-      reason instanceof Error
-        ? reason.message
-        : typeof reason === 'string'
-          ? reason
-          : 'Unhandled promise rejection';
+      reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : 'Unhandled promise rejection';
 
     reportError({
       errorType: 'UNHANDLED_REJECTION',

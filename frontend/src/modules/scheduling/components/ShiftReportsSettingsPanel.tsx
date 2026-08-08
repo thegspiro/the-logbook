@@ -10,7 +10,7 @@
  * Training defaults are read from the TrainingModuleConfig API.
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -24,32 +24,32 @@ import {
   SlidersHorizontal,
   Truck,
   Star,
-} from "lucide-react";
-import toast from "react-hot-toast";
-import { organizationService } from "../../../services/api";
-import { trainingModuleConfigService } from "../../../services/trainingServices";
-import { schedulingService } from "../services/api";
-import { getErrorMessage } from "../../../utils/errorHandling";
-import EditableTagList from "./EditableTagList";
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { organizationService } from '../../../services/api';
+import { trainingModuleConfigService } from '../../../services/trainingServices';
+import { schedulingService } from '../services/api';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import EditableTagList from './EditableTagList';
 import {
   SAMPLE_CALL_TYPES,
   SAMPLE_SKILLS,
   SAMPLE_TASKS,
   SAMPLE_APPARATUS_SKILLS,
   SAMPLE_APPARATUS_TASKS,
-} from "../constants/shiftReportConstants";
-import type { ShiftReportSettings } from "../types/shiftSettings";
-import type { TrainingModuleConfig } from "../../../types/training";
+} from '../constants/shiftReportConstants';
+import type { ShiftReportSettings } from '../types/shiftSettings';
+import type { TrainingModuleConfig } from '../../../types/training';
 
 type SectionKey =
-  | "feature-toggles"
-  | "checklist-timing"
-  | "post-shift"
-  | "training-defaults"
-  | "apparatus-skills"
-  | "form-sections"
-  | "review-workflow"
-  | "rating-scale";
+  | 'feature-toggles'
+  | 'checklist-timing'
+  | 'post-shift'
+  | 'training-defaults'
+  | 'apparatus-skills'
+  | 'form-sections'
+  | 'review-workflow'
+  | 'rating-scale';
 
 const SECTIONS: {
   key: SectionKey;
@@ -58,52 +58,52 @@ const SECTIONS: {
   description: string;
 }[] = [
   {
-    key: "feature-toggles",
-    label: "Feature Toggles",
+    key: 'feature-toggles',
+    label: 'Feature Toggles',
     icon: SlidersHorizontal,
-    description: "Enable/disable shift reports and training",
+    description: 'Enable/disable shift reports and training',
   },
   {
-    key: "checklist-timing",
-    label: "Checklist Timing",
+    key: 'checklist-timing',
+    label: 'Checklist Timing',
     icon: ClipboardCheck,
-    description: "Start/end of shift checklist windows",
+    description: 'Start/end of shift checklist windows',
   },
   {
-    key: "post-shift",
-    label: "Post-Shift Validation",
+    key: 'post-shift',
+    label: 'Post-Shift Validation',
     icon: FileText,
-    description: "Officer review after shift ends",
+    description: 'Officer review after shift ends',
   },
   {
-    key: "training-defaults",
-    label: "Feedback Defaults",
+    key: 'training-defaults',
+    label: 'Feedback Defaults',
     icon: GraduationCap,
-    description: "Call types, skills, and tasks",
+    description: 'Call types, skills, and tasks',
   },
   {
-    key: "apparatus-skills",
-    label: "Apparatus Skills",
+    key: 'apparatus-skills',
+    label: 'Apparatus Skills',
     icon: Truck,
-    description: "Skills & tasks per apparatus type",
+    description: 'Skills & tasks per apparatus type',
   },
   {
-    key: "form-sections",
-    label: "Form Sections",
+    key: 'form-sections',
+    label: 'Form Sections',
     icon: SlidersHorizontal,
-    description: "Show/hide report form fields",
+    description: 'Show/hide report form fields',
   },
   {
-    key: "review-workflow",
-    label: "Review Workflow",
+    key: 'review-workflow',
+    label: 'Review Workflow',
     icon: Clock,
-    description: "Report approval requirements",
+    description: 'Report approval requirements',
   },
   {
-    key: "rating-scale",
-    label: "Rating Scale",
+    key: 'rating-scale',
+    label: 'Rating Scale',
     icon: Star,
-    description: "Rating levels and display style",
+    description: 'Rating levels and display style',
   },
 ];
 
@@ -121,34 +121,27 @@ const DEFAULT_SETTINGS: ShiftReportSettings = {
   },
 };
 
-function useAsyncSave(): [
-  (fn: () => Promise<void>, successMsg: string, errorMsg: string) => Promise<void>,
-  boolean,
-] {
+function useAsyncSave(): [(fn: () => Promise<void>, successMsg: string, errorMsg: string) => Promise<void>, boolean] {
   const [isSaving, setIsSaving] = useState(false);
-  const run = useCallback(
-    async (fn: () => Promise<void>, successMsg: string, errorMsg: string) => {
-      setIsSaving(true);
-      try {
-        await fn();
-        toast.success(successMsg);
-      } catch (err: unknown) {
-        toast.error(getErrorMessage(err, errorMsg));
-      } finally {
-        setIsSaving(false);
-      }
-    },
-    [],
-  );
+  const run = useCallback(async (fn: () => Promise<void>, successMsg: string, errorMsg: string) => {
+    setIsSaving(true);
+    try {
+      await fn();
+      toast.success(successMsg);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, errorMsg));
+    } finally {
+      setIsSaving(false);
+    }
+  }, []);
   return [run, isSaving];
 }
 
-const checkboxClass =
-  "w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500";
+const checkboxClass = 'w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500';
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export const ShiftReportsSettingsPanel: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<SectionKey>("feature-toggles");
+  const [activeSection, setActiveSection] = useState<SectionKey>('feature-toggles');
   const [settings, setSettings] = useState<ShiftReportSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
@@ -167,23 +160,17 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   const [tasks, setTasks] = useState<string[]>([]);
 
   // New-item inputs
-  const [newCallType, setNewCallType] = useState("");
-  const [newSkill, setNewSkill] = useState("");
-  const [newTask, setNewTask] = useState("");
+  const [newCallType, setNewCallType] = useState('');
+  const [newSkill, setNewSkill] = useState('');
+  const [newTask, setNewTask] = useState('');
 
   // Per-apparatus-type mapping
   const [apparatusTypes, setApparatusTypes] = useState<string[]>([]);
-  const [selectedAppType, setSelectedAppType] = useState("");
-  const [appTypeSkills, setAppTypeSkills] = useState<
-    Record<string, string[]>
-  >({});
-  const [appTypeTasks, setAppTypeTasks] = useState<
-    Record<string, string[]>
-  >({});
+  const [selectedAppType, setSelectedAppType] = useState('');
+  const [appTypeSkills, setAppTypeSkills] = useState<Record<string, string[]>>({});
+  const [appTypeTasks, setAppTypeTasks] = useState<Record<string, string[]>>({});
   // Rating scale editor
-  const [ratingLabels, setRatingLabels] = useState<
-    Record<string, string>
-  >({});
+  const [ratingLabels, setRatingLabels] = useState<Record<string, string>>({});
 
   // ── Load settings ──
 
@@ -213,41 +200,27 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       try {
         const config = await trainingModuleConfigService.getConfig();
         setTrainingConfig(config);
-        setCallTypes(
-          config.shift_review_call_types?.length
-            ? config.shift_review_call_types
-            : SAMPLE_CALL_TYPES,
-        );
-        setSkills(
-          config.shift_review_default_skills?.length
-            ? config.shift_review_default_skills
-            : SAMPLE_SKILLS,
-        );
-        setTasks(
-          config.shift_review_default_tasks?.length
-            ? config.shift_review_default_tasks
-            : SAMPLE_TASKS,
-        );
+        setCallTypes(config.shift_review_call_types?.length ? config.shift_review_call_types : SAMPLE_CALL_TYPES);
+        setSkills(config.shift_review_default_skills?.length ? config.shift_review_default_skills : SAMPLE_SKILLS);
+        setTasks(config.shift_review_default_tasks?.length ? config.shift_review_default_tasks : SAMPLE_TASKS);
         setAppTypeSkills(
-          config.apparatus_type_skills &&
-            Object.keys(config.apparatus_type_skills).length > 0
+          config.apparatus_type_skills && Object.keys(config.apparatus_type_skills).length > 0
             ? config.apparatus_type_skills
-            : SAMPLE_APPARATUS_SKILLS,
+            : SAMPLE_APPARATUS_SKILLS
         );
         setAppTypeTasks(
-          config.apparatus_type_tasks &&
-            Object.keys(config.apparatus_type_tasks).length > 0
+          config.apparatus_type_tasks && Object.keys(config.apparatus_type_tasks).length > 0
             ? config.apparatus_type_tasks
-            : SAMPLE_APPARATUS_TASKS,
+            : SAMPLE_APPARATUS_TASKS
         );
         setRatingLabels(
           config.rating_scale_labels ?? {
-            "1": "Needs Improvement",
-            "2": "Developing",
-            "3": "Meets Expectations",
-            "4": "Exceeds Expectations",
-            "5": "Outstanding",
-          },
+            '1': 'Needs Improvement',
+            '2': 'Developing',
+            '3': 'Meets Expectations',
+            '4': 'Exceeds Expectations',
+            '5': 'Outstanding',
+          }
         );
       } catch {
         // Training module may not be enabled
@@ -262,9 +235,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
     trainingModuleConfigService
       .getSkillNames()
       .then((names) => {
-        setSkillEvalNames(
-          new Set(names.map((n) => n.name.toLowerCase())),
-        );
+        setSkillEvalNames(new Set(names.map((n) => n.name.toLowerCase())));
       })
       .catch(() => {});
   }, []);
@@ -274,41 +245,38 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       .getBasicApparatus({ is_active: true })
       .then((list) => {
         const fromApi = list.map((a) => a.apparatus_type);
-        const sampleTypes = Object.keys(
-          SAMPLE_APPARATUS_SKILLS,
-        );
-        const merged = [
-          ...new Set([...fromApi, ...sampleTypes]),
-        ];
+        const sampleTypes = Object.keys(SAMPLE_APPARATUS_SKILLS);
+        const merged = [...new Set([...fromApi, ...sampleTypes])];
         merged.sort();
         setApparatusTypes(merged);
         if (merged.length > 0) {
-          setSelectedAppType((prev) => prev || (merged[0] ?? ""));
+          setSelectedAppType((prev) => prev || (merged[0] ?? ''));
         }
       })
       .catch(() => {
-        const fallback = Object.keys(
-          SAMPLE_APPARATUS_SKILLS,
-        ).sort();
+        const fallback = Object.keys(SAMPLE_APPARATUS_SKILLS).sort();
         setApparatusTypes(fallback);
         if (fallback.length > 0) {
-          setSelectedAppType((prev) => prev || (fallback[0] ?? ""));
+          setSelectedAppType((prev) => prev || (fallback[0] ?? ''));
         }
       });
   }, []);
 
   // ── Save handlers ──
 
-  const saveSettings = useCallback(async (updated: ShiftReportSettings) => {
-    await runSaveSettings(
-      async () => {
-        await organizationService.updateSettings({ shift_reports: updated });
-        setSettings(updated);
-      },
-      "Shift report settings saved",
-      "Failed to save settings",
-    );
-  }, [runSaveSettings]);
+  const saveSettings = useCallback(
+    async (updated: ShiftReportSettings) => {
+      await runSaveSettings(
+        async () => {
+          await organizationService.updateSettings({ shift_reports: updated });
+          setSettings(updated);
+        },
+        'Shift report settings saved',
+        'Failed to save settings'
+      );
+    },
+    [runSaveSettings]
+  );
 
   const saveTrainingDefaults = useCallback(async () => {
     await runSaveTraining(
@@ -320,32 +288,32 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         });
         setTrainingConfig(result);
       },
-      "Training feedback defaults saved",
-      "Failed to save training defaults",
+      'Training feedback defaults saved',
+      'Failed to save training defaults'
     );
   }, [callTypes, skills, tasks, runSaveTraining]);
 
-  const saveAppTypeMapping = useCallback(async (
-    updatedSkills: Record<string, string[]>,
-    updatedTasks: Record<string, string[]>,
-  ) => {
-    await runSaveAppType(
-      async () => {
-        const result = await trainingModuleConfigService.updateConfig({
-          apparatus_type_skills: updatedSkills,
-          apparatus_type_tasks: updatedTasks,
-        });
-        setTrainingConfig(result);
-      },
-      "Apparatus skills/tasks saved",
-      "Failed to save",
-    );
-  }, [runSaveAppType]);
+  const saveAppTypeMapping = useCallback(
+    async (updatedSkills: Record<string, string[]>, updatedTasks: Record<string, string[]>) => {
+      await runSaveAppType(
+        async () => {
+          const result = await trainingModuleConfigService.updateConfig({
+            apparatus_type_skills: updatedSkills,
+            apparatus_type_tasks: updatedTasks,
+          });
+          setTrainingConfig(result);
+        },
+        'Apparatus skills/tasks saved',
+        'Failed to save'
+      );
+    },
+    [runSaveAppType]
+  );
 
   // ── Checklist timing helpers ──
 
   const updateChecklistTiming = useCallback(
-    (field: keyof ShiftReportSettings["checklist_timing"], value: boolean) => {
+    (field: keyof ShiftReportSettings['checklist_timing'], value: boolean) => {
       const updated: ShiftReportSettings = {
         ...settings,
         checklist_timing: { ...settings.checklist_timing, [field]: value },
@@ -353,13 +321,13 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       setSettings(updated);
       void saveSettings(updated);
     },
-    [settings, saveSettings],
+    [settings, saveSettings]
   );
 
   // ── Post-shift validation helpers ──
 
   const updateValidation = useCallback(
-    (field: keyof ShiftReportSettings["post_shift_validation"], value: boolean | number) => {
+    (field: keyof ShiftReportSettings['post_shift_validation'], value: boolean | number) => {
       const updated: ShiftReportSettings = {
         ...settings,
         post_shift_validation: { ...settings.post_shift_validation, [field]: value },
@@ -367,26 +335,31 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       setSettings(updated);
       void saveSettings(updated);
     },
-    [settings, saveSettings],
+    [settings, saveSettings]
   );
 
   // ── Tag-list helpers ──
 
   const addItem = useCallback(
-    (list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>, item: string, setInput: React.Dispatch<React.SetStateAction<string>>) => {
+    (
+      list: string[],
+      setList: React.Dispatch<React.SetStateAction<string[]>>,
+      item: string,
+      setInput: React.Dispatch<React.SetStateAction<string>>
+    ) => {
       const trimmed = item.trim();
       if (!trimmed || list.includes(trimmed)) return;
       setList((prev) => [...prev, trimmed]);
-      setInput("");
+      setInput('');
     },
-    [],
+    []
   );
 
   const removeItem = useCallback(
     (list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>, index: number) => {
       setList(list.filter((_, i) => i !== index));
     },
-    [],
+    []
   );
 
   const moveItem = useCallback(
@@ -399,7 +372,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       updated[target] = temp;
       setList(updated);
     },
-    [],
+    []
   );
 
   const trainingDirty =
@@ -413,695 +386,685 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
-        <Loader2 className="h-5 w-5 animate-spin text-theme-text-muted" />
-        <span className="ml-2 text-sm text-theme-text-muted">Loading settings...</span>
+        <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />
+        <span className="text-theme-text-muted ml-2 text-sm">Loading settings...</span>
       </div>
     );
   }
 
   const renderSection = () => {
     switch (activeSection) {
-      case "feature-toggles":
+      case 'feature-toggles':
         return (
           <div>
-            <p className="text-sm text-theme-text-muted mb-4">
-              Control whether shift reports are available for your department and
-              which features are included.
+            <p className="text-theme-text-muted mb-4 text-sm">
+              Control whether shift reports are available for your department and which features are included.
             </p>
             {loadingTraining ? (
               <div className="flex items-center justify-center py-6" role="status" aria-live="polite">
-                <Loader2 className="h-5 w-5 animate-spin text-theme-text-muted" />
-                <span className="ml-2 text-sm text-theme-text-muted">Loading config...</span>
+                <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />
+                <span className="text-theme-text-muted ml-2 text-sm">Loading config...</span>
               </div>
             ) : !trainingConfig ? (
-              <p className="text-sm text-theme-text-muted italic">
-                Configuration is not available.
+              <p className="text-theme-text-muted text-sm italic">Configuration is not available.</p>
+            ) : (
+              <div className="space-y-4">
+                <label className="flex cursor-pointer items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={trainingConfig.shift_reports_enabled ?? true}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      void runSaveTraining(
+                        async () => {
+                          const result = await trainingModuleConfigService.updateConfig({
+                            shift_reports_enabled: checked,
+                          });
+                          setTrainingConfig(result);
+                        },
+                        `Shift reports ${checked ? 'enabled' : 'disabled'}`,
+                        'Failed to update'
+                      );
+                    }}
+                    disabled={savingTraining}
+                    className={checkboxClass}
+                  />
+                  <div>
+                    <span className="text-theme-text-primary text-sm font-medium">Enable Shift Reports</span>
+                    <p className="text-theme-text-muted text-xs">
+                      When enabled, officers can file end-of-shift reports for crew members. All crew members receive
+                      hours and call credit. Disabling hides the Shift Reports tab from the scheduling section.
+                    </p>
+                  </div>
+                </label>
+                <label
+                  className={`flex cursor-pointer items-center gap-3 ${!(trainingConfig.shift_reports_enabled ?? true) ? 'pointer-events-none opacity-50' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={trainingConfig.shift_reports_include_training ?? true}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      void runSaveTraining(
+                        async () => {
+                          const result = await trainingModuleConfigService.updateConfig({
+                            shift_reports_include_training: checked,
+                          });
+                          setTrainingConfig(result);
+                        },
+                        `Training evaluations ${checked ? 'included' : 'excluded'} from shift reports`,
+                        'Failed to update'
+                      );
+                    }}
+                    disabled={savingTraining || !(trainingConfig.shift_reports_enabled ?? true)}
+                    className={checkboxClass}
+                  />
+                  <div>
+                    <span className="text-theme-text-primary text-sm font-medium">Include Training Evaluations</span>
+                    <p className="text-theme-text-muted text-xs">
+                      When enabled, trainees enrolled in a training program will have an expanded evaluation section
+                      (performance rating, skills, tasks, strengths/improvements). Requires the Training module to be
+                      active.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            )}
+          </div>
+        );
+      case 'checklist-timing':
+        return (
+          <div>
+            <p className="text-theme-text-muted mb-4 text-sm">
+              Choose which checklist windows are active for shifts. Equipment check templates are assigned per apparatus
+              on the Equipment tab — these toggles control whether members are prompted at shift start, shift end, or
+              both.
+            </p>
+
+            <div className="space-y-3">
+              <label className="flex cursor-pointer items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={settings.checklist_timing.start_of_shift_enabled}
+                  onChange={(e) => updateChecklistTiming('start_of_shift_enabled', e.target.checked)}
+                  disabled={saving}
+                  className={checkboxClass}
+                />
+                <div>
+                  <span className="text-theme-text-primary text-sm font-medium">Start-of-shift checklists</span>
+                  <p className="text-theme-text-muted text-xs">
+                    Members are prompted to complete equipment checks when their shift begins.
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex cursor-pointer items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={settings.checklist_timing.end_of_shift_enabled}
+                  onChange={(e) => updateChecklistTiming('end_of_shift_enabled', e.target.checked)}
+                  disabled={saving}
+                  className={checkboxClass}
+                />
+                <div>
+                  <span className="text-theme-text-primary text-sm font-medium">End-of-shift checklists</span>
+                  <p className="text-theme-text-muted text-xs">
+                    Members are reminded to complete equipment checks before their shift ends.
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+        );
+      case 'post-shift':
+        return (
+          <div>
+            <p className="text-theme-text-muted mb-4 text-sm">
+              After a shift ends, the shift officer can be notified to validate attendance, review hours, and confirm
+              call counts before the shift is finalized.
+            </p>
+
+            <div className="space-y-4">
+              <label className="flex cursor-pointer items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={settings.post_shift_validation.enabled}
+                  onChange={(e) => updateValidation('enabled', e.target.checked)}
+                  disabled={saving}
+                  className={checkboxClass}
+                />
+                <div>
+                  <span className="text-theme-text-primary text-sm font-medium">Enable post-shift validation</span>
+                  <p className="text-theme-text-muted text-xs">
+                    Notify the shift officer after a shift ends to review and confirm records.
+                  </p>
+                </div>
+              </label>
+
+              {settings.post_shift_validation.enabled && (
+                <>
+                  <label className="flex cursor-pointer items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={settings.post_shift_validation.require_officer_report}
+                      onChange={(e) => updateValidation('require_officer_report', e.target.checked)}
+                      disabled={saving}
+                      className={checkboxClass}
+                    />
+                    <div>
+                      <span className="text-theme-text-primary text-sm font-medium">
+                        Require officer shift completion report
+                      </span>
+                      <p className="text-theme-text-muted text-xs">
+                        Officers must file a shift completion report before the shift can be finalized. The report
+                        covers staffing, call response, and training observations.
+                      </p>
+                    </div>
+                  </label>
+
+                  <div>
+                    <label className="text-theme-text-primary mb-1 block text-sm font-medium">
+                      Validation window (hours after shift end)
+                    </label>
+                    <p className="text-theme-text-muted mb-2 text-xs">
+                      How long after a shift ends to send the validation reminder to the officer.
+                    </p>
+                    <input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={settings.post_shift_validation.validation_window_hours}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (val >= 1 && val <= 24) {
+                          updateValidation('validation_window_hours', val);
+                        }
+                      }}
+                      disabled={saving}
+                      className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-20 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      case 'training-defaults':
+        return (
+          <div>
+            <p className="text-theme-text-muted mb-4 text-sm">
+              Define the default call types, skills, and tasks that appear on the officer&apos;s shift completion report
+              form. Officers can add to these lists when filing a report.
+            </p>
+
+            {loadingTraining ? (
+              <div className="flex items-center justify-center py-6" role="status" aria-live="polite">
+                <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />
+                <span className="text-theme-text-muted ml-2 text-sm">Loading training config...</span>
+              </div>
+            ) : !trainingConfig ? (
+              <p className="text-theme-text-muted text-sm italic">
+                Training module configuration is not available. Enable the training module to configure shift report
+                defaults.
               </p>
             ) : (
-            <div className="space-y-4">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={trainingConfig.shift_reports_enabled ?? true}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    void runSaveTraining(
-                      async () => {
-                        const result = await trainingModuleConfigService.updateConfig({ shift_reports_enabled: checked });
-                        setTrainingConfig(result);
-                      },
-                      `Shift reports ${checked ? "enabled" : "disabled"}`,
-                      "Failed to update",
-                    );
-                  }}
-                  disabled={savingTraining}
-                  className={checkboxClass}
+              <div className="space-y-5">
+                {/* Call Types */}
+                <TagListEditor
+                  label="Call / Incident Types"
+                  description="Incident types officers can select when recording calls responded."
+                  items={callTypes}
+                  onRemove={(i) => removeItem(callTypes, setCallTypes, i)}
+                  onMove={(i, d) => moveItem(callTypes, setCallTypes, i, d)}
+                  inputValue={newCallType}
+                  onInputChange={setNewCallType}
+                  onAdd={() => addItem(callTypes, setCallTypes, newCallType, setNewCallType)}
+                  placeholder="e.g. Structure Fire"
                 />
-                <div>
-                  <span className="text-sm font-medium text-theme-text-primary">Enable Shift Reports</span>
-                  <p className="text-xs text-theme-text-muted">
-                    When enabled, officers can file end-of-shift reports for crew members.
-                    All crew members receive hours and call credit. Disabling hides the
-                    Shift Reports tab from the scheduling section.
-                  </p>
-                </div>
-              </label>
-              <label className={`flex items-center gap-3 cursor-pointer ${!(trainingConfig.shift_reports_enabled ?? true) ? 'opacity-50 pointer-events-none' : ''}`}>
-                <input
-                  type="checkbox"
-                  checked={trainingConfig.shift_reports_include_training ?? true}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    void runSaveTraining(
-                      async () => {
-                        const result = await trainingModuleConfigService.updateConfig({ shift_reports_include_training: checked });
-                        setTrainingConfig(result);
-                      },
-                      `Training evaluations ${checked ? "included" : "excluded"} from shift reports`,
-                      "Failed to update",
-                    );
-                  }}
-                  disabled={savingTraining || !(trainingConfig.shift_reports_enabled ?? true)}
-                  className={checkboxClass}
+
+                {/* Skills */}
+                <TagListEditor
+                  label="Observable Skills"
+                  description="Skills officers can mark as demonstrated during the shift."
+                  items={skills}
+                  onRemove={(i) => removeItem(skills, setSkills, i)}
+                  onMove={(i, d) => moveItem(skills, setSkills, i, d)}
+                  inputValue={newSkill}
+                  onInputChange={setNewSkill}
+                  onAdd={() => addItem(skills, setSkills, newSkill, setNewSkill)}
+                  placeholder="e.g. SCBA donning/doffing"
                 />
-                <div>
-                  <span className="text-sm font-medium text-theme-text-primary">Include Training Evaluations</span>
-                  <p className="text-xs text-theme-text-muted">
-                    When enabled, trainees enrolled in a training program will have an
-                    expanded evaluation section (performance rating, skills, tasks,
-                    strengths/improvements). Requires the Training module to be active.
-                  </p>
-                </div>
-              </label>
-            </div>
-            )}
-          </div>
-        );
-      case "checklist-timing":
-        return (
-          <div>
-        <p className="text-sm text-theme-text-muted mb-4">
-          Choose which checklist windows are active for shifts. Equipment check templates
-          are assigned per apparatus on the Equipment tab — these toggles control whether
-          members are prompted at shift start, shift end, or both.
-        </p>
 
-        <div className="space-y-3">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.checklist_timing.start_of_shift_enabled}
-              onChange={(e) => updateChecklistTiming("start_of_shift_enabled", e.target.checked)}
-              disabled={saving}
-              className={checkboxClass}
-            />
-            <div>
-              <span className="text-sm font-medium text-theme-text-primary">Start-of-shift checklists</span>
-              <p className="text-xs text-theme-text-muted">
-                Members are prompted to complete equipment checks when their shift begins.
-              </p>
-            </div>
-          </label>
-
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.checklist_timing.end_of_shift_enabled}
-              onChange={(e) => updateChecklistTiming("end_of_shift_enabled", e.target.checked)}
-              disabled={saving}
-              className={checkboxClass}
-            />
-            <div>
-              <span className="text-sm font-medium text-theme-text-primary">End-of-shift checklists</span>
-              <p className="text-xs text-theme-text-muted">
-                Members are reminded to complete equipment checks before their shift ends.
-              </p>
-            </div>
-          </label>
-        </div>
-          </div>
-        );
-      case "post-shift":
-        return (
-          <div>
-        <p className="text-sm text-theme-text-muted mb-4">
-          After a shift ends, the shift officer can be notified to validate attendance,
-          review hours, and confirm call counts before the shift is finalized.
-        </p>
-
-        <div className="space-y-4">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settings.post_shift_validation.enabled}
-              onChange={(e) => updateValidation("enabled", e.target.checked)}
-              disabled={saving}
-              className={checkboxClass}
-            />
-            <div>
-              <span className="text-sm font-medium text-theme-text-primary">Enable post-shift validation</span>
-              <p className="text-xs text-theme-text-muted">
-                Notify the shift officer after a shift ends to review and confirm records.
-              </p>
-            </div>
-          </label>
-
-          {settings.post_shift_validation.enabled && (
-            <>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.post_shift_validation.require_officer_report}
-                  onChange={(e) => updateValidation("require_officer_report", e.target.checked)}
-                  disabled={saving}
-                  className={checkboxClass}
+                {/* Tasks */}
+                <TagListEditor
+                  label="Default Tasks"
+                  description="Tasks to track on the shift completion report."
+                  items={tasks}
+                  onRemove={(i) => removeItem(tasks, setTasks, i)}
+                  onMove={(i, d) => moveItem(tasks, setTasks, i, d)}
+                  inputValue={newTask}
+                  onInputChange={setNewTask}
+                  onAdd={() => addItem(tasks, setTasks, newTask, setNewTask)}
+                  placeholder="e.g. Apparatus check-off"
                 />
-                <div>
-                  <span className="text-sm font-medium text-theme-text-primary">Require officer shift completion report</span>
-                  <p className="text-xs text-theme-text-muted">
-                    Officers must file a shift completion report before the shift can be finalized.
-                    The report covers staffing, call response, and training observations.
-                  </p>
-                </div>
-              </label>
 
-              <div>
-                <label className="block text-sm font-medium text-theme-text-primary mb-1">
-                  Validation window (hours after shift end)
-                </label>
-                <p className="text-xs text-theme-text-muted mb-2">
-                  How long after a shift ends to send the validation reminder to the officer.
-                </p>
-                <input
-                  type="number"
-                  min={1}
-                  max={24}
-                  value={settings.post_shift_validation.validation_window_hours}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    if (val >= 1 && val <= 24) {
-                      updateValidation("validation_window_hours", val);
-                    }
-                  }}
-                  disabled={saving}
-                  className="w-20 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
-                />
-              </div>
-            </>
-          )}
-        </div>
-          </div>
-        );
-      case "training-defaults":
-        return (
-          <div>
-        <p className="text-sm text-theme-text-muted mb-4">
-          Define the default call types, skills, and tasks that appear on the officer&apos;s
-          shift completion report form. Officers can add to these lists when filing a report.
-        </p>
-
-        {loadingTraining ? (
-          <div className="flex items-center justify-center py-6" role="status" aria-live="polite">
-            <Loader2 className="h-5 w-5 animate-spin text-theme-text-muted" />
-            <span className="ml-2 text-sm text-theme-text-muted">Loading training config...</span>
-          </div>
-        ) : !trainingConfig ? (
-          <p className="text-sm text-theme-text-muted italic">
-            Training module configuration is not available. Enable the training module to configure
-            shift report defaults.
-          </p>
-        ) : (
-          <div className="space-y-5">
-            {/* Call Types */}
-            <TagListEditor
-              label="Call / Incident Types"
-              description="Incident types officers can select when recording calls responded."
-              items={callTypes}
-              onRemove={(i) => removeItem(callTypes, setCallTypes, i)}
-              onMove={(i, d) => moveItem(callTypes, setCallTypes, i, d)}
-              inputValue={newCallType}
-              onInputChange={setNewCallType}
-              onAdd={() => addItem(callTypes, setCallTypes, newCallType, setNewCallType)}
-              placeholder="e.g. Structure Fire"
-            />
-
-            {/* Skills */}
-            <TagListEditor
-              label="Observable Skills"
-              description="Skills officers can mark as demonstrated during the shift."
-              items={skills}
-              onRemove={(i) => removeItem(skills, setSkills, i)}
-              onMove={(i, d) => moveItem(skills, setSkills, i, d)}
-              inputValue={newSkill}
-              onInputChange={setNewSkill}
-              onAdd={() => addItem(skills, setSkills, newSkill, setNewSkill)}
-              placeholder="e.g. SCBA donning/doffing"
-            />
-
-            {/* Tasks */}
-            <TagListEditor
-              label="Default Tasks"
-              description="Tasks to track on the shift completion report."
-              items={tasks}
-              onRemove={(i) => removeItem(tasks, setTasks, i)}
-              onMove={(i, d) => moveItem(tasks, setTasks, i, d)}
-              inputValue={newTask}
-              onInputChange={setNewTask}
-              onAdd={() => addItem(tasks, setTasks, newTask, setNewTask)}
-              placeholder="e.g. Apparatus check-off"
-            />
-
-            {/* Save button */}
-            {trainingDirty && (
-              <div className="flex justify-end pt-2">
-                <button
-                  onClick={() => void saveTrainingDefaults()}
-                  disabled={savingTraining}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
-                >
-                  {savingTraining && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Save Training Defaults
-                </button>
+                {/* Save button */}
+                {trainingDirty && (
+                  <div className="flex justify-end pt-2">
+                    <button
+                      onClick={() => void saveTrainingDefaults()}
+                      disabled={savingTraining}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                    >
+                      {savingTraining && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      Save Training Defaults
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
-          </div>
         );
-      case "apparatus-skills":
+      case 'apparatus-skills':
         if (!trainingConfig || apparatusTypes.length === 0) return null;
         return (
           <div>
-          <p className="text-sm text-theme-text-muted mb-4">
-            Assign specific skills and tasks to each apparatus type. When an officer files
-            a report linked to a shift, the form will show skills and tasks relevant to
-            that shift&apos;s apparatus instead of the general defaults above.
-          </p>
+            <p className="text-theme-text-muted mb-4 text-sm">
+              Assign specific skills and tasks to each apparatus type. When an officer files a report linked to a shift,
+              the form will show skills and tasks relevant to that shift&apos;s apparatus instead of the general
+              defaults above.
+            </p>
 
-          {/* Type selector */}
-          <div className="flex flex-wrap gap-1.5 mb-4">
-            {apparatusTypes.map((t) => (
-              <button
-                key={t}
-                onClick={() => setSelectedAppType(t)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize transition-colors ${
-                  selectedAppType === t
-                    ? "bg-violet-600 text-white"
-                    : "bg-theme-surface-hover text-theme-text-muted hover:text-theme-text-primary"
-                }`}
-              >
-                {t}
-                {(appTypeSkills[t]?.length || appTypeTasks[t]?.length)
-                  ? ` (${(appTypeSkills[t]?.length ?? 0) + (appTypeTasks[t]?.length ?? 0)})`
-                  : ""}
-              </button>
-            ))}
-          </div>
-
-          {selectedAppType && (
-            <div className="space-y-5 border-t border-theme-surface-border pt-4">
-              {/* Skills for selected type */}
-              <div>
-                <p className="text-sm font-medium text-theme-text-primary mb-1">
-                  Skills for <span className="capitalize">{selectedAppType}</span>
-                </p>
-                <p className="text-xs text-theme-text-muted mb-2">
-                  These override the general defaults when a shift uses this apparatus type.
-                  Leave empty to use the general defaults.
-                </p>
-
-                <EditableTagList
-                  items={appTypeSkills[selectedAppType] ?? []}
-                  onItemsChange={(updated) =>
-                    setAppTypeSkills({ ...appTypeSkills, [selectedAppType]: updated })
-                  }
-                  placeholder="e.g. Pump operations"
-                  defaultSuggestions={skills}
-                  suggestionsLabel={`Copy from general defaults (${skills.length} skills)`}
-                  getTagClassName={(item) => {
-                    const isLinked = skillEvalNames.has(item.toLowerCase());
-                    return isLinked
-                      ? "bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20"
-                      : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20";
-                  }}
-                  getTagTitle={(item) => {
-                    const isLinked = skillEvalNames.has(item.toLowerCase());
-                    return isLinked
-                      ? "Linked to training skill evaluation"
-                      : "No matching skill evaluation found \u2014 won't track competency";
-                  }}
-                />
-
-                {skillEvalNames.size > 0 && (appTypeSkills[selectedAppType] ?? []).length > 0 && (
-                  <p className="mt-2 text-[10px] text-theme-text-muted">
-                    <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />
-                    Linked to training module
-                    <span className="inline-block w-2 h-2 rounded-full bg-amber-500 ml-2 mr-1" />
-                    No matching skill evaluation
-                  </p>
-                )}
-              </div>
-
-              {/* Tasks for selected type */}
-              <div>
-                <p className="text-sm font-medium text-theme-text-primary mb-1">
-                  Tasks for <span className="capitalize">{selectedAppType}</span>
-                </p>
-
-                <EditableTagList
-                  items={appTypeTasks[selectedAppType] ?? []}
-                  onItemsChange={(updated) =>
-                    setAppTypeTasks({ ...appTypeTasks, [selectedAppType]: updated })
-                  }
-                  placeholder="e.g. Apparatus check-off"
-                  defaultSuggestions={tasks}
-                  suggestionsLabel={`Copy from general defaults (${tasks.length} tasks)`}
-                />
-              </div>
-
-              {/* Save button */}
-              <div className="flex justify-end pt-2">
+            {/* Type selector */}
+            <div className="mb-4 flex flex-wrap gap-1.5">
+              {apparatusTypes.map((t) => (
                 <button
-                  onClick={() => void saveAppTypeMapping(appTypeSkills, appTypeTasks)}
-                  disabled={savingAppType}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                  key={t}
+                  onClick={() => setSelectedAppType(t)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium capitalize transition-colors ${
+                    selectedAppType === t
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-theme-surface-hover text-theme-text-muted hover:text-theme-text-primary'
+                  }`}
                 >
-                  {savingAppType && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Save Apparatus Skills &amp; Tasks
+                  {t}
+                  {appTypeSkills[t]?.length || appTypeTasks[t]?.length
+                    ? ` (${(appTypeSkills[t]?.length ?? 0) + (appTypeTasks[t]?.length ?? 0)})`
+                    : ''}
                 </button>
-              </div>
+              ))}
             </div>
-          )}
+
+            {selectedAppType && (
+              <div className="border-theme-surface-border space-y-5 border-t pt-4">
+                {/* Skills for selected type */}
+                <div>
+                  <p className="text-theme-text-primary mb-1 text-sm font-medium">
+                    Skills for <span className="capitalize">{selectedAppType}</span>
+                  </p>
+                  <p className="text-theme-text-muted mb-2 text-xs">
+                    These override the general defaults when a shift uses this apparatus type. Leave empty to use the
+                    general defaults.
+                  </p>
+
+                  <EditableTagList
+                    items={appTypeSkills[selectedAppType] ?? []}
+                    onItemsChange={(updated) => setAppTypeSkills({ ...appTypeSkills, [selectedAppType]: updated })}
+                    placeholder="e.g. Pump operations"
+                    defaultSuggestions={skills}
+                    suggestionsLabel={`Copy from general defaults (${skills.length} skills)`}
+                    getTagClassName={(item) => {
+                      const isLinked = skillEvalNames.has(item.toLowerCase());
+                      return isLinked
+                        ? 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20'
+                        : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20';
+                    }}
+                    getTagTitle={(item) => {
+                      const isLinked = skillEvalNames.has(item.toLowerCase());
+                      return isLinked
+                        ? 'Linked to training skill evaluation'
+                        : "No matching skill evaluation found \u2014 won't track competency";
+                    }}
+                  />
+
+                  {skillEvalNames.size > 0 && (appTypeSkills[selectedAppType] ?? []).length > 0 && (
+                    <p className="text-theme-text-muted mt-2 text-[10px]">
+                      <span className="mr-1 inline-block h-2 w-2 rounded-full bg-green-500" />
+                      Linked to training module
+                      <span className="mr-1 ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" />
+                      No matching skill evaluation
+                    </p>
+                  )}
+                </div>
+
+                {/* Tasks for selected type */}
+                <div>
+                  <p className="text-theme-text-primary mb-1 text-sm font-medium">
+                    Tasks for <span className="capitalize">{selectedAppType}</span>
+                  </p>
+
+                  <EditableTagList
+                    items={appTypeTasks[selectedAppType] ?? []}
+                    onItemsChange={(updated) => setAppTypeTasks({ ...appTypeTasks, [selectedAppType]: updated })}
+                    placeholder="e.g. Apparatus check-off"
+                    defaultSuggestions={tasks}
+                    suggestionsLabel={`Copy from general defaults (${tasks.length} tasks)`}
+                  />
+                </div>
+
+                {/* Save button */}
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => void saveAppTypeMapping(appTypeSkills, appTypeTasks)}
+                    disabled={savingAppType}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
+                  >
+                    {savingAppType && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Save Apparatus Skills &amp; Tasks
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         );
-      case "form-sections":
+      case 'form-sections':
         if (!trainingConfig) return null;
         return (
           <div>
-          <p className="text-sm text-theme-text-muted mb-4">
-            Choose which optional sections appear on the shift completion report
-            form when officers file a new report. Core fields (trainee, date,
-            hours) are always shown.
-          </p>
+            <p className="text-theme-text-muted mb-4 text-sm">
+              Choose which optional sections appear on the shift completion report form when officers file a new report.
+              Core fields (trainee, date, hours) are always shown.
+            </p>
 
-          <div className="space-y-3">
-            {([
-              {
-                field: "form_show_performance_rating" as const,
-                label: "Performance Rating",
-                desc: "Star or competency rating for the trainee.",
-              },
-              {
-                field: "form_show_areas_of_strength" as const,
-                label: "Areas of Strength",
-                desc: "Free-text field for positive feedback.",
-              },
-              {
-                field: "form_show_areas_for_improvement" as const,
-                label: "Areas for Improvement",
-                desc: "Free-text field for developmental feedback.",
-              },
-              {
-                field: "form_show_officer_narrative" as const,
-                label: "Officer Narrative",
-                desc: "General observations and overall assessment.",
-              },
-              {
-                field: "form_show_call_types" as const,
-                label: "Call / Incident Types",
-                desc: "Categorize calls responded during the shift.",
-              },
-              {
-                field: "form_show_skills_observed" as const,
-                label: "Skills Observed",
-                desc: "Checklist of skills demonstrated on shift.",
-              },
-              {
-                field: "form_show_tasks_performed" as const,
-                label: "Tasks Performed",
-                desc: "Track tasks completed during the shift.",
-              },
-            ]).map(({ field, label, desc }) => (
-              <label key={field} className="flex items-center gap-3 cursor-pointer">
+            <div className="space-y-3">
+              {[
+                {
+                  field: 'form_show_performance_rating' as const,
+                  label: 'Performance Rating',
+                  desc: 'Star or competency rating for the trainee.',
+                },
+                {
+                  field: 'form_show_areas_of_strength' as const,
+                  label: 'Areas of Strength',
+                  desc: 'Free-text field for positive feedback.',
+                },
+                {
+                  field: 'form_show_areas_for_improvement' as const,
+                  label: 'Areas for Improvement',
+                  desc: 'Free-text field for developmental feedback.',
+                },
+                {
+                  field: 'form_show_officer_narrative' as const,
+                  label: 'Officer Narrative',
+                  desc: 'General observations and overall assessment.',
+                },
+                {
+                  field: 'form_show_call_types' as const,
+                  label: 'Call / Incident Types',
+                  desc: 'Categorize calls responded during the shift.',
+                },
+                {
+                  field: 'form_show_skills_observed' as const,
+                  label: 'Skills Observed',
+                  desc: 'Checklist of skills demonstrated on shift.',
+                },
+                {
+                  field: 'form_show_tasks_performed' as const,
+                  label: 'Tasks Performed',
+                  desc: 'Track tasks completed during the shift.',
+                },
+              ].map(({ field, label, desc }) => (
+                <label key={field} className="flex cursor-pointer items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={trainingConfig[field] ?? true}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      void runSaveTraining(
+                        async () => {
+                          const result = await trainingModuleConfigService.updateConfig({ [field]: checked });
+                          setTrainingConfig(result);
+                        },
+                        `${label} ${checked ? 'enabled' : 'disabled'}`,
+                        'Failed to update'
+                      );
+                    }}
+                    disabled={savingTraining}
+                    className={checkboxClass}
+                  />
+                  <div>
+                    <span className="text-theme-text-primary text-sm font-medium">{label}</span>
+                    <p className="text-theme-text-muted text-xs">{desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      case 'review-workflow':
+        if (!trainingConfig) return null;
+        return (
+          <div>
+            <p className="text-theme-text-muted mb-4 text-sm">
+              Controls whether shift completion reports require approval before the trainee can see them.
+            </p>
+
+            <div className="space-y-4">
+              <label className="flex cursor-pointer items-center gap-3">
                 <input
                   type="checkbox"
-                  checked={trainingConfig[field] ?? true}
+                  checked={trainingConfig.report_review_required}
                   onChange={(e) => {
                     const checked = e.target.checked;
                     void runSaveTraining(
                       async () => {
-                        const result = await trainingModuleConfigService.updateConfig({ [field]: checked });
+                        const result = await trainingModuleConfigService.updateConfig({
+                          report_review_required: checked,
+                        });
                         setTrainingConfig(result);
                       },
-                      `${label} ${checked ? "enabled" : "disabled"}`,
-                      "Failed to update",
+                      'Review workflow updated',
+                      'Failed to update'
                     );
                   }}
                   disabled={savingTraining}
                   className={checkboxClass}
                 />
                 <div>
-                  <span className="text-sm font-medium text-theme-text-primary">{label}</span>
-                  <p className="text-xs text-theme-text-muted">{desc}</p>
+                  <span className="text-theme-text-primary text-sm font-medium">
+                    Require report review before trainee visibility
+                  </span>
+                  <p className="text-theme-text-muted text-xs">
+                    Reports must be approved by a reviewer before the trainee can see them.
+                  </p>
                 </div>
               </label>
-            ))}
-          </div>
+
+              {trainingConfig.report_review_required && (
+                <div>
+                  <label className="text-theme-text-primary mb-1 block text-sm font-medium">Reviewer role</label>
+                  <select
+                    value={trainingConfig.report_review_role}
+                    onChange={(e) => {
+                      const role = e.target.value;
+                      void runSaveTraining(
+                        async () => {
+                          const result = await trainingModuleConfigService.updateConfig({ report_review_role: role });
+                          setTrainingConfig(result);
+                        },
+                        'Reviewer role updated',
+                        'Failed to update'
+                      );
+                    }}
+                    disabled={savingTraining}
+                    className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
+                  >
+                    <option value="training_officer">Training Officer</option>
+                    <option value="captain">Captain</option>
+                    <option value="chief">Chief</option>
+                  </select>
+                </div>
+              )}
+            </div>
           </div>
         );
-      case "review-workflow":
+      case 'rating-scale':
         if (!trainingConfig) return null;
         return (
           <div>
-          <p className="text-sm text-theme-text-muted mb-4">
-            Controls whether shift completion reports require approval before the trainee can see them.
-          </p>
+            <p className="text-theme-text-muted mb-4 text-sm">
+              Define the rating levels officers use when evaluating trainees. You can add, remove, rename, and reorder
+              levels. Each level gets a numeric value starting at 1.
+            </p>
 
-          <div className="space-y-4">
-            <label className="flex items-center gap-3 cursor-pointer">
+            {/* Scale type */}
+            <div className="mb-4">
+              <label className="text-theme-text-primary mb-1 block text-sm font-medium">Display style</label>
+              <div className="flex gap-2">
+                {(['competency', 'stars'] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => {
+                      void runSaveRating(
+                        async () => {
+                          const result = await trainingModuleConfigService.updateConfig({ rating_scale_type: st });
+                          setTrainingConfig(result);
+                        },
+                        'Display style updated',
+                        'Failed to update'
+                      );
+                    }}
+                    disabled={savingRating}
+                    className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                      trainingConfig.rating_scale_type === st
+                        ? 'border-violet-600 bg-violet-600 text-white'
+                        : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30'
+                    }`}
+                  >
+                    {st === 'stars' ? 'Stars (1-5)' : 'Labeled Bubbles'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom label */}
+            <div className="mb-4">
+              <label className="text-theme-text-primary mb-1 block text-sm font-medium">Field label</label>
               <input
-                type="checkbox"
-                checked={trainingConfig.report_review_required}
+                type="text"
+                value={trainingConfig.rating_label}
                 onChange={(e) => {
-                  const checked = e.target.checked;
-                  void runSaveTraining(
+                  const val = e.target.value;
+                  setTrainingConfig((prev) => (prev ? { ...prev, rating_label: val } : prev));
+                }}
+                onBlur={() => {
+                  void runSaveRating(
                     async () => {
-                      const result = await trainingModuleConfigService.updateConfig({ report_review_required: checked });
+                      const result = await trainingModuleConfigService.updateConfig({
+                        rating_label: trainingConfig.rating_label,
+                      });
                       setTrainingConfig(result);
                     },
-                    "Review workflow updated",
-                    "Failed to update",
+                    'Rating label saved',
+                    'Failed to update'
                   );
                 }}
-                disabled={savingTraining}
-                className={checkboxClass}
+                className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-64 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
               />
-              <div>
-                <span className="text-sm font-medium text-theme-text-primary">Require report review before trainee visibility</span>
-                <p className="text-xs text-theme-text-muted">
-                  Reports must be approved by a reviewer before the trainee can see them.
-                </p>
-              </div>
-            </label>
+            </div>
 
-            {trainingConfig.report_review_required && (
+            {/* Level labels editor */}
+            {trainingConfig.rating_scale_type !== 'stars' && (
               <div>
-                <label className="block text-sm font-medium text-theme-text-primary mb-1">
-                  Reviewer role
-                </label>
-                <select
-                  value={trainingConfig.report_review_role}
-                  onChange={(e) => {
-                    const role = e.target.value;
-                    void runSaveTraining(
-                      async () => {
-                        const result = await trainingModuleConfigService.updateConfig({ report_review_role: role });
-                        setTrainingConfig(result);
-                      },
-                      "Reviewer role updated",
-                      "Failed to update",
-                    );
+                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Rating levels</label>
+                <div className="space-y-2">
+                  {Object.keys(ratingLabels)
+                    .sort((a, b) => Number(a) - Number(b))
+                    .map((key) => (
+                      <div key={key} className="flex items-center gap-2">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-sm font-bold text-violet-700 dark:text-violet-400">
+                          {key}
+                        </span>
+                        <input
+                          type="text"
+                          value={ratingLabels[key] ?? ''}
+                          onChange={(e) =>
+                            setRatingLabels((prev) => ({
+                              ...prev,
+                              [key]: e.target.value,
+                            }))
+                          }
+                          className="border-theme-surface-border bg-theme-surface text-theme-text-primary flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500"
+                          placeholder={`Level ${key} label`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = { ...ratingLabels };
+                            delete updated[key];
+                            const renumbered: Record<string, string> = {};
+                            Object.values(updated)
+                              .sort()
+                              .forEach((v, i) => {
+                                renumbered[String(i + 1)] = v;
+                              });
+                            setRatingLabels(renumbered);
+                          }}
+                          disabled={Object.keys(ratingLabels).length <= 2}
+                          className="text-theme-text-muted p-1.5 transition-colors hover:text-red-500 disabled:opacity-30"
+                          title="Remove level"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextKey = String(Object.keys(ratingLabels).length + 1);
+                    setRatingLabels((prev) => ({
+                      ...prev,
+                      [nextKey]: '',
+                    }));
                   }}
-                  disabled={savingTraining}
-                  className="px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
+                  className="mt-2 inline-flex items-center gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
                 >
-                  <option value="training_officer">Training Officer</option>
-                  <option value="captain">Captain</option>
-                  <option value="chief">Chief</option>
-                </select>
+                  <Plus className="h-3 w-3" /> Add level
+                </button>
+
+                {/* Save */}
+                <div className="flex justify-end pt-3">
+                  <button
+                    onClick={() => {
+                      void runSaveRating(
+                        async () => {
+                          const result = await trainingModuleConfigService.updateConfig({
+                            rating_scale_labels: ratingLabels,
+                          });
+                          setTrainingConfig(result);
+                        },
+                        'Rating scale saved',
+                        'Failed to save'
+                      );
+                    }}
+                    disabled={
+                      savingRating ||
+                      JSON.stringify(ratingLabels) === JSON.stringify(trainingConfig?.rating_scale_labels ?? {})
+                    }
+                    className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                      JSON.stringify(ratingLabels) === JSON.stringify(trainingConfig?.rating_scale_labels ?? {})
+                        ? 'cursor-default bg-violet-600 text-white'
+                        : 'bg-violet-600 text-white hover:bg-violet-700'
+                    } disabled:opacity-50`}
+                  >
+                    {savingRating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Save Rating Scale
+                  </button>
+                </div>
               </div>
             )}
-          </div>
-          </div>
-        );
-      case "rating-scale":
-        if (!trainingConfig) return null;
-        return (
-          <div>
-          <p className="text-sm text-theme-text-muted mb-4">
-            Define the rating levels officers use when evaluating trainees.
-            You can add, remove, rename, and reorder levels. Each level
-            gets a numeric value starting at 1.
-          </p>
-
-          {/* Scale type */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-theme-text-primary mb-1">
-              Display style
-            </label>
-            <div className="flex gap-2">
-              {(["competency", "stars"] as const).map((st) => (
-                <button
-                  key={st}
-                  onClick={() => {
-                    void runSaveRating(
-                      async () => {
-                        const result = await trainingModuleConfigService.updateConfig({ rating_scale_type: st });
-                        setTrainingConfig(result);
-                      },
-                      "Display style updated",
-                      "Failed to update",
-                    );
-                  }}
-                  disabled={savingRating}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                    trainingConfig.rating_scale_type === st
-                      ? "bg-violet-600 text-white border-violet-600"
-                      : "bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30"
-                  }`}
-                >
-                  {st === "stars" ? "Stars (1-5)" : "Labeled Bubbles"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Custom label */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-theme-text-primary mb-1">
-              Field label
-            </label>
-            <input
-              type="text"
-              value={trainingConfig.rating_label}
-              onChange={(e) => {
-                const val = e.target.value;
-                setTrainingConfig((prev) =>
-                  prev ? { ...prev, rating_label: val } : prev,
-                );
-              }}
-              onBlur={() => {
-                void runSaveRating(
-                  async () => {
-                    const result = await trainingModuleConfigService.updateConfig({
-                      rating_label: trainingConfig.rating_label,
-                    });
-                    setTrainingConfig(result);
-                  },
-                  "Rating label saved",
-                  "Failed to update",
-                );
-              }}
-              className="w-64 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
-            />
-          </div>
-
-          {/* Level labels editor */}
-          {trainingConfig.rating_scale_type !== "stars" && (
-            <div>
-              <label className="block text-sm font-medium text-theme-text-primary mb-2">
-                Rating levels
-              </label>
-              <div className="space-y-2">
-                {Object.keys(ratingLabels)
-                  .sort((a, b) => Number(a) - Number(b))
-                  .map((key) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <span className="w-8 h-8 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-400 text-sm font-bold flex items-center justify-center shrink-0">
-                        {key}
-                      </span>
-                      <input
-                        type="text"
-                        value={ratingLabels[key] ?? ""}
-                        onChange={(e) =>
-                          setRatingLabels((prev) => ({
-                            ...prev,
-                            [key]: e.target.value,
-                          }))
-                        }
-                        className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
-                        placeholder={`Level ${key} label`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = { ...ratingLabels };
-                          delete updated[key];
-                          const renumbered: Record<string, string> =
-                            {};
-                          Object.values(updated)
-                            .sort()
-                            .forEach((v, i) => {
-                              renumbered[String(i + 1)] = v;
-                            });
-                          setRatingLabels(renumbered);
-                        }}
-                        disabled={Object.keys(ratingLabels).length <= 2}
-                        className="p-1.5 text-theme-text-muted hover:text-red-500 disabled:opacity-30 transition-colors"
-                        title="Remove level"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const nextKey = String(
-                    Object.keys(ratingLabels).length + 1,
-                  );
-                  setRatingLabels((prev) => ({
-                    ...prev,
-                    [nextKey]: "",
-                  }));
-                }}
-                className="mt-2 text-xs text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1"
-              >
-                <Plus className="w-3 h-3" /> Add level
-              </button>
-
-              {/* Save */}
-              <div className="flex justify-end pt-3">
-                <button
-                  onClick={() => {
-                    void runSaveRating(
-                      async () => {
-                        const result = await trainingModuleConfigService.updateConfig({
-                          rating_scale_labels: ratingLabels,
-                        });
-                        setTrainingConfig(result);
-                      },
-                      "Rating scale saved",
-                      "Failed to save",
-                    );
-                  }}
-                  disabled={savingRating || JSON.stringify(ratingLabels) === JSON.stringify(trainingConfig?.rating_scale_labels ?? {})}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                    JSON.stringify(ratingLabels) === JSON.stringify(trainingConfig?.rating_scale_labels ?? {})
-                      ? "bg-violet-600 text-white cursor-default"
-                      : "bg-violet-600 text-white hover:bg-violet-700"
-                  } disabled:opacity-50`}
-                >
-                  {savingRating && (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  )}
-                  Save Rating Scale
-                </button>
-              </div>
-            </div>
-          )}
           </div>
         );
       default:
@@ -1110,24 +1073,27 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col md:flex-row gap-6">
+    <div className="flex flex-col gap-6 md:flex-row">
       {/* Mobile: horizontal scrollable tabs */}
-      <nav className="md:hidden -mx-4 px-4 border-b border-theme-surface-border" aria-label="Shift report settings sections">
-        <div className="flex overflow-x-auto scrollbar-thin scroll-smooth gap-1 pb-2">
+      <nav
+        className="border-theme-surface-border -mx-4 border-b px-4 md:hidden"
+        aria-label="Shift report settings sections"
+      >
+        <div className="flex scrollbar-thin gap-1 overflow-x-auto scroll-smooth pb-2">
           {SECTIONS.map(({ key, label, icon: Icon }) => {
             const isActive = activeSection === key;
             return (
               <button
                 key={key}
                 onClick={() => setActiveSection(key)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                   isActive
-                    ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
-                    : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
+                    ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
+                    : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                 }`}
-                aria-current={isActive ? "page" : undefined}
+                aria-current={isActive ? 'page' : undefined}
               >
-                <Icon className={`w-4 h-4 shrink-0 ${isActive ? "" : "text-theme-text-muted"}`} />
+                <Icon className={`h-4 w-4 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
                 {label}
               </button>
             );
@@ -1136,25 +1102,27 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       </nav>
 
       {/* Desktop: sidebar */}
-      <nav className="hidden md:block md:w-52 shrink-0" aria-label="Shift report settings sections">
-        <div className="md:sticky md:top-24 space-y-1">
+      <nav className="hidden shrink-0 md:block md:w-52" aria-label="Shift report settings sections">
+        <div className="space-y-1 md:sticky md:top-24">
           {SECTIONS.map(({ key, label, icon: Icon, description }) => {
             const isActive = activeSection === key;
             return (
               <button
                 key={key}
                 onClick={() => setActiveSection(key)}
-                className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
                   isActive
-                    ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
-                    : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
+                    ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400'
+                    : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
                 }`}
-                aria-current={isActive ? "page" : undefined}
+                aria-current={isActive ? 'page' : undefined}
               >
-                <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${isActive ? "" : "text-theme-text-muted"}`} />
+                <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${isActive ? '' : 'text-theme-text-muted'}`} />
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{label}</p>
-                  <p className={`text-xs ${isActive ? "text-violet-600/70 dark:text-violet-400/70" : "text-theme-text-muted"}`}>
+                  <p
+                    className={`text-xs ${isActive ? 'text-violet-600/70 dark:text-violet-400/70' : 'text-theme-text-muted'}`}
+                  >
                     {description}
                   </p>
                 </div>
@@ -1165,8 +1133,8 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       </nav>
 
       {/* Content panel */}
-      <main className="flex-1 min-w-0">
-        <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-6">
+      <main className="min-w-0 flex-1">
+        <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 sm:p-6">
           {renderSection()}
         </div>
       </main>
@@ -1200,25 +1168,35 @@ const TagListEditor: React.FC<TagListEditorProps> = ({
   placeholder,
 }) => (
   <div>
-    <label className="block text-sm font-medium text-theme-text-primary mb-0.5">{label}</label>
-    <p className="text-xs text-theme-text-muted mb-2">{description}</p>
+    <label className="text-theme-text-primary mb-0.5 block text-sm font-medium">{label}</label>
+    <p className="text-theme-text-muted mb-2 text-xs">{description}</p>
 
     {items.length > 0 && (
-      <div className="flex flex-wrap gap-1.5 mb-2">
+      <div className="mb-2 flex flex-wrap gap-1.5">
         {items.map((item, i) => (
           <span
             key={i}
-            className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-400 border border-violet-500/20 px-2.5 py-0.5 text-xs font-medium"
+            className="inline-flex items-center gap-1 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-400"
           >
             {item}
             {onMove && (
               <>
-                <button type="button" onClick={() => onMove(i, -1)} disabled={i === 0}
-                  className="rounded-full p-0.5 hover:bg-violet-500/20 disabled:opacity-30 transition-colors" aria-label="Move up">
+                <button
+                  type="button"
+                  onClick={() => onMove(i, -1)}
+                  disabled={i === 0}
+                  className="rounded-full p-0.5 transition-colors hover:bg-violet-500/20 disabled:opacity-30"
+                  aria-label="Move up"
+                >
                   <ChevronUp className="h-3 w-3" />
                 </button>
-                <button type="button" onClick={() => onMove(i, 1)} disabled={i === items.length - 1}
-                  className="rounded-full p-0.5 hover:bg-violet-500/20 disabled:opacity-30 transition-colors" aria-label="Move down">
+                <button
+                  type="button"
+                  onClick={() => onMove(i, 1)}
+                  disabled={i === items.length - 1}
+                  className="rounded-full p-0.5 transition-colors hover:bg-violet-500/20 disabled:opacity-30"
+                  aria-label="Move down"
+                >
                   <ChevronDown className="h-3 w-3" />
                 </button>
               </>
@@ -1226,7 +1204,7 @@ const TagListEditor: React.FC<TagListEditorProps> = ({
             <button
               type="button"
               onClick={() => onRemove(i)}
-              className="ml-0.5 rounded-full p-0.5 hover:bg-violet-500/20 transition-colors"
+              className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-violet-500/20"
               aria-label={`Remove ${item}`}
             >
               <X className="h-3 w-3" />
@@ -1242,19 +1220,19 @@ const TagListEditor: React.FC<TagListEditorProps> = ({
         value={inputValue}
         onChange={(e) => onInputChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
+          if (e.key === 'Enter') {
             e.preventDefault();
             onAdd();
           }
         }}
         placeholder={placeholder}
-        className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary placeholder:text-theme-text-muted focus:ring-2 focus:ring-violet-500 focus:outline-none"
+        className="border-theme-surface-border bg-theme-surface text-theme-text-primary placeholder:text-theme-text-muted flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-none"
       />
       <button
         type="button"
         onClick={onAdd}
         disabled={!inputValue.trim()}
-        className="inline-flex items-center gap-1 rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-xs font-medium text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-40 transition-colors"
+        className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40"
       >
         <Plus className="h-3.5 w-3.5" />
         Add

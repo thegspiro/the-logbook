@@ -39,9 +39,7 @@ describe('MfaSettingsCard', () => {
     render(<MfaSettingsCard />);
     expect(await screen.findByText(/two-factor authentication is/i)).toBeInTheDocument();
     expect(screen.getByText('off')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /enable two-factor authentication/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /enable two-factor authentication/i })).toBeInTheDocument();
   });
 
   it('walks through enrollment and shows one-time recovery codes', async () => {
@@ -83,10 +81,7 @@ describe('MfaSettingsCard', () => {
 
     render(<MfaSettingsCard />);
     await user.click(await screen.findByRole('button', { name: /regenerate recovery codes/i }));
-    await user.type(
-      await screen.findByLabelText(/current authenticator code to generate/i),
-      '654321',
-    );
+    await user.type(await screen.findByLabelText(/current authenticator code to generate/i), '654321');
     await user.click(screen.getByRole('button', { name: /generate new codes/i }));
 
     await waitFor(() => expect(mockRegenerate).toHaveBeenCalledWith('654321'));

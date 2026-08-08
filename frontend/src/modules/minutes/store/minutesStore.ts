@@ -7,11 +7,7 @@
 import { create } from 'zustand';
 import { handleStoreError } from '../../../utils/storeHelpers';
 import { minutesService } from '../services/api';
-import type {
-  MeetingMinutes,
-  MinutesStats,
-  MinutesSearchResult,
-} from '../types/minutes';
+import type { MeetingMinutes, MinutesStats, MinutesSearchResult } from '../types/minutes';
 
 interface MinutesState {
   // Detail view

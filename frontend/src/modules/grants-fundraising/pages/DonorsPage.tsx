@@ -132,7 +132,7 @@ export const DonorsPage: React.FC = () => {
       (d) =>
         d.firstName.toLowerCase().includes(q) ||
         d.lastName.toLowerCase().includes(q) ||
-        (d.email ?? '').toLowerCase().includes(q),
+        (d.email ?? '').toLowerCase().includes(q)
     );
   }, [donors, search]);
 
@@ -140,10 +140,7 @@ export const DonorsPage: React.FC = () => {
   // Form helpers
   // -----------------------------------------------------------------------
 
-  const updateField = <K extends keyof NewDonorForm>(
-    field: K,
-    value: NewDonorForm[K],
-  ) => {
+  const updateField = <K extends keyof NewDonorForm>(field: K, value: NewDonorForm[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -184,8 +181,7 @@ export const DonorsPage: React.FC = () => {
     }
   };
 
-  const showCompanyField =
-    form.donorType === 'business' || form.donorType === 'foundation';
+  const showCompanyField = form.donorType === 'business' || form.donorType === 'foundation';
 
   // -----------------------------------------------------------------------
   // Render
@@ -196,16 +192,12 @@ export const DonorsPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">
-            Donors
-          </h1>
-          <p className="mt-1 text-sm text-theme-text-secondary">
-            Manage your donor directory and relationships
-          </p>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Donors</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">Manage your donor directory and relationships</p>
         </div>
         <button
           onClick={() => setShowForm((prev) => !prev)}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
         >
           {showForm ? (
             <>
@@ -225,11 +217,9 @@ export const DonorsPage: React.FC = () => {
       {showForm && (
         <form
           onSubmit={(e) => void handleSubmit(e)}
-          className="rounded-lg border border-theme-surface-border bg-theme-surface p-6 space-y-4"
+          className="border-theme-surface-border bg-theme-surface space-y-4 rounded-lg border p-6"
         >
-          <h2 className="text-lg font-semibold text-theme-text-primary">
-            New Donor
-          </h2>
+          <h2 className="text-theme-text-primary text-lg font-semibold">New Donor</h2>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* First Name */}
@@ -266,7 +256,7 @@ export const DonorsPage: React.FC = () => {
             <div>
               <label className={labelClass}>Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-secondary" />
+                <Mail className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                 <input
                   type="email"
                   value={form.email}
@@ -281,7 +271,7 @@ export const DonorsPage: React.FC = () => {
             <div>
               <label className={labelClass}>Phone</label>
               <div className="relative">
-                <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-secondary" />
+                <Phone className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                 <input
                   type="tel"
                   value={form.phone}
@@ -297,9 +287,7 @@ export const DonorsPage: React.FC = () => {
               <label className={labelClass}>Donor Type</label>
               <select
                 value={form.donorType}
-                onChange={(e) =>
-                  updateField('donorType', e.target.value as DonorType)
-                }
+                onChange={(e) => updateField('donorType', e.target.value as DonorType)}
                 className={selectClass}
               >
                 {DONOR_TYPE_OPTIONS.map((opt) => (
@@ -378,14 +366,14 @@ export const DonorsPage: React.FC = () => {
             <button
               type="button"
               onClick={resetForm}
-              className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
             >
               {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
               Save Donor
@@ -396,14 +384,15 @@ export const DonorsPage: React.FC = () => {
 
       {/* Search and Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-secondary" />
+        <div className="relative min-w-[240px] flex-1">
+          <Search className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             type="text"
-            aria-label="Search by name or email..." placeholder="Search by name or email..."
+            aria-label="Search by name or email..."
+            placeholder="Search by name or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className={`${inputClass} pl-10`}
@@ -425,14 +414,14 @@ export const DonorsPage: React.FC = () => {
       </div>
 
       {/* Donors Table */}
-      <div className="overflow-hidden rounded-lg border border-theme-surface-border bg-theme-surface">
+      <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
         {isLoading ? (
           <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
             <Loader2 className="h-8 w-8 animate-spin text-red-500" />
           </div>
         ) : filteredDonors.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <Users className="mb-3 h-12 w-12 text-theme-text-secondary opacity-40" />
+            <Users className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
             <p className="text-theme-text-secondary">
               {search || typeFilter
                 ? 'No donors match your search criteria'
@@ -443,50 +432,64 @@ export const DonorsPage: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-theme-surface-border bg-theme-surface">
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                <tr className="border-theme-surface-border bg-theme-surface border-b">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Name
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Email
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Type
                   </th>
-                  <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                  >
                     Total Donated
                   </th>
-                  <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                  >
                     # Donations
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Last Donation
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-theme-surface-border">
+              <tbody className="divide-theme-surface-border divide-y">
                 {filteredDonors.map((donor) => (
-                  <tr
-                    key={donor.id}
-                    className="hover:bg-theme-surface-hover transition-colors"
-                  >
+                  <tr key={donor.id} className="hover:bg-theme-surface-hover transition-colors">
                     {/* Name */}
                     <td className="px-4 py-3 text-sm">
-                      <span className="font-medium text-theme-text-primary">
+                      <span className="text-theme-text-primary font-medium">
                         {donor.firstName} {donor.lastName}
                       </span>
-                      {donor.companyName && (
-                        <p className="text-xs text-theme-text-secondary">
-                          {donor.companyName}
-                        </p>
-                      )}
+                      {donor.companyName && <p className="text-theme-text-secondary text-xs">{donor.companyName}</p>}
                     </td>
 
                     {/* Email */}
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
                       {donor.email ? (
                         <span className="inline-flex items-center gap-1">
                           <Mail className="h-3.5 w-3.5 shrink-0" />
@@ -507,20 +510,16 @@ export const DonorsPage: React.FC = () => {
                     </td>
 
                     {/* Total Donated */}
-                    <td className="px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">
+                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold">
                       {formatCurrency(donor.totalDonated)}
                     </td>
 
                     {/* # Donations */}
-                    <td className="px-4 py-3 text-right text-sm text-theme-text-secondary">
-                      {donor.donationCount}
-                    </td>
+                    <td className="text-theme-text-secondary px-4 py-3 text-right text-sm">{donor.donationCount}</td>
 
                     {/* Last Donation */}
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary">
-                      {donor.lastDonationDate
-                        ? formatDate(donor.lastDonationDate, tz)
-                        : '--'}
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                      {donor.lastDonationDate ? formatDate(donor.lastDonationDate, tz) : '--'}
                     </td>
 
                     {/* Actions */}
@@ -529,7 +528,7 @@ export const DonorsPage: React.FC = () => {
                         {donor.email && (
                           <a
                             href={`mailto:${donor.email}`}
-                            className="rounded p-1 text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary transition-colors"
+                            className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded p-1 transition-colors"
                             title="Send email"
                           >
                             <Mail className="h-4 w-4" />
@@ -538,7 +537,7 @@ export const DonorsPage: React.FC = () => {
                         {donor.phone && (
                           <a
                             href={`tel:${donor.phone}`}
-                            className="rounded p-1 text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary transition-colors"
+                            className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded p-1 transition-colors"
                             title="Call"
                           >
                             <Phone className="h-4 w-4" />

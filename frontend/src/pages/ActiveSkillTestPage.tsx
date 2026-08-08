@@ -39,20 +39,27 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
+import { useAuthStore } from '../stores/authStore';
 import { useAutoSave } from '../hooks/useAutoSave';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
 import { hydrateTemplateSections } from '../utils/skillTemplateSections';
 import { TestViewersPanel } from '../components/training/TestViewersPanel';
-import { toAppError } from '../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../utils/errorHandling';
 import type {
   SkillCriterion,
   SkillTemplateSection,
   CriterionResult,
   SectionResult,
+  SkillTestStatus,
   SkillTestUpdate,
 } from '../types/skillsTesting';
+
+/** The evaluation is still live: the clock may run and the server accepts writes. */
+function isTestLive(status: SkillTestStatus | undefined): boolean {
+  return status === 'draft' || status === 'in_progress';
+}
 
 // ==================== Timer Component ====================
 
@@ -391,6 +398,11 @@ const StatementCriterion: React.FC<{
   result: CriterionResult | undefined;
   onChange: (result: Partial<CriterionResult>) => void;
 }> = ({ criterion, onChange }) => {
+  // NOTE: the mount-time onChange below is the one criterion write the examiner
+  // did not make. SectionView tags it `autoMarked` so it cannot start the
+  // clock — otherwise merely opening a test whose first section leads with a
+  // statement would begin timing before the candidate is even in position.
+  //
   // Statements are read-only boxes for the assessor to read aloud.
   // Auto-mark as passed on first render so they don't block completion.
   useEffect(() => {
@@ -454,7 +466,12 @@ const CriterionNotes: React.FC<{
 const SectionView: React.FC<{
   section: SkillTemplateSection;
   sectionResults: CriterionResult[];
-  onUpdateCriterion: (criterionId: string, result: Partial<CriterionResult>, criterionLabel?: string) => void;
+  onUpdateCriterion: (
+    criterionId: string,
+    result: Partial<CriterionResult>,
+    criterionLabel?: string,
+    options?: { autoMarked?: boolean }
+  ) => void;
 }> = ({ section, sectionResults, onUpdateCriterion }) => {
   const getResult = (criterionId: string) => sectionResults.find((r) => r.criterion_id === criterionId);
 
@@ -512,7 +529,7 @@ const SectionView: React.FC<{
               <StatementCriterion
                 criterion={criterion}
                 result={result}
-                onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label)}
+                onChange={(r) => onUpdateCriterion(criterion.id, r, criterion.label, { autoMarked: true })}
               />
             )}
             <CriterionNotes
@@ -784,8 +801,14 @@ export const ActiveSkillTestPage: React.FC = () => {
     clearCurrentTest,
   } = useSkillsTestingStore();
 
+  const isOfficer = useAuthStore((state) => state.checkPermission('training.manage'));
+
   const tz = useTimezone();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // An explicit pause is a decision — equipment reset, an interruption, a
+  // candidate sent back to the staging area — so nothing may quietly undo it.
+  // Auto-start only ever covers the examiner who never started the clock.
+  const manuallyPausedRef = useRef(false);
   const [reviewing, setReviewing] = useState(false);
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -820,18 +843,36 @@ export const ActiveSkillTestPage: React.FC = () => {
     setActiveSectionIndex(0);
     setActiveTestTimer(0);
     setActiveTestRunning(false);
+    // A pause belongs to the attempt it was made in; the next test starts with
+    // auto-start armed again.
+    manuallyPausedRef.current = false;
   }, [testId, setActiveSectionIndex, setActiveTestTimer, setActiveTestRunning]);
 
   // Return to the top whenever the visible content is swapped out underneath
   // the examiner. Moving between sections, entering review, and showing results
   // all happen without a route change, and the controls that trigger them sit
-  // at the bottom of the page — so the next screen would otherwise render with
-  // the window still scrolled down, below its own questions, forcing a scroll
-  // back up every single time.
+  // at the bottom of the page — so the next screen would otherwise render still
+  // scrolled down, below its own questions. That is not cosmetic here: an
+  // examiner watching the candidate never looks up, so anything above the fold
+  // (the section's instructions, a statement to read aloud) is simply missed.
+  //
+  // Scrolling the window is not enough. Each screen below puts its body in a
+  // `flex-1 overflow-y-auto` div inside a `min-h-screen` flex column, which
+  // makes that div its own scroll container — the window offset this effect
+  // used to reset was never the one holding the examiner partway down the page.
+  // The window call stays for the outer document (header offset, footer).
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const showingResults = currentTest?.status === 'completed' || currentTest?.status === 'voided';
+  const loadedTestKey = currentTest?.id;
   useEffect(() => {
+    // Assignment rather than scrollTo(): this runs on every screen change and
+    // must not depend on an element method jsdom leaves unimplemented.
+    if (contentRef.current) contentRef.current.scrollTop = 0;
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-  }, [activeSectionIndex, reviewing, showingResults]);
+    // loadedTestKey is in the list so the first paint after the spinner lands
+    // at the top too — the content mounts one render after this effect first
+    // runs, when the ref is still null.
+  }, [activeSectionIndex, reviewing, showingResults, loadedTestKey]);
 
   // Global timer
   useEffect(() => {
@@ -874,13 +915,64 @@ export const ActiveSkillTestPage: React.FC = () => {
   );
   const globalTimeLimit = currentTest?.template_time_limit_seconds;
 
-  const toggleTimer = useCallback(() => {
-    setActiveTestRunning(!activeTestRunning);
-    if (!activeTestRunning && currentTest?.status === FormStatus.DRAFT) {
-      // Start the test
-      void updateTest(currentTest.id, { status: 'in_progress' });
+  /** Set the clock running, and stamp the test as under way the first time.
+   *
+   * The status write carries the scoring recorded so far on purpose. update_test
+   * returns the whole record and the store adopts the response, so a
+   * status-only write would echo back the server's older section_results and
+   * wipe the criterion the examiner just tapped — which, now, is the very tap
+   * that starts the clock.
+   */
+  const startTimer = useCallback(() => {
+    const state = useSkillsTestingStore.getState();
+    if (state.activeTestRunning) return;
+
+    setActiveTestRunning(true);
+
+    const test = state.currentTest;
+    if (test?.status === FormStatus.DRAFT) {
+      void updateTest(test.id, {
+        status: 'in_progress',
+        section_results: test.section_results ?? [],
+        elapsed_seconds: state.activeTestTimer,
+      }).catch(() => {
+        // The clock is already running locally. A failure here surfaces on the
+        // next save or on Complete Test, which report it properly.
+      });
     }
-  }, [activeTestRunning, setActiveTestRunning, currentTest, updateTest]);
+  }, [setActiveTestRunning, updateTest]);
+
+  const toggleTimer = useCallback(() => {
+    if (activeTestRunning) {
+      manuallyPausedRef.current = true;
+      setActiveTestRunning(false);
+      return;
+    }
+    manuallyPausedRef.current = false;
+    startTimer();
+  }, [activeTestRunning, setActiveTestRunning, startTimer]);
+
+  /** Start the clock on the examiner's first real action.
+   *
+   * The examiner is watching the candidate, not the phone, and a timer that
+   * only starts when someone remembers to press play records 00:00 on a skill
+   * whose time limit is itself a pass/fail criterion. Moving between sections
+   * and recording any result both mean the evaluation is under way, so either
+   * one starts the clock if it isn't running already.
+   */
+  const autoStartTimer = useCallback(() => {
+    if (manuallyPausedRef.current || reviewing) return;
+    if (!isTestLive(useSkillsTestingStore.getState().currentTest?.status)) return;
+    startTimer();
+  }, [reviewing, startTimer]);
+
+  const goToSection = useCallback(
+    (index: number) => {
+      setActiveSectionIndex(index);
+      autoStartTimer();
+    },
+    [setActiveSectionIndex, autoStartTimer]
+  );
 
   // Every write goes through here so it carries the version this screen is
   // working from. The server refuses a stale one with 409 instead of quietly
@@ -960,8 +1052,7 @@ export const ActiveSkillTestPage: React.FC = () => {
     onSave: persistAutoSave,
     // Only while the evaluation is live. A completed or voided test is
     // read-only, and update_test rejects writes to it.
-    enabled:
-      currentTest != null && !reviewing && (currentTest.status === 'draft' || currentTest.status === 'in_progress'),
+    enabled: currentTest != null && !reviewing && isTestLive(currentTest.status),
   });
 
   /** "Complete Test" — stops the clock, saves progress, and enters review mode */
@@ -999,118 +1090,186 @@ export const ActiveSkillTestPage: React.FC = () => {
     }
   }, [currentTest, activeTestTimer, saveTest, templateSections, setActiveTestRunning]);
 
+  /** Leave review mode and show the scored result.
+   *
+   * Both the active and detail routes render THIS component, so react-router
+   * swaps the URL without remounting and `reviewing` would survive the
+   * transition — pinning the page on the review screen even though the test is
+   * finished. Clearing the flag is what actually reveals the results view,
+   * which is gated on `!reviewing`.
+   */
+  const showResults = useCallback(
+    (id: string) => {
+      setReviewing(false);
+      void navigate(`/training/skills-testing/test/${id}`);
+    },
+    [navigate]
+  );
+
+  /** Report a failed finalize with the server's own message.
+   *
+   * These paths used to swallow the error and print a fixed string, which meant
+   * an examiner (and anyone debugging from their report) was told "failed" with
+   * no indication of whether the test was already submitted, someone else had
+   * edited it, or the network had dropped.
+   */
+  const reportFinalizeError = useCallback((err: unknown, fallback: string) => {
+    toast.error(
+      toAppError(err).status === 409
+        ? 'This test changed elsewhere — reload before submitting'
+        : getErrorMessage(err, fallback)
+    );
+  }, []);
+
+  /** Did the finalize land despite the error, leaving the test scored?
+   *
+   * Scoring is two calls — save the review notes, then complete — and the
+   * completion commits server-side before its response reaches the phone. A
+   * timeout, a dropped cell connection, or a duplicate tap therefore surfaces
+   * as a failure on a test that *is* finished: the examiner sees an error,
+   * refreshes out of desperation, and finds the scored result waiting. Ask the
+   * server what actually happened before calling anything a failure.
+   */
+  const reloadAndCheckFinalized = useCallback(
+    async (id: string): Promise<boolean> => {
+      await loadTest(id);
+      const latest = useSkillsTestingStore.getState().currentTest;
+      return latest?.id === id && latest.status === 'completed';
+    },
+    [loadTest]
+  );
+
+  /** The scorecard as it will be filed: recorded criteria plus the review
+   *  screen's section notes, which ride along as a reserved criterion entry. */
+  const mergeReviewNotes = useCallback((): SectionResult[] => {
+    return templateSections.map((section) => {
+      const existing = currentTest?.section_results?.find((sr) => sr.section_id === section.id);
+      const sectionNotes = reviewNotes[section.id] ?? '';
+      const finalCriteria = [...(existing?.criteria_results ?? [])];
+
+      if (sectionNotes) {
+        const noteId = `${section.id}-review-notes`;
+        const existingNoteEntry = finalCriteria.find((cr) => cr.criterion_id === noteId);
+        if (existingNoteEntry) {
+          existingNoteEntry.notes = sectionNotes;
+        } else {
+          finalCriteria.push({
+            criterion_id: noteId,
+            criterion_label: 'Section Review Notes',
+            passed: null,
+            notes: sectionNotes,
+          });
+        }
+      }
+
+      return {
+        section_id: section.id,
+        section_name: existing?.section_name ?? section.name,
+        criteria_results: finalCriteria,
+      };
+    });
+  }, [templateSections, currentTest?.section_results, reviewNotes]);
+
   /** "Submit Test" — finalizes the test with notes from review, calculates results */
   const handleSubmit = useCallback(async () => {
     if (!currentTest) return;
+
+    // Already finalized — nothing left to save. Reachable when a previous
+    // attempt completed server-side but its response never arrived (a dropped
+    // connection on a phone, mid-drill). Without this the retry re-runs the
+    // pre-submit save, which update_test refuses on a completed test, so the
+    // screen would fail permanently on a test that had in fact gone through.
+    if (currentTest.status === 'completed') {
+      showResults(currentTest.id);
+      return;
+    }
 
     if (!window.confirm('Submit this test? Results will be finalized and cannot be changed.')) return;
 
     setSubmitting(true);
     try {
-      // Merge review notes into section results before submitting
-      const updatedSectionResults: SectionResult[] = templateSections.map((section) => {
-        const existing = currentTest.section_results?.find((sr) => sr.section_id === section.id);
-        const sectionNotes = reviewNotes[section.id] ?? '';
-        const criteriaResults = existing?.criteria_results ?? [];
-
-        // Append section-level review note to the first criterion's notes or store as section note
-        // For now, store section notes in a special criterion entry
-        const finalCriteria = [...criteriaResults];
-        if (sectionNotes) {
-          // Add section notes as a special entry
-          const existingNoteEntry = finalCriteria.find((cr) => cr.criterion_id === `${section.id}-review-notes`);
-          if (existingNoteEntry) {
-            existingNoteEntry.notes = sectionNotes;
-          } else {
-            finalCriteria.push({
-              criterion_id: `${section.id}-review-notes`,
-              criterion_label: 'Section Review Notes',
-              passed: null,
-              notes: sectionNotes,
-            });
-          }
-        }
-
-        return {
-          section_id: section.id,
-          section_name: existing?.section_name ?? section.name,
-          criteria_results: finalCriteria,
-        };
-      });
-
       // Save section results with review notes
       await saveTest({
-        section_results: updatedSectionResults,
+        section_results: mergeReviewNotes(),
         elapsed_seconds: activeTestTimer,
       });
 
       // Then finalize
       const completed = await completeTest(currentTest.id);
-      toast.success(`Test submitted: ${completed.result.toUpperCase()}`);
-      // Leave review mode before navigating. Both the active and detail routes
-      // render THIS component, so react-router swaps the URL without remounting
-      // and `reviewing` would survive the transition — pinning the page on the
-      // review screen even though the test is now complete.
-      setReviewing(false);
-      void navigate(`/training/skills-testing/test/${currentTest.id}`);
-    } catch {
-      toast.error('Failed to submit test');
+      toast.success(
+        completed.pending_validation
+          ? 'Test submitted — a training officer will validate the result'
+          : `Test submitted: ${completed.result.toUpperCase()}`
+      );
+      showResults(currentTest.id);
+    } catch (err: unknown) {
+      // The submission may already be filed — see reloadAndCheckFinalized.
+      if (await reloadAndCheckFinalized(currentTest.id)) {
+        const filed = useSkillsTestingStore.getState().currentTest;
+        toast.success(
+          filed?.pending_validation
+            ? 'Test submitted — a training officer will validate the result'
+            : `Test submitted: ${(filed?.result ?? '').toUpperCase()}`
+        );
+        showResults(currentTest.id);
+        return;
+      }
+      reportFinalizeError(err, 'Failed to submit test');
     } finally {
       setSubmitting(false);
     }
-  }, [currentTest, activeTestTimer, saveTest, completeTest, navigate, templateSections, reviewNotes]);
+  }, [
+    currentTest,
+    activeTestTimer,
+    saveTest,
+    completeTest,
+    mergeReviewNotes,
+    showResults,
+    reportFinalizeError,
+    reloadAndCheckFinalized,
+  ]);
 
   /** Practice: complete the test (calculate results) but keep in review mode */
   const handlePracticeViewResults = useCallback(async () => {
     if (!currentTest) return;
 
+    // See handleSubmit: a completed test is read-only, so re-running the save
+    // would fail every time. Show the results that already exist instead.
+    if (currentTest.status === 'completed') {
+      showResults(currentTest.id);
+      return;
+    }
+
     setSubmitting(true);
     try {
-      // Merge review notes into section results
-      const updatedSectionResults: SectionResult[] = templateSections.map((section) => {
-        const existing = currentTest.section_results?.find((sr) => sr.section_id === section.id);
-        const sectionNotes = reviewNotes[section.id] ?? '';
-        const criteriaResults = existing?.criteria_results ?? [];
-        const finalCriteria = [...criteriaResults];
-        if (sectionNotes) {
-          const existingNoteEntry = finalCriteria.find((cr) => cr.criterion_id === `${section.id}-review-notes`);
-          if (existingNoteEntry) {
-            existingNoteEntry.notes = sectionNotes;
-          } else {
-            finalCriteria.push({
-              criterion_id: `${section.id}-review-notes`,
-              criterion_label: 'Section Review Notes',
-              passed: null,
-              notes: sectionNotes,
-            });
-          }
-        }
-        return {
-          section_id: section.id,
-          section_name: existing?.section_name ?? section.name,
-          criteria_results: finalCriteria,
-        };
-      });
-
       await saveTest({
-        section_results: updatedSectionResults,
+        section_results: mergeReviewNotes(),
         elapsed_seconds: activeTestTimer,
       });
       await completeTest(currentTest.id);
-
-      // Leaving review mode is what actually reveals the results: the completed
-      // view below is gated on `!reviewing`, and navigating between the active
-      // and detail routes does not remount this component (both routes render
-      // it), so without this the page re-renders the identical review screen
-      // and the button appears to do nothing.
-      setReviewing(false);
-      void navigate(`/training/skills-testing/test/${currentTest.id}`);
-    } catch {
-      toast.error('Failed to calculate results');
+      showResults(currentTest.id);
+    } catch (err: unknown) {
+      // The scoring may already be filed — see reloadAndCheckFinalized. Showing
+      // the results the server holds is the honest outcome; an error toast here
+      // would send the examiner off to refresh the page and find them anyway.
+      if (await reloadAndCheckFinalized(currentTest.id)) {
+        showResults(currentTest.id);
+        return;
+      }
+      reportFinalizeError(err, 'Failed to calculate results');
     } finally {
       setSubmitting(false);
     }
-  }, [currentTest, activeTestTimer, saveTest, completeTest, navigate, templateSections, reviewNotes]);
+  }, [
+    currentTest,
+    activeTestTimer,
+    saveTest,
+    completeTest,
+    mergeReviewNotes,
+    showResults,
+    reportFinalizeError,
+    reloadAndCheckFinalized,
+  ]);
 
   /** Practice: email results to candidate */
   const handleEmailResults = useCallback(async () => {
@@ -1164,11 +1323,19 @@ export const ActiveSkillTestPage: React.FC = () => {
       criterionId: string,
       result: Partial<CriterionResult>,
       sectionName?: string,
-      criterionLabel?: string
+      criterionLabel?: string,
+      options?: { autoMarked?: boolean }
     ) => {
       updateCriterionResult(sectionId, criterionId, result, sectionName, criterionLabel);
+      // Recording a pass/fail, a score, a time, or a checklist tick means the
+      // candidate is performing — so the clock starts here if the examiner
+      // never pressed play. Statements mark themselves as the section renders,
+      // which is nobody's action.
+      if (!options?.autoMarked) {
+        autoStartTimer();
+      }
     },
-    [updateCriterionResult]
+    [updateCriterionResult, autoStartTimer]
   );
 
   // Loading state
@@ -1194,7 +1361,9 @@ export const ActiveSkillTestPage: React.FC = () => {
             <button
               onClick={() =>
                 void navigate(
-                  currentTest.is_practice ? '/training/skills-testing' : '/training/admin?page=skills-testing&tab=tests'
+                  currentTest.is_practice || !isOfficer
+                    ? '/training/skills-testing'
+                    : '/training/admin?page=skills-testing&tab=tests'
                 )
               }
               className="hover:bg-theme-surface-hover flex items-center gap-1 rounded-lg p-2 text-sm transition-colors"
@@ -1212,7 +1381,7 @@ export const ActiveSkillTestPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div ref={contentRef} className="flex-1 overflow-y-auto px-4 py-4">
           {/* Practice banner */}
           {currentTest.is_practice && (
             <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-center dark:border-blue-800 dark:bg-blue-900/20">
@@ -1221,6 +1390,22 @@ export const ActiveSkillTestPage: React.FC = () => {
               </p>
             </div>
           )}
+          {/* Pending-validation banner. The examiner sees the marks they
+              recorded — withholding them from their author would be pointless —
+              but must not leave thinking the result already counts. */}
+          {currentTest.pending_validation && (
+            <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-900/20">
+              <p className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                Awaiting a training officer&apos;s validation
+              </p>
+              <p className="mt-1 text-sm text-purple-700/90 dark:text-purple-300/90">
+                Until then this result doesn&apos;t count toward {currentTest.candidate_name}&apos;s record, credit a
+                program requirement, or use one of their attempts. They can see the test is under review, but not the
+                score.
+              </p>
+            </div>
+          )}
+
           {/* Result banner */}
           <div
             className={`mb-4 flex items-center gap-3 rounded-xl p-4 ${
@@ -1315,9 +1500,10 @@ export const ActiveSkillTestPage: React.FC = () => {
           {/* Named viewers. Official results only: a practice attempt is the
               candidate's own drill note, discardable by them at will and purged
               after a year, so a durable grant on one would outlive the thing it
-              points at. The route is already gated on training.manage, so
-              anyone reading this screen may manage the grants. */}
-          {!currentTest.is_practice && (
+              points at. Officers only — the viewer endpoints require
+              training.manage, so a member examiner would see a panel whose every
+              call 403s. */}
+          {!currentTest.is_practice && isOfficer && (
             <div className="mt-4">
               <TestViewersPanel
                 testId={currentTest.id}
@@ -1403,7 +1589,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         )}
 
         {/* Review Content */}
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div ref={contentRef} className="flex-1 overflow-y-auto px-4 py-4">
           {/* Summary stats */}
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 text-center">
@@ -1515,7 +1701,7 @@ export const ActiveSkillTestPage: React.FC = () => {
           {templateSections.map((_, i) => (
             <button
               key={i}
-              onClick={() => setActiveSectionIndex(i)}
+              onClick={() => goToSection(i)}
               className={`h-2.5 w-2.5 rounded-full transition-colors ${
                 i === activeSectionIndex ? 'bg-red-600' : 'bg-theme-surface-border hover:bg-theme-text-muted'
               }`}
@@ -1553,13 +1739,20 @@ export const ActiveSkillTestPage: React.FC = () => {
       )}
 
       {/* Section Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={contentRef} className="flex-1 overflow-y-auto px-4 py-4">
         {currentSection && (
           <SectionView
             section={currentSection}
             sectionResults={currentSectionResults}
-            onUpdateCriterion={(criterionId, result, criterionLabel) =>
-              handleUpdateCriterion(currentSection.id, criterionId, result, currentSection.name, criterionLabel)
+            onUpdateCriterion={(criterionId, result, criterionLabel, options) =>
+              handleUpdateCriterion(
+                currentSection.id,
+                criterionId,
+                result,
+                currentSection.name,
+                criterionLabel,
+                options
+              )
             }
           />
         )}
@@ -1569,7 +1762,7 @@ export const ActiveSkillTestPage: React.FC = () => {
       <div className="bg-theme-surface-modal border-theme-surface-border action-bar-safe sticky bottom-0 border-t px-4">
         <div className="flex gap-3">
           <button
-            onClick={() => setActiveSectionIndex(activeSectionIndex - 1)}
+            onClick={() => goToSection(activeSectionIndex - 1)}
             disabled={!canGoBack}
             className="bg-theme-surface border-theme-surface-border flex items-center justify-center gap-1 rounded-xl border px-4 py-3 font-medium transition-colors disabled:opacity-30"
           >
@@ -1583,7 +1776,7 @@ export const ActiveSkillTestPage: React.FC = () => {
             Complete Test
           </button>
           <button
-            onClick={() => setActiveSectionIndex(activeSectionIndex + 1)}
+            onClick={() => goToSection(activeSectionIndex + 1)}
             disabled={!canGoForward}
             className="bg-theme-surface border-theme-surface-border flex items-center justify-center gap-1 rounded-xl border px-4 py-3 font-medium transition-colors disabled:opacity-30"
           >

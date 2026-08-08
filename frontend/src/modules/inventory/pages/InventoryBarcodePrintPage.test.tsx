@@ -44,7 +44,7 @@ const renderPage = (query: string) =>
   render(
     <MemoryRouter initialEntries={[`/inventory/print-labels${query}`]}>
       <InventoryBarcodePrintPage />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 
 describe('InventoryBarcodePrintPage', () => {
@@ -64,15 +64,13 @@ describe('InventoryBarcodePrintPage', () => {
 
   it('errors when no item ids are provided', async () => {
     renderPage('');
-    expect(
-      await screen.findByText(/No items specified/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/No items specified/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Back to Inventory/ })).toBeInTheDocument();
   });
 
   it('fetches and renders labels for the provided ids', async () => {
     mockGetItem.mockImplementation((id: string) =>
-      Promise.resolve(makeItem({ id, name: id === 'it-2' ? 'Spare Radio' : 'Thermal Camera' })),
+      Promise.resolve(makeItem({ id, name: id === 'it-2' ? 'Spare Radio' : 'Thermal Camera' }))
     );
     renderPage('?ids=it-1,it-2');
 
@@ -177,9 +175,6 @@ describe('InventoryBarcodePrintPage', () => {
     await user.click(screen.getByRole('button', { name: /Rollo 4/ }));
 
     // The change is debounced (~500ms) then saved to the position.
-    await waitFor(
-      () => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'rollo_4x6' }),
-      { timeout: 2000 },
-    );
+    await waitFor(() => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'rollo_4x6' }), { timeout: 2000 });
   });
 });

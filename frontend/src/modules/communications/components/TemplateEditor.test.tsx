@@ -31,12 +31,8 @@ describe('TemplateEditor', () => {
     const template = makeTemplate();
     render(<TemplateEditor template={template} isSaving={false} onSave={vi.fn()} />);
 
-    expect(screen.getByLabelText('Subject Line')).toHaveValue(
-      'Welcome to {{organization_name}}',
-    );
-    expect(screen.getByLabelText('HTML Body')).toHaveValue(
-      '<p>Hello {{first_name}}</p>',
-    );
+    expect(screen.getByLabelText('Subject Line')).toHaveValue('Welcome to {{organization_name}}');
+    expect(screen.getByLabelText('HTML Body')).toHaveValue('<p>Hello {{first_name}}</p>');
   });
 
   it('shows save button disabled when no changes', () => {

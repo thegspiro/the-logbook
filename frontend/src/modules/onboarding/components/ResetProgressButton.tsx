@@ -17,9 +17,7 @@ interface ResetProgressButtonProps {
   className?: string;
 }
 
-export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
-  className = ''
-}) => {
+export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({ className = '' }) => {
   const resetOnboarding = useOnboardingStore((state) => state.resetOnboarding);
   const [showModal, setShowModal] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -51,18 +49,19 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
       const localStorageKeysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (
-          key.startsWith('onboarding') ||
-          key === 'csrf_token' ||
-          key === 'access_token' ||
-          key === 'refresh_token' ||
-          key === 'has_session' ||
-          key === 'navigationLayout'
-        )) {
+        if (
+          key &&
+          (key.startsWith('onboarding') ||
+            key === 'csrf_token' ||
+            key === 'access_token' ||
+            key === 'refresh_token' ||
+            key === 'has_session' ||
+            key === 'navigationLayout')
+        ) {
           localStorageKeysToRemove.push(key);
         }
       }
-      localStorageKeysToRemove.forEach(key => localStorage.removeItem(key));
+      localStorageKeysToRemove.forEach((key) => localStorage.removeItem(key));
 
       // Clear all session storage
       sessionStorage.clear();
@@ -86,10 +85,10 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
       {/* Reset Button */}
       <button
         onClick={() => setShowModal(true)}
-        className={`inline-flex items-center px-4 py-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-transparent border border-red-600/50 hover:border-red-500 rounded-lg font-medium transition-all duration-300 ${className}`}
+        className={`inline-flex items-center rounded-lg border border-red-600/50 bg-transparent px-4 py-2 font-medium text-red-700 transition-all duration-300 hover:border-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 ${className}`}
         aria-label="Reset onboarding progress"
       >
-        <RotateCcw className="w-4 h-4 mr-2" aria-hidden="true" />
+        <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
         Reset Progress
       </button>
 
@@ -100,7 +99,9 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="reset-progress-title"
-          onKeyDown={(e) => { if (e.key === 'Escape' && !isResetting) setShowModal(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && !isResetting) setShowModal(false);
+          }}
         >
           {/* Backdrop */}
           <div
@@ -110,34 +111,34 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
           />
 
           {/* Modal Content */}
-          <div className="relative bg-theme-surface-modal border border-red-500/50 rounded-xl shadow-2xl max-w-md w-full p-6">
+          <div className="bg-theme-surface-modal relative w-full max-w-md rounded-xl border border-red-500/50 p-6 shadow-2xl">
             {/* Close Button */}
             {!isResetting && (
               <button
                 onClick={() => setShowModal(false)}
-                className="absolute top-4 right-4 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                className="text-theme-text-muted hover:text-theme-text-primary absolute top-4 right-4 transition-colors"
                 aria-label="Close dialog"
               >
-                <X className="w-5 h-5" aria-hidden="true" />
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
             )}
 
             {/* Warning Icon */}
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center">
-                <AlertTriangle className="w-8 h-8 text-red-700 dark:text-red-500" aria-hidden="true" />
+            <div className="mb-4 flex justify-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20">
+                <AlertTriangle className="h-8 w-8 text-red-700 dark:text-red-500" aria-hidden="true" />
               </div>
             </div>
 
             {/* Title */}
-            <h3 id="reset-progress-title" className="text-xl font-bold text-theme-text-primary text-center mb-2">
+            <h3 id="reset-progress-title" className="text-theme-text-primary mb-2 text-center text-xl font-bold">
               Reset Onboarding Progress?
             </h3>
 
             {/* Warning Message */}
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6">
-              <p className="text-red-700 dark:text-red-200 text-sm text-center">
-                <strong className="text-red-800 dark:text-red-400 font-semibold">Warning:</strong> This action will:
+            <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+              <p className="text-center text-sm text-red-700 dark:text-red-200">
+                <strong className="font-semibold text-red-800 dark:text-red-400">Warning:</strong> This action will:
               </p>
               <ul className="mt-2 space-y-1 text-sm text-red-700 dark:text-red-200">
                 <li className="flex items-start">
@@ -153,49 +154,44 @@ export const ResetProgressButton: React.FC<ResetProgressButtonProps> = ({
                   Remove any users and organizations created
                 </li>
               </ul>
-              <p className="mt-3 text-red-700 dark:text-red-300 text-sm text-center font-semibold">
+              <p className="mt-3 text-center text-sm font-semibold text-red-700 dark:text-red-300">
                 This action cannot be undone.
               </p>
             </div>
 
             {/* Error Message */}
             {error && (
-              <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 mb-4">
-                <p className="text-red-700 dark:text-red-200 text-sm text-center">{error}</p>
+              <div className="mb-4 rounded-lg border border-red-500 bg-red-500/20 p-3">
+                <p className="text-center text-sm text-red-700 dark:text-red-200">{error}</p>
               </div>
             )}
 
             {/* Action Buttons */}
-            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
               <button
                 onClick={() => setShowModal(false)}
                 disabled={isResetting}
-                className="flex-1 px-4 py-3 bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-theme-surface-hover hover:bg-theme-surface-hover text-theme-text-primary flex-1 rounded-lg px-4 py-3 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                onClick={() => { void handleReset(); }}
+                onClick={() => {
+                  void handleReset();
+                }}
                 disabled={isResetting}
-                className="btn-primary disabled:cursor-not-allowed flex flex-1 font-medium items-center justify-center py-3"
+                className="btn-primary flex flex-1 items-center justify-center py-3 font-medium disabled:cursor-not-allowed"
               >
                 {isResetting ? (
                   <>
                     <svg
-                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-theme-text-primary"
+                      className="text-theme-text-primary mr-2 -ml-1 h-4 w-4 animate-spin"
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
                       aria-hidden="true"
                     >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path
                         className="opacity-75"
                         fill="currentColor"

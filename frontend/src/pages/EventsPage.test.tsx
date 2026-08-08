@@ -10,15 +10,17 @@ import type { EventListItem } from '../types/event';
 vi.mock('../services/api', () => ({
   eventService: {
     getEvents: vi.fn(),
-    getVisibleEventTypes: vi.fn().mockResolvedValue([
-      'business_meeting',
-      'public_education',
-      'training',
-      'social',
-      'fundraiser',
-      'ceremony',
-      'other',
-    ]),
+    getVisibleEventTypes: vi
+      .fn()
+      .mockResolvedValue([
+        'business_meeting',
+        'public_education',
+        'training',
+        'social',
+        'fundraiser',
+        'ceremony',
+        'other',
+      ]),
     getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({
       visible_event_types: [
         'business_meeting',
@@ -96,9 +98,7 @@ describe('EventsPage', () => {
 
   describe('Loading State', () => {
     it('should display loading spinner initially', () => {
-      vi.mocked(eventService.getEvents).mockImplementation(
-        () => new Promise(() => {})
-      );
+      vi.mocked(eventService.getEvents).mockImplementation(() => new Promise(() => {}));
 
       renderWithRouter(<EventsPage />);
 
@@ -229,9 +229,7 @@ describe('EventsPage', () => {
 
       await waitFor(() => {
         const eventLinks = screen.getAllByRole('link');
-        const eventDetailLinks = eventLinks.filter(link =>
-          link.getAttribute('href')?.startsWith('/events/evt-')
-        );
+        const eventDetailLinks = eventLinks.filter((link) => link.getAttribute('href')?.startsWith('/events/evt-'));
         expect(eventDetailLinks.length).toBe(3);
       });
     });

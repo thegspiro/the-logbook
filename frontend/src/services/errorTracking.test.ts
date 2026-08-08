@@ -47,7 +47,7 @@ describe('ErrorTrackingService', () => {
       expect(result.errorType).toBe('EVENT_NOT_FOUND');
       expect(result.errorMessage).toBe('Event not found');
       expect(result.userMessage).toBe(
-        'This event could not be found. It may have been deleted or you may not have permission to view it.',
+        'This event could not be found. It may have been deleted or you may not have permission to view it.'
       );
       expect(result.troubleshootingSteps.length).toBeGreaterThan(0);
       expect(result.context).toMatchObject({
@@ -66,9 +66,7 @@ describe('ErrorTrackingService', () => {
 
       expect(result.errorMessage).toBe('Network failure');
       expect(result.errorType).toBe('NETWORK_ERROR');
-      expect(result.userMessage).toBe(
-        'Unable to connect to the server. Please check your internet connection.',
-      );
+      expect(result.userMessage).toBe('Unable to connect to the server. Please check your internet connection.');
     });
 
     it('should auto-detect error type from error message when not provided', () => {
@@ -181,11 +179,9 @@ describe('ErrorTrackingService', () => {
           errorMessage: 'Test error',
           userMessage: 'Unable to connect to the server. Please check your internet connection.',
           eventId: 'evt-42',
-          troubleshootingSteps: expect.arrayContaining([
-            'Try refreshing the page',
-          ]) as unknown,
+          troubleshootingSteps: expect.arrayContaining(['Try refreshing the page']) as unknown,
           context: expect.objectContaining({ eventId: 'evt-42' }) as unknown,
-        }),
+        })
       );
     });
 

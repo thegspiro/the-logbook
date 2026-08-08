@@ -1,6 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
-import { LogOut, Menu, X, Sun, Moon, Monitor, Contrast, ChevronDown, Bell, UserCog, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
+import {
+  LogOut,
+  Menu,
+  X,
+  Sun,
+  Moon,
+  Monitor,
+  Contrast,
+  ChevronDown,
+  Bell,
+  UserCog,
+  WifiOff,
+  RefreshCw,
+  Loader2,
+} from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
@@ -32,11 +46,7 @@ interface NavItem {
   isSectionLabel?: boolean;
 }
 
-export const TopNavigation: React.FC<TopNavigationProps> = ({
-  departmentName,
-  logoPreview,
-  onLogout,
-}) => {
+export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, logoPreview, onLogout }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
@@ -79,7 +89,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   };
 
   const themeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : theme === 'high-contrast' ? Contrast : Monitor;
-  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
+  const themeLabel =
+    theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
   const ThemeIcon = themeIcon;
 
   const hasAnyAdminPermission =
@@ -103,27 +114,33 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     { label: 'Members', path: '/members' },
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
-    ...(isModuleOn('training') ? [{
-      label: 'Training',
-      path: '/training/my-training',
-      subItems: [
-        { label: 'My Training', path: '/training/my-training' },
-        { label: 'Submit Training', path: '/training/submit' },
-        { label: 'Course Library', path: '/training/courses' },
-        { label: 'Programs', path: '/training/programs' },
-        { label: 'Skills Testing', path: '/training/skills-testing', permission: 'training.manage' },
-      ],
-    } as NavItem] : []),
+    ...(isModuleOn('training')
+      ? [
+          {
+            label: 'Training',
+            path: '/training/my-training',
+            subItems: [
+              { label: 'My Training', path: '/training/my-training' },
+              { label: 'Submit Training', path: '/training/submit' },
+              { label: 'Course Library', path: '/training/courses' },
+              { label: 'Programs', path: '/training/programs' },
+              { label: 'Skills Testing', path: '/training/skills-testing' },
+            ],
+          } as NavItem,
+        ]
+      : []),
     { label: 'Admin Hours', path: '/admin-hours' },
     ...(isModuleOn('scheduling') ? [{ label: 'Shift Scheduling', path: '/scheduling' } as NavItem] : []),
     {
       label: 'Operations',
       path: '/inventory',
       subItems: [
-        ...(isModuleOn('inventory') ? [
-          { label: 'My Equipment', path: '/inventory/my-equipment' },
-          { label: 'Inventory', path: '/inventory' },
-        ] : []),
+        ...(isModuleOn('inventory')
+          ? [
+              { label: 'My Equipment', path: '/inventory/my-equipment' },
+              { label: 'Inventory', path: '/inventory' },
+            ]
+          : []),
         ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store' }] : []),
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus' }]
@@ -132,52 +149,82 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       ],
     },
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
-    ...((isModuleOn('elections') || isModuleOn('minutes')) ? [{
-      label: 'Governance',
-      path: '/elections',
-      subItems: [
-        ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections' }] : []),
-        ...(isModuleOn('minutes') ? [
-          { label: 'Minutes', path: '/minutes' },
-          { label: 'Action Items', path: '/action-items' },
-        ] : []),
-      ],
-    } as NavItem] : []),
+    ...(isModuleOn('elections') || isModuleOn('minutes')
+      ? [
+          {
+            label: 'Governance',
+            path: '/elections',
+            subItems: [
+              ...(isModuleOn('elections') ? [{ label: 'Elections', path: '/elections' }] : []),
+              ...(isModuleOn('minutes')
+                ? [
+                    { label: 'Minutes', path: '/minutes' },
+                    { label: 'Action Items', path: '/action-items' },
+                  ]
+                : []),
+            ],
+          } as NavItem,
+        ]
+      : []),
 
     // ── Administration (only for admins) ──
-    ...(hasAnyAdminPermission ? [{
-      label: 'Admin',
-      path: '#',
-      subItems: [
-        { label: 'Department Setup', path: '/setup', permission: 'settings.manage' },
-        DIV,
-        ...(isModuleOn('prospective_members') ? [
-          { label: 'Prospective Members', path: '/prospective-members', permission: 'prospective_members.manage' },
-          { label: 'Pipeline Settings', path: '/prospective-members/settings', permission: 'prospective_members.manage' },
-        ] : []),
-        { label: 'Member Management', path: '/members/admin', permission: 'members.manage' },
-        { label: 'Scan Member ID', path: '/members/scan', permission: 'members.manage' },
-        { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
-        DIV,
-        { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
-        ...(isModuleOn('training') ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }] : []),
-        ...(isModuleOn('inventory') ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }] : []),
-        ...(isModuleOn('storefront') ? [{ label: 'Store Admin', path: '/store/admin', permission: 'storefront.manage' }] : []),
-        { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
-        DIV,
-        ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'forms.view' }] : []),
-        ...(isModuleOn('integrations') ? [{ label: 'Integrations', path: '/integrations', permission: 'settings.manage' }] : []),
-        ...(isModuleOn('reports') ? [{ label: 'Reports', path: '/reports' }] : []),
-        DIV,
-        { label: 'Organization', path: '/settings', permission: 'settings.manage' },
-        { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },
-        ...(isModuleOn('public_info') ? [{ label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' }] : []),
-        { label: 'Platform Analytics', path: '/admin/platform-analytics', permission: 'settings.manage' },
-        { label: 'QR Code Analytics', path: '/admin/analytics', permission: 'analytics.view' },
-        { label: 'Audit Log', path: '/admin/audit-log', permission: 'audit.view' },
-        { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
-      ],
-    } as NavItem] : []),
+    ...(hasAnyAdminPermission
+      ? [
+          {
+            label: 'Admin',
+            path: '#',
+            subItems: [
+              { label: 'Department Setup', path: '/setup', permission: 'settings.manage' },
+              DIV,
+              ...(isModuleOn('prospective_members')
+                ? [
+                    {
+                      label: 'Prospective Members',
+                      path: '/prospective-members',
+                      permission: 'prospective_members.manage',
+                    },
+                    {
+                      label: 'Pipeline Settings',
+                      path: '/prospective-members/settings',
+                      permission: 'prospective_members.manage',
+                    },
+                  ]
+                : []),
+              { label: 'Member Management', path: '/members/admin', permission: 'members.manage' },
+              { label: 'Scan Member ID', path: '/members/scan', permission: 'members.manage' },
+              { label: 'Waivers', path: '/members/admin/waivers', permission: 'members.manage' },
+              DIV,
+              { label: 'Events Admin', path: '/events/admin', permission: 'events.manage' },
+              ...(isModuleOn('training')
+                ? [{ label: 'Training Admin', path: '/training/admin', permission: 'training.manage' }]
+                : []),
+              ...(isModuleOn('inventory')
+                ? [{ label: 'Inventory Admin', path: '/inventory/admin', permission: 'inventory.manage' }]
+                : []),
+              ...(isModuleOn('storefront')
+                ? [{ label: 'Store Admin', path: '/store/admin', permission: 'storefront.manage' }]
+                : []),
+              { label: 'Admin Hours', path: '/admin-hours/manage', permission: 'admin_hours.manage' },
+              DIV,
+              ...(isModuleOn('forms') ? [{ label: 'Forms', path: '/forms', permission: 'forms.view' }] : []),
+              ...(isModuleOn('integrations')
+                ? [{ label: 'Integrations', path: '/integrations', permission: 'settings.manage' }]
+                : []),
+              ...(isModuleOn('reports') ? [{ label: 'Reports', path: '/reports' }] : []),
+              DIV,
+              { label: 'Organization', path: '/settings', permission: 'settings.manage' },
+              { label: 'Role Management', path: '/settings/roles', permission: 'positions.manage_permissions' },
+              ...(isModuleOn('public_info')
+                ? [{ label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' }]
+                : []),
+              { label: 'Platform Analytics', path: '/admin/platform-analytics', permission: 'settings.manage' },
+              { label: 'QR Code Analytics', path: '/admin/analytics', permission: 'analytics.view' },
+              { label: 'Audit Log', path: '/admin/audit-log', permission: 'audit.view' },
+              { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
+            ],
+          } as NavItem,
+        ]
+      : []),
   ];
 
   const isActive = (path: string) => {
@@ -188,16 +235,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     if (location.pathname === path) return true;
     if (!location.pathname.startsWith(path + '/')) return false;
     // Don't prefix-match if a sibling is a more specific match
-    return !siblings.some(s =>
-      s.path !== path &&
-      s.path.length > path.length &&
-      (location.pathname === s.path || location.pathname.startsWith(s.path + '/'))
+    return !siblings.some(
+      (s) =>
+        s.path !== path &&
+        s.path.length > path.length &&
+        (location.pathname === s.path || location.pathname.startsWith(s.path + '/'))
     );
   };
 
   const isParentActive = (item: NavItem) => {
     if (item.subItems) {
-      return item.subItems.some(sub => isActive(sub.path));
+      return item.subItems.some((sub) => isActive(sub.path));
     }
     return isActive(item.path);
   };
@@ -225,35 +273,42 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   };
 
   const toggleMobileMenu = (label: string) => {
-    setExpandedMobileMenus(prev =>
-      prev.includes(label) ? prev.filter(m => m !== label) : [...prev, label]
-    );
+    setExpandedMobileMenus((prev) => (prev.includes(label) ? prev.filter((m) => m !== label) : [...prev, label]));
   };
 
   const notificationsActive = isActive('/notifications');
   const accountActive = isActive('/account');
 
   return (
-    <header className="border-b safe-top" style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }} role="banner">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+    <header
+      className="safe-top border-b"
+      style={{ backgroundColor: 'var(--nav-bg)', borderColor: 'var(--nav-border)' }}
+      role="banner"
+    >
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 items-center justify-between">
           {/* Logo and Department Name */}
-          <a href="/dashboard" className="flex min-h-[44px] items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 rounded-lg">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
+          <a
+            href="/dashboard"
+            className="focus:ring-theme-focus-ring flex min-h-[44px] items-center rounded-lg focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
+          >
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg">
               <img
                 src={logoPreview || '/logo-128.png'}
                 alt={`${departmentName} logo`}
-                className="max-w-full max-h-full object-contain"
+                className="max-h-full max-w-full object-contain"
               />
             </div>
             <div className="ml-3 min-w-0">
-              <span className="text-theme-text-primary text-lg font-semibold wrap-break-word leading-tight">{departmentName}</span>
+              <span className="text-theme-text-primary text-lg leading-tight font-semibold wrap-break-word">
+                {departmentName}
+              </span>
               <p className="text-theme-text-muted text-xs">Dashboard</p>
             </div>
           </a>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-1" ref={dropdownRef} aria-label="Main navigation">
+          <nav className="hidden items-center space-x-1 md:flex" ref={dropdownRef} aria-label="Main navigation">
             {navItems.map((item) => {
               // Filter sub-items by permission (strip dividers whose neighbours are all hidden)
               const visibleSubItems = item.subItems?.filter(
@@ -271,7 +326,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
               if (item.permission && !checkPermission(item.permission)) return null;
 
               // Skip parent groups where all sub-items are hidden
-              const realSubItems = cleanedSubItems?.filter(s => !s.isDivider);
+              const realSubItems = cleanedSubItems?.filter((s) => !s.isDivider);
               if (item.subItems && realSubItems && realSubItems.length === 0) return null;
 
               const hasSubItems = !!cleanedSubItems && cleanedSubItems.length > 0;
@@ -284,39 +339,51 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       onClick={() => setOpenDropdown(openDropdown === item.label ? null : item.label)}
                       aria-expanded={openDropdown === item.label}
                       aria-haspopup="true"
-                      className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring flex items-center gap-1 ${
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                         active ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                       }`}
                     >
                       {item.label}
-                      <ChevronDown className={`w-3 h-3 transition-transform ${openDropdown === item.label ? 'rotate-180' : ''}`} aria-hidden="true" />
+                      <ChevronDown
+                        className={`h-3 w-3 transition-transform ${openDropdown === item.label ? 'rotate-180' : ''}`}
+                        aria-hidden="true"
+                      />
                     </button>
 
                     {openDropdown === item.label && (
-                      <div className={`absolute top-full mt-1 bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-xl py-1 z-50 animate-scale-in ${
-                        item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'
-                      }`}>
+                      <div
+                        className={`bg-theme-surface-modal border-theme-surface-border animate-scale-in absolute top-full z-50 mt-1 rounded-lg border py-1 shadow-xl ${
+                          item.label === 'Admin' ? 'right-0 w-56' : 'left-0 w-48'
+                        }`}
+                      >
                         {cleanedSubItems.map((subItem, idx) => {
                           if (subItem.isDivider) {
                             return (
-                              <div key={`div-${idx}`} className="my-1 border-t border-theme-surface-border" role="separator" />
+                              <div
+                                key={`div-${idx}`}
+                                className="border-theme-surface-border my-1 border-t"
+                                role="separator"
+                              />
                             );
                           }
-                          const subActive = isSubItemActive(subItem.path, (item.subItems || []).filter(s => !s.isDivider));
+                          const subActive = isSubItemActive(
+                            subItem.path,
+                            (item.subItems || []).filter((s) => !s.isDivider)
+                          );
                           return (
-                          <a
-                            key={subItem.path}
-                            href={subItem.path}
-                            onClick={(e) => handleNavigation(subItem.path, e)}
-                            aria-current={subActive ? 'page' : undefined}
-                            className={`block px-4 py-2 text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-theme-focus-ring ${
-                              subActive
-                                ? 'bg-red-600 text-white'
-                                : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
-                            }`}
-                          >
-                            {subItem.label}
-                          </a>
+                            <a
+                              key={subItem.path}
+                              href={subItem.path}
+                              onClick={(e) => handleNavigation(subItem.path, e)}
+                              aria-current={subActive ? 'page' : undefined}
+                              className={`focus:ring-theme-focus-ring block px-4 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden focus:ring-inset ${
+                                subActive
+                                  ? 'bg-red-600 text-white'
+                                  : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
+                              }`}
+                            >
+                              {subItem.label}
+                            </a>
                           );
                         })}
                       </div>
@@ -331,7 +398,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                   href={item.path}
                   onClick={(e) => handleNavigation(item.path, e)}
                   aria-current={active ? 'page' : undefined}
-                  className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                  className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                     active ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                   }`}
                 >
@@ -341,25 +408,27 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
             })}
 
             {/* ── Utility icons ── */}
-            <div className="flex items-center border-l border-theme-surface-border ml-1 pl-2 space-x-1">
-              {(!isOnline || pendingSyncCount > 0) && (
-                pendingSyncCount > 0 && isOnline ? (
+            <div className="border-theme-surface-border ml-1 flex items-center space-x-1 border-l pl-2">
+              {(!isOnline || pendingSyncCount > 0) &&
+                (pendingSyncCount > 0 && isOnline ? (
                   <button
-                    onClick={() => { void triggerOfflineDrain(); }}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-500/15 border border-blue-500/40 text-blue-700 dark:text-blue-300 text-xs font-medium hover:bg-blue-500/25 transition-colors"
+                    onClick={() => {
+                      void triggerOfflineDrain();
+                    }}
+                    className="inline-flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-500/15 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-500/25 dark:text-blue-300"
                     title="Click to retry syncing pending submissions"
                     aria-label={`${pendingSyncCount} pending sync. Click to retry.`}
                   >
                     {pendingSyncStatus === 'syncing' ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                     ) : (
-                      <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                      <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                     )}
                     <span>{pendingSyncCount} pending sync</span>
                   </button>
                 ) : (
                   <span
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-medium"
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
                     role="status"
                     aria-live="polite"
                     title={
@@ -368,24 +437,25 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                         : 'You are offline. Submissions will queue and sync when reconnected.'
                     }
                   >
-                    <WifiOff className="w-3.5 h-3.5" aria-hidden="true" />
+                    <WifiOff className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>{pendingSyncCount > 0 ? `Offline · ${pendingSyncCount} pending` : 'Offline'}</span>
                   </span>
-                )
-              )}
+                ))}
               <a
                 href="/notifications?tab=inbox"
                 onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
-                className={`relative p-2 rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
-                  notificationsActive ? 'text-theme-text-primary' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
+                className={`focus:ring-theme-focus-ring relative rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden ${
+                  notificationsActive
+                    ? 'text-theme-text-primary'
+                    : 'text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
                 title="Notifications"
                 aria-label={notifUnreadCount > 0 ? `Notifications (${notifUnreadCount} unread)` : 'Notifications'}
                 aria-current={notificationsActive ? 'page' : undefined}
               >
-                <Bell className="w-4 h-4" aria-hidden="true" />
+                <Bell className="h-4 w-4" aria-hidden="true" />
                 {notifUnreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
+                  <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
                     {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
                   </span>
                 )}
@@ -393,41 +463,45 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
               <a
                 href="/account"
                 onClick={(e) => handleNavigation('/account', e)}
-                className={`p-2 rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                className={`focus:ring-theme-focus-ring rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden ${
                   accountActive ? 'text-theme-text-primary' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
                 title="My Account"
                 aria-label="My Account"
                 aria-current={accountActive ? 'page' : undefined}
               >
-                <UserCog className="w-4 h-4" aria-hidden="true" />
+                <UserCog className="h-4 w-4" aria-hidden="true" />
               </a>
               <button
                 onClick={cycleTheme}
-                className="text-theme-text-secondary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden"
                 title={`Theme: ${themeLabel}`}
                 aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
               >
-                <ThemeIcon className="w-4 h-4" aria-hidden="true" />
+                <ThemeIcon className="h-4 w-4" aria-hidden="true" />
               </button>
               <button
                 onClick={toggleHighContrast}
                 aria-pressed={theme === 'high-contrast'}
-                className={`p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden ${
                   theme === 'high-contrast' ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-secondary'
                 }`}
                 title={theme === 'high-contrast' ? 'High contrast on — click to restore' : 'Turn on high contrast'}
-                aria-label={theme === 'high-contrast' ? 'High contrast on — click to restore previous theme' : 'Turn on high contrast'}
+                aria-label={
+                  theme === 'high-contrast'
+                    ? 'High contrast on — click to restore previous theme'
+                    : 'Turn on high contrast'
+                }
               >
-                <Contrast className="w-4 h-4" aria-hidden="true" />
+                <Contrast className="h-4 w-4" aria-hidden="true" />
               </button>
               <button
                 onClick={onLogout}
-                className="text-theme-text-secondary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden"
                 title="Logout"
                 aria-label="Logout"
               >
-                <LogOut className="w-4 h-4" aria-hidden="true" />
+                <LogOut className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           </nav>
@@ -435,18 +509,22 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
           {/* Mobile menu button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden text-theme-text-primary p-2.5 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+            className="text-theme-text-primary hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md p-2.5 transition-colors focus:ring-2 focus:outline-hidden md:hidden"
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-menu"
             aria-label={mobileMenuOpen ? 'Close main menu' : 'Open main menu'}
           >
-            {mobileMenuOpen ? <X className="w-6 h-6" aria-hidden="true" /> : <Menu className="w-6 h-6" aria-hidden="true" />}
+            {mobileMenuOpen ? (
+              <X className="h-6 w-6" aria-hidden="true" />
+            ) : (
+              <Menu className="h-6 w-6" aria-hidden="true" />
+            )}
           </button>
         </div>
 
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <nav id="mobile-menu" className="md:hidden pb-4" aria-label="Mobile navigation">
+          <nav id="mobile-menu" className="pb-4 md:hidden" aria-label="Mobile navigation">
             <div ref={mobileMenuRef} className="flex flex-col space-y-1">
               {navItems.map((item) => {
                 // Filter sub-items by permission
@@ -464,7 +542,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                 if (item.permission && !checkPermission(item.permission)) return null;
 
                 // Skip parent groups where all sub-items are hidden
-                const realSubItems = cleanedSubItems?.filter(s => !s.isDivider);
+                const realSubItems = cleanedSubItems?.filter((s) => !s.isDivider);
                 if (item.subItems && realSubItems && realSubItems.length === 0) return null;
 
                 const hasSubItems = !!cleanedSubItems && cleanedSubItems.length > 0;
@@ -476,36 +554,46 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                       <button
                         onClick={() => toggleMobileMenu(item.label)}
                         aria-expanded={isExpanded}
-                        className={`w-full flex items-center justify-between px-3 py-2 min-h-[44px] rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                        className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex min-h-[44px] w-full items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                           isParentActive(item) ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                         }`}
                       >
                         {item.label}
-                        <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                          aria-hidden="true"
+                        />
                       </button>
                       {isExpanded && (
-                        <div className="ml-4 space-y-1 mt-1">
+                        <div className="mt-1 ml-4 space-y-1">
                           {cleanedSubItems.map((subItem, idx) => {
                             if (subItem.isDivider) {
                               return (
-                                <div key={`div-${idx}`} className="my-1 border-t border-theme-surface-border mx-3" role="separator" />
+                                <div
+                                  key={`div-${idx}`}
+                                  className="border-theme-surface-border mx-3 my-1 border-t"
+                                  role="separator"
+                                />
                               );
                             }
-                            const subActive = isSubItemActive(subItem.path, (item.subItems || []).filter(s => !s.isDivider));
+                            const subActive = isSubItemActive(
+                              subItem.path,
+                              (item.subItems || []).filter((s) => !s.isDivider)
+                            );
                             return (
-                            <a
-                              key={subItem.path}
-                              href={subItem.path}
-                              onClick={(e) => handleNavigation(subItem.path, e)}
-                              aria-current={subActive ? 'page' : undefined}
-                              className={`flex items-center px-3 py-2 min-h-[44px] rounded-md text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
-                                subActive
-                                  ? 'bg-red-600 text-white'
-                                  : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
-                              }`}
-                            >
-                              {subItem.label}
-                            </a>
+                              <a
+                                key={subItem.path}
+                                href={subItem.path}
+                                onClick={(e) => handleNavigation(subItem.path, e)}
+                                aria-current={subActive ? 'page' : undefined}
+                                className={`focus:ring-theme-focus-ring flex min-h-[44px] items-center rounded-md px-3 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden ${
+                                  subActive
+                                    ? 'bg-red-600 text-white'
+                                    : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
+                                }`}
+                              >
+                                {subItem.label}
+                              </a>
                             );
                           })}
                         </div>
@@ -520,7 +608,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                     href={item.path}
                     onClick={(e) => handleNavigation(item.path, e)}
                     aria-current={isActive(item.path) ? 'page' : undefined}
-                    className={`flex items-center px-3 py-2 min-h-[44px] rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                    className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex min-h-[44px] items-center rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                       isActive(item.path) ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                     }`}
                   >
@@ -530,14 +618,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
               })}
 
               {/* ── Mobile utility links ── */}
-              <div className="border-t border-theme-surface-border mt-2 pt-2 space-y-1">
+              <div className="border-theme-surface-border mt-2 space-y-1 border-t pt-2">
                 {!isOnline && (
                   <div
-                    className="px-3 py-2 rounded-md text-sm font-medium flex items-center space-x-2 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                    className="flex items-center space-x-2 rounded-md bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300"
                     role="status"
                     aria-live="polite"
                   >
-                    <WifiOff className="w-4 h-4" aria-hidden="true" />
+                    <WifiOff className="h-4 w-4" aria-hidden="true" />
                     <span>
                       {pendingSyncCount > 0
                         ? `Offline · ${pendingSyncCount} pending — will sync when reconnected`
@@ -547,13 +635,15 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                 )}
                 {isOnline && pendingSyncCount > 0 && (
                   <button
-                    onClick={() => { void triggerOfflineDrain(); }}
-                    className="w-full px-3 py-2 rounded-md text-sm font-medium flex items-center space-x-2 bg-blue-500/15 text-blue-700 dark:text-blue-300 hover:bg-blue-500/25 transition-colors"
+                    onClick={() => {
+                      void triggerOfflineDrain();
+                    }}
+                    className="flex w-full items-center space-x-2 rounded-md bg-blue-500/15 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-500/25 dark:text-blue-300"
                   >
                     {pendingSyncStatus === 'syncing' ? (
-                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                     ) : (
-                      <RefreshCw className="w-4 h-4" aria-hidden="true" />
+                      <RefreshCw className="h-4 w-4" aria-hidden="true" />
                     )}
                     <span>{pendingSyncCount} pending sync — tap to retry</span>
                   </button>
@@ -562,14 +652,14 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                   href="/notifications?tab=inbox"
                   onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
                   aria-current={notificationsActive ? 'page' : undefined}
-                  className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                  className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                     notificationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                   }`}
                 >
-                  <Bell className="w-4 h-4" aria-hidden="true" />
+                  <Bell className="h-4 w-4" aria-hidden="true" />
                   <span>Notifications</span>
                   {notifUnreadCount > 0 && (
-                    <span className="bg-red-500 text-white text-[10px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
+                    <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
                       {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
                     </span>
                   )}
@@ -578,35 +668,35 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                   href="/account"
                   onClick={(e) => handleNavigation('/account', e)}
                   aria-current={accountActive ? 'page' : undefined}
-                  className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                  className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                     accountActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                   }`}
                 >
-                  <UserCog className="w-4 h-4" aria-hidden="true" />
+                  <UserCog className="h-4 w-4" aria-hidden="true" />
                   <span>My Account</span>
                 </a>
                 <button
                   onClick={cycleTheme}
-                  className="text-theme-text-secondary px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
                 >
-                  <ThemeIcon className="w-4 h-4" aria-hidden="true" />
+                  <ThemeIcon className="h-4 w-4" aria-hidden="true" />
                   <span>Theme: {themeLabel}</span>
                 </button>
                 <button
                   onClick={toggleHighContrast}
                   aria-pressed={theme === 'high-contrast'}
-                  className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                  className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                     theme === 'high-contrast' ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-secondary'
                   }`}
                 >
-                  <Contrast className="w-4 h-4" aria-hidden="true" />
+                  <Contrast className="h-4 w-4" aria-hidden="true" />
                   <span>{theme === 'high-contrast' ? 'High contrast on' : 'High contrast'}</span>
                 </button>
                 <button
                   onClick={onLogout}
-                  className="text-theme-text-secondary px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
                 >
-                  <LogOut className="w-4 h-4" aria-hidden="true" />
+                  <LogOut className="h-4 w-4" aria-hidden="true" />
                   <span>Logout</span>
                 </button>
               </div>

@@ -21,10 +21,7 @@ interface NotificationPreviewModalProps {
   onClose: () => void;
 }
 
-export const NotificationPreviewModal: React.FC<NotificationPreviewModalProps> = ({
-  notice,
-  onClose,
-}) => {
+export const NotificationPreviewModal: React.FC<NotificationPreviewModalProps> = ({ notice, onClose }) => {
   const [preview, setPreview] = useState<StoreNotificationPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

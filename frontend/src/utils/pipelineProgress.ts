@@ -45,9 +45,7 @@ export function requirementTarget(record: RequirementProgressRecord): string | n
     case 'calls':
       return req.required_calls ? `${done} / ${req.required_calls} calls` : null;
     case 'courses':
-      return req.required_courses?.length
-        ? `${done} / ${req.required_courses.length} courses`
-        : null;
+      return req.required_courses?.length ? `${done} / ${req.required_courses.length} courses` : null;
     case 'knowledge_test': {
       const pass = req.passing_score ?? record.progress_notes?.passing_score;
       return pass ? `Pass ≥ ${pass}%` : null;
@@ -93,7 +91,7 @@ export interface PhaseGroup {
 export function groupRecordsByPhase(
   records: RequirementProgressRecord[],
   phases: ProgramPhase[],
-  programReqs: ProgramRequirement[],
+  programReqs: ProgramRequirement[]
 ): PhaseGroup[] {
   const reqPhase = new Map<string, string | undefined>();
   programReqs.forEach((pr) => reqPhase.set(pr.requirement_id, pr.phase_id));
@@ -117,12 +115,7 @@ export function groupRecordsByPhase(
  * A phase group is complete when all of its *required* records are at 100%
  * (records with no matching program-requirement default to required).
  */
-export function isPhaseGroupComplete(
-  records: RequirementProgressRecord[],
-  programReqs: ProgramRequirement[],
-): boolean {
+export function isPhaseGroupComplete(records: RequirementProgressRecord[], programReqs: ProgramRequirement[]): boolean {
   const required = new Map(programReqs.map((pr) => [pr.requirement_id, pr.is_required]));
-  return records
-    .filter((r) => required.get(r.requirement_id) !== false)
-    .every((r) => r.progress_percentage >= 100);
+  return records.filter((r) => required.get(r.requirement_id) !== false).every((r) => r.progress_percentage >= 100);
 }

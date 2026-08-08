@@ -7,10 +7,7 @@ import type { RSVP, QRCheckInData } from '../types/event';
 /**
  * Custom render function that wraps components with common providers
  */
-export function renderWithRouter(
-  ui: ReactElement,
-  options?: Omit<RenderOptions, 'wrapper'>
-) {
+export function renderWithRouter(ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>) {
   const Wrapper = ({ children }: { children: React.ReactNode }) => {
     return <BrowserRouter>{children}</BrowserRouter>;
   };
@@ -129,4 +126,3 @@ export const createMockEventService = () => ({
   createOrUpdateRSVP: vi.fn(),
   recordActualTimes: vi.fn(),
 });
-

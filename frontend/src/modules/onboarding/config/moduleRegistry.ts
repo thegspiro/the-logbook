@@ -73,7 +73,16 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Add/edit members, assign positions, update member status',
       view: ['View member directory', 'See contact information', 'View member profiles'],
       manage: ['Add new members', 'Edit member information', 'Assign positions', 'Manage member status'],
-      defaultManagePositions: ['it_manager', 'fire_chief', 'president', 'membership_coordinator', 'training_officer', 'captain', 'secretary', 'assistant_secretary'],
+      defaultManagePositions: [
+        'it_manager',
+        'fire_chief',
+        'president',
+        'membership_coordinator',
+        'training_officer',
+        'captain',
+        'secretary',
+        'assistant_secretary',
+      ],
     },
   },
   {
@@ -90,7 +99,17 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create events, manage RSVPs, record attendance',
       view: ['View all events', 'RSVP to events', "See who's attending", 'Check in to events'],
       manage: ['Create new events', 'Edit/cancel events', 'Manage RSVPs', 'Override attendance'],
-      defaultManagePositions: ['it_manager', 'fire_chief', 'president', 'secretary', 'training_officer', 'meeting_hall_coordinator', 'public_outreach', 'scheduling_officer', 'facilities_manager'],
+      defaultManagePositions: [
+        'it_manager',
+        'fire_chief',
+        'president',
+        'secretary',
+        'training_officer',
+        'meeting_hall_coordinator',
+        'public_outreach',
+        'scheduling_officer',
+        'facilities_manager',
+      ],
     },
   },
   {
@@ -123,7 +142,13 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       viewDescription: 'Fill out and submit forms across all modules',
       manageDescription: 'Create forms, design fields, view submissions, export data',
       view: ['View available forms', 'Submit forms', 'See personal submissions'],
-      manage: ['Create form templates', 'Design form fields', 'View all submissions', 'Export responses', 'Manage form settings'],
+      manage: [
+        'Create form templates',
+        'Design form fields',
+        'View all submissions',
+        'Export responses',
+        'Manage form settings',
+      ],
       defaultManagePositions: ['it_manager', 'secretary'],
     },
   },
@@ -168,8 +193,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'scheduling',
     name: 'Scheduling & Shifts',
-    description:
-      'Create shift schedules, manage duty rosters, and handle shift trades. Simplify workforce planning.',
+    description: 'Create shift schedules, manage duty rosters, and handle shift trades. Simplify workforce planning.',
     icon: Clock,
     priority: 'recommended',
     category: 'Operations',
@@ -179,7 +203,15 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Create schedules, approve swaps, manage coverage',
       view: ['View shift schedules', 'See personal assignments', 'Request shift swaps'],
       manage: ['Create schedules', 'Assign shifts', 'Approve swap requests', 'Override assignments'],
-      defaultManagePositions: ['it_manager', 'president', 'secretary', 'vice_president', 'training_officer', 'scheduling_officer', 'fire_chief'],
+      defaultManagePositions: [
+        'it_manager',
+        'president',
+        'secretary',
+        'vice_president',
+        'training_officer',
+        'scheduling_officer',
+        'fire_chief',
+      ],
     },
   },
 
@@ -225,8 +257,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'elections',
     name: 'Elections & Voting',
-    description:
-      'Run officer elections with secure voting, multiple voting methods, and automatic result tabulation.',
+    description: 'Run officer elections with secure voting, multiple voting methods, and automatic result tabulation.',
     icon: Vote,
     priority: 'recommended',
     category: 'Governance',
@@ -259,8 +290,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'reports',
     name: 'Reports & Analytics',
-    description:
-      'Generate custom reports, view analytics dashboards, and export data. Make data-driven decisions.',
+    description: 'Generate custom reports, view analytics dashboards, and export data. Make data-driven decisions.',
     icon: BarChart3,
     priority: 'optional',
     category: 'Governance',
@@ -280,8 +310,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'notifications',
     name: 'Email Notifications',
-    description:
-      'Automated email notifications for events, reminders, and important updates. Keep everyone informed.',
+    description: 'Automated email notifications for events, reminders, and important updates. Keep everyone informed.',
     icon: Bell,
     priority: 'optional',
     category: 'Communication',
@@ -318,8 +347,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
   {
     id: 'integrations',
     name: 'External Integrations',
-    description:
-      'Connect with external tools like Google Calendar, Slack, and more. Extend platform capabilities.',
+    description: 'Connect with external tools like Google Calendar, Slack, and more. Extend platform capabilities.',
     icon: Plug,
     priority: 'optional',
     category: 'Advanced',
@@ -349,7 +377,12 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       viewDescription: 'View prospective member pipeline and applicant progress',
       manageDescription: 'Manage applicants, configure pipeline stages, and convert members',
       view: ['View applicant pipeline', 'See applicant progress', 'View pipeline statistics'],
-      manage: ['Add/edit applicants', 'Advance or reject applicants', 'Configure pipeline stages', 'Convert applicants to members'],
+      manage: [
+        'Add/edit applicants',
+        'Advance or reject applicants',
+        'Configure pipeline stages',
+        'Convert applicants to members',
+      ],
       defaultManagePositions: ['it_manager', 'president', 'fire_chief', 'membership_coordinator'],
     },
   },
@@ -400,7 +433,6 @@ export const getModuleById = (id: string): ModuleDefinition | undefined => {
   return MODULE_REGISTRY.find((m) => m.id === id);
 };
 
-
 /**
  * Get only user-facing modules (excludes system modules)
  * Use this for the ModuleOverview page where users select modules
@@ -408,5 +440,3 @@ export const getModuleById = (id: string): ModuleDefinition | undefined => {
 export const getUserFacingModules = (): ModuleDefinition[] => {
   return MODULE_REGISTRY.filter((m) => m.category !== 'System');
 };
-
-

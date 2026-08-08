@@ -51,7 +51,8 @@ function templateToInitialData(template: EventTemplate): Partial<EventCreate> {
     require_checkout: template.require_checkout,
     send_reminders: template.send_reminders,
     reminder_schedule: template.reminder_schedule,
-    custom_fields: (template.custom_fields_template as Record<string, string | number | boolean | null> | undefined) || undefined,
+    custom_fields:
+      (template.custom_fields_template as Record<string, string | number | boolean | null> | undefined) || undefined,
   };
 }
 
@@ -65,22 +66,32 @@ export const EventCreatePage: React.FC = () => {
   const [userEvents, setUserEvents] = useState<ConflictEvent[]>([]);
 
   useEffect(() => {
-    void eventService.getEvents({ end_after: new Date().toISOString() }).then((data) => {
-      setUserEvents(data.map((e) => ({
-        id: e.id,
-        title: e.title,
-        start_datetime: e.start_datetime,
-        end_datetime: e.end_datetime,
-      })));
-    }).catch(() => { /* non-critical */ });
+    void eventService
+      .getEvents({ end_after: new Date().toISOString() })
+      .then((data) => {
+        setUserEvents(
+          data.map((e) => ({
+            id: e.id,
+            title: e.title,
+            start_datetime: e.start_datetime,
+            end_datetime: e.end_datetime,
+          }))
+        );
+      })
+      .catch(() => {
+        /* non-critical */
+      });
   }, []);
 
   useEffect(() => {
-    void eventService.getTemplates().then((data) => {
-      setTemplates(data.filter((t) => t.is_active));
-    }).catch(() => {
-      // Templates are optional — silently ignore fetch errors
-    });
+    void eventService
+      .getTemplates()
+      .then((data) => {
+        setTemplates(data.filter((t) => t.is_active));
+      })
+      .catch(() => {
+        // Templates are optional — silently ignore fetch errors
+      });
   }, []);
 
   const handleSubmit = async (data: EventCreate) => {
@@ -132,50 +143,56 @@ export const EventCreatePage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
           <Link
             to="/events"
-            className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
+            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 mr-2" />
+            <ArrowLeft className="mr-2 h-5 w-5" />
             Back to Events
           </Link>
-          <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-            <Calendar className="w-8 h-8 text-red-700" />
+          <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
+            <Calendar className="h-8 w-8 text-red-700" />
             <span>Create Event</span>
           </h1>
           <p className="text-theme-text-muted mt-1">
-            Schedule a new event for your department. All fields marked with <span className="text-red-700 dark:text-red-500">*</span> are required.
+            Schedule a new event for your department. All fields marked with{' '}
+            <span className="text-red-700 dark:text-red-500">*</span> are required.
           </p>
         </div>
 
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
+          <div
+            className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4"
+            role="alert"
+            aria-live="assertive"
+          >
             <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           </div>
         )}
 
         {/* Template Selector */}
         {templates.length > 0 && (
-          <div className="card p-6 mb-6">
-            <div className="flex items-center space-x-2 mb-3">
-              <FileText className="w-5 h-5 text-theme-text-muted" />
-              <h2 className="text-lg font-semibold text-theme-text-primary">Start from a Template</h2>
+          <div className="card mb-6 p-6">
+            <div className="mb-3 flex items-center space-x-2">
+              <FileText className="text-theme-text-muted h-5 w-5" />
+              <h2 className="text-theme-text-primary text-lg font-semibold">Start from a Template</h2>
             </div>
-            <p className="text-sm text-theme-text-muted mb-3">
+            <p className="text-theme-text-muted mb-3 text-sm">
               Optionally select a template to pre-fill common event settings.
             </p>
             <select
               value={selectedTemplateId}
               onChange={handleTemplateChange}
-              className="w-full sm:w-96 rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none sm:w-96"
             >
               <option value="">— No template —</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.name}{t.description ? ` — ${t.description}` : ''}
+                  {t.name}
+                  {t.description ? ` — ${t.description}` : ''}
                 </option>
               ))}
             </select>

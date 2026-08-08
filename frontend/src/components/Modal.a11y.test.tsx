@@ -15,7 +15,7 @@ describe('Modal accessibility', () => {
     const { container } = render(
       <Modal isOpen={true} onClose={() => {}} title="Test Modal">
         <p>Modal content</p>
-      </Modal>,
+      </Modal>
     );
     const results = await axe(container);
     expect(results).toHaveNoViolations();
@@ -23,14 +23,9 @@ describe('Modal accessibility', () => {
 
   it('has no axe violations with footer', async () => {
     const { container } = render(
-      <Modal
-        isOpen={true}
-        onClose={() => {}}
-        title="Test Modal"
-        footer={<button>Save</button>}
-      >
+      <Modal isOpen={true} onClose={() => {}} title="Test Modal" footer={<button>Save</button>}>
         <p>Modal content with footer</p>
-      </Modal>,
+      </Modal>
     );
     const results = await axe(container);
     expect(results).toHaveNoViolations();

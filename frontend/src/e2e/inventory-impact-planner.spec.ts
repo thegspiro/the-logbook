@@ -45,18 +45,36 @@ const ANALYSIS = {
   estimated_total_cost: null,
   members: [
     {
-      user_id: 'u1', full_name: 'Amy Adams', membership_number: '001',
-      rank: 'firefighter', station: 'Station 1', status: 'active',
-      needed_size: 'M', has_size_on_file: true, has_related_item: false,
-      needs_replacement: false, over_allowance: false, related_item_names: [],
-      email: 'amy@x.org', phone: '555-1',
+      user_id: 'u1',
+      full_name: 'Amy Adams',
+      membership_number: '001',
+      rank: 'firefighter',
+      station: 'Station 1',
+      status: 'active',
+      needed_size: 'M',
+      has_size_on_file: true,
+      has_related_item: false,
+      needs_replacement: false,
+      over_allowance: false,
+      related_item_names: [],
+      email: 'amy@x.org',
+      phone: '555-1',
     },
     {
-      user_id: 'u2', full_name: 'Bob Baker', membership_number: '002',
-      rank: 'firefighter', station: 'Station 2', status: 'active',
-      needed_size: 'L', has_size_on_file: true, has_related_item: false,
-      needs_replacement: false, over_allowance: false, related_item_names: [],
-      email: 'bob@x.org', phone: '555-2',
+      user_id: 'u2',
+      full_name: 'Bob Baker',
+      membership_number: '002',
+      rank: 'firefighter',
+      station: 'Station 2',
+      status: 'active',
+      needed_size: 'L',
+      has_size_on_file: true,
+      has_related_item: false,
+      needs_replacement: false,
+      over_allowance: false,
+      related_item_names: [],
+      email: 'bob@x.org',
+      phone: '555-2',
     },
   ],
 };
@@ -74,11 +92,20 @@ async function setupPlanner(page: Page) {
   await page.goto('/login');
   await page.evaluate(() => localStorage.setItem('has_session', '1'));
 
-  await page.route('**/api/v1/auth/me', jsonRoute({
-    id: 'qm-user', username: 'qm', email: 'qm@example.com',
-    first_name: 'Quinn', last_name: 'Master', is_active: true,
-    permissions: ['*'], roles: ['admin'], positions: [],
-  }));
+  await page.route(
+    '**/api/v1/auth/me',
+    jsonRoute({
+      id: 'qm-user',
+      username: 'qm',
+      email: 'qm@example.com',
+      first_name: 'Quinn',
+      last_name: 'Master',
+      is_active: true,
+      permissions: ['*'],
+      roles: ['admin'],
+      positions: [],
+    })
+  );
   await page.route('**/api/v1/auth/branding', jsonRoute({ name: 'Test FD', logo: null }));
   await page.route('**/api/v1/auth/oauth-config', jsonRoute({ googleEnabled: false, microsoftEnabled: false }));
   await page.route('**/api/v1/organization/enabled-modules', jsonRoute({ enabled_modules: ['inventory'] }));

@@ -137,10 +137,7 @@ const routes = ({ empty = false }: MockOptions): [string, () => unknown][] => [
 
   ['**/api/v1/auth/me', () => TEST_USER],
   ['**/api/v1/auth/branding', () => ({ name: TEST_DEPARTMENT, logo: null })],
-  [
-    '**/api/v1/auth/oauth-config',
-    () => ({ googleEnabled: false, microsoftEnabled: false }),
-  ],
+  ['**/api/v1/auth/oauth-config', () => ({ googleEnabled: false, microsoftEnabled: false })],
   ['**/api/v1/auth/session-settings', () => ({ session_timeout_minutes: 60 })],
   ['**/api/v1/auth/logout', () => ({ message: 'Logged out' })],
 
@@ -250,8 +247,5 @@ export function visibleText(page: Page, text: string) {
 }
 
 export function navItem(page: Page, name: RegExp | string) {
-  return page
-    .locator('aside, nav')
-    .getByRole('button', { name })
-    .first();
+  return page.locator('aside, nav').getByRole('button', { name }).first();
 }

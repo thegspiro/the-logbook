@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  containerTypeLabel,
-  isPresetContainerType,
-} from './equipmentCheck';
+import { containerTypeLabel, isPresetContainerType } from './equipmentCheck';
 
 describe('containerTypeLabel', () => {
   it('maps known preset keys to their display label', () => {

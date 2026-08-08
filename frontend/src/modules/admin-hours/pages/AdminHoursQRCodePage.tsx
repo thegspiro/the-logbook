@@ -49,7 +49,7 @@ const AdminHoursQRCodePage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-theme-text-secondary">Loading...</div>
       </div>
     );
@@ -57,8 +57,8 @@ const AdminHoursQRCodePage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="max-w-2xl mx-auto p-6">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
+      <div className="mx-auto max-w-2xl p-6">
+        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
           <p className="text-red-700 dark:text-red-400">{error}</p>
         </div>
         <Link to="/admin-hours/manage" className="text-blue-600 hover:text-blue-800 dark:hover:text-blue-400">
@@ -73,73 +73,59 @@ const AdminHoursQRCodePage: React.FC = () => {
   const clockInUrl = getClockInUrl();
 
   return (
-    <div className="min-h-screen max-w-4xl mx-auto p-6">
+    <div className="mx-auto min-h-screen max-w-4xl p-6">
       {/* Header */}
       <div className="mb-6 print:hidden">
-        <Link to="/admin-hours/manage" className="text-blue-600 hover:text-blue-800 dark:hover:text-blue-400 mb-4 inline-block">
+        <Link
+          to="/admin-hours/manage"
+          className="mb-4 inline-block text-blue-600 hover:text-blue-800 dark:hover:text-blue-400"
+        >
           &larr; Back to Admin Hours Management
         </Link>
-        <h1 className="text-3xl font-bold text-theme-text-primary">Admin Hours QR Code</h1>
+        <h1 className="text-theme-text-primary text-3xl font-bold">Admin Hours QR Code</h1>
       </div>
 
       {/* Category Info */}
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <div
-            className="w-5 h-5 rounded-full"
-            style={{ backgroundColor: qrData.categoryColor ?? '#6B7280' }}
-          />
-          <h2 className="text-2xl font-semibold text-theme-text-primary">{qrData.categoryName}</h2>
+      <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
+        <div className="mb-2 flex items-center gap-3">
+          <div className="h-5 w-5 rounded-full" style={{ backgroundColor: qrData.categoryColor ?? '#6B7280' }} />
+          <h2 className="text-theme-text-primary text-2xl font-semibold">{qrData.categoryName}</h2>
         </div>
-        {qrData.categoryDescription && (
-          <p className="text-theme-text-secondary">{qrData.categoryDescription}</p>
-        )}
-        {qrData.organizationName && (
-          <p className="text-sm text-theme-text-muted mt-1">{qrData.organizationName}</p>
-        )}
+        {qrData.categoryDescription && <p className="text-theme-text-secondary">{qrData.categoryDescription}</p>}
+        {qrData.organizationName && <p className="text-theme-text-muted mt-1 text-sm">{qrData.organizationName}</p>}
       </div>
 
       {/* QR Code */}
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-8">
+      <div className="bg-theme-surface rounded-lg p-8 shadow-md backdrop-blur-xs">
         <div className="text-center">
-          <h3 className="text-xl font-semibold text-theme-text-primary mb-2">
-            Scan to Clock In / Clock Out
-          </h3>
+          <h3 className="text-theme-text-primary mb-2 text-xl font-semibold">Scan to Clock In / Clock Out</h3>
           <p className="text-theme-text-secondary mb-6">
             Members scan this QR code to start or stop tracking hours for <strong>{qrData.categoryName}</strong>
           </p>
 
           {clockInUrl && (
-            <div className="flex justify-center mb-6">
+            <div className="mb-6 flex justify-center">
               <div className="qr-container">
-                <QRCodeSVG
-                  value={clockInUrl}
-                  size={300}
-                  level="H"
-                  includeMargin={true}
-                />
+                <QRCodeSVG value={clockInUrl} size={300} level="H" includeMargin={true} />
               </div>
             </div>
           )}
 
           {/* Category label under QR for print */}
           <div
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6"
+            className="mb-6 inline-flex items-center gap-2 rounded-full px-4 py-2"
             style={{ backgroundColor: (qrData.categoryColor ?? '#6B7280') + '20' }}
           >
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: qrData.categoryColor ?? '#6B7280' }}
-            />
+            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: qrData.categoryColor ?? '#6B7280' }} />
             <span className="font-semibold" style={{ color: qrData.categoryColor ?? '#6B7280' }}>
               {qrData.categoryName}
             </span>
           </div>
 
           {/* Instructions */}
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-left print:hidden">
-            <h4 className="font-semibold text-blue-700 dark:text-blue-300 mb-2">Instructions:</h4>
-            <ol className="list-decimal list-inside space-y-1 text-blue-700 dark:text-blue-300">
+          <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 text-left print:hidden">
+            <h4 className="mb-2 font-semibold text-blue-700 dark:text-blue-300">Instructions:</h4>
+            <ol className="list-inside list-decimal space-y-1 text-blue-700 dark:text-blue-300">
               <li>Print and post this QR code at the relevant work area</li>
               <li>Members scan with their phone camera when starting work</li>
               <li>Log in if prompted, then tap &quot;Clock In&quot;</li>
@@ -151,10 +137,7 @@ const AdminHoursQRCodePage: React.FC = () => {
 
       {/* Print Button */}
       <div className="mt-6 text-center print:hidden">
-        <button
-          onClick={() => window.print()}
-          className="btn-info px-6 transition"
-        >
+        <button onClick={() => window.print()} className="btn-info px-6 transition">
           Print QR Code
         </button>
       </div>

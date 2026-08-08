@@ -15,7 +15,9 @@ export const FlashlightToggle: React.FC<FlashlightToggleProps> = ({ on, onToggle
   return (
     <button
       type="button"
-      onClick={() => { void onToggle(); }}
+      onClick={() => {
+        void onToggle();
+      }}
       aria-pressed={on}
       aria-label={on ? 'Turn flashlight off' : 'Turn flashlight on'}
       className={`absolute top-2 right-2 z-10 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full shadow-lg transition-colors ${

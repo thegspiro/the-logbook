@@ -5,8 +5,8 @@
  * Displays a user-friendly error message with the option to reload.
  */
 
-import { Component, ErrorInfo, ReactNode } from "react";
-import { errorTracker } from "../services/errorTracking";
+import { Component, ErrorInfo, ReactNode } from 'react';
+import { errorTracker } from '../services/errorTracking';
 
 interface Props {
   children: ReactNode;
@@ -23,10 +23,10 @@ interface State {
 function isChunkLoadError(error: Error): boolean {
   const msg = error.message.toLowerCase();
   return (
-    msg.includes("failed to fetch dynamically imported module") ||
-    msg.includes("loading chunk") ||
-    msg.includes("loading css chunk") ||
-    msg.includes("importing a module script failed")
+    msg.includes('failed to fetch dynamically imported module') ||
+    msg.includes('loading chunk') ||
+    msg.includes('loading css chunk') ||
+    msg.includes('importing a module script failed')
   );
 }
 
@@ -48,7 +48,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   override componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     // Log the error to console (or send to error tracking service)
-    console.error("ErrorBoundary caught an error:", error, errorInfo);
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
 
     this.setState({
       error,
@@ -60,9 +60,7 @@ export class ErrorBoundary extends Component<Props, State> {
     // mid-session), which an administrator resolves very differently from an
     // ordinary render crash.
     errorTracker.logError(error, {
-      errorType: isChunkLoadError(error)
-        ? "CHUNK_LOAD_ERROR"
-        : "REACT_ERROR_BOUNDARY",
+      errorType: isChunkLoadError(error) ? 'CHUNK_LOAD_ERROR' : 'REACT_ERROR_BOUNDARY',
       additionalContext: { componentStack: errorInfo.componentStack },
     });
   }
@@ -72,7 +70,7 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   handleGoHome = (): void => {
-    window.location.href = "/dashboard";
+    window.location.href = '/dashboard';
   };
 
   handleRetry = (): void => {
@@ -91,20 +89,20 @@ export class ErrorBoundary extends Component<Props, State> {
       `\nComponent Stack: ${this.state.errorInfo?.componentStack}`,
       `\nURL: ${window.location.href}`,
       `\nTime: ${new Date().toISOString()}`,
-    ].join("");
+    ].join('');
 
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(errorText);
       } else {
         // Fallback for non-HTTPS contexts
-        const textarea = document.createElement("textarea");
+        const textarea = document.createElement('textarea');
         textarea.value = errorText;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
         document.body.appendChild(textarea);
         textarea.select();
-        document.execCommand("copy");
+        document.execCommand('copy');
         document.body.removeChild(textarea);
       }
       this.setState({ copied: true });
@@ -117,11 +115,11 @@ export class ErrorBoundary extends Component<Props, State> {
   override render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
-          <div className="card max-w-2xl p-8 w-full">
+        <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+          <div className="card w-full max-w-2xl p-8">
             <div className="text-center">
               {/* Error Icon */}
-              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 dark:bg-red-500/20 mb-4">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20">
                 <svg
                   className="h-8 w-8 text-red-600 dark:text-red-400"
                   fill="none"
@@ -139,27 +137,25 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
 
               {/* Error Message */}
-              <h1 className="text-2xl font-bold text-theme-text-primary mb-2">
-                {this.state.isChunkError
-                  ? "New Version Available"
-                  : "Oops! Something went wrong"}
+              <h1 className="text-theme-text-primary mb-2 text-2xl font-bold">
+                {this.state.isChunkError ? 'New Version Available' : 'Oops! Something went wrong'}
               </h1>
               <p className="text-theme-text-secondary mb-6">
                 {this.state.isChunkError
-                  ? "The application has been updated. Please reload the page to get the latest version."
+                  ? 'The application has been updated. Please reload the page to get the latest version.'
                   : "We're sorry, but something unexpected happened. Please try reloading the page or return to the dashboard."}
               </p>
 
               {/* Error Details (Development Only) */}
               {import.meta.env.DEV && this.state.error && (
                 <details className="mb-6 text-left">
-                  <summary className="cursor-pointer text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 mb-2">
+                  <summary className="mb-2 cursor-pointer text-sm text-red-700 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300">
                     Show error details (Development)
                   </summary>
-                  <div className="bg-theme-input-bg rounded-lg p-4 overflow-auto max-h-64">
-                    <pre className="text-xs text-red-700 dark:text-red-300 whitespace-pre-wrap">
+                  <div className="bg-theme-input-bg max-h-64 overflow-auto rounded-lg p-4">
+                    <pre className="text-xs whitespace-pre-wrap text-red-700 dark:text-red-300">
                       <strong>Error:</strong> {this.state.error.toString()}
-                      {"\n\n"}
+                      {'\n\n'}
                       <strong>Component Stack:</strong>
                       {this.state.errorInfo?.componentStack}
                     </pre>
@@ -168,17 +164,12 @@ export class ErrorBoundary extends Component<Props, State> {
               )}
 
               {/* Action Buttons (#65 — improved recovery) */}
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <div className="flex flex-col justify-center gap-3 sm:flex-row">
                 <button
                   onClick={this.handleRetry}
-                  className="btn-primary font-medium inline-flex items-center justify-center px-6 py-3 rounded-md text-base"
+                  className="btn-primary inline-flex items-center justify-center rounded-md px-6 py-3 text-base font-medium"
                 >
-                  <svg
-                    className="mr-2 h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -190,13 +181,13 @@ export class ErrorBoundary extends Component<Props, State> {
                 </button>
                 <button
                   onClick={this.handleReload}
-                  className="inline-flex items-center justify-center px-6 py-3 border border-theme-surface-border text-base font-medium rounded-md text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:ring-theme-focus-ring transition-colors"
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:ring-theme-focus-ring inline-flex items-center justify-center rounded-md border px-6 py-3 text-base font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden"
                 >
                   Reload Page
                 </button>
                 <button
                   onClick={this.handleGoHome}
-                  className="inline-flex items-center justify-center px-6 py-3 border border-theme-surface-border text-base font-medium rounded-md text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:ring-theme-focus-ring transition-colors"
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface hover:bg-theme-surface-hover focus:ring-theme-focus-ring inline-flex items-center justify-center rounded-md border px-6 py-3 text-base font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden"
                 >
                   Go to Dashboard
                 </button>
@@ -206,11 +197,9 @@ export class ErrorBoundary extends Component<Props, State> {
               <div className="mt-4 flex flex-col items-center gap-2">
                 <button
                   onClick={() => void this.handleCopyError()}
-                  className="text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary text-sm transition-colors"
                 >
-                  {this.state.copied
-                    ? "Copied to clipboard!"
-                    : "Copy error details to clipboard"}
+                  {this.state.copied ? 'Copied to clipboard!' : 'Copy error details to clipboard'}
                 </button>
               </div>
             </div>

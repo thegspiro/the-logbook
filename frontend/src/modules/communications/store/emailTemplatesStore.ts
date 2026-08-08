@@ -7,11 +7,7 @@
 import { create } from 'zustand';
 import { emailTemplatesService } from '../../../services/api';
 import { createFetchAction, handleStoreError } from '../../../utils/storeHelpers';
-import type {
-  EmailTemplate,
-  EmailTemplateUpdate,
-  EmailTemplatePreview,
-} from '../types';
+import type { EmailTemplate, EmailTemplateUpdate, EmailTemplatePreview } from '../types';
 
 interface EmailTemplatesState {
   // Data
@@ -33,7 +29,7 @@ interface EmailTemplatesState {
     templateId: string,
     context?: Record<string, unknown>,
     overrides?: { subject?: string; html_body?: string; css_styles?: string },
-    memberId?: string,
+    memberId?: string
   ) => Promise<void>;
   clearPreview: () => void;
   clearError: () => void;
@@ -52,7 +48,7 @@ export const useEmailTemplatesStore = create<EmailTemplatesState>((set) => ({
     set,
     () => emailTemplatesService.getTemplates(),
     'templates',
-    'Failed to load email templates',
+    'Failed to load email templates'
   ),
 
   selectTemplate: (template) => {

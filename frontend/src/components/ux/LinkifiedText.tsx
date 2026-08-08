@@ -54,7 +54,7 @@ export const LinkifiedText: React.FC<LinkifiedTextProps> = ({ text, linkClassNam
         className={linkClassName ?? DEFAULT_LINK_CLASS}
       >
         {url}
-      </a>,
+      </a>
     );
     lastIndex = end;
   }

@@ -17,16 +17,17 @@ const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
   };
 
   const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : theme === 'high-contrast' ? Contrast : Monitor;
-  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
+  const themeLabel =
+    theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
   return (
     <button
       onClick={cycleTheme}
-      className={`text-theme-text-secondary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${className}`}
+      className={`text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden ${className}`}
       title={`Theme: ${themeLabel}`}
       aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
     >
-      <ThemeIcon className="w-5 h-5" aria-hidden="true" />
+      <ThemeIcon className="h-5 w-5" aria-hidden="true" />
     </button>
   );
 };

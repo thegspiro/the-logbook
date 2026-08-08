@@ -10,41 +10,41 @@
 // ============================================================================
 
 export const CheckType = {
-  PASS_FAIL: "pass_fail",
-  PRESENT: "present",
-  FUNCTIONAL: "functional",
-  QUANTITY: "quantity",
-  LEVEL: "level",
-  DATE_LOT: "date_lot",
-  READING: "reading",
-  TEXT: "text",
-  HEADER: "header",
+  PASS_FAIL: 'pass_fail',
+  PRESENT: 'present',
+  FUNCTIONAL: 'functional',
+  QUANTITY: 'quantity',
+  LEVEL: 'level',
+  DATE_LOT: 'date_lot',
+  READING: 'reading',
+  TEXT: 'text',
+  HEADER: 'header',
 } as const;
 export type CheckType = (typeof CheckType)[keyof typeof CheckType];
 
 export const TemplateType = {
-  EQUIPMENT: "equipment",
-  VEHICLE: "vehicle",
-  COMBINED: "combined",
+  EQUIPMENT: 'equipment',
+  VEHICLE: 'vehicle',
+  COMBINED: 'combined',
 } as const;
 export type TemplateType = (typeof TemplateType)[keyof typeof TemplateType];
 
 export const CHECK_TYPE_LABELS: Record<CheckType, string> = {
-  pass_fail: "Pass / Fail",
-  present: "Present",
-  functional: "Functional",
-  quantity: "Quantity",
-  level: "Level",
-  date_lot: "Date / Lot",
-  reading: "Reading",
-  text: "Statement",
-  header: "Section Header",
+  pass_fail: 'Pass / Fail',
+  present: 'Present',
+  functional: 'Functional',
+  quantity: 'Quantity',
+  level: 'Level',
+  date_lot: 'Date / Lot',
+  reading: 'Reading',
+  text: 'Statement',
+  header: 'Section Header',
 };
 
 export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
-  equipment: "Equipment Check",
-  vehicle: "Vehicle Check",
-  combined: "Combined",
+  equipment: 'Equipment Check',
+  vehicle: 'Vehicle Check',
+  combined: 'Combined',
 };
 
 // ============================================================================
@@ -56,21 +56,21 @@ export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
 // departments can describe where equipment lives in their own terms
 // (e.g. a "pack" inside a "bag" inside a "compartment").
 export const CONTAINER_TYPE_PRESETS: { value: string; label: string }[] = [
-  { value: "compartment", label: "Compartment" },
-  { value: "cabinet", label: "Cabinet" },
-  { value: "drawer", label: "Drawer" },
-  { value: "shelf", label: "Shelf" },
-  { value: "bag", label: "Bag" },
-  { value: "pack", label: "Pack" },
-  { value: "pouch", label: "Pouch" },
-  { value: "box", label: "Box" },
-  { value: "case", label: "Case" },
-  { value: "tray", label: "Tray" },
-  { value: "kit", label: "Kit" },
+  { value: 'compartment', label: 'Compartment' },
+  { value: 'cabinet', label: 'Cabinet' },
+  { value: 'drawer', label: 'Drawer' },
+  { value: 'shelf', label: 'Shelf' },
+  { value: 'bag', label: 'Bag' },
+  { value: 'pack', label: 'Pack' },
+  { value: 'pouch', label: 'Pouch' },
+  { value: 'box', label: 'Box' },
+  { value: 'case', label: 'Case' },
+  { value: 'tray', label: 'Tray' },
+  { value: 'kit', label: 'Kit' },
 ];
 
 const CONTAINER_TYPE_LABEL_MAP: Record<string, string> = Object.fromEntries(
-  CONTAINER_TYPE_PRESETS.map((p) => [p.value, p.label]),
+  CONTAINER_TYPE_PRESETS.map((p) => [p.value, p.label])
 );
 
 /**
@@ -79,15 +79,15 @@ const CONTAINER_TYPE_LABEL_MAP: Record<string, string> = Object.fromEntries(
  * custom label) is returned verbatim. Empty falls back to "Compartment".
  */
 export function containerTypeLabel(value?: string | null): string {
-  const key = (value ?? "").trim();
-  if (!key) return "Compartment";
+  const key = (value ?? '').trim();
+  if (!key) return 'Compartment';
   return CONTAINER_TYPE_LABEL_MAP[key] ?? key;
 }
 
 /** True when the value is one of the known presets (not a custom label). */
 export function isPresetContainerType(value?: string | null): boolean {
-  const key = (value ?? "").trim();
-  return key === "" || key in CONTAINER_TYPE_LABEL_MAP;
+  const key = (value ?? '').trim();
+  return key === '' || key in CONTAINER_TYPE_LABEL_MAP;
 }
 
 // ============================================================================
@@ -213,7 +213,7 @@ export interface EquipmentCheckTemplate {
   apparatusType?: string;
   name: string;
   description?: string;
-  checkTiming: "start_of_shift" | "end_of_shift";
+  checkTiming: 'start_of_shift' | 'end_of_shift';
   templateType: TemplateType;
   assignedPositions?: string[];
   isActive: boolean;
@@ -258,7 +258,7 @@ export interface CheckItemResultSubmit {
   compartment_name: string;
   item_name: string;
   check_type?: string | undefined;
-  status: "pass" | "fail" | "not_checked";
+  status: 'pass' | 'fail' | 'not_checked';
   quantity_found?: number | undefined;
   required_quantity?: number | undefined;
   critical_minimum_quantity?: number | undefined;
@@ -302,7 +302,7 @@ export interface ShiftEquipmentCheckItemRecord {
   compartmentName: string;
   itemName: string;
   checkType?: string;
-  status: "pass" | "fail" | "not_checked";
+  status: 'pass' | 'fail' | 'not_checked';
   quantityFound?: number;
   requiredQuantity?: number;
   criticalMinimumQuantity?: number;
@@ -330,8 +330,8 @@ export interface ShiftEquipmentCheckRecord {
   checkedByName?: string;
   checkedAt?: string;
   checkTiming: string;
-  checkContext?: "shift_based" | "standalone";
-  overallStatus: "pass" | "fail" | "incomplete";
+  checkContext?: 'shift_based' | 'standalone';
+  overallStatus: 'pass' | 'fail' | 'incomplete';
   totalItems: number;
   completedItems: number;
   failedItems: number;

@@ -10,17 +10,7 @@
  */
 
 import React, { useEffect, useMemo } from 'react';
-import {
-  ClipboardList,
-  Users,
-  Vote,
-  BarChart3,
-  Shield,
-  UserCheck,
-  Handshake,
-  FileText,
-  Megaphone,
-} from 'lucide-react';
+import { ClipboardList, Users, Vote, BarChart3, Shield, UserCheck, Handshake, FileText, Megaphone } from 'lucide-react';
 import type { Election } from '../../../types/election';
 import { ElectionStatus } from '../../../constants/enums';
 
@@ -131,7 +121,7 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
   return (
     <div className="mb-6">
       <nav
-        className="flex gap-1 overflow-x-auto pb-1 border-b border-theme-surface-border"
+        className="border-theme-surface-border flex gap-1 overflow-x-auto border-b pb-1"
         role="tablist"
         aria-label="Election management sections"
       >
@@ -147,20 +137,22 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
               aria-controls={`panel-${tab.id}`}
               tabIndex={isActive ? 0 : -1}
               onClick={() => onTabChange(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 isActive
-                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-                  : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border'
+                  ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                  : 'text-theme-text-muted hover:text-theme-text-secondary hover:border-theme-surface-border border-transparent'
               }`}
             >
               <Icon className="h-4 w-4" />
               {tab.label}
               {tab.badge != null && tab.badge > 0 && (
-                <span className={`ml-1 text-xs px-1.5 py-0.5 rounded-full ${
-                  isActive
-                    ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400'
-                    : 'bg-theme-surface-secondary text-theme-text-muted'
-                }`}>
+                <span
+                  className={`ml-1 rounded-full px-1.5 py-0.5 text-xs ${
+                    isActive
+                      ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400'
+                      : 'bg-theme-surface-secondary text-theme-text-muted'
+                  }`}
+                >
                   {tab.badge}
                 </span>
               )}

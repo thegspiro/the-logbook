@@ -169,9 +169,7 @@ describe('TrainingRequirementsPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Create Requirement' }));
 
     await waitFor(() => {
-      expect(mockCreateRequirement).toHaveBeenCalledWith(
-        expect.objectContaining({ frequency: 'one_time' })
-      );
+      expect(mockCreateRequirement).toHaveBeenCalledWith(expect.objectContaining({ frequency: 'one_time' }));
     });
     const payload = mockCreateRequirement.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(payload.year).toBeUndefined();

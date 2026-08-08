@@ -16,7 +16,11 @@ export const securityService = {
     return response.data;
   },
 
-  async getAlerts(params?: { limit?: number; threat_level?: string; alert_type?: string }): Promise<{ alerts: SecurityAlert[]; total: number }> {
+  async getAlerts(params?: {
+    limit?: number;
+    threat_level?: string;
+    alert_type?: string;
+  }): Promise<{ alerts: SecurityAlert[]; total: number }> {
     const response = await api.get<{ alerts: SecurityAlert[]; total: number }>('/security/alerts', { params });
     return response.data;
   },
@@ -26,13 +30,27 @@ export const securityService = {
     return response.data;
   },
 
-  async verifyAuditIntegrity(params?: { start_id?: number; end_id?: number }): Promise<{ verified: boolean; total_checked: number; errors: string[] }> {
-    const response = await api.get<{ verified: boolean; total_checked: number; errors: string[] }>('/security/audit-log/integrity', { params });
+  async verifyAuditIntegrity(params?: {
+    start_id?: number;
+    end_id?: number;
+  }): Promise<{ verified: boolean; total_checked: number; errors: string[] }> {
+    const response = await api.get<{ verified: boolean; total_checked: number; errors: string[] }>(
+      '/security/audit-log/integrity',
+      { params }
+    );
     return response.data;
   },
 
-  async triggerManualCheck(): Promise<{ check_completed: boolean; overall_status: string; integrity: Record<string, unknown> }> {
-    const response = await api.post<{ check_completed: boolean; overall_status: string; integrity: Record<string, unknown> }>('/security/manual-check');
+  async triggerManualCheck(): Promise<{
+    check_completed: boolean;
+    overall_status: string;
+    integrity: Record<string, unknown>;
+  }> {
+    const response = await api.post<{
+      check_completed: boolean;
+      overall_status: string;
+      integrity: Record<string, unknown>;
+    }>('/security/manual-check');
     return response.data;
   },
 };
@@ -117,7 +135,12 @@ export interface RecurringTrainingSessionCreate extends TrainingSessionCreate {
 }
 
 export const analyticsApiService = {
-  async trackEvent(data: { event_type: string; event_id: string; user_id?: string | undefined; metadata: Record<string, unknown> }): Promise<void> {
+  async trackEvent(data: {
+    event_type: string;
+    event_id: string;
+    user_id?: string | undefined;
+    metadata: Record<string, unknown>;
+  }): Promise<void> {
     await api.post('/analytics/track', data);
   },
 
@@ -169,7 +192,12 @@ export const errorLogsService = {
     await api.post('/errors/log', data);
   },
 
-  async getErrors(params?: { error_type?: string; event_id?: string; skip?: number; limit?: number }): Promise<{ errors: ErrorLogRecord[]; total: number }> {
+  async getErrors(params?: {
+    error_type?: string;
+    event_id?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ errors: ErrorLogRecord[]; total: number }> {
     const response = await api.get<{ errors: ErrorLogRecord[]; total: number }>('/errors', { params });
     return response.data;
   },
@@ -280,7 +308,10 @@ export const dashboardService = {
     const response = await api.get<AdminSummary>('/dashboard/admin-summary');
     return response.data;
   },
-  async getActionItems(params?: { status_filter?: string | undefined; assigned_to_me?: boolean | undefined }): Promise<ActionItemSummary[]> {
+  async getActionItems(params?: {
+    status_filter?: string | undefined;
+    assigned_to_me?: boolean | undefined;
+  }): Promise<ActionItemSummary[]> {
     const response = await api.get<ActionItemSummary[]>('/dashboard/action-items', { params });
     return asArray(response.data);
   },
@@ -352,12 +383,27 @@ export interface EmailTemplatePreview {
 }
 
 export const reportsService = {
-  async getAvailableReports(): Promise<{ available_reports: Array<{ id: string; title: string; description: string; category: string; available: boolean }> }> {
-    const response = await api.get<{ available_reports: Array<{ id: string; title: string; description: string; category: string; available: boolean }> }>('/reports/available');
+  async getAvailableReports(): Promise<{
+    available_reports: Array<{ id: string; title: string; description: string; category: string; available: boolean }>;
+  }> {
+    const response = await api.get<{
+      available_reports: Array<{
+        id: string;
+        title: string;
+        description: string;
+        category: string;
+        available: boolean;
+      }>;
+    }>('/reports/available');
     return response.data;
   },
 
-  async generateReport(data: { report_type: string; start_date?: string; end_date?: string; filters?: Record<string, unknown> }): Promise<Record<string, unknown>> {
+  async generateReport(data: {
+    report_type: string;
+    start_date?: string;
+    end_date?: string;
+    filters?: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
     const response = await api.post<Record<string, unknown>>('/reports/generate', data);
     return response.data;
   },
@@ -414,8 +460,14 @@ export interface NotificationsSummary {
 }
 
 export const memberStatusService = {
-  async changeStatus(userId: string, data: import('../types/user').MemberStatusChangeRequest): Promise<import('../types/user').MemberStatusChangeResponse> {
-    const response = await api.patch<import('../types/user').MemberStatusChangeResponse>(`/users/${userId}/status`, data);
+  async changeStatus(
+    userId: string,
+    data: import('../types/user').MemberStatusChangeRequest
+  ): Promise<import('../types/user').MemberStatusChangeResponse> {
+    const response = await api.patch<import('../types/user').MemberStatusChangeResponse>(
+      `/users/${userId}/status`,
+      data
+    );
     return response.data;
   },
 
@@ -430,7 +482,9 @@ export const memberStatusService = {
   },
 
   async getOverduePropertyReturns(): Promise<{ members: import('../types/user').OverdueMember[] }> {
-    const response = await api.get<{ members: import('../types/user').OverdueMember[] }>('/users/property-return-reminders/overdue');
+    const response = await api.get<{ members: import('../types/user').OverdueMember[] }>(
+      '/users/property-return-reminders/overdue'
+    );
     return response.data;
   },
 
@@ -440,7 +494,9 @@ export const memberStatusService = {
   },
 
   async getPropertyReturnPreview(userId: string): Promise<import('../types/user').PropertyReturnReport> {
-    const response = await api.get<import('../types/user').PropertyReturnReport>(`/users/${userId}/property-return-report`);
+    const response = await api.get<import('../types/user').PropertyReturnReport>(
+      `/users/${userId}/property-return-report`
+    );
     return response.data;
   },
 
@@ -449,8 +505,13 @@ export const memberStatusService = {
     return response.data;
   },
 
-  async updateTierConfig(config: import('../types/user').MembershipTierConfig): Promise<import('../types/user').MembershipTierConfig> {
-    const response = await api.put<import('../types/user').MembershipTierConfig>('/users/membership-tiers/config', config);
+  async updateTierConfig(
+    config: import('../types/user').MembershipTierConfig
+  ): Promise<import('../types/user').MembershipTierConfig> {
+    const response = await api.put<import('../types/user').MembershipTierConfig>(
+      '/users/membership-tiers/config',
+      config
+    );
     return response.data;
   },
 
@@ -466,7 +527,9 @@ export const memberStatusService = {
   },
 
   async getMemberLeaves(userId: string, activeOnly = true): Promise<LeaveOfAbsenceResponse[]> {
-    const response = await api.get<LeaveOfAbsenceResponse[]>(`/users/${userId}/leaves-of-absence`, { params: { active_only: activeOnly } });
+    const response = await api.get<LeaveOfAbsenceResponse[]>(`/users/${userId}/leaves-of-absence`, {
+      params: { active_only: activeOnly },
+    });
     return asArray(response.data);
   },
 
@@ -487,14 +550,17 @@ export const memberStatusService = {
     return response.data;
   },
 
-  async updateLeaveOfAbsence(leaveId: string, data: {
-    leave_type?: string;
-    reason?: string;
-    start_date?: string;
-    end_date?: string;
-    active?: boolean;
-    exempt_from_training_waiver?: boolean;
-  }): Promise<LeaveOfAbsenceResponse> {
+  async updateLeaveOfAbsence(
+    leaveId: string,
+    data: {
+      leave_type?: string;
+      reason?: string;
+      start_date?: string;
+      end_date?: string;
+      active?: boolean;
+      exempt_from_training_waiver?: boolean;
+    }
+  ): Promise<LeaveOfAbsenceResponse> {
     const response = await api.patch<LeaveOfAbsenceResponse>(`/users/leaves-of-absence/${leaveId}`, data);
     return response.data;
   },
@@ -521,14 +587,17 @@ export const memberStatusService = {
     return response.data;
   },
 
-  async updateTrainingWaiver(waiverId: string, data: {
-    waiver_type?: string;
-    reason?: string;
-    start_date?: string;
-    end_date?: string;
-    requirement_ids?: string[];
-    active?: boolean;
-  }): Promise<TrainingWaiverResponse> {
+  async updateTrainingWaiver(
+    waiverId: string,
+    data: {
+      waiver_type?: string;
+      reason?: string;
+      start_date?: string;
+      end_date?: string;
+      requirement_ids?: string[];
+      active?: boolean;
+    }
+  ): Promise<TrainingWaiverResponse> {
     const response = await api.patch<TrainingWaiverResponse>(`/training/waivers/${waiverId}`, data);
     return response.data;
   },
@@ -615,63 +684,113 @@ export interface RoleOption {
 }
 
 export const shiftCompletionService = {
-  async createReport(data: import('../types/training').ShiftCompletionReportCreate): Promise<import('../types/training').ShiftCompletionReport> {
+  async createReport(
+    data: import('../types/training').ShiftCompletionReportCreate
+  ): Promise<import('../types/training').ShiftCompletionReport> {
     const response = await api.post<import('../types/training').ShiftCompletionReport>('/training/shift-reports', data);
     return response.data;
   },
 
-  async getMyReports(params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/my-reports', { params });
+  async getMyReports(params?: {
+    start_date?: string;
+    end_date?: string;
+  }): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>(
+      '/training/shift-reports/my-reports',
+      { params }
+    );
     return response.data;
   },
 
-  async getMyStats(params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').TraineeShiftStats> {
-    const response = await api.get<import('../types/training').TraineeShiftStats>('/training/shift-reports/my-stats', { params });
+  async getMyStats(params?: {
+    start_date?: string;
+    end_date?: string;
+  }): Promise<import('../types/training').TraineeShiftStats> {
+    const response = await api.get<import('../types/training').TraineeShiftStats>('/training/shift-reports/my-stats', {
+      params,
+    });
     return response.data;
   },
 
   async getReportsByOfficer(): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/by-officer');
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>(
+      '/training/shift-reports/by-officer'
+    );
     return response.data;
   },
 
-  async getReportsForTrainee(traineeId: string, params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get<import('../types/training').ShiftCompletionReport[]>(`/training/shift-reports/trainee/${traineeId}`, { params });
+  async getReportsForTrainee(
+    traineeId: string,
+    params?: { start_date?: string; end_date?: string }
+  ): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>(
+      `/training/shift-reports/trainee/${traineeId}`,
+      { params }
+    );
     return response.data;
   },
 
-  async getTraineeStats(traineeId: string, params?: { start_date?: string; end_date?: string }): Promise<import('../types/training').TraineeShiftStats> {
-    const response = await api.get<import('../types/training').TraineeShiftStats>(`/training/shift-reports/trainee/${traineeId}/stats`, { params });
+  async getTraineeStats(
+    traineeId: string,
+    params?: { start_date?: string; end_date?: string }
+  ): Promise<import('../types/training').TraineeShiftStats> {
+    const response = await api.get<import('../types/training').TraineeShiftStats>(
+      `/training/shift-reports/trainee/${traineeId}/stats`,
+      { params }
+    );
     return response.data;
   },
 
-  async getAllReports(params?: { trainee_id?: string; officer_id?: string; start_date?: string; end_date?: string; limit?: number; offset?: number }): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/all', { params });
+  async getAllReports(params?: {
+    trainee_id?: string;
+    officer_id?: string;
+    start_date?: string;
+    end_date?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/all', {
+      params,
+    });
     return response.data;
   },
 
   async getReport(reportId: string): Promise<import('../types/training').ShiftCompletionReport> {
-    const response = await api.get<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}`);
+    const response = await api.get<import('../types/training').ShiftCompletionReport>(
+      `/training/shift-reports/${reportId}`
+    );
     return response.data;
   },
 
-  async acknowledgeReport(reportId: string, comments?: string): Promise<import('../types/training').ShiftCompletionReport> {
-    const response = await api.post<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}/acknowledge`, { trainee_comments: comments });
+  async acknowledgeReport(
+    reportId: string,
+    comments?: string
+  ): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.post<import('../types/training').ShiftCompletionReport>(
+      `/training/shift-reports/${reportId}/acknowledge`,
+      { trainee_comments: comments }
+    );
     return response.data;
   },
 
   async getPendingReviewReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/pending-review');
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>(
+      '/training/shift-reports/pending-review'
+    );
     return response.data;
   },
 
   async getFlaggedReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/flagged');
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>(
+      '/training/shift-reports/flagged'
+    );
     return response.data;
   },
 
   async getDraftReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
-    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/drafts');
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>(
+      '/training/shift-reports/drafts'
+    );
     return response.data;
   },
 
@@ -680,38 +799,68 @@ export const shiftCompletionService = {
     return response.data;
   },
 
-  async updateReport(reportId: string, data: Partial<import('../types/training').ShiftCompletionReportCreate> & { review_status?: string }): Promise<import('../types/training').ShiftCompletionReport> {
-    const response = await api.put<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}`, data);
+  async updateReport(
+    reportId: string,
+    data: Partial<import('../types/training').ShiftCompletionReportCreate> & { review_status?: string }
+  ): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.put<import('../types/training').ShiftCompletionReport>(
+      `/training/shift-reports/${reportId}`,
+      data
+    );
     return response.data;
   },
 
-  async reviewReport(reportId: string, data: { review_status: string; reviewer_notes?: string | undefined; redact_fields?: string[] | undefined }): Promise<import('../types/training').ShiftCompletionReport> {
-    const response = await api.post<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}/review`, data);
+  async reviewReport(
+    reportId: string,
+    data: { review_status: string; reviewer_notes?: string | undefined; redact_fields?: string[] | undefined }
+  ): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.post<import('../types/training').ShiftCompletionReport>(
+      `/training/shift-reports/${reportId}/review`,
+      data
+    );
     return response.data;
   },
 
-  async batchReviewReports(data: { report_ids: string[]; review_status: string; reviewer_notes?: string }): Promise<{ reviewed: number; failed: number }> {
+  async batchReviewReports(data: {
+    report_ids: string[];
+    review_status: string;
+    reviewer_notes?: string;
+  }): Promise<{ reviewed: number; failed: number }> {
     const response = await api.post<{ reviewed: number; failed: number }>('/training/shift-reports/batch-review', data);
     return response.data;
   },
 
   async getOfficerAnalytics(): Promise<import('../types/training').OfficerShiftAnalytics> {
-    const response = await api.get<import('../types/training').OfficerShiftAnalytics>('/training/shift-reports/officer-analytics');
+    const response = await api.get<import('../types/training').OfficerShiftAnalytics>(
+      '/training/shift-reports/officer-analytics'
+    );
     return response.data;
   },
 
-  async previewShiftData(shiftId: string, traineeId: string): Promise<{ hours_on_shift: number | null; calls_responded: number; call_types: string[] }> {
-    const response = await api.get<{ hours_on_shift: number | null; calls_responded: number; call_types: string[] }>(`/training/shift-reports/shift-preview/${shiftId}/${traineeId}`);
+  async previewShiftData(
+    shiftId: string,
+    traineeId: string
+  ): Promise<{ hours_on_shift: number | null; calls_responded: number; call_types: string[] }> {
+    const response = await api.get<{ hours_on_shift: number | null; calls_responded: number; call_types: string[] }>(
+      `/training/shift-reports/shift-preview/${shiftId}/${traineeId}`
+    );
     return response.data;
   },
 
   async getShiftCrewStatus(shiftId: string): Promise<import('../types/training').ShiftCrewMember[]> {
-    const response = await api.get<import('../types/training').ShiftCrewMember[]>(`/training/shift-reports/shift-crew/${shiftId}`);
+    const response = await api.get<import('../types/training').ShiftCrewMember[]>(
+      `/training/shift-reports/shift-crew/${shiftId}`
+    );
     return response.data;
   },
 
-  async batchCreateReports(data: import('../types/training').BatchShiftReportCreate): Promise<import('../types/training').BatchShiftReportResponse> {
-    const response = await api.post<import('../types/training').BatchShiftReportResponse>('/training/shift-reports/batch', data);
+  async batchCreateReports(
+    data: import('../types/training').BatchShiftReportCreate
+  ): Promise<import('../types/training').BatchShiftReportResponse> {
+    const response = await api.post<import('../types/training').BatchShiftReportResponse>(
+      '/training/shift-reports/batch',
+      data
+    );
     return response.data;
   },
 };

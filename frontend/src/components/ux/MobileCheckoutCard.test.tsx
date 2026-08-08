@@ -27,12 +27,7 @@ describe('MobileCheckoutCard', () => {
 
   it('renders member name and dates', () => {
     render(
-      <MobileCheckoutCard
-        {...baseProps}
-        memberName="John Smith"
-        checkoutDate="Jan 15, 2026"
-        dueDate="Feb 15, 2026"
-      />
+      <MobileCheckoutCard {...baseProps} memberName="John Smith" checkoutDate="Jan 15, 2026" dueDate="Feb 15, 2026" />
     );
     expect(screen.getByText('John Smith')).toBeInTheDocument();
     expect(screen.getByText('Jan 15, 2026')).toBeInTheDocument();
@@ -62,13 +57,7 @@ describe('MobileCheckoutCard', () => {
   });
 
   it('applies overdue styling to due date', () => {
-    render(
-      <MobileCheckoutCard
-        {...baseProps}
-        dueDate="Jan 1, 2026"
-        isOverdue
-      />
-    );
+    render(<MobileCheckoutCard {...baseProps} dueDate="Jan 1, 2026" isOverdue />);
     const dueDate = screen.getByText('Jan 1, 2026');
     expect(dueDate.className).toContain('text-red');
   });

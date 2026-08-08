@@ -167,9 +167,12 @@ export interface EnhancedErrorProps {
 /**
  * Get enhanced error information
  */
-export function getEnhancedError(error: string | Error, context?: {
-  eventId?: string;
-  userId?: string;
-}): ErrorLog {
+export function getEnhancedError(
+  error: string | Error,
+  context?: {
+    eventId?: string;
+    userId?: string;
+  }
+): ErrorLog {
   return errorTracker.logError(error, context);
 }

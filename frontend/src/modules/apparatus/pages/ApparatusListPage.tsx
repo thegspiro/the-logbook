@@ -103,23 +103,25 @@ export const ApparatusListPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to">
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br">
       {/* Header */}
-      <header className="bg-theme-input-bg backdrop-blur-xs border-b border-theme-surface-border px-4 sm:px-6 py-4">
-        <div className="max-w-7xl mx-auto">
+      <header className="bg-theme-input-bg border-theme-surface-border border-b px-4 py-4 backdrop-blur-xs sm:px-6">
+        <div className="mx-auto max-w-7xl">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center space-x-3 min-w-0">
-              <div className="bg-red-600 rounded-lg p-2 shrink-0">
-                <Truck className="w-6 h-6 text-white" />
+            <div className="flex min-w-0 items-center space-x-3">
+              <div className="shrink-0 rounded-lg bg-red-600 p-2">
+                <Truck className="h-6 w-6 text-white" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-theme-text-primary text-lg sm:text-xl font-bold truncate">Apparatus Management</h1>
-                <p className="text-theme-text-muted text-sm hidden sm:block">Manage your fleet vehicles and equipment</p>
+                <h1 className="text-theme-text-primary truncate text-lg font-bold sm:text-xl">Apparatus Management</h1>
+                <p className="text-theme-text-muted hidden text-sm sm:block">
+                  Manage your fleet vehicles and equipment
+                </p>
               </div>
             </div>
             <button
               onClick={() => void navigate('/dashboard')}
-              className="text-theme-text-secondary hover:text-theme-text-primary transition-colors text-sm shrink-0 max-md:inline-flex max-md:min-h-[44px] max-md:items-center"
+              className="text-theme-text-secondary hover:text-theme-text-primary shrink-0 text-sm transition-colors max-md:inline-flex max-md:min-h-[44px] max-md:items-center"
             >
               <span className="hidden sm:inline">← Back to Dashboard</span>
               <span className="sm:hidden">← Back</span>
@@ -128,107 +130,110 @@ export const ApparatusListPage: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Error Display */}
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center justify-between">
+          <div className="mb-6 flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 p-4">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400" />
+              <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-400" />
               <span className="text-red-700 dark:text-red-300">{error}</span>
             </div>
-            <button onClick={clearError} className="text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300">
+            <button
+              onClick={clearError}
+              className="text-red-700 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+            >
               Dismiss
             </button>
           </div>
         )}
 
         {/* Fleet Summary Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-8">
+        <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total Fleet</p>
-            <p className="text-theme-text-primary text-2xl font-bold mt-1">
-              {isLoadingSummary ? '...' : fleetSummary?.totalApparatus ?? 0}
+            <p className="text-theme-text-primary mt-1 text-2xl font-bold">
+              {isLoadingSummary ? '...' : (fleetSummary?.totalApparatus ?? 0)}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">In Service</p>
-            <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">
-              {isLoadingSummary ? '...' : fleetSummary?.inServiceCount ?? 0}
+            <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">
+              {isLoadingSummary ? '...' : (fleetSummary?.inServiceCount ?? 0)}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Out of Service</p>
-            <p className="text-red-700 dark:text-red-400 text-2xl font-bold mt-1">
-              {isLoadingSummary ? '...' : fleetSummary?.outOfServiceCount ?? 0}
+            <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-400">
+              {isLoadingSummary ? '...' : (fleetSummary?.outOfServiceCount ?? 0)}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">In Maintenance</p>
-            <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">
-              {isLoadingSummary ? '...' : fleetSummary?.inMaintenanceCount ?? 0}
+            <p className="mt-1 text-2xl font-bold text-yellow-700 dark:text-yellow-400">
+              {isLoadingSummary ? '...' : (fleetSummary?.inMaintenanceCount ?? 0)}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Reserve</p>
-            <p className="text-blue-700 dark:text-blue-400 text-2xl font-bold mt-1">
-              {isLoadingSummary ? '...' : fleetSummary?.reserveCount ?? 0}
+            <p className="mt-1 text-2xl font-bold text-blue-700 dark:text-blue-400">
+              {isLoadingSummary ? '...' : (fleetSummary?.reserveCount ?? 0)}
             </p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Maint. Due</p>
-            <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">
-              {isLoadingSummary ? '...' : (fleetSummary?.maintenanceDueSoon ?? 0) + (fleetSummary?.maintenanceOverdue ?? 0)}
+            <p className="mt-1 text-2xl font-bold text-orange-700 dark:text-orange-400">
+              {isLoadingSummary
+                ? '...'
+                : (fleetSummary?.maintenanceDueSoon ?? 0) + (fleetSummary?.maintenanceOverdue ?? 0)}
             </p>
           </div>
         </div>
 
         {/* Actions Bar */}
         <div className="card mb-6 p-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             {/* Search */}
-            <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
+            <div className="relative w-full flex-1 md:max-w-md">
+              <Search className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 transform" />
               <input
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
                 type="text"
-                aria-label="Search by unit number, name, or VIN..." placeholder="Search by unit number, name, or VIN..."
+                aria-label="Search by unit number, name, or VIN..."
+                placeholder="Search by unit number, name, or VIN..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="form-input pl-10 placeholder-theme-text-muted pr-4"
+                className="form-input placeholder-theme-text-muted pr-4 pl-10"
               />
             </div>
 
             {/* Filter Toggle */}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center space-x-2 px-4 py-2 max-md:min-h-[44px] rounded-lg transition-colors ${
+              className={`flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors max-md:min-h-[44px] ${
                 showFilters
                   ? 'bg-red-600 text-white'
                   : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
               }`}
             >
-              <Filter className="w-4 h-4" />
+              <Filter className="h-4 w-4" />
               <span>Filters</span>
             </button>
 
             {/* Add Button */}
-            <button
-              onClick={() => void navigate('/apparatus/new')}
-              className="btn-primary flex items-center space-x-2"
-            >
-              <Plus className="w-4 h-4" />
+            <button onClick={() => void navigate('/apparatus/new')} className="btn-primary flex items-center space-x-2">
+              <Plus className="h-4 w-4" />
               <span>Add Apparatus</span>
             </button>
           </div>
 
           {/* Expanded Filters */}
           {showFilters && (
-            <div className="mt-4 pt-4 border-t border-theme-surface-border grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="border-theme-surface-border mt-4 grid grid-cols-1 gap-4 border-t pt-4 sm:grid-cols-2 md:grid-cols-4">
               {/* Type Filter */}
               <div>
-                <label className="block text-sm text-theme-text-muted mb-1">Type</label>
+                <label className="text-theme-text-muted mb-1 block text-sm">Type</label>
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
@@ -246,7 +251,7 @@ export const ApparatusListPage: React.FC = () => {
 
               {/* Status Filter */}
               <div>
-                <label className="block text-sm text-theme-text-muted mb-1">Status</label>
+                <label className="text-theme-text-muted mb-1 block text-sm">Status</label>
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
@@ -264,7 +269,7 @@ export const ApparatusListPage: React.FC = () => {
 
               {/* Show Archived */}
               <div className="flex items-end">
-                <label className="flex items-center space-x-2 cursor-pointer">
+                <label className="flex cursor-pointer items-center space-x-2">
                   <input
                     type="checkbox"
                     checked={showArchived}
@@ -284,7 +289,7 @@ export const ApparatusListPage: React.FC = () => {
                     setShowArchived(false);
                     setSearchQuery('');
                   }}
-                  className="px-4 py-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 transition-colors"
                 >
                   Clear Filters
                 </button>
@@ -296,13 +301,13 @@ export const ApparatusListPage: React.FC = () => {
         {/* Apparatus Table */}
         {isLoading ? (
           <div className="card p-12 text-center" role="status" aria-live="polite">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
+            <div className="border-theme-text-primary mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2"></div>
             <p className="text-theme-text-secondary">Loading apparatus...</p>
           </div>
         ) : apparatusList.length === 0 ? (
           <div className="card p-12 text-center">
-            <Truck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
-            <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Apparatus Found</h3>
+            <Truck className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
+            <h3 className="text-theme-text-primary mb-2 text-xl font-bold">No Apparatus Found</h3>
             <p className="text-theme-text-secondary mb-6">
               {searchQuery || filterType || filterStatus
                 ? 'Try adjusting your search or filters'
@@ -311,9 +316,9 @@ export const ApparatusListPage: React.FC = () => {
             {!searchQuery && !filterType && !filterStatus && (
               <button
                 onClick={() => void navigate('/apparatus/new')}
-                className="btn-primary flex items-center mx-auto px-6 py-3 space-x-2"
+                className="btn-primary mx-auto flex items-center space-x-2 px-6 py-3"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="h-5 w-5" />
                 <span>Add Apparatus</span>
               </button>
             )}
@@ -323,38 +328,62 @@ export const ApparatusListPage: React.FC = () => {
             <div className="card overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-theme-input-bg border-b border-theme-surface-border">
+                  <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
-                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="text-theme-text-secondary px-3 py-3 text-left text-xs font-medium tracking-wider uppercase sm:px-6"
+                      >
                         Unit
                       </th>
-                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
+                      <th
+                        scope="col"
+                        className="text-theme-text-secondary table-col-secondary px-3 py-3 text-left text-xs font-medium tracking-wider uppercase sm:px-6"
+                      >
                         Type
                       </th>
-                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
+                      <th
+                        scope="col"
+                        className="text-theme-text-secondary table-col-secondary px-3 py-3 text-left text-xs font-medium tracking-wider uppercase sm:px-6"
+                      >
                         Vehicle
                       </th>
-                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="text-theme-text-secondary px-3 py-3 text-left text-xs font-medium tracking-wider uppercase sm:px-6"
+                      >
                         Status
                       </th>
-                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-secondary">
-                        <Users className="w-4 h-4 inline mr-1" />
+                      <th
+                        scope="col"
+                        className="text-theme-text-secondary table-col-secondary px-3 py-3 text-left text-xs font-medium tracking-wider uppercase sm:px-6"
+                      >
+                        <Users className="mr-1 inline h-4 w-4" />
                         Min Crew
                       </th>
-                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-tertiary">
-                        <Gauge className="w-4 h-4 inline mr-1" />
+                      <th
+                        scope="col"
+                        className="text-theme-text-secondary table-col-tertiary px-3 py-3 text-left text-xs font-medium tracking-wider uppercase sm:px-6"
+                      >
+                        <Gauge className="mr-1 inline h-4 w-4" />
                         Mileage
                       </th>
-                      <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider table-col-tertiary">
-                        <Clock className="w-4 h-4 inline mr-1" />
+                      <th
+                        scope="col"
+                        className="text-theme-text-secondary table-col-tertiary px-3 py-3 text-left text-xs font-medium tracking-wider uppercase sm:px-6"
+                      >
+                        <Clock className="mr-1 inline h-4 w-4" />
                         Hours
                       </th>
-                      <th scope="col" className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="text-theme-text-secondary px-3 py-3 text-right text-xs font-medium tracking-wider uppercase sm:px-6"
+                      >
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-theme-surface-border">
+                  <tbody className="divide-theme-surface-border divide-y">
                     {apparatusList.map((apparatus) => {
                       const apparatusType = apparatus.apparatusType || getTypeById(apparatus.apparatusTypeId);
                       const status = apparatus.statusRecord || getStatusById(apparatus.statusId);
@@ -366,103 +395,97 @@ export const ApparatusListPage: React.FC = () => {
                             apparatus.isArchived ? 'opacity-60' : ''
                           }`}
                         >
-                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="flex items-center">
-                              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold shrink-0">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-600 font-bold text-white">
                                 {apparatus.unitNumber.substring(0, 2)}
                               </div>
                               <div className="ml-3 min-w-0">
-                                <div className="text-theme-text-primary font-medium truncate">
+                                <div className="text-theme-text-primary truncate font-medium">
                                   {apparatus.unitNumber}
                                 </div>
                                 {apparatus.name && (
-                                  <div className="text-theme-text-muted text-sm truncate">{apparatus.name}</div>
+                                  <div className="text-theme-text-muted truncate text-sm">{apparatus.name}</div>
                                 )}
                               </div>
                             </div>
                           </td>
-                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-secondary">
+                          <td className="table-col-secondary px-3 py-4 whitespace-nowrap sm:px-6">
                             {apparatusType && <ApparatusTypeBadge type={apparatusType} />}
                           </td>
-                          <td className="px-3 sm:px-6 py-4 table-col-secondary">
+                          <td className="table-col-secondary px-3 py-4 sm:px-6">
                             <div className="text-theme-text-primary text-sm">
                               {apparatus.year && apparatus.make && apparatus.model
                                 ? `${apparatus.year} ${apparatus.make} ${apparatus.model}`
                                 : apparatus.make && apparatus.model
-                                ? `${apparatus.make} ${apparatus.model}`
-                                : '-'}
+                                  ? `${apparatus.make} ${apparatus.model}`
+                                  : '-'}
                             </div>
                           </td>
-                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="flex items-center gap-2">
                               {status && <StatusBadge status={status} />}
                               {apparatus.hasDeficiency && (
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20"
+                                  className="inline-flex items-center gap-1 rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:text-red-400"
                                   title="Equipment deficiency reported"
                                 >
-                                  <AlertTriangle className="w-3 h-3" />
+                                  <AlertTriangle className="h-3 w-3" />
                                   Deficiency
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-secondary">
+                          <td className="table-col-secondary px-3 py-4 whitespace-nowrap sm:px-6">
+                            <div className="text-theme-text-secondary text-sm">{apparatus.minStaffing}</div>
+                          </td>
+                          <td className="table-col-tertiary px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="text-theme-text-secondary text-sm">
-                              {apparatus.minStaffing}
+                              {apparatus.currentMileage ? formatNumber(apparatus.currentMileage) : '-'}
                             </div>
                           </td>
-                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-tertiary">
+                          <td className="table-col-tertiary px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="text-theme-text-secondary text-sm">
-                              {apparatus.currentMileage
-                                ? formatNumber(apparatus.currentMileage)
-                                : '-'}
+                              {apparatus.currentHours ? formatNumber(apparatus.currentHours) : '-'}
                             </div>
                           </td>
-                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap table-col-tertiary">
-                            <div className="text-theme-text-secondary text-sm">
-                              {apparatus.currentHours
-                                ? formatNumber(apparatus.currentHours)
-                                : '-'}
-                            </div>
-                          </td>
-                          <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right">
+                          <td className="px-3 py-4 text-right whitespace-nowrap sm:px-6">
                             <div className="flex items-center justify-end space-x-1 sm:space-x-2">
                               <button
                                 onClick={() => void navigate(`/apparatus/print-labels?ids=${apparatus.id}`)}
-                                className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-sm transition-colors"
+                                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 transition-colors sm:inline-flex"
                                 title="Print label"
                               >
-                                <Printer className="w-4 h-4" />
+                                <Printer className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
-                                className="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded-sm transition-colors"
+                                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                 title="View Details"
                               >
-                                <Eye className="w-4 h-4" />
+                                <Eye className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() => void navigate(`/apparatus/${apparatus.id}/edit`)}
-                                className="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-green-700 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-500/10 rounded-sm transition-colors"
+                                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-green-700 transition-colors hover:bg-green-500/10 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
                                 title="Edit"
                               >
-                                <Edit className="w-4 h-4" />
+                                <Edit className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
-                                className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-yellow-700 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-500/10 rounded-sm transition-colors"
+                                className="hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-yellow-700 transition-colors hover:bg-yellow-500/10 hover:text-yellow-700 sm:inline-flex dark:text-yellow-400 dark:hover:text-yellow-300"
                                 title="View Details"
                               >
-                                <Wrench className="w-4 h-4" />
+                                <Wrench className="h-4 w-4" />
                               </button>
                               {!apparatus.isArchived && (
                                 <button
                                   onClick={() => void navigate(`/apparatus/${apparatus.id}`)}
-                                  className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-theme-text-muted hover:text-theme-text-secondary hover:bg-theme-surface-secondary rounded-sm transition-colors"
+                                  className="text-theme-text-muted hover:text-theme-text-secondary hover:bg-theme-surface-secondary hidden min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 transition-colors sm:inline-flex"
                                   title="Archive"
                                 >
-                                  <Archive className="w-4 h-4" />
+                                  <Archive className="h-4 w-4" />
                                 </button>
                               )}
                             </div>
@@ -477,7 +500,7 @@ export const ApparatusListPage: React.FC = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row">
                 <p className="text-theme-text-muted text-sm">
                   Showing page {currentPage} of {totalPages} ({totalApparatus} total)
                 </p>
@@ -485,9 +508,9 @@ export const ApparatusListPage: React.FC = () => {
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <ChevronLeft className="w-5 h-5" />
+                    <ChevronLeft className="h-5 w-5" />
                   </button>
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNum;
@@ -504,7 +527,7 @@ export const ApparatusListPage: React.FC = () => {
                       <button
                         key={pageNum}
                         onClick={() => handlePageChange(pageNum)}
-                        className={`min-w-[40px] h-10 rounded-lg transition-colors text-sm font-medium ${
+                        className={`h-10 min-w-[40px] rounded-lg text-sm font-medium transition-colors ${
                           currentPage === pageNum
                             ? 'bg-red-600 text-white'
                             : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -517,9 +540,9 @@ export const ApparatusListPage: React.FC = () => {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRight className="h-5 w-5" />
                   </button>
                 </div>
               </div>

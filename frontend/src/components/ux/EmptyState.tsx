@@ -33,18 +33,18 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`text-center py-12 px-4 animate-fade-in ${className}`}>
+    <div className={`animate-fade-in px-4 py-12 text-center ${className}`}>
       {Icon && (
-        <div className="mx-auto w-16 h-16 rounded-full bg-gradient-to-br from-theme-surface-secondary to-theme-surface-hover flex items-center justify-center mb-5 shadow-sm animate-bounce-subtle">
-          <Icon className="w-8 h-8 text-theme-text-muted" aria-hidden="true" />
+        <div className="from-theme-surface-secondary to-theme-surface-hover animate-bounce-subtle mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br shadow-sm">
+          <Icon className="text-theme-text-muted h-8 w-8" aria-hidden="true" />
         </div>
       )}
-      <h3 className="text-lg font-semibold text-theme-text-primary mb-2">{title}</h3>
+      <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">{title}</h3>
       {description && (
-        <p className="text-sm text-theme-text-muted max-w-sm mx-auto mb-6 leading-relaxed">{description}</p>
+        <p className="text-theme-text-muted mx-auto mb-6 max-w-sm text-sm leading-relaxed">{description}</p>
       )}
       {actions && actions.length > 0 && (
-        <div className="flex items-center justify-center flex-wrap gap-3">
+        <div className="flex flex-wrap items-center justify-center gap-3">
           {actions.map((action, index) => {
             const ActionIcon = action.icon;
             return (
@@ -57,7 +57,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
                     : 'btn-primary inline-flex items-center gap-2'
                 }
               >
-                {ActionIcon && <ActionIcon className="w-4 h-4" />}
+                {ActionIcon && <ActionIcon className="h-4 w-4" />}
                 {action.label}
               </button>
             );

@@ -14,18 +14,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import {
-  ArrowDown,
-  ArrowUp,
-  CalendarRange,
-  Clock,
-  GraduationCap,
-  Pencil,
-  Plus,
-  Trash2,
-  Wand2,
-  X,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, CalendarRange, Clock, GraduationCap, Pencil, Plus, Trash2, Wand2, X } from 'lucide-react';
 import { courseSyllabusService } from '../../services/trainingServices';
 import { trainingService } from '../../services/api';
 import { Skeleton } from '../ux/Skeleton';
@@ -33,11 +22,7 @@ import { EmptyState } from '../ux/EmptyState';
 import { ConfirmDialog } from '../ux/ConfirmDialog';
 import { MEETING_WEEKDAYS } from '../../constants/enums';
 import { getErrorMessage } from '../../utils/errorHandling';
-import type {
-  CourseClass,
-  CourseClassCreate,
-  TrainingCourse,
-} from '../../types/training';
+import type { CourseClass, CourseClassCreate, TrainingCourse } from '../../types/training';
 
 interface CourseSyllabusBuilderProps {
   course: TrainingCourse;
@@ -50,7 +35,7 @@ const QUARTER_HOURS = ['00', '15', '30', '45'];
 
 /** Options for a plain time select, restricted to quarter hours. */
 const TIME_OPTIONS: string[] = Array.from({ length: 24 }, (_, hour) =>
-  QUARTER_HOURS.map((m) => `${String(hour).padStart(2, '0')}:${m}`),
+  QUARTER_HOURS.map((m) => `${String(hour).padStart(2, '0')}:${m}`)
 ).flat();
 
 /** "Day 1", "Day 4" — offsets are zero-based, officers count from one. */
@@ -94,22 +79,14 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
   onSubmit,
   onCreateCourse,
 }) => {
-  const [classCourseId, setClassCourseId] = useState(
-    initial?.class_course_id ?? '',
-  );
+  const [classCourseId, setClassCourseId] = useState(initial?.class_course_id ?? '');
   const [title, setTitle] = useState(initial?.title ?? '');
   const [sectionName, setSectionName] = useState(initial?.section_name ?? '');
   const [dayOffset, setDayOffset] = useState(String(initial?.day_offset ?? 0));
   const [startTime, setStartTime] = useState(initial?.start_time ?? '19:00');
-  const [durationMinutes, setDurationMinutes] = useState(
-    String(initial?.duration_minutes ?? 180),
-  );
-  const [creditHours, setCreditHours] = useState(
-    initial?.credit_hours != null ? String(initial.credit_hours) : '',
-  );
-  const [countsTowardCert, setCountsTowardCert] = useState(
-    initial?.counts_toward_certification ?? true,
-  );
+  const [durationMinutes, setDurationMinutes] = useState(String(initial?.duration_minutes ?? 180));
+  const [creditHours, setCreditHours] = useState(initial?.credit_hours != null ? String(initial.credit_hours) : '');
+  const [countsTowardCert, setCountsTowardCert] = useState(initial?.counts_toward_certification ?? true);
 
   const selectedCourse = courses.find((c) => c.id === classCourseId);
 
@@ -140,10 +117,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="card-secondary space-y-4 border-l-4 border-l-red-500 p-4"
-    >
+    <form onSubmit={handleSubmit} className="card-secondary space-y-4 border-l-4 border-l-red-500 p-4">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="md:col-span-2">
           <label className="form-label" htmlFor="class-course">
@@ -169,7 +143,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
               <button
                 type="button"
                 onClick={() => void handleCreateCourse()}
-                className="btn-icon shrink-0 border border-theme-surface-border"
+                className="btn-icon border-theme-surface-border shrink-0 border"
                 aria-label="Create a new course"
                 title="Create a new course"
               >
@@ -178,7 +152,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
             )}
           </div>
           {selectedCourse && (
-            <p className="mt-1 text-xs text-theme-text-muted">
+            <p className="text-theme-text-muted mt-1 text-xs">
               {selectedCourse.credit_hours != null
                 ? `${selectedCourse.credit_hours} credit hours`
                 : 'No credit hours set on this course'}
@@ -213,9 +187,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
             placeholder="e.g. Orientation & Safety"
             className="form-input"
           />
-          <p className="mt-1 text-xs text-theme-text-muted">
-            Sections become phases when a pipeline is generated.
-          </p>
+          <p className="text-theme-text-muted mt-1 text-xs">Sections become phases when a pipeline is generated.</p>
         </div>
 
         <div>
@@ -230,9 +202,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
             onChange={(e) => setDayOffset(e.target.value)}
             className="form-input"
           />
-          <p className="mt-1 text-xs text-theme-text-muted">
-            Days after the course start. 0 is the first day.
-          </p>
+          <p className="text-theme-text-muted mt-1 text-xs">Days after the course start. 0 is the first day.</p>
         </div>
 
         <div>
@@ -270,8 +240,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
 
         <div>
           <label className="form-label" htmlFor="class-credits">
-            Credit hours{' '}
-            <span className="text-theme-text-muted">(optional)</span>
+            Credit hours <span className="text-theme-text-muted">(optional)</span>
           </label>
           <input
             id="class-credits"
@@ -280,11 +249,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
             step={0.25}
             value={creditHours}
             onChange={(e) => setCreditHours(e.target.value)}
-            placeholder={
-              selectedCourse?.credit_hours != null
-                ? String(selectedCourse.credit_hours)
-                : 'From the course'
-            }
+            placeholder={selectedCourse?.credit_hours != null ? String(selectedCourse.credit_hours) : 'From the course'}
             className="form-input"
           />
         </div>
@@ -298,13 +263,10 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
           className="mt-1"
         />
         <span>
-          <span className="font-medium text-theme-text-primary">
-            Counts toward certification requirements
-          </span>
-          <span className="block text-theme-text-muted">
-            Leave on for classes delivered the way a certifying body accepts.
-            Turn it off for an informal in-house drill: attendance still earns
-            hours, but the class won&rsquo;t advance a certificate.
+          <span className="text-theme-text-primary font-medium">Counts toward certification requirements</span>
+          <span className="text-theme-text-muted block">
+            Leave on for classes delivered the way a certifying body accepts. Turn it off for an informal in-house
+            drill: attendance still earns hours, but the class won&rsquo;t advance a certificate.
           </span>
         </span>
       </label>
@@ -321,11 +283,7 @@ const ClassRowForm: React.FC<ClassRowFormProps> = ({
   );
 };
 
-export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({
-  course,
-  onCreateCourse,
-  onChange,
-}) => {
+export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({ course, onCreateCourse, onChange }) => {
   const [classes, setClasses] = useState<CourseClass[]>([]);
   const [catalog, setCatalog] = useState<TrainingCourse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -359,10 +317,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({
     void load();
   }, [load]);
 
-  const totalCreditHours = useMemo(
-    () => classes.reduce((sum, c) => sum + (c.credit_hours ?? 0), 0),
-    [classes],
-  );
+  const totalCreditHours = useMemo(() => classes.reduce((sum, c) => sum + (c.credit_hours ?? 0), 0), [classes]);
 
   const spanDays = useMemo(() => {
     if (classes.length === 0) return 0;
@@ -424,7 +379,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({
     try {
       const saved = await courseSyllabusService.reorderClasses(
         course.id,
-        reordered.map((c) => c.id),
+        reordered.map((c) => c.id)
       );
       setClasses(saved);
       onChange?.(saved);
@@ -458,9 +413,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({
 
   const toggleMeetingDay = (day: number) => {
     setMeetingDays((current) =>
-      current.includes(day)
-        ? current.filter((d) => d !== day)
-        : [...current, day].sort((a, b) => a - b),
+      current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort((a, b) => a - b)
     );
   };
 
@@ -478,17 +431,15 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="flex items-center gap-2 font-semibold text-theme-text-primary">
+          <h3 className="text-theme-text-primary flex items-center gap-2 font-semibold">
             <GraduationCap className="h-5 w-5 text-red-700 dark:text-red-500" />
             <span>Classes</span>
           </h3>
-          <p className="text-sm text-theme-text-muted">
+          <p className="text-theme-text-muted text-sm">
             {classes.length === 0
               ? 'No classes yet — add the subjects this course covers.'
               : `${classes.length} class${classes.length === 1 ? '' : 'es'} over ${spanDays} day${spanDays === 1 ? '' : 's'}` +
-                (totalCreditHours > 0
-                  ? ` · ${totalCreditHours} credit hours`
-                  : '')}
+                (totalCreditHours > 0 ? ` · ${totalCreditHours} credit hours` : '')}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -496,7 +447,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({
             <button
               type="button"
               onClick={() => setShowPattern((s) => !s)}
-              className="btn-icon flex items-center gap-2 border border-theme-surface-border px-3"
+              className="btn-icon border-theme-surface-border flex items-center gap-2 border px-3"
             >
               <Wand2 className="h-4 w-4" />
               <span className="text-sm">Fill from pattern</span>
@@ -520,12 +471,9 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({
         <div className="card-secondary space-y-3 p-4">
           <div className="flex items-start justify-between">
             <div>
-              <p className="font-medium text-theme-text-primary">
-                Fill offsets from a meeting pattern
-              </p>
-              <p className="text-sm text-theme-text-muted">
-                Spaces every class across the days the course meets. Individual
-                days stay editable afterwards.
+              <p className="text-theme-text-primary font-medium">Fill offsets from a meeting pattern</p>
+              <p className="text-theme-text-muted text-sm">
+                Spaces every class across the days the course meets. Individual days stay editable afterwards.
               </p>
             </div>
             <button
@@ -574,12 +522,7 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              onClick={() => void handleAutofill()}
-              disabled={submitting}
-              className="btn-primary"
-            >
+            <button type="button" onClick={() => void handleAutofill()} disabled={submitting} className="btn-primary">
               Apply to all {classes.length} classes
             </button>
           </div>
@@ -625,12 +568,9 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({
             }
 
             return (
-              <li
-                key={item.id}
-                className="card-secondary flex items-start gap-3 p-3"
-              >
+              <li key={item.id} className="card-secondary flex items-start gap-3 p-3">
                 <div className="flex flex-col items-center gap-1 pt-1">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-theme-surface text-xs font-semibold text-theme-text-primary">
+                  <span className="bg-theme-surface text-theme-text-primary flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold">
                     {item.sequence}
                   </span>
                   <button
@@ -655,42 +595,29 @@ export const CourseSyllabusBuilder: React.FC<CourseSyllabusBuilderProps> = ({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-theme-text-primary">
+                    <span className="text-theme-text-primary font-medium">
                       {item.title || item.class_course_name || 'Class'}
                     </span>
-                    {item.section_name && (
-                      <span className="badge">{item.section_name}</span>
-                    )}
+                    {item.section_name && <span className="badge">{item.section_name}</span>}
                     {item.class_course_active === false && (
-                      <span className="badge bg-red-500/20 text-red-700 dark:text-red-400">
-                        Course archived
-                      </span>
+                      <span className="badge bg-red-500/20 text-red-700 dark:text-red-400">Course archived</span>
                     )}
                   </div>
 
-                  {item.class_course_name &&
-                    item.title &&
-                    item.title !== item.class_course_name && (
-                      <p className="text-xs text-theme-text-muted">
-                        {item.class_course_name}
-                      </p>
-                    )}
+                  {item.class_course_name && item.title && item.title !== item.class_course_name && (
+                    <p className="text-theme-text-muted text-xs">{item.class_course_name}</p>
+                  )}
 
-                  <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-theme-text-muted">
-                    <span className="font-medium text-theme-text-secondary">
-                      {dayLabel(item.day_offset)}
-                    </span>
+                  <div className="text-theme-text-muted mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                    <span className="text-theme-text-secondary font-medium">{dayLabel(item.day_offset)}</span>
                     <span>{gapLabel(item.day_offset, previousOffset)}</span>
                     {item.start_time && (
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {item.start_time} ·{' '}
-                        {formatDuration(item.duration_minutes)}
+                        {item.start_time} · {formatDuration(item.duration_minutes)}
                       </span>
                     )}
-                    {item.credit_hours != null && (
-                      <span>{item.credit_hours} credits</span>
-                    )}
+                    {item.credit_hours != null && <span>{item.credit_hours} credits</span>}
                     {item.instructor && <span>{item.instructor}</span>}
                   </div>
                 </div>

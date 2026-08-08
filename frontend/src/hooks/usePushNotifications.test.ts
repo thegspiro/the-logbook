@@ -87,9 +87,7 @@ describe('usePushNotifications', () => {
       await result.current.subscribe();
     });
 
-    expect(pm.subscribe).toHaveBeenCalledWith(
-      expect.objectContaining({ userVisibleOnly: true }),
-    );
+    expect(pm.subscribe).toHaveBeenCalledWith(expect.objectContaining({ userVisibleOnly: true }));
     expect(mockPost).toHaveBeenCalledWith('/notifications/push/subscribe', SUB.toJSON());
     expect(result.current.subscribed).toBe(true);
   });

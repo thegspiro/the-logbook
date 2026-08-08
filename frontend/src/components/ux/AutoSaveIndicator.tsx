@@ -18,11 +18,7 @@ interface AutoSaveIndicatorProps {
   lastSaved?: Date | null;
 }
 
-export const AutoSaveIndicator: React.FC<AutoSaveIndicatorProps> = ({
-  status,
-  className = '',
-  lastSaved,
-}) => {
+export const AutoSaveIndicator: React.FC<AutoSaveIndicatorProps> = ({ status, className = '', lastSaved }) => {
   const tz = useTimezone();
   const configs = {
     idle: { icon: Cloud, text: '', color: 'text-theme-text-muted' },
@@ -40,13 +36,12 @@ export const AutoSaveIndicator: React.FC<AutoSaveIndicatorProps> = ({
   return (
     <div
       className={`inline-flex items-center gap-1.5 text-xs ${config.color} ${className}`}
-      role="status" aria-live="polite"
+      role="status"
+      aria-live="polite"
     >
-      <Icon className={`w-3.5 h-3.5 ${status === 'saving' ? 'animate-spin' : ''}`} />
+      <Icon className={`h-3.5 w-3.5 ${status === 'saving' ? 'animate-spin' : ''}`} />
       <span>{config.text}</span>
-      {status === 'saved' && lastSaved && (
-        <span className="text-theme-text-muted">at {formatTime(lastSaved, tz)}</span>
-      )}
+      {status === 'saved' && lastSaved && <span className="text-theme-text-muted">at {formatTime(lastSaved, tz)}</span>}
     </div>
   );
 };

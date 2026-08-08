@@ -6,7 +6,13 @@
  * scheduling pages and components.
  */
 
-import type { ShiftRecord, ShiftAttendanceRecord, SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord } from '../modules/scheduling/services/api';
+import type {
+  ShiftRecord,
+  ShiftAttendanceRecord,
+  SchedulingSummary,
+  ShiftTemplateRecord,
+  BasicApparatusRecord,
+} from '../modules/scheduling/services/api';
 import type { AssignmentStatus, RequestStatus } from '../constants/enums';
 
 // Re-export the API-level types so consumers can import from one place

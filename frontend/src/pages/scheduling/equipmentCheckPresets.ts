@@ -27,7 +27,8 @@ export const CHECK_TYPE_HELP: Record<string, string> = {
   pass_fail: 'Simple pass or fail check. Good for binary inspections like "lights working" or "no visible damage".',
   present: 'Verify the item is present. Use for mandatory equipment that must be on the apparatus.',
   functional: 'Test that the item works correctly. Similar to pass/fail but implies active testing.',
-  quantity: 'Count items and compare against the expected quantity. Set the expected count, a minimum to pass, and an optional critical threshold that triggers urgent leadership alerts.',
+  quantity:
+    'Count items and compare against the expected quantity. Set the expected count, a minimum to pass, and an optional critical threshold that triggers urgent leadership alerts.',
   level: 'Read a gauge or measure a level (e.g., fuel, pressure, fluid). Shows min level and unit fields.',
   date_lot: 'Track serial/lot numbers and verify against expected values. Good for medical supplies and dated items.',
   reading: 'Record a numeric reading without a pass/fail threshold. Good for odometer, hour meters, etc.',
@@ -35,17 +36,7 @@ export const CHECK_TYPE_HELP: Record<string, string> = {
   header: 'Visual section divider to group items. Not a checkable item — just a label to help members navigate.',
 };
 
-export const LEVEL_UNIT_PRESETS = [
-  'psi',
-  '%',
-  'gallons',
-  'liters',
-  'inches',
-  'feet',
-  'bar',
-  'mmHg',
-  'quarts',
-] as const;
+export const LEVEL_UNIT_PRESETS = ['psi', '%', 'gallons', 'liters', 'inches', 'feet', 'bar', 'mmHg', 'quarts'] as const;
 
 // ============================================================================
 // Positions & apparatus types

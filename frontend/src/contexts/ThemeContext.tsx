@@ -1,11 +1,4 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 type Theme = 'light' | 'dark' | 'system' | 'high-contrast';
 type ResolvedTheme = 'light' | 'dark' | 'high-contrast';
@@ -59,7 +52,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(getSavedTheme);
   const [systemPreference, setSystemPreference] = useState<ResolvedTheme>(getSystemPreference);
 
-  const resolvedTheme: ResolvedTheme = theme === 'system' ? systemPreference : theme === 'high-contrast' ? 'high-contrast' : theme;
+  const resolvedTheme: ResolvedTheme =
+    theme === 'system' ? systemPreference : theme === 'high-contrast' ? 'high-contrast' : theme;
 
   const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
@@ -87,14 +81,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<ThemeContextValue>(
     () => ({ theme, resolvedTheme, setTheme }),
-    [theme, resolvedTheme, setTheme],
+    [theme, resolvedTheme, setTheme]
   );
 
-  return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

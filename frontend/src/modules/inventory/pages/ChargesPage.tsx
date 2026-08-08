@@ -13,26 +13,32 @@ const ChargeManagementPanel = React.lazy(() => import('../../../components/Charg
 
 const ChargesPage: React.FC = () => (
   <div className="min-h-screen">
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
       <Link
         to="/inventory/admin"
-        className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 mb-6"
+        className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
       </Link>
 
-      <div className="flex items-center gap-3 mb-6">
-        <div className="bg-amber-600 rounded-lg p-2">
-          <DollarSign className="w-5 h-5 text-white" />
+      <div className="mb-6 flex items-center gap-3">
+        <div className="rounded-lg bg-amber-600 p-2">
+          <DollarSign className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-theme-text-primary">Charge Management</h1>
-          <p className="text-sm text-theme-text-muted">Cost recovery for lost or damaged items</p>
+          <h1 className="text-theme-text-primary text-xl font-bold">Charge Management</h1>
+          <p className="text-theme-text-muted text-sm">Cost recovery for lost or damaged items</p>
         </div>
       </div>
 
-      <Suspense fallback={<div className="flex justify-center py-12" role="status" aria-live="polite"><Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" /></div>}>
+      <Suspense
+        fallback={
+          <div className="flex justify-center py-12" role="status" aria-live="polite">
+            <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+          </div>
+        }
+      >
         <ChargeManagementPanel />
       </Suspense>
     </div>

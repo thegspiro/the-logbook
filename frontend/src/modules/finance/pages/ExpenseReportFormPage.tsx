@@ -79,13 +79,9 @@ const EXPENSE_TYPE_OPTIONS = [
 // =============================================================================
 
 const FormSkeleton: React.FC = () => (
-  <div
-    className="space-y-6"
-    aria-label="Loading expense report form"
-    role="status" aria-live="polite"
-  >
+  <div className="space-y-6" aria-label="Loading expense report form" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
       {Array.from({ length: 4 }).map((_, i) => (
         <div key={`field-${String(i)}`} className="mb-4 space-y-2">
           <Skeleton className="h-4 w-24" />
@@ -103,12 +99,7 @@ const FormSkeleton: React.FC = () => (
 const ExpenseReportFormPage: React.FC = () => {
   const navigate = useNavigate();
 
-  const {
-    fiscalYears,
-    isLoading,
-    fetchFiscalYears,
-    createExpenseReport,
-  } = useFinanceStore();
+  const { fiscalYears, isLoading, fetchFiscalYears, createExpenseReport } = useFinanceStore();
 
   const [lineItems, setLineItems] = useState<LineItemEntry[]>([]);
   const [lineItemErrors, setLineItemErrors] = useState<Record<number, string>>({});
@@ -169,9 +160,7 @@ const ExpenseReportFormPage: React.FC = () => {
   };
 
   const updateLineItem = (index: number, field: keyof LineItemEntry, value: string | number) => {
-    setLineItems((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
-    );
+    setLineItems((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)));
   };
 
   const validateLineItems = (): boolean => {
@@ -237,7 +226,7 @@ const ExpenseReportFormPage: React.FC = () => {
         <button
           type="button"
           onClick={() => void navigate('/finance/expenses')}
-          className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Expense Reports
@@ -254,7 +243,7 @@ const ExpenseReportFormPage: React.FC = () => {
       <button
         type="button"
         onClick={() => void navigate('/finance/expenses')}
-        className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Expense Reports
@@ -262,24 +251,15 @@ const ExpenseReportFormPage: React.FC = () => {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-theme-text-primary">
-          New Expense Report
-        </h1>
-        <p className="mt-1 text-sm text-theme-text-secondary">
-          Submit expenses for reimbursement.
-        </p>
+        <h1 className="text-theme-text-primary text-2xl font-bold">New Expense Report</h1>
+        <p className="text-theme-text-secondary mt-1 text-sm">Submit expenses for reimbursement.</p>
       </div>
 
       {/* Form */}
-      <form
-        onSubmit={(e) => void handleSubmit(onSubmit)(e)}
-        className="space-y-6"
-      >
+      <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-6">
         {/* Report Details */}
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-          <h2 className="mb-4 text-lg font-semibold text-theme-text-primary">
-            Report Details
-          </h2>
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Report Details</h2>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className={labelClass}>Title *</label>
@@ -289,9 +269,7 @@ const ExpenseReportFormPage: React.FC = () => {
                 placeholder="Brief title for this expense report"
                 {...register('title')}
               />
-              {errors.title && (
-                <p className={errorClass}>{errors.title.message}</p>
-              )}
+              {errors.title && <p className={errorClass}>{errors.title.message}</p>}
             </div>
 
             <div className="sm:col-span-2">
@@ -302,9 +280,7 @@ const ExpenseReportFormPage: React.FC = () => {
                 placeholder="Additional context for this expense report"
                 {...register('description')}
               />
-              {errors.description && (
-                <p className={errorClass}>{errors.description.message}</p>
-              )}
+              {errors.description && <p className={errorClass}>{errors.description.message}</p>}
             </div>
 
             <div>
@@ -317,28 +293,22 @@ const ExpenseReportFormPage: React.FC = () => {
                   </option>
                 ))}
               </select>
-              {errors.fiscalYearId && (
-                <p className={errorClass}>{errors.fiscalYearId.message}</p>
-              )}
+              {errors.fiscalYearId && <p className={errorClass}>{errors.fiscalYearId.message}</p>}
             </div>
 
             <div className="flex items-end">
               <div className="rounded-lg bg-gray-50 px-4 py-2 dark:bg-gray-800">
-                <span className="text-sm text-theme-text-secondary">Total: </span>
-                <span className="text-lg font-bold text-theme-text-primary">
-                  {formatCurrency(totalAmount)}
-                </span>
+                <span className="text-theme-text-secondary text-sm">Total: </span>
+                <span className="text-theme-text-primary text-lg font-bold">{formatCurrency(totalAmount)}</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Line Items */}
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-theme-text-primary">
-              Line Items
-            </h2>
+            <h2 className="text-theme-text-primary text-lg font-semibold">Line Items</h2>
             <button
               type="button"
               onClick={addLineItem}
@@ -350,20 +320,15 @@ const ExpenseReportFormPage: React.FC = () => {
           </div>
 
           {lineItems.length === 0 ? (
-            <p className="py-8 text-center text-sm text-theme-text-secondary">
+            <p className="text-theme-text-secondary py-8 text-center text-sm">
               No line items yet. Click &quot;Add Item&quot; to begin.
             </p>
           ) : (
             <div className="space-y-4">
               {lineItems.map((item, index) => (
-                <div
-                  key={`line-item-${String(index)}`}
-                  className="rounded-lg border border-theme-surface-border p-4"
-                >
+                <div key={`line-item-${String(index)}`} className="border-theme-surface-border rounded-lg border p-4">
                   <div className="mb-3 flex items-center justify-between">
-                    <span className="text-sm font-medium text-theme-text-secondary">
-                      Item {index + 1}
-                    </span>
+                    <span className="text-theme-text-secondary text-sm font-medium">Item {index + 1}</span>
                     <button
                       type="button"
                       onClick={() => removeLineItem(index)}
@@ -429,9 +394,7 @@ const ExpenseReportFormPage: React.FC = () => {
                       />
                     </div>
                   </div>
-                  {lineItemErrors[index] && (
-                    <p className="mt-2 text-xs text-red-600">{lineItemErrors[index]}</p>
-                  )}
+                  {lineItemErrors[index] && <p className="mt-2 text-xs text-red-600">{lineItemErrors[index]}</p>}
                 </div>
               ))}
             </div>
@@ -443,7 +406,7 @@ const ExpenseReportFormPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void navigate('/finance/expenses')}
-            className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
           >
             Cancel
           </button>

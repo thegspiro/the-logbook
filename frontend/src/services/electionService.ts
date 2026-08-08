@@ -126,8 +126,16 @@ export const electionService = {
   /**
    * Rollback an election to previous status
    */
-  async rollbackElection(electionId: string, reason: string): Promise<{ success: boolean; election: Election; message: string; notifications_sent: number }> {
-    const response = await api.post<{ success: boolean; election: Election; message: string; notifications_sent: number }>(`/elections/${electionId}/rollback`, { reason });
+  async rollbackElection(
+    electionId: string,
+    reason: string
+  ): Promise<{ success: boolean; election: Election; message: string; notifications_sent: number }> {
+    const response = await api.post<{
+      success: boolean;
+      election: Election;
+      message: string;
+      notifications_sent: number;
+    }>(`/elections/${electionId}/rollback`, { reason });
     return response.data;
   },
 
@@ -246,7 +254,9 @@ export const electionService = {
    * Import attendees from the linked meeting into the election
    */
   async importMeetingAttendees(electionId: string): Promise<ImportMeetingAttendeesResponse> {
-    const response = await api.post<ImportMeetingAttendeesResponse>(`/elections/${electionId}/import-meeting-attendees`);
+    const response = await api.post<ImportMeetingAttendeesResponse>(
+      `/elections/${electionId}/import-meeting-attendees`
+    );
     return response.data;
   },
 
@@ -318,16 +328,26 @@ export const electionService = {
   /**
    * Bulk add voter overrides
    */
-  async bulkAddVoterOverrides(electionId: string, data: BulkVoterOverrideCreate): Promise<{ added: number; skipped: number }> {
-    const response = await api.post<{ added: number; skipped: number }>(`/elections/${electionId}/voter-overrides/bulk`, data);
+  async bulkAddVoterOverrides(
+    electionId: string,
+    data: BulkVoterOverrideCreate
+  ): Promise<{ added: number; skipped: number }> {
+    const response = await api.post<{ added: number; skipped: number }>(
+      `/elections/${electionId}/voter-overrides/bulk`,
+      data
+    );
     return response.data;
   },
 
   /**
    * Get proxy authorizations for an election
    */
-  async getProxyAuthorizations(electionId: string): Promise<{ authorizations: ProxyAuthorization[]; proxy_voting_enabled: boolean }> {
-    const response = await api.get<{ authorizations: ProxyAuthorization[]; proxy_voting_enabled: boolean }>(`/elections/${electionId}/proxy-authorizations`);
+  async getProxyAuthorizations(
+    electionId: string
+  ): Promise<{ authorizations: ProxyAuthorization[]; proxy_voting_enabled: boolean }> {
+    const response = await api.get<{ authorizations: ProxyAuthorization[]; proxy_voting_enabled: boolean }>(
+      `/elections/${electionId}/proxy-authorizations`
+    );
     return response.data;
   },
 
@@ -373,8 +393,13 @@ export const electionService = {
   /**
    * Get non-voters for an election (eligible voters who haven't voted yet)
    */
-  async getNonVoters(electionId: string): Promise<{ non_voters: Array<{ id: string; full_name: string; email: string }>; count: number }> {
-    const response = await api.get<{ non_voters: Array<{ id: string; full_name: string; email: string }>; count: number }>(`/elections/${electionId}/non-voters`);
+  async getNonVoters(
+    electionId: string
+  ): Promise<{ non_voters: Array<{ id: string; full_name: string; email: string }>; count: number }> {
+    const response = await api.get<{
+      non_voters: Array<{ id: string; full_name: string; email: string }>;
+      count: number;
+    }>(`/elections/${electionId}/non-voters`);
     return response.data;
   },
 
@@ -399,7 +424,7 @@ export const electionService = {
    */
   async createNomination(
     electionId: string,
-    payload: { position: string; nominee_user_id?: string | undefined; statement?: string | undefined },
+    payload: { position: string; nominee_user_id?: string | undefined; statement?: string | undefined }
   ): Promise<Candidate> {
     const response = await api.post<Candidate>(`/elections/${electionId}/nominations`, payload);
     return response.data;
@@ -410,7 +435,7 @@ export const electionService = {
    */
   async acceptNomination(electionId: string, candidateId: string): Promise<{ success: boolean; message: string }> {
     const response = await api.post<{ success: boolean; message: string }>(
-      `/elections/${electionId}/nominations/${candidateId}/accept`,
+      `/elections/${electionId}/nominations/${candidateId}/accept`
     );
     return response.data;
   },
@@ -420,7 +445,7 @@ export const electionService = {
    */
   async declineNomination(electionId: string, candidateId: string): Promise<{ success: boolean; message: string }> {
     const response = await api.post<{ success: boolean; message: string }>(
-      `/elections/${electionId}/nominations/${candidateId}/decline`,
+      `/elections/${electionId}/nominations/${candidateId}/decline`
     );
     return response.data;
   },
@@ -435,7 +460,7 @@ export const electionService = {
       entries: Array<{ candidate_id: string; count: number }>;
       notes?: string | undefined;
       allow_over_count?: boolean | undefined;
-    },
+    }
   ): Promise<{
     recorded: number;
     batch_id?: string;
@@ -465,7 +490,7 @@ export const electionService = {
       end_date: string;
       nomination_deadline?: string | undefined;
       include_candidates?: boolean | undefined;
-    },
+    }
   ): Promise<Election> {
     const response = await api.post<Election>(`/elections/${electionId}/clone`, payload);
     return response.data;
@@ -477,11 +502,11 @@ export const electionService = {
    */
   async mergeWriteIns(
     electionId: string,
-    payload: { source_candidate_ids: string[]; target_candidate_id: string },
+    payload: { source_candidate_ids: string[]; target_candidate_id: string }
   ): Promise<{ merged: number; message: string }> {
     const response = await api.post<{ merged: number; message: string }>(
       `/elections/${electionId}/write-ins/merge`,
-      payload,
+      payload
     );
     return response.data;
   },
@@ -509,12 +534,8 @@ export const electionService = {
   /**
    * List paper-ballot batches with their attestation trail.
    */
-  async getManualBallotBatches(
-    electionId: string,
-  ): Promise<{ batches: ManualBallotBatch[] }> {
-    const response = await api.get<{ batches: ManualBallotBatch[] }>(
-      `/elections/${electionId}/manual-ballots`,
-    );
+  async getManualBallotBatches(electionId: string): Promise<{ batches: ManualBallotBatch[] }> {
+    const response = await api.get<{ batches: ManualBallotBatch[] }>(`/elections/${electionId}/manual-ballots`);
     return response.data;
   },
 
@@ -525,7 +546,7 @@ export const electionService = {
    */
   async attestManualBallots(
     electionId: string,
-    batchId: string,
+    batchId: string
   ): Promise<{ attestations: number; required: number; status: string; message: string }> {
     const response = await api.post<{
       attestations: number;
@@ -543,11 +564,11 @@ export const electionService = {
   async voidManualBallots(
     electionId: string,
     batchId: string,
-    reason: string,
+    reason: string
   ): Promise<{ voided: number; message: string }> {
     const response = await api.post<{ voided: number; message: string }>(
       `/elections/${electionId}/manual-ballots/${batchId}/void`,
-      { reason },
+      { reason }
     );
     return response.data;
   },
@@ -559,12 +580,9 @@ export const electionService = {
    */
   async remindNonVoters(
     electionId: string,
-    payload?: { subject?: string; message?: string },
+    payload?: { subject?: string; message?: string }
   ): Promise<EmailBallotResponse> {
-    const response = await api.post<EmailBallotResponse>(
-      `/elections/${electionId}/remind-non-voters`,
-      payload ?? {},
-    );
+    const response = await api.post<EmailBallotResponse>(`/elections/${electionId}/remind-non-voters`, payload ?? {});
     return response.data;
   },
 
@@ -608,10 +626,9 @@ export const electionService = {
    * list freely before sending.
    */
   async getPackageRecipients(electionId: string, mode: string): Promise<PackageRecipient[]> {
-    const response = await api.get<{ recipients: PackageRecipient[] }>(
-      `/elections/${electionId}/package-recipients`,
-      { params: { mode } }
-    );
+    const response = await api.get<{ recipients: PackageRecipient[] }>(`/elections/${electionId}/package-recipients`, {
+      params: { mode },
+    });
     return asArray(response.data?.recipients);
   },
 
@@ -629,14 +646,8 @@ export const electionService = {
   /**
    * Email the pre-meeting package PDF to a secretary-edited email list.
    */
-  async sendPreMeetingPackage(
-    electionId: string,
-    payload: PreMeetingPackageSend
-  ): Promise<PreMeetingPackageResponse> {
-    const response = await api.post<PreMeetingPackageResponse>(
-      `/elections/${electionId}/send-package`,
-      payload
-    );
+  async sendPreMeetingPackage(electionId: string, payload: PreMeetingPackageSend): Promise<PreMeetingPackageResponse> {
+    const response = await api.post<PreMeetingPackageResponse>(`/elections/${electionId}/send-package`, payload);
     return response.data;
   },
 
@@ -649,5 +660,4 @@ export const electionService = {
     });
     return response.data;
   },
-
 };

@@ -20,7 +20,17 @@ const mockFacilities = [
 ];
 
 const mockRooms = [
-  { id: 'r1', facilityId: 'f1', name: 'Conference Room', roomNumber: '101', roomType: 'training_room', floor: 1, capacity: 30, createdAt: '', updatedAt: '' },
+  {
+    id: 'r1',
+    facilityId: 'f1',
+    name: 'Conference Room',
+    roomNumber: '101',
+    roomType: 'training_room',
+    floor: 1,
+    capacity: 30,
+    createdAt: '',
+    updatedAt: '',
+  },
   { id: 'r2', facilityId: 'f1', name: 'Kitchen', roomType: 'kitchen', createdAt: '', updatedAt: '' },
 ];
 

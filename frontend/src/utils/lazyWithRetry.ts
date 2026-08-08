@@ -15,18 +15,18 @@
  *     re-thrown and caught by the ErrorBoundary instead.
  */
 
-import { lazy, type ComponentType } from "react";
+import { lazy, type ComponentType } from 'react';
 
-const RELOAD_KEY = "chunk_reload";
+const RELOAD_KEY = 'chunk_reload';
 
 function isChunkLoadError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const msg = error.message.toLowerCase();
   return (
-    msg.includes("failed to fetch dynamically imported module") ||
-    msg.includes("loading chunk") ||
-    msg.includes("loading css chunk") ||
-    msg.includes("importing a module script failed")
+    msg.includes('failed to fetch dynamically imported module') ||
+    msg.includes('loading chunk') ||
+    msg.includes('loading css chunk') ||
+    msg.includes('importing a module script failed')
   );
 }
 
@@ -41,7 +41,7 @@ function isChunkLoadError(error: unknown): boolean {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function lazyWithRetry<T extends ComponentType<any>>(
-  importFn: () => Promise<{ default: T }>,
+  importFn: () => Promise<{ default: T }>
 ): React.LazyExoticComponent<T> {
   return lazy(() =>
     importFn().catch((error: unknown) => {
@@ -69,7 +69,7 @@ export function lazyWithRetry<T extends ComponentType<any>>(
 
         throw retryError ?? error;
       });
-    }),
+    })
   );
 }
 

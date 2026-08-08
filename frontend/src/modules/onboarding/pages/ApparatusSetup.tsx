@@ -53,11 +53,11 @@ const makeApparatus = (): OnboardingApparatusDraft => ({
  */
 const ApparatusSetup: React.FC = () => {
   const navigate = useNavigate();
-  const departmentName = useOnboardingStore(state => state.departmentName);
-  const logoPreview = useOnboardingStore(state => state.logoData);
-  const lastSaved = useOnboardingStore(state => state.lastSaved);
-  const savedApparatus = useOnboardingStore(state => state.apparatus);
-  const setApparatus = useOnboardingStore(state => state.setApparatus);
+  const departmentName = useOnboardingStore((state) => state.departmentName);
+  const logoPreview = useOnboardingStore((state) => state.logoData);
+  const lastSaved = useOnboardingStore((state) => state.lastSaved);
+  const savedApparatus = useOnboardingStore((state) => state.apparatus);
+  const setApparatus = useOnboardingStore((state) => state.setApparatus);
 
   const [rows, setRows] = useState<OnboardingApparatusDraft[]>(savedApparatus);
   const [positionDrafts, setPositionDrafts] = useState<Record<string, string>>({});
@@ -74,39 +74,35 @@ const ApparatusSetup: React.FC = () => {
     field: K,
     value: OnboardingApparatusDraft[K]
   ) => {
-    setRows(prev => prev.map(row => (row.id === id ? { ...row, [field]: value } : row)));
+    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
   };
 
   const addPosition = (id: string, position: string) => {
     const clean = position.trim().toLowerCase();
     if (!clean) return;
-    setRows(prev =>
-      prev.map(row =>
-        row.id === id && !row.positions.includes(clean)
-          ? { ...row, positions: [...row.positions, clean] }
-          : row
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === id && !row.positions.includes(clean) ? { ...row, positions: [...row.positions, clean] } : row
       )
     );
-    setPositionDrafts(prev => ({ ...prev, [id]: '' }));
+    setPositionDrafts((prev) => ({ ...prev, [id]: '' }));
   };
 
   const removePosition = (id: string, position: string) => {
-    setRows(prev =>
-      prev.map(row =>
-        row.id === id
-          ? { ...row, positions: row.positions.filter((p: string) => p !== position) }
-          : row
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === id ? { ...row, positions: row.positions.filter((p: string) => p !== position) } : row
       )
     );
   };
 
-  const namedRows = rows.filter(row => row.unitNumber.trim());
+  const namedRows = rows.filter((row) => row.unitNumber.trim());
 
   const persist = async (apparatusRows: OnboardingApparatusDraft[]) => {
     const { error: apiError } = await execute(
       async () => {
         const response = await apiClient.saveApparatus(
-          apparatusRows.map(row => ({
+          apparatusRows.map((row) => ({
             unit_number: row.unitNumber.trim(),
             // `||` not `??`: an untouched name is '' and must be omitted so
             // the backend falls back to the unit number.
@@ -147,23 +143,23 @@ const ApparatusSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col safe-top">
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
       <OnboardingHeader
         departmentName={departmentName}
         logoPreview={logoPreview}
-        icon={<Truck aria-hidden="true" className="w-6 h-6 text-white" />}
+        icon={<Truck aria-hidden="true" className="h-6 w-6 text-white" />}
       />
 
-      <main className="flex-1 flex items-start justify-center p-4 py-8">
-        <div className="max-w-3xl w-full">
-          <div className="text-center mb-6">
-            <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-3">
-              <Truck className="w-7 h-7 text-red-500" aria-hidden="true" />
+      <main className="flex flex-1 items-start justify-center p-4 py-8">
+        <div className="w-full max-w-3xl">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10">
+              <Truck className="h-7 w-7 text-red-500" aria-hidden="true" />
             </div>
-            <h2 className="text-2xl font-bold text-theme-text-primary">Your Apparatus</h2>
-            <p className="text-theme-text-secondary mt-2 max-w-xl mx-auto text-sm">
-              Add your engines, trucks, and ambulances. Shift scheduling uses the minimum
-              staffing and riding positions to know when a unit is short.
+            <h2 className="text-theme-text-primary text-2xl font-bold">Your Apparatus</h2>
+            <p className="text-theme-text-secondary mx-auto mt-2 max-w-xl text-sm">
+              Add your engines, trucks, and ambulances. Shift scheduling uses the minimum staffing and riding positions
+              to know when a unit is short.
             </p>
           </div>
 
@@ -179,36 +175,33 @@ const ApparatusSetup: React.FC = () => {
           )}
 
           {rows.length === 0 ? (
-            <div className="card p-8 text-center mb-4">
-              <p className="text-theme-text-secondary text-sm mb-4">
+            <div className="card mb-4 p-8 text-center">
+              <p className="text-theme-text-secondary mb-4 text-sm">
                 No apparatus yet. You can add these later from the Apparatus page.
               </p>
-              <button
-                onClick={() => setRows([makeApparatus()])}
-                className="btn-primary inline-flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" aria-hidden="true" />
+              <button onClick={() => setRows([makeApparatus()])} className="btn-primary inline-flex items-center gap-2">
+                <Plus className="h-4 w-4" aria-hidden="true" />
                 Add Apparatus
               </button>
             </div>
           ) : (
-            <div className="space-y-4 mb-4">
-              {rows.map(row => (
+            <div className="mb-4 space-y-4">
+              {rows.map((row) => (
                 <div key={row.id} className="card p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-theme-text-primary">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-theme-text-primary text-sm font-semibold">
                       {row.unitNumber.trim() || 'New Apparatus'}
                     </h3>
                     <button
-                      onClick={() => setRows(prev => prev.filter(r => r.id !== row.id))}
-                      className="text-theme-text-muted hover:text-red-500 transition-colors mobile-touch-target"
+                      onClick={() => setRows((prev) => prev.filter((r) => r.id !== row.id))}
+                      className="text-theme-text-muted mobile-touch-target transition-colors hover:text-red-500"
                       aria-label={`Remove ${row.unitNumber.trim() || 'apparatus'}`}
                     >
-                      <Trash2 className="w-4 h-4" aria-hidden="true" />
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                     <div>
                       <label className={labelClass} htmlFor={`unit-${row.id}`}>
                         Unit Number <span className="text-red-500">*</span>
@@ -217,7 +210,7 @@ const ApparatusSetup: React.FC = () => {
                         id={`unit-${row.id}`}
                         className={inputClass}
                         value={row.unitNumber}
-                        onChange={e => updateRow(row.id, 'unitNumber', e.target.value)}
+                        onChange={(e) => updateRow(row.id, 'unitNumber', e.target.value)}
                         placeholder="E-1"
                         maxLength={20}
                       />
@@ -230,7 +223,7 @@ const ApparatusSetup: React.FC = () => {
                         id={`aname-${row.id}`}
                         className={inputClass}
                         value={row.name}
-                        onChange={e => updateRow(row.id, 'name', e.target.value)}
+                        onChange={(e) => updateRow(row.id, 'name', e.target.value)}
                         placeholder="Engine 1"
                         maxLength={100}
                       />
@@ -246,12 +239,8 @@ const ApparatusSetup: React.FC = () => {
                         max={20}
                         className={inputClass}
                         value={row.minStaffing}
-                        onChange={e =>
-                          updateRow(
-                            row.id,
-                            'minStaffing',
-                            Math.min(20, Math.max(1, Number(e.target.value) || 1))
-                          )
+                        onChange={(e) =>
+                          updateRow(row.id, 'minStaffing', Math.min(20, Math.max(1, Number(e.target.value) || 1)))
                         }
                       />
                     </div>
@@ -264,9 +253,9 @@ const ApparatusSetup: React.FC = () => {
                         id={`type-${row.id}`}
                         className={inputClass}
                         value={row.apparatusType}
-                        onChange={e => updateRow(row.id, 'apparatusType', e.target.value)}
+                        onChange={(e) => updateRow(row.id, 'apparatusType', e.target.value)}
                       >
-                        {APPARATUS_TYPES.map(type => (
+                        {APPARATUS_TYPES.map((type) => (
                           <option key={type.value} value={type.value}>
                             {type.label}
                           </option>
@@ -276,15 +265,15 @@ const ApparatusSetup: React.FC = () => {
                   </div>
 
                   {/* Riding positions */}
-                  <div className="mt-4 pt-4 border-t border-theme-surface-border">
+                  <div className="border-theme-surface-border mt-4 border-t pt-4">
                     <span className={labelClass}>Riding Positions</span>
 
                     {row.positions.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {row.positions.map(position => (
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        {row.positions.map((position) => (
                           <span
                             key={position}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-medium capitalize"
+                            className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-1 text-xs font-medium text-red-600 capitalize dark:text-red-400"
                           >
                             {position}
                             <button
@@ -292,35 +281,31 @@ const ApparatusSetup: React.FC = () => {
                               aria-label={`Remove ${position} position`}
                               className="hover:text-red-700 dark:hover:text-red-300"
                             >
-                              <X className="w-3 h-3" aria-hidden="true" />
+                              <X className="h-3 w-3" aria-hidden="true" />
                             </button>
                           </span>
                         ))}
                       </div>
                     )}
 
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {COMMON_POSITIONS.filter(p => !row.positions.includes(p)).map(
-                        (position: string) => (
-                          <button
-                            key={position}
-                            onClick={() => addPosition(row.id, position)}
-                            className="px-2 py-1 rounded-md border border-dashed border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:border-red-500/40 text-xs capitalize transition-colors"
-                          >
-                            + {position}
-                          </button>
-                        )
-                      )}
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {COMMON_POSITIONS.filter((p) => !row.positions.includes(p)).map((position: string) => (
+                        <button
+                          key={position}
+                          onClick={() => addPosition(row.id, position)}
+                          className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary rounded-md border border-dashed px-2 py-1 text-xs capitalize transition-colors hover:border-red-500/40"
+                        >
+                          + {position}
+                        </button>
+                      ))}
                     </div>
 
                     <div className="flex gap-2">
                       <input
                         className={inputClass}
                         value={positionDrafts[row.id] ?? ''}
-                        onChange={e =>
-                          setPositionDrafts(prev => ({ ...prev, [row.id]: e.target.value }))
-                        }
-                        onKeyDown={e => {
+                        onChange={(e) => setPositionDrafts((prev) => ({ ...prev, [row.id]: e.target.value }))}
+                        onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
                             addPosition(row.id, positionDrafts[row.id] ?? '');
@@ -331,7 +316,7 @@ const ApparatusSetup: React.FC = () => {
                       />
                       <button
                         onClick={() => addPosition(row.id, positionDrafts[row.id] ?? '')}
-                        className="px-3 py-2 rounded-lg border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover transition-colors shrink-0"
+                        className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover shrink-0 rounded-lg border px-3 py-2 transition-colors"
                       >
                         Add
                       </button>
@@ -341,16 +326,16 @@ const ApparatusSetup: React.FC = () => {
               ))}
 
               <button
-                onClick={() => setRows(prev => [...prev, makeApparatus()])}
-                className="w-full py-3 rounded-lg border border-dashed border-theme-surface-border text-theme-text-secondary hover:border-red-500/40 hover:text-theme-text-primary transition-colors inline-flex items-center justify-center gap-2 mobile-touch-target"
+                onClick={() => setRows((prev) => [...prev, makeApparatus()])}
+                className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary mobile-touch-target inline-flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-3 transition-colors hover:border-red-500/40"
               >
-                <Plus className="w-4 h-4" aria-hidden="true" />
+                <Plus className="h-4 w-4" aria-hidden="true" />
                 Add Another Apparatus
               </button>
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3 mt-6">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <button
               onClick={() => void handleContinue()}
               disabled={isLoading}
@@ -361,21 +346,18 @@ const ApparatusSetup: React.FC = () => {
             <button
               onClick={() => void handleSkip()}
               disabled={isLoading}
-              className="flex-1 px-4 py-3 rounded-lg border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover transition-colors disabled:opacity-50 mobile-touch-target"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover mobile-touch-target flex-1 rounded-lg border px-4 py-3 transition-colors disabled:opacity-50"
             >
               Skip for now
             </button>
           </div>
 
-          <div className="flex items-center justify-between mt-6">
+          <div className="mt-6 flex items-center justify-between">
             <BackButton to="/onboarding/stations" />
             <ResetProgressButton />
           </div>
 
-          <ProgressIndicator
-            step="apparatus"
-            className="mt-6 pt-6 border-t border-theme-nav-border"
-          />
+          <ProgressIndicator step="apparatus" className="border-theme-nav-border mt-6 border-t pt-6" />
         </div>
       </main>
 

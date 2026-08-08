@@ -68,17 +68,13 @@ export const getRSVPStatusColor = (status: RSVPStatus): string => {
 /**
  * Get expiration status for certifications/trainings
  */
-export const getExpirationStatus = (
-  expirationDate: string
-): { status: string; color: string } => {
+export const getExpirationStatus = (expirationDate: string): { status: string; color: string } => {
   const today = new Date();
   const expDate = new Date(expirationDate);
   if (isNaN(expDate.getTime())) {
     return { status: 'Unknown', color: 'text-gray-600 bg-gray-50' };
   }
-  const daysUntilExpiry = Math.floor(
-    (expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  const daysUntilExpiry = Math.floor((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
   if (daysUntilExpiry < 0) {
     return { status: 'Expired', color: 'text-red-600 bg-red-50' };
@@ -115,7 +111,10 @@ export function generateICSContent(event: {
 }): string {
   const formatICSDate = (dateStr: string): string => {
     const d = new Date(dateStr);
-    return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    return d
+      .toISOString()
+      .replace(/[-:]/g, '')
+      .replace(/\.\d{3}/, '');
   };
 
   const escapeICS = (str: string): string => {

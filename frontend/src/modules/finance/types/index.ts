@@ -13,8 +13,7 @@ export const FiscalYearStatus = {
   ACTIVE: 'active',
   CLOSED: 'closed',
 } as const;
-export type FiscalYearStatus =
-  (typeof FiscalYearStatus)[keyof typeof FiscalYearStatus];
+export type FiscalYearStatus = (typeof FiscalYearStatus)[keyof typeof FiscalYearStatus];
 
 export const PurchaseRequestStatus = {
   DRAFT: 'draft',
@@ -27,8 +26,7 @@ export const PurchaseRequestStatus = {
   PAID: 'paid',
   CANCELLED: 'cancelled',
 } as const;
-export type PurchaseRequestStatus =
-  (typeof PurchaseRequestStatus)[keyof typeof PurchaseRequestStatus];
+export type PurchaseRequestStatus = (typeof PurchaseRequestStatus)[keyof typeof PurchaseRequestStatus];
 
 export const ExpenseReportStatus = {
   DRAFT: 'draft',
@@ -39,8 +37,7 @@ export const ExpenseReportStatus = {
   PAID: 'paid',
   CANCELLED: 'cancelled',
 } as const;
-export type ExpenseReportStatus =
-  (typeof ExpenseReportStatus)[keyof typeof ExpenseReportStatus];
+export type ExpenseReportStatus = (typeof ExpenseReportStatus)[keyof typeof ExpenseReportStatus];
 
 export const CheckRequestStatus = {
   DRAFT: 'draft',
@@ -52,8 +49,7 @@ export const CheckRequestStatus = {
   VOIDED: 'voided',
   CANCELLED: 'cancelled',
 } as const;
-export type CheckRequestStatus =
-  (typeof CheckRequestStatus)[keyof typeof CheckRequestStatus];
+export type CheckRequestStatus = (typeof CheckRequestStatus)[keyof typeof CheckRequestStatus];
 
 export const DuesStatus = {
   PENDING: 'pending',
@@ -71,8 +67,7 @@ export const DuesFrequency = {
   QUARTERLY: 'quarterly',
   MONTHLY: 'monthly',
 } as const;
-export type DuesFrequency =
-  (typeof DuesFrequency)[keyof typeof DuesFrequency];
+export type DuesFrequency = (typeof DuesFrequency)[keyof typeof DuesFrequency];
 
 export const PurchaseRequestPriority = {
   LOW: 'low',
@@ -80,8 +75,7 @@ export const PurchaseRequestPriority = {
   HIGH: 'high',
   URGENT: 'urgent',
 } as const;
-export type PurchaseRequestPriority =
-  (typeof PurchaseRequestPriority)[keyof typeof PurchaseRequestPriority];
+export type PurchaseRequestPriority = (typeof PurchaseRequestPriority)[keyof typeof PurchaseRequestPriority];
 
 export const ExpenseType = {
   GENERAL: 'general',
@@ -103,8 +97,7 @@ export const ApprovalStepType = {
   APPROVAL: 'approval',
   NOTIFICATION: 'notification',
 } as const;
-export type ApprovalStepType =
-  (typeof ApprovalStepType)[keyof typeof ApprovalStepType];
+export type ApprovalStepType = (typeof ApprovalStepType)[keyof typeof ApprovalStepType];
 
 export const ApproverType = {
   POSITION: 'position',
@@ -112,8 +105,7 @@ export const ApproverType = {
   SPECIFIC_USER: 'specific_user',
   EMAIL: 'email',
 } as const;
-export type ApproverType =
-  (typeof ApproverType)[keyof typeof ApproverType];
+export type ApproverType = (typeof ApproverType)[keyof typeof ApproverType];
 
 export const ApprovalStepStatus = {
   PENDING: 'pending',
@@ -123,16 +115,14 @@ export const ApprovalStepStatus = {
   AUTO_APPROVED: 'auto_approved',
   SENT: 'sent',
 } as const;
-export type ApprovalStepStatus =
-  (typeof ApprovalStepStatus)[keyof typeof ApprovalStepStatus];
+export type ApprovalStepStatus = (typeof ApprovalStepStatus)[keyof typeof ApprovalStepStatus];
 
 export const ApprovalEntityType = {
   PURCHASE_REQUEST: 'purchase_request',
   EXPENSE_REPORT: 'expense_report',
   CHECK_REQUEST: 'check_request',
 } as const;
-export type ApprovalEntityType =
-  (typeof ApprovalEntityType)[keyof typeof ApprovalEntityType];
+export type ApprovalEntityType = (typeof ApprovalEntityType)[keyof typeof ApprovalEntityType];
 
 // =============================================================================
 // Status Badge Color Mappings (Tailwind classes)

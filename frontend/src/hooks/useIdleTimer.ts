@@ -31,8 +31,12 @@ export function useIdleTimer() {
   // Keep mutable refs to latest values so resetTimers never needs to change identity
   const logoutRef = useRef(logout);
   const navigateRef = useRef(navigate);
-  useEffect(() => { logoutRef.current = logout; }, [logout]);
-  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+  useEffect(() => {
+    logoutRef.current = logout;
+  }, [logout]);
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
 
   const performLogout = useCallback(async () => {
     toast.dismiss();
@@ -80,7 +84,9 @@ export function useIdleTimer() {
       );
     }, warningMs);
 
-    timeoutRef.current = setTimeout(() => { void performLogout(); }, timeoutMs);
+    timeoutRef.current = setTimeout(() => {
+      void performLogout();
+    }, timeoutMs);
   }, [performLogout]);
 
   useEffect(() => {

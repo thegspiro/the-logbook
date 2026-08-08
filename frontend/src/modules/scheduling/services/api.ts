@@ -218,9 +218,7 @@ export interface ShiftTemplateRecord {
  * Normalize any position format to PositionSlot[].
  * Handles: string[], PositionSlot[], null/undefined.
  */
-export function normalizePositions(
-  positions: unknown[] | null | undefined,
-): PositionSlot[] {
+export function normalizePositions(positions: unknown[] | null | undefined): PositionSlot[] {
   if (!positions || !Array.isArray(positions)) return [];
   return positions.map((p) => {
     if (typeof p === 'string') {
@@ -234,9 +232,7 @@ export function normalizePositions(
   });
 }
 
-export function resolveTemplatePositions(
-  positions: ShiftTemplateRecord['positions'],
-): PositionSlot[] {
+export function resolveTemplatePositions(positions: ShiftTemplateRecord['positions']): PositionSlot[] {
   if (!positions) return [];
   // Standard / specialty templates store a plain array
   if (Array.isArray(positions)) return normalizePositions(positions);
@@ -247,7 +243,7 @@ export function resolveTemplatePositions(
   // Legacy event templates — compute from resources
   if (Array.isArray(positions.resources)) {
     const flat = positions.resources.flatMap((r) =>
-      Array.from({ length: r.quantity ?? 1 }, () => r.positions ?? []).flat(),
+      Array.from({ length: r.quantity ?? 1 }, () => r.positions ?? []).flat()
     );
     return normalizePositions(flat);
   }
@@ -336,8 +332,16 @@ const api = createApiClient();
 // ============================================
 
 export const schedulingService = {
-  async getShifts(params?: { start_date?: string; end_date?: string; skip?: number; limit?: number }): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }>('/scheduling/shifts', { params });
+  async getShifts(params?: {
+    start_date?: string;
+    end_date?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get<{ shifts: ShiftRecord[]; total: number; skip: number; limit: number }>(
+      '/scheduling/shifts',
+      { params }
+    );
     return response.data;
   },
 
@@ -361,24 +365,17 @@ export const schedulingService = {
   },
 
   async getCalendarFeed(): Promise<{ token: string; feed_path: string }> {
-    const response = await api.get<{ token: string; feed_path: string }>(
-      '/scheduling/calendar-feed',
-    );
+    const response = await api.get<{ token: string; feed_path: string }>('/scheduling/calendar-feed');
     return response.data;
   },
 
   async rotateCalendarFeed(): Promise<{ token: string; feed_path: string }> {
-    const response = await api.post<{ token: string; feed_path: string }>(
-      '/scheduling/calendar-feed/rotate',
-    );
+    const response = await api.post<{ token: string; feed_path: string }>('/scheduling/calendar-feed/rotate');
     return response.data;
   },
 
   async cancelShift(shiftId: string, reason?: string): Promise<ShiftRecord> {
-    const response = await api.post<ShiftRecord>(
-      `/scheduling/shifts/${shiftId}/cancel`,
-      reason ? { reason } : {},
-    );
+    const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/cancel`, reason ? { reason } : {});
     return response.data;
   },
 
@@ -389,7 +386,7 @@ export const schedulingService = {
       override_incomplete_checks?: boolean;
       override_reason?: string;
       pass_down_notes?: string;
-    },
+    }
   ): Promise<ShiftRecord> {
     const body: Record<string, unknown> = {};
     if (manualHours?.length) body.manual_hours = manualHours;
@@ -398,27 +395,21 @@ export const schedulingService = {
       if (opts.override_reason) body.override_reason = opts.override_reason;
     }
     if (opts?.pass_down_notes) body.pass_down_notes = opts.pass_down_notes;
-    const response = await api.post<ShiftRecord>(
-      `/scheduling/shifts/${shiftId}/finalize`,
-      body,
-    );
+    const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/finalize`, body);
     return response.data;
   },
 
   async reopenShift(shiftId: string, reason?: string): Promise<ShiftRecord> {
-    const response = await api.post<ShiftRecord>(
-      `/scheduling/shifts/${shiftId}/reopen`,
-      reason ? { reason } : {},
-    );
+    const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/reopen`, reason ? { reason } : {});
     return response.data;
   },
 
   async getShiftHandoff(
-    shiftId: string,
+    shiftId: string
   ): Promise<{ shift_id: string; shift_date: string | null; pass_down_notes: string } | null> {
-    const response = await api.get<
-      { shift_id: string; shift_date: string | null; pass_down_notes: string } | null
-    >(`/scheduling/shifts/${shiftId}/handoff`);
+    const response = await api.get<{ shift_id: string; shift_date: string | null; pass_down_notes: string } | null>(
+      `/scheduling/shifts/${shiftId}/handoff`
+    );
     return response.data;
   },
 
@@ -442,7 +433,12 @@ export const schedulingService = {
     return response.data;
   },
 
-  async getMyShifts(params?: { start_date?: string; end_date?: string; skip?: number; limit?: number }): Promise<{ shifts: ShiftRecord[]; total: number }> {
+  async getMyShifts(params?: {
+    start_date?: string;
+    end_date?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ shifts: ShiftRecord[]; total: number }> {
     const response = await api.get<{ shifts: ShiftRecord[]; total: number }>('/scheduling/my-shifts', { params });
     return response.data;
   },
@@ -459,7 +455,7 @@ export const schedulingService = {
   // Shift Assignments
   async getUnavailableMembers(shiftId: string): Promise<string[]> {
     const response = await api.get<{ unavailable_user_ids: string[] }>(
-      `/scheduling/shifts/${shiftId}/unavailable-members`,
+      `/scheduling/shifts/${shiftId}/unavailable-members`
     );
     return asArray(response.data?.unavailable_user_ids);
   },
@@ -471,10 +467,13 @@ export const schedulingService = {
       status: a.assignment_status ?? a.status ?? 'assigned',
     }));
   },
-  async createAssignment(shiftId: string, data: AssignmentCreate): Promise<Assignment & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }> {
+  async createAssignment(
+    shiftId: string,
+    data: AssignmentCreate
+  ): Promise<Assignment & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }> {
     const response = await api.post<Assignment & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }>(
       `/scheduling/shifts/${shiftId}/assignments`,
-      data,
+      data
     );
     return response.data;
   },
@@ -492,42 +491,33 @@ export const schedulingService = {
 
   // Attendance history
   async getMyAttendanceHistory(
-    options: { limit?: number; start_date?: string; end_date?: string } = {},
+    options: { limit?: number; start_date?: string; end_date?: string } = {}
   ): Promise<ShiftAttendanceRecord[]> {
     const { limit = 50, start_date, end_date } = options;
-    const response = await api.get<ShiftAttendanceRecord[]>(
-      '/scheduling/my-attendance-history',
-      { params: { limit, start_date, end_date } },
-    );
+    const response = await api.get<ShiftAttendanceRecord[]>('/scheduling/my-attendance-history', {
+      params: { limit, start_date, end_date },
+    });
     return asArray(response.data);
   },
 
   // Active shift lookup
   async getActiveShiftForApparatus(apparatusId: string): Promise<ShiftRecord> {
-    const response = await api.get<ShiftRecord>(
-      `/scheduling/apparatus/${apparatusId}/active-shift`,
-    );
+    const response = await api.get<ShiftRecord>(`/scheduling/apparatus/${apparatusId}/active-shift`);
     return response.data;
   },
 
   // Shift Check-In / Check-Out
   async checkIn(shiftId: string): Promise<ShiftAttendanceRecord> {
-    const response = await api.post<ShiftAttendanceRecord>(
-      `/scheduling/shifts/${shiftId}/check-in`,
-    );
+    const response = await api.post<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/check-in`);
     return response.data;
   },
   async checkOut(shiftId: string): Promise<ShiftAttendanceRecord> {
-    const response = await api.post<ShiftAttendanceRecord>(
-      `/scheduling/shifts/${shiftId}/check-out`,
-    );
+    const response = await api.post<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/check-out`);
     return response.data;
   },
   async getMyAttendance(shiftId: string): Promise<ShiftAttendanceRecord | null> {
     try {
-      const response = await api.get<ShiftAttendanceRecord>(
-        `/scheduling/shifts/${shiftId}/my-attendance`,
-      );
+      const response = await api.get<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/my-attendance`);
       return response.data;
     } catch {
       return null;
@@ -656,7 +646,7 @@ export const schedulingService = {
   // --- Shift Signup (member self-service) ---
   async signupForShift(
     shiftId: string,
-    data?: { position?: string },
+    data?: { position?: string }
   ): Promise<ShiftSignupResponse & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }> {
     const response = await api.post<
       ShiftSignupResponse & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }
@@ -668,7 +658,11 @@ export const schedulingService = {
   },
 
   // --- Open Shifts ---
-  async getOpenShifts(params?: { start_date?: string | undefined; end_date?: string; apparatus_id?: string }): Promise<ShiftRecord[]> {
+  async getOpenShifts(params?: {
+    start_date?: string | undefined;
+    end_date?: string;
+    apparatus_id?: string;
+  }): Promise<ShiftRecord[]> {
     const response = await api.get<ShiftRecord[]>('/scheduling/shifts/open', { params });
     return asArray(response.data);
   },
@@ -700,7 +694,9 @@ export const schedulingService = {
     const response = await api.get<SchedulingEligibilitySettings>('/scheduling/eligibility/settings');
     return response.data;
   },
-  async updateEligibilitySettings(data: Partial<SchedulingEligibilitySettings>): Promise<SchedulingEligibilitySettings> {
+  async updateEligibilitySettings(
+    data: Partial<SchedulingEligibilitySettings>
+  ): Promise<SchedulingEligibilitySettings> {
     const response = await api.put<SchedulingEligibilitySettings>('/scheduling/eligibility/settings', data);
     return response.data;
   },
@@ -722,12 +718,12 @@ export const schedulingService = {
   },
   async bulkAssignPlatoon(
     userIds: string[],
-    platoon: string | null,
+    platoon: string | null
   ): Promise<{ updated: number; platoon: string | null }> {
-    const response = await api.post<{ updated: number; platoon: string | null }>(
-      '/scheduling/platoons/bulk-assign',
-      { user_ids: userIds, platoon },
-    );
+    const response = await api.post<{ updated: number; platoon: string | null }>('/scheduling/platoons/bulk-assign', {
+      user_ids: userIds,
+      platoon,
+    });
     return response.data;
   },
 
@@ -745,7 +741,11 @@ export const schedulingService = {
     const response = await api.post<EquipmentCheckTemplate>('/equipment-checks/templates', data);
     return response.data;
   },
-  async getEquipmentCheckTemplates(params?: { apparatus_id?: string; apparatus_type?: string; check_timing?: string }): Promise<EquipmentCheckTemplate[]> {
+  async getEquipmentCheckTemplates(params?: {
+    apparatus_id?: string;
+    apparatus_type?: string;
+    check_timing?: string;
+  }): Promise<EquipmentCheckTemplate[]> {
     const response = await api.get<EquipmentCheckTemplate[]>('/equipment-checks/templates', { params });
     return asArray(response.data);
   },
@@ -753,7 +753,10 @@ export const schedulingService = {
     const response = await api.get<EquipmentCheckTemplate>(`/equipment-checks/templates/${templateId}`);
     return response.data;
   },
-  async updateEquipmentCheckTemplate(templateId: string, data: EquipmentCheckTemplateUpdate): Promise<EquipmentCheckTemplate> {
+  async updateEquipmentCheckTemplate(
+    templateId: string,
+    data: EquipmentCheckTemplateUpdate
+  ): Promise<EquipmentCheckTemplate> {
     const response = await api.put<EquipmentCheckTemplate>(`/equipment-checks/templates/${templateId}`, data);
     return response.data;
   },
@@ -761,11 +764,9 @@ export const schedulingService = {
     await api.delete(`/equipment-checks/templates/${templateId}`);
   },
   async cloneEquipmentCheckTemplate(templateId: string, targetApparatusId: string): Promise<EquipmentCheckTemplate> {
-    const response = await api.post<EquipmentCheckTemplate>(
-      `/equipment-checks/templates/${templateId}/clone`,
-      null,
-      { params: { target_apparatus_id: targetApparatusId } },
-    );
+    const response = await api.post<EquipmentCheckTemplate>(`/equipment-checks/templates/${templateId}/clone`, null, {
+      params: { target_apparatus_id: targetApparatusId },
+    });
     return response.data;
   },
 
@@ -777,19 +778,24 @@ export const schedulingService = {
     return response.data;
   },
   async swapItemLot(templateItemId: string, inventoryLotId: string): Promise<LotSwapResult> {
-    const response = await api.post<LotSwapResult>(
-      `/equipment-checks/items/${templateItemId}/swap`,
-      { inventory_lot_id: inventoryLotId },
-    );
+    const response = await api.post<LotSwapResult>(`/equipment-checks/items/${templateItemId}/swap`, {
+      inventory_lot_id: inventoryLotId,
+    });
     return response.data;
   },
 
   // --- Compartment CRUD ---
   async addCompartment(templateId: string, data: CheckTemplateCompartmentCreate): Promise<CheckTemplateCompartment> {
-    const response = await api.post<CheckTemplateCompartment>(`/equipment-checks/templates/${templateId}/compartments`, data);
+    const response = await api.post<CheckTemplateCompartment>(
+      `/equipment-checks/templates/${templateId}/compartments`,
+      data
+    );
     return response.data;
   },
-  async updateCompartment(compartmentId: string, data: CheckTemplateCompartmentUpdate): Promise<CheckTemplateCompartment> {
+  async updateCompartment(
+    compartmentId: string,
+    data: CheckTemplateCompartmentUpdate
+  ): Promise<CheckTemplateCompartment> {
     const response = await api.put<CheckTemplateCompartment>(`/equipment-checks/compartments/${compartmentId}`, data);
     return response.data;
   },
@@ -836,23 +842,24 @@ export const schedulingService = {
     const response = await api.get<ShiftEquipmentCheckRecord>(`/equipment-checks/checks/${checkId}`);
     return response.data;
   },
-  async uploadCheckItemPhotos(checkId: string, itemId: string, files: File[]): Promise<{ photoUrls: string[]; count: number }> {
+  async uploadCheckItemPhotos(
+    checkId: string,
+    itemId: string,
+    files: File[]
+  ): Promise<{ photoUrls: string[]; count: number }> {
     const formData = new FormData();
     files.forEach((file) => formData.append('files', file));
     const response = await api.post<{ photo_urls: string[]; count: number }>(
       `/equipment-checks/checks/${checkId}/items/${itemId}/photos`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
+      { headers: { 'Content-Type': 'multipart/form-data' } }
     );
     return { photoUrls: response.data.photo_urls ?? [], count: response.data.count };
   },
-  async getLastCheckResults(
-    templateId: string,
-    apparatusId?: string,
-  ): Promise<Record<string, LastCheckItemResult>> {
+  async getLastCheckResults(templateId: string, apparatusId?: string): Promise<Record<string, LastCheckItemResult>> {
     const response = await api.get<Record<string, LastCheckItemResult>>(
       `/equipment-checks/templates/${templateId}/last-results`,
-      { params: apparatusId ? { apparatus_id: apparatusId } : undefined },
+      { params: apparatusId ? { apparatus_id: apparatusId } : undefined }
     );
     return response.data;
   },
@@ -862,7 +869,12 @@ export const schedulingService = {
     const response = await api.get<ActiveChecklistRecord[]>('/equipment-checks/my-checklists');
     return asArray(response.data);
   },
-  async getMyChecklistHistory(params?: { start_date?: string; end_date?: string; limit?: number; offset?: number }): Promise<ShiftEquipmentCheckRecord[]> {
+  async getMyChecklistHistory(params?: {
+    start_date?: string;
+    end_date?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ShiftEquipmentCheckRecord[]> {
     const response = await api.get<ShiftEquipmentCheckRecord[]>('/equipment-checks/my-checklists/history', { params });
     return asArray(response.data);
   },
@@ -871,10 +883,7 @@ export const schedulingService = {
   // Reports
   // =====================================================================
 
-  async getEquipmentComplianceReport(params?: {
-    date_from?: string;
-    date_to?: string;
-  }): Promise<ComplianceReport> {
+  async getEquipmentComplianceReport(params?: { date_from?: string; date_to?: string }): Promise<ComplianceReport> {
     const response = await api.get<ComplianceReport>('/equipment-checks/reports/compliance', { params });
     return response.data;
   },
@@ -927,12 +936,11 @@ export const schedulingService = {
 
   async getTemplateChangelog(
     templateId: string,
-    params?: { limit?: number; offset?: number },
+    params?: { limit?: number; offset?: number }
   ): Promise<TemplateChangeLogResponse> {
-    const response = await api.get<TemplateChangeLogResponse>(
-      `/equipment-checks/templates/${templateId}/changelog`,
-      { params },
-    );
+    const response = await api.get<TemplateChangeLogResponse>(`/equipment-checks/templates/${templateId}/changelog`, {
+      params,
+    });
     return response.data;
   },
 

@@ -11,11 +11,7 @@ import { getCameraUnavailableReason } from '../constants/camera';
  */
 function makeResponsiveQrbox(target: { width: number; height: number }) {
   return (viewfinderWidth: number, viewfinderHeight: number) => {
-    const scale = Math.min(
-      1,
-      (viewfinderWidth * 0.8) / target.width,
-      (viewfinderHeight * 0.8) / target.height,
-    );
+    const scale = Math.min(1, (viewfinderWidth * 0.8) / target.width, (viewfinderHeight * 0.8) / target.height);
     return {
       width: Math.max(1, Math.round(target.width * scale)),
       height: Math.max(1, Math.round(target.height * scale)),
@@ -140,10 +136,7 @@ export function useHtml5Scanner({
     // selects the FRONT camera.
     const backCamera = cameras.find((c) => /back|rear|environment/i.test(c.label));
     const cameraTarget: string | MediaTrackConstraints =
-      backCamera?.id ??
-      (cameras.length === 1 && cameras[0]
-        ? cameras[0].id
-        : { facingMode: { ideal: 'environment' } });
+      backCamera?.id ?? (cameras.length === 1 && cameras[0] ? cameras[0].id : { facingMode: { ideal: 'environment' } });
 
     const startConfig = {
       fps: scanConfig.fps,

@@ -26,14 +26,21 @@ export const EventEditPage: React.FC = () => {
   const [updateScope, setUpdateScope] = useState<'single' | 'future'>('single');
 
   useEffect(() => {
-    void eventService.getEvents({ end_after: new Date().toISOString() }).then((data) => {
-      setUserEvents(data.map((e) => ({
-        id: e.id,
-        title: e.title,
-        start_datetime: e.start_datetime,
-        end_datetime: e.end_datetime,
-      })));
-    }).catch(() => { /* non-critical */ });
+    void eventService
+      .getEvents({ end_after: new Date().toISOString() })
+      .then((data) => {
+        setUserEvents(
+          data.map((e) => ({
+            id: e.id,
+            title: e.title,
+            start_datetime: e.start_datetime,
+            end_datetime: e.end_datetime,
+          }))
+        );
+      })
+      .catch(() => {
+        /* non-critical */
+      });
   }, []);
 
   useEffect(() => {
@@ -91,12 +98,12 @@ export const EventEditPage: React.FC = () => {
 
   if (error && !event) {
     return (
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
             onClick={() => void navigate('/events')}
-            className="mt-2 text-sm text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline"
+            className="mt-2 text-sm text-red-700 underline hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
           >
             Back to Events
           </button>
@@ -135,7 +142,7 @@ export const EventEditPage: React.FC = () => {
 
   // Build initial recurrence state when editing a recurring event
   const initialRecurrence: InitialRecurrence | undefined =
-    (event.is_recurring || event.recurrence_parent_id)
+    event.is_recurring || event.recurrence_parent_id
       ? {
           is_recurring: true,
           recurrence_pattern: event.recurrence_pattern,
@@ -150,27 +157,29 @@ export const EventEditPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
           <Link
             to={`/events/${eventId}`}
-            className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
+            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 mr-2" />
+            <ArrowLeft className="mr-2 h-5 w-5" />
             Back to Event
           </Link>
-          <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-            <Calendar className="w-8 h-8 text-red-700" />
+          <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
+            <Calendar className="h-8 w-8 text-red-700" />
             <span>Edit Event</span>
           </h1>
-          <p className="text-theme-text-muted mt-1">
-            Update the details for &ldquo;{event.title}&rdquo;.
-          </p>
+          <p className="text-theme-text-muted mt-1">Update the details for &ldquo;{event.title}&rdquo;.</p>
         </div>
 
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
+          <div
+            className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4"
+            role="alert"
+            aria-live="assertive"
+          >
             <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           </div>
         )}
@@ -183,7 +192,7 @@ export const EventEditPage: React.FC = () => {
               <fieldset className="mt-3">
                 <legend className="sr-only">Update scope</legend>
                 <div className="flex flex-col gap-2">
-                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <label className="inline-flex cursor-pointer items-center gap-2">
                     <input
                       type="radio"
                       name="updateScope"
@@ -194,7 +203,7 @@ export const EventEditPage: React.FC = () => {
                     />
                     <span>This event only</span>
                   </label>
-                  <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <label className="inline-flex cursor-pointer items-center gap-2">
                     <input
                       type="radio"
                       name="updateScope"

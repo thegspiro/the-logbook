@@ -11,18 +11,10 @@ import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const ApparatusListPage = lazyWithRetry(
-  () => import('./pages/ApparatusListPage'),
-);
-const ApparatusDetailPage = lazyWithRetry(
-  () => import('./pages/ApparatusDetailPage'),
-);
-const ApparatusFormPage = lazyWithRetry(
-  () => import('./pages/ApparatusFormPage'),
-);
-const ApparatusLabelPrintPage = lazyWithRetry(
-  () => import('./pages/ApparatusLabelPrintPage'),
-);
+const ApparatusListPage = lazyWithRetry(() => import('./pages/ApparatusListPage'));
+const ApparatusDetailPage = lazyWithRetry(() => import('./pages/ApparatusDetailPage'));
+const ApparatusFormPage = lazyWithRetry(() => import('./pages/ApparatusFormPage'));
+const ApparatusLabelPrintPage = lazyWithRetry(() => import('./pages/ApparatusLabelPrintPage'));
 
 export const getApparatusRoutes = () => {
   return (

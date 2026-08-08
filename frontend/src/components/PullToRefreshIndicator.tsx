@@ -28,17 +28,17 @@ export const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-40 flex justify-center pointer-events-none safe-top"
+      className="safe-top pointer-events-none fixed top-0 right-0 left-0 z-40 flex justify-center"
       style={{ transform: `translateY(${refreshing ? 48 : pullDistance * 0.5}px)` }}
       aria-live="polite"
       aria-label={refreshing ? 'Refreshing' : 'Pull to refresh'}
     >
-      <div className="bg-theme-surface rounded-full shadow-lg p-2 border border-theme-surface-border">
+      <div className="bg-theme-surface border-theme-surface-border rounded-full border p-2 shadow-lg">
         {refreshing ? (
-          <Loader2 className="w-5 h-5 text-blue-500 animate-spin" aria-hidden="true" />
+          <Loader2 className="h-5 w-5 animate-spin text-blue-500" aria-hidden="true" />
         ) : (
           <ArrowDown
-            className="w-5 h-5 text-theme-text-secondary transition-transform"
+            className="text-theme-text-secondary h-5 w-5 transition-transform"
             style={{ transform: `rotate(${rotation}deg)`, opacity: progress }}
             aria-hidden="true"
             data-testid="pull-arrow"

@@ -764,9 +764,7 @@
      devices), plus the on-screen keyboard height, plus the mobile bottom
      navigation bar. For fixed/sticky bars whose inner content already provides
      its own visual padding. See `--keyboard-inset` and `--bottom-nav-height`. */
-  padding-bottom: calc(
-    env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + var(--bottom-nav-height, 0px)
-  );
+  padding-bottom: calc(env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + var(--bottom-nav-height, 0px));
 }
 
 @utility action-bar-safe {
@@ -779,8 +777,7 @@
      and its submit button — sits behind the keyboard, unreachable. */
   padding-top: 0.75rem;
   padding-bottom: calc(
-    0.75rem + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) +
-      var(--bottom-nav-height, 0px)
+    0.75rem + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px) + var(--bottom-nav-height, 0px)
   );
 }
 
@@ -1190,6 +1187,15 @@ body {
   -moz-osx-font-smoothing: grayscale;
   /* Prevent iOS overscroll bounce on body */
   overscroll-behavior: none;
+  /* Opaque themed canvas behind every route. The dark-mode surface tokens
+     (--surface-bg, --surface-secondary) are translucent white — they are
+     designed to sit on this gradient. Without a painted canvas, any page
+     rendered outside AppLayout (public forms, ballots, status pages) composites
+     those tokens over the browser's default white, producing a white page with
+     light-on-light text in dark mode. */
+  background: linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to));
+  background-attachment: fixed;
+  color: var(--text-primary);
 }
 
 /* Native <option> elements render against the OS dropdown background

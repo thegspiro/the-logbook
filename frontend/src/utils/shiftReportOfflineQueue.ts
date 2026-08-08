@@ -24,9 +24,7 @@ const STORE_REPORTS = STORE_PENDING_SHIFT_REPORTS;
 
 const openDB = openOfflineDb;
 
-export async function enqueueShiftReport(
-  payload: BatchShiftReportCreate,
-): Promise<string> {
+export async function enqueueShiftReport(payload: BatchShiftReportCreate): Promise<string> {
   const db = await openDB();
   const id = `sr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const entry: QueuedShiftReport = {

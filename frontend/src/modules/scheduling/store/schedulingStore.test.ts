@@ -124,9 +124,7 @@ describe('schedulingStore', () => {
 
   describe('loadApparatus', () => {
     it('should load apparatus list', async () => {
-      const apparatus = [
-        { id: 'a1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine', is_active: true },
-      ];
+      const apparatus = [{ id: 'a1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine', is_active: true }];
       mockGetBasicApparatus.mockResolvedValue(apparatus);
 
       await useSchedulingStore.getState().loadApparatus();
@@ -164,7 +162,12 @@ describe('schedulingStore', () => {
 
     it('should clear error on successful reload', async () => {
       useSchedulingStore.setState({ summaryError: 'previous error' });
-      const summary = { shifts_scheduled: 5, shifts_scheduled_this_week: 2, shifts_scheduled_this_month: 8, hours_worked_this_month: 96 };
+      const summary = {
+        shifts_scheduled: 5,
+        shifts_scheduled_this_week: 2,
+        shifts_scheduled_this_month: 8,
+        hours_worked_this_month: 96,
+      };
       mockGetSummary.mockResolvedValue(summary);
 
       await useSchedulingStore.getState().loadSummary();

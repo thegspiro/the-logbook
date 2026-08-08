@@ -6,16 +6,7 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import {
-  Save,
-  Variable,
-  Loader2,
-  ChevronDown,
-  ChevronUp,
-  Info,
-  Undo2,
-  UserCheck,
-} from 'lucide-react';
+import { Save, Variable, Loader2, ChevronDown, ChevronUp, Info, Undo2, UserCheck } from 'lucide-react';
 import type { EmailTemplate, EmailTemplateUpdate, TemplateVariable } from '../types';
 import { validateEmailList, parseEmailList } from '../../../hooks/useEmailListInput';
 
@@ -50,7 +41,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   const [showVariables, setShowVariables] = useState(false);
   const [showOfficerVariables, setShowOfficerVariables] = useState(false);
   const [showRecipients, setShowRecipients] = useState(
-    () => (template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0,
+    () => (template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0
   );
   const htmlRef = useRef<HTMLTextAreaElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
@@ -81,10 +72,16 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     setCssStyles(template.css_styles ?? '');
     setDefaultCc((template.default_cc ?? []).join(', '));
     setDefaultBcc((template.default_bcc ?? []).join(', '));
-    setShowRecipients(
-      (template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0,
-    );
-  }, [template.id, template.subject, template.html_body, template.text_body, template.css_styles, template.default_cc, template.default_bcc]);
+    setShowRecipients((template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0);
+  }, [
+    template.id,
+    template.subject,
+    template.html_body,
+    template.text_body,
+    template.css_styles,
+    template.default_cc,
+    template.default_bcc,
+  ]);
 
   const ccError = validateEmailList(defaultCc);
   const bccError = validateEmailList(defaultBcc);
@@ -146,38 +143,31 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   };
 
   const labelClass = 'form-label';
-  const inputClass =
-    'form-input font-mono';
+  const inputClass = 'form-input font-mono';
 
   return (
     <div className="space-y-4">
       {/* Header with save button */}
       <div className="flex items-center justify-between">
-        <h3 className="text-theme-text-primary text-lg font-semibold">
-          Edit Template
-        </h3>
+        <h3 className="text-theme-text-primary text-lg font-semibold">Edit Template</h3>
         <div className="flex items-center gap-2">
           {isDirty && (
             <button
               onClick={handleDiscard}
               disabled={isSaving}
-              className="flex items-center space-x-1.5 px-3 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
             >
-              <Undo2 className="w-4 h-4" />
+              <Undo2 className="h-4 w-4" />
               <span>Discard</span>
             </button>
           )}
           <button
             onClick={handleSave}
             disabled={!isDirty || isSaving || hasValidationErrors}
-            className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center space-x-2 rounded-lg bg-orange-600 px-4 py-2 text-white transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
             title="Save changes (Ctrl+S)"
           >
-            {isSaving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             <span>Save</span>
           </button>
         </div>
@@ -190,11 +180,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
             Subject Line
           </label>
           <span
-            className={`text-xs ${
-              subject.length > 60
-                ? 'text-yellow-500'
-                : 'text-theme-text-muted'
-            }`}
+            className={`text-xs ${subject.length > 60 ? 'text-yellow-500' : 'text-theme-text-muted'}`}
             aria-live="polite"
           >
             {subject.length}/500{subject.length > 60 ? ' — may be truncated in some email clients' : ''}
@@ -217,13 +203,9 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
       <div>
         <button
           onClick={() => setShowRecipients(!showRecipients)}
-          className="flex items-center space-x-2 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+          className="text-theme-text-secondary hover:text-theme-text-primary flex items-center space-x-2 text-sm transition-colors"
         >
-          {showRecipients ? (
-            <ChevronUp className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
+          {showRecipients ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           <span>Default CC / BCC Recipients</span>
         </button>
         {showRecipients && (
@@ -245,7 +227,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
               {ccError ? (
                 <p className="mt-1 text-xs text-red-500">{ccError}</p>
               ) : (
-                <p id="cc-hint" className="mt-1 text-xs text-theme-text-muted">
+                <p id="cc-hint" className="text-theme-text-muted mt-1 text-xs">
                   These addresses will be CC'd on every email sent with this template.
                 </p>
               )}
@@ -267,7 +249,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
               {bccError ? (
                 <p className="mt-1 text-xs text-red-500">{bccError}</p>
               ) : (
-                <p id="bcc-hint" className="mt-1 text-xs text-theme-text-muted">
+                <p id="bcc-hint" className="text-theme-text-muted mt-1 text-xs">
                   These addresses will be BCC'd (hidden from other recipients) on every email sent with this template.
                 </p>
               )}
@@ -281,22 +263,18 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
         <div className="card-secondary">
           <button
             onClick={() => setShowVariables(!showVariables)}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors"
           >
             <span className="flex items-center space-x-2">
-              <Variable className="w-4 h-4" />
+              <Variable className="h-4 w-4" />
               <span>Available Variables ({template.available_variables.length})</span>
             </span>
-            {showVariables ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
-            )}
+            {showVariables ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
           {showVariables && (
-            <div className="px-4 pb-3 border-t border-theme-surface-border pt-3">
-              <p className="text-theme-text-muted text-xs mb-2 flex items-center gap-1">
-                <Info className="w-3 h-3" />
+            <div className="border-theme-surface-border border-t px-4 pt-3 pb-3">
+              <p className="text-theme-text-muted mb-2 flex items-center gap-1 text-xs">
+                <Info className="h-3 w-3" />
                 Click a variable to insert it at the cursor in the HTML body.
               </p>
               <div className="flex flex-wrap gap-2">
@@ -305,7 +283,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                     key={v.name}
                     onClick={() => insertVariable(v)}
                     title={v.description}
-                    className="inline-flex items-center px-2.5 py-1 bg-orange-500/10 border border-orange-500/30 rounded-sm text-xs text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors font-mono"
+                    className="inline-flex items-center rounded-sm border border-orange-500/30 bg-orange-500/10 px-2.5 py-1 font-mono text-xs text-orange-600 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
                   >
                     {`{{${v.name}}}`}
                   </button>
@@ -321,22 +299,18 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
         <div className="card-secondary">
           <button
             onClick={() => setShowOfficerVariables(!showOfficerVariables)}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors"
           >
             <span className="flex items-center space-x-2">
-              <UserCheck className="w-4 h-4" />
+              <UserCheck className="h-4 w-4" />
               <span>Officer Signature Variables ({officerVariables.length})</span>
             </span>
-            {showOfficerVariables ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
-            )}
+            {showOfficerVariables ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
           {showOfficerVariables && (
-            <div className="px-4 pb-3 border-t border-theme-surface-border pt-3">
-              <p className="text-theme-text-muted text-xs mb-2 flex items-center gap-1">
-                <Info className="w-3 h-3" />
+            <div className="border-theme-surface-border border-t px-4 pt-3 pb-3">
+              <p className="text-theme-text-muted mb-2 flex items-center gap-1 text-xs">
+                <Info className="h-3 w-3" />
                 Resolved from the Officers tab, so a message is signed by whoever holds the office.
               </p>
               <div className="flex flex-wrap gap-2">
@@ -345,7 +319,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                     key={v.name}
                     onClick={() => insertVariable(v)}
                     title={v.description}
-                    className="inline-flex items-center px-2.5 py-1 bg-blue-500/10 border border-blue-500/30 rounded-sm text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors font-mono"
+                    className="inline-flex items-center rounded-sm border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 font-mono text-xs text-blue-600 transition-colors hover:bg-blue-500/20 dark:text-blue-400"
                   >
                     {`{{${v.name}}}`}
                   </button>
@@ -376,13 +350,9 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
       <div>
         <button
           onClick={() => setShowTextBody(!showTextBody)}
-          className="flex items-center space-x-2 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+          className="text-theme-text-secondary hover:text-theme-text-primary flex items-center space-x-2 text-sm transition-colors"
         >
-          {showTextBody ? (
-            <ChevronUp className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
+          {showTextBody ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           <span>Plain-Text Body (Fallback)</span>
         </button>
         {showTextBody && (
@@ -401,13 +371,9 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
       <div>
         <button
           onClick={() => setShowCss(!showCss)}
-          className="flex items-center space-x-2 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+          className="text-theme-text-secondary hover:text-theme-text-primary flex items-center space-x-2 text-sm transition-colors"
         >
-          {showCss ? (
-            <ChevronUp className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
-          )}
+          {showCss ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           <span>CSS Styles</span>
         </button>
         {showCss && (

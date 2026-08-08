@@ -102,13 +102,8 @@ describe('ImportMembers', () => {
     await uploadCsv(template);
 
     await screen.findByText(IMPORT_BUTTON);
-    expect(mockToastError).not.toHaveBeenCalledWith(
-      expect.stringContaining('Missing required columns')
-    );
-    expect(mockToast).not.toHaveBeenCalledWith(
-      expect.stringContaining('unrecognized column'),
-      expect.anything()
-    );
+    expect(mockToastError).not.toHaveBeenCalledWith(expect.stringContaining('Missing required columns'));
+    expect(mockToast).not.toHaveBeenCalledWith(expect.stringContaining('unrecognized column'), expect.anything());
   });
 
   it('rejects the template example row rather than importing John Doe', async () => {
@@ -116,9 +111,7 @@ describe('ImportMembers', () => {
     await uploadCsv(template);
 
     expect(
-      await screen.findByText(
-        /This is the template's example row, not a member — delete it from the file/
-      )
+      await screen.findByText(/This is the template's example row, not a member — delete it from the file/)
     ).toBeInTheDocument();
     await clickImport();
     expect(mockCreateMember).not.toHaveBeenCalled();
@@ -276,9 +269,7 @@ describe('ImportMembers', () => {
     await clickImport();
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/role "Chief" does not match any role configured under Roles/)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/role "Chief" does not match any role configured under Roles/)).toBeInTheDocument();
     });
     expect(mockCreateMember).not.toHaveBeenCalled();
   });
@@ -294,9 +285,7 @@ describe('ImportMembers', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(
-          /Emergency contact 1 "Jane Doe" is missing emergencyRelationship1 and emergencyPhone1/
-        )
+        screen.getByText(/Emergency contact 1 "Jane Doe" is missing emergencyRelationship1 and emergencyPhone1/)
       ).toBeInTheDocument();
     });
     expect(mockCreateMember).not.toHaveBeenCalled();
@@ -317,9 +306,7 @@ describe('ImportMembers', () => {
   // locale format on save, which the API's `date` fields reject with a 422.
   it('converts locale-formatted dates to the ISO form the API accepts', async () => {
     renderWithRouter(<ImportMembers />);
-    await uploadCsv(
-      'firstName,lastName,email,dateOfBirth,joinDate\nJohn,Doe,john@example.com,3/15/1985,1/5/2020'
-    );
+    await uploadCsv('firstName,lastName,email,dateOfBirth,joinDate\nJohn,Doe,john@example.com,3/15/1985,1/5/2020');
 
     await clickImport();
 
@@ -337,9 +324,7 @@ describe('ImportMembers', () => {
     await clickImport();
 
     await waitFor(() => {
-      expect(mockCreateMember).toHaveBeenCalledWith(
-        expect.objectContaining({ date_of_birth: '1985-03-15' })
-      );
+      expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ date_of_birth: '1985-03-15' }));
     });
   });
 
@@ -399,24 +384,18 @@ describe('ImportMembers', () => {
     await uploadCsv('firstName,lastName,email,status\nJohn,Doe,john@example.com,probationary');
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.stringContaining('The status column is ignored'),
-        { icon: '⚠️' }
-      );
+      expect(mockToast).toHaveBeenCalledWith(expect.stringContaining('The status column is ignored'), { icon: '⚠️' });
     });
   });
 
   it('names columns it does not recognize instead of dropping them silently', async () => {
     renderWithRouter(<ImportMembers />);
-    await uploadCsv(
-      'firstName,lastName,email,certifications,notes\nJohn,Doe,john@example.com,EMT-B,none'
-    );
+    await uploadCsv('firstName,lastName,email,certifications,notes\nJohn,Doe,john@example.com,EMT-B,none');
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        'Ignoring 2 unrecognized column(s): certifications, notes',
-        { icon: '⚠️' }
-      );
+      expect(mockToast).toHaveBeenCalledWith('Ignoring 2 unrecognized column(s): certifications, notes', {
+        icon: '⚠️',
+      });
     });
   });
 
@@ -425,14 +404,9 @@ describe('ImportMembers', () => {
     await uploadCsv('First Name,LAST_NAME,E-Mail,Membership Number\nJohn,Doe,john@example.com,FF-001');
 
     await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith(
-        'File validated successfully! Found 1 members to import.'
-      );
+      expect(mockToastSuccess).toHaveBeenCalledWith('File validated successfully! Found 1 members to import.');
     });
-    expect(mockToast).not.toHaveBeenCalledWith(
-      expect.stringContaining('unrecognized column'),
-      expect.anything()
-    );
+    expect(mockToast).not.toHaveBeenCalledWith(expect.stringContaining('unrecognized column'), expect.anything());
   });
 
   // Every row of a roster whose role column holds assignments rather than
@@ -456,9 +430,9 @@ describe('ImportMembers', () => {
       );
     });
     // Both rows naming that role are reported, not just the first.
-    expect(
-      screen.getAllByText(/role "Engine Operator" does not match any role configured under Roles/)
-    ).toHaveLength(2);
+    expect(screen.getAllByText(/role "Engine Operator" does not match any role configured under Roles/)).toHaveLength(
+      2
+    );
     expect(screen.getByRole('button', { name: /Import 0 Members/ })).toBeDisabled();
   });
 
@@ -469,9 +443,7 @@ describe('ImportMembers', () => {
     await uploadCsv('firstName,lastName,email,role\nJohn,Doe,john@example.com,member');
 
     await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith(
-        'File validated successfully! Found 1 members to import.'
-      );
+      expect(mockToastSuccess).toHaveBeenCalledWith('File validated successfully! Found 1 members to import.');
     });
     expect(mockToastError).not.toHaveBeenCalled();
   });
@@ -499,9 +471,7 @@ describe('ImportMembers', () => {
       await uploadCsv(UNQUOTED_COMMA);
 
       expect(
-        await screen.findByText(
-          /email "\(555\) 111-2222" is not an email address — that looks like a phone number/
-        )
+        await screen.findByText(/email "\(555\) 111-2222" is not an email address — that looks like a phone number/)
       ).toBeInTheDocument();
     });
 
@@ -520,18 +490,14 @@ describe('ImportMembers', () => {
       renderWithRouter(<ImportMembers />);
       await uploadCsv('firstName,lastName,email,state\nJohn,Doe,VA,');
 
-      expect(
-        await screen.findByText(/email "VA" is not an email address/)
-      ).toBeInTheDocument();
+      expect(await screen.findByText(/email "VA" is not an email address/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Import 0 Members/ })).toBeDisabled();
     });
   });
 
   it('reports every problem in a row at once, not just the first', async () => {
     renderWithRouter(<ImportMembers />);
-    await uploadCsv(
-      'firstName,lastName,email,dateOfBirth,joinDate\nJohn,Doe,not-an-email,32/1/1985,someday'
-    );
+    await uploadCsv('firstName,lastName,email,dateOfBirth,joinDate\nJohn,Doe,not-an-email,32/1/1985,someday');
 
     expect(await screen.findByText(/email "not-an-email" is not an email address/)).toBeInTheDocument();
     expect(screen.getByText(/dateOfBirth "32\/1\/1985" is not a recognized date/)).toBeInTheDocument();
@@ -542,17 +508,13 @@ describe('ImportMembers', () => {
     renderWithRouter(<ImportMembers />);
     await uploadCsv(`firstName,lastName,email,platoon\nJohn,Doe,john@example.com,${'A'.repeat(21)}`);
 
-    expect(
-      await screen.findByText('platoon is 21 characters long; the limit is 20')
-    ).toBeInTheDocument();
+    expect(await screen.findByText('platoon is 21 characters long; the limit is 20')).toBeInTheDocument();
   });
 
   describe('duplicates within one file', () => {
     it('points at the line the value was first used on', async () => {
       renderWithRouter(<ImportMembers />);
-      await uploadCsv(
-        'firstName,lastName,email\nJohn,Doe,dup@example.com\nJane,Roe,dup@example.com'
-      );
+      await uploadCsv('firstName,lastName,email\nJohn,Doe,dup@example.com\nJane,Roe,dup@example.com');
 
       expect(
         await screen.findByText('email "dup@example.com" is already used on line 2 of this file')
@@ -561,30 +523,22 @@ describe('ImportMembers', () => {
 
     it('keeps the first occurrence importable', async () => {
       renderWithRouter(<ImportMembers />);
-      await uploadCsv(
-        'firstName,lastName,email\nJohn,Doe,dup@example.com\nJane,Roe,dup@example.com'
-      );
+      await uploadCsv('firstName,lastName,email\nJohn,Doe,dup@example.com\nJane,Roe,dup@example.com');
       await clickImport();
 
       await waitFor(() => {
         expect(mockCreateMember).toHaveBeenCalledTimes(1);
       });
-      expect(mockCreateMember).toHaveBeenCalledWith(
-        expect.objectContaining({ first_name: 'John' })
-      );
+      expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ first_name: 'John' }));
     });
 
     // Two different addresses can still collide, because an omitted username is
     // derived from the local part.
     it('catches usernames that collide only after being derived', async () => {
       renderWithRouter(<ImportMembers />);
-      await uploadCsv(
-        'firstName,lastName,email\nJohn,Doe,j.doe@example.com\nJane,Doe,j.doe@other.org'
-      );
+      await uploadCsv('firstName,lastName,email\nJohn,Doe,j.doe@example.com\nJane,Doe,j.doe@other.org');
 
-      expect(
-        await screen.findByText('username "j_doe" is already used on line 2 of this file')
-      ).toBeInTheDocument();
+      expect(await screen.findByText('username "j_doe" is already used on line 2 of this file')).toBeInTheDocument();
     });
   });
 
@@ -616,9 +570,7 @@ describe('ImportMembers', () => {
       await clickImport();
 
       await waitFor(() => {
-        expect(mockCreateMember).toHaveBeenCalledWith(
-          expect.objectContaining({ send_welcome_email: false })
-        );
+        expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ send_welcome_email: false }));
       });
     });
 
@@ -631,9 +583,7 @@ describe('ImportMembers', () => {
       await clickImport();
 
       await waitFor(() => {
-        expect(mockCreateMember).toHaveBeenCalledWith(
-          expect.objectContaining({ send_welcome_email: true })
-        );
+        expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ send_welcome_email: true }));
       });
     });
   });
@@ -668,13 +618,9 @@ describe('ImportMembers', () => {
       mockGetUsers.mockResolvedValue(EXISTING);
 
       renderWithRouter(<ImportMembers />);
-      await uploadCsv(
-        'firstName,lastName,email,membershipNumber\nPat,Jones,pat@example.com,FF-001'
-      );
+      await uploadCsv('firstName,lastName,email,membershipNumber\nPat,Jones,pat@example.com,FF-001');
 
-      expect(
-        await screen.findByText(/membershipNumber "FF-001" already belongs to Mary Smith/)
-      ).toBeInTheDocument();
+      expect(await screen.findByText(/membershipNumber "FF-001" already belongs to Mary Smith/)).toBeInTheDocument();
     });
 
     it('imports a member who collides with nobody', async () => {
@@ -685,9 +631,7 @@ describe('ImportMembers', () => {
       await clickImport();
 
       await waitFor(() => {
-        expect(mockCreateMember).toHaveBeenCalledWith(
-          expect.objectContaining({ email: 'pat@example.com' })
-        );
+        expect(mockCreateMember).toHaveBeenCalledWith(expect.objectContaining({ email: 'pat@example.com' }));
       });
     });
 
@@ -700,10 +644,9 @@ describe('ImportMembers', () => {
       await uploadCsv('firstName,lastName,email\nPat,Jones,pat@example.com');
 
       await waitFor(() => {
-        expect(mockToast).toHaveBeenCalledWith(
-          expect.stringContaining('Could not load the current roster'),
-          { icon: '⚠️' }
-        );
+        expect(mockToast).toHaveBeenCalledWith(expect.stringContaining('Could not load the current roster'), {
+          icon: '⚠️',
+        });
       });
       await clickImport();
       await waitFor(() => {
@@ -742,9 +685,7 @@ describe('ImportMembers', () => {
 
     it('hands back the failed rows with the reason in the first column', async () => {
       renderWithRouter(<ImportMembers />);
-      await uploadCsv(
-        'firstName,lastName,email\nJohn,Doe,john@example.com\nJane,Roe,not-an-email'
-      );
+      await uploadCsv('firstName,lastName,email\nJohn,Doe,john@example.com\nJane,Roe,not-an-email');
       await screen.findByText('Download Error Report');
 
       const report = await captureDownload(async () => {
@@ -753,9 +694,7 @@ describe('ImportMembers', () => {
 
       const lines = report.split('\r\n');
       expect(lines[0]).toBe('errorReason,firstName,lastName,email');
-      expect(lines[1]).toBe(
-        '"email ""not-an-email"" is not an email address",Jane,Roe,not-an-email'
-      );
+      expect(lines[1]).toBe('"email ""not-an-email"" is not an email address",Jane,Roe,not-an-email');
       // Only the failures, so the corrected file cannot collide with the
       // members that already imported.
       expect(lines).toHaveLength(2);
@@ -763,9 +702,7 @@ describe('ImportMembers', () => {
 
     it('carries a shifted row through verbatim so it can be re-quoted', async () => {
       renderWithRouter(<ImportMembers />);
-      await uploadCsv(
-        'firstName,lastName,street,email\nJohn,Doe,123 Main St, Apt 4,john@example.com'
-      );
+      await uploadCsv('firstName,lastName,street,email\nJohn,Doe,123 Main St, Apt 4,john@example.com');
       await screen.findByText('Download Error Report');
 
       const report = await captureDownload(async () => {
@@ -822,9 +759,7 @@ describe('ImportMembers', () => {
       });
 
       renderWithRouter(<ImportMembers />);
-      await uploadCsv(
-        'firstName,lastName,email\nJohn,Doe,taken@example.com\nJane,Roe,not-an-email'
-      );
+      await uploadCsv('firstName,lastName,email\nJohn,Doe,taken@example.com\nJane,Roe,not-an-email');
       await clickImport();
       await screen.findByText('Import Complete!');
 

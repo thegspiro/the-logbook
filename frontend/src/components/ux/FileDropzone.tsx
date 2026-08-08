@@ -46,9 +46,7 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({
           return;
         }
 
-        const preview = file.type.startsWith('image/')
-          ? URL.createObjectURL(file)
-          : undefined;
+        const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
 
         validFiles.push({ file, preview });
       });
@@ -108,14 +106,17 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
-        className={`relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-          isDragging
-            ? 'border-red-500 bg-red-500/5'
-            : 'border-theme-surface-border hover:border-theme-text-muted'
+        className={`relative cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+          isDragging ? 'border-red-500 bg-red-500/5' : 'border-theme-surface-border hover:border-theme-text-muted'
         }`}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
         aria-label={label}
       >
         <input
@@ -127,45 +128,47 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({
           className="hidden"
           aria-hidden="true"
         />
-        <Upload className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
-        <p className="text-sm text-theme-text-secondary">{label}</p>
-        <p className="text-xs text-theme-text-muted mt-1">Max {maxSizeMB}MB per file</p>
+        <Upload className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
+        <p className="text-theme-text-secondary text-sm">{label}</p>
+        <p className="text-theme-text-muted mt-1 text-xs">Max {maxSizeMB}MB per file</p>
       </div>
 
       {/* Error */}
-      {error && (
-        <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
-      )}
+      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       {/* File previews */}
       {files.length > 0 && (
         <div className="mt-3 space-y-2">
           {files.map((fp, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-3 p-2 bg-theme-surface-secondary rounded-lg"
-            >
+            <div key={index} className="bg-theme-surface-secondary flex items-center gap-3 rounded-lg p-2">
               {fp.preview ? (
-                <img src={fp.preview} alt={`Preview of ${fp.file.name}`} className="w-10 h-10 rounded-sm object-cover" />
+                <img
+                  src={fp.preview}
+                  alt={`Preview of ${fp.file.name}`}
+                  className="h-10 w-10 rounded-sm object-cover"
+                />
               ) : (
-                <div className="w-10 h-10 rounded-sm bg-theme-surface-hover flex items-center justify-center">
+                <div className="bg-theme-surface-hover flex h-10 w-10 items-center justify-center rounded-sm">
                   {fp.file.type.startsWith('image/') ? (
-                    <Image className="w-5 h-5 text-theme-text-muted" />
+                    <Image className="text-theme-text-muted h-5 w-5" />
                   ) : (
-                    <FileIcon className="w-5 h-5 text-theme-text-muted" />
+                    <FileIcon className="text-theme-text-muted h-5 w-5" />
                   )}
                 </div>
               )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-theme-text-primary truncate">{fp.file.name}</p>
-                <p className="text-xs text-theme-text-muted">{formatSize(fp.file.size)}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-theme-text-primary truncate text-sm">{fp.file.name}</p>
+                <p className="text-theme-text-muted text-xs">{formatSize(fp.file.size)}</p>
               </div>
               <button
-                onClick={(e) => { e.stopPropagation(); removeFile(index); }}
-                className="p-1 text-theme-text-muted hover:text-red-500 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeFile(index);
+                }}
+                className="text-theme-text-muted p-1 transition-colors hover:text-red-500"
                 aria-label={`Remove ${fp.file.name}`}
               >
-                <X className="w-4 h-4" />
+                <X className="h-4 w-4" />
               </button>
             </div>
           ))}

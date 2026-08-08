@@ -2,7 +2,14 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { HardDrive, Cloud, Database, FolderOpen, CheckCircle, Info, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
+import {
+  OnboardingHeader,
+  ProgressIndicator,
+  BackButton,
+  ResetProgressButton,
+  ErrorAlert,
+  AutoSaveNotification,
+} from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
@@ -22,12 +29,12 @@ const FileStorageChoice: React.FC = () => {
   const navigate = useNavigate();
 
   // Zustand store
-  const departmentName = useOnboardingStore(state => state.departmentName);
-  const logoPreview = useOnboardingStore(state => state.logoData);
-  const emailPlatform = useOnboardingStore(state => state.emailPlatform);
-  const fileStoragePlatform = useOnboardingStore(state => state.fileStoragePlatform);
-  const setFileStoragePlatform = useOnboardingStore(state => state.setFileStoragePlatform);
-  const lastSaved = useOnboardingStore(state => state.lastSaved);
+  const departmentName = useOnboardingStore((state) => state.departmentName);
+  const logoPreview = useOnboardingStore((state) => state.logoData);
+  const emailPlatform = useOnboardingStore((state) => state.emailPlatform);
+  const fileStoragePlatform = useOnboardingStore((state) => state.fileStoragePlatform);
+  const setFileStoragePlatform = useOnboardingStore((state) => state.setFileStoragePlatform);
+  const lastSaved = useOnboardingStore((state) => state.lastSaved);
 
   // API request hook
   const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
@@ -52,21 +59,33 @@ const FileStorageChoice: React.FC = () => {
 
   // Google Drive Icon
   const GoogleDriveIcon = () => (
-    <svg className="w-10 h-10" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
-      <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
-      <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
-      <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
-      <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
-      <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
-      <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+    <svg className="h-10 w-10" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+      <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da" />
+      <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47" />
+      <path
+        d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"
+        fill="#ea4335"
+      />
+      <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d" />
+      <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc" />
+      <path
+        d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"
+        fill="#ffba00"
+      />
     </svg>
   );
 
   // OneDrive Icon
   const OneDriveIcon = () => (
-    <svg className="w-10 h-10" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-      <path fill="#0078d4" d="M30.5 15.5c-5.24 0-9.8 3.05-11.95 7.45-3.55.25-6.55 2.65-7.45 5.95C5.7 29.9 2 34.15 2 39.25c0 5.65 4.6 10.25 10.25 10.25h25.5C43.45 49.5 48 44.95 48 39.25S43.45 29 37.75 29c-.45 0-.9.05-1.35.1-.5-7.45-6.7-13.6-14.4-13.6z"/>
-      <path fill="#0364b8" d="M18.55 22.95c-.35-.8-.65-1.65-.9-2.5 3.55.25 6.55 2.65 7.45 5.95 5.4 1 9.1 5.25 9.1 10.35 0 .45-.05.9-.1 1.35 5.7-.05 10.35-4.65 10.35-10.35S43.45 17.4 37.75 17.4c-.45 0-.9.05-1.35.1-.5-7.45-6.7-13.6-14.4-13.6-5.24 0-9.8 3.05-11.95 7.45-3.55.25-6.55 2.65-7.45 5.95 4.4-1 8.15-3.65 10.95-7.35z"/>
+    <svg className="h-10 w-10" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+      <path
+        fill="#0078d4"
+        d="M30.5 15.5c-5.24 0-9.8 3.05-11.95 7.45-3.55.25-6.55 2.65-7.45 5.95C5.7 29.9 2 34.15 2 39.25c0 5.65 4.6 10.25 10.25 10.25h25.5C43.45 49.5 48 44.95 48 39.25S43.45 29 37.75 29c-.45 0-.9.05-1.35.1-.5-7.45-6.7-13.6-14.4-13.6z"
+      />
+      <path
+        fill="#0364b8"
+        d="M18.55 22.95c-.35-.8-.65-1.65-.9-2.5 3.55.25 6.55 2.65 7.45 5.95 5.4 1 9.1 5.25 9.1 10.35 0 .45-.05.9-.1 1.35 5.7-.05 10.35-4.65 10.35-10.35S43.45 17.4 37.75 17.4c-.45 0-.9.05-1.35.1-.5-7.45-6.7-13.6-14.4-13.6-5.24 0-9.8 3.05-11.95 7.45-3.55.25-6.55 2.65-7.45 5.95 4.4-1 8.15-3.65 10.95-7.35z"
+      />
     </svg>
   );
 
@@ -81,9 +100,9 @@ const FileStorageChoice: React.FC = () => {
         '15 GB free storage (expandable)',
         'Easy sharing and collaboration',
         'Automatic backup and sync',
-        'Integrated with Google Workspace'
+        'Integrated with Google Workspace',
       ],
-      setupInfo: 'You\'ll need to authorize access to your Google Drive account using OAuth 2.0.',
+      setupInfo: "You'll need to authorize access to your Google Drive account using OAuth 2.0.",
       recommended: emailPlatform === 'gmail',
     },
     {
@@ -96,51 +115,48 @@ const FileStorageChoice: React.FC = () => {
         '5 GB free storage (expandable)',
         'Deep integration with Office 365',
         'Advanced security features',
-        'SharePoint document libraries'
+        'SharePoint document libraries',
       ],
-      setupInfo: 'You\'ll need your Microsoft 365 credentials and app registration details.',
+      setupInfo: "You'll need your Microsoft 365 credentials and app registration details.",
       recommended: emailPlatform === 'microsoft',
     },
     {
       id: 's3',
       name: 'Amazon S3',
       description: 'AWS cloud storage',
-      icon: <Database aria-hidden="true" className="w-10 h-10 text-theme-accent-orange" />,
+      icon: <Database aria-hidden="true" className="text-theme-accent-orange h-10 w-10" />,
       color: 'from-orange-600 to-yellow-500',
       features: [
         'Pay-as-you-go pricing',
         'Highly scalable and reliable',
         '99.999999999% durability',
-        'Advanced security and compliance'
+        'Advanced security and compliance',
       ],
-      setupInfo: 'You\'ll need an AWS account, Access Key ID, and Secret Access Key.',
+      setupInfo: "You'll need an AWS account, Access Key ID, and Secret Access Key.",
     },
     {
       id: 'local',
       name: 'Local Storage',
       description: 'Store files on your server',
-      icon: <HardDrive aria-hidden="true" className="w-10 h-10 text-theme-text-muted" />,
+      icon: <HardDrive aria-hidden="true" className="text-theme-text-muted h-10 w-10" />,
       color: 'from-slate-600 to-slate-400',
       features: [
         'Complete control over your data',
         'No third-party dependencies',
         'No monthly fees',
-        'Requires manual backups'
+        'Requires manual backups',
       ],
-      setupInfo: 'Files will be stored in your configured upload directory. Make sure you have adequate storage space and a backup strategy.',
+      setupInfo:
+        'Files will be stored in your configured upload directory. Make sure you have adequate storage space and a backup strategy.',
       recommended: emailPlatform === 'selfhosted' || emailPlatform === 'other',
     },
     {
       id: 'other',
       name: 'Configure Later',
       description: 'Skip for now',
-      icon: <FolderOpen aria-hidden="true" className="w-10 h-10 text-theme-text-muted" />,
+      icon: <FolderOpen aria-hidden="true" className="text-theme-text-muted h-10 w-10" />,
       color: 'from-slate-700 to-slate-500',
-      features: [
-        'Set up file storage later',
-        'Use local storage as default',
-        'Can be changed in settings'
-      ],
+      features: ['Set up file storage later', 'Use local storage as default', 'Can be changed in settings'],
       setupInfo: 'You can configure file storage later in the system settings.',
     },
   ];
@@ -185,46 +201,42 @@ const FileStorageChoice: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col safe-top">
-      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
+      <OnboardingHeader
+        departmentName={departmentName}
+        logoPreview={logoPreview}
+        icon={<Mail aria-hidden="true" className="h-6 w-6 text-white" />}
+      />
 
-      <main className="flex-1 flex items-center justify-center p-4 py-8">
-        <div className="max-w-5xl w-full">
+      <main className="flex flex-1 items-center justify-center p-4 py-8">
+        <div className="w-full max-w-5xl">
           {/* Navigation Buttons */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="mb-6 flex items-center justify-between">
             <BackButton to="/onboarding/email-config" />
             <ResetProgressButton />
           </div>
 
           {/* Page Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-              <Cloud aria-hidden="true" className="w-8 h-8 text-white" />
+          <div className="mb-8 text-center">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-blue-600">
+              <Cloud aria-hidden="true" className="h-8 w-8 text-white" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
-              File Storage
-            </h2>
-            <p className="text-xl text-theme-text-secondary mb-2">
-              Where should department files be stored?
-            </p>
-            <p className="text-sm text-theme-text-muted">
-              Documents, images, reports, and other files
-            </p>
+            <h2 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">File Storage</h2>
+            <p className="text-theme-text-secondary mb-2 text-xl">Where should department files be stored?</p>
+            <p className="text-theme-text-muted text-sm">Documents, images, reports, and other files</p>
           </div>
 
           {/* Smart Recommendation Notice */}
           {emailPlatform && (emailPlatform === 'gmail' || emailPlatform === 'microsoft') && (
-            <div className="alert-success mb-6 max-w-3xl mx-auto">
+            <div className="alert-success mx-auto mb-6 max-w-3xl">
               <div className="flex items-start space-x-3">
-                <CheckCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-success-icon shrink-0 mt-0.5" />
+                <CheckCircle aria-hidden="true" className="text-theme-alert-success-icon mt-0.5 h-5 w-5 shrink-0" />
                 <div>
-                  <p className="text-theme-alert-success-title text-sm font-medium mb-1">
-                    Smart Recommendation
-                  </p>
+                  <p className="text-theme-alert-success-title mb-1 text-sm font-medium">Smart Recommendation</p>
                   <p className="text-theme-alert-success-text text-sm">
-                    Based on your {emailPlatform === 'gmail' ? 'Gmail' : 'Microsoft 365'} email selection,
-                    we've pre-selected {emailPlatform === 'gmail' ? 'Google Drive' : 'OneDrive'} for seamless
-                    integration with your existing platform.
+                    Based on your {emailPlatform === 'gmail' ? 'Gmail' : 'Microsoft 365'} email selection, we've
+                    pre-selected {emailPlatform === 'gmail' ? 'Google Drive' : 'OneDrive'} for seamless integration with
+                    your existing platform.
                   </p>
                 </div>
               </div>
@@ -232,12 +244,12 @@ const FileStorageChoice: React.FC = () => {
           )}
 
           {/* Platform Cards */}
-          <div className="grid md:grid-cols-2 gap-4 mb-8">
+          <div className="mb-8 grid gap-4 md:grid-cols-2">
             {platforms.map((platform) => (
               <button
                 key={platform.id}
                 onClick={() => setFileStoragePlatform(platform.id)}
-                className={`relative bg-theme-surface backdrop-blur-xs rounded-lg p-6 text-left border-2 transition-all duration-300 hover:scale-105 ${
+                className={`bg-theme-surface relative rounded-lg border-2 p-6 text-left backdrop-blur-xs transition-all duration-300 hover:scale-105 ${
                   fileStoragePlatform === platform.id
                     ? 'border-theme-accent-red shadow-lg'
                     : 'border-theme-surface-border hover:border-theme-surface-hover'
@@ -247,8 +259,8 @@ const FileStorageChoice: React.FC = () => {
                 {/* Recommended Badge */}
                 {platform.recommended && (
                   <div className="absolute top-4 right-4">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-500 text-white">
-                      <CheckCircle aria-hidden="true" className="w-3 h-3 mr-1" />
+                    <span className="inline-flex items-center rounded-full bg-green-500 px-3 py-1 text-xs font-semibold text-white">
+                      <CheckCircle aria-hidden="true" className="mr-1 h-3 w-3" />
                       Recommended
                     </span>
                   </div>
@@ -257,39 +269,42 @@ const FileStorageChoice: React.FC = () => {
                 {/* Selected Indicator */}
                 {fileStoragePlatform === platform.id && (
                   <div className="absolute top-4 left-4">
-                    <CheckCircle aria-hidden="true" className="w-6 h-6 text-theme-accent-red" />
+                    <CheckCircle aria-hidden="true" className="text-theme-accent-red h-6 w-6" />
                   </div>
                 )}
 
-                <div className={`flex items-start space-x-4 ${fileStoragePlatform === platform.id ? 'mt-8' : platform.recommended ? 'mt-8' : ''}`}>
+                <div
+                  className={`flex items-start space-x-4 ${fileStoragePlatform === platform.id ? 'mt-8' : platform.recommended ? 'mt-8' : ''}`}
+                >
                   {/* Icon */}
-                  <div className={`shrink-0 w-16 h-16 rounded-lg bg-linear-to-br ${platform.color} flex items-center justify-center`}>
+                  <div
+                    className={`h-16 w-16 shrink-0 rounded-lg bg-linear-to-br ${platform.color} flex items-center justify-center`}
+                  >
                     {platform.icon}
                   </div>
 
                   {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-bold text-theme-text-primary mb-1">
-                      {platform.name}
-                    </h3>
-                    <p className="text-theme-text-muted text-sm mb-3">
-                      {platform.description}
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-theme-text-primary mb-1 text-xl font-bold">{platform.name}</h3>
+                    <p className="text-theme-text-muted mb-3 text-sm">{platform.description}</p>
 
                     {/* Features */}
-                    <ul className="space-y-1 mb-3">
+                    <ul className="mb-3 space-y-1">
                       {platform.features.map((feature, index) => (
-                        <li key={index} className="flex items-start text-sm text-theme-text-secondary">
-                          <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green mr-2 shrink-0 mt-0.5" />
+                        <li key={index} className="text-theme-text-secondary flex items-start text-sm">
+                          <CheckCircle
+                            aria-hidden="true"
+                            className="text-theme-accent-green mt-0.5 mr-2 h-4 w-4 shrink-0"
+                          />
                           <span>{feature}</span>
                         </li>
                       ))}
                     </ul>
 
                     {/* Setup Info */}
-                    <div className="bg-theme-alert-info-bg border border-theme-alert-info-border rounded-sm px-3 py-2">
-                      <p className="text-theme-alert-info-text text-xs flex items-start">
-                        <Info aria-hidden="true" className="w-3 h-3 mr-1 shrink-0 mt-0.5" />
+                    <div className="bg-theme-alert-info-bg border-theme-alert-info-border rounded-sm border px-3 py-2">
+                      <p className="text-theme-alert-info-text flex items-start text-xs">
+                        <Info aria-hidden="true" className="mt-0.5 mr-1 h-3 w-3 shrink-0" />
                         <span>{platform.setupInfo}</span>
                       </p>
                     </div>
@@ -301,35 +316,31 @@ const FileStorageChoice: React.FC = () => {
 
           {/* Error Alert */}
           {error && (
-            <div className="max-w-md mx-auto mb-6">
-              <ErrorAlert
-                message={error}
-                canRetry={canRetry}
-                onRetry={handleContinue}
-                onDismiss={clearError}
-              />
+            <div className="mx-auto mb-6 max-w-md">
+              <ErrorAlert message={error} canRetry={canRetry} onRetry={handleContinue} onDismiss={clearError} />
             </div>
           )}
 
           {/* Continue Button */}
-          <div className="max-w-md mx-auto">
+          <div className="mx-auto max-w-md">
             <button
-              onClick={() => { void handleContinue(); }}
+              onClick={() => {
+                void handleContinue();
+              }}
               disabled={!fileStoragePlatform || isSaving}
-              className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
+              className={`w-full rounded-lg px-8 py-4 text-lg font-semibold transition-all duration-300 ${
                 fileStoragePlatform && !isSaving
-                  ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                  ? 'transform bg-linear-to-r from-red-600 to-orange-600 text-white shadow-lg hover:scale-105 hover:from-red-700 hover:to-orange-700 hover:shadow-xl'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
               aria-label="Continue to next step"
             >
               {isSaving ? 'Saving...' : 'Continue'}
             </button>
-
           </div>
 
           {/* Progress Indicator */}
-          <ProgressIndicator step="file_storage" className="mt-6 pt-6 border-t border-theme-nav-border" />
+          <ProgressIndicator step="file_storage" className="border-theme-nav-border mt-6 border-t pt-6" />
 
           {/* Auto-Save Notification */}
           <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
@@ -337,14 +348,12 @@ const FileStorageChoice: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
-        <div className="max-w-7xl mx-auto text-center">
+      <footer className="bg-theme-nav-bg border-theme-nav-border border-t px-6 py-4 backdrop-blur-xs">
+        <div className="mx-auto max-w-7xl text-center">
           <p className="text-theme-text-secondary text-sm">
             © {currentYear} {departmentName}. All rights reserved.
           </p>
-          <p className="text-theme-text-muted text-xs mt-1">
-            Powered by The Logbook
-          </p>
+          <p className="text-theme-text-muted mt-1 text-xs">Powered by The Logbook</p>
         </div>
       </footer>
     </div>

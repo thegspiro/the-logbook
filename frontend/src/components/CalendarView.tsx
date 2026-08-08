@@ -21,8 +21,18 @@ interface CalendarViewProps {
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ] as const;
 
 /**
@@ -107,10 +117,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
     return map;
   }, [events, timezone]);
 
-  const calendarDays = useMemo(
-    () => getCalendarDays(currentYear, currentMonth),
-    [currentYear, currentMonth]
-  );
+  const calendarDays = useMemo(() => getCalendarDays(currentYear, currentMonth), [currentYear, currentMonth]);
 
   const goToPreviousMonth = useCallback(() => {
     setCurrentMonth((prev) => {
@@ -154,17 +161,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
         <div className="flex items-center gap-2">
           <button
             onClick={goToPreviousMonth}
-            className="p-2 rounded-lg text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
             aria-label="Previous month"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h2 className="text-lg font-semibold text-theme-text-primary min-w-[180px] text-center">
-            {monthLabel}
-          </h2>
+          <h2 className="text-theme-text-primary min-w-[180px] text-center text-lg font-semibold">{monthLabel}</h2>
           <button
             onClick={goToNextMonth}
-            className="p-2 rounded-lg text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
             aria-label="Next month"
           >
             <ChevronRight className="h-5 w-5" />
@@ -172,20 +177,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
         </div>
         <button
           onClick={goToToday}
-          className="px-3 py-1.5 text-sm font-medium rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+          className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors"
         >
           Today
         </button>
       </div>
 
       {/* Calendar grid */}
-      <div className="bg-theme-surface border border-theme-surface-border rounded-lg overflow-hidden">
+      <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border">
         {/* Day-of-week headers */}
-        <div className="grid grid-cols-7 border-b border-theme-surface-border">
+        <div className="border-theme-surface-border grid grid-cols-7 border-b">
           {DAYS_OF_WEEK.map((day) => (
             <div
               key={day}
-              className="py-2 text-center text-xs font-medium text-theme-text-muted uppercase tracking-wider"
+              className="text-theme-text-muted py-2 text-center text-xs font-medium tracking-wider uppercase"
             >
               {day}
             </div>
@@ -206,22 +211,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
               <button
                 key={`${dateKey}-${index}`}
                 onClick={() => setSelectedDate(isSelected ? null : dateKey)}
-                className={`
-                  relative min-h-[72px] sm:min-h-[88px] p-1.5 sm:p-2 border-b border-r border-theme-surface-border
-                  text-left transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-theme-focus-ring
-                  ${isCurrentMonth ? 'bg-theme-surface' : 'bg-theme-surface-secondary'}
-                  ${isSelected ? 'ring-2 ring-inset ring-red-500/50 bg-red-50 dark:bg-red-500/10' : ''}
-                  ${!isSelected ? 'hover:bg-theme-surface-hover' : ''}
-                `}
+                className={`border-theme-surface-border focus:ring-theme-focus-ring relative min-h-[72px] border-r border-b p-1.5 text-left transition-colors focus:ring-2 focus:outline-none focus:ring-inset sm:min-h-[88px] sm:p-2 ${isCurrentMonth ? 'bg-theme-surface' : 'bg-theme-surface-secondary'} ${isSelected ? 'bg-red-50 ring-2 ring-red-500/50 ring-inset dark:bg-red-500/10' : ''} ${!isSelected ? 'hover:bg-theme-surface-hover' : ''} `}
                 aria-label={`${formatDateCustom(date, { month: 'long', day: 'numeric', year: 'numeric' }, timezone)}${hasEvents ? `, ${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}` : ''}`}
               >
                 <span
-                  className={`
-                    inline-flex items-center justify-center text-sm font-medium w-7 h-7 rounded-full
-                    ${isToday ? 'bg-red-600 text-white' : ''}
-                    ${!isToday && isCurrentMonth ? 'text-theme-text-primary' : ''}
-                    ${!isToday && !isCurrentMonth ? 'text-theme-text-muted' : ''}
-                  `}
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium ${isToday ? 'bg-red-600 text-white' : ''} ${!isToday && isCurrentMonth ? 'text-theme-text-primary' : ''} ${!isToday && !isCurrentMonth ? 'text-theme-text-muted' : ''} `}
                 >
                   {date.getDate()}
                 </span>
@@ -232,14 +226,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
                     {dayEvents.slice(0, 3).map((evt) => (
                       <div
                         key={evt.id}
-                        className={`text-[10px] sm:text-xs leading-tight truncate rounded px-1 py-0.5 font-medium ${getEventTypeBadgeColor(evt.event_type)}`}
+                        className={`truncate rounded px-1 py-0.5 text-[10px] leading-tight font-medium sm:text-xs ${getEventTypeBadgeColor(evt.event_type)}`}
                       >
                         <span className="hidden sm:inline">{evt.title}</span>
                         <span className="sm:hidden">&bull;</span>
                       </div>
                     ))}
                     {dayEvents.length > 3 && (
-                      <div className="text-[10px] sm:text-xs text-theme-text-muted font-medium px-1">
+                      <div className="text-theme-text-muted px-1 text-[10px] font-medium sm:text-xs">
                         +{dayEvents.length - 3} more
                       </div>
                     )}
@@ -253,18 +247,22 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
 
       {/* Selected day events panel */}
       {selectedDate && (
-        <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-theme-text-primary mb-3">
-            {formatDateCustom(selectedDate + 'T12:00:00', {
-              weekday: 'long',
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric',
-            }, timezone)}
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+          <h3 className="text-theme-text-primary mb-3 text-sm font-semibold">
+            {formatDateCustom(
+              selectedDate + 'T12:00:00',
+              {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              },
+              timezone
+            )}
           </h3>
 
           {selectedEvents.length === 0 ? (
-            <p className="text-sm text-theme-text-muted flex items-center gap-2">
+            <p className="text-theme-text-muted flex items-center gap-2 text-sm">
               <Calendar className="h-4 w-4" aria-hidden="true" />
               No events on this day.
             </p>
@@ -274,39 +272,39 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, timezone }) 
                 <Link
                   key={event.id}
                   to={`/events/${event.id}`}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover hover:border-red-300 transition-colors"
+                  className="border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-3 rounded-lg border p-3 transition-colors hover:border-red-300"
                 >
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-medium text-theme-text-primary truncate">
-                        {event.title}
-                      </h4>
+                      <h4 className="text-theme-text-primary truncate text-sm font-medium">{event.title}</h4>
                       {event.is_cancelled && (
-                        <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300">
+                        <span className="inline-flex shrink-0 items-center rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">
                           Cancelled
                         </span>
                       )}
                       {event.is_mandatory && (
-                        <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
+                        <span className="inline-flex shrink-0 items-center rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
                           Mandatory
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${getEventTypeBadgeColor(event.event_type)}`}>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${getEventTypeBadgeColor(event.event_type)}`}
+                      >
                         {getEventTypeLabel(event.event_type)}
                       </span>
-                      <span className="text-xs text-theme-text-muted">
+                      <span className="text-theme-text-muted text-xs">
                         {formatTime(event.start_datetime, timezone)}
                       </span>
                       {(event.location_name || event.location) && (
-                        <span className="text-xs text-theme-text-muted truncate">
+                        <span className="text-theme-text-muted truncate text-xs">
                           &middot; {event.location_name || event.location}
                         </span>
                       )}
                     </div>
                   </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-theme-text-muted" aria-hidden="true" />
+                  <ChevronRight className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
                 </Link>
               ))}
             </div>

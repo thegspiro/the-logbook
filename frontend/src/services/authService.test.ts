@@ -47,8 +47,7 @@ describe('authService', () => {
     it('should propagate API errors', async () => {
       mockPost.mockRejectedValue(new Error('Invalid credentials'));
 
-      await expect(authService.login({ username: 'bad', password: 'wrong' }))
-        .rejects.toThrow('Invalid credentials');
+      await expect(authService.login({ username: 'bad', password: 'wrong' })).rejects.toThrow('Invalid credentials');
     });
   });
 
@@ -140,9 +139,9 @@ describe('authService', () => {
     it('should propagate errors for wrong current password', async () => {
       mockPost.mockRejectedValue(new Error('Current password is incorrect'));
 
-      await expect(
-        authService.changePassword({ current_password: 'wrong', new_password: 'new' })
-      ).rejects.toThrow('Current password is incorrect');
+      await expect(authService.changePassword({ current_password: 'wrong', new_password: 'new' })).rejects.toThrow(
+        'Current password is incorrect'
+      );
     });
   });
 

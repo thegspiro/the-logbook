@@ -10,6 +10,7 @@ Covers the pipeline release (revert_test_pass_from_pipeline) and the
 authorization helpers that decide who may drive a test. DB is mocked; no MySQL.
 """
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -148,18 +149,19 @@ class TestRevertTestPassFromPipeline:
 
 
 class TestAuthorizeTestWrite:
-    """Who may drive a test: officers always, peer examiners only on practice."""
+    """Who may drive a test: officers always, examiners until it is validated."""
 
     @staticmethod
     def _user(user_id, permissions):
         return SimpleNamespace(id=user_id, permissions=permissions, roles=[])
 
     @staticmethod
-    def _test(examiner_id, candidate_id, is_practice):
+    def _test(examiner_id, candidate_id, is_practice, validated_at=None):
         return SimpleNamespace(
             examiner_id=examiner_id,
             candidate_id=candidate_id,
             is_practice=is_practice,
+            validated_at=validated_at,
         )
 
     def test_officer_may_write_official_test(self, monkeypatch):
@@ -180,14 +182,29 @@ class TestAuthorizeTestWrite:
             self._test("member-1", "cand", True), self._user("member-1", [])
         )
 
-    def test_member_may_not_write_official_test(self, monkeypatch):
+    def test_member_may_write_own_official_test_before_validation(self, monkeypatch):
+        """Departments use senior members as examiners; the officer's authority
+        is at validation, not at the clipboard."""
+        monkeypatch.setattr(
+            "app.api.v1.endpoints.skills_testing.user_has_permission",
+            lambda user, perm: False,
+        )
+        _authorize_test_write(
+            self._test("member-1", "cand", False), self._user("member-1", [])
+        )
+
+    def test_member_may_not_rewrite_a_validated_test(self, monkeypatch):
+        """Once an officer has accepted the result it is a record, not a draft."""
         monkeypatch.setattr(
             "app.api.v1.endpoints.skills_testing.user_has_permission",
             lambda user, perm: False,
         )
         with pytest.raises(HTTPException) as exc:
             _authorize_test_write(
-                self._test("member-1", "cand", False), self._user("member-1", [])
+                self._test(
+                    "member-1", "cand", False, validated_at=datetime.now(timezone.utc)
+                ),
+                self._user("member-1", []),
             )
         assert exc.value.status_code == 403
 

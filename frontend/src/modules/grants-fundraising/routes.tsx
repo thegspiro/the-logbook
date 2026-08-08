@@ -15,39 +15,23 @@ import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 // Dashboard
-const GrantsDashboardPage = lazyWithRetry(
-  () => import('./pages/GrantsDashboardPage'),
-);
+const GrantsDashboardPage = lazyWithRetry(() => import('./pages/GrantsDashboardPage'));
 
 // Grant Applications
-const GrantApplicationsPage = lazyWithRetry(
-  () => import('./pages/GrantApplicationsPage'),
-);
-const GrantDetailPage = lazyWithRetry(
-  () => import('./pages/GrantDetailPage'),
-);
-const GrantApplicationFormPage = lazyWithRetry(
-  () => import('./pages/GrantApplicationFormPage'),
-);
+const GrantApplicationsPage = lazyWithRetry(() => import('./pages/GrantApplicationsPage'));
+const GrantDetailPage = lazyWithRetry(() => import('./pages/GrantDetailPage'));
+const GrantApplicationFormPage = lazyWithRetry(() => import('./pages/GrantApplicationFormPage'));
 
 // Grant Opportunities
-const GrantOpportunitiesPage = lazyWithRetry(
-  () => import('./pages/GrantOpportunitiesPage'),
-);
+const GrantOpportunitiesPage = lazyWithRetry(() => import('./pages/GrantOpportunitiesPage'));
 
 // Fundraising
-const CampaignsPage = lazyWithRetry(
-  () => import('./pages/CampaignsPage'),
-);
+const CampaignsPage = lazyWithRetry(() => import('./pages/CampaignsPage'));
 const DonorsPage = lazyWithRetry(() => import('./pages/DonorsPage'));
-const DonationsPage = lazyWithRetry(
-  () => import('./pages/DonationsPage'),
-);
+const DonationsPage = lazyWithRetry(() => import('./pages/DonationsPage'));
 
 // Reports
-const GrantsReportsPage = lazyWithRetry(
-  () => import('./pages/GrantsReportsPage'),
-);
+const GrantsReportsPage = lazyWithRetry(() => import('./pages/GrantsReportsPage'));
 
 export const getGrantsFundraisingRoutes = () => {
   return (
@@ -56,16 +40,10 @@ export const getGrantsFundraisingRoutes = () => {
       <Route path="/grants" element={<GrantsDashboardPage />} />
 
       {/* Grant Opportunities */}
-      <Route
-        path="/grants/opportunities"
-        element={<GrantOpportunitiesPage />}
-      />
+      <Route path="/grants/opportunities" element={<GrantOpportunitiesPage />} />
 
       {/* Grant Applications */}
-      <Route
-        path="/grants/applications"
-        element={<GrantApplicationsPage />}
-      />
+      <Route path="/grants/applications" element={<GrantApplicationsPage />} />
       <Route
         path="/grants/applications/new"
         element={
@@ -74,10 +52,7 @@ export const getGrantsFundraisingRoutes = () => {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/grants/applications/:id"
-        element={<GrantDetailPage />}
-      />
+      <Route path="/grants/applications/:id" element={<GrantDetailPage />} />
       <Route
         path="/grants/applications/:id/edit"
         element={

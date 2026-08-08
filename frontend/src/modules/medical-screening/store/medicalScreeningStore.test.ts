@@ -47,9 +47,7 @@ describe('medicalScreeningStore', () => {
 
   describe('fetchRequirements', () => {
     it('loads requirements into state', async () => {
-      const mockData = [
-        { id: 'req-1', name: 'Annual Physical', screening_type: 'physical_exam', is_active: true },
-      ];
+      const mockData = [{ id: 'req-1', name: 'Annual Physical', screening_type: 'physical_exam', is_active: true }];
       mockListRequirements.mockResolvedValue(mockData);
 
       await useMedicalScreeningStore.getState().fetchRequirements();
@@ -105,9 +103,7 @@ describe('medicalScreeningStore', () => {
   describe('updateRequirement', () => {
     it('replaces updated requirement in state', async () => {
       useMedicalScreeningStore.setState({
-        requirements: [
-          { id: 'req-1', name: 'Old Name', screening_type: 'physical_exam', is_active: true } as never,
-        ],
+        requirements: [{ id: 'req-1', name: 'Old Name', screening_type: 'physical_exam', is_active: true } as never],
       });
       const updated = { id: 'req-1', name: 'New Name', screening_type: 'physical_exam', is_active: true };
       mockUpdateRequirement.mockResolvedValue(updated);
@@ -141,9 +137,7 @@ describe('medicalScreeningStore', () => {
 
   describe('fetchRecords', () => {
     it('loads records into state', async () => {
-      const mockData = [
-        { id: 'rec-1', screening_type: 'physical_exam', status: 'passed' },
-      ];
+      const mockData = [{ id: 'rec-1', screening_type: 'physical_exam', status: 'passed' }];
       mockListRecords.mockResolvedValue(mockData);
 
       await useMedicalScreeningStore.getState().fetchRecords();
@@ -179,9 +173,7 @@ describe('medicalScreeningStore', () => {
   describe('deleteRecord', () => {
     it('removes record from state', async () => {
       useMedicalScreeningStore.setState({
-        records: [
-          { id: 'rec-1', screening_type: 'physical_exam', status: 'passed' } as never,
-        ],
+        records: [{ id: 'rec-1', screening_type: 'physical_exam', status: 'passed' } as never],
       });
       mockDeleteRecord.mockResolvedValue(undefined);
 

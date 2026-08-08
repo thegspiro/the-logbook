@@ -33,16 +33,16 @@ const CommunityEngagementTab: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
-        <Loader2 className="h-8 w-8 text-theme-text-muted animate-spin" />
+      <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
+        <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-700 dark:text-red-400">
+      <div className="mx-auto max-w-7xl px-4 py-8">
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-red-700 dark:text-red-400">
           {error || 'No data available'}
         </div>
       </div>
@@ -52,83 +52,79 @@ const CommunityEngagementTab: React.FC = () => {
   const totalAttendees = data.total_member_attendees + data.total_external_attendees;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
+        <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
           <Globe className="h-5 w-5 text-blue-700 dark:text-blue-400" />
           Community Engagement
         </h2>
-        <p className="text-sm text-theme-text-muted mt-1">
-          Public outreach metrics for community-facing events
-        </p>
+        <p className="text-theme-text-muted mt-1 text-sm">Public outreach metrics for community-facing events</p>
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card-secondary p-5">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-blue-500/20 rounded-lg">
+          <div className="mb-2 flex items-center gap-3">
+            <div className="rounded-lg bg-blue-500/20 p-2">
               <Calendar className="h-5 w-5 text-blue-700 dark:text-blue-400" />
             </div>
-            <span className="text-sm text-theme-text-muted">Public Events</span>
+            <span className="text-theme-text-muted text-sm">Public Events</span>
           </div>
-          <p className="text-3xl font-bold text-theme-text-primary">{data.total_public_events}</p>
-          <p className="text-xs text-theme-text-muted mt-1">Total events held</p>
+          <p className="text-theme-text-primary text-3xl font-bold">{data.total_public_events}</p>
+          <p className="text-theme-text-muted mt-1 text-xs">Total events held</p>
         </div>
 
         <div className="card-secondary p-5">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-green-500/20 rounded-lg">
+          <div className="mb-2 flex items-center gap-3">
+            <div className="rounded-lg bg-green-500/20 p-2">
               <Users className="h-5 w-5 text-green-700 dark:text-green-400" />
             </div>
-            <span className="text-sm text-theme-text-muted">Member Attendees</span>
+            <span className="text-theme-text-muted text-sm">Member Attendees</span>
           </div>
-          <p className="text-3xl font-bold text-theme-text-primary">{data.total_member_attendees}</p>
-          <p className="text-xs text-theme-text-muted mt-1">Members who checked in</p>
+          <p className="text-theme-text-primary text-3xl font-bold">{data.total_member_attendees}</p>
+          <p className="text-theme-text-muted mt-1 text-xs">Members who checked in</p>
         </div>
 
         <div className="card-secondary p-5">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-purple-500/20 rounded-lg">
+          <div className="mb-2 flex items-center gap-3">
+            <div className="rounded-lg bg-purple-500/20 p-2">
               <Globe className="h-5 w-5 text-purple-700 dark:text-purple-400" />
             </div>
-            <span className="text-sm text-theme-text-muted">External Attendees</span>
+            <span className="text-theme-text-muted text-sm">External Attendees</span>
           </div>
-          <p className="text-3xl font-bold text-theme-text-primary">{data.total_external_attendees}</p>
-          <p className="text-xs text-theme-text-muted mt-1">Community participants</p>
+          <p className="text-theme-text-primary text-3xl font-bold">{data.total_external_attendees}</p>
+          <p className="text-theme-text-muted mt-1 text-xs">Community participants</p>
         </div>
 
         <div className="card-secondary p-5">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-cyan-500/20 rounded-lg">
+          <div className="mb-2 flex items-center gap-3">
+            <div className="rounded-lg bg-cyan-500/20 p-2">
               <TrendingUp className="h-5 w-5 text-cyan-700 dark:text-cyan-400" />
             </div>
-            <span className="text-sm text-theme-text-muted">Upcoming Public</span>
+            <span className="text-theme-text-muted text-sm">Upcoming Public</span>
           </div>
-          <p className="text-3xl font-bold text-theme-text-primary">{data.upcoming_public_events}</p>
-          <p className="text-xs text-theme-text-muted mt-1">Events scheduled</p>
+          <p className="text-theme-text-primary text-3xl font-bold">{data.upcoming_public_events}</p>
+          <p className="text-theme-text-muted mt-1 text-xs">Events scheduled</p>
         </div>
       </div>
 
       {/* Summary section */}
       <div className="card-secondary p-6">
-        <h3 className="text-md font-medium text-theme-text-primary mb-4">Engagement Summary</h3>
+        <h3 className="text-md text-theme-text-primary mb-4 font-medium">Engagement Summary</h3>
         <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-theme-text-muted">Total People Reached</span>
-            <span className="text-lg font-semibold text-theme-text-primary">{totalAttendees}</span>
+          <div className="flex items-center justify-between">
+            <span className="text-theme-text-muted text-sm">Total People Reached</span>
+            <span className="text-theme-text-primary text-lg font-semibold">{totalAttendees}</span>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-theme-text-muted">Avg. Attendees per Event</span>
-            <span className="text-lg font-semibold text-theme-text-primary">
-              {data.total_public_events > 0
-                ? Math.round(totalAttendees / data.total_public_events)
-                : 0}
+          <div className="flex items-center justify-between">
+            <span className="text-theme-text-muted text-sm">Avg. Attendees per Event</span>
+            <span className="text-theme-text-primary text-lg font-semibold">
+              {data.total_public_events > 0 ? Math.round(totalAttendees / data.total_public_events) : 0}
             </span>
           </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-theme-text-muted">External to Member Ratio</span>
-            <span className="text-lg font-semibold text-theme-text-primary">
+          <div className="flex items-center justify-between">
+            <span className="text-theme-text-muted text-sm">External to Member Ratio</span>
+            <span className="text-theme-text-primary text-lg font-semibold">
               {data.total_member_attendees > 0
                 ? (data.total_external_attendees / data.total_member_attendees).toFixed(1)
                 : '—'}

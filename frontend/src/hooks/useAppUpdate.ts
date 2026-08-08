@@ -62,17 +62,9 @@ export function useAppUpdate(): AppUpdateState {
       if (!res.ok) return;
 
       const data: unknown = await res.json();
-      if (
-        typeof data === 'object' &&
-        data !== null &&
-        'buildId' in data &&
-        typeof data.buildId === 'string'
-      ) {
+      if (typeof data === 'object' && data !== null && 'buildId' in data && typeof data.buildId === 'string') {
         const serverBuildId = (data as { buildId: string }).buildId;
-        if (
-          serverBuildId !== getCurrentBuildId() &&
-          serverBuildId !== dismissedBuildRef.current
-        ) {
+        if (serverBuildId !== getCurrentBuildId() && serverBuildId !== dismissedBuildRef.current) {
           setUpdateAvailable(true);
         }
       }
@@ -94,8 +86,7 @@ export function useAppUpdate(): AppUpdateState {
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
-    return () =>
-      document.removeEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [checkForUpdate]);
 
   // Periodic fallback
@@ -122,12 +113,7 @@ export function useAppUpdate(): AppUpdateState {
     void fetch('/version.json', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d: unknown) => {
-        if (
-          typeof d === 'object' &&
-          d !== null &&
-          'buildId' in d &&
-          typeof d.buildId === 'string'
-        ) {
+        if (typeof d === 'object' && d !== null && 'buildId' in d && typeof d.buildId === 'string') {
           dismissedBuildRef.current = (d as { buildId: string }).buildId;
         }
       })

@@ -74,7 +74,7 @@ const renderPage = () =>
       <Routes>
         <Route path="/inventory/items/:id" element={<ItemDetailPage />} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 
 describe('ItemDetailPage', () => {

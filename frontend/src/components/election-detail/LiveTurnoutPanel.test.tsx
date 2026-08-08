@@ -67,12 +67,7 @@ describe('LiveTurnoutPanel', () => {
   });
 
   it('omits the quorum bar when the election has no quorum', async () => {
-    render(
-      <LiveTurnoutPanel
-        electionId="e1"
-        election={{ ...election, quorum_type: 'none' }}
-      />,
-    );
+    render(<LiveTurnoutPanel electionId="e1" election={{ ...election, quorum_type: 'none' }} />);
     await waitFor(() => {
       expect(screen.getByText('12')).toBeInTheDocument();
     });

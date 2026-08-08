@@ -37,9 +37,7 @@ describe('FloatingActionButton', () => {
   it('calls action onClick and closes menu when action is clicked', async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
-    const testActions = [
-      { id: 'test', label: 'Test Action', icon: <PlusIcon />, onClick },
-    ];
+    const testActions = [{ id: 'test', label: 'Test Action', icon: <PlusIcon />, onClick }];
 
     render(<FloatingActionButton actions={testActions} />);
     await user.click(screen.getByLabelText('Open quick actions'));

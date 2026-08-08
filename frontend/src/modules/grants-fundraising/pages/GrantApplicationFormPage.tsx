@@ -127,13 +127,10 @@ export const GrantApplicationFormPage: React.FC = () => {
             grantAgency: app.grantAgency,
             opportunityId: app.opportunityId ?? '',
             applicationStatus: app.applicationStatus,
-            amountRequested:
-              app.amountRequested != null ? String(app.amountRequested) : '',
-            matchAmount:
-              app.matchAmount != null ? String(app.matchAmount) : '',
+            amountRequested: app.amountRequested != null ? String(app.amountRequested) : '',
+            matchAmount: app.matchAmount != null ? String(app.matchAmount) : '',
             matchSource: app.matchSource ?? '',
-            applicationDeadline:
-              app.applicationDeadline?.split('T')[0] ?? '',
+            applicationDeadline: app.applicationDeadline?.split('T')[0] ?? '',
             grantStartDate: app.grantStartDate?.split('T')[0] ?? '',
             grantEndDate: app.grantEndDate?.split('T')[0] ?? '',
             projectDescription: app.projectDescription ?? '',
@@ -141,10 +138,7 @@ export const GrantApplicationFormPage: React.FC = () => {
             budgetSummary: app.budgetSummary ?? '',
             keyContacts: app.keyContacts ?? '',
             federalAwardId: app.federalAwardId ?? '',
-            performancePeriodMonths:
-              app.performancePeriodMonths != null
-                ? String(app.performancePeriodMonths)
-                : '',
+            performancePeriodMonths: app.performancePeriodMonths != null ? String(app.performancePeriodMonths) : '',
             reportingFrequency: app.reportingFrequency ?? '',
             assignedTo: app.assignedTo ?? '',
             priority: app.priority,
@@ -160,11 +154,7 @@ export const GrantApplicationFormPage: React.FC = () => {
     }
   }, [isEditing, id]);
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >,
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
@@ -200,11 +190,8 @@ export const GrantApplicationFormPage: React.FC = () => {
       grantProgramName: formData.grantProgramName,
       grantAgency: formData.grantAgency,
       opportunityId: formData.opportunityId || null,
-      applicationStatus:
-        formData.applicationStatus as GrantApplication['applicationStatus'],
-      amountRequested: formData.amountRequested
-        ? Number(formData.amountRequested)
-        : null,
+      applicationStatus: formData.applicationStatus as GrantApplication['applicationStatus'],
+      amountRequested: formData.amountRequested ? Number(formData.amountRequested) : null,
       matchAmount: formData.matchAmount ? Number(formData.matchAmount) : null,
       matchSource: formData.matchSource || null,
       applicationDeadline: formData.applicationDeadline || null,
@@ -215,9 +202,7 @@ export const GrantApplicationFormPage: React.FC = () => {
       budgetSummary: formData.budgetSummary || null,
       keyContacts: formData.keyContacts || null,
       federalAwardId: formData.federalAwardId || null,
-      performancePeriodMonths: formData.performancePeriodMonths
-        ? Number(formData.performancePeriodMonths)
-        : null,
+      performancePeriodMonths: formData.performancePeriodMonths ? Number(formData.performancePeriodMonths) : null,
       reportingFrequency: formData.reportingFrequency || null,
       assignedTo: formData.assignedTo || null,
       priority: formData.priority as GrantApplication['priority'],
@@ -255,18 +240,16 @@ export const GrantApplicationFormPage: React.FC = () => {
       <div className="flex items-center gap-4">
         <button
           onClick={() => void navigate('/grants/applications')}
-          className="rounded-lg p-2 text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary transition-colors"
+          className="text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg p-2 transition-colors"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div>
-          <h1 className="text-xl font-bold text-theme-text-primary">
+          <h1 className="text-theme-text-primary text-xl font-bold">
             {isEditing ? 'Edit Application' : 'New Grant Application'}
           </h1>
-          <p className="text-sm text-theme-text-muted">
-            {isEditing
-              ? 'Update grant application details'
-              : 'Create a new grant application'}
+          <p className="text-theme-text-muted text-sm">
+            {isEditing ? 'Update grant application details' : 'Create a new grant application'}
           </p>
         </div>
       </div>
@@ -278,10 +261,8 @@ export const GrantApplicationFormPage: React.FC = () => {
         className="space-y-6"
       >
         {/* Program Information */}
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-          <h2 className="mb-4 font-semibold text-theme-text-primary">
-            Program Information
-          </h2>
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-4 font-semibold">Program Information</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label htmlFor="grantProgramName" className={labelClass}>
@@ -296,11 +277,7 @@ export const GrantApplicationFormPage: React.FC = () => {
                 className={`${inputClass} ${errors.grantProgramName ? 'border-red-500' : ''}`}
                 placeholder="e.g. Assistance to Firefighters Grant"
               />
-              {errors.grantProgramName && (
-                <p className="mt-1 text-xs text-red-500">
-                  {errors.grantProgramName}
-                </p>
-              )}
+              {errors.grantProgramName && <p className="mt-1 text-xs text-red-500">{errors.grantProgramName}</p>}
             </div>
             <div>
               <label htmlFor="grantAgency" className={labelClass}>
@@ -315,11 +292,7 @@ export const GrantApplicationFormPage: React.FC = () => {
                 className={`${inputClass} ${errors.grantAgency ? 'border-red-500' : ''}`}
                 placeholder="e.g. FEMA"
               />
-              {errors.grantAgency && (
-                <p className="mt-1 text-xs text-red-500">
-                  {errors.grantAgency}
-                </p>
-              )}
+              {errors.grantAgency && <p className="mt-1 text-xs text-red-500">{errors.grantAgency}</p>}
             </div>
             <div>
               <label htmlFor="opportunityId" className={labelClass}>
@@ -394,10 +367,8 @@ export const GrantApplicationFormPage: React.FC = () => {
         </div>
 
         {/* Funding Details */}
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-          <h2 className="mb-4 font-semibold text-theme-text-primary">
-            Funding Details
-          </h2>
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-4 font-semibold">Funding Details</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
               <label htmlFor="amountRequested" className={labelClass}>
@@ -463,8 +434,8 @@ export const GrantApplicationFormPage: React.FC = () => {
         </div>
 
         {/* Dates */}
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-          <h2 className="mb-4 font-semibold text-theme-text-primary">Dates</h2>
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-4 font-semibold">Dates</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             <div>
               <label htmlFor="applicationDeadline" className={labelClass}>
@@ -524,10 +495,8 @@ export const GrantApplicationFormPage: React.FC = () => {
         </div>
 
         {/* Reporting */}
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-          <h2 className="mb-4 font-semibold text-theme-text-primary">
-            Reporting
-          </h2>
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-4 font-semibold">Reporting</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label htmlFor="reportingFrequency" className={labelClass}>
@@ -552,10 +521,8 @@ export const GrantApplicationFormPage: React.FC = () => {
         </div>
 
         {/* Project Details */}
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-          <h2 className="mb-4 font-semibold text-theme-text-primary">
-            Project Details
-          </h2>
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-4 font-semibold">Project Details</h2>
           <div className="space-y-4">
             <div>
               <label htmlFor="projectDescription" className={labelClass}>
@@ -635,7 +602,7 @@ export const GrantApplicationFormPage: React.FC = () => {
           <button
             type="button"
             onClick={() => void navigate('/grants/applications')}
-            className="inline-flex items-center gap-2 rounded-lg bg-theme-surface-hover px-6 py-2.5 text-sm font-medium text-theme-text-primary hover:bg-theme-surface transition-colors"
+            className="bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface inline-flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium transition-colors"
           >
             <X className="h-4 w-4" />
             Cancel
@@ -643,14 +610,10 @@ export const GrantApplicationFormPage: React.FC = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save className="h-4 w-4" />
-            {isSubmitting
-              ? 'Saving...'
-              : isEditing
-                ? 'Update Application'
-                : 'Create Application'}
+            {isSubmitting ? 'Saving...' : isEditing ? 'Update Application' : 'Create Application'}
           </button>
         </div>
       </form>

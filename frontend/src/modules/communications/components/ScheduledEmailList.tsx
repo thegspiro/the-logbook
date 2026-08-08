@@ -5,15 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import {
-  CalendarClock,
-  CheckCircle2,
-  Clock,
-  Trash2,
-  XCircle,
-  AlertTriangle,
-  RefreshCw,
-} from 'lucide-react';
+import { CalendarClock, CheckCircle2, Clock, Trash2, XCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfirmDialog } from '../../../components/ux';
 import { formatShortDateTime } from '../../../utils/dateFormatting';
@@ -29,13 +21,8 @@ const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; la
 
 const ScheduledEmailList: React.FC = () => {
   const tz = useTimezone();
-  const {
-    scheduledEmails,
-    isLoading,
-    fetchScheduledEmails,
-    cancelScheduledEmail,
-    isSaving,
-  } = useScheduledEmailsStore();
+  const { scheduledEmails, isLoading, fetchScheduledEmails, cancelScheduledEmail, isSaving } =
+    useScheduledEmailsStore();
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
 
   useEffect(() => {
@@ -57,10 +44,8 @@ const ScheduledEmailList: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
-        <RefreshCw className="h-5 w-5 animate-spin text-theme-text-secondary" />
-        <span className="ml-2 text-sm text-theme-text-secondary">
-          Loading scheduled emails...
-        </span>
+        <RefreshCw className="text-theme-text-secondary h-5 w-5 animate-spin" />
+        <span className="text-theme-text-secondary ml-2 text-sm">Loading scheduled emails...</span>
       </div>
     );
   }
@@ -68,10 +53,8 @@ const ScheduledEmailList: React.FC = () => {
   if (scheduledEmails.length === 0) {
     return (
       <div className="py-8 text-center">
-        <CalendarClock className="mx-auto h-10 w-10 text-theme-text-secondary opacity-50" />
-        <p className="mt-2 text-sm text-theme-text-secondary">
-          No scheduled emails yet
-        </p>
+        <CalendarClock className="text-theme-text-secondary mx-auto h-10 w-10 opacity-50" />
+        <p className="text-theme-text-secondary mt-2 text-sm">No scheduled emails yet</p>
       </div>
     );
   }
@@ -79,49 +62,35 @@ const ScheduledEmailList: React.FC = () => {
   return (
     <div className="space-y-3">
       {scheduledEmails.map((email) => {
-        const fallback = STATUS_CONFIG['pending'] as typeof STATUS_CONFIG[string];
+        const fallback = STATUS_CONFIG['pending'] as (typeof STATUS_CONFIG)[string];
         const statusInfo = STATUS_CONFIG[email.status] ?? fallback;
         const StatusIcon = statusInfo.icon;
 
         return (
           <div
             key={email.id}
-            className="flex items-center justify-between rounded-lg border border-theme-surface-border bg-theme-surface p-4"
+            className="border-theme-surface-border bg-theme-surface flex items-center justify-between rounded-lg border p-4"
           >
             <div className="flex items-start gap-3">
               <StatusIcon className={`mt-0.5 h-5 w-5 ${statusInfo.color}`} />
               <div>
-                <div className="text-sm font-medium text-theme-text-primary">
-                  {email.template_type
-                    .replace(/_/g, ' ')
-                    .replace(/\b\w/g, (c) => c.toUpperCase())}
+                <div className="text-theme-text-primary text-sm font-medium">
+                  {email.template_type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                 </div>
-                <div className="mt-0.5 text-xs text-theme-text-secondary">
-                  To: {email.to_emails.join(', ')}
-                </div>
+                <div className="text-theme-text-secondary mt-0.5 text-xs">To: {email.to_emails.join(', ')}</div>
                 {email.cc_emails && email.cc_emails.length > 0 && (
-                  <div className="mt-0.5 text-xs text-theme-text-secondary">
-                    CC: {email.cc_emails.join(', ')}
-                  </div>
+                  <div className="text-theme-text-secondary mt-0.5 text-xs">CC: {email.cc_emails.join(', ')}</div>
                 )}
                 {email.bcc_emails && email.bcc_emails.length > 0 && (
-                  <div className="mt-0.5 text-xs text-theme-text-secondary">
-                    BCC: {email.bcc_emails.join(', ')}
-                  </div>
+                  <div className="text-theme-text-secondary mt-0.5 text-xs">BCC: {email.bcc_emails.join(', ')}</div>
                 )}
-                <div className="mt-0.5 text-xs text-theme-text-secondary">
+                <div className="text-theme-text-secondary mt-0.5 text-xs">
                   <CalendarClock className="mr-1 inline h-3 w-3" />
                   {formatShortDateTime(email.scheduled_at, tz)}
                 </div>
-                {email.error_message && (
-                  <div className="mt-1 text-xs text-red-500">
-                    {email.error_message}
-                  </div>
-                )}
+                {email.error_message && <div className="mt-1 text-xs text-red-500">{email.error_message}</div>}
                 {email.sent_at && (
-                  <div className="mt-0.5 text-xs text-green-600">
-                    Sent: {formatShortDateTime(email.sent_at, tz)}
-                  </div>
+                  <div className="mt-0.5 text-xs text-green-600">Sent: {formatShortDateTime(email.sent_at, tz)}</div>
                 )}
               </div>
             </div>

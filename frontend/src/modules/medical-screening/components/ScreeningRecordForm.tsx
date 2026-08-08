@@ -6,18 +6,8 @@
 
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import {
-  ScreeningType,
-  ScreeningStatus,
-  SCREENING_TYPE_LABELS,
-  SCREENING_STATUS_LABELS,
-} from '../types';
-import type {
-  ScreeningRecord,
-  ScreeningRequirement,
-  ScreeningRecordCreate,
-  ScreeningRecordUpdate,
-} from '../types';
+import { ScreeningType, ScreeningStatus, SCREENING_TYPE_LABELS, SCREENING_STATUS_LABELS } from '../types';
+import type { ScreeningRecord, ScreeningRequirement, ScreeningRecordCreate, ScreeningRecordUpdate } from '../types';
 
 interface ScreeningRecordFormProps {
   record: ScreeningRecord | null;
@@ -29,18 +19,9 @@ interface ScreeningRecordFormProps {
 const inputClass = 'form-input';
 const labelClass = 'text-theme-text-secondary mb-2 block text-sm font-medium';
 
-export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({
-  record,
-  requirements,
-  onSave,
-  onClose,
-}) => {
-  const [screeningType, setScreeningType] = useState<string>(
-    record?.screening_type ?? ScreeningType.PHYSICAL_EXAM
-  );
-  const [recordStatus, setRecordStatus] = useState<string>(
-    record?.status ?? ScreeningStatus.SCHEDULED
-  );
+export const ScreeningRecordForm: React.FC<ScreeningRecordFormProps> = ({ record, requirements, onSave, onClose }) => {
+  const [screeningType, setScreeningType] = useState<string>(record?.screening_type ?? ScreeningType.PHYSICAL_EXAM);
+  const [recordStatus, setRecordStatus] = useState<string>(record?.status ?? ScreeningStatus.SCHEDULED);
   const [requirementId, setRequirementId] = useState(record?.requirement_id ?? '');
   const [scheduledDate, setScheduledDate] = useState(record?.scheduled_date ?? '');
   const [completedDate, setCompletedDate] = useState(record?.completed_date ?? '');

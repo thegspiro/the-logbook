@@ -7,14 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router';
-import {
-  LogIn,
-  LogOut,
-  Loader2,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-} from 'lucide-react';
+import { LogIn, LogOut, Loader2, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
@@ -48,9 +41,7 @@ const ShiftCheckInPage: React.FC = () => {
       try {
         let sid = paramShiftId;
         if (!sid && paramApparatusId) {
-          const activeShift = await schedulingService
-            .getActiveShiftForApparatus(paramApparatusId)
-            .catch(() => null);
+          const activeShift = await schedulingService.getActiveShiftForApparatus(paramApparatusId).catch(() => null);
           if (!activeShift) {
             setNoActiveShift(true);
             setLoading(false);
@@ -92,9 +83,7 @@ const ShiftCheckInPage: React.FC = () => {
     try {
       const result = await schedulingService.checkOut(resolvedShiftId);
       setAttendance(result);
-      const hrs = Math.round(
-        ((result.duration_minutes ?? 0) / 60) * 10,
-      ) / 10;
+      const hrs = Math.round(((result.duration_minutes ?? 0) / 60) * 10) / 10;
       toast.success(`Checked out - ${hrs} hours recorded`);
     } catch {
       toast.error('Failed to check out');
@@ -105,28 +94,25 @@ const ShiftCheckInPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   if (noActiveShift) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <Clock className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-          <h1 className="text-xl font-bold text-theme-text-primary mb-1">
-            No Active Shift
-          </h1>
-          <p className="text-theme-text-muted text-sm mb-4">
-            There is no active or upcoming shift for this
-            apparatus right now. Check back closer to your
-            shift start time.
+          <Clock className="mx-auto mb-3 h-12 w-12 text-amber-500" />
+          <h1 className="text-theme-text-primary mb-1 text-xl font-bold">No Active Shift</h1>
+          <p className="text-theme-text-muted mb-4 text-sm">
+            There is no active or upcoming shift for this apparatus right now. Check back closer to your shift start
+            time.
           </p>
           <button
             onClick={() => void navigate('/scheduling')}
-            className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors"
+            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
           >
             Go to Scheduling
           </button>
@@ -137,19 +123,16 @@ const ShiftCheckInPage: React.FC = () => {
 
   if (!shift) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-          <h1 className="text-xl font-bold text-theme-text-primary mb-1">
-            Shift Not Found
-          </h1>
-          <p className="text-theme-text-muted text-sm mb-4">
-            This QR code may be invalid or you may not have
-            access to this shift.
+          <AlertCircle className="mx-auto mb-3 h-12 w-12 text-red-500" />
+          <h1 className="text-theme-text-primary mb-1 text-xl font-bold">Shift Not Found</h1>
+          <p className="text-theme-text-muted mb-4 text-sm">
+            This QR code may be invalid or you may not have access to this shift.
           </p>
           <button
             onClick={() => void navigate('/scheduling')}
-            className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors"
+            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700"
           >
             Go to Scheduling
           </button>
@@ -158,100 +141,80 @@ const ShiftCheckInPage: React.FC = () => {
     );
   }
 
-  const hrs = attendance?.duration_minutes
-    ? Math.round((attendance.duration_minutes / 60) * 10) / 10
-    : null;
+  const hrs = attendance?.duration_minutes ? Math.round((attendance.duration_minutes / 60) * 10) / 10 : null;
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm bg-theme-surface rounded-2xl border border-theme-surface-border shadow-lg p-6 space-y-5">
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="bg-theme-surface border-theme-surface-border w-full max-w-sm space-y-5 rounded-2xl border p-6 shadow-lg">
         {/* Shift info */}
         <div className="text-center">
-          <h1 className="text-xl font-bold text-theme-text-primary">
-            Shift Check-In
-          </h1>
-          <p className="text-sm text-theme-text-muted mt-1">
-            {shift.apparatus_name || 'Shift'} &mdash;{' '}
-            {formatDate(shift.shift_date, tz)}
+          <h1 className="text-theme-text-primary text-xl font-bold">Shift Check-In</h1>
+          <p className="text-theme-text-muted mt-1 text-sm">
+            {shift.apparatus_name || 'Shift'} &mdash; {formatDate(shift.shift_date, tz)}
           </p>
-          <p className="text-xs text-theme-text-muted">
+          <p className="text-theme-text-muted text-xs">
             {formatTime(shift.start_time, tz)}
-            {shift.end_time
-              ? ` - ${formatTime(shift.end_time, tz)}`
-              : ''}
+            {shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}
           </p>
         </div>
 
         {/* Status and action */}
         {!attendance?.checked_in_at ? (
           <button
-            onClick={() => { void handleCheckIn(); }}
+            onClick={() => {
+              void handleCheckIn();
+            }}
             disabled={processing || shift.is_finalized}
-            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-green-600 text-white rounded-xl text-lg font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
           >
-            {processing ? (
-              <Loader2 className="w-6 h-6 animate-spin" />
-            ) : (
-              <LogIn className="w-6 h-6" />
-            )}
+            {processing ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogIn className="h-6 w-6" />}
             Check In
           </button>
         ) : !attendance?.checked_out_at ? (
           <div className="space-y-3">
-            <div className="flex items-center gap-2 p-3 bg-green-500/10 rounded-lg">
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
+            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
               <div>
-                <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                  Checked in
-                </p>
+                <p className="text-sm font-medium text-green-700 dark:text-green-400">Checked in</p>
                 <p className="text-xs text-green-600/70 dark:text-green-400/70">
-                  <Clock className="w-3 h-3 inline mr-1" />
+                  <Clock className="mr-1 inline h-3 w-3" />
                   {formatTime(attendance.checked_in_at, tz)}
                 </p>
               </div>
             </div>
             <button
-              onClick={() => { void handleCheckOut(); }}
+              onClick={() => {
+                void handleCheckOut();
+              }}
               disabled={processing || shift.is_finalized}
-              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-red-600 text-white rounded-xl text-lg font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 px-6 py-4 text-lg font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
             >
-              {processing ? (
-                <Loader2 className="w-6 h-6 animate-spin" />
-              ) : (
-                <LogOut className="w-6 h-6" />
-              )}
+              {processing ? <Loader2 className="h-6 w-6 animate-spin" /> : <LogOut className="h-6 w-6" />}
               Check Out
             </button>
           </div>
         ) : (
-          <div className="text-center space-y-3">
-            <div className="p-4 bg-theme-surface-hover rounded-lg">
-              <CheckCircle2 className="w-10 h-10 text-green-600 mx-auto mb-2" />
-              <p className="text-lg font-bold text-theme-text-primary">
-                {hrs} hours
-              </p>
-              <p className="text-xs text-theme-text-muted">
-                {formatTime(attendance.checked_in_at, tz)}{' '}
-                &rarr;{' '}
-                {formatTime(attendance.checked_out_at, tz)}
+          <div className="space-y-3 text-center">
+            <div className="bg-theme-surface-hover rounded-lg p-4">
+              <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-green-600" />
+              <p className="text-theme-text-primary text-lg font-bold">{hrs} hours</p>
+              <p className="text-theme-text-muted text-xs">
+                {formatTime(attendance.checked_in_at, tz)} &rarr; {formatTime(attendance.checked_out_at, tz)}
               </p>
             </div>
-            <p className="text-sm text-theme-text-muted">
-              Shift complete. Thank you!
-            </p>
+            <p className="text-theme-text-muted text-sm">Shift complete. Thank you!</p>
           </div>
         )}
 
         {shift.is_finalized && (
           <p className="text-center text-xs text-amber-600 dark:text-amber-400">
-            This shift has been finalized. Check-in/out is
-            closed.
+            This shift has been finalized. Check-in/out is closed.
           </p>
         )}
 
         <button
           onClick={() => void navigate('/scheduling')}
-          className="w-full text-center text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors py-2"
+          className="text-theme-text-muted hover:text-theme-text-primary w-full py-2 text-center text-sm transition-colors"
         >
           Go to Scheduling
         </button>

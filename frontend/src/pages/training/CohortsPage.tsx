@@ -23,9 +23,7 @@ interface CohortsPageProps {
   embedded?: boolean;
 }
 
-export const CohortsPage: React.FC<CohortsPageProps> = ({
-  embedded = false,
-}) => {
+export const CohortsPage: React.FC<CohortsPageProps> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const tz = useTimezone();
   const [cohorts, setCohorts] = useState<CourseCohort[]>([]);
@@ -50,9 +48,7 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({
   if (showWizard) {
     return (
       <div className={embedded ? '' : 'mx-auto max-w-4xl px-4 py-8'}>
-        <h2 className="mb-6 text-xl font-semibold text-theme-text-primary">
-          New cohort
-        </h2>
+        <h2 className="text-theme-text-primary mb-6 text-xl font-semibold">New cohort</h2>
         <CohortWizard
           onCancel={() => setShowWizard(false)}
           onComplete={(cohort) => {
@@ -66,26 +62,18 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({
 
   return (
     <div className={embedded ? '' : 'min-h-screen'}>
-      <main
-        className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}
-      >
+      <main className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             {!embedded && (
-              <h1 className="flex items-center gap-3 text-3xl font-bold text-theme-text-primary">
+              <h1 className="text-theme-text-primary flex items-center gap-3 text-3xl font-bold">
                 <GraduationCap className="h-8 w-8 text-red-700 dark:text-red-500" />
                 <span>Course Cohorts</span>
               </h1>
             )}
-            <p className="text-sm text-theme-text-muted">
-              Scheduled runs of your multi-class courses
-            </p>
+            <p className="text-theme-text-muted text-sm">Scheduled runs of your multi-class courses</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowWizard(true)}
-            className="btn-primary flex items-center gap-2"
-          >
+          <button type="button" onClick={() => setShowWizard(true)} className="btn-primary flex items-center gap-2">
             <Plus className="h-5 w-5" />
             <span>New cohort</span>
           </button>
@@ -98,9 +86,7 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({
             icon={CalendarRange}
             title="No cohorts yet"
             description="A cohort is one run of a multi-class course. Build a course syllabus first, then generate a cohort to turn it into dated training events your members can sign in to."
-            actions={[
-              { label: 'New cohort', onClick: () => setShowWizard(true) },
-            ]}
+            actions={[{ label: 'New cohort', onClick: () => setShowWizard(true) }]}
           />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -108,33 +94,25 @@ export const CohortsPage: React.FC<CohortsPageProps> = ({
               <button
                 key={cohort.id}
                 type="button"
-                onClick={() => { void navigate(`/training/cohorts/${cohort.id}`); }}
-                className="card-secondary p-5 text-left transition-colors hover:bg-theme-surface-hover"
+                onClick={() => {
+                  void navigate(`/training/cohorts/${cohort.id}`);
+                }}
+                className="card-secondary hover:bg-theme-surface-hover p-5 text-left transition-colors"
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-theme-text-primary">
-                    {cohort.name}
-                  </h3>
-                  <span
-                    className={`badge shrink-0 ${COHORT_STATUS_COLORS[cohort.status] ?? ''}`}
-                  >
+                  <h3 className="text-theme-text-primary font-semibold">{cohort.name}</h3>
+                  <span className={`badge shrink-0 ${COHORT_STATUS_COLORS[cohort.status] ?? ''}`}>
                     {COHORT_STATUS_LABELS[cohort.status] ?? cohort.status}
                   </span>
                 </div>
 
-                {cohort.course_name && (
-                  <p className="mb-3 text-sm text-theme-text-muted">
-                    {cohort.course_name}
-                  </p>
-                )}
+                {cohort.course_name && <p className="text-theme-text-muted mb-3 text-sm">{cohort.course_name}</p>}
 
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-theme-text-muted">
+                <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                   <span className="flex items-center gap-1">
                     <CalendarRange className="h-3 w-3" />
                     {formatDate(cohort.start_date, tz)}
-                    {cohort.end_date
-                      ? ` – ${formatDate(cohort.end_date, tz)}`
-                      : ''}
+                    {cohort.end_date ? ` – ${formatDate(cohort.end_date, tz)}` : ''}
                   </span>
                   <span>
                     {cohort.class_count} class

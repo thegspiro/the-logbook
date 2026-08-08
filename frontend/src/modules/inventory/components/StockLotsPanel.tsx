@@ -100,7 +100,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
         if (l.id !== lotId) return l;
         target = Math.max(0, l.quantity + delta);
         return { ...l, quantity: target };
-      }),
+      })
     );
     if (target === null) return;
     try {
@@ -119,9 +119,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
     if (!lot.expiration_date) return null;
     const day = 24 * 60 * 60 * 1000;
     return Math.round(
-      (new Date(`${lot.expiration_date}T00:00:00`).getTime() -
-        new Date(`${today}T00:00:00`).getTime()) /
-        day,
+      (new Date(`${lot.expiration_date}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / day
     );
   };
 
@@ -133,26 +131,21 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
     return 'ok';
   };
 
-  const daysLeftLabel = (d: number): string =>
-    d < 0
-      ? `${Math.abs(d)}d ago`
-      : d === 0
-        ? 'today'
-        : `${d}d left`;
+  const daysLeftLabel = (d: number): string => (d < 0 ? `${Math.abs(d)}d ago` : d === 0 ? 'today' : `${d}d left`);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10" role="status" aria-live="polite">
-        <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
+        <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="text-sm text-theme-text-muted">
-          <span className="font-semibold text-theme-text-primary">{totalReady}</span> ready unit
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-theme-text-muted text-sm">
+          <span className="text-theme-text-primary font-semibold">{totalReady}</span> ready unit
           {totalReady !== 1 ? 's' : ''} across {lots.length} lot{lots.length !== 1 ? 's' : ''}
         </div>
         {canManage && !showForm && (
@@ -161,14 +154,14 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
             onClick={() => setShowForm(true)}
             className="btn-primary btn-sm inline-flex items-center gap-1"
           >
-            <Plus className="w-4 h-4" /> Add Lot
+            <Plus className="h-4 w-4" /> Add Lot
           </button>
         )}
       </div>
 
       {showForm && canManage && (
-        <div className="card-secondary p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="card-secondary space-y-3 p-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="form-label">Lot Number</label>
               <input
@@ -225,12 +218,15 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
               onClick={() => void handleAdd()}
               className="btn-primary btn-sm inline-flex items-center gap-1 disabled:opacity-50"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <PackagePlus className="w-4 h-4" />}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
               Save Lot
             </button>
             <button
               type="button"
-              onClick={() => { setShowForm(false); setForm(emptyForm()); }}
+              onClick={() => {
+                setShowForm(false);
+                setForm(emptyForm());
+              }}
               className="btn-secondary btn-sm"
             >
               Cancel
@@ -240,7 +236,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
       )}
 
       {lots.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-theme-surface-border p-6 text-center text-sm text-theme-text-muted">
+        <div className="border-theme-surface-border text-theme-text-muted rounded-lg border border-dashed p-6 text-center text-sm">
           No ready stock yet. Add a lot to keep fresh units on hand for swaps.
         </div>
       ) : (
@@ -259,38 +255,32 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                 }`}
               >
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-theme-text-primary">
-                      {lot.lot_number || 'No lot #'}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-theme-text-primary font-medium">{lot.lot_number || 'No lot #'}</span>
                     {lot.expiration_date && (
                       <span
                         className={`inline-flex items-center gap-1 text-xs ${
                           state === 'expired'
-                            ? 'text-red-600 dark:text-red-400 font-medium'
+                            ? 'font-medium text-red-600 dark:text-red-400'
                             : state === 'soon'
-                              ? 'text-yellow-700 dark:text-yellow-400 font-medium'
+                              ? 'font-medium text-yellow-700 dark:text-yellow-400'
                               : 'text-theme-text-muted'
                         }`}
                       >
-                        {state === 'expired' && <AlertTriangle className="w-3 h-3" />}
-                        {state === 'soon' && <Clock className="w-3 h-3" />}
+                        {state === 'expired' && <AlertTriangle className="h-3 w-3" />}
+                        {state === 'soon' && <Clock className="h-3 w-3" />}
                         {state === 'expired' ? 'Expired ' : 'Exp '}
                         {formatDate(lot.expiration_date, tz)}
                         {(() => {
                           const d = daysLeft(lot);
-                          return d === null ? null : (
-                            <span className="opacity-70">· {daysLeftLabel(d)}</span>
-                          );
+                          return d === null ? null : <span className="opacity-70">· {daysLeftLabel(d)}</span>;
                         })()}
                       </span>
                     )}
                   </div>
-                  {lot.notes && (
-                    <p className="text-xs text-theme-text-muted mt-0.5 truncate">{lot.notes}</p>
-                  )}
+                  {lot.notes && <p className="text-theme-text-muted mt-0.5 truncate text-xs">{lot.notes}</p>}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex shrink-0 items-center gap-2">
                   {canManage ? (
                     <div className="flex items-center gap-1">
                       <button
@@ -301,9 +291,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                       >
                         −
                       </button>
-                      <span className="w-8 text-center font-semibold text-theme-text-primary">
-                        {lot.quantity}
-                      </span>
+                      <span className="text-theme-text-primary w-8 text-center font-semibold">{lot.quantity}</span>
                       <button
                         type="button"
                         aria-label="Increase quantity"
@@ -314,16 +302,16 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                       </button>
                     </div>
                   ) : (
-                    <span className="font-semibold text-theme-text-primary">{lot.quantity}</span>
+                    <span className="text-theme-text-primary font-semibold">{lot.quantity}</span>
                   )}
                   {canManage && (
                     <button
                       type="button"
                       aria-label="Delete lot"
                       onClick={() => void handleDelete(lot)}
-                      className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                      className="rounded p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   )}
                 </div>

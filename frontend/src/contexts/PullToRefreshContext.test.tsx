@@ -34,7 +34,11 @@ describe('PullToRefreshContext', () => {
 
     render(
       <PullToRefreshProvider>
-        <ContextProbe onRun={(r) => { run = r; }} />
+        <ContextProbe
+          onRun={(r) => {
+            run = r;
+          }}
+        />
         <RegisteringPage onRefresh={refresh} />
       </PullToRefreshProvider>
     );
@@ -65,8 +69,6 @@ describe('PullToRefreshContext', () => {
   });
 
   it('useRegisterPullToRefresh is a no-op outside a provider', () => {
-    expect(() =>
-      render(<RegisteringPage onRefresh={() => Promise.resolve()} />)
-    ).not.toThrow();
+    expect(() => render(<RegisteringPage onRefresh={() => Promise.resolve()} />)).not.toThrow();
   });
 });

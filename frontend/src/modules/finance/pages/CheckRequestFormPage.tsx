@@ -20,9 +20,7 @@ import type { CheckRequest } from '../types';
 const checkRequestSchema = z.object({
   payeeName: z.string().min(1, 'Payee name is required').max(200),
   payeeAddress: z.string().max(500).optional(),
-  amount: z
-    .number({ message: 'Amount is required' })
-    .positive('Amount must be positive'),
+  amount: z.number({ message: 'Amount is required' }).positive('Amount must be positive'),
   memo: z.string().max(500).optional(),
   purpose: z.string().max(2000).optional(),
   fiscalYearId: z.string().min(1, 'Fiscal year is required'),
@@ -38,15 +36,8 @@ const errorClass = 'mt-1 text-xs text-red-600';
 
 const CheckRequestFormPage: React.FC = () => {
   const navigate = useNavigate();
-  const {
-    fiscalYears,
-    budgets,
-    budgetCategories,
-    isLoading,
-    fetchFiscalYears,
-    fetchBudgets,
-    createCheckRequest,
-  } = useFinanceStore();
+  const { fiscalYears, budgets, budgetCategories, isLoading, fetchFiscalYears, fetchBudgets, createCheckRequest } =
+    useFinanceStore();
 
   const {
     register,
@@ -111,31 +102,35 @@ const CheckRequestFormPage: React.FC = () => {
       <button
         type="button"
         onClick={() => void navigate('/finance/check-requests')}
-        className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Check Requests
       </button>
 
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-        <h1 className="mb-6 text-xl font-bold text-theme-text-primary">
-          New Check Request
-        </h1>
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <h1 className="text-theme-text-primary mb-6 text-xl font-bold">New Check Request</h1>
 
         <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-4">
           <div>
-            <label htmlFor="payeeName" className={labelClass}>Payee Name *</label>
+            <label htmlFor="payeeName" className={labelClass}>
+              Payee Name *
+            </label>
             <input id="payeeName" {...register('payeeName')} className={inputClass} />
             {errors.payeeName && <p className={errorClass}>{errors.payeeName.message}</p>}
           </div>
 
           <div>
-            <label htmlFor="payeeAddress" className={labelClass}>Payee Address</label>
+            <label htmlFor="payeeAddress" className={labelClass}>
+              Payee Address
+            </label>
             <input id="payeeAddress" {...register('payeeAddress')} className={inputClass} />
           </div>
 
           <div>
-            <label htmlFor="amount" className={labelClass}>Amount *</label>
+            <label htmlFor="amount" className={labelClass}>
+              Amount *
+            </label>
             <input
               id="amount"
               type="number"
@@ -147,47 +142,54 @@ const CheckRequestFormPage: React.FC = () => {
           </div>
 
           <div>
-            <label htmlFor="fiscalYearId" className={labelClass}>Fiscal Year *</label>
+            <label htmlFor="fiscalYearId" className={labelClass}>
+              Fiscal Year *
+            </label>
             <select id="fiscalYearId" {...register('fiscalYearId')} className={selectClass}>
               <option value="">Select fiscal year</option>
               {fiscalYears.map((fy) => (
-                <option key={fy.id} value={fy.id}>{fy.name}</option>
+                <option key={fy.id} value={fy.id}>
+                  {fy.name}
+                </option>
               ))}
             </select>
             {errors.fiscalYearId && <p className={errorClass}>{errors.fiscalYearId.message}</p>}
           </div>
 
           <div>
-            <label htmlFor="budgetId" className={labelClass}>Budget (Optional)</label>
+            <label htmlFor="budgetId" className={labelClass}>
+              Budget (Optional)
+            </label>
             <select id="budgetId" {...register('budgetId')} className={selectClass}>
               <option value="">No budget linked</option>
               {budgets.map((b) => (
                 <option key={b.id} value={b.id}>
                   {categoryMap.get(b.categoryId) ?? 'Unknown'} -{' '}
-                  {formatCurrencyWhole(
-                    b.amountBudgeted - b.amountSpent - b.amountEncumbered,
-                  )}{' '}
-                  remaining
+                  {formatCurrencyWhole(b.amountBudgeted - b.amountSpent - b.amountEncumbered)} remaining
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label htmlFor="purpose" className={labelClass}>Purpose</label>
+            <label htmlFor="purpose" className={labelClass}>
+              Purpose
+            </label>
             <textarea id="purpose" rows={3} {...register('purpose')} className={inputClass} />
           </div>
 
           <div>
-            <label htmlFor="memo" className={labelClass}>Memo</label>
+            <label htmlFor="memo" className={labelClass}>
+              Memo
+            </label>
             <input id="memo" {...register('memo')} className={inputClass} />
           </div>
 
-          <div className="flex justify-end gap-3 border-t border-theme-surface-border pt-4">
+          <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
             <button
               type="button"
               onClick={() => void navigate('/finance/check-requests')}
-              className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
             >
               Cancel
             </button>

@@ -43,9 +43,7 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
       ]);
       setCandidates(candidateData);
       setMembers(
-        memberData.filter(
-          (m: User) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY,
-        ),
+        memberData.filter((m: User) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY)
       );
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load nominations'));
@@ -97,20 +95,23 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
   };
 
   if (loading) {
-    return <p className="text-sm text-theme-text-muted">Loading nominations…</p>;
+    return <p className="text-theme-text-muted text-sm">Loading nominations…</p>;
   }
 
   return (
     <div className="space-y-6">
       {nominationsOpen && (
-        <form onSubmit={(e) => { void handleNominate(e); }} className="card p-4 space-y-3">
-          <h4 className="text-sm font-semibold text-theme-text-primary">Submit a Nomination</h4>
+        <form
+          onSubmit={(e) => {
+            void handleNominate(e);
+          }}
+          className="card space-y-3 p-4"
+        >
+          <h4 className="text-theme-text-primary text-sm font-semibold">Submit a Nomination</h4>
           {election.nomination_deadline && (
-            <p className="text-xs text-theme-text-muted">
-              Nominations close automatically at the configured deadline.
-            </p>
+            <p className="text-theme-text-muted text-xs">Nominations close automatically at the configured deadline.</p>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="nomination-position" className="form-label">
                 Position <span aria-hidden="true">*</span>
@@ -153,7 +154,7 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
           </div>
           <div>
             <label htmlFor="nomination-statement" className="form-label">
-              Statement <span className="text-xs text-theme-text-muted">(optional)</span>
+              Statement <span className="text-theme-text-muted text-xs">(optional)</span>
             </label>
             <textarea
               id="nomination-statement"
@@ -166,7 +167,11 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
             />
           </div>
           <div className="flex justify-end">
-            <button type="submit" disabled={submitting || !position} className="btn-primary rounded-md disabled:opacity-50">
+            <button
+              type="submit"
+              disabled={submitting || !position}
+              className="btn-primary rounded-md disabled:opacity-50"
+            >
               {submitting ? 'Submitting…' : 'Nominate'}
             </button>
           </div>
@@ -174,21 +179,21 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
       )}
 
       <div>
-        <h4 className="text-sm font-semibold text-theme-text-primary mb-2">Nominations</h4>
+        <h4 className="text-theme-text-primary mb-2 text-sm font-semibold">Nominations</h4>
         {candidates.length === 0 ? (
-          <p className="text-sm text-theme-text-muted">No nominations yet.</p>
+          <p className="text-theme-text-muted text-sm">No nominations yet.</p>
         ) : (
-          <ul className="divide-y divide-theme-surface-border">
+          <ul className="divide-theme-surface-border divide-y">
             {candidates.map((c) => (
-              <li key={c.id} className="py-3 flex items-center justify-between gap-3">
+              <li key={c.id} className="flex items-center justify-between gap-3 py-3">
                 <div>
-                  <p className="text-sm text-theme-text-primary">
+                  <p className="text-theme-text-primary text-sm">
                     {c.name}
                     {c.position && <span className="text-theme-text-muted"> — {c.position}</span>}
                   </p>
-                  {c.statement && <p className="text-xs text-theme-text-muted mt-0.5">{c.statement}</p>}
+                  {c.statement && <p className="text-theme-text-muted mt-0.5 text-xs">{c.statement}</p>}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex shrink-0 items-center gap-2">
                   {c.accepted ? (
                     <span className="badge bg-green-500/10 text-green-700 dark:text-green-300">Accepted</span>
                   ) : (
@@ -198,15 +203,19 @@ const NominationsPanel: React.FC<NominationsPanelProps> = ({
                     <>
                       <button
                         type="button"
-                        onClick={() => { void handleRespond(c.id, true); }}
-                        className="btn-success rounded-md text-xs px-3 py-1.5"
+                        onClick={() => {
+                          void handleRespond(c.id, true);
+                        }}
+                        className="btn-success rounded-md px-3 py-1.5 text-xs"
                       >
                         Accept
                       </button>
                       <button
                         type="button"
-                        onClick={() => { void handleRespond(c.id, false); }}
-                        className="px-3 py-1.5 text-xs border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover"
+                        onClick={() => {
+                          void handleRespond(c.id, false);
+                        }}
+                        className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-xs"
                       >
                         Decline
                       </button>

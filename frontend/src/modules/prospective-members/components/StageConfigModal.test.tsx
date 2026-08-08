@@ -15,7 +15,9 @@ vi.mock('@/services/formsServices', () => ({
 vi.mock('@/services/eventServices', () => ({
   eventService: {
     getEvents: (...args: unknown[]) => mockGetEvents(...args) as unknown,
-    getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({ visible_event_types: [], custom_event_categories: [] }),
+    getVisibleEventTypesWithCategories: vi
+      .fn()
+      .mockResolvedValue({ visible_event_types: [], custom_event_categories: [] }),
   },
 }));
 
@@ -283,10 +285,7 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Meeting'));
     await user.type(screen.getByLabelText(/stage name/i), 'Meet the Chief');
     await user.selectOptions(screen.getByLabelText('Meeting Type'), 'chief_meeting');
-    await user.type(
-      screen.getByLabelText(/meeting details/i),
-      'Meet with Chief Smith'
-    );
+    await user.type(screen.getByLabelText(/meeting details/i), 'Meet with Chief Smith');
 
     await user.click(screen.getByText('Add Stage'));
 
@@ -338,10 +337,7 @@ describe('StageConfigModal', () => {
 
     await user.click(screen.getByText('Enable Status Page'));
     await user.type(screen.getByLabelText(/stage name/i), 'Activate Status Page');
-    await user.type(
-      screen.getByLabelText(/custom status message/i),
-      'Welcome! Track your progress here.'
-    );
+    await user.type(screen.getByLabelText(/custom status message/i), 'Welcome! Track your progress here.');
 
     await user.click(screen.getByText('Add Stage'));
 
@@ -511,9 +507,7 @@ describe('StageConfigModal', () => {
         include_faq_link: false,
         include_next_meeting: false,
         include_status_tracker: false,
-        custom_sections: [
-          { id: 'existing-1', title: 'Parking Info', content: 'Park in lot B', enabled: true },
-        ],
+        custom_sections: [{ id: 'existing-1', title: 'Parking Info', content: 'Park in lot B', enabled: true }],
       },
       sort_order: 0,
       is_required: true,
@@ -523,12 +517,7 @@ describe('StageConfigModal', () => {
       updated_at: '2026-01-01T00:00:00Z',
     };
 
-    render(
-      <StageConfigModal
-        {...defaultProps}
-        editingStage={editingStage}
-      />
-    );
+    render(<StageConfigModal {...defaultProps} editingStage={editingStage} />);
 
     // Existing custom section should be visible with its data
     const titleInput = screen.getByLabelText('Custom section 1 title');
@@ -620,9 +609,7 @@ describe('StageConfigModal', () => {
     // 4 built-in + 2 custom
     expect(sectionOrder).toHaveLength(6);
     // First 4 are the built-in ones
-    expect(sectionOrder?.slice(0, 4)).toEqual([
-      'welcome', 'faq_link', 'next_meeting', 'status_tracker',
-    ]);
+    expect(sectionOrder?.slice(0, 4)).toEqual(['welcome', 'faq_link', 'next_meeting', 'status_tracker']);
   });
 
   it('removes custom section ID from section_order when section is deleted', async () => {
@@ -661,9 +648,7 @@ describe('StageConfigModal', () => {
         include_faq_link: false,
         include_next_meeting: false,
         include_status_tracker: false,
-        custom_sections: [
-          { id: 'cs-1', title: 'Info', content: 'Some info', enabled: true },
-        ],
+        custom_sections: [{ id: 'cs-1', title: 'Info', content: 'Some info', enabled: true }],
         // NOTE: no section_order — simulates a stage saved before the feature
       },
       sort_order: 0,
@@ -795,12 +780,12 @@ describe('StageConfigModal', () => {
     const eventTypeSelect = await screen.findByLabelText(/auto-link event type/i);
     // Ensure the mock data has been resolved and state updated
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalledWith(
-        expect.objectContaining({ include_cancelled: false, limit: 100 })
-      );
+      expect(mockGetEvents).toHaveBeenCalledWith(expect.objectContaining({ include_cancelled: false, limit: 100 }));
     });
     // Allow microtasks to flush so upcomingEvents state is set
-    await new Promise((r) => { setTimeout(r, 0); });
+    await new Promise((r) => {
+      setTimeout(r, 0);
+    });
 
     await user.selectOptions(eventTypeSelect, 'business_meeting');
 
@@ -831,12 +816,12 @@ describe('StageConfigModal', () => {
 
     // Wait for events to load
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalledWith(
-        expect.objectContaining({ include_cancelled: false, limit: 100 })
-      );
+      expect(mockGetEvents).toHaveBeenCalledWith(expect.objectContaining({ include_cancelled: false, limit: 100 }));
     });
     // Allow microtasks to flush so upcomingEvents state is set
-    await new Promise((r) => { setTimeout(r, 0); });
+    await new Promise((r) => {
+      setTimeout(r, 0);
+    });
 
     const meetingCheckbox = screen.getByRole('checkbox', { name: 'Next Meeting Details' });
     await user.click(meetingCheckbox);
@@ -856,9 +841,7 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Meeting'));
 
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalledWith(
-        expect.objectContaining({ include_cancelled: false, limit: 100 })
-      );
+      expect(mockGetEvents).toHaveBeenCalledWith(expect.objectContaining({ include_cancelled: false, limit: 100 }));
     });
 
     // Select an event type with no upcoming events

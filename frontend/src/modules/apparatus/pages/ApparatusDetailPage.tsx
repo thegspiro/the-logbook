@@ -7,16 +7,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import {
-  Truck,
-  Wrench,
-  Fuel,
-  Users,
-  Package,
-  FileText,
-  AlertTriangle,
-  Info,
-} from 'lucide-react';
+import { Truck, Wrench, Fuel, Users, Package, FileText, AlertTriangle, Info } from 'lucide-react';
 import { useApparatusStore } from '../store/apparatusStore';
 import { ApparatusDetailHeader } from '../components/ApparatusDetailHeader';
 import { ApparatusOverviewTab } from '../components/ApparatusOverviewTab';
@@ -25,12 +16,7 @@ import { FuelLogsTab } from '../components/FuelLogsTab';
 import { OperatorsTab } from '../components/OperatorsTab';
 import { EquipmentTab } from '../components/EquipmentTab';
 import { DocumentsTab } from '../components/DocumentsTab';
-import type {
-  ApparatusMaintenance,
-  ApparatusFuelLog,
-  ApparatusOperator,
-  ApparatusEquipment,
-} from '../types';
+import type { ApparatusMaintenance, ApparatusFuelLog, ApparatusOperator, ApparatusEquipment } from '../types';
 import {
   apparatusMaintenanceService,
   apparatusFuelLogService,
@@ -56,17 +42,8 @@ export const ApparatusDetailPage: React.FC = () => {
 
   const tz = useTimezone();
 
-  const {
-    currentApparatus,
-    types,
-    statuses,
-    isLoading,
-    error,
-    fetchApparatus,
-    fetchTypes,
-    fetchStatuses,
-    clearError,
-  } = useApparatusStore();
+  const { currentApparatus, types, statuses, isLoading, error, fetchApparatus, fetchTypes, fetchStatuses, clearError } =
+    useApparatusStore();
 
   useEffect(() => {
     if (!id) return;
@@ -76,40 +53,43 @@ export const ApparatusDetailPage: React.FC = () => {
     void fetchApparatus(id);
   }, [id, fetchApparatus, fetchTypes, fetchStatuses]);
 
-  const loadTabData = useCallback(async (tab: TabType) => {
-    if (!id || !currentApparatus) return;
-    if (tab === 'overview' || tab === 'documents') return;
+  const loadTabData = useCallback(
+    async (tab: TabType) => {
+      if (!id || !currentApparatus) return;
+      if (tab === 'overview' || tab === 'documents') return;
 
-    setLoadingTab(true);
-    try {
-      switch (tab) {
-        case 'maintenance': {
-          const maint = await apparatusMaintenanceService.getMaintenanceRecords({ apparatusId: id });
-          setMaintenanceRecords(maint);
-          break;
+      setLoadingTab(true);
+      try {
+        switch (tab) {
+          case 'maintenance': {
+            const maint = await apparatusMaintenanceService.getMaintenanceRecords({ apparatusId: id });
+            setMaintenanceRecords(maint);
+            break;
+          }
+          case 'fuel': {
+            const fuel = await apparatusFuelLogService.getFuelLogs({ apparatusId: id });
+            setFuelLogs(fuel);
+            break;
+          }
+          case 'operators': {
+            const ops = await apparatusOperatorService.getOperators({ apparatusId: id });
+            setOperators(ops);
+            break;
+          }
+          case 'equipment': {
+            const equip = await apparatusEquipmentService.getEquipment({ apparatusId: id });
+            setEquipment(equip);
+            break;
+          }
         }
-        case 'fuel': {
-          const fuel = await apparatusFuelLogService.getFuelLogs({ apparatusId: id });
-          setFuelLogs(fuel);
-          break;
-        }
-        case 'operators': {
-          const ops = await apparatusOperatorService.getOperators({ apparatusId: id });
-          setOperators(ops);
-          break;
-        }
-        case 'equipment': {
-          const equip = await apparatusEquipmentService.getEquipment({ apparatusId: id });
-          setEquipment(equip);
-          break;
-        }
+      } catch {
+        // Tab data will show empty state
+      } finally {
+        setLoadingTab(false);
       }
-    } catch {
-      // Tab data will show empty state
-    } finally {
-      setLoadingTab(false);
-    }
-  }, [id, currentApparatus]);
+    },
+    [id, currentApparatus]
+  );
 
   // Load tab-specific data
   useEffect(() => {
@@ -134,9 +114,9 @@ export const ApparatusDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-theme-bg flex items-center justify-center">
+      <div className="bg-theme-bg flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-theme-text-primary mx-auto mb-4"></div>
+          <div className="border-theme-text-primary mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2"></div>
           <p className="text-theme-text-secondary">Loading apparatus...</p>
         </div>
       </div>
@@ -145,15 +125,12 @@ export const ApparatusDetailPage: React.FC = () => {
 
   if (!currentApparatus) {
     return (
-      <div className="min-h-screen bg-theme-bg flex items-center justify-center">
+      <div className="bg-theme-bg flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <Truck className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
-          <h2 className="text-theme-text-primary text-xl font-bold mb-2">Apparatus Not Found</h2>
+          <Truck className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
+          <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Apparatus Not Found</h2>
           <p className="text-theme-text-muted mb-6">The apparatus you&#39;re looking for doesn&#39;t exist.</p>
-          <button
-            onClick={() => void navigate('/apparatus')}
-            className="btn-primary px-6 py-3"
-          >
+          <button onClick={() => void navigate('/apparatus')} className="btn-primary px-6 py-3">
             Back to Fleet
           </button>
         </div>
@@ -165,17 +142,17 @@ export const ApparatusDetailPage: React.FC = () => {
   const status = currentApparatus.statusRecord || getStatusById(currentApparatus.statusId);
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
-    { id: 'overview', label: 'Overview', icon: <Info className="w-4 h-4" /> },
-    { id: 'maintenance', label: 'Maintenance', icon: <Wrench className="w-4 h-4" /> },
-    { id: 'fuel', label: 'Fuel Logs', icon: <Fuel className="w-4 h-4" /> },
-    { id: 'operators', label: 'Operators', icon: <Users className="w-4 h-4" /> },
-    { id: 'equipment', label: 'Equipment', icon: <Package className="w-4 h-4" /> },
-    { id: 'documents', label: 'Documents', icon: <FileText className="w-4 h-4" /> },
+    { id: 'overview', label: 'Overview', icon: <Info className="h-4 w-4" /> },
+    { id: 'maintenance', label: 'Maintenance', icon: <Wrench className="h-4 w-4" /> },
+    { id: 'fuel', label: 'Fuel Logs', icon: <Fuel className="h-4 w-4" /> },
+    { id: 'operators', label: 'Operators', icon: <Users className="h-4 w-4" /> },
+    { id: 'equipment', label: 'Equipment', icon: <Package className="h-4 w-4" /> },
+    { id: 'documents', label: 'Documents', icon: <FileText className="h-4 w-4" /> },
   ];
 
   return (
-    <div className="min-h-screen bg-theme-bg">
-      <div className="max-w-7xl mx-auto px-6 pt-6">
+    <div className="bg-theme-bg min-h-screen">
+      <div className="mx-auto max-w-7xl px-6 pt-6">
         <Breadcrumbs />
       </div>
       {/* Header */}
@@ -188,13 +165,16 @@ export const ApparatusDetailPage: React.FC = () => {
 
       {/* Error Display */}
       {error && (
-        <div className="max-w-7xl mx-auto px-6 pt-4">
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center justify-between">
+        <div className="mx-auto max-w-7xl px-6 pt-4">
+          <div className="flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 p-4">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400" />
+              <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-400" />
               <span className="text-red-700 dark:text-red-300">{error}</span>
             </div>
-            <button onClick={clearError} className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300">
+            <button
+              onClick={clearError}
+              className="text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+            >
               Dismiss
             </button>
           </div>
@@ -202,13 +182,13 @@ export const ApparatusDetailPage: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="max-w-7xl mx-auto px-6 pt-6">
-        <div className="card-secondary flex p-1 space-x-1">
+      <div className="mx-auto max-w-7xl px-6 pt-6">
+        <div className="card-secondary flex space-x-1 p-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors flex-1 justify-center ${
+              className={`flex flex-1 items-center justify-center space-x-2 rounded-md px-4 py-2 transition-colors ${
                 activeTab === tab.id
                   ? 'bg-red-600 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary'
@@ -222,13 +202,9 @@ export const ApparatusDetailPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <main className="max-w-7xl mx-auto px-6 py-6">
+      <main className="mx-auto max-w-7xl px-6 py-6">
         {activeTab === 'overview' && (
-          <ApparatusOverviewTab
-            currentApparatus={currentApparatus}
-            apparatusType={apparatusType}
-            timezone={tz}
-          />
+          <ApparatusOverviewTab currentApparatus={currentApparatus} apparatusType={apparatusType} timezone={tz} />
         )}
 
         {activeTab === 'maintenance' && (
@@ -270,9 +246,7 @@ export const ApparatusDetailPage: React.FC = () => {
           />
         )}
 
-        {activeTab === 'documents' && (
-          <DocumentsTab id={id || ''} />
-        )}
+        {activeTab === 'documents' && <DocumentsTab id={id || ''} />}
       </main>
     </div>
   );

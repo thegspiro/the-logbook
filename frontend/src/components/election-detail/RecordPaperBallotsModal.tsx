@@ -6,11 +6,7 @@ interface RecordPaperBallotsModalProps {
   recording: boolean;
   error: string | null;
   attestationsRequired?: number;
-  onSubmit: (
-    entries: Array<{ candidate_id: string; count: number }>,
-    notes: string,
-    allowOverCount: boolean,
-  ) => void;
+  onSubmit: (entries: Array<{ candidate_id: string; count: number }>, notes: string, allowOverCount: boolean) => void;
   onClose: () => void;
 }
 
@@ -37,7 +33,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
         onClose();
       }
     },
-    [onClose],
+    [onClose]
   );
 
   const entries = candidates
@@ -47,29 +43,27 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="paper-ballots-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
-        <div className="px-6 py-4 border-b border-theme-surface-border">
-          <h3 id="paper-ballots-title" className="text-lg font-medium text-theme-text-primary">
+      <div className="bg-theme-surface-modal w-full max-w-md rounded-lg shadow-xl">
+        <div className="border-theme-surface-border border-b px-6 py-4">
+          <h3 id="paper-ballots-title" className="text-theme-text-primary text-lg font-medium">
             Record Paper Ballots
           </h3>
         </div>
 
-        <div className="px-6 py-4 modal-body">
-          <p className="text-sm text-theme-text-secondary mb-4">
-            Enter the paper-ballot count for each candidate. Each ballot is
-            recorded as an individual vote attributed to you and covered by
-            integrity verification.
+        <div className="modal-body px-6 py-4">
+          <p className="text-theme-text-secondary mb-4 text-sm">
+            Enter the paper-ballot count for each candidate. Each ballot is recorded as an individual vote attributed to
+            you and covered by integrity verification.
             {attestationsRequired > 0 && (
               <>
                 {' '}
-                The batch will not count in results until{' '}
-                {attestationsRequired} other officer
+                The batch will not count in results until {attestationsRequired} other officer
                 {attestationsRequired !== 1 ? 's' : ''} attest
                 {attestationsRequired === 1 ? 's' : ''} the tally.
               </>
@@ -77,7 +71,11 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
           </p>
 
           {error && (
-            <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
+            <div
+              className="mb-4 rounded-sm border border-red-500/30 bg-red-500/10 p-3"
+              role="alert"
+              aria-live="assertive"
+            >
               <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
             </div>
           )}
@@ -85,10 +83,10 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
           <div className="space-y-3">
             {candidates.map((candidate) => (
               <div key={candidate.id} className="flex items-center justify-between gap-3">
-                <label htmlFor={`paper-count-${candidate.id}`} className="text-sm text-theme-text-primary">
+                <label htmlFor={`paper-count-${candidate.id}`} className="text-theme-text-primary text-sm">
                   {candidate.name}
                   {candidate.position && (
-                    <span className="text-xs text-theme-text-muted ml-1">({candidate.position})</span>
+                    <span className="text-theme-text-muted ml-1 text-xs">({candidate.position})</span>
                   )}
                 </label>
                 <input
@@ -99,15 +97,15 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
                   value={counts[candidate.id] ?? ''}
                   onChange={(e) => setCounts({ ...counts, [candidate.id]: e.target.value })}
                   placeholder="0"
-                  className="w-24 bg-theme-input-bg border border-theme-input-border rounded-md py-1.5 px-3 text-theme-text-primary text-right focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-24 rounded-md border px-3 py-1.5 text-right focus:outline-hidden"
                 />
               </div>
             ))}
           </div>
 
           <div className="mt-4">
-            <label htmlFor="paper-notes" className="block text-sm font-medium text-theme-text-secondary">
-              Notes <span className="text-xs text-theme-text-muted">(optional)</span>
+            <label htmlFor="paper-notes" className="text-theme-text-secondary block text-sm font-medium">
+              Notes <span className="text-theme-text-muted text-xs">(optional)</span>
             </label>
             <textarea
               id="paper-notes"
@@ -115,7 +113,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
               placeholder="e.g. Paper ballots collected at the March business meeting"
-              className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 shadow-xs focus:outline-hidden"
             />
           </div>
 
@@ -127,14 +125,14 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
                 onChange={(e) => setAllowOverCount(e.target.checked)}
                 className="form-checkbox"
               />
-              <span className="text-sm text-theme-text-secondary">
+              <span className="text-theme-text-secondary text-sm">
                 The tally is correct — override the eligible-voter count check
               </span>
             </label>
           )}
 
           <div className="mt-6 flex items-center justify-between">
-            <span className="text-sm text-theme-text-muted" aria-live="polite">
+            <span className="text-theme-text-muted text-sm" aria-live="polite">
               Total: {total} ballot{total !== 1 ? 's' : ''}
             </span>
             <div className="flex space-x-3">
@@ -142,7 +140,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
                 type="button"
                 onClick={onClose}
                 disabled={recording}
-                className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 disabled:opacity-50"
               >
                 Cancel
               </button>

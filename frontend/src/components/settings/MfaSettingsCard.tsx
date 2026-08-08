@@ -128,8 +128,8 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-theme-text-muted py-4" role="status" aria-live="polite">
-        <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+      <div className="text-theme-text-muted flex items-center gap-2 py-4" role="status" aria-live="polite">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading…
       </div>
     );
   }
@@ -138,27 +138,30 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
   if (step === 'recovery') {
     return (
       <div className="space-y-4">
-        <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-4">
-          <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-            Save your recovery codes
-          </p>
-          <p className="text-xs text-theme-text-muted mt-1">
-            Each code works once if you lose your authenticator. They won't be
-            shown again.
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+          <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Save your recovery codes</p>
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Each code works once if you lose your authenticator. They won't be shown again.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 font-mono text-sm">
           {recoveryCodes.map((c) => (
-            <span key={c} className="px-2 py-1 rounded bg-theme-surface-hover text-theme-text-primary text-center">
+            <span key={c} className="bg-theme-surface-hover text-theme-text-primary rounded px-2 py-1 text-center">
               {c}
             </span>
           ))}
         </div>
         <div className="flex gap-2">
-          <button onClick={copyRecovery} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover">
-            <Copy className="w-4 h-4" /> Copy codes
+          <button
+            onClick={copyRecovery}
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm"
+          >
+            <Copy className="h-4 w-4" /> Copy codes
           </button>
-          <button onClick={() => setStep('idle')} className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium">
+          <button
+            onClick={() => setStep('idle')}
+            className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
+          >
             Done
           </button>
         </div>
@@ -170,18 +173,18 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
   if (step === 'enrolling') {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-theme-text-secondary">
-          Scan this QR code with an authenticator app (Google Authenticator,
-          Authy, 1Password…), then enter the 6-digit code to confirm.
+        <p className="text-theme-text-secondary text-sm">
+          Scan this QR code with an authenticator app (Google Authenticator, Authy, 1Password…), then enter the 6-digit
+          code to confirm.
         </p>
-        <div className="flex justify-center bg-white p-4 rounded-lg w-fit mx-auto">
+        <div className="mx-auto flex w-fit justify-center rounded-lg bg-white p-4">
           {qrUrl && <QRCodeSVG value={qrUrl} size={176} />}
         </div>
-        <p className="text-xs text-theme-text-muted text-center break-all">
+        <p className="text-theme-text-muted text-center text-xs break-all">
           Can't scan? Enter this key manually: <span className="font-mono">{secret}</span>
         </p>
         <div>
-          <label htmlFor="mfa-setup-code" className="block text-sm font-medium text-theme-text-secondary mb-1">
+          <label htmlFor="mfa-setup-code" className="text-theme-text-secondary mb-1 block text-sm font-medium">
             Authenticator code
           </label>
           <input
@@ -197,13 +200,18 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => { void confirmEnroll(); }}
+            onClick={() => {
+              void confirmEnroll();
+            }}
             disabled={busy || !code.trim()}
-            className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
           >
-            {busy && <Loader2 className="w-4 h-4 animate-spin" />} Verify & enable
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Verify & enable
           </button>
-          <button onClick={() => setStep('idle')} className="px-4 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary">
+          <button
+            onClick={() => setStep('idle')}
+            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 text-sm"
+          >
             Cancel
           </button>
         </div>
@@ -216,21 +224,21 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         {enabled ? (
-          <ShieldCheck className="w-5 h-5 text-green-600 dark:text-green-400" />
+          <ShieldCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
         ) : (
-          <ShieldOff className="w-5 h-5 text-theme-text-muted" />
+          <ShieldOff className="text-theme-text-muted h-5 w-5" />
         )}
-        <span className="text-sm text-theme-text-primary">
+        <span className="text-theme-text-primary text-sm">
           Two-factor authentication is <strong>{enabled ? 'on' : 'off'}</strong>
           {enabled && ` · ${recoveryRemaining} recovery code${recoveryRemaining === 1 ? '' : 's'} left`}
         </span>
       </div>
 
       {enabled && recoveryRemaining <= LOW_RECOVERY_THRESHOLD && (
-        <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3" role="status">
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3" role="status">
           <p className="text-sm text-amber-700 dark:text-amber-400">
             {recoveryRemaining === 0
-              ? "You have no recovery codes left. Generate a new set so you can still get in if you lose your authenticator."
+              ? 'You have no recovery codes left. Generate a new set so you can still get in if you lose your authenticator.'
               : `You're running low on recovery codes (${recoveryRemaining} left). Generate a fresh set to be safe.`}
           </p>
         </div>
@@ -238,11 +246,13 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
 
       {!enabled && (
         <button
-          onClick={() => { void startEnroll(); }}
+          onClick={() => {
+            void startEnroll();
+          }}
           disabled={busy}
-          className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
         >
-          {busy && <Loader2 className="w-4 h-4 animate-spin" />} Enable two-factor authentication
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />} Enable two-factor authentication
         </button>
       )}
 
@@ -250,13 +260,13 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowRegen(true)}
-            className="px-4 py-2 text-sm border border-theme-surface-border text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover"
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm"
           >
             Regenerate recovery codes
           </button>
           <button
             onClick={() => setShowDisable(true)}
-            className="px-4 py-2 text-sm border border-red-500/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-500/10"
+            className="rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-700 hover:bg-red-500/10 dark:text-red-400"
           >
             Disable
           </button>
@@ -265,10 +275,10 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
 
       {enabled && showRegen && (
         <div className="space-y-2">
-          <label htmlFor="mfa-regen-code" className="block text-sm font-medium text-theme-text-secondary">
+          <label htmlFor="mfa-regen-code" className="text-theme-text-secondary block text-sm font-medium">
             Enter a current authenticator code to generate new recovery codes
           </label>
-          <p className="text-xs text-theme-text-muted">
+          <p className="text-theme-text-muted text-xs">
             This replaces your existing recovery codes — the old ones stop working.
           </p>
           <input
@@ -283,13 +293,21 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
           />
           <div className="flex gap-2">
             <button
-              onClick={() => { void regenerate(); }}
+              onClick={() => {
+                void regenerate();
+              }}
               disabled={busy || !regenCode.trim()}
-              className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
             >
-              {busy && <Loader2 className="w-4 h-4 animate-spin" />} Generate new codes
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Generate new codes
             </button>
-            <button onClick={() => { setShowRegen(false); setRegenCode(''); }} className="px-4 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary">
+            <button
+              onClick={() => {
+                setShowRegen(false);
+                setRegenCode('');
+              }}
+              className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 text-sm"
+            >
               Cancel
             </button>
           </div>
@@ -298,7 +316,7 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
 
       {enabled && showDisable && (
         <div className="space-y-2">
-          <label htmlFor="mfa-disable-code" className="block text-sm font-medium text-theme-text-secondary">
+          <label htmlFor="mfa-disable-code" className="text-theme-text-secondary block text-sm font-medium">
             Enter a current authenticator code to disable
           </label>
           <input
@@ -313,13 +331,21 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
           />
           <div className="flex gap-2">
             <button
-              onClick={() => { void disable(); }}
+              onClick={() => {
+                void disable();
+              }}
               disabled={busy || !disableCode.trim()}
-              className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium disabled:opacity-50"
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
             >
               Confirm disable
             </button>
-            <button onClick={() => { setShowDisable(false); setDisableCode(''); }} className="px-4 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary">
+            <button
+              onClick={() => {
+                setShowDisable(false);
+                setDisableCode('');
+              }}
+              className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 text-sm"
+            >
               Cancel
             </button>
           </div>

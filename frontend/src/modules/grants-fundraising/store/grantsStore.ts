@@ -39,11 +39,7 @@ interface GrantsState {
   error: string | null;
 
   // Actions
-  fetchOpportunities: (params?: {
-    category?: string;
-    isActive?: boolean;
-    search?: string;
-  }) => Promise<void>;
+  fetchOpportunities: (params?: { category?: string; isActive?: boolean; search?: string }) => Promise<void>;
   fetchApplications: (params?: {
     status?: string;
     priority?: string;
@@ -51,57 +47,28 @@ interface GrantsState {
     search?: string;
   }) => Promise<void>;
   fetchApplication: (id: string) => Promise<void>;
-  fetchCampaigns: (params?: {
-    status?: string;
-    campaignType?: string;
-    search?: string;
-  }) => Promise<void>;
-  fetchDonors: (params?: {
-    donorType?: string;
-    active?: boolean;
-    search?: string;
-  }) => Promise<void>;
+  fetchCampaigns: (params?: { status?: string; campaignType?: string; search?: string }) => Promise<void>;
+  fetchDonors: (params?: { donorType?: string; active?: boolean; search?: string }) => Promise<void>;
   fetchDonations: (params?: {
     campaignId?: string;
     donorId?: string;
     startDate?: string;
     endDate?: string;
   }) => Promise<void>;
-  fetchPledges: (params?: {
-    campaignId?: string;
-    donorId?: string;
-    status?: string;
-  }) => Promise<void>;
+  fetchPledges: (params?: { campaignId?: string; donorId?: string; status?: string }) => Promise<void>;
   fetchDashboard: () => Promise<void>;
-  createApplication: (
-    data: Partial<GrantApplication>,
-  ) => Promise<GrantApplication>;
-  updateApplication: (
-    id: string,
-    data: Partial<GrantApplication>,
-  ) => Promise<GrantApplication>;
+  createApplication: (data: Partial<GrantApplication>) => Promise<GrantApplication>;
+  updateApplication: (id: string, data: Partial<GrantApplication>) => Promise<GrantApplication>;
   createDonation: (data: Partial<Donation>) => Promise<Donation>;
-  addBudgetItem: (
-    applicationId: string,
-    data: Partial<GrantBudgetItem>,
-  ) => Promise<GrantBudgetItem>;
-  addExpenditure: (
-    applicationId: string,
-    data: Partial<GrantExpenditure>,
-  ) => Promise<GrantExpenditure>;
-  addComplianceTask: (
-    applicationId: string,
-    data: Partial<GrantComplianceTask>,
-  ) => Promise<GrantComplianceTask>;
+  addBudgetItem: (applicationId: string, data: Partial<GrantBudgetItem>) => Promise<GrantBudgetItem>;
+  addExpenditure: (applicationId: string, data: Partial<GrantExpenditure>) => Promise<GrantExpenditure>;
+  addComplianceTask: (applicationId: string, data: Partial<GrantComplianceTask>) => Promise<GrantComplianceTask>;
   updateComplianceTask: (
     applicationId: string,
     taskId: string,
-    data: Partial<GrantComplianceTask>,
+    data: Partial<GrantComplianceTask>
   ) => Promise<GrantComplianceTask>;
-  addGrantNote: (
-    applicationId: string,
-    data: Partial<GrantNote>,
-  ) => Promise<GrantNote>;
+  addGrantNote: (applicationId: string, data: Partial<GrantNote>) => Promise<GrantNote>;
   clearError: () => void;
 }
 
@@ -175,10 +142,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       set({ campaigns, isLoading: false });
     } catch (error) {
       set({
-        error: handleStoreError(
-          error,
-          'Failed to fetch fundraising campaigns',
-        ),
+        error: handleStoreError(error, 'Failed to fetch fundraising campaigns'),
         isLoading: false,
       });
     }
@@ -265,17 +229,9 @@ export const useGrantsStore = create<GrantsState>((set) => ({
     try {
       const updated = await grantsService.updateApplication(id, data);
       set((state) => ({
-        applications: state.applications.map((app) =>
-          app.id === id ? updated : app,
-        ),
-        selectedApplication:
-          state.selectedApplication?.id === id
-            ? updated
-            : state.selectedApplication,
-        currentApplication:
-          state.currentApplication?.id === id
-            ? updated
-            : state.currentApplication,
+        applications: state.applications.map((app) => (app.id === id ? updated : app)),
+        selectedApplication: state.selectedApplication?.id === id ? updated : state.selectedApplication,
+        currentApplication: state.currentApplication?.id === id ? updated : state.currentApplication,
         isLoading: false,
       }));
       return updated;
@@ -324,10 +280,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
 
   addExpenditure: async (applicationId, data) => {
     try {
-      const expenditure = await grantsService.createExpenditure(
-        applicationId,
-        data,
-      );
+      const expenditure = await grantsService.createExpenditure(applicationId, data);
       const application = await grantsService.getApplication(applicationId);
       set({ selectedApplication: application, currentApplication: application });
       return expenditure;
@@ -341,10 +294,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
 
   addComplianceTask: async (applicationId, data) => {
     try {
-      const task = await grantsService.createComplianceTask(
-        applicationId,
-        data,
-      );
+      const task = await grantsService.createComplianceTask(applicationId, data);
       const application = await grantsService.getApplication(applicationId);
       set({ selectedApplication: application, currentApplication: application });
       return task;
@@ -358,11 +308,7 @@ export const useGrantsStore = create<GrantsState>((set) => ({
 
   updateComplianceTask: async (applicationId, taskId, data) => {
     try {
-      const task = await grantsService.updateComplianceTask(
-        applicationId,
-        taskId,
-        data,
-      );
+      const task = await grantsService.updateComplianceTask(applicationId, taskId, data);
       const application = await grantsService.getApplication(applicationId);
       set({ selectedApplication: application, currentApplication: application });
       return task;

@@ -1,8 +1,4 @@
-import type {
-  EventModuleSettings,
-  EventType,
-  EmailTemplate,
-} from '../../types/event';
+import type { EventModuleSettings, EventType, EmailTemplate } from '../../types/event';
 
 /** Props shared by all settings section components. */
 export interface SettingsSectionProps {

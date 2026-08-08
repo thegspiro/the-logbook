@@ -43,7 +43,15 @@ describe('AllowancesPage', () => {
     mockGetCategories.mockResolvedValue([{ id: 'cat-1', name: 'Polos' }]);
     mockGetRoles.mockResolvedValue([{ id: 'role-1', name: 'Firefighter' }]);
     mockGetAllowances.mockResolvedValue([
-      { id: 'a1', organization_id: 'o1', category_id: 'cat-1', role_id: 'role-1', max_quantity: 3, period_type: 'annual', is_active: true },
+      {
+        id: 'a1',
+        organization_id: 'o1',
+        category_id: 'cat-1',
+        role_id: 'role-1',
+        max_quantity: 3,
+        period_type: 'annual',
+        is_active: true,
+      },
     ]);
   });
 

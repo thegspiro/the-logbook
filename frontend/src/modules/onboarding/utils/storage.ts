@@ -36,11 +36,11 @@ const STORAGE_KEYS = {
  * Kept for cleanup purposes only
  */
 const DEPRECATED_SENSITIVE_KEYS = [
-  'emailConfig',      // Contains SMTP passwords
+  'emailConfig', // Contains SMTP passwords
   'fileStorageConfig', // Contains API keys
   'authenticationConfig', // Contains OAuth secrets
-  'adminUser',        // Contains password
-  'itTeamInfo',       // Contains contact PII
+  'adminUser', // Contains password
+  'itTeamInfo', // Contains contact PII
 ] as const;
 
 /**
@@ -54,8 +54,12 @@ export const getOnboardingData = (): Partial<OnboardingData> => {
   const navigationLayout = localStorage.getItem(STORAGE_KEYS.NAVIGATION_LAYOUT) as 'top' | 'left' | null;
   const emailPlatform = sessionStorage.getItem(STORAGE_KEYS.EMAIL_PLATFORM) as OnboardingData['emailPlatform'];
   const emailConfigMethod = sessionStorage.getItem(STORAGE_KEYS.EMAIL_CONFIG_METHOD) as 'oauth' | 'apppassword' | null;
-  const fileStoragePlatform = sessionStorage.getItem(STORAGE_KEYS.FILE_STORAGE_PLATFORM) as OnboardingData['fileStoragePlatform'];
-  const authenticationPlatform = sessionStorage.getItem(STORAGE_KEYS.AUTHENTICATION_PLATFORM) as OnboardingData['authenticationPlatform'];
+  const fileStoragePlatform = sessionStorage.getItem(
+    STORAGE_KEYS.FILE_STORAGE_PLATFORM
+  ) as OnboardingData['fileStoragePlatform'];
+  const authenticationPlatform = sessionStorage.getItem(
+    STORAGE_KEYS.AUTHENTICATION_PLATFORM
+  ) as OnboardingData['authenticationPlatform'];
 
   return {
     departmentName: departmentName || '',
@@ -86,7 +90,6 @@ export const saveDepartmentInfo = (name: string, logoData?: string) => {
   }
 };
 
-
 /**
  * Mark email as configured (no credentials stored)
  *
@@ -105,11 +108,10 @@ export const saveEmailConfig = (config: EmailConfig, method?: 'oauth' | 'apppass
   if (config && (config.smtpPassword || config.googleClientSecret || config.microsoftClientSecret)) {
     console.warn(
       'SECURITY: Email credentials should be sent directly to the backend API, ' +
-      'not stored in browser storage. The credentials have been excluded from local storage.'
+        'not stored in browser storage. The credentials have been excluded from local storage.'
     );
   }
 };
-
 
 /**
  * Mark file storage as configured (no API keys stored)
@@ -124,10 +126,9 @@ export const saveFileStorageConfig = (_config: Record<string, unknown>) => {
 
   console.warn(
     'SECURITY: File storage credentials should be sent directly to the backend API. ' +
-    'The configuration has been excluded from local storage.'
+      'The configuration has been excluded from local storage.'
   );
 };
-
 
 /**
  * Remove any legacy sensitive data that may have been stored
@@ -158,5 +159,3 @@ export const getDepartmentName = (): string | null => {
 export const getLogoData = (): string | null => {
   return sessionStorage.getItem(STORAGE_KEYS.LOGO_DATA);
 };
-
-

@@ -147,9 +147,7 @@ describe('InventoryCategoriesPage', () => {
     await user.type(nameInput, 'Radios');
     await user.click(screen.getByText('Create Category'));
     await waitFor(() => {
-      expect(mockCreateCategory).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Radios' }),
-      );
+      expect(mockCreateCategory).toHaveBeenCalledWith(expect.objectContaining({ name: 'Radios' }));
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('Category created');
   });

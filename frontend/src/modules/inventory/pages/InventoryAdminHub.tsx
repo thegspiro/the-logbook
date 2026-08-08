@@ -36,12 +36,7 @@ import { inventoryService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
-import type {
-  InventorySummary,
-  LowStockAlert,
-  ReturnRequestItem,
-  EquipmentRequestItem,
-} from '../types';
+import type { InventorySummary, LowStockAlert, ReturnRequestItem, EquipmentRequestItem } from '../types';
 interface NavCardProps {
   to: string;
   icon: React.ReactNode;
@@ -55,21 +50,25 @@ interface NavCardProps {
 const NavCard: React.FC<NavCardProps> = ({ to, icon, title, description, badge, badgeColor, iconBg }) => (
   <Link
     to={to}
-    className="card-secondary p-3 sm:p-4 hover:bg-theme-surface-hover active:bg-theme-surface-hover transition-colors group flex items-center sm:items-start gap-3 sm:gap-4"
+    className="card-secondary hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex items-center gap-3 p-3 transition-colors sm:items-start sm:gap-4 sm:p-4"
   >
-    <div className={`shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center transition-colors ${iconBg ?? 'bg-theme-surface-secondary text-theme-text-muted group-hover:text-theme-text-primary'}`}>
+    <div
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors sm:h-10 sm:w-10 ${iconBg ?? 'bg-theme-surface-secondary text-theme-text-muted group-hover:text-theme-text-primary'}`}
+    >
       {icon}
     </div>
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-2">
-        <h3 className="text-sm font-semibold text-theme-text-primary group-hover:text-theme-text-primary">{title}</h3>
+        <h3 className="text-theme-text-primary group-hover:text-theme-text-primary text-sm font-semibold">{title}</h3>
         {badge != null && badge > 0 && (
-          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${badgeColor ?? 'bg-blue-500/10 text-blue-700 dark:text-blue-400'}`}>
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeColor ?? 'bg-blue-500/10 text-blue-700 dark:text-blue-400'}`}
+          >
             {badge}
           </span>
         )}
       </div>
-      <p className="text-xs text-theme-text-muted mt-0.5 hidden sm:block">{description}</p>
+      <p className="text-theme-text-muted mt-0.5 hidden text-xs sm:block">{description}</p>
     </div>
   </Link>
 );
@@ -87,22 +86,20 @@ interface ProminentCardProps {
 const ProminentCard: React.FC<ProminentCardProps> = ({ to, icon, title, description, stat, statLabel, iconBg }) => (
   <Link
     to={to}
-    className="card-secondary p-4 sm:p-5 hover:bg-theme-surface-hover active:bg-theme-surface-hover transition-all group flex flex-col gap-3"
+    className="card-secondary hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex flex-col gap-3 p-4 transition-all sm:p-5"
   >
     <div className="flex items-center justify-between">
-      <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center ${iconBg}`}>
-        {icon}
-      </div>
+      <div className={`flex h-10 w-10 items-center justify-center rounded-xl sm:h-11 sm:w-11 ${iconBg}`}>{icon}</div>
       {stat != null && (
         <div className="text-right">
-          <p className="text-xl sm:text-2xl font-bold text-theme-text-primary">{stat}</p>
-          {statLabel && <p className="text-[11px] text-theme-text-muted">{statLabel}</p>}
+          <p className="text-theme-text-primary text-xl font-bold sm:text-2xl">{stat}</p>
+          {statLabel && <p className="text-theme-text-muted text-[11px]">{statLabel}</p>}
         </div>
       )}
     </div>
     <div>
-      <h3 className="text-sm font-semibold text-theme-text-primary">{title}</h3>
-      <p className="text-xs text-theme-text-muted mt-0.5">{description}</p>
+      <h3 className="text-theme-text-primary text-sm font-semibold">{title}</h3>
+      <p className="text-theme-text-muted mt-0.5 text-xs">{description}</p>
     </div>
   </Link>
 );
@@ -114,7 +111,7 @@ interface SectionProps {
 
 const Section: React.FC<SectionProps> = ({ title, children }) => (
   <div>
-    <h2 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-3">{title}</h2>
+    <h2 className="text-theme-text-muted mb-3 text-xs font-semibold tracking-wider uppercase">{title}</h2>
     {children}
   </div>
 );
@@ -138,9 +135,9 @@ export const InventoryAdminHub: React.FC = () => {
         inventoryService.getSummary(),
         inventoryService.getLowStockItems().catch(() => [] as LowStockAlert[]),
         inventoryService.getReturnRequests({ status: 'pending' }).catch(() => [] as ReturnRequestItem[]),
-        inventoryService.getEquipmentRequests({ status: 'pending' }).catch(
-          () => ({ requests: [] as EquipmentRequestItem[], total: 0 }),
-        ),
+        inventoryService
+          .getEquipmentRequests({ status: 'pending' })
+          .catch(() => ({ requests: [] as EquipmentRequestItem[], total: 0 })),
       ]);
       setSummary(summaryData);
       setLowStockAlerts(lowStock);
@@ -159,35 +156,39 @@ export const InventoryAdminHub: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="bg-blue-600 rounded-lg p-2 shrink-0">
-              <Package className="w-6 h-6 text-white" />
+        <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="shrink-0 rounded-lg bg-blue-600 p-2">
+              <Package className="h-6 w-6 text-white" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold text-theme-text-primary truncate">Inventory Administration</h1>
-              <p className="text-sm text-theme-text-muted">Manage equipment, assignments, and compliance</p>
+              <h1 className="text-theme-text-primary truncate text-xl font-bold sm:text-2xl">
+                Inventory Administration
+              </h1>
+              <p className="text-theme-text-muted text-sm">Manage equipment, assignments, and compliance</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+          <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
             {canManage && (
               <button
                 onClick={() => setMemberPickerOpen(true)}
                 className="btn-info btn-md flex items-center gap-2"
                 title="Assign items to an individual member"
               >
-                <UserPlus className="w-4 h-4" />
+                <UserPlus className="h-4 w-4" />
                 <span className="hidden sm:inline">Assign to Member</span>
                 <span className="sm:hidden">Assign</span>
               </button>
             )}
             <button
-              onClick={() => { void loadSummary(); }}
+              onClick={() => {
+                void loadSummary();
+              }}
               className="btn-secondary btn-md"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refresh</span>
             </button>
           </div>
@@ -195,76 +196,100 @@ export const InventoryAdminHub: React.FC = () => {
 
         {/* Quick stats bar */}
         {summary && (
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mb-8 text-sm text-theme-text-muted">
-            <span><span className="font-semibold text-green-600 dark:text-green-400">{summary.items_by_status['available'] ?? 0}</span> available</span>
-            <span><span className="font-semibold text-blue-600 dark:text-blue-400">{summary.active_checkouts}</span> checked out</span>
+          <div className="text-theme-text-muted mb-8 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+            <span>
+              <span className="font-semibold text-green-600 dark:text-green-400">
+                {summary.items_by_status['available'] ?? 0}
+              </span>{' '}
+              available
+            </span>
+            <span>
+              <span className="font-semibold text-blue-600 dark:text-blue-400">{summary.active_checkouts}</span> checked
+              out
+            </span>
             {summary.maintenance_due_count > 0 && (
-              <span><span className="font-semibold text-orange-600 dark:text-orange-400">{summary.maintenance_due_count}</span> maintenance due</span>
+              <span>
+                <span className="font-semibold text-orange-600 dark:text-orange-400">
+                  {summary.maintenance_due_count}
+                </span>{' '}
+                maintenance due
+              </span>
             )}
           </div>
         )}
 
         {/* Low stock alerts */}
         {lowStockAlerts.length > 0 && (
-          <div className="mb-8 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+          <div className="mb-8 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 sm:p-4">
+            <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 shrink-0" />
+                <AlertTriangle className="h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
                 <h3 className="text-sm font-semibold text-yellow-700 dark:text-yellow-300">
                   Low Stock Alerts ({lowStockAlerts.length})
                 </h3>
               </div>
               <Link
                 to="/inventory/admin/reorder"
-                className="text-xs font-medium text-yellow-700 dark:text-yellow-300 hover:underline"
+                className="text-xs font-medium text-yellow-700 hover:underline dark:text-yellow-300"
               >
                 Create Reorder Request &rarr;
               </Link>
             </div>
             <div className="space-y-2">
               {lowStockAlerts.slice(0, 5).map((alert) => (
-                <div key={alert.category_id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2 bg-yellow-500/5 rounded px-3 py-2">
+                <div
+                  key={alert.category_id}
+                  className="flex flex-col justify-between gap-1 rounded bg-yellow-500/5 px-3 py-2 sm:flex-row sm:items-center sm:gap-2"
+                >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300 truncate">{alert.category_name}</p>
-                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full shrink-0 sm:hidden ${
-                        alert.current_stock === 0
-                          ? 'bg-red-500/20 text-red-700 dark:text-red-400'
-                          : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
-                      }`}>
+                      <p className="truncate text-sm font-medium text-yellow-700 dark:text-yellow-300">
+                        {alert.category_name}
+                      </p>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium sm:hidden ${
+                          alert.current_stock === 0
+                            ? 'bg-red-500/20 text-red-700 dark:text-red-400'
+                            : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
+                        }`}
+                      >
                         {alert.current_stock === 0 ? 'Out' : 'Low'}
                       </span>
                     </div>
                     <p className="text-xs text-yellow-600 dark:text-yellow-400">
                       {alert.current_stock} in stock &middot; threshold: {alert.threshold}
                       {alert.items && alert.items.length > 0 && (
-                        <span className="hidden sm:inline ml-1">
+                        <span className="ml-1 hidden sm:inline">
                           ({alert.items.map((i) => `${i.name}: ${i.quantity}`).join(', ')})
                         </span>
                       )}
                     </p>
                   </div>
-                  <span className={`px-2 py-0.5 text-xs font-medium rounded-full shrink-0 hidden sm:inline ${
-                    alert.current_stock === 0
-                      ? 'bg-red-500/20 text-red-700 dark:text-red-400'
-                      : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
-                  }`}>
+                  <span
+                    className={`hidden shrink-0 rounded-full px-2 py-0.5 text-xs font-medium sm:inline ${
+                      alert.current_stock === 0
+                        ? 'bg-red-500/20 text-red-700 dark:text-red-400'
+                        : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
+                    }`}
+                  >
                     {alert.current_stock === 0 ? 'Out of stock' : 'Low'}
                   </span>
                 </div>
               ))}
               {lowStockAlerts.length > 5 && (
-                <p className="text-xs text-yellow-500">...and {lowStockAlerts.length - 5} more categories below threshold</p>
+                <p className="text-xs text-yellow-500">
+                  ...and {lowStockAlerts.length - 5} more categories below threshold
+                </p>
               )}
             </div>
           </div>
         )}
 
         {/* Prominent top cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
+        <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <ProminentCard
             to="/inventory/admin/items"
-            icon={<Package className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+            icon={<Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
             title="Items"
             description="Browse, add, edit, and manage individual equipment"
             stat={summary?.total_items}
@@ -273,14 +298,14 @@ export const InventoryAdminHub: React.FC = () => {
           />
           <ProminentCard
             to="/inventory/admin/members"
-            icon={<Users className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />}
+            icon={<Users className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
             title="Members"
             description="View and manage per-member equipment assignments"
             iconBg="bg-emerald-500/10"
           />
           <ProminentCard
             to="/inventory/checkouts"
-            icon={<ArrowDownToLine className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
+            icon={<ArrowDownToLine className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
             title="Checkouts"
             description="Manage active and overdue equipment checkouts"
             stat={summary?.overdue_checkouts}
@@ -292,52 +317,52 @@ export const InventoryAdminHub: React.FC = () => {
         {/* Inventory Management */}
         <div className="space-y-8">
           <Section title="Inventory Management">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <NavCard
                 to="/inventory/admin/pool"
-                icon={<Layers className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+                icon={<Layers className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
                 title="Pool Items"
                 description="Manage quantity-tracked items, issue to members"
                 iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
               />
               <NavCard
                 to="/inventory/admin/categories"
-                icon={<Tag className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+                icon={<Tag className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
                 title="Categories"
                 description="Organize items by type with tracking settings"
                 iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
               />
               <NavCard
                 to="/inventory/admin/kits"
-                icon={<BoxSelect className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+                icon={<BoxSelect className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
                 title="Equipment Kits"
                 description="Create and manage kit templates for multi-item issuance"
                 iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
               />
               <NavCard
                 to="/inventory/admin/variant-groups"
-                icon={<Ruler className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+                icon={<Ruler className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
                 title="Variant Groups"
                 description="Group pool item variants by size, style, and color"
                 iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
               />
               <NavCard
                 to="/inventory/admin/allowances"
-                icon={<SlidersHorizontal className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+                icon={<SlidersHorizontal className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
                 title="Issuance Allowances"
                 description="Cap how many units per category a member can be issued"
                 iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
               />
               <NavCard
                 to="/inventory/admin/impact-planner"
-                icon={<Target className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+                icon={<Target className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
                 title="Impact Planner"
                 description="Plan a new issue: who's impacted, sizes needed, who to contact"
                 iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
               />
               <NavCard
                 to="/inventory/admin/maintenance"
-                icon={<Wrench className="w-5 h-5 text-orange-600 dark:text-orange-400" />}
+                icon={<Wrench className="h-5 w-5 text-orange-600 dark:text-orange-400" />}
                 title="Maintenance"
                 description="Track inspections, repairs, and compliance"
                 badge={summary?.maintenance_due_count}
@@ -346,7 +371,7 @@ export const InventoryAdminHub: React.FC = () => {
               />
               <NavCard
                 to="/inventory/storage-areas"
-                icon={<MapPin className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />}
+                icon={<MapPin className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />}
                 title="Storage Areas"
                 description="Manage storage locations within facilities"
                 iconBg="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
@@ -356,10 +381,10 @@ export const InventoryAdminHub: React.FC = () => {
 
           {/* Requests & Workflows */}
           <Section title="Requests & Workflows">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <NavCard
                 to="/inventory/admin/requests"
-                icon={<ClipboardList className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />}
+                icon={<ClipboardList className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />}
                 title="Equipment Requests"
                 description="Review member requests for equipment"
                 badge={pendingRequests > 0 ? pendingRequests : undefined}
@@ -368,7 +393,7 @@ export const InventoryAdminHub: React.FC = () => {
               />
               <NavCard
                 to="/inventory/admin/returns"
-                icon={<CornerDownLeft className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />}
+                icon={<CornerDownLeft className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />}
                 title="Return Requests"
                 description="Review and process member return requests"
                 badge={pendingReturns > 0 ? pendingReturns : undefined}
@@ -377,21 +402,21 @@ export const InventoryAdminHub: React.FC = () => {
               />
               <NavCard
                 to="/inventory/admin/charges"
-                icon={<DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />}
+                icon={<DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />}
                 title="Charges"
                 description="Cost recovery for lost or damaged items"
                 iconBg="bg-green-500/10 text-green-600 dark:text-green-400"
               />
               <NavCard
                 to="/inventory/admin/write-offs"
-                icon={<FileX className="w-5 h-5 text-red-600 dark:text-red-400" />}
+                icon={<FileX className="h-5 w-5 text-red-600 dark:text-red-400" />}
                 title="Write-Offs"
                 description="Process loss and damage write-off requests"
                 iconBg="bg-red-500/10 text-red-600 dark:text-red-400"
               />
               <NavCard
                 to="/inventory/admin/reorder"
-                icon={<Truck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
+                icon={<Truck className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
                 title="Reorder Requests"
                 description="Track and manage supply reorder requests"
                 badge={lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined}
@@ -400,7 +425,7 @@ export const InventoryAdminHub: React.FC = () => {
               />
               <NavCard
                 to="/scheduling/supply/expiring"
-                icon={<Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
+                icon={<Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
                 title="Expiring on Apparatus"
                 description="Items expiring on the trucks and ready replacement stock"
                 iconBg="bg-amber-500/10 text-amber-600 dark:text-amber-400"
@@ -410,16 +435,16 @@ export const InventoryAdminHub: React.FC = () => {
 
           {/* Tools */}
           <Section title="Tools">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <NavCard
                 to="/inventory/import"
-                icon={<Upload className="w-5 h-5 text-theme-text-muted group-hover:text-theme-text-primary" />}
+                icon={<Upload className="text-theme-text-muted group-hover:text-theme-text-primary h-5 w-5" />}
                 title="Import / Export"
                 description="Bulk import from CSV or export inventory data"
               />
               <NavCard
                 to="/store/admin"
-                icon={<Store className="w-5 h-5 text-theme-text-muted group-hover:text-theme-text-primary" />}
+                icon={<Store className="text-theme-text-muted group-hover:text-theme-text-primary h-5 w-5" />}
                 title="Department Store"
                 description="Order windows, catalog, and member order payments"
               />
@@ -444,7 +469,9 @@ export const InventoryAdminHub: React.FC = () => {
         mode="checkout"
         userId={assignTarget?.userId ?? ''}
         memberName={assignTarget?.memberName ?? ''}
-        onComplete={() => { void loadSummary(); }}
+        onComplete={() => {
+          void loadSummary();
+        }}
       />
     </div>
   );

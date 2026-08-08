@@ -72,7 +72,9 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   // Re-focus the search field after the Modal's own focus effect runs.
@@ -84,19 +86,22 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const sorted = [...members].sort((a, b) =>
-      memberDisplayName(a).localeCompare(memberDisplayName(b)),
-    );
+    const sorted = [...members].sort((a, b) => memberDisplayName(a).localeCompare(memberDisplayName(b)));
     if (!q) return sorted;
     return sorted.filter((m) => {
       const name = memberDisplayName(m).toLowerCase();
-      return name.includes(q) || (m.membership_number ?? '').toLowerCase().includes(q)
-        || m.username.toLowerCase().includes(q);
+      return (
+        name.includes(q) ||
+        (m.membership_number ?? '').toLowerCase().includes(q) ||
+        m.username.toLowerCase().includes(q)
+      );
     });
   }, [members, search]);
 
   // Reset the keyboard highlight whenever the visible list changes.
-  useEffect(() => { setActiveIndex(-1); }, [search]);
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [search]);
 
   // Keep the highlighted row scrolled into view.
   useEffect(() => {
@@ -105,9 +110,12 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
     rowRefs.current[activeIndex]?.scrollIntoView?.({ block: 'nearest' });
   }, [activeIndex]);
 
-  const handleSelect = useCallback((m: MemberInventorySummary) => {
-    onSelect({ userId: m.user_id, memberName: memberDisplayName(m) });
-  }, [onSelect]);
+  const handleSelect = useCallback(
+    (m: MemberInventorySummary) => {
+      onSelect({ userId: m.user_id, memberName: memberDisplayName(m) });
+    },
+    [onSelect]
+  );
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (filtered.length === 0) return;
@@ -120,8 +128,7 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
     } else if (e.key === 'Enter') {
       e.preventDefault();
       // With nothing highlighted, a single match is the obvious choice.
-      const target = activeIndex >= 0 ? filtered[activeIndex]
-        : filtered.length === 1 ? filtered[0] : undefined;
+      const target = activeIndex >= 0 ? filtered[activeIndex] : filtered.length === 1 ? filtered[0] : undefined;
       if (target) handleSelect(target);
     }
   };
@@ -133,7 +140,7 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
           {/* Search + scan */}
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+              <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
               <input
                 ref={searchRef}
                 type="text"
@@ -149,10 +156,10 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
             <button
               type="button"
               onClick={() => setScannerOpen(true)}
-              className="btn-secondary btn-md flex items-center gap-2 shrink-0"
+              className="btn-secondary btn-md flex shrink-0 items-center gap-2"
               title="Scan a member's digital ID card"
             >
-              <ScanLine className="w-4 h-4" />
+              <ScanLine className="h-4 w-4" />
               <span className="hidden sm:inline">Scan ID</span>
             </button>
           </div>
@@ -160,45 +167,47 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
           {/* Body */}
           {loading ? (
             <div className="flex items-center justify-center py-10" role="status" aria-live="polite">
-              <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted mr-2" />
-              <span className="text-sm text-theme-text-muted">Loading members...</span>
+              <Loader2 className="text-theme-text-muted mr-2 h-5 w-5 animate-spin" />
+              <span className="text-theme-text-muted text-sm">Loading members...</span>
             </div>
           ) : error ? (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+            <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" />
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-10 text-theme-text-muted text-sm">
+            <div className="text-theme-text-muted py-10 text-center text-sm">
               {search ? 'No members match your search.' : 'No members found.'}
             </div>
           ) : (
-            <div className="space-y-1.5 max-h-80 overflow-y-auto">
+            <div className="max-h-80 space-y-1.5 overflow-y-auto">
               {filtered.map((m, i) => (
                 <button
                   key={m.user_id}
-                  ref={(el) => { rowRefs.current[i] = el; }}
+                  ref={(el) => {
+                    rowRefs.current[i] = el;
+                  }}
                   type="button"
                   onClick={() => handleSelect(m)}
                   onMouseEnter={() => setActiveIndex(i)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                     i === activeIndex
-                      ? 'border-blue-500/40 bg-theme-surface-hover'
+                      ? 'bg-theme-surface-hover border-blue-500/40'
                       : 'border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover'
                   }`}
                 >
-                  <User className="w-5 h-5 text-theme-text-muted shrink-0" />
+                  <User className="text-theme-text-muted h-5 w-5 shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-theme-text-primary truncate">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-theme-text-primary truncate text-sm font-medium">
                         {memberDisplayName(m)}
                       </span>
                       {m.membership_number && (
-                        <span className="text-xs text-theme-text-muted">#{m.membership_number}</span>
+                        <span className="text-theme-text-muted text-xs">#{m.membership_number}</span>
                       )}
                     </div>
                     {m.total_items > 0 && (
-                      <p className="text-xs text-theme-text-muted">
+                      <p className="text-theme-text-muted text-xs">
                         {m.total_items} item{m.total_items !== 1 ? 's' : ''} assigned
                       </p>
                     )}
@@ -214,7 +223,10 @@ export const MemberPickerModal: React.FC<MemberPickerModalProps> = ({
       <MemberIdScannerModal
         isOpen={isOpen && scannerOpen}
         onClose={() => setScannerOpen(false)}
-        onMemberIdentified={(m) => { setScannerOpen(false); onSelect(m); }}
+        onMemberIdentified={(m) => {
+          setScannerOpen(false);
+          onSelect(m);
+        }}
       />
     </>
   );

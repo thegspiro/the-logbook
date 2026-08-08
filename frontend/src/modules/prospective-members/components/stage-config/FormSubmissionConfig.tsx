@@ -102,23 +102,24 @@ const FormSubmissionConfig: React.FC<FormSubmissionConfigProps> = ({
       )}
       {errors.form_id && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.form_id}</p>}
 
-      {(config as FormStageConfig).form_id && (() => {
-        const selected = availableForms.find((f) => f.id === (config as FormStageConfig).form_id);
-        if (!selected) return null;
-        if (selected.integration_type === 'membership_interest') {
+      {(config as FormStageConfig).form_id &&
+        (() => {
+          const selected = availableForms.find((f) => f.id === (config as FormStageConfig).form_id);
+          if (!selected) return null;
+          if (selected.integration_type === 'membership_interest') {
+            return (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400">
+                <CheckCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                Configured for membership pipeline (label-based mapping)
+              </p>
+            );
+          }
           return (
-            <p className="mt-2 flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400">
-              <CheckCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              Configured for membership pipeline (label-based mapping)
+            <p className="text-theme-text-muted mt-2 text-xs">
+              This form will be auto-configured for the membership pipeline when you save.
             </p>
           );
-        }
-        return (
-          <p className="text-theme-text-muted mt-2 text-xs">
-            This form will be auto-configured for the membership pipeline when you save.
-          </p>
-        );
-      })()}
+        })()}
 
       {formValidationLoading && (
         <div className="text-theme-text-muted mt-3 flex items-center gap-2 text-sm">
@@ -136,9 +137,7 @@ const FormSubmissionConfig: React.FC<FormSubmissionConfigProps> = ({
         >
           <p
             className={`mb-1.5 font-medium ${
-              formValidation.valid
-                ? 'text-green-800 dark:text-green-300'
-                : 'text-amber-800 dark:text-amber-300'
+              formValidation.valid ? 'text-green-800 dark:text-green-300' : 'text-amber-800 dark:text-amber-300'
             }`}
           >
             {formValidation.valid ? 'All required fields detected' : 'Missing required fields'}
@@ -166,9 +165,7 @@ const FormSubmissionConfig: React.FC<FormSubmissionConfigProps> = ({
                   ) : (
                     <>
                       <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                      <span className="text-amber-800 dark:text-amber-300">
-                        {friendly[field]} — not found
-                      </span>
+                      <span className="text-amber-800 dark:text-amber-300">{friendly[field]} — not found</span>
                     </>
                   )}
                 </li>
@@ -181,7 +178,7 @@ const FormSubmissionConfig: React.FC<FormSubmissionConfigProps> = ({
         </div>
       )}
 
-      <label className="text-theme-text-secondary flex items-center gap-2 text-sm mt-4">
+      <label className="text-theme-text-secondary mt-4 flex items-center gap-2 text-sm">
         <input
           type="checkbox"
           checked={(config as FormStageConfig).auto_advance ?? false}
@@ -190,7 +187,7 @@ const FormSubmissionConfig: React.FC<FormSubmissionConfigProps> = ({
         />
         Auto-advance when form is submitted
       </label>
-      <p className="text-theme-text-muted text-xs ml-6">
+      <p className="text-theme-text-muted ml-6 text-xs">
         Automatically complete this step and advance the prospect when the linked form is submitted.
       </p>
     </div>

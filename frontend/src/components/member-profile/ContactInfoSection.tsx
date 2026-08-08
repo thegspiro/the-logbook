@@ -1,8 +1,5 @@
-import React from "react";
-import type {
-  ContactInfoUpdate,
-  NotificationPreferences,
-} from "../../types/user";
+import React from 'react';
+import type { ContactInfoUpdate, NotificationPreferences } from '../../types/user';
 
 interface ContactInfoSectionProps {
   user: {
@@ -36,15 +33,13 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
   onNotificationToggle,
 }) => {
   return (
-    <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-theme-text-primary">
-          Contact Information
-        </h2>
+    <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-theme-text-primary text-lg font-semibold">Contact Information</h2>
         {canEdit && !isEditing && (
           <button
             onClick={onEditClick}
-            className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+            className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
           >
             Edit
           </button>
@@ -55,103 +50,75 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
         <div className="space-y-3">
           {user.email && (
             <div>
-              <p className="text-xs text-theme-text-muted uppercase font-medium">
-                Email
-              </p>
-              <p className="text-sm text-theme-text-primary mt-1">
-                {user.email}
-              </p>
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Email</p>
+              <p className="text-theme-text-primary mt-1 text-sm">{user.email}</p>
             </div>
           )}
           {user.phone && (
             <div>
-              <p className="text-xs text-theme-text-muted uppercase font-medium">
-                Phone
-              </p>
-              <p className="text-sm text-theme-text-primary mt-1">
-                {user.phone}
-              </p>
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Phone</p>
+              <p className="text-theme-text-primary mt-1 text-sm">{user.phone}</p>
             </div>
           )}
           {user.mobile && (
             <div>
-              <p className="text-xs text-theme-text-muted uppercase font-medium">
-                Mobile
-              </p>
-              <p className="text-sm text-theme-text-primary mt-1">
-                {user.mobile}
-              </p>
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Mobile</p>
+              <p className="text-theme-text-primary mt-1 text-sm">{user.mobile}</p>
             </div>
           )}
         </div>
       ) : (
         <div className="space-y-4">
           <div>
-            <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
-              Email
-            </label>
+            <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Email</label>
             <input
               type="email"
               value={editForm.email}
-              onChange={(e) =>
-                onFormChange("email", e.target.value)
-              }
-              className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+              onChange={(e) => onFormChange('email', e.target.value)}
+              className="form-input border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
             />
           </div>
           <div>
-            <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
-              Phone
-            </label>
+            <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Phone</label>
             <input
               type="tel"
               value={editForm.phone}
-              onChange={(e) =>
-                onFormChange("phone", e.target.value)
-              }
-              className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+              onChange={(e) => onFormChange('phone', e.target.value)}
+              className="form-input border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
             />
           </div>
           <div>
-            <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
-              Mobile
-            </label>
+            <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Mobile</label>
             <input
               type="tel"
               value={editForm.mobile}
-              onChange={(e) =>
-                onFormChange("mobile", e.target.value)
-              }
-              className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+              onChange={(e) => onFormChange('mobile', e.target.value)}
+              className="form-input border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
             />
           </div>
 
-          <div className="pt-4 border-t border-theme-surface-border">
-            <label className="block text-xs text-theme-text-muted uppercase font-medium mb-3">
+          <div className="border-theme-surface-border border-t pt-4">
+            <label className="text-theme-text-muted mb-3 block text-xs font-medium uppercase">
               Notification Preferences
             </label>
             <div className="space-y-2">
-              <label className="flex items-center cursor-pointer">
+              <label className="flex cursor-pointer items-center">
                 <input
                   type="checkbox"
                   checked={editForm.notification_preferences?.email}
-                  onChange={() => onNotificationToggle("email")}
+                  onChange={() => onNotificationToggle('email')}
                   className="form-checkbox border-theme-surface-border"
                 />
-                <span className="ml-2 text-sm text-theme-text-secondary">
-                  Email notifications
-                </span>
+                <span className="text-theme-text-secondary ml-2 text-sm">Email notifications</span>
               </label>
-              <label className="flex items-center cursor-pointer">
+              <label className="flex cursor-pointer items-center">
                 <input
                   type="checkbox"
                   checked={editForm.notification_preferences?.sms_notifications}
-                  onChange={() => onNotificationToggle("sms_notifications")}
+                  onChange={() => onNotificationToggle('sms_notifications')}
                   className="form-checkbox border-theme-surface-border"
                 />
-                <span className="ml-2 text-sm text-theme-text-secondary">
-                  Urgent text messages
-                </span>
+                <span className="text-theme-text-secondary ml-2 text-sm">Urgent text messages</span>
               </label>
             </div>
           </div>
@@ -162,22 +129,20 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
                 void onSaveContact();
               }}
               disabled={saving}
-              className="btn-info disabled:cursor-not-allowed flex-1 font-medium rounded-md text-sm"
+              className="btn-info flex-1 rounded-md text-sm font-medium disabled:cursor-not-allowed"
             >
-              {saving ? "Saving..." : "Save Changes"}
+              {saving ? 'Saving...' : 'Save Changes'}
             </button>
             <button
               onClick={onCancelEdit}
               disabled={saving}
-              className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50"
+              className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex-1 rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50"
             >
               Cancel
             </button>
           </div>
 
-          {error && (
-            <div className="mt-2 text-sm text-red-700 dark:text-red-400">{error}</div>
-          )}
+          {error && <div className="mt-2 text-sm text-red-700 dark:text-red-400">{error}</div>}
         </div>
       )}
     </div>

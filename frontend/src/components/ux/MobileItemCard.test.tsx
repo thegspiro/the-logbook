@@ -90,15 +90,7 @@ describe('MobileItemCard', () => {
   });
 
   it('shows issue button only when canIssue is true', () => {
-    render(
-      <MobileItemCard
-        {...baseProps}
-        showActions
-        onIssue={vi.fn()}
-        canIssue
-        canRetire={false}
-      />
-    );
+    render(<MobileItemCard {...baseProps} showActions onIssue={vi.fn()} canIssue canRetire={false} />);
     expect(screen.getByText('Issue')).toBeInTheDocument();
   });
 

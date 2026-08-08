@@ -6,15 +6,7 @@
  */
 
 import { useState } from 'react';
-import {
-  Pencil,
-  Save,
-  X,
-  MapPin,
-  Phone,
-  Mail,
-  Loader2,
-} from 'lucide-react';
+import { Pencil, Save, X, MapPin, Phone, Mail, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import type { Facility, FacilityType, FacilityStatus } from '../types';
@@ -29,8 +21,12 @@ interface Props {
 }
 
 const NUMERIC_FIELDS = new Set([
-  'year_built', 'square_footage', 'num_floors',
-  'num_bays', 'max_occupancy', 'sleeping_quarters',
+  'year_built',
+  'square_footage',
+  'num_floors',
+  'num_bays',
+  'max_occupancy',
+  'sleeping_quarters',
 ]);
 
 function facilityToEditData(facility: Facility): Record<string, unknown> {
@@ -103,35 +99,36 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
   };
 
   const ed = (field: string) => editData[field] as string;
-  const setEd = (field: string, value: string) =>
-    setEditData((prev) => ({ ...prev, [field]: value }));
+  const setEd = (field: string, value: string) => setEditData((prev) => ({ ...prev, [field]: value }));
 
   return (
-    <div className="bg-theme-surface border border-theme-surface-border rounded-xl">
-      <div className="flex items-center justify-between p-5 border-b border-theme-surface-border">
-        <h2 className="text-sm font-semibold text-theme-text-primary">Facility Details</h2>
+    <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
+      <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
+        <h2 className="text-theme-text-primary text-sm font-semibold">Facility Details</h2>
         {!isEditing ? (
           <button
             onClick={startEditing}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-theme-text-muted border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+            className="text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors"
           >
-            <Pencil className="w-3.5 h-3.5" /> Edit
+            <Pencil className="h-3.5 w-3.5" /> Edit
           </button>
         ) : (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { void handleSave(); }}
+              onClick={() => {
+                void handleSave();
+              }}
               disabled={isSaving}
-              className="btn-primary flex gap-1.5 items-center text-sm px-3 py-1.5"
+              className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm"
             >
-              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
               Save
             </button>
             <button
               onClick={() => setIsEditing(false)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1.5 px-3 py-1.5 text-sm transition-colors"
             >
-              <X className="w-3.5 h-3.5" /> Cancel
+              <X className="h-3.5 w-3.5" /> Cancel
             </button>
           </div>
         )}
@@ -141,12 +138,7 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
         {!isEditing ? (
           <OverviewViewMode facility={facility} tz={tz} />
         ) : (
-          <OverviewEditMode
-            ed={ed}
-            setEd={setEd}
-            facilityTypes={facilityTypes}
-            facilityStatuses={facilityStatuses}
-          />
+          <OverviewEditMode ed={ed} setEd={setEd} facilityTypes={facilityTypes} facilityStatuses={facilityStatuses} />
         )}
       </div>
     </div>
@@ -154,67 +146,78 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
 }
 
 function OverviewViewMode({ facility, tz }: { facility: Facility; tz: string }) {
-  const address = [facility.addressLine1, facility.city, facility.state, facility.zipCode]
-    .filter(Boolean)
-    .join(', ');
+  const address = [facility.addressLine1, facility.city, facility.state, facility.zipCode].filter(Boolean).join(', ');
 
   return (
     <div className="space-y-5">
       {address && (
         <div className="flex items-start gap-2.5">
-          <MapPin className="w-4 h-4 text-theme-text-muted mt-0.5 shrink-0" />
+          <MapPin className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" />
           <div>
-            <p className="text-sm text-theme-text-primary">{address}</p>
-            {facility.addressLine2 && (
-              <p className="text-sm text-theme-text-secondary">{facility.addressLine2}</p>
-            )}
-            {facility.county && (
-              <p className="text-xs text-theme-text-muted mt-0.5">{facility.county} County</p>
-            )}
+            <p className="text-theme-text-primary text-sm">{address}</p>
+            {facility.addressLine2 && <p className="text-theme-text-secondary text-sm">{facility.addressLine2}</p>}
+            {facility.county && <p className="text-theme-text-muted mt-0.5 text-xs">{facility.county} County</p>}
           </div>
         </div>
       )}
 
       {(facility.phone || facility.fax || facility.email) && (
-        <div className="flex flex-wrap items-center gap-4 text-sm text-theme-text-secondary">
+        <div className="text-theme-text-secondary flex flex-wrap items-center gap-4 text-sm">
           {facility.phone && (
-            <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />{facility.phone}</span>
+            <span className="flex items-center gap-1.5">
+              <Phone className="h-3.5 w-3.5" />
+              {facility.phone}
+            </span>
           )}
           {facility.fax && (
-            <span className="flex items-center gap-1.5 text-theme-text-muted"><Phone className="w-3.5 h-3.5" />Fax: {facility.fax}</span>
+            <span className="text-theme-text-muted flex items-center gap-1.5">
+              <Phone className="h-3.5 w-3.5" />
+              Fax: {facility.fax}
+            </span>
           )}
           {facility.email && (
-            <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" />{facility.email}</span>
+            <span className="flex items-center gap-1.5">
+              <Mail className="h-3.5 w-3.5" />
+              {facility.email}
+            </span>
           )}
         </div>
       )}
 
-      {(facility.yearBuilt || facility.squareFootage || facility.numFloors ||
-        facility.numBays || facility.maxOccupancy || facility.sleepingQuarters) && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 p-4 bg-theme-surface-hover/50 rounded-lg">
+      {(facility.yearBuilt ||
+        facility.squareFootage ||
+        facility.numFloors ||
+        facility.numBays ||
+        facility.maxOccupancy ||
+        facility.sleepingQuarters) && (
+        <div className="bg-theme-surface-hover/50 grid grid-cols-2 gap-4 rounded-lg p-4 sm:grid-cols-3 lg:grid-cols-6">
           {facility.yearBuilt != null && <InfoItem label="Year Built" value={String(facility.yearBuilt)} />}
-          {facility.squareFootage != null && <InfoItem label="Sq. Footage" value={formatNumber(facility.squareFootage)} />}
+          {facility.squareFootage != null && (
+            <InfoItem label="Sq. Footage" value={formatNumber(facility.squareFootage)} />
+          )}
           {facility.numFloors != null && <InfoItem label="Floors" value={String(facility.numFloors)} />}
           {facility.numBays != null && <InfoItem label="Apparatus Bays" value={String(facility.numBays)} />}
           {facility.maxOccupancy != null && <InfoItem label="Max Occupancy" value={String(facility.maxOccupancy)} />}
-          {facility.sleepingQuarters != null && <InfoItem label="Sleeping Quarters" value={String(facility.sleepingQuarters)} />}
+          {facility.sleepingQuarters != null && (
+            <InfoItem label="Sleeping Quarters" value={String(facility.sleepingQuarters)} />
+          )}
         </div>
       )}
 
       {facility.description && (
         <div>
-          <p className="text-xs font-medium text-theme-text-muted mb-1">Description</p>
-          <p className="text-sm text-theme-text-secondary">{facility.description}</p>
+          <p className="text-theme-text-muted mb-1 text-xs font-medium">Description</p>
+          <p className="text-theme-text-secondary text-sm">{facility.description}</p>
         </div>
       )}
       {facility.notes && (
         <div>
-          <p className="text-xs font-medium text-theme-text-muted mb-1">Notes</p>
-          <p className="text-sm text-theme-text-muted italic">{facility.notes}</p>
+          <p className="text-theme-text-muted mb-1 text-xs font-medium">Notes</p>
+          <p className="text-theme-text-muted text-sm italic">{facility.notes}</p>
         </div>
       )}
 
-      <div className="flex items-center gap-4 text-xs text-theme-text-muted pt-2 border-t border-theme-surface-border">
+      <div className="text-theme-text-muted border-theme-surface-border flex items-center gap-4 border-t pt-2 text-xs">
         <span>Created: {formatDate(facility.createdAt, tz)}</span>
         <span>Updated: {formatDate(facility.updatedAt, tz)}</span>
       </div>
@@ -232,72 +235,206 @@ interface EditModeProps {
 function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditModeProps) {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className={labelCls}>Name *</label>
-          <input type="text" value={ed('name')} onChange={e => setEd('name', e.target.value)} className={inputCls} />
+          <input type="text" value={ed('name')} onChange={(e) => setEd('name', e.target.value)} className={inputCls} />
         </div>
         <div>
           <label className={labelCls}>Facility Number</label>
-          <input type="text" value={ed('facility_number')} onChange={e => setEd('facility_number', e.target.value)} className={inputCls} placeholder="e.g., STA-01" />
+          <input
+            type="text"
+            value={ed('facility_number')}
+            onChange={(e) => setEd('facility_number', e.target.value)}
+            className={inputCls}
+            placeholder="e.g., STA-01"
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className={labelCls}>Type</label>
-          <select value={ed('facility_type_id')} onChange={e => setEd('facility_type_id', e.target.value)} className={inputCls}>
+          <select
+            value={ed('facility_type_id')}
+            onChange={(e) => setEd('facility_type_id', e.target.value)}
+            className={inputCls}
+          >
             <option value="">Select type...</option>
-            {facilityTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {facilityTypes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
           </select>
         </div>
         <div>
           <label className={labelCls}>Status</label>
-          <select value={ed('status_id')} onChange={e => setEd('status_id', e.target.value)} className={inputCls}>
+          <select value={ed('status_id')} onChange={(e) => setEd('status_id', e.target.value)} className={inputCls}>
             <option value="">Select status...</option>
-            {facilityStatuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {facilityStatuses.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
       <div>
         <label className={labelCls}>Address Line 1</label>
-        <input type="text" value={ed('address_line1')} onChange={e => setEd('address_line1', e.target.value)} className={inputCls} />
+        <input
+          type="text"
+          value={ed('address_line1')}
+          onChange={(e) => setEd('address_line1', e.target.value)}
+          className={inputCls}
+        />
       </div>
       <div>
         <label className={labelCls}>Address Line 2</label>
-        <input type="text" value={ed('address_line2')} onChange={e => setEd('address_line2', e.target.value)} className={inputCls} />
+        <input
+          type="text"
+          value={ed('address_line2')}
+          onChange={(e) => setEd('address_line2', e.target.value)}
+          className={inputCls}
+        />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div><label className={labelCls}>City</label><input type="text" value={ed('city')} onChange={e => setEd('city', e.target.value)} className={inputCls} /></div>
-        <div><label className={labelCls}>State</label><input type="text" value={ed('state')} onChange={e => setEd('state', e.target.value)} className={inputCls} /></div>
-        <div><label className={labelCls}>Zip Code</label><input type="text" inputMode="numeric" autoComplete="postal-code" value={ed('zip_code')} onChange={e => setEd('zip_code', e.target.value)} className={inputCls} /></div>
-        <div><label className={labelCls}>County</label><input type="text" value={ed('county')} onChange={e => setEd('county', e.target.value)} className={inputCls} /></div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div>
+          <label className={labelCls}>City</label>
+          <input type="text" value={ed('city')} onChange={(e) => setEd('city', e.target.value)} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>State</label>
+          <input
+            type="text"
+            value={ed('state')}
+            onChange={(e) => setEd('state', e.target.value)}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Zip Code</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="postal-code"
+            value={ed('zip_code')}
+            onChange={(e) => setEd('zip_code', e.target.value)}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>County</label>
+          <input
+            type="text"
+            value={ed('county')}
+            onChange={(e) => setEd('county', e.target.value)}
+            className={inputCls}
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div><label className={labelCls}>Phone</label><input type="text" value={ed('phone')} onChange={e => setEd('phone', e.target.value)} className={inputCls} /></div>
-        <div><label className={labelCls}>Fax</label><input type="text" value={ed('fax')} onChange={e => setEd('fax', e.target.value)} className={inputCls} /></div>
-        <div><label className={labelCls}>Email</label><input type="text" value={ed('email')} onChange={e => setEd('email', e.target.value)} className={inputCls} /></div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div>
+          <label className={labelCls}>Phone</label>
+          <input
+            type="text"
+            value={ed('phone')}
+            onChange={(e) => setEd('phone', e.target.value)}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Fax</label>
+          <input type="text" value={ed('fax')} onChange={(e) => setEd('fax', e.target.value)} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Email</label>
+          <input
+            type="text"
+            value={ed('email')}
+            onChange={(e) => setEd('email', e.target.value)}
+            className={inputCls}
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div><label className={labelCls}>Year Built</label><input type="number" value={ed('year_built')} onChange={e => setEd('year_built', e.target.value)} className={inputCls} /></div>
-        <div><label className={labelCls}>Sq. Footage</label><input type="number" value={ed('square_footage')} onChange={e => setEd('square_footage', e.target.value)} className={inputCls} /></div>
-        <div><label className={labelCls}>Floors</label><input type="number" value={ed('num_floors')} onChange={e => setEd('num_floors', e.target.value)} className={inputCls} /></div>
-        <div><label className={labelCls}>Apparatus Bays</label><input type="number" value={ed('num_bays')} onChange={e => setEd('num_bays', e.target.value)} className={inputCls} /></div>
-        <div><label className={labelCls}>Max Occupancy</label><input type="number" value={ed('max_occupancy')} onChange={e => setEd('max_occupancy', e.target.value)} className={inputCls} /></div>
-        <div><label className={labelCls}>Sleeping Quarters</label><input type="number" value={ed('sleeping_quarters')} onChange={e => setEd('sleeping_quarters', e.target.value)} className={inputCls} /></div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div>
+          <label className={labelCls}>Year Built</label>
+          <input
+            type="number"
+            value={ed('year_built')}
+            onChange={(e) => setEd('year_built', e.target.value)}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Sq. Footage</label>
+          <input
+            type="number"
+            value={ed('square_footage')}
+            onChange={(e) => setEd('square_footage', e.target.value)}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Floors</label>
+          <input
+            type="number"
+            value={ed('num_floors')}
+            onChange={(e) => setEd('num_floors', e.target.value)}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Apparatus Bays</label>
+          <input
+            type="number"
+            value={ed('num_bays')}
+            onChange={(e) => setEd('num_bays', e.target.value)}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Max Occupancy</label>
+          <input
+            type="number"
+            value={ed('max_occupancy')}
+            onChange={(e) => setEd('max_occupancy', e.target.value)}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label className={labelCls}>Sleeping Quarters</label>
+          <input
+            type="number"
+            value={ed('sleeping_quarters')}
+            onChange={(e) => setEd('sleeping_quarters', e.target.value)}
+            className={inputCls}
+          />
+        </div>
       </div>
 
       <div>
         <label className={labelCls}>Description</label>
-        <textarea value={ed('description')} onChange={e => setEd('description', e.target.value)} rows={2} className={inputCls + ' resize-none'} />
+        <textarea
+          value={ed('description')}
+          onChange={(e) => setEd('description', e.target.value)}
+          rows={2}
+          className={inputCls + ' resize-none'}
+        />
       </div>
       <div>
         <label className={labelCls}>Notes</label>
-        <textarea value={ed('notes')} onChange={e => setEd('notes', e.target.value)} rows={2} className={inputCls + ' resize-none'} />
+        <textarea
+          value={ed('notes')}
+          onChange={(e) => setEd('notes', e.target.value)}
+          rows={2}
+          className={inputCls + ' resize-none'}
+        />
       </div>
     </div>
   );
@@ -306,8 +443,8 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs text-theme-text-muted">{label}</p>
-      <p className="text-sm font-medium text-theme-text-primary">{value}</p>
+      <p className="text-theme-text-muted text-xs">{label}</p>
+      <p className="text-theme-text-primary text-sm font-medium">{value}</p>
     </div>
   );
 }

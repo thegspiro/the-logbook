@@ -19,9 +19,9 @@ export interface PublicPortalAPIKey {
   organization_id: string;
   key_prefix: string;
   name: string;
-  rate_limit: number | null;  // Individual rate limit override
-  rate_limit_override: number | null;  // Alias for compatibility
-  effective_rate_limit: number;  // Actual rate limit being used
+  rate_limit: number | null; // Individual rate limit override
+  rate_limit_override: number | null; // Alias for compatibility
+  effective_rate_limit: number; // Actual rate limit being used
   expires_at: string | null;
   last_used_at: string | null;
   is_active: boolean;
@@ -67,7 +67,7 @@ export interface PublicPortalUsageStats {
   status_4xx_24h: number;
   status_5xx_24h: number;
   average_response_time_ms: number;
-  avg_response_time_ms: number;  // Alias
+  avg_response_time_ms: number; // Alias
   error_rate_percentage: number;
   endpoint_usage: Record<string, number>;
   top_endpoints: Array<{ endpoint: string; count: number }>;
@@ -78,20 +78,20 @@ export interface PublicPortalUsageStats {
 export interface PublicPortalDataWhitelist {
   id: string;
   organization_id: string;
-  category: string;  // Used in components
-  data_category: string;  // Alias for compatibility
+  category: string; // Used in components
+  data_category: string; // Alias for compatibility
   field_name: string;
   is_enabled: boolean;
-  is_sensitive: boolean;  // Whether field contains PII
-  description: string | null;  // Field description
+  is_sensitive: boolean; // Whether field contains PII
+  description: string | null; // Field description
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateAPIKeyRequest {
   name: string;
-  rate_limit?: number | undefined;  // Used in component
-  rate_limit_override?: number | undefined;  // Alias for compatibility
+  rate_limit?: number | undefined; // Used in component
+  rate_limit_override?: number | undefined; // Alias for compatibility
   expires_at?: string | undefined;
 }
 

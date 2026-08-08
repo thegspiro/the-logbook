@@ -39,10 +39,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
 
 function browserSupportsPush(): boolean {
   return (
-    typeof window !== 'undefined' &&
-    'serviceWorker' in navigator &&
-    'PushManager' in window &&
-    'Notification' in window
+    typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
   );
 }
 
@@ -60,7 +57,7 @@ export function usePushNotifications(): UsePushNotifications {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [permission, setPermission] = useState<NotificationPermission>(
-    browserSupportsPush() ? Notification.permission : 'default',
+    browserSupportsPush() ? Notification.permission : 'default'
   );
 
   useEffect(() => {
@@ -71,9 +68,7 @@ export function usePushNotifications(): UsePushNotifications {
       try {
         // The notifications schemas do not use the camelCase alias generator,
         // so this endpoint responds in snake_case like the rest of the module.
-        const { data } = await api.get<{ enabled: boolean; public_key: string | null }>(
-          '/notifications/push/config',
-        );
+        const { data } = await api.get<{ enabled: boolean; public_key: string | null }>('/notifications/push/config');
         if (cancelled) return;
         setConfig({ enabled: data.enabled, publicKey: data.public_key });
 
@@ -106,7 +101,7 @@ export function usePushNotifications(): UsePushNotifications {
         setError(
           result === 'denied'
             ? 'Notifications are blocked for this site. Re-enable them in your browser settings.'
-            : 'Notification permission was dismissed.',
+            : 'Notification permission was dismissed.'
         );
         return false;
       }

@@ -1,13 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from 'react';
 
 /**
  * Loads data from an async function on mount and provides a reload trigger.
  * Swallows errors silently (services may not be configured yet in this app).
  */
-function useLoadData<T>(
-  loadFn: () => Promise<T>,
-  initial: T,
-): { data: T; loading: boolean; reload: () => void } {
+function useLoadData<T>(loadFn: () => Promise<T>, initial: T): { data: T; loading: boolean; reload: () => void } {
   const [data, setData] = useState<T>(initial);
   const [loading, setLoading] = useState(true);
 

@@ -7,7 +7,7 @@ describe('LinkifiedText', () => {
     render(
       <p>
         <LinkifiedText text="Sign up at https://example.com/form now" />
-      </p>,
+      </p>
     );
     const link = screen.getByRole('link', { name: 'https://example.com/form' });
     expect(link).toHaveAttribute('href', 'https://example.com/form');
@@ -19,7 +19,7 @@ describe('LinkifiedText', () => {
     render(
       <p data-testid="body">
         <LinkifiedText text="See https://example.com/sop." />
-      </p>,
+      </p>
     );
     expect(screen.getByRole('link')).toHaveAttribute('href', 'https://example.com/sop');
     // The full original text is preserved, period included.
@@ -30,7 +30,7 @@ describe('LinkifiedText', () => {
     render(
       <p>
         <LinkifiedText text="Forms: https://a.co/1 and https://b.co/2" />
-      </p>,
+      </p>
     );
     expect(screen.getAllByRole('link')).toHaveLength(2);
   });
@@ -39,7 +39,7 @@ describe('LinkifiedText', () => {
     render(
       <p data-testid="body">
         <LinkifiedText text="No links here, just text" />
-      </p>,
+      </p>
     );
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.getByTestId('body')).toHaveTextContent('No links here, just text');
@@ -49,7 +49,7 @@ describe('LinkifiedText', () => {
     render(
       <p>
         <LinkifiedText text="Visit example.com for details" />
-      </p>,
+      </p>
     );
     expect(screen.queryByRole('link')).toBeNull();
   });

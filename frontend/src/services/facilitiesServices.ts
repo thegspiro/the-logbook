@@ -461,7 +461,13 @@ export const facilitiesService = {
   },
 
   // Facilities CRUD
-  async getFacilities(params?: { facility_type_id?: string; status_id?: string; is_archived?: boolean; skip?: number; limit?: number }): Promise<Facility[]> {
+  async getFacilities(params?: {
+    facility_type_id?: string;
+    status_id?: string;
+    is_archived?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<Facility[]> {
     const response = await api.get<Facility[]>('/facilities', { params });
     return asArray(response.data);
   },
@@ -487,7 +493,12 @@ export const facilitiesService = {
   },
 
   // Maintenance
-  async getMaintenanceRecords(params?: { facility_id?: string; status?: string; skip?: number; limit?: number }): Promise<MaintenanceRecord[]> {
+  async getMaintenanceRecords(params?: {
+    facility_id?: string;
+    status?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<MaintenanceRecord[]> {
     const response = await api.get<MaintenanceRecord[]>('/facilities/maintenance', { params });
     return asArray(response.data);
   },
@@ -554,11 +565,26 @@ export const facilitiesService = {
     const response = await api.get<MaintenanceType[]>('/facilities/maintenance-types', { params });
     return asArray(response.data);
   },
-  async createMaintenanceType(data: { name: string; description?: string; category?: string; default_interval_value?: number; default_interval_unit?: string }): Promise<MaintenanceType> {
+  async createMaintenanceType(data: {
+    name: string;
+    description?: string;
+    category?: string;
+    default_interval_value?: number;
+    default_interval_unit?: string;
+  }): Promise<MaintenanceType> {
     const response = await api.post<MaintenanceType>('/facilities/maintenance-types', data);
     return response.data;
   },
-  async updateMaintenanceType(typeId: string, data: Partial<{ name: string; description?: string; category?: string; default_interval_value?: number; default_interval_unit?: string }>): Promise<MaintenanceType> {
+  async updateMaintenanceType(
+    typeId: string,
+    data: Partial<{
+      name: string;
+      description?: string;
+      category?: string;
+      default_interval_value?: number;
+      default_interval_unit?: string;
+    }>
+  ): Promise<MaintenanceType> {
     const response = await api.patch<MaintenanceType>(`/facilities/maintenance-types/${typeId}`, data);
     return response.data;
   },
@@ -588,7 +614,11 @@ export const facilitiesService = {
   },
 
   // Emergency Contacts
-  async getEmergencyContacts(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<EmergencyContact[]> {
+  async getEmergencyContacts(params?: {
+    facility_id?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<EmergencyContact[]> {
     const response = await api.get<EmergencyContact[]>('/facilities/emergency-contacts', { params });
     return asArray(response.data);
   },
@@ -605,7 +635,11 @@ export const facilitiesService = {
   },
 
   // Shutoff Locations
-  async getShutoffLocations(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<ShutoffLocation[]> {
+  async getShutoffLocations(params?: {
+    facility_id?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<ShutoffLocation[]> {
     const response = await api.get<ShutoffLocation[]>('/facilities/shutoff-locations', { params });
     return asArray(response.data);
   },
@@ -622,7 +656,11 @@ export const facilitiesService = {
   },
 
   // Capital Projects
-  async getCapitalProjects(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<CapitalProject[]> {
+  async getCapitalProjects(params?: {
+    facility_id?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<CapitalProject[]> {
     const response = await api.get<CapitalProject[]>('/facilities/capital-projects', { params });
     return asArray(response.data);
   },
@@ -643,7 +681,11 @@ export const facilitiesService = {
   },
 
   // Insurance Policies
-  async getInsurancePolicies(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<InsurancePolicy[]> {
+  async getInsurancePolicies(params?: {
+    facility_id?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<InsurancePolicy[]> {
     const response = await api.get<InsurancePolicy[]>('/facilities/insurance-policies', { params });
     return asArray(response.data);
   },
@@ -685,7 +727,11 @@ export const facilitiesService = {
   },
 
   // Utility Accounts
-  async getUtilityAccounts(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<UtilityAccount[]> {
+  async getUtilityAccounts(params?: {
+    facility_id?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<UtilityAccount[]> {
     const response = await api.get<UtilityAccount[]>('/facilities/utility-accounts', { params });
     return asArray(response.data);
   },
@@ -723,7 +769,11 @@ export const facilitiesService = {
   },
 
   // Documents
-  async getFacilityDocuments(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<FacilityDocument[]> {
+  async getFacilityDocuments(params?: {
+    facility_id?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<FacilityDocument[]> {
     const response = await api.get<FacilityDocument[]>('/facilities/documents', { params });
     return asArray(response.data);
   },
@@ -778,7 +828,11 @@ export const facilitiesService = {
   },
 
   // Compliance Checklists
-  async getComplianceChecklists(params?: { facility_id?: string; skip?: number; limit?: number }): Promise<ComplianceChecklist[]> {
+  async getComplianceChecklists(params?: {
+    facility_id?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<ComplianceChecklist[]> {
     const response = await api.get<ComplianceChecklist[]>('/facilities/compliance-checklists', { params });
     return asArray(response.data);
   },
@@ -790,7 +844,10 @@ export const facilitiesService = {
     const response = await api.post<ComplianceChecklist>('/facilities/compliance-checklists', data);
     return response.data;
   },
-  async updateComplianceChecklist(checklistId: string, data: Partial<ComplianceChecklistCreate>): Promise<ComplianceChecklist> {
+  async updateComplianceChecklist(
+    checklistId: string,
+    data: Partial<ComplianceChecklistCreate>
+  ): Promise<ComplianceChecklist> {
     const response = await api.patch<ComplianceChecklist>(`/facilities/compliance-checklists/${checklistId}`, data);
     return response.data;
   },
@@ -854,7 +911,12 @@ export interface TrainingWaiverResponse {
 }
 
 export const locationsService = {
-  async getLocations(params?: { is_active?: boolean; exclude_rooms?: boolean; skip?: number; limit?: number }): Promise<Location[]> {
+  async getLocations(params?: {
+    is_active?: boolean;
+    exclude_rooms?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<Location[]> {
     const response = await api.get<Location[]>('/locations', { params });
     return asArray(response.data);
   },

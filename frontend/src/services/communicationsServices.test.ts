@@ -287,7 +287,7 @@ describe('emailTemplatesService', () => {
         't1',
         { org_name: 'FD' },
         { subject: 'Custom Subject', html_body: '<p>Custom</p>' },
-        'member-1',
+        'member-1'
       );
 
       expect(mockPost).toHaveBeenCalledWith('/email-templates/t1/preview', {
@@ -318,11 +318,9 @@ describe('emailTemplatesService', () => {
 
       const result = await emailTemplatesService.uploadAttachment('t1', file);
 
-      expect(mockPost).toHaveBeenCalledWith(
-        '/email-templates/t1/attachments',
-        expect.any(FormData),
-        { headers: { 'Content-Type': 'multipart/form-data' } },
-      );
+      expect(mockPost).toHaveBeenCalledWith('/email-templates/t1/attachments', expect.any(FormData), {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       expect(result).toEqual(attachment);
     });
   });
@@ -455,9 +453,7 @@ describe('messagesService', () => {
     it('should propagate errors', async () => {
       mockPost.mockRejectedValueOnce(new Error('Forbidden'));
 
-      await expect(
-        messagesService.createMessage({ title: 'X', body: 'Y' })
-      ).rejects.toThrow('Forbidden');
+      await expect(messagesService.createMessage({ title: 'X', body: 'Y' })).rejects.toThrow('Forbidden');
     });
   });
 
@@ -502,7 +498,10 @@ describe('messagesService', () => {
   // --- getAvailableRoles ---
   describe('getAvailableRoles', () => {
     it('should GET /messages/roles', async () => {
-      const roles = [{ id: 'role1', name: 'Admin' }, { id: 'role2', name: 'Member' }];
+      const roles = [
+        { id: 'role1', name: 'Admin' },
+        { id: 'role2', name: 'Member' },
+      ];
       mockGet.mockResolvedValueOnce({ data: roles });
 
       const result = await messagesService.getAvailableRoles();

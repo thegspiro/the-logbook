@@ -287,7 +287,6 @@ const STAGE_PRESETS: StagePreset[] = [
   },
 ];
 
-
 const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
   form_submission: () => ({ form_id: '', form_name: '' }),
   document_upload: () => ({ required_document_types: [''], allow_multiple: true }),
@@ -336,7 +335,6 @@ const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
   }),
 };
 
-
 export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   isOpen,
   onClose,
@@ -345,8 +343,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   existingStageCount,
 }) => {
   const tz = useTimezone();
-  const { isConnected: isIntegrationConnected, loading: integrationsLoading } =
-    useConnectedIntegrations();
+  const { isConnected: isIntegrationConnected, loading: integrationsLoading } = useConnectedIntegrations();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [stageType, setStageType] = useState<StageType>('manual_approval');
@@ -418,9 +415,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
           setUpcomingEvents(sorted);
           // Merge org-defined categories + categories found on actual events
           const orgCategories = typesWithCategories.custom_event_categories?.map((c) => c.label) ?? [];
-          const eventCategories = sorted
-            .map((e) => e.custom_category)
-            .filter((c): c is string => !!c);
+          const eventCategories = sorted.map((e) => e.custom_category).filter((c): c is string => !!c);
           const allCategories = [...new Set([...orgCategories, ...eventCategories])].sort();
           setCustomCategories(allCategories);
         }
@@ -455,7 +450,10 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
         setTimeoutOverrideDays(180);
       }
       // Validate pre-selected form for pipeline compatibility
-      if (editingStage.stage_type === StageTypeConst.FORM_SUBMISSION && (editingStage.config as FormStageConfig).form_id) {
+      if (
+        editingStage.stage_type === StageTypeConst.FORM_SUBMISSION &&
+        (editingStage.config as FormStageConfig).form_id
+      ) {
         const formId = (editingStage.config as FormStageConfig).form_id;
         setFormValidationLoading(true);
         void pipelineService.validateFormForPipeline(formId).then(
@@ -507,15 +505,13 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
       ? `${getEventTypeLabel(eventType).toLowerCase()} (${category})`
       : getEventTypeLabel(eventType).toLowerCase();
     if (!nextEvent) {
-      return (
-        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-          No upcoming {label} events found.
-        </p>
-      );
+      return <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">No upcoming {label} events found.</p>;
     }
     return (
       <div className="border-theme-surface-border bg-theme-surface-hover mt-2 rounded-md border p-3">
-        <p className="text-theme-text-muted mb-1 text-xs font-medium">Next upcoming event (auto-linked when stage activates):</p>
+        <p className="text-theme-text-muted mb-1 text-xs font-medium">
+          Next upcoming event (auto-linked when stage activates):
+        </p>
         <p className="text-theme-text-primary text-sm font-medium">{nextEvent.title}</p>
         <p className="text-theme-text-muted mt-0.5 text-xs">
           {formatDateTime(nextEvent.start_datetime, tz)}
@@ -903,7 +899,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   />
                   Auto-advance when documents are uploaded
                 </label>
-                <p className="text-theme-text-muted text-xs ml-6">
+                <p className="text-theme-text-muted ml-6 text-xs">
                   Automatically complete this step and advance the prospect when documents are uploaded.
                 </p>
                 {isIntegrationConnected('documenso') && (
@@ -919,8 +915,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                         setConfig({
                           ...docConfig,
                           signing_provider: provider,
-                          documenso_template_id:
-                            provider === 'documenso' ? docConfig.documenso_template_id : undefined,
+                          documenso_template_id: provider === 'documenso' ? docConfig.documenso_template_id : undefined,
                         });
                       }}
                       className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
@@ -947,8 +942,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                           className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
                         />
                         <p className="text-theme-text-muted mt-1 text-xs">
-                          Applicants are told documents will be sent for e-signature. The template ID
-                          is stored for automated sending in a later release.
+                          Applicants are told documents will be sent for e-signature. The template ID is stored for
+                          automated sending in a later release.
                         </p>
                       </div>
                     )}
@@ -981,11 +976,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
 
             {/* Election Vote Config */}
             {stageType === StageTypeConst.ELECTION_VOTE && (
-              <ElectionVoteConfig
-                config={config}
-                setConfig={setConfig}
-                errors={errors}
-              />
+              <ElectionVoteConfig config={config} setConfig={setConfig} errors={errors} />
             )}
 
             {/* Manual Approval Config */}
@@ -1063,11 +1054,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
 
             {/* Reference Check Config */}
             {stageType === StageTypeConst.REFERENCE_CHECK && (
-              <ReferenceCheckStageConfig
-                config={config}
-                setConfig={setConfig}
-                errors={errors}
-              />
+              <ReferenceCheckStageConfig config={config} setConfig={setConfig} errors={errors} />
             )}
 
             {/* Checklist Config */}
@@ -1158,8 +1145,9 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   />
                   Auto-advance when checklist is completed
                 </label>
-                <p className="text-theme-text-muted text-xs ml-6">
-                  Automatically complete this step and advance the prospect when all required checklist items are checked off.
+                <p className="text-theme-text-muted ml-6 text-xs">
+                  Automatically complete this step and advance the prospect when all required checklist items are
+                  checked off.
                 </p>
               </div>
             )}
@@ -1177,9 +1165,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     min={1}
                     max={20}
                     value={interviewReqConfig.required_count}
-                    onChange={(e) =>
-                      setConfig({ ...interviewReqConfig, required_count: Number(e.target.value) })
-                    }
+                    onChange={(e) => setConfig({ ...interviewReqConfig, required_count: Number(e.target.value) })}
                     className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-32 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
                   />
                   {errors.required_count && (
@@ -1196,7 +1182,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     onChange={(e) =>
                       setConfig({
                         ...interviewReqConfig,
-                        required_recommendation: (e.target.value || undefined) as InterviewRequirementConfig['required_recommendation'],
+                        required_recommendation: (e.target.value ||
+                          undefined) as InterviewRequirementConfig['required_recommendation'],
                       })
                     }
                     className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
@@ -1222,8 +1209,9 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   />
                   Auto-advance when interview requirement is met
                 </label>
-                <p className="text-theme-text-muted text-xs ml-6">
-                  Automatically complete this step and advance the prospect when the required number of interviews are recorded.
+                <p className="text-theme-text-muted ml-6 text-xs">
+                  Automatically complete this step and advance the prospect when the required number of interviews are
+                  recorded.
                 </p>
               </div>
             )}
@@ -1304,9 +1292,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   <input
                     type="checkbox"
                     checked={multiApprovalConfig.require_notes}
-                    onChange={(e) =>
-                      setConfig({ ...multiApprovalConfig, require_notes: e.target.checked })
-                    }
+                    onChange={(e) => setConfig({ ...multiApprovalConfig, require_notes: e.target.checked })}
                     className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                   />
                   Require notes with each approval
@@ -1342,9 +1328,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            const updated = medicalScreeningConfig.required_screenings.filter(
-                              (_, i) => i !== idx
-                            );
+                            const updated = medicalScreeningConfig.required_screenings.filter((_, i) => i !== idx);
                             setConfig({ ...medicalScreeningConfig, required_screenings: updated });
                           }}
                           className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
@@ -1375,9 +1359,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   <input
                     type="checkbox"
                     checked={medicalScreeningConfig.require_all_passed}
-                    onChange={(e) =>
-                      setConfig({ ...medicalScreeningConfig, require_all_passed: e.target.checked })
-                    }
+                    onChange={(e) => setConfig({ ...medicalScreeningConfig, require_all_passed: e.target.checked })}
                     className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                   />
                   Require all screenings passed before advancing
@@ -1395,8 +1377,9 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                   />
                   Auto-advance when all screenings pass
                 </label>
-                <p className="text-theme-text-muted text-xs ml-6">
-                  Automatically complete this step and advance the prospect when all required medical screenings are passed.
+                <p className="text-theme-text-muted ml-6 text-xs">
+                  Automatically complete this step and advance the prospect when all required medical screenings are
+                  passed.
                 </p>
               </div>
             )}

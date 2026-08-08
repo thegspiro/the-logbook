@@ -14,22 +14,11 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import {
-  AlertTriangle,
-  CalendarPlus,
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  Users,
-} from 'lucide-react';
+import { AlertTriangle, CalendarPlus, ChevronLeft, ChevronRight, Search, Users } from 'lucide-react';
 import { ProgressSteps } from '../ux/ProgressSteps';
 import { Skeleton } from '../ux/Skeleton';
 import DateTimeQuarterHour from '../ux/DateTimeQuarterHour';
-import {
-  courseCohortService,
-  trainingService,
-  userService,
-} from '../../services/api';
+import { courseCohortService, trainingService, userService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
   formatDate,
@@ -67,11 +56,7 @@ const STEPS = [
 /** Per-class edits keyed by syllabus class id. */
 type Overrides = Record<string, { start?: string; end?: string; skip?: boolean }>;
 
-export const CohortWizard: React.FC<CohortWizardProps> = ({
-  onComplete,
-  onCancel,
-  initialCourseId,
-}) => {
+export const CohortWizard: React.FC<CohortWizardProps> = ({ onComplete, onCancel, initialCourseId }) => {
   const tz = useTimezone();
 
   const [step, setStep] = useState(0);
@@ -90,15 +75,11 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
   const [startDate, setStartDate] = useState(getTodayLocalDate(tz));
   const [meetingDays, setMeetingDays] = useState<number[]>([]);
   const [defaultStartTime, setDefaultStartTime] = useState('');
-  const [rollPolicy, setRollPolicy] = useState<DateRollPolicy>(
-    DateRollPolicy.NONE,
-  );
+  const [rollPolicy, setRollPolicy] = useState<DateRollPolicy>(DateRollPolicy.NONE);
   const [blackoutDates, setBlackoutDates] = useState<string[]>([]);
 
   // Step 3 — preview
-  const [preview, setPreview] = useState<CohortSchedulePreviewResponse | null>(
-    null,
-  );
+  const [preview, setPreview] = useState<CohortSchedulePreviewResponse | null>(null);
   const [overrides, setOverrides] = useState<Overrides>({});
 
   // Step 4 — roster
@@ -114,10 +95,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
     const load = async () => {
       setLoading(true);
       try {
-        const [courseList, memberList] = await Promise.all([
-          trainingService.getCourses(),
-          userService.getUsers(),
-        ]);
+        const [courseList, memberList] = await Promise.all([trainingService.getCourses(), userService.getUsers()]);
         setCourses(courseList);
         setMembers(memberList);
       } catch (err: unknown) {
@@ -166,22 +144,16 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
     const query = memberSearch.trim().toLowerCase();
     if (!query) return members;
     return members.filter((m) =>
-      `${m.first_name ?? ''} ${m.last_name ?? ''} ${m.email ?? ''}`
-        .toLowerCase()
-        .includes(query),
+      `${m.first_name ?? ''} ${m.last_name ?? ''} ${m.email ?? ''}`.toLowerCase().includes(query)
     );
   }, [members, memberSearch]);
 
   const includedClasses = useMemo(
-    () =>
-      (preview?.classes ?? []).filter(
-        (c) => !overrides[c.course_class_id]?.skip,
-      ),
-    [preview, overrides],
+    () => (preview?.classes ?? []).filter((c) => !overrides[c.course_class_id]?.skip),
+    [preview, overrides]
   );
 
-  const effectiveStart = (item: PreviewClass): string =>
-    overrides[item.course_class_id]?.start ?? item.scheduled_start;
+  const effectiveStart = (item: PreviewClass): string => overrides[item.course_class_id]?.start ?? item.scheduled_start;
 
   const handleAdvance = async () => {
     if (step === 0) {
@@ -233,8 +205,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
         generate_program: generateProgram && !selectedCourse?.program_id,
         program_id: selectedCourse?.program_id || undefined,
         classes: classOverrides.length > 0 ? classOverrides : undefined,
-        member_user_ids:
-          selectedMembers.length > 0 ? selectedMembers : undefined,
+        member_user_ids: selectedMembers.length > 0 ? selectedMembers : undefined,
       });
 
       toast.success(`Generated ${cohort.classes.length} classes`);
@@ -248,25 +219,19 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
 
   const toggleMeetingDay = (day: number) => {
     setMeetingDays((current) =>
-      current.includes(day)
-        ? current.filter((d) => d !== day)
-        : [...current, day].sort((a, b) => a - b),
+      current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort((a, b) => a - b)
     );
   };
 
   const toggleMember = (userId: string) => {
     setSelectedMembers((current) =>
-      current.includes(userId)
-        ? current.filter((id) => id !== userId)
-        : [...current, userId],
+      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]
     );
   };
 
   const toggleBlackout = (day: string) => {
     setBlackoutDates((current) =>
-      current.includes(day)
-        ? current.filter((d) => d !== day)
-        : [...current, day].sort(),
+      current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort()
     );
   };
 
@@ -304,9 +269,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-theme-text-muted">
-              The course must already have classes on its syllabus.
-            </p>
+            <p className="text-theme-text-muted mt-1 text-xs">The course must already have classes on its syllabus.</p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -354,15 +317,12 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
               onChange={(e) => setStartDate(e.target.value)}
               className="form-input md:max-w-xs"
             />
-            <p className="mt-1 text-xs text-theme-text-muted">
-              Every class is scheduled relative to this date.
-            </p>
+            <p className="text-theme-text-muted mt-1 text-xs">Every class is scheduled relative to this date.</p>
           </div>
 
           <div>
             <span className="form-label">
-              Meeting days{' '}
-              <span className="text-theme-text-muted">(optional)</span>
+              Meeting days <span className="text-theme-text-muted">(optional)</span>
             </span>
             <div className="hscroll mt-1 flex gap-2">
               {MEETING_WEEKDAYS.map((day) => (
@@ -381,9 +341,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
                 </button>
               ))}
             </div>
-            <p className="mt-1 text-xs text-theme-text-muted">
-              Used by the &ldquo;next meeting day&rdquo; rule below.
-            </p>
+            <p className="text-theme-text-muted mt-1 text-xs">Used by the &ldquo;next meeting day&rdquo; rule below.</p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -394,26 +352,17 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
               <select
                 id="cohort-policy"
                 value={rollPolicy}
-                onChange={(e) =>
-                  setRollPolicy(e.target.value as DateRollPolicy)
-                }
+                onChange={(e) => setRollPolicy(e.target.value as DateRollPolicy)}
                 className="form-input"
               >
-                <option value={DateRollPolicy.NONE}>
-                  Keep the computed date
-                </option>
-                <option value={DateRollPolicy.NEXT_BUSINESS_DAY}>
-                  Move weekends to the next weekday
-                </option>
-                <option value={DateRollPolicy.NEXT_MEETING_DAY}>
-                  Move to the next meeting day
-                </option>
+                <option value={DateRollPolicy.NONE}>Keep the computed date</option>
+                <option value={DateRollPolicy.NEXT_BUSINESS_DAY}>Move weekends to the next weekday</option>
+                <option value={DateRollPolicy.NEXT_MEETING_DAY}>Move to the next meeting day</option>
               </select>
             </div>
             <div>
               <label className="form-label" htmlFor="cohort-time">
-                Default start time{' '}
-                <span className="text-theme-text-muted">(optional)</span>
+                Default start time <span className="text-theme-text-muted">(optional)</span>
               </label>
               <input
                 id="cohort-time"
@@ -423,9 +372,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
                 onChange={(e) => setDefaultStartTime(e.target.value)}
                 className="form-input"
               />
-              <p className="mt-1 text-xs text-theme-text-muted">
-                Only used for classes with no time of their own.
-              </p>
+              <p className="text-theme-text-muted mt-1 text-xs">Only used for classes with no time of their own.</p>
             </div>
           </div>
         </div>
@@ -438,22 +385,20 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
             <Skeleton className="h-64 w-full" />
           ) : !preview ? (
             <div className="alert-warning">
-              Could not build a schedule. Go back and check the course has
-              classes on its syllabus.
+              Could not build a schedule. Go back and check the course has classes on its syllabus.
             </div>
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-theme-text-muted">
+                <p className="text-theme-text-muted text-sm">
                   {includedClasses.length} class
-                  {includedClasses.length === 1 ? '' : 'es'} from{' '}
-                  {formatDate(preview.classes[0]?.scheduled_start, tz)} — times
-                  shown in {preview.timezone}
+                  {includedClasses.length === 1 ? '' : 'es'} from {formatDate(preview.classes[0]?.scheduled_start, tz)}{' '}
+                  — times shown in {preview.timezone}
                 </p>
                 <button
                   type="button"
                   onClick={() => void runPreview()}
-                  className="btn-icon border border-theme-surface-border px-3 text-sm"
+                  className="btn-icon border-theme-surface-border border px-3 text-sm"
                 >
                   Recalculate
                 </button>
@@ -461,12 +406,9 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
 
               {suggestedBlackouts.length > 0 && (
                 <div className="card-secondary space-y-2 p-4">
-                  <p className="text-sm font-medium text-theme-text-primary">
-                    Holidays in this range
-                  </p>
-                  <p className="text-xs text-theme-text-muted">
-                    Select any the department does not train on, then
-                    recalculate.
+                  <p className="text-theme-text-primary text-sm font-medium">Holidays in this range</p>
+                  <p className="text-theme-text-muted text-xs">
+                    Select any the department does not train on, then recalculate.
                   </p>
                   <div className="hscroll flex gap-2">
                     {suggestedBlackouts.map((day) => (
@@ -475,7 +417,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
                         type="button"
                         onClick={() => toggleBlackout(day)}
                         aria-pressed={blackoutDates.includes(day)}
-                        className={`mobile-touch-target whitespace-nowrap rounded-lg border px-3 text-xs ${
+                        className={`mobile-touch-target rounded-lg border px-3 text-xs whitespace-nowrap ${
                           blackoutDates.includes(day)
                             ? 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
                             : 'border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted'
@@ -493,24 +435,17 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
                   const override = overrides[item.course_class_id];
                   const skipped = override?.skip ?? false;
                   return (
-                    <li
-                      key={item.course_class_id}
-                      className={`card-secondary p-3 ${skipped ? 'opacity-50' : ''}`}
-                    >
+                    <li key={item.course_class_id} className={`card-secondary p-3 ${skipped ? 'opacity-50' : ''}`}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-theme-surface text-xs font-semibold">
+                            <span className="bg-theme-surface flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
                               {item.sequence}
                             </span>
-                            <span className="font-medium text-theme-text-primary">
-                              {item.title}
-                            </span>
-                            {item.section_name && (
-                              <span className="badge">{item.section_name}</span>
-                            )}
+                            <span className="text-theme-text-primary font-medium">{item.title}</span>
+                            {item.section_name && <span className="badge">{item.section_name}</span>}
                           </div>
-                          <p className="mt-1 text-sm text-theme-text-secondary">
+                          <p className="text-theme-text-secondary mt-1 text-sm">
                             {formatShortDateTime(effectiveStart(item), tz)}
                           </p>
                           {item.warnings.map((warning) => (
@@ -526,28 +461,22 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
 
                         <div className="flex flex-col items-end gap-2">
                           <DateTimeQuarterHour
-                            value={formatForDateTimeInput(
-                              effectiveStart(item),
-                              tz,
-                            )}
+                            value={formatForDateTimeInput(effectiveStart(item), tz)}
                             onChange={(value: string) => {
                               const utcStart = localToUTC(value, tz);
                               const durationMs =
-                                new Date(item.scheduled_end).getTime() -
-                                new Date(item.scheduled_start).getTime();
+                                new Date(item.scheduled_end).getTime() - new Date(item.scheduled_start).getTime();
                               setOverrides((current) => ({
                                 ...current,
                                 [item.course_class_id]: {
                                   ...current[item.course_class_id],
                                   start: utcStart,
-                                  end: new Date(
-                                    new Date(utcStart).getTime() + durationMs,
-                                  ).toISOString(),
+                                  end: new Date(new Date(utcStart).getTime() + durationMs).toISOString(),
                                 },
                               }));
                             }}
                           />
-                          <label className="flex items-center gap-2 text-xs text-theme-text-muted">
+                          <label className="text-theme-text-muted flex items-center gap-2 text-xs">
                             <input
                               type="checkbox"
                               checked={skipped}
@@ -578,18 +507,16 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
       {step === 3 && (
         <div className="card space-y-4 p-5">
           <div>
-            <p className="font-medium text-theme-text-primary">
-              Who is taking this course?
-            </p>
-            <p className="text-sm text-theme-text-muted">
-              Selected members are enrolled in the pipeline and added to every
-              class on their calendar. You can add more later.
+            <p className="text-theme-text-primary font-medium">Who is taking this course?</p>
+            <p className="text-theme-text-muted text-sm">
+              Selected members are enrolled in the pipeline and added to every class on their calendar. You can add more
+              later.
             </p>
           </div>
 
           <div className="relative">
             <Search
-              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-muted"
+              className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
               aria-hidden="true"
             />
             <input
@@ -606,29 +533,25 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
             {filteredMembers.map((member) => (
               <label
                 key={member.id}
-                className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-theme-surface-hover"
+                className="hover:bg-theme-surface-hover flex cursor-pointer items-center gap-3 rounded-lg p-2"
               >
                 <input
                   type="checkbox"
                   checked={selectedMembers.includes(member.id)}
                   onChange={() => toggleMember(member.id)}
                 />
-                <span className="text-sm text-theme-text-primary">
+                <span className="text-theme-text-primary text-sm">
                   {member.first_name} {member.last_name}
                 </span>
-                <span className="text-xs text-theme-text-muted">
-                  {member.email}
-                </span>
+                <span className="text-theme-text-muted text-xs">{member.email}</span>
               </label>
             ))}
             {filteredMembers.length === 0 && (
-              <p className="p-3 text-sm text-theme-text-muted">
-                No members match that search.
-              </p>
+              <p className="text-theme-text-muted p-3 text-sm">No members match that search.</p>
             )}
           </div>
 
-          <p className="flex items-center gap-2 text-sm text-theme-text-secondary">
+          <p className="text-theme-text-secondary flex items-center gap-2 text-sm">
             <Users className="h-4 w-4" />
             {selectedMembers.length} selected
           </p>
@@ -638,16 +561,12 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
       {/* ── Step 5: confirm ────────────────────────────────────── */}
       {step === 4 && (
         <div className="card space-y-4 p-5">
-          <h3 className="font-semibold text-theme-text-primary">
-            Ready to generate
-          </h3>
+          <h3 className="text-theme-text-primary font-semibold">Ready to generate</h3>
 
           <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-theme-text-muted">Course</dt>
-              <dd className="text-theme-text-primary">
-                {selectedCourse?.name}
-              </dd>
+              <dd className="text-theme-text-primary">{selectedCourse?.name}</dd>
             </div>
             <div>
               <dt className="text-theme-text-muted">Cohort</dt>
@@ -655,43 +574,30 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
             </div>
             <div>
               <dt className="text-theme-text-muted">Classes</dt>
-              <dd className="text-theme-text-primary">
-                {includedClasses.length}
-              </dd>
+              <dd className="text-theme-text-primary">{includedClasses.length}</dd>
             </div>
             <div>
               <dt className="text-theme-text-muted">Members</dt>
-              <dd className="text-theme-text-primary">
-                {selectedMembers.length}
-              </dd>
+              <dd className="text-theme-text-primary">{selectedMembers.length}</dd>
             </div>
             <div>
               <dt className="text-theme-text-muted">First class</dt>
               <dd className="text-theme-text-primary">
-                {includedClasses[0]
-                  ? formatShortDateTime(effectiveStart(includedClasses[0]), tz)
-                  : '—'}
+                {includedClasses[0] ? formatShortDateTime(effectiveStart(includedClasses[0]), tz) : '—'}
               </dd>
             </div>
             <div>
               <dt className="text-theme-text-muted">Last class</dt>
               <dd className="text-theme-text-primary">
                 {includedClasses.length > 0
-                  ? formatShortDateTime(
-                      effectiveStart(
-                        includedClasses[includedClasses.length - 1] as PreviewClass,
-                      ),
-                      tz,
-                    )
+                  ? formatShortDateTime(effectiveStart(includedClasses[includedClasses.length - 1] as PreviewClass), tz)
                   : '—'}
               </dd>
             </div>
           </dl>
 
           {selectedCourse?.program_id ? (
-            <p className="alert-info text-sm">
-              Members will be enrolled in this course&rsquo;s existing pipeline.
-            </p>
+            <p className="alert-info text-sm">Members will be enrolled in this course&rsquo;s existing pipeline.</p>
           ) : (
             <label className="flex items-start gap-3 text-sm">
               <input
@@ -701,21 +607,18 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
                 className="mt-1"
               />
               <span>
-                <span className="font-medium text-theme-text-primary">
-                  Build a matching pipeline
-                </span>
-                <span className="block text-theme-text-muted">
-                  Creates a program whose phases mirror the syllabus sections,
-                  so attendance progresses each member automatically.
+                <span className="text-theme-text-primary font-medium">Build a matching pipeline</span>
+                <span className="text-theme-text-muted block">
+                  Creates a program whose phases mirror the syllabus sections, so attendance progresses each member
+                  automatically.
                 </span>
               </span>
             </label>
           )}
 
-          <p className="text-sm text-theme-text-muted">
+          <p className="text-theme-text-muted text-sm">
             This creates {includedClasses.length} training event
-            {includedClasses.length === 1 ? '' : 's'} on the department
-            calendar.
+            {includedClasses.length === 1 ? '' : 's'} on the department calendar.
           </p>
         </div>
       )}
@@ -725,7 +628,7 @@ export const CohortWizard: React.FC<CohortWizardProps> = ({
         <button
           type="button"
           onClick={step === 0 ? onCancel : () => setStep((s) => s - 1)}
-          className="btn-icon flex items-center gap-1 border border-theme-surface-border px-4"
+          className="btn-icon border-theme-surface-border flex items-center gap-1 border px-4"
         >
           <ChevronLeft className="h-4 w-4" />
           <span>{step === 0 ? 'Cancel' : 'Back'}</span>

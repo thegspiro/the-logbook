@@ -29,9 +29,7 @@ export const PageTransition: React.FC<PageTransitionProps> = ({ children }) => {
 
   return (
     <div
-      className={`transition-opacity duration-150 ease-in-out ${
-        transitioning ? 'opacity-0' : 'opacity-100'
-      }`}
+      className={`transition-opacity duration-150 ease-in-out ${transitioning ? 'opacity-0' : 'opacity-100'}`}
       aria-live="polite"
     >
       {displayedChildren}

@@ -14,8 +14,19 @@
  */
 import { useState, useEffect } from 'react';
 import {
-  RefreshCw, AlertCircle, ChevronDown, ChevronRight, Clock, User,
-  Globe, Trash2, Download, CheckCircle2, XCircle, RotateCcw, Plug,
+  RefreshCw,
+  AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  User,
+  Globe,
+  Trash2,
+  Download,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
+  Plug,
 } from 'lucide-react';
 import { formsService } from '../../services/api';
 import { FieldType } from '../../constants/enums';
@@ -144,15 +155,28 @@ const SubmissionViewer = ({
   const formatValue = (fieldId: string, value: unknown): string => {
     if (value === null || value === undefined) return '—';
     const type = getFieldType(fieldId);
-    const strVal = typeof value === 'string' ? value : typeof value === 'number' || typeof value === 'boolean' ? String(value) : JSON.stringify(value);
+    const strVal =
+      typeof value === 'string'
+        ? value
+        : typeof value === 'number' || typeof value === 'boolean'
+          ? String(value)
+          : JSON.stringify(value);
 
     switch (type) {
       case FieldType.DATE:
-        try { return formatDate(strVal, tz); } catch { return strVal; }
+        try {
+          return formatDate(strVal, tz);
+        } catch {
+          return strVal;
+        }
       case FieldType.TIME:
         return strVal;
       case FieldType.DATETIME:
-        try { return formatShortDateTime(strVal, tz); } catch { return strVal; }
+        try {
+          return formatShortDateTime(strVal, tz);
+        } catch {
+          return strVal;
+        }
       case FieldType.CHECKBOX:
       case FieldType.MULTISELECT:
         return strVal.split(',').join(', ');
@@ -195,19 +219,26 @@ const SubmissionViewer = ({
   if (loading) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg p-8 text-center">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-theme-text-muted" />
-        <p className="text-sm text-theme-text-muted">Loading submissions...</p>
+        <RefreshCw className="text-theme-text-muted mx-auto mb-2 h-6 w-6 animate-spin" />
+        <p className="text-theme-text-muted text-sm">Loading submissions...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 rounded-lg flex items-center gap-2 bg-red-500/10 border border-red-500/30">
-        <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 shrink-0" />
+      <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+        <AlertCircle className="h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
         <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         {formId && (
-          <button onClick={() => { void loadData(); }} className="ml-auto text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline">Retry</button>
+          <button
+            onClick={() => {
+              void loadData();
+            }}
+            className="ml-auto text-xs text-red-700 underline hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+          >
+            Retry
+          </button>
         )}
       </div>
     );
@@ -216,7 +247,7 @@ const SubmissionViewer = ({
   if (submissions.length === 0) {
     return (
       <div className="card-secondary p-8 text-center">
-        <p className="text-sm text-theme-text-muted">No submissions yet.</p>
+        <p className="text-theme-text-muted text-sm">No submissions yet.</p>
       </div>
     );
   }
@@ -226,25 +257,27 @@ const SubmissionViewer = ({
       {/* Header */}
       {!directSubmission && (
         <div className={`flex items-center justify-between ${compact ? 'mb-3' : 'mb-4'}`}>
-          <span className="text-sm text-theme-text-muted">
+          <span className="text-theme-text-muted text-sm">
             {total} {total === 1 ? 'submission' : 'submissions'}
           </span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={exportCsv}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="h-3.5 w-3.5" />
               Export CSV
             </button>
             {formId && (
               <button
                 type="button"
-                onClick={() => { void loadData(); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg transition-colors"
+                onClick={() => {
+                  void loadData();
+                }}
+                className="text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                <RefreshCw className="h-3.5 w-3.5" />
                 Refresh
               </button>
             )}
@@ -264,59 +297,67 @@ const SubmissionViewer = ({
                 onClick={() => setExpandedId(isExpanded ? null : sub.id)}
                 aria-expanded={isExpanded}
                 aria-label={`Submission by ${sub.submitter_name || sub.submitted_by || 'Anonymous'}`}
-                className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-theme-surface-secondary transition-colors"
+                className="hover:bg-theme-surface-secondary flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
               >
                 {isExpanded ? (
-                  <ChevronDown className="w-4 h-4 text-theme-text-muted shrink-0" />
+                  <ChevronDown className="text-theme-text-muted h-4 w-4 shrink-0" />
                 ) : (
-                  <ChevronRight className="w-4 h-4 text-theme-text-muted shrink-0" />
+                  <ChevronRight className="text-theme-text-muted h-4 w-4 shrink-0" />
                 )}
 
-                <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
                   {sub.is_public_submission ? (
-                    <Globe className="w-4 h-4 text-cyan-700 dark:text-cyan-400 shrink-0" />
+                    <Globe className="h-4 w-4 shrink-0 text-cyan-700 dark:text-cyan-400" />
                   ) : (
-                    <User className="w-4 h-4 text-theme-text-muted shrink-0" />
+                    <User className="text-theme-text-muted h-4 w-4 shrink-0" />
                   )}
-                  <span className="text-sm text-theme-text-primary truncate">
+                  <span className="text-theme-text-primary truncate text-sm">
                     {sub.submitter_name || sub.submitted_by || 'Anonymous'}
                   </span>
                   {sub.submitter_email && (
-                    <span className="text-xs text-theme-text-muted truncate">({sub.submitter_email})</span>
+                    <span className="text-theme-text-muted truncate text-xs">({sub.submitter_email})</span>
                   )}
                 </div>
 
-                {sub.integration_processed && sub.integration_result && (() => {
-                  const results = Object.values(sub.integration_result as Record<string, Record<string, unknown>>);
-                  const allOk = results.every((r) => r.success === true);
-                  const anyFailed = results.some((r) => r.success === false);
-                  return anyFailed ? (
-                    <span className="flex items-center gap-1 text-[11px] text-red-700 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full shrink-0" title="Integration failed">
-                      <XCircle className="w-3 h-3" />
-                      Failed
-                    </span>
-                  ) : allOk ? (
-                    <span className="flex items-center gap-1 text-[11px] text-green-700 dark:text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full shrink-0" title="Integration succeeded">
-                      <CheckCircle2 className="w-3 h-3" />
-                      Synced
-                    </span>
-                  ) : null;
-                })()}
+                {sub.integration_processed &&
+                  sub.integration_result &&
+                  (() => {
+                    const results = Object.values(sub.integration_result as Record<string, Record<string, unknown>>);
+                    const allOk = results.every((r) => r.success === true);
+                    const anyFailed = results.some((r) => r.success === false);
+                    return anyFailed ? (
+                      <span
+                        className="flex shrink-0 items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] text-red-700 dark:text-red-400"
+                        title="Integration failed"
+                      >
+                        <XCircle className="h-3 w-3" />
+                        Failed
+                      </span>
+                    ) : allOk ? (
+                      <span
+                        className="flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] text-green-700 dark:text-green-400"
+                        title="Integration succeeded"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        Synced
+                      </span>
+                    ) : null;
+                  })()}
 
-                <div className="flex items-center gap-1.5 text-xs text-theme-text-muted shrink-0">
-                  <Clock className="w-3 h-3" />
+                <div className="text-theme-text-muted flex shrink-0 items-center gap-1.5 text-xs">
+                  <Clock className="h-3 w-3" />
                   {formatShortDateTime(sub.submitted_at, tz)}
                 </div>
               </button>
 
               {/* Expanded detail */}
               {isExpanded && (
-                <div className="border-t border-theme-surface-border px-4 py-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="border-theme-surface-border border-t px-4 py-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     {Object.entries(sub.data).map(([fieldId, value]) => (
                       <div key={fieldId} className="bg-theme-surface-secondary rounded-lg px-3 py-2">
-                        <p className="text-xs text-theme-text-muted font-medium mb-0.5">{getFieldLabel(fieldId)}</p>
-                        <p className="text-sm text-theme-text-primary wrap-break-word">{formatValue(fieldId, value)}</p>
+                        <p className="text-theme-text-muted mb-0.5 text-xs font-medium">{getFieldLabel(fieldId)}</p>
+                        <p className="text-theme-text-primary text-sm wrap-break-word">{formatValue(fieldId, value)}</p>
                       </div>
                     ))}
                   </div>
@@ -324,48 +365,50 @@ const SubmissionViewer = ({
                   {/* Integration Results */}
                   {sub.integration_processed && sub.integration_result && (
                     <div className="mt-3 space-y-2">
-                      <p className="text-xs font-medium text-theme-text-secondary flex items-center gap-1.5">
-                        <Plug className="w-3.5 h-3.5" />
+                      <p className="text-theme-text-secondary flex items-center gap-1.5 text-xs font-medium">
+                        <Plug className="h-3.5 w-3.5" />
                         Integration Results
                       </p>
-                      {Object.entries(sub.integration_result as Record<string, Record<string, unknown>>).map(([key, result]) => {
-                        const succeeded = result.success === true;
-                        return (
-                          <div
-                            key={key}
-                            className={`p-3 rounded-lg border ${
-                              succeeded
-                                ? 'bg-green-500/10 border-green-500/20'
-                                : 'bg-red-500/10 border-red-500/20'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 mb-1">
-                              {succeeded ? (
-                                <CheckCircle2 className="w-3.5 h-3.5 text-green-700 dark:text-green-400 shrink-0" />
-                              ) : (
-                                <XCircle className="w-3.5 h-3.5 text-red-700 dark:text-red-400 shrink-0" />
+                      {Object.entries(sub.integration_result as Record<string, Record<string, unknown>>).map(
+                        ([key, result]) => {
+                          const succeeded = result.success === true;
+                          return (
+                            <div
+                              key={key}
+                              className={`rounded-lg border p-3 ${
+                                succeeded ? 'border-green-500/20 bg-green-500/10' : 'border-red-500/20 bg-red-500/10'
+                              }`}
+                            >
+                              <div className="mb-1 flex items-center gap-2">
+                                {succeeded ? (
+                                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-700 dark:text-green-400" />
+                                ) : (
+                                  <XCircle className="h-3.5 w-3.5 shrink-0 text-red-700 dark:text-red-400" />
+                                )}
+                                <span
+                                  className={`text-xs font-medium capitalize ${
+                                    succeeded ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
+                                  }`}
+                                >
+                                  {key.replace(/_/g, ' ')}
+                                </span>
+                              </div>
+                              {typeof result.message === 'string' && (
+                                <p
+                                  className={`ml-5 text-xs ${
+                                    succeeded ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                                  }`}
+                                >
+                                  {result.message}
+                                </p>
                               )}
-                              <span className={`text-xs font-medium capitalize ${
-                                succeeded ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
-                              }`}>
-                                {key.replace(/_/g, ' ')}
-                              </span>
+                              {!succeeded && typeof result.error === 'string' && (
+                                <p className="ml-5 text-xs text-red-700 dark:text-red-300">{result.error}</p>
+                              )}
                             </div>
-                            {typeof result.message === 'string' && (
-                              <p className={`text-xs ml-5 ${
-                                succeeded ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
-                              }`}>
-                                {result.message}
-                              </p>
-                            )}
-                            {!succeeded && typeof result.error === 'string' && (
-                              <p className="text-xs text-red-700 dark:text-red-300 ml-5">
-                                {result.error}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
+                          );
+                        }
+                      )}
                     </div>
                   )}
 
@@ -375,29 +418,33 @@ const SubmissionViewer = ({
                       <>
                         <button
                           type="button"
-                          onClick={() => { void handleReprocess(sub.id); }}
+                          onClick={() => {
+                            void handleReprocess(sub.id);
+                          }}
                           disabled={reprocessing === sub.id}
                           aria-label="Reprocess integrations for this submission"
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-orange-700 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 rounded-lg transition-colors disabled:opacity-50"
+                          className="flex items-center gap-1.5 rounded-lg bg-orange-500/10 px-3 py-1.5 text-xs text-orange-700 transition-colors hover:bg-orange-500/20 hover:text-orange-700 disabled:opacity-50 dark:text-orange-400 dark:hover:text-orange-300"
                         >
                           {reprocessing === sub.id ? (
-                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            <RefreshCw className="h-3 w-3 animate-spin" />
                           ) : (
-                            <RotateCcw className="w-3 h-3" />
+                            <RotateCcw className="h-3 w-3" />
                           )}
                           Reprocess
                         </button>
                         <button
                           type="button"
-                          onClick={() => { void handleDelete(sub.id); }}
+                          onClick={() => {
+                            void handleDelete(sub.id);
+                          }}
                           disabled={deleting === sub.id}
                           aria-label={`Delete submission by ${sub.submitter_name || sub.submitted_by || 'Anonymous'}`}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors disabled:opacity-50"
+                          className="flex items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-1.5 text-xs text-red-700 transition-colors hover:bg-red-500/20 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
                         >
                           {deleting === sub.id ? (
-                            <RefreshCw className="w-3 h-3 animate-spin" />
+                            <RefreshCw className="h-3 w-3 animate-spin" />
                           ) : (
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="h-3 w-3" />
                           )}
                           Delete
                         </button>
@@ -413,23 +460,23 @@ const SubmissionViewer = ({
 
       {/* Pagination */}
       {total > limit && (
-        <div className="flex items-center justify-center gap-3 mt-4">
+        <div className="mt-4 flex items-center justify-center gap-3">
           <button
             type="button"
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary rounded-lg disabled:opacity-30"
+            className="text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary rounded-lg px-3 py-1.5 text-xs disabled:opacity-30"
           >
             Previous
           </button>
-          <span className="text-xs text-theme-text-muted">
+          <span className="text-theme-text-muted text-xs">
             Page {page + 1} of {Math.ceil(total / limit)}
           </span>
           <button
             type="button"
             onClick={() => setPage((p) => p + 1)}
             disabled={(page + 1) * limit >= total}
-            className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary rounded-lg disabled:opacity-30"
+            className="text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary rounded-lg px-3 py-1.5 text-xs disabled:opacity-30"
           >
             Next
           </button>
