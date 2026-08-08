@@ -364,7 +364,7 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 > Results package** to sign and file with the minutes. All covered in
 > Script 12, Chapters 14–16."
 
-### COMMUNICATIONS (15:00 – 15:30)
+### COMMUNICATIONS (15:00 – 15:20)
 
 **[SCREEN: Navigate to Communications module]**
 
@@ -384,7 +384,50 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 
 **[SCREEN: Show the acknowledgment report and the schedule field]**
 
-### PUBLIC PORTAL (15:30 – 16:00)
+### EMAIL TEMPLATES — FINDING THINGS, AND SIGNING THEM (15:20 – 15:45)
+
+**[SCREEN: Administration → Email Templates. The sidebar shows seven collapsible
+categories with counts.]**
+
+> "Email Templates is where the wording of every automated notice lives — welcome
+> emails, event reminders, dues notices, store confirmations. There are well over
+> three dozen of them, and they used to be one long flat scroll."
+
+> "They're grouped now — Members & Accounts, Events & Scheduling, Training,
+> Elections, Inventory, Department Store, Other. Search still works across all of
+> them, and searching expands every group so a match can't hide behind a collapsed
+> header."
+
+**[SCREEN: Open a template; in the signature block, type {{president_name}} and
+{{president_title}}.]**
+
+> "Second thing, and this one solves a real annoyance. A notice you send as
+> secretary, or that goes out from a nightly automated job, had no way to carry
+> the name of the officer it should come from."
+
+> "Every template can use officer variables now. President, Vice President, Chief,
+> Deputy and Assistant Chief, Secretary, Assistant Secretary, Treasurer, Safety
+> Officer, Training Officer, Quartermaster — name, title, email and phone for each
+> one."
+
+**[SCREEN: Send Test Email; the rendered signature shows the current holder's
+real name.]**
+
+> "It fills in whoever currently holds that office."
+
+**[CALLOUT: "You probably don't have to set this up"]**
+
+> "And here's the part people miss and then spend twenty minutes on: **you
+> probably don't have to configure anything.** It works out who holds each office
+> from the positions your members already carry. Open the Officers tab only if it
+> got one wrong, or if an office has nobody matching a position."
+
+> "If you _do_ link an office to a specific member, the values track that member's
+> profile — they change their phone number, your notices follow. And it re-checks
+> nightly, which is what catches a change made to the member rather than to the
+> assignment."
+
+### PUBLIC PORTAL (15:45 – 16:00)
 
 **[SCREEN: Navigate to Public Portal settings]**
 
@@ -457,12 +500,12 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| Recording Meeting Minutes | 1:30–5:00 | "Recording Meeting Minutes in The Logbook" |
-| Creating Action Items | 3:00–4:00 | "Tracking Action Items from Meetings" |
-| Event Attendance Tracking | 7:30–8:30 | "Managing Event Attendance" |
-| Adding a New Member | 10:00–10:30 | "How to Add a New Member (Secretary)" |
-| Document Organization | 12:00–13:00 | "Organizing Your Department's Documents" |
-| Custom Forms Builder | 13:30–14:00 | "Building Custom Forms for Your Department" |
-| Secretary's Meeting Workflow | 16:00–17:30 | "The Secretary's Meeting Workflow" |
+| Clip                         | Timecode    | Standalone Title                            |
+| ---------------------------- | ----------- | ------------------------------------------- |
+| Recording Meeting Minutes    | 1:30–5:00   | "Recording Meeting Minutes in The Logbook"  |
+| Creating Action Items        | 3:00–4:00   | "Tracking Action Items from Meetings"       |
+| Event Attendance Tracking    | 7:30–8:30   | "Managing Event Attendance"                 |
+| Adding a New Member          | 10:00–10:30 | "How to Add a New Member (Secretary)"       |
+| Document Organization        | 12:00–13:00 | "Organizing Your Department's Documents"    |
+| Custom Forms Builder         | 13:30–14:00 | "Building Custom Forms for Your Department" |
+| Secretary's Meeting Workflow | 16:00–17:30 | "The Secretary's Meeting Workflow"          |

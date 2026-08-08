@@ -471,7 +471,7 @@ use_ssl: true # Wrong! Port 587 needs TLS, not SSL
 - ✅ At least 1 uppercase letter (A-Z)
 - ✅ At least 1 lowercase letter (a-z)
 - ✅ At least 1 number (0-9)
-- ✅ At least 1 special character (!@#$%^&*)
+- ✅ At least 1 special character (!@#$%^&\*)
 
 **Good Password Examples**:
 
@@ -2122,7 +2122,7 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Scenario**: A member is on leave and their training compliance numbers look wrong — they're showing as non-compliant even though they should have reduced requirements.
 
 **How Waiver Adjustments Work**:
-When a Leave of Absence is created via **Administration > Member Lifecycle**, the system automatically reduces all proportional training requirements (hours, shifts, calls) using:
+When a Leave of Absence is created via **Members > Admin > Waivers**, the system automatically reduces all proportional training requirements (hours, shifts, calls) using:
 
 ```
 adjusted_required = base_required × (active_months / total_months)
@@ -2141,10 +2141,10 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 
 **Not working? Check these causes**:
 
-1. **Leave is not active**: Go to Member Lifecycle > Leave of Absence and verify the leave is active (not deactivated)
+1. **Leave is not active**: Go to **Members > Admin > Waivers** and verify the leave is active (not deactivated)
 2. **Leave doesn't cover enough days**: A month is only waived if the leave covers ≥15 days of that month. A leave from Jan 20–Jan 31 (12 days) does NOT waive January.
 3. **Wrong requirement type**: Only Hours, Shifts, and Calls requirements are adjusted proportionally. Courses and Certifications are binary (complete or not) and are never adjusted.
-4. **Training Waiver vs. Leave of Absence**: A Leave of Absence (Member Lifecycle) applies to ALL requirements. A Training Waiver (`/training/waivers` API) can target specific requirements via `requirement_ids`. You don't need both — a Leave of Absence is sufficient for general leaves.
+4. **Training Waiver vs. Leave of Absence**: A Leave of Absence (Members > Admin > Waivers) applies to ALL requirements. A Training Waiver (`/training/waivers` API) can target specific requirements via `requirement_ids`. You don't need both — a Leave of Absence is sufficient for general leaves.
 
 #### Leave of Absence: Meeting Attendance Not Adjusted
 
@@ -5412,15 +5412,15 @@ npm run build
 
 **Versions bumped (2026-02-24)**:
 
-| Package              | From    | To      | Reason                               |
-| -------------------- | ------- | ------- | ------------------------------------ |
-| @typescript-eslint/* | 8.21.0  | 8.56.1  | TypeScript 5.9 compatibility         |
-| @vitest/coverage-v8  | 3.0.0   | 3.2.4   | Match vitest 3.2.4                   |
-| @vitest/ui           | 3.0.0   | 3.2.4   | Match vitest 3.2.4                   |
-| esbuild (override)   | 0.25.0  | 0.27.0  | Vite 7.3.1 peer dep                  |
-| postcss              | 8.5.0   | 8.5.6   | Vite 7.3.1 peer dep                  |
-| react-hook-form      | 7.54.2  | 7.71.1  | Deduplicate with @hookform/resolvers |
-| jsdom (root)         | ^24.1.3 | ^26.0.0 | Align with frontend                  |
+| Package               | From    | To      | Reason                               |
+| --------------------- | ------- | ------- | ------------------------------------ |
+| @typescript-eslint/\* | 8.21.0  | 8.56.1  | TypeScript 5.9 compatibility         |
+| @vitest/coverage-v8   | 3.0.0   | 3.2.4   | Match vitest 3.2.4                   |
+| @vitest/ui            | 3.0.0   | 3.2.4   | Match vitest 3.2.4                   |
+| esbuild (override)    | 0.25.0  | 0.27.0  | Vite 7.3.1 peer dep                  |
+| postcss               | 8.5.0   | 8.5.6   | Vite 7.3.1 peer dep                  |
+| react-hook-form       | 7.54.2  | 7.71.1  | Deduplicate with @hookform/resolvers |
+| jsdom (root)          | ^24.1.3 | ^26.0.0 | Align with frontend                  |
 
 ---
 

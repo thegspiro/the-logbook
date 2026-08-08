@@ -7,6 +7,7 @@ The Apparatus module tracks department vehicles, their maintenance, fuel logs, e
 ## Table of Contents
 
 ### Apparatus
+
 1. [Apparatus Overview](#apparatus-overview)
 2. [Viewing Apparatus Details](#viewing-apparatus-details)
 3. [Maintenance Scheduling](#maintenance-scheduling)
@@ -15,6 +16,7 @@ The Apparatus module tracks department vehicles, their maintenance, fuel logs, e
 6. [NFPA Compliance](#nfpa-compliance)
 
 ### Facilities
+
 7. [Facilities Overview](#facilities-overview)
 8. [Facility Details](#facility-details)
 9. [Facility Maintenance](#facility-maintenance)
@@ -23,6 +25,7 @@ The Apparatus module tracks department vehicles, their maintenance, fuel logs, e
 12. [Capital Projects](#capital-projects)
 
 ### Worked Examples
+
 13. [Realistic Example: Annual Pump Test and Maintenance for Engine 3](#realistic-example-annual-pump-test-and-maintenance-for-engine-3)
 14. [Realistic Example: Managing a Facility Inspection Cycle](#realistic-example-managing-a-facility-inspection-cycle)
 15. [Troubleshooting](#troubleshooting)
@@ -34,6 +37,7 @@ The Apparatus module tracks department vehicles, their maintenance, fuel logs, e
 Navigate to **Apparatus** in the sidebar to view your department's vehicle fleet.
 
 The apparatus list shows all vehicles with:
+
 - Unit number and name
 - Type (Engine, Ladder, Rescue, Ambulance, etc.)
 - Status (In Service, Out of Service, Reserve, Retired)
@@ -79,6 +83,7 @@ Track preventive and corrective maintenance for each apparatus:
 ### Viewing Maintenance
 
 Each apparatus has a maintenance section showing:
+
 - **Upcoming** maintenance based on schedules (date or mileage triggers)
 - **Completed** maintenance history
 
@@ -145,16 +150,17 @@ The compliance section shows which standards apply and whether the apparatus is 
 
 Navigate to **Facilities** in the sidebar. The facilities module has a dashboard landing page and dedicated detail pages:
 
-| Page | URL | Description |
-|------|-----|-------------|
-| **Dashboard** | `/facilities` | Summary statistics, recent activity, and searchable facility card grid |
-| **Facility Detail** | `/facilities/:id` | Full-page detail with sidebar navigation to all sections |
-| **Maintenance** | `/facilities/maintenance` | Cross-facility maintenance records and work orders |
-| **Inspections** | `/facilities/inspections` | Cross-facility inspection records and scheduling |
+| Page                | URL                       | Description                                                            |
+| ------------------- | ------------------------- | ---------------------------------------------------------------------- |
+| **Dashboard**       | `/facilities`             | Summary statistics, recent activity, and searchable facility card grid |
+| **Facility Detail** | `/facilities/:id`         | Full-page detail with sidebar navigation to all sections               |
+| **Maintenance**     | `/facilities/maintenance` | Cross-facility maintenance records and work orders                     |
+| **Inspections**     | `/facilities/inspections` | Cross-facility inspection records and scheduling                       |
 
 ### Dashboard
 
 The facilities dashboard shows:
+
 - **Summary cards**: Total facilities, pending maintenance work orders, upcoming inspections, overdue items
 - **Recent activity feed**: Latest maintenance completions, inspection results, and status changes
 - **Facility card grid**: Searchable and filterable cards showing each facility's name, type, address, and status
@@ -176,27 +182,27 @@ The Facilities header has a **Print Labels** button that prints a barcode label 
 
 Click on any facility from the dashboard to open its full-page detail view at `/facilities/:id`. The page uses a **sidebar navigation** layout with the following sections:
 
-| Section | Description |
-|---------|-------------|
-| **Overview** | Name, type, status, address, phone, email, fax, county, founded year |
-| **Rooms** | Room inventory with purpose, capacity, NFPA 1500/1585 zone classification (hot/transition/cold), and linked Location records for Events and QR check-in |
-| **Building Systems** | HVAC, electrical, plumbing, fire suppression, and 8 fire-critical system types (exhaust extraction, cascade air, decontamination, bay door, air quality monitor, PPE cleaning, alerting system, shore power). Each system tracks model, install date, warranty, and condition |
-| **Maintenance** | Maintenance history and work orders with 16 NFPA-aligned maintenance types. Priority badges (low/medium/high/critical) |
-| **Inspections** | Inspection records with inspector name, license number, agency, pass/fail status, deficiency tracking, and corrective action dates |
-| **Utilities** | Utility accounts (electric, gas, water, internet) with monthly usage readings and cost tracking |
-| **Emergency Contacts** | Building-specific emergency contacts with phone, role, and priority |
-| **Access Keys** | Key and access card tracking with assignment history |
-| **Shutoff Locations** | Gas, water, and electrical shutoff location descriptions and photos |
-| **Capital Projects** | Building improvement projects with budget, timeline, status, and contractor info |
-| **Insurance** | Insurance policy tracking with provider, policy number, coverage, and renewal dates |
-| **Occupants** | Organizations or units housed in the facility |
-| **Compliance** | Compliance checklists for fire code, ADA, and other standards |
+| Section                | Description                                                                                                                                                                                                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Overview**           | Name, type, status, address, phone, email, fax, county, founded year                                                                                                                                                                                                          |
+| **Rooms**              | Room inventory with purpose, capacity, NFPA 1500/1585 zone classification (hot/transition/cold), and linked Location records for Events and QR check-in                                                                                                                       |
+| **Building Systems**   | HVAC, electrical, plumbing, fire suppression, and 8 fire-critical system types (exhaust extraction, cascade air, decontamination, bay door, air quality monitor, PPE cleaning, alerting system, shore power). Each system tracks model, install date, warranty, and condition |
+| **Maintenance**        | Maintenance history and work orders with 16 NFPA-aligned maintenance types. Priority badges (low/medium/high/critical)                                                                                                                                                        |
+| **Inspections**        | Inspection records with inspector name, license number, agency, pass/fail status, deficiency tracking, and corrective action dates                                                                                                                                            |
+| **Utilities**          | Utility accounts (electric, gas, water, internet) with monthly usage readings and cost tracking                                                                                                                                                                               |
+| **Emergency Contacts** | Building-specific emergency contacts with phone, role, and priority                                                                                                                                                                                                           |
+| **Access Keys**        | Key and access card tracking with assignment history                                                                                                                                                                                                                          |
+| **Shutoff Locations**  | Gas, water, and electrical shutoff location descriptions and photos                                                                                                                                                                                                           |
+| **Capital Projects**   | Building improvement projects with budget, timeline, status, and contractor info                                                                                                                                                                                              |
+| **Insurance**          | Insurance policy tracking with provider, policy number, coverage, and renewal dates                                                                                                                                                                                           |
+| **Occupants**          | Organizations or units housed in the facility                                                                                                                                                                                                                                 |
+| **Compliance**         | Compliance checklists for fire code, ADA, and other standards                                                                                                                                                                                                                 |
 
 ![Facility detail page with its sidebar navigation and content area](./images/06-11-facility-detail.png)
 
 > **Edge case:** If a facility was created during onboarding, it is automatically linked to a Location record so it appears in the Events location picker. Rooms added later also auto-create Location records. If you delete a room, its linked Location record is preserved (with a note that the room was removed) to avoid breaking existing event references.
 
-### Facilities Module Architecture *(2026-04-11)*
+### Facilities Module Architecture _(2026-04-11)_
 
 The facilities module was refactored for maintainability:
 
@@ -259,6 +265,7 @@ The **Inspections** tab tracks scheduled and completed facility inspections:
 ### Systems
 
 Track major building systems for each facility:
+
 - HVAC systems (with model, install date, warranty)
 - Fire suppression systems
 - Electrical systems
@@ -302,6 +309,7 @@ This walkthrough demonstrates how to record a major annual service on an apparat
 **Clearwater Fire Department** runs three engines. **Driver/Operator Chris Jennings** is responsible for apparatus maintenance records. **Engine 3** is due for its annual pump test and service per NFPA 1911.
 
 Engine 3 details:
+
 - **Unit:** Engine 3
 - **Year/Make/Model:** 2019 Pierce Enforcer
 - **VIN:** 4P1CD01H4KA001234
@@ -315,16 +323,17 @@ Engine 3 details:
 
 Before taking Engine 3 to the service shop, D/O Jennings fuels up. He navigates to **Apparatus > Engine 3 > Fuel Logs** and clicks **Add Fuel Log**:
 
-| Field | Value |
-|-------|-------|
-| **Date** | March 10, 2026 |
-| **Fuel Type** | Diesel |
-| **Gallons** | 42.5 |
-| **Cost** | $148.75 |
-| **Mileage Reading** | 28,450 |
+| Field                | Value           |
+| -------------------- | --------------- |
+| **Date**             | March 10, 2026  |
+| **Fuel Type**        | Diesel          |
+| **Gallons**          | 42.5            |
+| **Cost**             | $148.75         |
+| **Mileage Reading**  | 28,450          |
 | **Station/Location** | Shell — Main St |
 
 The system calculates fuel efficiency from the previous fill-up:
+
 - Previous reading: 28,120 miles at 40.0 gallons
 - Miles since last fill: 330
 - **Fuel efficiency: 7.8 MPG** (typical for a fire engine)
@@ -349,15 +358,15 @@ The calendar and scheduling module now show Engine 3 as unavailable. Any shifts 
 
 After the annual pump test is completed by Apex Fire Equipment, D/O Jennings records the results. He navigates to **Apparatus > Engine 3 > Maintenance** and clicks **Add Maintenance**:
 
-| Field | Value |
-|-------|-------|
-| **Maintenance Type** | Annual Pump Test (NFPA 1911) |
-| **Date** | March 12, 2026 |
-| **Vendor** | Apex Fire Equipment |
-| **Cost** | $1,850.00 |
-| **Description** | Annual service pump test per NFPA 1911. All flows within spec. Pump rated at 1,500 GPM — tested at 1,520 GPM (101%). Pressure governor tested and calibrated. Primer tested — achieved prime in 8 seconds. Relief valve tested at 200 PSI. |
-| **Mileage at Service** | 28,465 |
-| **Result** | Pass |
+| Field                  | Value                                                                                                                                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Maintenance Type**   | Annual Pump Test (NFPA 1911)                                                                                                                                                                                                               |
+| **Date**               | March 12, 2026                                                                                                                                                                                                                             |
+| **Vendor**             | Apex Fire Equipment                                                                                                                                                                                                                        |
+| **Cost**               | $1,850.00                                                                                                                                                                                                                                  |
+| **Description**        | Annual service pump test per NFPA 1911. All flows within spec. Pump rated at 1,500 GPM — tested at 1,520 GPM (101%). Pressure governor tested and calibrated. Primer tested — achieved prime in 8 seconds. Relief valve tested at 200 PSI. |
+| **Mileage at Service** | 28,465                                                                                                                                                                                                                                     |
+| **Result**             | Pass                                                                                                                                                                                                                                       |
 
 He attaches the pump test certificate PDF from Apex.
 
@@ -369,23 +378,23 @@ During the annual service, Apex also performed routine maintenance. D/O Jennings
 
 **Oil and Filter Change:**
 
-| Field | Value |
-|-------|-------|
-| **Maintenance Type** | Oil Change |
-| **Date** | March 12, 2026 |
-| **Cost** | $285.00 |
-| **Description** | Full synthetic 15W-40, 12 quarts. Oil filter, fuel filters (2), and air filter replaced. |
-| **Next Due** | 30,000 miles or March 2027 |
+| Field                | Value                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| **Maintenance Type** | Oil Change                                                                               |
+| **Date**             | March 12, 2026                                                                           |
+| **Cost**             | $285.00                                                                                  |
+| **Description**      | Full synthetic 15W-40, 12 quarts. Oil filter, fuel filters (2), and air filter replaced. |
+| **Next Due**         | 30,000 miles or March 2027                                                               |
 
 **Brake Inspection:**
 
-| Field | Value |
-|-------|-------|
-| **Maintenance Type** | Brake Inspection |
-| **Date** | March 12, 2026 |
-| **Cost** | $0 (included in annual service) |
-| **Description** | Front pads at 60%, rear pads at 45%. No replacement needed. All brake lines inspected — no leaks. Parking brake tested and holding. |
-| **Next Due** | March 2027 |
+| Field                | Value                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Maintenance Type** | Brake Inspection                                                                                                                    |
+| **Date**             | March 12, 2026                                                                                                                      |
+| **Cost**             | $0 (included in annual service)                                                                                                     |
+| **Description**      | Front pads at 60%, rear pads at 45%. No replacement needed. All brake lines inspected — no leaks. Parking brake tested and holding. |
+| **Next Due**         | March 2027                                                                                                                          |
 
 ---
 
@@ -393,12 +402,12 @@ During the annual service, Apex also performed routine maintenance. D/O Jennings
 
 D/O Jennings navigates to **Apparatus > Engine 3 > NFPA Compliance** and updates the compliance records:
 
-| Standard | Assessment Date | Result | Next Due |
-|----------|----------------|--------|----------|
-| NFPA 1911 — Pump Test | March 12, 2026 | Pass | March 2027 |
-| NFPA 1911 — Aerial (N/A) | — | — | — |
-| NFPA 1911 — Ground Ladder | January 8, 2026 | Pass | January 2027 |
-| NFPA 1901 — General Condition | March 12, 2026 | Pass | March 2027 |
+| Standard                      | Assessment Date | Result | Next Due     |
+| ----------------------------- | --------------- | ------ | ------------ |
+| NFPA 1911 — Pump Test         | March 12, 2026  | Pass   | March 2027   |
+| NFPA 1911 — Aerial (N/A)      | —               | —      | —            |
+| NFPA 1911 — Ground Ladder     | January 8, 2026 | Pass   | January 2027 |
+| NFPA 1901 — General Condition | March 12, 2026  | Pass   | March 2027   |
 
 All compliance items show green checkmarks. Engine 3 is fully compliant.
 
@@ -413,6 +422,7 @@ Engine 3 is back from the shop. D/O Jennings:
 3. Updates mileage to 28,470 (drive back from shop)
 
 The status history timeline now shows:
+
 ```
 March 10 — Out of Service (Annual pump test and service)
 March 13 — In Service (Annual service complete — all tests passed)
@@ -431,6 +441,7 @@ This walkthrough demonstrates how to track the annual inspection cycle for a fir
 **Station 1** of **Maplewood Fire Department** is due for its annual fire code inspection and building assessment. Facilities Manager **Lt. Jim Walsh** coordinates inspections and maintenance for all three department stations.
 
 Station 1 details:
+
 - **Type:** Fire Station
 - **Built:** 1998 (28 years old)
 - **Bays:** 3 apparatus bays
@@ -443,23 +454,23 @@ Station 1 details:
 
 The county fire marshal conducts the annual fire code inspection on April 5. Lt. Walsh navigates to **Facilities > Station 1 > Inspections** and clicks **Add Inspection**:
 
-| Field | Value |
-|-------|-------|
-| **Inspection Type** | Fire Code Inspection |
-| **Date** | April 5, 2026 |
-| **Inspector** | County Fire Marshal — Inspector Daniels |
-| **Result** | Conditional Pass |
+| Field               | Value                                   |
+| ------------------- | --------------------------------------- |
+| **Inspection Type** | Fire Code Inspection                    |
+| **Date**            | April 5, 2026                           |
+| **Inspector**       | County Fire Marshal — Inspector Daniels |
+| **Result**          | Conditional Pass                        |
 
 **Findings:**
 
-| Item | Status | Details |
-|------|--------|---------|
-| Sprinkler system | Pass | All heads clear, FDC accessible, inspection tag current |
-| Fire extinguishers | Pass | All units inspected, tags current |
-| Emergency lighting | **Deficiency** | Battery backup on bay 2 exit sign failed — unit not illuminating on battery test |
-| Smoke/CO detectors | Pass | All units tested and functional |
-| Electrical panels | **Deficiency** | Panel C in mechanical room has obstructed clearance (36" required, storage within 24") |
-| Kitchen hood suppression | Pass | Ansul system inspected, nozzles clear |
+| Item                     | Status         | Details                                                                                |
+| ------------------------ | -------------- | -------------------------------------------------------------------------------------- |
+| Sprinkler system         | Pass           | All heads clear, FDC accessible, inspection tag current                                |
+| Fire extinguishers       | Pass           | All units inspected, tags current                                                      |
+| Emergency lighting       | **Deficiency** | Battery backup on bay 2 exit sign failed — unit not illuminating on battery test       |
+| Smoke/CO detectors       | Pass           | All units tested and functional                                                        |
+| Electrical panels        | **Deficiency** | Panel C in mechanical room has obstructed clearance (36" required, storage within 24") |
+| Kitchen hood suppression | Pass           | Ansul system inspected, nozzles clear                                                  |
 
 Lt. Walsh uploads the inspector's report PDF and notes the two deficiencies that need correction within 30 days.
 
@@ -471,23 +482,23 @@ For each deficiency, Lt. Walsh creates a maintenance record in **Facilities > St
 
 **Work Order 1 — Exit Sign Replacement:**
 
-| Field | Value |
-|-------|-------|
-| **Type** | Electrical |
-| **Priority** | High |
+| Field           | Value                                                                                                                                                                            |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Type**        | Electrical                                                                                                                                                                       |
+| **Priority**    | High                                                                                                                                                                             |
 | **Description** | Replace battery backup exit sign unit above bay 2 personnel door. Unit failed battery illumination test during fire code inspection (April 5). Must be corrected within 30 days. |
-| **Due Date** | May 5, 2026 |
-| **Assigned To** | Lt. Walsh |
+| **Due Date**    | May 5, 2026                                                                                                                                                                      |
+| **Assigned To** | Lt. Walsh                                                                                                                                                                        |
 
 **Work Order 2 — Clear Panel C Obstruction:**
 
-| Field | Value |
-|-------|-------|
-| **Type** | General / Safety |
-| **Priority** | High |
+| Field           | Value                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Type**        | General / Safety                                                                                                                            |
+| **Priority**    | High                                                                                                                                        |
 | **Description** | Remove storage items blocking 36-inch clearance in front of electrical panel C in mechanical room. Cited in fire code inspection (April 5). |
-| **Due Date** | April 12, 2026 |
-| **Assigned To** | A Platoon (next shift) |
+| **Due Date**    | April 12, 2026                                                                                                                              |
+| **Assigned To** | A Platoon (next shift)                                                                                                                      |
 
 ---
 
@@ -503,13 +514,13 @@ For each deficiency, Lt. Walsh creates a maintenance record in **Facilities > St
 
 While addressing the deficiencies, Lt. Walsh also performs the quarterly building systems check. He navigates to **Facilities > Station 1 > Systems** and updates each system:
 
-| System | Check Date | Status | Notes |
-|--------|-----------|--------|-------|
-| HVAC Unit 1 (bays) | April 8 | Operational | Filter replaced. Refrigerant levels normal. |
-| HVAC Unit 2 (living quarters) | April 8 | Operational | Filter replaced. Thermostat calibrated. |
-| Generator (Generac 48kW) | April 8 | Operational | Weekly auto-test running. Last full-load test: Feb 2026. Next due: Aug 2026. |
-| Fire Suppression (sprinkler) | April 5 | Operational | Per fire marshal inspection — all clear. |
-| Kitchen Hood (Ansul) | April 5 | Operational | Per fire marshal inspection — annual service due October 2026. |
+| System                        | Check Date | Status      | Notes                                                                        |
+| ----------------------------- | ---------- | ----------- | ---------------------------------------------------------------------------- |
+| HVAC Unit 1 (bays)            | April 8    | Operational | Filter replaced. Refrigerant levels normal.                                  |
+| HVAC Unit 2 (living quarters) | April 8    | Operational | Filter replaced. Thermostat calibrated.                                      |
+| Generator (Generac 48kW)      | April 8    | Operational | Weekly auto-test running. Last full-load test: Feb 2026. Next due: Aug 2026. |
+| Fire Suppression (sprinkler)  | April 5    | Operational | Per fire marshal inspection — all clear.                                     |
+| Kitchen Hood (Ansul)          | April 5    | Operational | Per fire marshal inspection — annual service due October 2026.               |
 
 ---
 
@@ -517,12 +528,12 @@ While addressing the deficiencies, Lt. Walsh also performs the quarterly buildin
 
 Lt. Walsh records the monthly utility readings for Station 1 under **Facilities > Station 1 > Utilities**:
 
-| Utility | April Reading | Cost | vs. Last Month |
-|---------|--------------|------|---------------|
-| Electric | 4,850 kWh | $582.00 | +12% (bay heaters running) |
-| Natural Gas | 180 therms | $234.00 | -8% (warming trend) |
-| Water | 6,200 gal | $48.00 | Normal |
-| Internet | — | $89.99/mo | Fixed |
+| Utility     | April Reading | Cost      | vs. Last Month             |
+| ----------- | ------------- | --------- | -------------------------- |
+| Electric    | 4,850 kWh     | $582.00   | +12% (bay heaters running) |
+| Natural Gas | 180 therms    | $234.00   | -8% (warming trend)        |
+| Water       | 6,200 gal     | $48.00    | Normal                     |
+| Internet    | —             | $89.99/mo | Fixed                      |
 
 Over time, these readings build a usage trend that helps identify anomalies (e.g., a spike in water usage could indicate a leak) and support budget planning.
 
@@ -549,15 +560,15 @@ The Equipment Check system provides structured vehicle and equipment inspections
 
 ### Edge Cases — Equipment Checks
 
-| Scenario | Behavior |
-|----------|----------|
-| Apparatus with no template assigned | No checklist appears for shifts using this apparatus |
-| Single failed item | Marks entire apparatus as deficient |
-| Passing check after deficiency | Clears flag only when ALL items pass |
-| Expired item (past expiration date) | Auto-fails regardless of submitted result |
-| Item below required quantity | Auto-fails |
+| Scenario                                       | Behavior                                                                                                                                           |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Apparatus with no template assigned            | No checklist appears for shifts using this apparatus                                                                                               |
+| Single failed item                             | Marks entire apparatus as deficient                                                                                                                |
+| Passing check after deficiency                 | Clears flag only when ALL items pass                                                                                                               |
+| Expired item (past expiration date)            | Auto-fails regardless of submitted result                                                                                                          |
+| Item below required quantity                   | Auto-fails                                                                                                                                         |
 | Equipment check status: `incomplete` vs `fail` | If not all items are completed, overall status is `incomplete` (overrides `fail`). An incomplete check is distinct from a failed check in reports. |
-| Template resolution fallback | System first looks for templates tied to the specific apparatus ID, then falls back to templates matching the apparatus type. |
+| Template resolution fallback                   | System first looks for templates tied to the specific apparatus ID, then falls back to templates matching the apparatus type.                      |
 
 ---
 
@@ -565,51 +576,54 @@ The Equipment Check system provides structured vehicle and equipment inspections
 
 ### System Defaults & Protected Records
 
-| Scenario | Behavior |
-|----------|----------|
-| Modify system facility type (e.g., "Fire Station") | Returns "Cannot modify system facility types." System-defined types are immutable. |
-| Delete system facility type | Returns "Cannot delete system facility types." |
-| Delete facility type in use | Returns "Cannot delete type. N facilities use this type." Remove or reassign facilities first. |
-| Modify system facility status (e.g., "Operational") | Returns "Cannot modify system facility statuses." |
-| Delete system facility status | Returns "Cannot delete system facility statuses." |
-| System defaults missing (partial migration) | `_ensure_system_defaults` runs on each Facilities module access and inserts missing system types/statuses at runtime as a recovery mechanism. |
+| Scenario                                            | Behavior                                                                                                                                      |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Modify system facility type (e.g., "Fire Station")  | Returns "Cannot modify system facility types." System-defined types are immutable.                                                            |
+| Delete system facility type                         | Returns "Cannot delete system facility types."                                                                                                |
+| Delete facility type in use                         | Returns "Cannot delete type. N facilities use this type." Remove or reassign facilities first.                                                |
+| Modify system facility status (e.g., "Operational") | Returns "Cannot modify system facility statuses."                                                                                             |
+| Delete system facility status                       | Returns "Cannot delete system facility statuses."                                                                                             |
+| System defaults missing (partial migration)         | `_ensure_system_defaults` runs on each Facilities module access and inserts missing system types/statuses at runtime as a recovery mechanism. |
 
 ### Facility Lifecycle
 
-| Scenario | Behavior |
-|----------|----------|
-| Archive an already-archived facility | Returns "Facility is already archived." |
-| Unarchive a non-archived facility | Returns "Facility is not archived." |
-| Create historic maintenance entry without date | Returns "occurred_date is required for historic entries." Scheduled maintenance does not require this field. |
-| Facility type/status lookup with no records | Service first searches by name (e.g., "Fire Station"), then falls back to any active record. If none exist and auto-seeding fails, facility creation will fail. |
+| Scenario                                       | Behavior                                                                                                                                                        |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Archive an already-archived facility           | Returns "Facility is already archived."                                                                                                                         |
+| Unarchive a non-archived facility              | Returns "Facility is not archived."                                                                                                                             |
+| Create historic maintenance entry without date | Returns "occurred_date is required for historic entries." Scheduled maintenance does not require this field.                                                    |
+| Facility type/status lookup with no records    | Service first searches by name (e.g., "Fire Station"), then falls back to any active record. If none exist and auto-seeding fails, facility creation will fail. |
 
 ---
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| Apparatus status not updating | Verify you have `apparatus.manage` permission. Status changes are logged in the status history. |
-| Fuel efficiency showing incorrect values | Check that mileage readings are entered in the correct order (each reading should be higher than the last). |
-| Setup checklist showing 0 apparatus | Fixed in March 2026 — the checklist was counting the wrong table when the Apparatus module was enabled. Pull latest and restart. |
-| Shift scheduling not showing min staffing | Fixed in March 2026 — the apparatus list endpoint was not returning the full `min_staffing` field. Pull latest and restart. Understaffing badges (amber triangle) now appear on shift cards when `attendee_count < min_staffing`. |
-| Cannot see Facilities module | Facilities is an optional module. Your administrator must enable it in Settings > Modules. You may see the simplified Locations page instead. |
-| Inspection past due but no alert | Inspection alerts depend on notification rules being configured. Check Settings > Notifications. |
-| Room not showing on facility | Rooms must be added individually to each facility from the Rooms section of the facility detail page. |
-| Facility address fields showing as blank | Fixed in March 2026 — frontend types were using snake_case (`address_line1`, `zip_code`) but the API returns camelCase (`addressLine1`, `zipCode`). Pull latest and rebuild. |
-| Apparatus list page gradient looks wrong in light mode | Fixed in March 2026 — hardcoded `via-red-900` gradient replaced with theme-aware CSS variables. Pull latest and rebuild. |
-| Physical address not showing in Organization Settings | As of 2026-03-04, a Physical Address section is now available in Organization Settings > General with a "Same as mailing address" toggle. |
-| Facility creation fails with "No facility types available" | As of 2026-03-06, system types/statuses are auto-seeded on first use if migration data was missing. Run `alembic upgrade head` for the backfill migration. |
-| Backend won't start after enabling facilities | Fixed in March 2026 — cascading issues with FK references, nullable columns, and seed data. Pull latest and restart. See [Troubleshooting](../../docs/TROUBLESHOOTING.md#facilities-container-startup-crash-chain). |
-| Facility rooms don't appear in Events location picker | As of 2026-03-06, rooms auto-sync a linked Location record. Existing rooms will get locations on next update. |
-| Maintenance routes returning 404 | Fixed in March 2026 — route ordering issue where `GET /{facility_id}` matched before static routes like `/maintenance`. Pull latest and restart. |
-| NFPA zone classification not visible on rooms | As of 2026-03-06, rooms support NFPA 1500/1585 zone classification (hot/transition/cold). Check the Rooms tab in facility detail for zone badges. |
-| Facility detail only shows Rooms tab | As of 2026-03-06, the FacilityDetailPanel has tabbed sub-sections: Rooms, Building Systems, and Emergency Contacts. Pull latest and rebuild. |
-| Apparatus deficiency badge won't clear | A subsequent full check must pass ALL items. Partial checks or checks with any failure won't clear the flag. |
-| Equipment check template not appearing for shift | Verify the template is assigned to the shift's apparatus (or apparatus type) and that your position matches the template's assigned positions. |
-| Photo upload fails on equipment check | Photos must be JPEG, PNG, or WebP and under 10 MB. Max 3 photos per item. |
-| Apparatus type/status dropdowns missing defaults | Fixed 2026-03-19 — list schemas were missing default enum fields. Pull latest. |
-| Dark mode colors look wrong on apparatus page | Fixed 2026-03-18 — dark mode and high-contrast variants added across 25+ files. Pull latest. |
+| Issue                                                              | Solution                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Apparatus status not updating                                      | Verify you have `apparatus.manage` permission. Status changes are logged in the status history.                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Fuel efficiency showing incorrect values                           | Check that mileage readings are entered in the correct order (each reading should be higher than the last).                                                                                                                                                                                                                                                                                                                                                                                                |
+| Setup checklist showing 0 apparatus                                | Fixed in March 2026 — the checklist was counting the wrong table when the Apparatus module was enabled. Pull latest and restart.                                                                                                                                                                                                                                                                                                                                                                           |
+| Shift scheduling not showing min staffing                          | Fixed in March 2026 — the apparatus list endpoint was not returning the full `min_staffing` field. Pull latest and restart. Understaffing badges (amber triangle) now appear on shift cards when `attendee_count < min_staffing`.                                                                                                                                                                                                                                                                          |
+| Cannot see Facilities module                                       | Facilities is an optional module. Your administrator must enable it in Settings > Modules. You may see the simplified Locations page instead.                                                                                                                                                                                                                                                                                                                                                              |
+| Inspection past due but no alert                                   | Inspection alerts depend on notification rules being configured. Check Settings > Notifications.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Room not showing on facility                                       | Rooms must be added individually to each facility from the Rooms section of the facility detail page.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Facility address fields showing as blank                           | Fixed in March 2026 — frontend types were using snake_case (`address_line1`, `zip_code`) but the API returns camelCase (`addressLine1`, `zipCode`). Pull latest and rebuild.                                                                                                                                                                                                                                                                                                                               |
+| Apparatus list page gradient looks wrong in light mode             | Fixed in March 2026 — hardcoded `via-red-900` gradient replaced with theme-aware CSS variables. Pull latest and rebuild.                                                                                                                                                                                                                                                                                                                                                                                   |
+| Physical address not showing in Organization Settings              | As of 2026-03-04, a Physical Address section is now available in Organization Settings > General with a "Same as mailing address" toggle.                                                                                                                                                                                                                                                                                                                                                                  |
+| Facility creation fails with "No facility types available"         | As of 2026-03-06, system types/statuses are auto-seeded on first use if migration data was missing. Run `alembic upgrade head` for the backfill migration.                                                                                                                                                                                                                                                                                                                                                 |
+| Backend won't start after enabling facilities                      | Fixed in March 2026 — cascading issues with FK references, nullable columns, and seed data. Pull latest and restart. See [Troubleshooting](../../docs/TROUBLESHOOTING.md#facilities-container-startup-crash-chain).                                                                                                                                                                                                                                                                                        |
+| Facility rooms don't appear in Events location picker              | As of 2026-03-06, rooms auto-sync a linked Location record. Existing rooms will get locations on next update.                                                                                                                                                                                                                                                                                                                                                                                              |
+| Maintenance routes returning 404                                   | Fixed in March 2026 — route ordering issue where `GET /{facility_id}` matched before static routes like `/maintenance`. Pull latest and restart.                                                                                                                                                                                                                                                                                                                                                           |
+| NFPA zone classification not visible on rooms                      | As of 2026-03-06, rooms support NFPA 1500/1585 zone classification (hot/transition/cold). Check the Rooms tab in facility detail for zone badges.                                                                                                                                                                                                                                                                                                                                                          |
+| Facility detail only shows Rooms tab                               | As of 2026-03-06, the FacilityDetailPanel has tabbed sub-sections: Rooms, Building Systems, and Emergency Contacts. Pull latest and rebuild.                                                                                                                                                                                                                                                                                                                                                               |
+| Apparatus deficiency badge won't clear                             | A subsequent full check must pass ALL items. Partial checks or checks with any failure won't clear the flag.                                                                                                                                                                                                                                                                                                                                                                                               |
+| Equipment check template not appearing for shift                   | Verify the template is assigned to the shift's apparatus (or apparatus type) and that your position matches the template's assigned positions.                                                                                                                                                                                                                                                                                                                                                             |
+| Photo upload fails on equipment check                              | Photos must be JPEG, PNG, or WebP and under 10 MB. Max 3 photos per item.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Apparatus type/status dropdowns missing defaults                   | Fixed 2026-03-19 — list schemas were missing default enum fields. Pull latest.                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Dark mode colors look wrong on apparatus page                      | Fixed 2026-03-18 — dark mode and high-contrast variants added across 25+ files. Pull latest.                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Apparatus detail tabs all showed "Apparatus not found"             | Fixed 2026-08-07. **Sixteen read endpoints were unreachable** — the whole apparatus detail read API. A single-segment `/{id}` route declared above the literal paths swallowed them, so `GET /apparatus/maintenance-types` was interpreted as an apparatus whose id was the word "maintenance-types". This took out maintenance, fuel logs, equipment, operators, NFPA compliance, components, component notes, service providers, report configs, custom fields and EVOC levels. Pull latest and restart. |
+| **Fuel Logs tab crashes** for an apparatus that has fuel logs      | Fixed 2026-08-07. `gallons` is stored as a precise decimal and arrives as a string (`"33.000"`), while the page expected a number and formatted it as one. Any apparatus with at least one fuel log took the page down to the error screen. Pull latest and rebuild.                                                                                                                                                                                                                                       |
+| Creating a maintenance record shows an error but the record exists | Fixed 2026-08-07. The record was written, then serializing the response tried to load the maintenance type it had not fetched — so the save succeeded and the caller saw a failure. If you have duplicate maintenance records from retrying, delete the extras.                                                                                                                                                                                                                                            |
 
 ---
 
@@ -643,11 +657,11 @@ See [Shifts & Scheduling > Standalone Equipment Checks](./03-scheduling.md#stand
 
 ### Edge Cases
 
-| Scenario | Behavior |
-|----------|----------|
-| Apparatus with no EVOC level set | No validation on driver/operator assignments |
-| Badge with unrecognized apparatus type | Falls back to generic vehicle icon |
-| Ad-hoc equipment check on out-of-service apparatus | Allowed — check is recorded normally |
+| Scenario                                           | Behavior                                     |
+| -------------------------------------------------- | -------------------------------------------- |
+| Apparatus with no EVOC level set                   | No validation on driver/operator assignments |
+| Badge with unrecognized apparatus type             | Falls back to generic vehicle icon           |
+| Ad-hoc equipment check on out-of-service apparatus | Allowed — check is recorded normally         |
 
 ---
 

@@ -38,27 +38,32 @@ docker-compose up -d
 ## 📚 Documentation Sections
 
 ### 🎯 Getting Started
+
 - **[Installation Guide](Installation)** - Complete setup instructions
 - **[Unraid Quick Start](Unraid-Quick-Start)** - One-command Unraid deployment
 - **[Onboarding Guide](Onboarding)** - First-time setup wizard
 - **[Quick Reference](Quick-Reference)** - Common commands and tasks
 
 ### 🚢 Deployment
+
 - **[Unraid Deployment](Deployment-Unraid)** - Complete Unraid guide
 - **[Docker Deployment](Deployment-Docker)** - Docker Compose deployment
 - **[Production Deployment](Deployment-Production)** - Production best practices
 
 ### 🔧 Configuration
+
 - **[Environment Variables](Configuration-Environment)** - All .env settings explained
 - **[Module Configuration](Configuration-Modules)** - Enable/disable modules
 - **[Security Configuration](Configuration-Security)** - Security settings
 
 ### 💻 Development
+
 - **[Backend Development](Development-Backend)** - Python/FastAPI development
 - **[Frontend Development](Development-Frontend)** - React/TypeScript development
 - **[Contributing Guide](Contributing)** - How to contribute
 
 ### 📦 Modules
+
 - **[Training Programs](Module-Training)** - Training & certification tracking
 - **[Elections & Voting](Module-Elections)** - Election management system
 - **[Event Management](Module-Events)** - QR code check-in system
@@ -69,9 +74,10 @@ docker-compose up -d
 - **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
 - **[Inventory](Module-Inventory)** - Equipment tracking, assignments, pool items, thermal labels
 - **[Compliance](Module-Compliance)** - Compliance tracking
-- **[Salesforce Integration](Integration-Salesforce)** - Bidirectional CRM sync *(2026-04-11)*
+- **[Salesforce Integration](Integration-Salesforce)** - Bidirectional CRM sync _(2026-04-11)_
 
 ### 🔐 Security
+
 - **[Security Overview](Security-Overview)** - Security policy and compliance
 - **[Authentication](Security-Authentication)** - Local, OAuth/OIDC, MFA
 - **[Encryption](Security-Encryption)** - AES-256-GCM encryption
@@ -81,6 +87,7 @@ docker-compose up -d
 - **[HIPAA Security Features](Security-HIPAA)** - Security features aligned with HIPAA requirements
 
 ### 🛠️ Troubleshooting
+
 - **[Common Issues](Troubleshooting)** - Solutions to common problems
 - **[Container Conflicts](Troubleshooting-Containers)** - Docker container issues
 - **[Frontend Issues](Troubleshooting-Frontend)** - Frontend not loading
@@ -88,6 +95,7 @@ docker-compose up -d
 - **[Database Issues](Troubleshooting-Database)** - Database connection problems
 
 ### 📖 Reference
+
 - **[API Documentation](API-Reference)** - Complete API reference
 - **[Database Schema](Database-Schema)** - Database structure
 - **[Role System](Role-System)** - RBAC documentation
@@ -102,7 +110,7 @@ docker-compose up -d
 - ✅ **Tamper-Proof Logging** - Blockchain-inspired audit trails
 - ✅ **Multi-Tenancy** - Host multiple organizations
 - ✅ **Role-Based Access Control** - Granular permissions
-- ✅ **Progressive Web App** - Mobile responsive PWA
+- ✅ **Progressive Web App** - Installable on iOS and Android, with a phone bottom tab bar and **Web Push to the lock screen** _(2026-08-07, opt-in via `PUSH_ENABLED`)_
 - ✅ **Integration Ready** - Microsoft 365, Google Workspace, Salesforce
 - ✅ **Zero Configuration** - One-command installation for Unraid
 
@@ -110,19 +118,106 @@ docker-compose up -d
 
 ## 🛠️ Technology Stack
 
-| Component | Technology |
-|-----------|-----------|
-| **Backend** | Python 3.13, FastAPI, SQLAlchemy |
-| **Frontend** | React 19, TypeScript 5.9, Vite 7.3 |
-| **Database** | MySQL 8.0+ (MariaDB 10.11+ for ARM) |
-| **Cache** | Redis 7+ |
+| Component          | Technology                                     |
+| ------------------ | ---------------------------------------------- |
+| **Backend**        | Python 3.13, FastAPI, SQLAlchemy               |
+| **Frontend**       | React 19, TypeScript 5.9, Vite 7.3             |
+| **Database**       | MySQL 8.0+ (MariaDB 10.11+ for ARM)            |
+| **Cache**          | Redis 7+                                       |
 | **Authentication** | OAuth 2.0 / OIDC (Google, Microsoft), TOTP MFA |
-| **Encryption** | AES-256-GCM, Argon2id |
-| **Container** | Docker, Docker Compose |
+| **Encryption**     | AES-256-GCM, Argon2id                          |
+| **Container**      | Docker, Docker Compose                         |
 
 ---
 
 ## 📊 Latest Updates
+
+### August 2026 — Skills Testing: Results the Member Can See, Scorecards That Can't Drift
+
+- **A member can finally see their own skills-test results.** They used to live
+  on the examiner's device — every skills-testing screen required officer
+  permission, so a candidate read their result over somebody's shoulder. There is
+  now a **Skills Tests** section on My Training.
+- **Your department decides how much of a result the candidate sees, and when.**
+  Full scorecard, scores without the written notes, or nothing — and either as
+  soon as the test is submitted, or only once an officer releases it, so a chief
+  can review it or deliver a failure in person first. Defaults match the old
+  behaviour, so nobody loses sight of a result they can read today.
+- **Editing a published skill sheet can no longer change an old scorecard.**
+  Because criteria were identified by their position on the sheet, inserting one
+  used to shift recorded marks onto their neighbours and raising the passing
+  percentage could turn a recorded pass into a fail. Every test now freezes the
+  sheet it was scored against.
+- **The examiner's stopwatch is what gets recorded.** Elapsed time used to be
+  overwritten with "finished minus started" — and the start is stamped once, so a
+  test begun at 09:00 and submitted after lunch recorded seven hours. Time limits
+  are pass/fail criteria on most sheets.
+- **Scoring saves itself**, on a screen used one-handed outdoors, and two people
+  editing one test no longer silently overwrite each other.
+- **Void, cancel and delete are three different things.** A scored official
+  result is withdrawn with a reason (releasing any requirement the pass had
+  completed), not erased; an abandoned unscored evaluation is cancelled; a
+  practice attempt is deleted.
+
+### August 2026 — Push Notifications, and an App That Feels Installed
+
+- **Notifications now reach your lock screen** when the app is closed — event
+  reminders, training expiry, schedule changes, maintenance due, election
+  notices. Every existing alert is covered. On iPhone the app must be installed to
+  the home screen first; departments turn push on per deployment.
+- **A bottom tab bar on phones.** Four destinations plus More, within thumb
+  reach, instead of two taps from the top-left corner across 59 menu entries.
+- **The app launches at your dashboard**, not at an onboarding splash it then
+  redirected away from — and it no longer flashes blank white on iPhone.
+- **Installing is 1.8 MB instead of 6.1 MB.** It used to download every screen up
+  front, including finance, grants and elections that most members never open,
+  over whatever rural cellular connection the install happened on.
+- **A long list of phone-specific fixes:** Save buttons hidden behind the iOS
+  keyboard, a scanner that never released the camera when you switched apps,
+  pull-to-refresh hijacking scrolls inside dialogs, iOS autocorrect rewriting
+  usernames and serial numbers, headers under the notch, and icon buttons too
+  small to hit.
+
+### August 2026 — Importing a Roster Tells You What's Wrong First
+
+- **Every row is checked before a single member is created.** Validation used to
+  run inside the import and stop at the first problem in a row, so row 21's error
+  surfaced only after rows 1–20 had already been created. Each rejected row now
+  reports _all_ of its problems at once, naming the column and the value.
+- **Rejected rows download as a CSV** — your original rows, unchanged, with the
+  reasons in a leading column. Fix and re-upload; it holds only the failures, so
+  it cannot collide with what already imported.
+- **Welcome emails are off by default for imports.** Loading a roster used to put
+  an unrecallable password-setup link in front of every address on it.
+- **Progress, and a Stop button.** Rows not reached are listed as stopped, so the
+  error report is exactly the work left.
+- **Collisions with your existing roster are caught up front**, naming who owns
+  the email, username or membership number.
+
+### August 2026 — Applicant Files Stay Confidential After Election
+
+- **A member can no longer read their own prospective-membership record.** It
+  carries interview notes, references and election-package commentary written in
+  confidence — and it stayed readable once the applicant was elected and given
+  coordinator permissions in their own right.
+- The record is hidden from the list, the board, the statistics and the labels,
+  and opening it directly reads as "not found" rather than "forbidden", which
+  would confirm there is something in it about them.
+- **Prospect search now matches a full name.** "John Smith" used to return
+  nothing.
+
+### August 2026 — The Platform Reports Its Own Failures
+
+- **Error Monitoring now receives client and server failures automatically.**
+  Before this it received almost nothing — a server error became a toast on one
+  member's screen, so investigating "the site is broken for Dave" meant asking
+  Dave.
+- Reports are queued and retried, flushed when a tab closes, and held and
+  delivered on next login when raised before sign-in. Repeats are counted rather
+  than collapsed into silence, and anything the rate cap discards is itself
+  reported.
+- **Personal identifiers are scrubbed from error text in the browser** before it
+  is sent, and rows are retained 180 days.
 
 ### August 2026 — Schedule a Whole Multi-Class Course at Once
 
@@ -362,6 +457,7 @@ docker-compose up -d
 - **Security fixes**: CSRF tokens added to module API clients, permission gates on apparatus/forms routes, token refresh race condition fix, memory leak fix in PWA install hook
 
 ### February 2026 (Feb 23) - Training Compliance, Waiver Management & Membership Enhancements
+
 - **LOA–Training Waiver auto-linking**: Leaves of absence automatically create linked training waivers; date changes sync; deactivation cascades; opt-out with `exempt_from_training_waiver`
 - **Waiver Management Page** (`/members/admin/waivers`): Unified page for managing training, meeting, and shift waivers with Active/Create/History tabs
 - **Training Waivers officer tab**: New tab in Training Admin Dashboard with summary cards, status filtering, and source tracking
@@ -375,6 +471,7 @@ docker-compose up -d
 - **15-minute time increments**: All date/time pickers enforce 15-minute steps
 
 ### February 2026 (Week of Feb 22) - Inventory Overhaul, Event Reminders & Security Hardening
+
 - **Inventory module overhaul**: Pool/quantity-tracked items, item issuances, batch checkout/return, departure clearance lifecycle, notification netting, thermal label printing (Dymo/Rollo), barcode label generation
 - **Inventory security hardening**: Row-level locking on all mutation operations, IDOR fix on clearance line items, org-scoped unique constraints, LIKE injection prevention, kwargs whitelist
 - **Event reminders**: Configurable reminder schedules, multiple reminders per event, post-event/shift validation notifications
@@ -387,6 +484,7 @@ docker-compose up -d
 - **40 new inventory tests**, CI pipeline with GitHub Actions
 
 ### February 2026 (Earlier) - Scheduling Module, Events Module, TypeScript Quality & Backend Fixes
+
 - **Scheduling Module enhanced**: 6-tab hub (Schedule, My Shifts, Open Shifts, Requests, Templates, Reports)
 - Member self-service shift signup with position selection (officer, driver, firefighter, EMS, etc.)
 - My Shifts tab with confirm/decline assignments, swap requests, and time-off requests
@@ -415,6 +513,7 @@ docker-compose up -d
 - Security hardening: session timeouts, DOMPurify sanitization, password requirements
 
 ### January 2026 - Package Updates
+
 - ✅ Updated to Vite 6.0.5 (fixed from invalid 7.3.1)
 - ✅ React 18.3.1 with security updates
 - ✅ axios 1.7.9 security updates
@@ -423,6 +522,7 @@ docker-compose up -d
 - ✅ 25+ package updates total
 
 ### January 2026 - Unraid Automation
+
 - ✅ One-command installation script
 - ✅ Automatic container cleanup
 - ✅ Auto-generated secure passwords

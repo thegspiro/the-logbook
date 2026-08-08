@@ -31,7 +31,7 @@ tablet, checking training status on a laptop.]**
 **[CALLOUT: Member capabilities list]**
 
 > "You can't change other people's data or configure system settings — that's
-> for officers and admins. But everything related to *your* participation in
+> for officers and admins. But everything related to _your_ participation in
 > the department is right at your fingertips."
 
 > "Let's start with logging in."
@@ -187,6 +187,26 @@ Administrative]**
 > "Click on any certification to see the details — when you completed it, who
 > recorded it, and any attached documentation like scanned certificates."
 
+**[SCREEN: Scroll down the same page to the Skills Tests section.]**
+
+> "Scroll down and there's a **Skills Tests** section too. If somebody's run you
+> through a skill sheet — a psychomotor evaluation, an NREMT-style checkoff —
+> your scorecard is here. Official results and your own practice attempts."
+
+> "That's newer than it sounds like it should be. Those used to live on the
+> examiner's phone, and reading yours meant asking them to turn it around."
+
+**[SCREEN: Open a result; the read-only scorecard.]**
+
+> "Tap one for the section-by-section breakdown."
+
+**[CALLOUT: "Empty? Either you've taken none — or your department doesn't share them"]**
+
+> "If there's nothing there, it's one of two things: you haven't taken one, or
+> your department has chosen not to share results with the person tested. Both
+> look the same, deliberately — the alternative is a screen that announces 'you
+> were evaluated and you may not know how it went,' which helps nobody."
+
 ### SUBMITTING EXTERNAL TRAINING (9:30 – 11:00)
 
 **[SCREEN: Navigate to Submit Training (SubmitTrainingPage)]**
@@ -244,7 +264,6 @@ Administrative]**
 > for the dates. Every class is already on your calendar, you're already on the
 > list, and you check into each one with the QR code the same as any other
 > event. Miss one and it's just that class you make up, not the whole course."
-
 
 ### VIEWING YOUR SCHEDULE (12:00 – 12:45)
 
@@ -458,11 +477,11 @@ Copy button, and Reset link]**
 
 **[CALLOUT: "Your training history, in one file, in one click"]**
 
-> "It only ever gives you *your* data — there's no way to point it at someone
+> "It only ever gives you _your_ data — there's no way to point it at someone
 > else — and it leaves out things like your password and your two-factor
 > secret, which nobody should have a copy of."
 
-> "One tip: if you're ever leaving the department, download this *before* your
+> "One tip: if you're ever leaving the department, download this _before_ your
 > account is closed. It's much easier than asking for it afterward."
 
 ### YOUR MEMBER PROFILE (20:00 – 20:30)
@@ -474,7 +493,7 @@ Copy button, and Reset link]**
 > your profile photo is uploaded — it appears on your ID card and in the
 > directory."
 
-> "Two things on that page other members do *not* see: your date of birth, and
+> "Two things on that page other members do _not_ see: your date of birth, and
 > your emergency contacts. Those are limited to your chiefs, captains,
 > secretaries and membership coordinator — and to you. There's no department
 > setting that can put them on the roster, and when an officer does open them,
@@ -494,9 +513,29 @@ Copy button, and Reset link]**
 **[SCREEN: Show adding The Logbook to the home screen on a mobile device.
 Show the app opening full-screen like a native app.]**
 
-> "You get push notifications, offline access to recently viewed content, and
-> the full interface optimized for your screen size. It's the same platform,
-> same data, just on your phone."
+> "Installing it is worth the twenty seconds. You get the full interface on your
+> screen size, offline access to pages you've already opened — and, if your
+> department has it switched on, **notifications on your lock screen** while the
+> app is closed."
+
+**[SCREEN: A phone face-down; it lights up with a Logbook notification. Then
+My Account > Notifications, showing the Push notifications toggle.]**
+
+> "My Account, Notifications, switch on Push notifications. Event reminders,
+> training about to expire, schedule changes, election notices — all of it, no
+> per-category setup."
+
+**[CALLOUT: "iPhone: install the app FIRST, or the toggle won't be there"]**
+
+> "One iPhone-specific thing: the toggle only exists once the app is on your home
+> screen. If you're looking for it in Safari, you won't find it — that's Apple's
+> rule, not ours. And it's per device, so turn it on on the station tablet too."
+
+**[SCREEN: The bottom tab bar on a phone.]**
+
+> "You'll also notice there's a bar across the bottom on a phone now — four
+> destinations plus More. Everything used to live behind that menu button in the
+> top-left corner, which is the hardest place on a big phone to reach one-handed."
 
 **[CALLOUT: "Add to Home Screen = full app experience on your phone"]**
 
@@ -515,15 +554,15 @@ Show the app opening full-screen like a native app.]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| How to RSVP | 5:00–6:00 | "How to RSVP for an Event in 30 Seconds" |
-| QR Code Check-In | 6:00–7:00 | "Checking In with a QR Code" |
-| Checking Training Status | 8:00–9:30 | "Checking Your Training Compliance Status" |
-| Submitting External Training | 9:30–11:00 | "Submitting External Training for Credit" |
-| Subscribe to Your Shifts | 12:45–13:15 | "Put Your Shifts in Your Phone Calendar" |
-| Requesting a Shift Swap | 13:15–14:30 | "How to Request a Shift Swap" |
-| Voting in an Election | 16:00–17:00 | "How to Vote in a Department Election" |
-| Setting Up Dark Mode | 18:00–19:00 | "Customizing Your Logbook (Dark Mode & More)" |
-| Privacy Choices & Your Data | 19:00–20:00 | "Your Privacy Choices — and Downloading Your Data" |
-| Adding to Home Screen | 20:30–21:00 | "Add The Logbook to Your Phone's Home Screen" |
+| Clip                         | Timecode    | Standalone Title                                   |
+| ---------------------------- | ----------- | -------------------------------------------------- |
+| How to RSVP                  | 5:00–6:00   | "How to RSVP for an Event in 30 Seconds"           |
+| QR Code Check-In             | 6:00–7:00   | "Checking In with a QR Code"                       |
+| Checking Training Status     | 8:00–9:30   | "Checking Your Training Compliance Status"         |
+| Submitting External Training | 9:30–11:00  | "Submitting External Training for Credit"          |
+| Subscribe to Your Shifts     | 12:45–13:15 | "Put Your Shifts in Your Phone Calendar"           |
+| Requesting a Shift Swap      | 13:15–14:30 | "How to Request a Shift Swap"                      |
+| Voting in an Election        | 16:00–17:00 | "How to Vote in a Department Election"             |
+| Setting Up Dark Mode         | 18:00–19:00 | "Customizing Your Logbook (Dark Mode & More)"      |
+| Privacy Choices & Your Data  | 19:00–20:00 | "Your Privacy Choices — and Downloading Your Data" |
+| Adding to Home Screen        | 20:30–21:00 | "Add The Logbook to Your Phone's Home Screen"      |
