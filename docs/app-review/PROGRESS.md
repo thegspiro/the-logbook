@@ -51,7 +51,7 @@ from its open list.
 | B10 | messaging & communications | MSG2 | ✅ (p1, p2) |
 | B11 | notifications | NOTIF2 | ✅ (p1, p2) |
 | B12 | integrations | INT2 | ✅ (p1, p2) |
-| B13 | forms | FORM2 | ⬜ |
+| B13 | forms | FORM2 | ✅ |
 | B14 | grants & fundraising | GF2 | ⬜ |
 | B15 | admin-hours | AH2 | ⬜ |
 | B16 | reports & analytics | RPT2 | ⬜ |
@@ -984,4 +984,25 @@ re-run unless directed).
   rate-limited + idempotent). Storefront reconciliation depth deferred to an A1
   pass. INT-3/INT-5 stand (flagged). No code changed. See integrations.md → Pass 2.
   Next: B13 forms.
+- **B13 forms ✅ (pass 2, against freshly-merged main) — no code change.** The merge
+  brought forms' pass-1 work (`2e8e51e`: FORM-6 `_is_empty_value`, FORM-7 all 14
+  client-facing returns → `safe_error_detail`) plus three migration commits
+  (index rename/reconcile + `server_default` on NOT-NULL cols for fresh-install raw
+  inserts). Re-verified FORM-6/FORM-7 hold, then ran the six pass-2 lenses — **all
+  clean:** update paths are `model_dump(exclude_unset=True)`-fed (no protected-column
+  injection; `FormUpdate`/`FormIntegrationUpdate` expose no FK);
+  `_validate_field_mappings` rejects field-mapping keys not on the form; forms is
+  Pattern-B clean (org/submitter/form names populated at the boundary); no
+  latent-500 (`_process_integrations` catches every processor exception — incl. the
+  `_reassign_prospect_pipeline` `ValueError` — into an internal `results` dict it
+  never returns; all service methods return `safe_error_detail` tuples, endpoints
+  guard `if error`); every field/integration/submission mutation resolves through
+  the org-scoped `get_form_by_id`. **Residual (LOW, unchanged):**
+  `FormFieldUpdate.condition_field_id` stored without a same-form check — a plain
+  `String(36)` (not a DB FK), set on the caller's own-org form, consumed only
+  client-side for conditional visibility (server never dereferences it), so a
+  dangling value is a no-op toggle, not a leak; flagged under BXC-1, not fixed to
+  avoid breaking the builder's two-phase save. Gate: flake8/black clean, 9
+  `TestIsEmptyValue` unit tests pass. See forms.md → Pass 2. Next: B14 grants &
+  fundraising.
 </content>

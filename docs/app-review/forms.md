@@ -1,6 +1,7 @@
-# Application Review — Forms (Tier B, 2nd pass)
+# Application Review — Forms (Tier B)
 
-**Prefix:** `FORM2` · **Iteration:** B13 · **Reviewed:** 2026-08-06
+**Prefix:** `FORM2` · **Iteration:** B13 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
 
 **Backend:** `endpoints/forms.py` (752 L, 21 endpoints), `public/forms.py` (209 L),
 `services/forms_service.py` (2,290 L), models `models/forms.py`
@@ -11,6 +12,55 @@ FORM-5 (require_authentication not enforced), FORM-6 (required = presence-only)
 left open.
 
 ---
+
+## Pass 2 (2026-08-08, against freshly-merged main) — no code change
+
+Run after the 144-commit merge. The merge brought forms' own pass-1 work
+(`2e8e51e`: FORM-6/FORM-7) plus three migration commits that renamed/reconciled
+the forms index set and gave NOT-NULL columns a `server_default` so raw inserts
+work on fresh installs (`sort_order server_default="0"`). Re-verified FORM-6
+(`_is_empty_value`) and FORM-7 (`safe_error_detail` on all 14 client-facing
+returns) hold on the merged tree, then applied the six pass-2 lenses. **All clean —
+nothing to fix.**
+
+- **Update-bypass:** all three update paths (`update_form`, `update_field`,
+  `update_integration`) are fed `model_dump(exclude_unset=True)` from typed
+  schemas, so their `setattr` loops can't inject `id`/`organization_id`/
+  `created_by`. Neither `FormUpdate` nor `FormIntegrationUpdate` exposes an FK.
+- **FK validation on the integration surface:** `_validate_field_mappings`
+  rejects any `field_mappings` key that isn't a field id on the form
+  (`bad_ids` check against `form.fields`), so a mapping can't reference a foreign
+  field. The cross-module submission writes (member/item/event) remain gated by
+  FORM-1/2's `_entity_in_org`.
+- **No projection read-leak / MS2-4:** forms is Pattern-B clean —
+  `organization_name`/`submitter_name`/`form_name` are populated at the boundary
+  (`public/forms.py:133`, `forms_service.py:939`); no eager-loaded FK leaks a
+  cross-org name.
+- **No latent-500:** `_process_integrations` wraps every processor call in
+  `try/except Exception`, capturing failures (incl. the `_reassign_prospect_pipeline`
+  `ValueError`, `forms_service.py:1810`) into an internal `results` dict it never
+  returns (`-> None`). Every public service method returns a
+  `(result, safe_error_detail(e))` tuple and every endpoint guards `if error`.
+- **Cross-org write:** every field/integration/submission mutation resolves
+  through the org-scoped `get_form_by_id` (or a query filtering
+  `organization_id`); forms carry `organization_id` directly. XC-3 clean.
+
+**Residual (unchanged, LOW):** `FormFieldUpdate.condition_field_id` is stored via
+`update_field`'s blind `setattr` without checking the referenced field belongs to
+the same form. It is a plain `String(36)` (not a DB FK), is set by a `forms.manage`
+user on their own org's form, and is **consumed only client-side** for conditional
+field visibility — the server never dereferences it to fetch data, so a
+dangling/foreign value degrades to a no-op toggle, never a leak or crash. Recorded
+under BXC-1 in `CROSS-CUTTING.md`; not fixed here because a within-form
+same-form check risks rejecting the builder's legitimate two-phase save
+(fields persisted first, conditions wired second) for no security gain.
+
+**No code changed.** The public-submission surface and integration writes are
+mature (FORM-1/2/3/6/7 done); the lens verifications are the deliverable.
+
+---
+
+## Pass 1 (2026-08-06)
 
 ## Scope
 
