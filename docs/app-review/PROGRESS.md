@@ -58,7 +58,7 @@ from its open list.
 | B17 | events | EV2 | ✅ (p1, p2) |
 | B18 | training | TR2 | ✅ (p1, p2) |
 | B19 | scheduling | SCH2 | ✅ (p1, p2) |
-| B20 | finance | FIN2 | 🔄 |
+| B20 | finance | FIN2 | ✅ (p1, p2) |
 | B21 | orgs, roles & users | ORU2 | ✅ (p1, p2) |
 | B22 | compliance & skills | CS2 | 🔄 |
 | B23 | security, audit & IP | SEC2 | 🔄 |
@@ -1118,4 +1118,18 @@ re-run unless directed).
   Lenses 2–5 clean (update endpoints use exclude_unset; name maps fed by org-scoped
   ids). **2 regression tests** (template rejects foreign apparatus). flake8/black
   clean. 500 fix in CHANGELOG. See scheduling.md → Pass 2. Next: B20 finance.
+- **B20 finance ✅ (pass 2).** Re-verified this well-hardened module (FIN-1/2/3/6
+  closed; `_validate_finance_fks` on budget/PR/CR/expense create+update; org-scoped
+  budget write-helpers; `approve_step` SoD; denominators guarded; the known
+  unscoped-approval-read DiD gap re-confirmed not-live). **1 fix — FIN-8** (LOW XC-1:
+  `create_dues_schedule`/`update_dues_schedule` — the one create/update pair the
+  "all 7 finance FK paths" statement missed — never called `_validate_finance_fks`,
+  so a client `fiscal_year_id` was splatted onto the row unvalidated. Bounded to a
+  dangling cross-tenant ref (no read-leak/corruption — only the id is projected),
+  but the exact FK the validator exists to catch; added the call to both paths).
+  Lenses 2/3/4 clean (responses expose only `*_id`; every finalize/approve path
+  org-resolves the entity). FIN-4/5/7 stay flagged; `requester_name` hardcoded `""`
+  noted. **2 regression tests** (create + update reject a foreign fiscal year).
+  flake8/black clean. No user-visible change. See finance.md → Pass 2. Next: B22
+  compliance & skills.
 </content>

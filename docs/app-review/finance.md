@@ -1,6 +1,7 @@
-# Application Review — Finance (Tier B, 2nd pass)
+# Application Review — Finance (Tier B)
 
-**Prefix:** `FIN2` · **Iteration:** B20 · **Reviewed:** 2026-08-06
+**Prefix:** `FIN2` · **Iteration:** B20 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-08 (pass 2)
 
 **Backend:** `endpoints/finance.py` (~1,370 L, 41 endpoints),
 `services/finance_service.py` (~1,930 L)
@@ -8,6 +9,40 @@
 **Prior audit:** `docs/module-audit/finance.md` (iteration 20) — FIN-1 (CRITICAL
 budget corruption), FIN-2, FIN-3 (dues PII), FIN-6 (dues idempotency) fixed; FIN-7
 partly fixed; FIN-4 (disburse SoD), FIN-5 (view scoping) flagged.
+
+---
+
+## Pass 2 (2026-08-08) — six-lens sweep
+
+Re-verified this well-hardened module: FIN-1/2/3/6 closed; `_validate_finance_fks`
+wired into the budget/PR/CR/expense create+update paths; org-scoped budget
+write-helpers; `approve_step`'s `assert_different_person`; both ratio computations
+guard their denominators (no divide-by-zero 500). The known DiD gap
+(`get_approval_records`/`get_current_pending_step` unscoped) re-confirmed **not
+live** (every call site passes an already-org-resolved `entity_id`). **1 fix.**
+
+### FIN-8 — LOW — Dues-schedule create/update skipped the finance FK validator (XC-1) — ✅ FIXED
+
+`_validate_finance_fks` guards budget/PR/CR/expense writes, but `create_dues_schedule`
+and `update_dues_schedule` — the one create/update pair the "all 7 paths" claim
+didn't cover — never called it, while `DuesScheduleCreate/Update` expose a client
+`fiscal_year_id` splatted straight onto the row. Impact is bounded to a dangling
+cross-tenant reference (`DuesScheduleResponse` exposes only the id, no eager-loaded
+fiscal-year name; `generate_member_dues` reads only `amount`/`due_date`), so no
+read-leak or money corruption today — but it's the exact FK the validator exists to
+catch. **Fix:** call `_validate_finance_fks` at the top of `create_dues_schedule`
+and after the not-found check in `update_dues_schedule` (the helper already
+validates `fiscal_year_id` and no-ops on absent keys). 2 regression tests
+(create + update reject a foreign fiscal year).
+
+**Flagged (unchanged):** FIN-4 (disburse-side SoD — `issue_check`/`mark_pr_paid`/
+`mark_expense_paid` need only `finance.manage`, no requester≠disburser check),
+FIN-5 (view scoping), FIN-7 residual (float→Decimal money math). Also noted (LOW,
+not fixed here): `PendingApprovalResponse.requester_name` is hardcoded `""` in
+`_get_entity_info` — a cosmetic MS2-4 unpopulated-name, no security impact.
+Cross-module FKs `station_id`/`apparatus_id`/`facility_id` on budget/PR are
+consistently unvalidated on **both** create and update (SET NULL, no projection) —
+pass-1's deliberate finance-FK-only scope, noted for a future cross-module batch.
 
 ---
 
