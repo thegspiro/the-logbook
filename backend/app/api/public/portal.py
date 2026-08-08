@@ -478,7 +478,8 @@ async def get_application_status(
     No authentication required — uses a unique token emailed to the prospect.
     Returns limited public-safe fields only.
 
-    Rate limit: 30 requests/min per IP
+    Rate limit: 100 requests/min per IP (the shared per-IP default). Enumeration
+    is impractical regardless — the status token is high-entropy.
     """
     from app.services.membership_pipeline_service import MembershipPipelineService
 

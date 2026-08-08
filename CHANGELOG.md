@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: sensitive list data is no longer briefly cached in the browser (2026-08-08)
+
+**Security**
+
+- **Several sensitive list views were being held in the app's short-lived in-memory
+  cache** — the member roster, private messages, the document list, integration
+  settings, error logs, and your notifications. Because of how the cache exclusions
+  were matched, the top-level lists slipped through even though their detail pages
+  were correctly excluded. All are now excluded (as are the meeting list and event
+  requests, which carry attendee/contact details), so this data is always fetched
+  fresh and never cached.
+
+### Onboarding: completed setup can no longer be replayed to add stations or apparatus (2026-08-08)
+
+**Security**
+
+- **After setup was finished, a still-valid setup session could still be used to add
+  stations or apparatus** to the organization, skipping the normal permission
+  checks. Those two setup steps now refuse to run once onboarding is complete, like
+  the other setup steps already did.
+
 ### Compliance & skills: no self-scoring on evaluations; reports count risk correctly (2026-08-08)
 
 **Fixed**

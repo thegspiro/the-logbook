@@ -62,10 +62,10 @@ from its open list.
 | B21 | orgs, roles & users | ORU2 | ✅ (p1, p2) |
 | B22 | compliance & skills | CS2 | ✅ (p1, p2) |
 | B23 | security, audit & IP | SEC2 | ✅ (p1, p2) |
-| B24 | core infra | CI2 | 🔄 |
-| B25 | onboarding | ONB2 | 🔄 |
-| B26 | public-portal | PP2 | 🔄 |
-| B27 | frontend shared | FE2 | 🔄 |
+| B24 | core infra | CI2 | ✅ (p1, p2) |
+| B25 | onboarding | ONB2 | ✅ (p1, p2) |
+| B26 | public-portal | PP2 | ✅ (p1, p2) |
+| B27 | frontend shared | FE2 | ✅ (p1, p2) |
 
 **36 features total.** After B27 the rotation wraps to A1.
 
@@ -1163,4 +1163,69 @@ re-run unless directed).
   org-agnostic IP block data. **2 compiled-SQL regression tests**. flake8/black
   clean. See security-audit-ip.md → Pass 2. **B19–B23 complete — 23 of 27 Tier B
   modules through pass 2.** Next: B24 core infra.
+- **B24 core infra ✅ (pass 2) — no code change.** Re-verified the crypto/auth/
+  config/cache/middleware foundation against the infra lenses: all middleware pure
+  ASGI (no BaseHTTPMiddleware; async wrapped receives; Set-Cookie preserved); every
+  request-state cache bounded + evicted (Pitfall #9); crypto fail-closed (AES-256-GCM
+  `$gcm2$`, decrypt re-raises on no-key-verifies; `clear_pattern` footgun confirmed
+  removed); JWT HS256+exp; secrets masked. **1 LOW DiD flag — CI-11:** the auth
+  rate-limit's "fall back to in-memory on Redis error" path is unreachable (the redis
+  helper returns False instead of raising, so a transient-command-error auth request
+  is limited by neither backend — fail-open in that narrow window). Not
+  attacker-triggerable; flagged (honoring intent is a behavior change). No code
+  changed. See core-infra.md → Pass 2. Next: B25 onboarding.
+- **B25 onboarding ✅ (pass 2).** Re-verified pass-1 (post-completion reset blocked;
+  second owner/org blocked; ONB-8 status minimal-response). **1 fix — ONB-9** (MED:
+  pass-1 added a `needs_onboarding()` replay guard to the mutating onboarding steps
+  because completion doesn't delete the session, but `/session/stations` and
+  `/session/apparatus` were missed — both write real Facility/Location/BasicApparatus
+  rows, so a stale/stolen session could inject stations/apparatus into a completed
+  org, bypassing the authenticated facilities.manage path; added the same guard to
+  both). **Flagged (LOW):** `/complete` persists IT-team users before validating
+  required steps; `save_session_roles` no slug-dedup → IntegrityError 500;
+  `/organization` missing `except Exception`; `/status` unthrottled. **2 DB-free
+  regression tests.** flake8/black clean. Security fix in CHANGELOG. See
+  onboarding.md → Pass 2. Next: B26 public-portal.
+- **B26 public-portal ✅ (pass 2) — essentially clean.** Re-verified the
+  unauthenticated surface (org-scoped on the API key, data-minimized, fail-closed
+  rate limiting, high-entropy tokens, no SSRF/raw-SQL; no unguarded `.isoformat()`
+  500). **No exploitable defect.** 1 doc correction (the app-status docstring said
+  30/min but enforces the shared 100/min default — corrected). **Flagged (LOW):**
+  the app-status endpoint uses the per-process `validate_ip_rate_limit` rather than
+  the shared-Redis `public_rate_limit` its siblings use (100×N/min behind N workers;
+  LOW because the status token is high-entropy) — hardening-consistency, not a
+  drive-by; PP-6/PP-7 residuals stand. No functional code changed. See
+  public-portal.md → Pass 2. Next: B27 frontend shared.
+- **B27 frontend shared ✅ (pass 2) — Tier B pass 2 COMPLETE.** Re-verified pass-1
+  (no `dangerouslySetInnerHTML`; render helpers text-render; both axios instances
+  set withCredentials + CSRF + shared refreshPromise; only `has_session` in
+  localStorage; FE-1 object-detail handling). **1 fix — FE-2 (HIGH):** the HIPAA
+  `UNCACHEABLE_PREFIXES` matched via `url.startsWith(prefix)`, so a trailing-slash
+  prefix (`/users/`) matched `/users/123` but **not the bare list endpoint** `/users`
+  — which the roster service hits on the cached global instance, caching member/PII
+  lists in-memory for up to 90s (the list already omits the slash on `/elections`/
+  `/officers`/`/audit-logs` for exactly this reason). Six confirmed live — `/users`
+  (roster, HIGH), `/messages` (private messages, HIGH), `/integrations` (secrets,
+  MED-HIGH), `/documents`, `/errors`, `/notifications/my` — fixed by dropping the
+  trailing slash (covers list + sub-paths; no cacheable endpoint lost; verified no
+  collision). **2 hardening additions:** `/meetings` + `/event-requests` (attendee/
+  contact PII, previously unexcluded). **1 LOW flag** (module-factory 401 handler
+  lacks the onboarding guard). Regression test pins all 8 exclusions + non-collision
+  (`apiCache.test.ts` 71 pass); tsc + eslint clean. Security fix in CHANGELOG. See
+  frontend-shared.md → Pass 2.
+
+---
+
+## 🏁 Pass 2 complete (2026-08-08)
+
+**All 27 Tier B modules (B1–B27) reviewed in pass 2.** Each iteration re-verified
+the pass-1 landed fixes, applied the six pass-2 lenses (update-bypass, projection
+read-leak, cross-org write, unpopulated `*_name`, cross-module restriction bypass,
+latent-500) plus the XC org-scoping rules, applied only verified/safe fixes, flagged
+product/behavior/migration decisions, added regression tests, and passed the
+completion gate (flake8/black/tsc/eslint; DB-backed tests are the known no-MySQL
+sandbox limit). Headline finds: **ORU-7d (CRITICAL** rank privilege-escalation),
+**FE-2 (HIGH** HIPAA cache leak), **AH-6 (HIGH** bulk-approve SoD bypass), plus a
+class of latent-500s (EV-9 end-event, SCH-8, GF-10/11) and cross-org read-leaks
+(TR-7/8, EV-8, EV-10) the finding-focused pass 1 didn't reach.
 </content>
