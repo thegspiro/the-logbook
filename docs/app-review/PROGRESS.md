@@ -59,7 +59,7 @@ from its open list.
 | B18 | training | TR2 | ✅ (p1, p2) |
 | B19 | scheduling | SCH2 | 🔄 |
 | B20 | finance | FIN2 | 🔄 |
-| B21 | orgs, roles & users | ORU2 | 🔄 |
+| B21 | orgs, roles & users | ORU2 | ✅ (p1, p2) |
 | B22 | compliance & skills | CS2 | 🔄 |
 | B23 | security, audit & IP | SEC2 | 🔄 |
 | B24 | core infra | CI2 | ⬜ |
@@ -1088,4 +1088,23 @@ re-run unless directed).
   pass. flake8/black clean. Cross-org leak fixes in CHANGELOG (Security). See
   training.md → Pass 2. **Next: B19 scheduling.** B14–B18 complete — 18 of 27 Tier B
   modules through pass 2.
+- **B21 orgs, roles & users ✅ (pass 2).** Re-verified ORU-7a/7b. The
+  privilege-escalation lens found a **CRITICAL** — ORU-7d: effective permissions are
+  the union of a member's positions *and* their operational rank
+  (`_collect_user_permissions` adds `get_rank_default_permissions(user.rank)`), but
+  while every role grant is ceiling-checked, **rank had no ceiling** and a rank
+  change is gated only on `members.manage`. The `fire_chief` rank carries
+  `settings.manage`/`security.manage`/`positions.manage_permissions`, which the
+  default secretary lacks — so a secretary could `POST /users` a member at
+  `rank="fire_chief"` with a chosen password (only `role_ids` were ceiling-checked,
+  not `rank`) and log in as near-superadmin, or `PATCH .../profile` their *own* rank
+  to fire_chief and gain those perms instantly. Fixed with a new
+  `_enforce_rank_grant_ceiling` (mirrors the role ceiling — a rank's permissions
+  must be ⊆ the caller's; wildcards honored; 403 + CRITICAL security alert), wired
+  into `create_member` (any provided rank) and `update_user_profile` (only on an
+  actual rank change). **2 LOW latent-500s** flagged (both unreachable); lenses 1–4
+  clean (ALLOWED_PROFILE_FIELDS allowlist, org-scoped by-id, role org validated).
+  **4 DB-free regression tests** (`test_rank_grant_ceiling.py`). flake8/black clean.
+  Security fix in CHANGELOG. See orgs-roles-users.md → Pass 2. Next: B22 compliance
+  & skills.
 </content>

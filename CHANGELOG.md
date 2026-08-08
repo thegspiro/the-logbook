@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Members: setting a rank can no longer grant permissions beyond your own (2026-08-08)
+
+**Security**
+
+- **A member's rank grants permissions, but assigning a rank wasn't held to the
+  same limit as assigning a role.** Anyone allowed to edit ranks (for example, a
+  secretary with member-management access) could set a member — or themselves — to
+  a chief-level rank and quietly gain administrator powers like managing settings
+  and security. Rank assignment is now capped the same way role assignment is: you
+  can only assign a rank whose permissions are within your own, and a blocked
+  attempt is logged as a security alert.
+
 ### Training: closed cross-department leaks in category reports and exports (2026-08-08)
 
 **Security**
