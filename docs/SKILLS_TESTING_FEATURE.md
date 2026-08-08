@@ -1040,6 +1040,87 @@ works without a roster to find your own name in.
 
 ---
 
+## 21. Officer Actions on the Result Page _(2026-08-08)_
+
+Accept, release and void were previously reachable only from the admin list, so
+an officer who opened a scorecard to judge it had to navigate back to a row and
+act on a record they could no longer see. All three now also sit on the result
+page itself (`SkillTestOfficerActions`), gated on `training.manage` and on the
+test not being practice — the three endpoints all require that permission, so a
+member examiner would otherwise be shown buttons that `403`.
+
+### 21.1 The panel states the consequence, not the mechanism
+
+Every one of these actions changes what the person tested experiences, and the
+rules governing that are inherited three levels deep (test → template →
+department). An officer cannot be expected to hold that chain in their head, so
+each button carries a sentence naming _this candidate_ and _this outcome_ —
+whether they are notified, and whether they will read the notes or only the
+scores.
+
+That copy is driven by **`effective_result_disclosure` / `effective_result_release`**
+on `SkillTestResponse`: the policy resolved by `resolve_disclosure_policy` and
+sent down, rather than reimplemented in TypeScript where it would drift. The
+pre-existing `result_disclosure` / `result_release` fields carry only the test's
+own overrides — usually `NULL` — and are **not** what a UI should read to
+describe behavior. `_build_test_response` takes `org_config` so the resolution
+covers the department default too.
+
+### 21.2 Release is offered only where it is a real step
+
+Under `on_completion` the result is already as visible as it will ever be, and a
+Release button would imply the member is waiting on something. The panel
+therefore shows it only for `on_release` + not yet released + disclosure not
+`none`, and disables it while the result is still pending validation — there is
+no decided outcome to release. (The admin list keeps its looser rule; the
+endpoint is idempotent and refuses never-shown results, so offering it there
+saves working out which mode a template inherits.)
+
+### 21.3 A voided result renders as a result
+
+`ActiveSkillTestPage` previously routed only `status === 'completed'` to the
+read-only view, so a **voided** test fell through to the live evaluation screen:
+editable criteria and a "Complete Test" button for a record the API refuses
+every write on. Voided now lands in the same read-only branch, with the outcome
+stated as withdrawn — the marks stay on display, since the scorecard is the
+evidence of what was withdrawn, but they must not read as a standing pass.
+
+---
+
+## 22. Candidate Notification _(2026-08-08)_
+
+An in-app notification (`NotificationCategory.TRAINING`, linking to
+`/training/my-skill-tests/{id}`) is sent to the candidate when a result becomes
+**theirs to read** — which is not the same event as an officer clicking
+something.
+
+`notify_candidate_result_available` is gated on
+`candidate_result_view` — the same `resolve_result_view` the read endpoints use,
+with the reader fixed as the candidate — rather than on the calling endpoint:
+
+| Transition                                       | Notified                                                |
+| ------------------------------------------------ | ------------------------------------------------------- |
+| `POST /complete` by an officer (auto-validates)  | Yes, under `on_completion`                              |
+| `POST /validate` under `on_completion`           | Yes                                                     |
+| `POST /validate` under `on_release`              | **No** — it counts, but is not yet readable             |
+| `POST /release`                                  | Yes                                                     |
+| Either, where disclosure resolves to `none`      | **No** — the notification would disclose by implication |
+| `POST /complete` by a member (leaves it pending) | **No** — no decided outcome exists                      |
+| `POST /void` on a result the candidate could see | Yes, with the reason (`notify_candidate_result_voided`) |
+| `POST /void` on a result they could never see    | **No**                                                  |
+| Anything on a practice attempt                   | **No**                                                  |
+
+The message names the tier it is granting: at `scores` it states that examiner
+notes are **not** included, so nobody goes looking for commentary that
+`redact_test_for_view` already stripped.
+
+**Best-effort by construction.** Every failure is caught and logged: the result
+stands either way, and a notification outage must not fail the validation or
+release that produced it. Delivery rides `NotificationsService.log_notification`,
+so web push to the member's registered devices comes along with no further work.
+
+---
+
 ## 10. Implementation Phases
 
 ### Phase 1 — Foundation

@@ -58,6 +58,8 @@ from app.services.skills_testing_service import (
     build_template_snapshot,
     calculate_test_result,
     is_pending_validation,
+    notify_candidate_result_available,
+    notify_candidate_result_voided,
     redact_test_for_view,
     resolve_disclosure_policy,
     resolve_elapsed_seconds,
@@ -1108,7 +1110,13 @@ async def create_test(
             username=current_user.username,
         )
 
-    return _build_test_response(new_test, template, candidate, current_user)
+    return _build_test_response(
+        new_test,
+        template,
+        candidate,
+        current_user,
+        org_config=await _org_training_config(db, current_user.organization_id),
+    )
 
 
 @router.get("/tests/{test_id}", response_model=SkillTestResponse)
@@ -1186,6 +1194,7 @@ async def get_test(
         voider,
         view=result_view,
         validator=validator,
+        org_config=await _org_training_config(db, current_user.organization_id),
     )
 
 
@@ -1308,7 +1317,13 @@ async def update_test(
     examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
     examiner = examiner_result.scalar_one_or_none()
 
-    return _build_test_response(test, template, candidate, examiner)
+    return _build_test_response(
+        test,
+        template,
+        candidate,
+        examiner,
+        org_config=await _org_training_config(db, current_user.organization_id),
+    )
 
 
 def _ensure_utc(dt: datetime | None) -> datetime | None:
@@ -1489,7 +1504,23 @@ async def complete_test(
             username=current_user.username,
         )
 
-    return _build_test_response(test, template, candidate, examiner)
+    org_config = await _org_training_config(db, current_user.organization_id)
+
+    # An officer's completion is also the sign-off, so for them this is the
+    # moment the result becomes the candidate's to read. A member's submission
+    # notifies nobody yet — the helper sees it is pending validation and stays
+    # quiet until an officer accepts it.
+    await notify_candidate_result_available(
+        db,
+        test=test,
+        template=template,
+        org_config=org_config,
+        organization_id=current_user.organization_id,
+    )
+
+    return _build_test_response(
+        test, template, candidate, examiner, org_config=org_config
+    )
 
 
 @router.delete("/tests/{test_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1680,8 +1711,12 @@ async def validate_test(
     examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
     examiner = examiner_result.scalar_one_or_none()
 
+    org_config = await _org_training_config(db, current_user.organization_id)
+
     if test.validated_at:
-        return _build_test_response(test, template, candidate, examiner)
+        return _build_test_response(
+            test, template, candidate, examiner, org_config=org_config
+        )
 
     # SEC (CS-8): validation is the step that makes a result count, so it is the
     # step self-dealing has to be blocked at. Without this an officer could have
@@ -1746,7 +1781,20 @@ async def validate_test(
         username=current_user.username,
     )
 
-    return _build_test_response(test, template, candidate, examiner)
+    # Tell the candidate, but only if this is the step that actually put the
+    # result in front of them. Under the on_release mode it is not — the helper
+    # re-resolves visibility and stays silent until the separate release.
+    await notify_candidate_result_available(
+        db,
+        test=test,
+        template=template,
+        org_config=org_config,
+        organization_id=current_user.organization_id,
+    )
+
+    return _build_test_response(
+        test, template, candidate, examiner, org_config=org_config
+    )
 
 
 @router.post("/tests/{test_id}/release", response_model=SkillTestResponse)
@@ -1800,12 +1848,14 @@ async def release_test_results(
     examiner_result = await db.execute(select(User).where(User.id == test.examiner_id))
     examiner = examiner_result.scalar_one_or_none()
 
-    if test.released_at:
-        return _build_test_response(test, template, candidate, examiner)
+    org_config = await _org_training_config(db, current_user.organization_id)
 
-    disclosure, _release = resolve_disclosure_policy(
-        test, template, await _org_training_config(db, current_user.organization_id)
-    )
+    if test.released_at:
+        return _build_test_response(
+            test, template, candidate, examiner, org_config=org_config
+        )
+
+    disclosure, _release = resolve_disclosure_policy(test, template, org_config)
     if disclosure == ResultDisclosure.NONE.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1838,7 +1888,20 @@ async def release_test_results(
         username=current_user.username,
     )
 
-    return _build_test_response(test, template, candidate, examiner)
+    # Releasing is the moment the member can read a result that was deliberately
+    # held back, so it is the moment worth telling them about. Silent if the
+    # test is still awaiting validation — there is no decided result to read.
+    await notify_candidate_result_available(
+        db,
+        test=test,
+        template=template,
+        org_config=org_config,
+        organization_id=current_user.organization_id,
+    )
+
+    return _build_test_response(
+        test, template, candidate, examiner, org_config=org_config
+    )
 
 
 @router.get("/tests/{test_id}/viewers", response_model=list[SkillTestViewerResponse])
@@ -2176,7 +2239,13 @@ async def cancel_test(
             username=current_user.username,
         )
 
-    return _build_test_response(test, template, candidate, examiner)
+    return _build_test_response(
+        test,
+        template,
+        candidate,
+        examiner,
+        org_config=await _org_training_config(db, current_user.organization_id),
+    )
 
 
 @router.post("/tests/{test_id}/void", response_model=SkillTestResponse)
@@ -2296,7 +2365,27 @@ async def void_test(
         username=current_user.username,
     )
 
-    return _build_test_response(test, template, candidate, examiner, current_user)
+    org_config = await _org_training_config(db, current_user.organization_id)
+
+    # Only a candidate who could see the result needs to hear it was withdrawn.
+    # For anyone else the notification would be the disclosure the policy exists
+    # to prevent: "your evaluation has been voided" says one happened.
+    await notify_candidate_result_voided(
+        db,
+        test=test,
+        template=template,
+        org_config=org_config,
+        organization_id=current_user.organization_id,
+    )
+
+    return _build_test_response(
+        test,
+        template,
+        candidate,
+        examiner,
+        current_user,
+        org_config=org_config,
+    )
 
 
 @router.post("/tests/{test_id}/email-results")
@@ -2696,6 +2785,7 @@ def _build_test_response(
     voider: User | None = None,
     view: str = ResultDisclosure.FULL.value,
     validator: User | None = None,
+    org_config: object | None = None,
 ) -> SkillTestResponse:
     """Build a SkillTestResponse with denormalized names and template structure.
 
@@ -2703,11 +2793,19 @@ def _build_test_response(
     at the single point every read path funnels through, rather than at each
     endpoint — a new endpoint that forgets to redact is a leak, and this way
     there is nothing to forget.
+
+    ``org_config`` is the department's training config, needed only to resolve
+    the effective disclosure policy. Passing None resolves against the test and
+    template alone, which is correct wherever the department has set no default
+    and harmless elsewhere — the field is advisory UI copy, never a gate.
     """
     # The structure the client renders the scorecard from must be the one this
     # test was taken under — the live template may have been edited since, and
     # criterion identity is positional.
     scored_against = resolve_test_template(test, template)
+    effective_disclosure, effective_release = resolve_disclosure_policy(
+        test, template, org_config
+    )
 
     response = SkillTestResponse(
         id=test.id,
@@ -2730,6 +2828,8 @@ def _build_test_response(
         updated_at=_ensure_utc(test.updated_at),
         result_disclosure=test.result_disclosure,
         result_release=test.result_release,
+        effective_result_disclosure=effective_disclosure,
+        effective_result_release=effective_release,
         result_viewer_positions=test.result_viewer_positions,
         released_at=_ensure_utc(test.released_at),
         released_by=test.released_by,

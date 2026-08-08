@@ -54,6 +54,14 @@ const mockCompletedPracticeTest = {
   is_practice: true,
 };
 
+const mockVoidedTest = {
+  ...mockCompletedTest,
+  status: 'voided' as const,
+  voided_at: '2026-01-16T09:00:00Z',
+  voided_by_name: 'Chief Adams',
+  void_reason: 'Scored against the wrong candidate',
+};
+
 /** A two-section scorecard: a statement that marks itself, then scoreable steps. */
 const mockTestWithSections = {
   ...mockInProgressPracticeTest,
@@ -77,6 +85,7 @@ let currentMockTest:
   | typeof mockInProgressTest
   | typeof mockInProgressPracticeTest
   | typeof mockTestWithSections
+  | typeof mockVoidedTest
   | null = null;
 // The page reads the running flag through getState() as well as through the
 // hook, so the mock has to hold it like the real store does.
@@ -189,6 +198,28 @@ describe('ActiveSkillTestPage', () => {
       renderWithRouter(<ActiveSkillTestPage />);
 
       expect(screen.getByRole('button', { name: /back to tests/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('Voided test view', () => {
+    // A voided test used to fall through to the live evaluation screen, which
+    // offered editable criteria and a Complete Test button for a record the
+    // API refuses every write on.
+    it('should show the read-only result view, not the live evaluation screen', () => {
+      currentMockTest = mockVoidedTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.queryByRole('button', { name: /complete test/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /back to tests/i })).toBeInTheDocument();
+    });
+
+    it('should state the result was withdrawn rather than showing it as a standing pass', () => {
+      currentMockTest = mockVoidedTest;
+      renderWithRouter(<ActiveSkillTestPage />);
+
+      expect(screen.getByText('Voided')).toBeInTheDocument();
+      expect(screen.getByText(/withdrawn and counts toward nothing/)).toBeInTheDocument();
+      expect(screen.queryByText('Passed')).not.toBeInTheDocument();
     });
   });
 

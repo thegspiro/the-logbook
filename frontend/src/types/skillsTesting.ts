@@ -227,6 +227,11 @@ export interface SkillTest {
   /** Disclosure overrides set on this test; null inherits the template's. */
   result_disclosure?: ResultDisclosure | undefined;
   result_release?: ResultRelease | undefined;
+  /** The policy actually in force, resolved test → template → department by the
+   *  backend. These are what the UI must read to tell an officer what the
+   *  candidate will see; the raw overrides above are usually null. */
+  effective_result_disclosure?: ResultDisclosure | undefined;
+  effective_result_release?: ResultRelease | undefined;
   result_viewer_positions?: string[] | undefined;
   /** Release trail — set once an officer releases the result. */
   released_at?: string | undefined;

@@ -283,13 +283,22 @@ class SkillTestResponse(UTCResponseBase):
     created_at: datetime
     updated_at: datetime
 
-    # Resolved disclosure policy in force for this test, so the UI can explain
-    # what the candidate will see without recomputing the inheritance chain.
+    # Overrides set on this test itself. Usually null — the setting normally
+    # lives on the template or the department default — so a UI that wants to
+    # tell an officer what the candidate will see must read the effective_*
+    # fields below, not these.
     result_disclosure: Optional[str] = None
     result_release: Optional[str] = None
     result_viewer_positions: Optional[list] = None
     released_at: Optional[datetime] = None
     released_by: Optional[UUID] = None
+
+    # The policy actually in force, resolved down the test → template →
+    # department chain. Sent so the officer-facing UI can state, before they
+    # accept or void a result, exactly what the member will end up seeing —
+    # without reimplementing the inheritance rules in TypeScript.
+    effective_result_disclosure: Optional[str] = None
+    effective_result_release: Optional[str] = None
 
     # Void trail — populated only when an official result has been withdrawn.
     voided_at: Optional[datetime] = None

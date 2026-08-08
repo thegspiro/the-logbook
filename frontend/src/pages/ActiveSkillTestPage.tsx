@@ -36,6 +36,7 @@ import {
   Trash2,
   Mail,
   RotateCcw,
+  Ban,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
@@ -46,6 +47,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
 import { hydrateTemplateSections } from '../utils/skillTemplateSections';
 import { TestViewersPanel } from '../components/training/TestViewersPanel';
+import { SkillTestOfficerActions } from '../components/training/SkillTestOfficerActions';
 import { getErrorMessage, toAppError } from '../utils/errorHandling';
 import type {
   SkillCriterion,
@@ -1351,8 +1353,11 @@ export const ActiveSkillTestPage: React.FC = () => {
     );
   }
 
-  // Completed test — full detail view (read-only)
-  if (currentTest.status === 'completed' && !reviewing) {
+  // Completed test — full detail view (read-only). A voided test lands here
+  // too: it is a finished result that was withdrawn, and routing it to the live
+  // evaluation UI below would hand an officer editable criteria for a record
+  // the API refuses every write on.
+  if (showingResults && !reviewing) {
     return (
       <div className="flex min-h-screen flex-col">
         {/* Header */}
@@ -1374,7 +1379,11 @@ export const ActiveSkillTestPage: React.FC = () => {
             <div className="text-center">
               <p className="text-theme-text-primary text-sm font-bold">{currentTest.template_name}</p>
               <p className="text-theme-text-muted text-xs">
-                {currentTest.is_practice ? 'Practice Results' : 'Test Results'}
+                {currentTest.status === 'voided'
+                  ? 'Voided Result'
+                  : currentTest.is_practice
+                    ? 'Practice Results'
+                    : 'Test Results'}
               </p>
             </div>
             <div className="w-16" /> {/* Spacer for centering */}
@@ -1406,34 +1415,52 @@ export const ActiveSkillTestPage: React.FC = () => {
             </div>
           )}
 
-          {/* Result banner */}
-          <div
-            className={`mb-4 flex items-center gap-3 rounded-xl p-4 ${
-              currentTest.result === 'pass'
-                ? 'border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
-                : 'border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
-            }`}
-          >
-            {currentTest.result === 'pass' ? (
-              <CheckCircle2 className="h-10 w-10 shrink-0 text-green-500" />
-            ) : (
-              <XCircle className="h-10 w-10 shrink-0 text-red-500" />
-            )}
-            <div className="flex-1">
-              <p
-                className={`text-lg font-bold ${currentTest.result === 'pass' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}
-              >
-                {currentTest.result === 'pass' ? 'Passed' : 'Failed'}
-              </p>
-              {currentTest.overall_score != null && (
-                <p
-                  className={`text-sm font-medium ${currentTest.result === 'pass' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
-                >
-                  Overall Score: {Math.round(currentTest.overall_score)}%
+          {/* Result banner. A voided result keeps its marks on display — the
+              scorecard is the evidence of what was withdrawn — but must not
+              read as a standing pass or fail, so the outcome is stated as
+              withdrawn and the pass/green treatment is dropped. */}
+          {currentTest.status === 'voided' ? (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+              <Ban className="h-10 w-10 shrink-0 text-amber-500" />
+              <div className="flex-1">
+                <p className="text-lg font-bold text-amber-700 dark:text-amber-300">Voided</p>
+                <p className="text-sm font-medium text-amber-600 dark:text-amber-400">
+                  This result was withdrawn and counts toward nothing
+                  {currentTest.overall_score != null
+                    ? ` (recorded ${currentTest.result === 'pass' ? 'pass' : 'fail'}, ${Math.round(currentTest.overall_score)}%)`
+                    : ''}
                 </p>
-              )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div
+              className={`mb-4 flex items-center gap-3 rounded-xl p-4 ${
+                currentTest.result === 'pass'
+                  ? 'border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
+                  : 'border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
+              }`}
+            >
+              {currentTest.result === 'pass' ? (
+                <CheckCircle2 className="h-10 w-10 shrink-0 text-green-500" />
+              ) : (
+                <XCircle className="h-10 w-10 shrink-0 text-red-500" />
+              )}
+              <div className="flex-1">
+                <p
+                  className={`text-lg font-bold ${currentTest.result === 'pass' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}
+                >
+                  {currentTest.result === 'pass' ? 'Passed' : 'Failed'}
+                </p>
+                {currentTest.overall_score != null && (
+                  <p
+                    className={`text-sm font-medium ${currentTest.result === 'pass' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                  >
+                    Overall Score: {Math.round(currentTest.overall_score)}%
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Test details grid */}
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1510,6 +1537,17 @@ export const ActiveSkillTestPage: React.FC = () => {
                 candidateId={currentTest.candidate_id}
                 examinerId={currentTest.examiner_id}
               />
+            </div>
+          )}
+
+          {/* What the officer can do about this result, last: the decision is
+              made after reading the scorecard, and this is where they arrive
+              having read it. Officers only — accept, release and void all
+              require training.manage, so a member examiner would be shown
+              buttons that 403. */}
+          {!currentTest.is_practice && isOfficer && (
+            <div className="mt-4">
+              <SkillTestOfficerActions test={currentTest} />
             </div>
           )}
         </div>
