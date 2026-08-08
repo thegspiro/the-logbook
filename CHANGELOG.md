@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation: the Member Lifecycle page was documented but never built (2026-08-08)
+
+**Fixed (documentation)**
+
+- **`docs/training/01-membership.md` described a "Member Lifecycle Management"
+  page with four tabs — Archived Members, Overdue Returns, Leave of Absence, and
+  Tier Configuration. No such page exists**, and it appears never to have.
+  `/members/admin` has exactly three tabs: Member Management, Add Member, Import
+  Members. Every navigation instruction pointing at the phantom page has been
+  corrected across the membership, training, events, inventory and troubleshooting
+  guides.
+- **A correction to the 2026-08-07 entry for this**, which claimed membership
+  tiers "are configured under organization settings." That was taken from a commit
+  message rather than from the code and is wrong. Tiers are _stored_ in
+  `Organization.settings["membership_tiers"]`, but **no screen reads or writes
+  them** — `getTierConfig`, `updateTierConfig` and `advanceMembershipTiers` exist
+  in the frontend service layer with zero callers.
+- **Screenshot `01-22-member-lifecycle.png` was mislabelled.** It was captured at
+  `/members/admin` and applied under a "Member Lifecycle Management page" caption,
+  so a correct screenshot of the Members Admin hub read as evidence that the
+  lifecycle page existed. Caption and manifest `alt` corrected; the image itself
+  was always fine.
+
+**Known gaps this surfaced** (product, not documentation — endpoints,
+permissions and service methods all exist and are tested; only the screens are
+missing). Full inventory with the API surface for each is in
+`docs/KNOWN_LIMITATIONS.md`:
+
+- **Archiving a member is a one-way door in the UI.** You archive from the member
+  profile; reactivating is API-only.
+- **A leave of absence cannot be edited or cancelled from any screen.** Creating
+  one works (from Waiver Management, which is where it actually lives). A leave
+  pro-rates hours, shift and call requirements, so a wrong end date quietly
+  changes someone's compliance with no way to put it right.
+- **Membership tier configuration has no UI at all.** With no tiers configured, a
+  tier change accepts _any_ value — validation only engages once tiers exist, so
+  the unconfigured state is also the unvalidated one.
+- **Tier auto-advancement has no trigger.** No button and no scheduled task calls
+  `POST /users/advance-membership-tiers`, so advancement never runs on its own.
+- **Overdue member property returns have no screen.** (The Inventory module's
+  "Overdue Returns" figure counts checkouts, a different thing — plausibly why
+  this was assumed to exist.)
+
 ### Skills testing: the member can see their own results, and a scorecard can no longer drift (2026-08-08)
 
 **Added**

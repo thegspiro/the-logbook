@@ -476,7 +476,7 @@ Where `eligible_meetings = total_meetings − per_meeting_waivers − meetings_d
 
 ### Leave of Absence & Meeting Attendance
 
-When a member has an active **Leave of Absence** (created via **Administration > Member Lifecycle**), any meetings whose date falls within the leave period are automatically excluded from the attendance denominator. This means:
+When a member has an active **Leave of Absence** (created via **Members > Admin > Waivers**), any meetings whose date falls within the leave period are automatically excluded from the attendance denominator. This means:
 
 - The member's attendance percentage is not penalized for meetings they could not attend
 - Officers do **not** need to grant individual per-meeting waivers for members on formal leave

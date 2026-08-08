@@ -204,12 +204,18 @@ export const SHOTS = [
     route: "/prospective-members",
   },
   {
+    // Corrected 2026-08-08. This was captured at /members/admin but described as
+    // a "Member Lifecycle Management page showing the four tab buttons" — a page
+    // that does not exist (see docs/KNOWN_LIMITATIONS.md, "Member Lifecycle").
+    // The capture was always of the Members Admin hub; only the caption was
+    // wrong, which made a correct screenshot read as evidence for a fictional
+    // page. Renaming the id would orphan the committed PNG, so the id stays and
+    // the alt text tells the truth.
     id: "01-22-member-lifecycle",
     doc: "01-membership.md",
     line: 567,
-    anchor:
-      "Screenshot of the Member Lifecycle Management page showing the four tab buttons",
-    alt: "Member Lifecycle Management page with its tab bar and archived member list",
+    anchor: "The Members Admin hub — Member Management, Add Member",
+    alt: "The Members Admin hub — Member Management, Add Member and Import Members tabs",
     route: "/members/admin",
   },
 

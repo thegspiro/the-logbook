@@ -1,10 +1,20 @@
-# Script 5: Training Officer — Managing Certifications & Programs
+# Script 5: Training Officer, Part 1 — Building Your Training Program
 
 **Video Type:** Role-Based Guide (Medium-Form)
-**Estimated Length:** 25–30 minutes
+**Estimated Length:** 13–15 minutes
 **Target Audience:** Training Officers, Safety Officers, Compliance Officers
 **Roles Covered:** training_officer, safety_officer
-**Chapters:** 9 (each designed as a standalone clip)
+**Chapters:** 5 (each designed as a standalone clip)
+**Requires permission:** `training.manage`
+
+> **This is Part 1 of two.** Part 1 sets the system up: the dashboard, building
+> programs and requirements, and recording completions.
+> [Part 2](./16-training-officer-part-2.md) uses it: evaluating members, proving
+> compliance, and putting training on the calendar.
+>
+> They were one 26-minute video. The break is where a training officer has
+> something to go away and do — build their real requirements — rather than
+> fourteen more minutes of features that need those requirements to exist first.
 
 ---
 
@@ -30,10 +40,16 @@ and skills testing status.]**
 
 **[CALLOUT: Training Officer capabilities list]**
 
-> "We'll cover: the Training Officer Dashboard, managing training programs and
-> requirements, recording training completions, tracking certifications and
-> expirations, skills testing, compliance reporting, and integration with events
-> and scheduling."
+> "This is Part 1 of two, and it's the setup half. We'll cover the Training
+> Officer Dashboard, building training programs and the requirements inside them,
+> and every way a completion gets recorded — by you, in bulk after a class, or by
+> a member submitting their own."
+
+> "By the end of it the system knows what your department owes and what's been
+> paid against it. **Part 2** is about using that: skills testing, compliance
+> reporting, and putting training on the calendar."
+
+**[CALLOUT: "Part 1: build it · Part 2: run it"]**
 
 **[TRANSITION: Dashboard walkthrough]**
 
@@ -344,399 +360,69 @@ action]**
 
 **[CALLOUT: "Reverse an approval or void a record — mistakes are easy to undo"]**
 
-**[TRANSITION: Skills testing]**
+**[TRANSITION: Wrap-up]**
 
 ---
 
-## CHAPTER 5: Skills Testing (12:00 – 16:00)
+## CHAPTER 5: What You've Built, and What's Next (12:00 – 13:00)
 
-### WHAT IS SKILLS TESTING? (12:00 – 13:00)
+### WHERE THAT LEAVES YOU (12:00 – 12:30)
 
-**[SCREEN: Navigate to Skills Testing (SkillsTestingPage)]**
+**[SCREEN: The Training Officer Dashboard again — the same view from Chapter 2,
+now populated with real programs, requirements and recorded completions.]**
 
-> "Skills testing goes beyond certifications — it's hands-on evaluation of a
-> member's practical skills. Can they throw a ladder? Can they perform a search
-> pattern? Can they operate the pump?"
+> "Stop here for a moment and look at what changed. Same dashboard we opened on.
+> But now it knows what your department owes — every requirement, who it applies
+> to, and how often it comes due — and it knows what's been paid against that."
 
-> "The Logbook lets you create skills testing templates, conduct tests, and
-> record results — all digitally."
+> "That's the whole foundation. Everything else builds on it."
 
-### CREATING SKILL TEMPLATES (13:00 – 14:30)
+**[CALLOUT: "Go build your requirements before Part 2"]**
 
-**[SCREEN: Navigate to Skills Testing Templates
-(SkillsTestingTemplatesTab). Click to create a new template.]**
+> "So here's my honest advice: **stop the video here and go do it.** Set up your
+> real programs and your real requirements, on your real roster. It'll take an
+> afternoon. Part 2 is about using what you just built, and it'll make a lot more
+> sense with your own department's data in front of you than with mine."
 
-> "First, create a template. The Skill Template Builder lets you design a
-> testing protocol."
+### WHAT PART 2 COVERS (12:30 – 13:00)
 
-**[SCREEN: Navigate to the Skill Template Builder
-(SkillTemplateBuilderPage)]**
+**[SCREEN: Quick cuts — the Compliance Matrix, a generated PDF compliance
+report, the cohort wizard, a skills test scorecard.]**
 
-> "**Template Name:** 'Annual SCBA Proficiency Test.'
-> **Skills to Evaluate:** Add each skill being tested — 'Don and doff SCBA in
-> under 60 seconds,' 'Navigate a zero-visibility environment,' 'Emergency air
-> management.'"
+> "Part 2 picks up from exactly here. Evaluating members with skills tests.
+> Proving compliance — the reports you hand a chief, an insurer, or a state
+> inspector. Putting training on the calendar so completions record themselves.
+> And the weekly, monthly and quarterly routine that keeps it all current."
 
-**[SCREEN: Add several skills to the template with pass/fail criteria]**
+> "That's **Script 16 — Training Officer, Part 2**. Link's below."
 
-> "For each skill, set the evaluation criteria — pass/fail, scored 1-5, or
-> timed. You can add detailed instructions for the evaluator and the member."
-
-### CONDUCTING A SKILLS TEST (14:30 – 15:30)
-
-**[SCREEN: Navigate to Start Skill Test (StartSkillTestPage)]**
-
-> "When it's time to test, select the template and the member being evaluated.
-> The system presents each skill in order."
-
-> "One thing you'll notice: you can't select **yourself** as the candidate.
-> Skills testing is somebody observing you perform — so the examiner and the
-> candidate have to be two different people. If you want to run through a
-> sheet on your own to practice, switch the test into **practice mode**;
-> practice attempts don't touch anyone's record."
-
-**[SCREEN: Show the active skill test interface (ActiveSkillTestPage)]**
-
-> "Walk through each skill — mark it as pass or fail, add notes on performance,
-> record the time if it's a timed evolution."
-
-**[SCREEN: Show marking skills and adding notes]**
-
-> "Your scoring saves itself as you go — that screen's meant to be used
-> one-handed, outdoors, while you're actually watching somebody, so it doesn't
-> wait for you to remember to press Save."
-
-> "When the test is complete, the results are saved to the member's training
-> record. You can see a history of all their skills test results over time — and
-> so can **they**, on My Training."
-
-### TEST RECORDS (15:30 – 16:00)
-
-**[SCREEN: Navigate to Skills Testing Test Records
-(SkillsTestingTestRecordsTab)]**
-
-> "The Test Records tab gives you a complete history of all skills testing
-> conducted. Filter by member, by template, by date range, or by result."
-
-**[SCREEN: Show filtering and browsing test records]**
-
-> "This is your documentation for NFPA compliance — proof that your members are
-> tested and proficient."
-
-**[SCREEN: Hover three rows showing Delete, Void and Cancel respectively.]**
-
-> "And notice each row offers exactly one way to take it off the books. Practice
-> attempts you delete. A scored official result you **void** — the record stays,
-> with a reason you type and your name on it, and any training requirement that
-> pass had completed goes back to incomplete. An evaluation you abandoned
-> mid-session you **cancel**. You can't delete an official result: an examiner
-> observed something, so you withdraw it rather than erase it."
-
-**[CALLOUT: "Full deep-dive: Script 15 — Skills Testing"]**
-
-> "There's a lot more here than fits in this chapter — deciding how much of a
-> result the candidate sees and when, attempt limits, and one genuinely nasty bug
-> that used to let editing a published sheet rewrite scorecards you'd already
-> finished. That's all in **Script 15**, the skills-testing deep dive. If you've
-> been running skills testing since before August 2026, watch that one."
-
-**[TRANSITION: Compliance and reporting]**
-
----
-
-## CHAPTER 6: Compliance Reporting (16:00 – 19:00)
-
-### COMPLIANCE OFFICER DASHBOARD (16:00 – 17:00)
-
-**[SCREEN: Navigate to Compliance Officer Dashboard
-(ComplianceOfficerDashboard)]**
-
-> "The Compliance Officer Dashboard is the big-picture compliance view. It
-> aggregates data from training, certifications, and skills testing into a
-> single compliance score."
-
-**[SCREEN: Show the compliance dashboard with metrics and charts]**
-
-> "You'll see overall compliance percentage, broken down by category —
-> medical certifications, operational certifications, safety training, and
-> skills testing. Each category shows how many members are current versus
-> how many are overdue."
-
-### COMPLIANCE REQUIREMENTS CONFIGURATION (17:00 – 18:00)
-
-**[SCREEN: Navigate to Compliance Requirements Config
-(ComplianceRequirementsConfigPage)]**
-
-> "This is where you define what 'compliance' means for your department. Which
-> certifications are mandatory? Which are optional? What are the recurrence
-> intervals?"
-
-**[SCREEN: Show the requirements configuration with mandatory/optional toggles]**
-
-> "You might have state-mandated requirements — like annual Hazmat refresher
-> for all members — and department-specific requirements — like monthly
-> apparatus familiarization for Engineers. Configure both here."
-
-**[SCREEN: On the Thresholds tab, highlight the "Evaluation Period" checkbox]**
-
-> "One setting on the Thresholds tab worth knowing: the **Evaluation Period**.
-> If your drills land late in the month, leaving the current month in the
-> calculation makes members look non-compliant before they've even had the
-> class. Uncheck **Count the current in-progress month** and compliance stops at
-> the end of last month, so members are measured against where they stood when
-> the month began. It's a department-wide default, and any single requirement
-> can override it from its own Evaluation Period dropdown."
-
-**[SCREENSHOT NEEDED]:** _The Compliance Requirements Thresholds tab with the "Evaluation Period" checkbox and its helper text._
-
-> "One thing this never touches: certifications that are expiring soon are
-> always flagged against the real calendar date, no matter how you set this."
-
-### GENERATING COMPLIANCE REPORTS (18:00 – 19:00)
-
-> "When it's time for an annual report, a state inspection, or an insurance
-> audit, generate a compliance report."
-
-**[SCREEN: Navigate to Reports → Training Compliance report]**
-
-> "The report lists every member with their certification status for every
-> requirement. Export it as PDF for inspectors or as CSV for your records."
-
-**[SCREEN: Generate and show the report, then demonstrate the export]**
-
-> "The Reports tab has more than the compliance report. **Member Records (All
-> Members)** lets you pick a period — month, quarter, year, or lifetime — and
-> export every member's completed records: CSV gives you one combined
-> spreadsheet, PDF merges a section per member into a single document. There's
-> also a **Hours Summary** CSV — hours by member, category, and type, which is
-> exactly what most states want — and a **Certification** CSV listing every
-> cert as valid, expiring soon, or expired."
-
-**[SCREEN: Show the Member Records period selector with CSV and PDF buttons,
-then the Hours Summary and Certification report cards]**
-
-**[SCREENSHOT NEEDED]:** _The Training Reports tab showing the Compliance, Hours Summary, and Certification cards above the "Member Records (All Members)" period selector with CSV / PDF buttons._
-
-> "And if you need just one person's training — say a member is moving to
-> another department and wants their history — open their training history page,
-> pick a period, and export their records as CSV or PDF right there."
-
-**[SCREEN: On a member's training history, show the export period dropdown with
-the CSV and PDF buttons]**
-
-> "Having this at your fingertips replaces hours of digging through filing
-> cabinets and spreadsheets. When the state inspector shows up, you hand them
-> a comprehensive PDF in thirty seconds."
-
-**[CALLOUT: "State inspection? PDF report in 30 seconds."]**
-
-**[TRANSITION: Integration with events]**
-
----
-
-## CHAPTER 7: Integrating Training with Events & Wrap-Up (19:00 – 26:00)
-
-### TRAINING EVENTS (19:00 – 20:00)
-
-> "Training and Events are connected. When you create an event with the type
-> 'Training,' you can link it to specific training requirements."
-
-**[SCREEN: Show creating an event of type "Training" and linking a requirement]**
-
-> "After the event, attendance records can feed directly into training
-> completions. Members who checked in can be bulk-credited for the training
-> requirement attached to that event."
-
-> "This means: create the training event, members RSVP and check in, and after
-> the event you batch-update everyone's training records with one action."
-
-**[CALLOUT: "Event attendance → automatic training credit"]**
-
-### MULTI-CLASS COURSES & COHORTS (20:00 – 21:30)
-
-> "That works beautifully for a single class. But what about a recruit school?
-> Fifteen classes, over two months, every one a different subject. Are you
-> going to build fifteen events by hand — and then do it again next spring?"
-
-**[SCREEN: Navigate to Training > Setup > Course Library, hover the "Manage
-classes" icon on a course card named "Recruit School"]**
-
-> "You don't have to. A course can carry its own class list. Click Manage
-> classes on any course and you get a syllabus — every subject the course
-> covers, in order."
-
-**[SCREEN: Course Syllabus Builder (CourseSyllabusBuilder) showing an ordered
-list of classes with day numbers and gap labels]**
-
-> "Here's the part that makes it reusable: you don't put dates on these
-> classes. You say how far apart they are. Orientation is day one. SCBA is the
-> next day. Ladders is two days after that. Notice the builder even says it
-> that way — 'Next day,' 'Two days later' — because that's how you'd describe
-> it to somebody standing in front of you."
-
-**[CALLOUT: "No dates on the syllabus — only spacing"]**
-
-> "And if your school meets on a regular cadence, don't count days at all.
-> Fill from pattern — Tuesdays and Thursdays — and it spaces every class out
-> for you."
-
-**[SCREEN: Click "Fill from pattern", select Tue and Thu, click Apply]**
-
-> "Now the payoff. When a new class of recruits starts, go to Records, Course
-> Cohorts, New cohort. Pick the course, pick a start date."
-
-**[SCREEN: Navigate to Training > Records > Course Cohorts > New cohort, select
-the course, set a start date, click Next]**
-
-> "And stop right here, because this next screen is the one that saves you.
-> Before anything is created, you see every single date the system worked out.
-> This one got moved — it would have landed on a Saturday. This one's flagged
-> because the classroom is already booked. And Labor Day is sitting right in
-> the middle of your course, so it's offered to you as a day to skip."
-
-**[SCREEN: The Preview step, scrolling the computed class list, pointing at an
-amber warning and the suggested holiday chips]**
-
-**[CALLOUT: "Preview shows every date — before a single event exists"]**
-
-> "You can move any individual class, or skip one entirely. Then pick your
-> recruits, and generate."
-
-**[SCREEN: Roster step selecting members, then the Generate button; cut to the
-Cohort Detail page with the full class timeline]**
-
-> "Fifteen training events, on the calendar, each with its own training
-> session. Your recruits see the whole schedule, they check in with the QR code
-> the same as always, and the hours flow into their pipeline automatically. One
-> screen instead of an afternoon."
-
-### WHEN PLANS CHANGE (21:30 – 22:00)
-
-> "And they will. Your SCBA instructor calls out. Weather kills a live-fire
-> night. Somebody joins two weeks late."
-
-**[SCREEN: Cohort Detail page, click Reschedule on one class, then show the
-Shift remaining control]**
-
-> "Reschedule one class and its calendar event moves with it — nobody loses
-> their spot. Cancel one and everybody signed up sees a cancellation, not a
-> class that quietly vanished. Add a make-up session. Or push everything that
-> hasn't happened yet back a week, in one click."
-
-**[CALLOUT: "Reschedule · Cancel · Add class · Shift remaining"]**
-
-> "One thing worth knowing: editing the course's syllabus does not change a
-> school that's already running. That's on purpose — you don't want a recruit
-> class re-scheduled underneath the recruits. Fix the syllabus and it applies
-> to the next intake."
-
-**[TRANSITION: External training]**
-
-### EXTERNAL TRAINING (22:00 – 22:30)
-
-**[SCREEN: Navigate to External Training page (ExternalTrainingPage)]**
-
-> "The External Training page tracks training taken outside the department —
-> courses at the fire academy, conferences, mutual aid training. Members submit
-> these for your approval, and they count toward their compliance requirements
-> just like internal training."
-
-### SHIFT COMPLETION REPORTS & SKILL SCORING (22:30 – 24:00)
-
-> "After each shift, officers file shift completion reports on their trainees.
-> Let me show you the workflow."
-
-**[SCREEN: Navigate to Training Admin > Shift Reports > Create]**
-
-> "You select the trainee, the shift date, and the shift — hours and calls
-> auto-populate from attendance records. Then you rate their performance 1-5,
-> note strengths and areas for improvement, and write a narrative."
-
-**[SCREEN: Show the skills section with 1-5 score buttons]**
-
-> "New as of this update — you can now score each observed skill on a 1-5
-> scale. **1 is 'Needs work', 3 is 'Competent', 5 is 'Excellent.'** These
-> scores flow directly into the trainee's competency score history."
-
-**[SCREENSHOT NEEDED]:** _Close-up of the skills scoring section showing
-3-4 skills, each with violet 1-5 score buttons, score labels as tooltips,
-the demonstrated checkbox, and comment field._
-
-> "Skills highlighted in **green** are linked to formal SkillEvaluations — those
-> scores feed competency tracking and pipeline progress. **Amber** skills are
-> observed on reports but aren't formally tracked."
-
-**[SCREENSHOT NEEDED]:** _The apparatus skills settings panel showing
-green and amber linkage tags on skills._
-
-### BATCH REVIEW (24:00 – 25:00)
-
-> "When you have a pile of pending reports — say, after a busy weekend — you
-> can batch-review them."
-
-**[SCREEN: Navigate to Pending Review view]**
-
-> "Check the reports you want to approve, or hit Select All. Then click
-> 'Approve Selected' — up to 100 at a time. You can also batch-flag reports
-> that need follow-up."
-
-**[SCREENSHOT NEEDED]:** _Pending Review view with checkboxes on 5 report
-cards, 3 checked, and the "Approve Selected (3)" / "Flag Selected (3)"
-action buttons visible._
-
-> "Flagged reports appear in their own tab, and you can re-review them later."
-
-**[SCREEN: Show the Flagged tab with a few flagged reports]**
-
-### TRAINING OFFICER'S WORKFLOW (25:00 – 25:30)
-
-> "Let me summarize the Training Officer's workflow."
-
-**[CALLOUT: Workflow steps appearing one at a time]**
-
-> "**Weekly:** Check the dashboard for new submissions and approaching
-> expirations. Approve or reject any member-submitted external training.
-> Review pending shift reports — batch-approve routine ones, flag any that
-> need a closer look."
-
-> "**Before Training Events:** Ensure the event is linked to the correct
-> requirement. Prepare any skills testing templates needed."
-
-> "**After Training Events:** Bulk-record completions for all attendees. Update
-> skills testing records if practical evaluations were conducted. File shift
-> completion reports with skill scores for any on-shift training observations."
-
-> "**Monthly:** Review the Compliance Matrix. Identify members falling behind.
-> Plan next month's training calendar to address gaps."
-
-> "**Quarterly:** Generate compliance reports for the Chief and officers.
-> Review and update training requirements if state mandates have changed."
-
-### WRAP-UP (25:30 – 26:00)
-
-> "The Training Officer role is about keeping the department ready. The Logbook
-> automates the tracking, the reminders, and the reporting — so you can focus
-> on the actual training."
-
-> "Next up, we have the everyday member's guide — what the platform looks like
-> for the Firefighter who just needs to RSVP, check their training status, and
-> view the schedule."
-
-**[SCREEN: End card with subscribe, next video link, and playlist link]**
+**[SCREEN: End card with subscribe, Part 2 link, and playlist link]**
 
 ---
 
 ## Clip Extraction Guide
 
-| Clip                          | Timecode    | Standalone Title                                         |
-| ----------------------------- | ----------- | -------------------------------------------------------- |
-| Training Dashboard Overview   | 1:30–4:00   | "The Training Officer Dashboard Explained"               |
-| Creating Training Programs    | 5:00–8:00   | "Setting Up Training Programs & Requirements"            |
-| Bulk Recording Training       | 9:30–11:00  | "Recording Training for Multiple Members at Once"        |
-| Skills Testing Walkthrough    | 12:00–16:00 | "Running a Skills Test in The Logbook"                   |
-| Compliance Reporting          | 16:00–19:00 | "Generating Compliance Reports"                          |
-| Multi-Class Courses & Cohorts | 20:00–21:30 | "Schedule a Whole Recruit School in One Shot"            |
-| When Plans Change             | 21:30–22:00 | "Rescheduling a Class Series Without Touching 15 Events" |
-| Shift Reports & Skill Scoring | 22:30–24:00 | "Filing Shift Reports with 1-5 Skill Scoring"            |
-| Batch Review                  | 24:00–25:00 | "Batch Reviewing Shift Reports"                          |
-| Training Officer Workflow     | 25:00–25:30 | "The Training Officer's Weekly Routine"                  |
+| Clip                             | Timecode    | Standalone Title                              |
+| -------------------------------- | ----------- | --------------------------------------------- |
+| Training Dashboard Overview      | 1:30–4:00   | "The Training Officer Dashboard Explained"    |
+| Creating Training Programs       | 5:00–6:30   | "Setting Up a Training Program"               |
+| Picking Courses From the Library | 7:00–7:20   | "Your Course Requirement Shows Everyone Red"  |
+| The Freshness Window             | 7:20–7:45   | "'Taken Within the Last 180 Days'"            |
+| Bulk Recording Training          | 9:30–11:00  | "Recording Training for Multiple Members"     |
+| Fixing a Mistake                 | 11:30–12:00 | "Undo a Mistaken Approval or Training Record" |
+
+---
+
+## Production Notes
+
+- **This was one 26-minute video** and is now two. The split point is
+  deliberate: Part 1 ends at the moment a training officer has something to go
+  away and do. Sending them off to build requirements, rather than carrying them
+  through fourteen more minutes of features that need those requirements to
+  exist, is the whole reason for the break.
+- The Chapter 5 close is new. Shoot it against the same demo data Chapter 2 opens
+  on, so the "look what changed" beat actually shows a changed dashboard.
+- Chapters 3's course-picker and freshness-window beats (7:00–7:45) are the two
+  most likely to be watched as standalone clips by _existing_ users — the course
+  picker fixes requirements that silently never matched anything. Give both clean
+  in-points.

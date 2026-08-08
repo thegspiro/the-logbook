@@ -595,7 +595,7 @@ The matrix displays:
 
 ### Leave of Absence Adjustments
 
-When a member has an active **Leave of Absence** (created via **Administration > Member Lifecycle**), the Compliance Matrix, Competency Matrix, Training Reports, and all other compliance views automatically adjust proportional requirements (hours, shifts, calls) so the member is not penalized for time they were inactive.
+When a member has an active **Leave of Absence** (created via **Members > Admin > Waivers**), the Compliance Matrix, Competency Matrix, Training Reports, and all other compliance views automatically adjust proportional requirements (hours, shifts, calls) so the member is not penalized for time they were inactive.
 
 The adjustment formula is:
 
@@ -1454,7 +1454,7 @@ The training module has several boundary behaviors that affect how submissions a
 | Hours not counting toward a requirement      | Verify the training record's course is linked to the correct requirement. The record must be in "Approved" status.                                                                                                            |
 | Program progress not updating after a shift  | Shift completion reports must be filed by the shift officer. Auto-progression only works for enrolled members with matching requirement types.                                                                                |
 | Compliance matrix shows incorrect data       | Check the requirement's frequency and due date type settings. Rolling periods use today's date as the reference point.                                                                                                        |
-| Member on leave still shows as non-compliant | Verify the Leave of Absence is active in Member Lifecycle. The leave must cover ≥15 days of a month for that month to be waived. Only hours, shifts, and calls requirements are adjusted.                                     |
+| Member on leave still shows as non-compliant | Verify the Leave of Absence is active under **Members > Admin > Waivers**. The leave must cover ≥15 days of a month for that month to be waived. Only hours, shifts, and calls requirements are adjusted.                     |
 | LOA created but training not adjusted        | Check that `exempt_from_training_waiver` is not set on the leave. The auto-linked training waiver should appear in the Training Waivers tab. If missing, create a standalone training waiver from the Waiver Management page. |
 | Duplicate training record warning            | The system detects records with the same member + course name (case-insensitive) + completion date within ±1 day. Review the warning and either proceed or skip the duplicate.                                                |
 | Compliance card shows wrong color            | Red = expired certs or <50% requirements met; Yellow = expiring certs or <100% requirements met; Green = all met. Check individual requirement progress for details.                                                          |
@@ -1823,15 +1823,15 @@ Alex's membership status is now eligible for upgrade from **Probationary** to **
 
 **What Auto-Progressed vs. What Required Manual Action:**
 
-| Action                          | Method    | Triggered By                             |
-| ------------------------------- | --------- | ---------------------------------------- |
-| Phase unlocking                 | Automatic | Previous phase reaching 100%             |
-| Shift report hours/calls/skills | Automatic | Approved shift completion reports        |
-| Self-reported training approval | Manual    | Officer review in Review Submissions     |
-| External certification credit   | Manual    | Officer review of uploaded certificate   |
-| Duplicate enrollment prevention | Automatic | System constraint check                  |
-| Officer sign-off                | Manual    | Officer marks requirement complete       |
-| Membership status upgrade       | Manual    | Administrator action in Member Lifecycle |
+| Action                          | Method    | Triggered By                               |
+| ------------------------------- | --------- | ------------------------------------------ |
+| Phase unlocking                 | Automatic | Previous phase reaching 100%               |
+| Shift report hours/calls/skills | Automatic | Approved shift completion reports          |
+| Self-reported training approval | Manual    | Officer review in Review Submissions       |
+| External certification credit   | Manual    | Officer review of uploaded certificate     |
+| Duplicate enrollment prevention | Automatic | System constraint check                    |
+| Officer sign-off                | Manual    | Officer marks requirement complete         |
+| Membership status upgrade       | Manual    | Administrator action on the member profile |
 
 ---
 

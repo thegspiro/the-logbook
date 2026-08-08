@@ -15,13 +15,26 @@ services.
 
 ### Role-Based Guides (Medium-Form, 20–40 minutes each, cuttable into clips)
 
-| #   | Title                                                 | Target Audience                        | Est. Length |
-| --- | ----------------------------------------------------- | -------------------------------------- | ----------- |
-| 3   | IT Manager / System Admin — Complete Platform Guide   | IT managers, system owners             | 35–40 min   |
-| 4   | Fire Chief & Department Leadership Guide              | Chiefs, Deputy Chiefs, Presidents      | 25–30 min   |
-| 5   | Training Officer — Managing Certifications & Programs | Training officers, compliance officers | 25–30 min   |
-| 6   | The Member Experience — Your Day-to-Day Guide         | All members, firefighters, engineers   | 18–22 min   |
-| 7   | Secretary & Administrative Officer Guide              | Secretaries, treasurers, admin staff   | 20–25 min   |
+| #   | Title                                                                   | Target Audience                        | Est. Length |
+| --- | ----------------------------------------------------------------------- | -------------------------------------- | ----------- |
+| 3   | IT Manager / System Admin — Complete Platform Guide                     | IT managers, system owners             | 35–40 min   |
+| 4   | Fire Chief & Department Leadership Guide                                | Chiefs, Deputy Chiefs, Presidents      | 25–30 min   |
+| 5   | Training Officer, Part 1 — Building Your Training Program               | Training officers, compliance officers | 13–15 min   |
+| 16  | Training Officer, Part 2 — Evaluating, Reporting & Running the Calendar | Training officers, compliance officers | 15–18 min   |
+| 6   | The Member Experience — Your Day-to-Day Guide                           | All members, firefighters, engineers   | 18–22 min   |
+| 7   | Secretary & Administrative Officer Guide                                | Secretaries, treasurers, admin staff   | 20–25 min   |
+
+> **Scripts 5 and 16 are one guide in two parts.** They were a single 26-minute
+> video; it was the longest thing in the series aimed at somebody with a job to do
+> that afternoon. The break is at the point where a training officer has something
+> to go away and build — their real programs and requirements — rather than
+> carrying them through fourteen more minutes of features that need those
+> requirements to exist first.
+>
+> Part 1 sets the system up (dashboard, programs, requirements, recording
+> completions). Part 2 uses it (skills testing, compliance reporting, the training
+> calendar, and the weekly/monthly/quarterly routine). Publish them a week apart;
+> Part 1's close explicitly tells viewers to go and build before starting Part 2.
 
 ### Feature Deep Dives (Medium/Short-Form, focused on one subsystem)
 
@@ -36,8 +49,8 @@ services.
 | 15  | Skills Testing — Running an Evaluation the Member Can Actually See        | Training officers, evaluators, FTOs/preceptors, EMS officers | 18–22 min   |
 
 > Scripts 9–11 form a **training-pipeline mini-series**: 11 builds a pipeline, 9
-> runs it day to day, and 10 shows the member's side. They complement Script 5
-> (the broad Training Officer guide) rather than replacing it.
+> runs it day to day, and 10 shows the member's side. They complement Scripts 5
+> and 16 (the broad Training Officer guide) rather than replacing it.
 
 > Script 14 is the scheduling counterpart to Script 11: 11 defines what a recruit
 > must _accomplish_ (the pipeline), 14 defines _when the classes meet_ (the course
@@ -56,8 +69,8 @@ services.
 > results, receipts, proxies, runoffs, quorum, the rollback rule, dispute
 > forensics, voting-method selection, and the pre-meeting package.
 
-> Script 15 is the canonical skills-testing deep-dive, superseding the brief
-> mention in Script 5. It ships with a **shorts pack (15a–15h)**. Two of those
+> Script 15 is the canonical skills-testing deep-dive, superseding the summary in
+> Script 16, Chapter 2. It ships with a **shorts pack (15a–15h)**. Two of those
 > shorts — 15f and 15g — describe historical data that was **not** retroactively
 > corrected (elapsed times recorded before 2026-08-08, and scorecards altered by
 > template edits before the same date), so they are the priority cut for existing

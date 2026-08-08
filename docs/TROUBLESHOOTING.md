@@ -2122,7 +2122,7 @@ The Inventory module manages equipment, assignments, checkout/check-in, and main
 **Scenario**: A member is on leave and their training compliance numbers look wrong — they're showing as non-compliant even though they should have reduced requirements.
 
 **How Waiver Adjustments Work**:
-When a Leave of Absence is created via **Administration > Member Lifecycle**, the system automatically reduces all proportional training requirements (hours, shifts, calls) using:
+When a Leave of Absence is created via **Members > Admin > Waivers**, the system automatically reduces all proportional training requirements (hours, shifts, calls) using:
 
 ```
 adjusted_required = base_required × (active_months / total_months)
@@ -2141,10 +2141,10 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 
 **Not working? Check these causes**:
 
-1. **Leave is not active**: Go to Member Lifecycle > Leave of Absence and verify the leave is active (not deactivated)
+1. **Leave is not active**: Go to **Members > Admin > Waivers** and verify the leave is active (not deactivated)
 2. **Leave doesn't cover enough days**: A month is only waived if the leave covers ≥15 days of that month. A leave from Jan 20–Jan 31 (12 days) does NOT waive January.
 3. **Wrong requirement type**: Only Hours, Shifts, and Calls requirements are adjusted proportionally. Courses and Certifications are binary (complete or not) and are never adjusted.
-4. **Training Waiver vs. Leave of Absence**: A Leave of Absence (Member Lifecycle) applies to ALL requirements. A Training Waiver (`/training/waivers` API) can target specific requirements via `requirement_ids`. You don't need both — a Leave of Absence is sufficient for general leaves.
+4. **Training Waiver vs. Leave of Absence**: A Leave of Absence (Members > Admin > Waivers) applies to ALL requirements. A Training Waiver (`/training/waivers` API) can target specific requirements via `requirement_ids`. You don't need both — a Leave of Absence is sufficient for general leaves.
 
 #### Leave of Absence: Meeting Attendance Not Adjusted
 

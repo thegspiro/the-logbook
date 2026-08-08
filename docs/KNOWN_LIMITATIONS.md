@@ -189,11 +189,73 @@ file, line and target. Known gaps are listed in its `KNOWN_MISSING_ROUTES`
 allowance, and a companion test fails if either route ever appears, so the
 allowance cannot outlive the gap.
 
-| Item                                                                  | Status                              | Detail                                                                                                                                                                                                                                                                                                                        |
-| --------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Grants: "Record Donation" points at a screen that was never built** | Open (MED — feature gap, not a bug) | The donors page links to a create-donation route with no matching page. The API client and store already expose the create call, so the gap is the screen alone. `docs/training/12-grants-fundraising.md` documents the flow and carries a screenshot placeholder for it; both stay until the page exists.                    |
-| **Grants: "Add Opportunity" points at a screen that was never built** | Open (MED — feature gap, not a bug) | Same shape as above, from the opportunities page. Documented in the grants training guide.                                                                                                                                                                                                                                    |
-| **Membership tiers are documented on a tab that does not exist**      | Open (LOW, docs/product mismatch)   | `docs/training/01-membership.md` describes a Tier Configuration tab on the Member Lifecycle page; tiers are actually configured under organization settings. The screenshot placeholder is deliberately left unfilled rather than pointed at the settings page, since one of the two has to change and it is not clear which. |
+| Item                                                                  | Status                              | Detail                                                                                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Grants: "Record Donation" points at a screen that was never built** | Open (MED — feature gap, not a bug) | The donors page links to a create-donation route with no matching page. The API client and store already expose the create call, so the gap is the screen alone. `docs/training/12-grants-fundraising.md` documents the flow and carries a screenshot placeholder for it; both stay until the page exists. |
+| **Grants: "Add Opportunity" points at a screen that was never built** | Open (MED — feature gap, not a bug) | Same shape as above, from the opportunities page. Documented in the grants training guide.                                                                                                                                                                                                                 |
+
+## Member Lifecycle — The Page That Was Documented but Never Built (2026-08-08)
+
+`docs/training/01-membership.md` described a **Member Lifecycle Management** page
+under Members Admin with four tabs — Archived Members, Overdue Returns, Leave of
+Absence, Tier Configuration. **No such page exists**, and it appears never to
+have. `/members/admin` (`MembersAdminHub.tsx`) declares exactly three tabs:
+Member Management, Add Member, Import Members.
+
+The guide has been corrected. This row records the **product** gap, which is
+real: for four lifecycle operations the endpoints, permissions and service
+methods all exist and are exercised by tests, and only the screens are missing.
+
+> **Correction to a previous entry.** The 2026-08-07 row this replaces stated
+> that "tiers are actually configured under organization settings." That was
+> wrong — it was taken from a commit message rather than from the code. Tiers are
+> _stored_ in `Organization.settings["membership_tiers"]`, but **no settings
+> screen reads or writes them**. Read the call site, not the commit message.
+
+Verified 2026-08-08 by searching for consumers of every `memberStatusService`
+method in `frontend/src/services/adminServices.ts`:
+
+| Capability                           | API                                                                                                                    | Service method                                                                            | UI consumer                                                                        | State                |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------- |
+| Change member status (incl. archive) | `POST /users/{id}/status`                                                                                              | `changeStatus`                                                                            | `MemberProfilePage.tsx:296`                                                        | ✅ Shipped           |
+| Create a leave of absence            | `POST /users/leaves-of-absence`                                                                                        | `createLeaveOfAbsence`                                                                    | `WaiverManagementPage.tsx:275`                                                     | ⚠️ Works, wrong home |
+| List / view leaves                   | `GET /users/leaves-of-absence`, `/users/{id}/leaves-of-absence`                                                        | `listLeavesOfAbsence`, `getMemberLeaves`                                                  | `WaiverManagementPage`, `TrainingWaiversTab`, `MemberProfilePage` (read-only card) | ⚠️ Read-only         |
+| Edit / delete a leave                | `PATCH`/`DELETE /users/leaves-of-absence/{id}`                                                                         | `updateLeaveOfAbsence`, `deleteLeaveOfAbsence`                                            | **none**                                                                           | ❌ API only          |
+| List archived / reactivate           | `GET /users/archived`, `POST /users/{id}/reactivate`                                                                   | `getArchivedMembers`, `reactivateMember`                                                  | **none**                                                                           | ❌ API only          |
+| Overdue property returns             | `GET /users/overdue-property-returns`, `POST .../reminders`, `GET /users/{id}/property-return-preview`                 | `getOverduePropertyReturns`, `processPropertyReturnReminders`, `getPropertyReturnPreview` | **none**                                                                           | ❌ API only          |
+| Tier configuration                   | `GET`/`PUT /users/membership-tiers/config`, `POST /users/advance-membership-tiers`, `POST /users/{id}/membership-tier` | `getTierConfig`, `updateTierConfig`, `advanceMembershipTiers`                             | **none**                                                                           | ❌ API only          |
+
+**Why this matters more than a missing screen usually would.** Two of the gaps
+are the _reversal_ of an action that does have a UI: you can archive a member
+from their profile but cannot un-archive one, and you can put somebody on leave
+from Waiver Management but cannot correct the dates afterwards. A one-way door
+with no visible handle on the far side is worse than a feature that is simply
+absent.
+
+**Two decisions this needs, not one:**
+
+1. **Build the page, or distribute the operations?** A consolidated lifecycle
+   page is what the docs assumed. Alternatively archived/reactivate could live on
+   the Members list as a filter, and leave-of-absence editing next to where leaves
+   are already created. The second is less work and arguably where people would
+   look; the first is what four years of documentation has promised.
+2. **Does auto-advancement get a trigger?** `POST /users/advance-membership-tiers`
+   is called by nothing — no button, no scheduled task. Tier advancement therefore
+   never runs on its own. If tiers are meant to be self-maintaining it needs a
+   nightly job; if they are meant to be deliberate it needs a button.
+
+Until then the guide documents the API surface directly and says plainly that
+there is no screen.
+
+| Item                                                        | Status                            | Detail                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **No UI to un-archive a member**                            | Open (MED — one-way door)         | Archiving is available from the member profile; reactivating is API only.                                                                                                                                                                             |
+| **No UI to edit or cancel a leave of absence**              | Open (MED — one-way door)         | Creating is available from Waiver Management; correcting the dates is API only. Leaves pro-rate training requirements, so a wrong end date quietly changes somebody's compliance.                                                                     |
+| **Leave of absence is created from Waiver Management**      | Open (LOW — discoverability)      | It works, but it is not where a membership coordinator would look for it.                                                                                                                                                                             |
+| **No UI for membership tier configuration**                 | Open (MED — feature gap)          | With no tiers configured, a tier change accepts **any** value — validation only engages once tiers exist, so the unconfigured state is also the unvalidated one.                                                                                      |
+| **Tier auto-advancement has no trigger**                    | Open (MED — needs a product call) | No button and no scheduled task calls the endpoint, so advancement never runs by itself. See decision 2 above.                                                                                                                                        |
+| **No UI for overdue property returns (members)**            | Open (LOW)                        | Three endpoints, no consumer. The Inventory members page shows an "Overdue Returns" figure, which is a different feature and may be the reason this was assumed to exist.                                                                             |
+| **Screenshot `01-22-member-lifecycle.png` was mislabelled** | ✅ Resolved (2026-08-08)          | Captured at `/members/admin` but applied under a "Member Lifecycle Management page" caption, so a real screenshot of the Members Admin hub read as evidence that the lifecycle page existed. Caption and manifest `alt` corrected; the image is fine. |
 
 ## Skills Testing — Offline Support (2026-08-07)
 

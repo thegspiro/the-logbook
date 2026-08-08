@@ -5,7 +5,7 @@
 **Target Audience:** Training Officers, Recruit/Field Training Officers, Compliance Officers
 **Roles Covered:** training_officer, safety_officer
 **Chapters:** 8 (each designed as a standalone clip)
-**Prerequisite viewing:** Script 5 (Training Officer — Managing Certifications & Programs)
+**Prerequisite viewing:** Script 5 (Training Officer, Part 1 — Building Your Training Program). Part 2 (Script 16) is useful but not required for this one.
 
 > **Companion videos:** Script 11 is a focused, click-by-click walkthrough of
 > _building_ a pipeline; Script 10 shows the same feature from the member's side.

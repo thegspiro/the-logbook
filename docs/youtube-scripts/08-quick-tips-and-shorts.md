@@ -669,7 +669,7 @@ requests]**
 > have requested or filed them. You can't just blank out who did that without
 > making the record a lie."
 
-**[SCREEN: Member Lifecycle > Deactivate, then Anonymize]**
+**[SCREEN: The member profile > status control > Deactivate; then Anonymize]**
 
 > "The right move is **Deactivate, then Anonymize**. It strips their personal
 > information and leaves those records owned, so your financial trail still makes

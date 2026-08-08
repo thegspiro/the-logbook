@@ -987,8 +987,14 @@ Lt. Park clicks **Complete Clearance**. The clearance status changes to **Comple
 The system automatically:
 
 - Cancels any pending property return reminder notifications for FF Garcia
-- Updates the Member Lifecycle page — FF Garcia's "Overdue Returns" count drops to zero
+- Clears FF Garcia from the overdue property-return list
 - Logs the clearance completion in the audit trail
+
+> **Note (2026-08-08):** that overdue list is currently reachable only through the
+> API (`GET /users/overdue-property-returns`) — there is no screen for it. An
+> earlier version of this walkthrough said the count updates on a "Member
+> Lifecycle page", which does not exist. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
 
 > **Hint:** If Lt. Park needed to close the clearance with outstanding items (e.g., FF Garcia is unreachable and has items that will never be returned), she could use **Close Incomplete** instead. This requires administrator permission and logs which items were left unresolved.
 

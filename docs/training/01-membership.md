@@ -341,7 +341,13 @@ To permanently delete a member:
   The impact preview no longer claims uploaded documents are deleted; they are
   not.
 
-> **Important:** Deletion is permanent and cannot be undone. Consider changing the member's status to **Archived** instead if you may need their records in the future. Archived members can be reactivated from the Member Lifecycle page.
+> **Important:** Deletion is permanent and cannot be undone. Consider changing the member's status to **Archived** instead if you may need their records in the future.
+
+> **⚠️ Archiving is currently a one-way door in the UI** _(verified 2026-08-08)_.
+> You archive from the member profile, but reactivating is API only
+> (`POST /users/{id}/reactivate`) — there is no archived-members screen. Archiving
+> is still far safer than deleting, since the record and its history survive; just
+> be aware that undoing it needs an administrator with API access.
 
 ### When Deletion Is Refused _(2026-08-07)_
 
@@ -524,7 +530,12 @@ When a member is dropped, the system automatically:
 3. Tracks outstanding items
 4. Auto-archives the member once all property is returned
 
-> **Hint:** Check the **Overdue Returns** tab on the Member Lifecycle page to see members with outstanding equipment.
+> **Hint:** Overdue property returns are tracked by the API
+> (`GET /users/overdue-property-returns`) but **have no screen** as of
+> 2026-08-08. The Inventory module's members page shows an "Overdue Returns"
+> figure, which counts inventory checkouts rather than offboarding property, so
+> it is not a substitute. See
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
 
 ---
 
@@ -536,7 +547,15 @@ When a member takes a leave of absence, their time away should be recorded so th
 
 ### Managing Leaves
 
-Navigate to **Administration > Members > Member Management**, then open the **Member Lifecycle Management** page and select the **Leave of Absence** tab.
+Navigate to **Members > Admin > Waivers** — the
+[Waiver Management](#waiver-management) page. Leaves of absence are created and
+listed there, alongside training waivers.
+
+> **Corrected 2026-08-08.** This previously said to open a "Member Lifecycle
+> Management" page and select a "Leave of Absence" tab. That page does not exist.
+> Waiver Management is an odd home for this and is where it actually lives — the
+> two are closely related (a leave auto-links a training waiver), which is
+> presumably why.
 
 1. Click **Add Leave of Absence**.
 2. Select the **member** from the dropdown.
@@ -558,11 +577,22 @@ For rolling-period requirements (e.g., "12 hours of training over 12 months"):
 
 ### Viewing Leaves
 
-- The **Leave of Absence** tab shows all active (and optionally inactive) leaves across the department
-- Individual member profiles show active leaves in the right sidebar
+- **Waiver Management** lists all active (and optionally inactive) leaves across
+  the department; the **Training Waivers** officer view lists them too
+- Individual member profiles show active leaves in the right sidebar, read-only
 - Toggle **Show inactive leaves** to see historical records
 
 > **Hint:** Deactivating a leave does not delete it -- it becomes inactive and remains in the history. You can toggle "Show inactive leaves" to review past records.
+
+> **⚠️ You cannot edit or cancel a leave from any screen** _(verified
+> 2026-08-08)_. Creating one works; correcting one does not — `PATCH` and
+> `DELETE /users/leaves-of-absence/{id}` exist and are tested, but nothing in the
+> application calls them.
+>
+> **Check the dates before you save.** A leave pro-rates the member's hours,
+> shift and call requirements, so a wrong end date quietly changes their
+> compliance and there is no screen to put it right. Tracked in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08).
 
 ### LOA and Training Waiver Auto-Linking
 
@@ -646,47 +676,100 @@ Rank validation results are visible in the **Members Admin Hub**. Members with u
 
 Membership tiers classify members by their years of service and grant benefits like voting eligibility, office-holding rights, and training exemptions.
 
-### Configuring Tiers
+### Configuring Tiers — API Only
 
-Navigate to the **Member Lifecycle Management** page and select the **Tier Configuration** tab.
+> **⚠️ There is no screen for this.** Membership tiers work, and the API is
+> complete, but **no page in the application reads or writes the tier
+> configuration**. Verified against the code on 2026-08-08: the service methods
+> (`getTierConfig`, `updateTierConfig`, `advanceMembershipTiers`) exist in
+> `frontend/src/services/adminServices.ts` with **zero callers**.
+>
+> This section previously described a "Tier Configuration" tab on a "Member
+> Lifecycle Management" page. Neither exists — see
+> [Member Lifecycle Management](#member-lifecycle-management) below. Configure
+> tiers through the API until the screen is built, or leave them unconfigured, in
+> which case membership types are free-form and unvalidated.
 
-> **Known discrepancy (2026-08-07).** There is no Tier Configuration tab on the
-> Member Lifecycle page — membership tiers are configured under **organization
-> settings**. One of the two has to change, and it is not yet settled which, so
-> this section and its screenshot placeholder are deliberately left as written
-> rather than silently repointed. Tracked in
-> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#frontend-routes--navigation-2026-08-07).
+The configuration is stored in the organization's settings under
+`membership_tiers` and is read and written through:
 
-1. Click **Add Tier** to create a new tier.
-2. Set the **tier name** (e.g., "Senior Member", "Life Member").
-3. Set the **years required** for automatic advancement.
-4. Configure **benefits**:
-   - Voting eligible
-   - Can hold office
-   - Training exempt
-   - Requires meeting attendance for voting
+| Method | Endpoint                                  | Permission       |
+| ------ | ----------------------------------------- | ---------------- |
+| `GET`  | `/api/v1/users/membership-tiers/config`   | `members.manage` |
+| `PUT`  | `/api/v1/users/membership-tiers/config`   | `members.manage` |
+| `POST` | `/api/v1/users/advance-membership-tiers`  | `members.manage` |
+| `POST` | `/api/v1/users/{user_id}/membership-tier` | `members.manage` |
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Tier Configuration tab showing two configured tiers (e.g., "Active Member" at 0 years, "Senior Member" at 10 years) with their benefits checkboxes, and the "Add Tier" button at the bottom]_
+Each tier carries:
+
+- A **tier id** and **name** (e.g. `senior` / "Senior Member")
+- The **years of service required** for automatic advancement
+- **Benefits**: voting eligible, can hold office, training exempt, requires
+  meeting attendance for voting
+
+**What still works without the screen:**
+
+- **Changing one member's tier** is available in the UI, from the member's
+  profile — that path goes through the status-change control, not through tier
+  configuration.
+- **Validation.** If tiers _are_ configured, a tier change is rejected unless the
+  target tier id is one of them. If none are configured, any value is accepted —
+  so an unconfigured department has membership types that nothing checks.
+- **Auto-advancement** runs when `POST /users/advance-membership-tiers` is
+  called. Because nothing in the UI calls it, in practice it only runs if an
+  operator invokes it.
 
 ### Auto-Advancement
 
-Enable **Auto-advance members based on years of service** to automatically promote members when their hire date qualifies them. You can also manually trigger advancement by clicking **Advance Eligible Now**.
+Auto-advancement computes each member's years of service from their `hire_date`
+and promotes them to the highest tier they qualify for under the organization's
+configured tiers.
+
+> **There is no "Advance Eligible Now" button** and no scheduled job for this —
+> the endpoint has to be called deliberately. An earlier version of this guide
+> described both; neither exists.
 
 ---
 
 ## Member Lifecycle Management
 
-The **Member Lifecycle Management** page (found under Members Admin) consolidates all lifecycle operations into one view with four tabs:
+> **⚠️ Corrected 2026-08-08 — this page does not exist.** Earlier versions of this
+> guide described a "Member Lifecycle Management" page under Members Admin with
+> four tabs: Archived Members, Overdue Returns, Leave of Absence, and Tier
+> Configuration. **None of it is real.** `/members/admin` has exactly three tabs —
+> Member Management, Add Member, Import Members — and there is no lifecycle page
+> anywhere in the application.
+>
+> The screenshot below was captured at `/members/admin` and applied under the old
+> caption, so it shows the Members Admin hub, not a lifecycle page. It has been
+> re-captioned rather than removed, since the page it actually shows is a real one.
 
-| Tab                    | Purpose                                            |
-| ---------------------- | -------------------------------------------------- |
-| **Archived Members**   | View and reactivate members who have been archived |
-| **Overdue Returns**    | Track members with outstanding property to return  |
-| **Leave of Absence**   | Manage leave periods for active members            |
-| **Tier Configuration** | Configure membership tiers and auto-advancement    |
+![The Members Admin hub — Member Management, Add Member and Import Members tabs](./images/01-22-member-lifecycle.png)
 
-![Member Lifecycle Management page with its tab bar and archived member list](./images/01-22-member-lifecycle.png)
+### Where Each Lifecycle Operation Actually Lives
+
+Verified against the code on 2026-08-08:
+
+| Operation                                          | Where it is today                                                                   | State                                                                                                                        |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Change a member's status** (including archiving) | Member profile → status control                                                     | ✅ Full UI                                                                                                                   |
+| **Leave of absence — create**                      | [Waiver Management](#waiver-management) (`/waivers`)                                | ✅ Works, but it is not where you would look                                                                                 |
+| **Leave of absence — view**                        | Member profile (read-only card), and listed on Waiver Management / Training Waivers | ✅ Read-only                                                                                                                 |
+| **Leave of absence — edit or delete**              | —                                                                                   | ❌ API only (`updateLeaveOfAbsence`, `deleteLeaveOfAbsence` have no callers)                                                 |
+| **Archived members — list and reactivate**         | —                                                                                   | ❌ API only (`getArchivedMembers`, `reactivateMember` have no callers)                                                       |
+| **Overdue property returns**                       | —                                                                                   | ❌ API only for _members_. The Inventory module's members page shows an "Overdue Returns" figure, which is a different thing |
+| **Tier configuration**                             | —                                                                                   | ❌ API only (see [Membership Tiers](#membership-tiers))                                                                      |
+
+**What this means in practice.** Archiving a member works, and so does putting
+one on leave — but _reversing_ either one needs the API. If you archive somebody
+by mistake, or a leave of absence is entered with the wrong dates, there is no
+screen to fix it from. Budget for that before you archive in bulk.
+
+> **This is a feature gap, not a bug.** The endpoints, permissions and service
+> methods all exist and are tested; what is missing is the screens. Tracked in
+> [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md#member-lifecycle--the-page-that-was-documented-but-never-built-2026-08-08)
+> with the exact API surface, so whoever builds the page does not have to
+> rediscover it.
 
 ---
 

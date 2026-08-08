@@ -8,9 +8,10 @@
 **Requires permission:** `training.manage` for official tests — **practice tests
 need no permission at all**
 
-> **Companion videos:** Script 5 is the broad Training Officer guide and mentions
-> skills testing in passing. This is the deep dive. Script 11 builds the pipeline
-> a skills test can complete; Script 10 is the member's side of that pipeline.
+> **Companion videos:** Scripts 5 and 16 are the broad Training Officer guide;
+> Script 16, Chapter 2 summarises skills testing in four minutes. This is the deep
+> dive. Script 11 builds the pipeline a skills test can complete; Script 10 is the
+> member's side of that pipeline.
 
 > **What changed on 2026-08-08:** most of chapters 4 through 7 is new. If you have
 > the older skills-testing footage, chapters 1–3 still hold; the rest does not.
