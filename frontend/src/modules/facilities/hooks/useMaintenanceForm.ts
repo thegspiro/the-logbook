@@ -103,9 +103,11 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
     }
   }, [facilityId]);
 
-  useEffect(() => { void loadRecords(); }, [loadRecords]);
+  useEffect(() => {
+    void loadRecords();
+  }, [loadRecords]);
 
-  const filtered = records.filter(r => {
+  const filtered = records.filter((r) => {
     if (statusFilter === 'completed' && !r.isCompleted) return false;
     if (statusFilter === 'pending' && r.isCompleted) return false;
     if (statusFilter === 'overdue' && !r.isOverdue) return false;
@@ -134,8 +136,14 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
   };
 
   const handleSave = async () => {
-    if (!facilityId && !formData.facility_id) { toast.error('Please select a facility'); return; }
-    if (!formData.description.trim()) { toast.error('Description is required'); return; }
+    if (!facilityId && !formData.facility_id) {
+      toast.error('Please select a facility');
+      return;
+    }
+    if (!formData.description.trim()) {
+      toast.error('Description is required');
+      return;
+    }
     setIsSaving(true);
     try {
       const payload = formToPayload(formData);

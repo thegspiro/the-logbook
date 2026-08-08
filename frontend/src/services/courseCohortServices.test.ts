@@ -24,10 +24,7 @@ vi.mock('./apiClient', () => ({
 }));
 
 // Import after the mock is in place
-import {
-  courseCohortService,
-  courseSyllabusService,
-} from './trainingServices';
+import { courseCohortService, courseSyllabusService } from './trainingServices';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -69,10 +66,7 @@ describe('courseSyllabusService', () => {
       day_offset: 5,
     });
 
-    expect(mockPatch).toHaveBeenCalledWith(
-      '/training/courses/course-1/classes/cc2',
-      { day_offset: 5 },
-    );
+    expect(mockPatch).toHaveBeenCalledWith('/training/courses/course-1/classes/cc2', { day_offset: 5 });
   });
 
   it('deletes a class', async () => {
@@ -80,9 +74,7 @@ describe('courseSyllabusService', () => {
 
     await courseSyllabusService.deleteClass('course-1', 'cc2');
 
-    expect(mockDelete).toHaveBeenCalledWith(
-      '/training/courses/course-1/classes/cc2',
-    );
+    expect(mockDelete).toHaveBeenCalledWith('/training/courses/course-1/classes/cc2');
   });
 
   it('sends the full ordering when reordering', async () => {
@@ -90,10 +82,7 @@ describe('courseSyllabusService', () => {
 
     await courseSyllabusService.reorderClasses('course-1', ['c', 'a', 'b']);
 
-    expect(mockPost).toHaveBeenCalledWith(
-      '/training/courses/course-1/classes/reorder',
-      { class_ids: ['c', 'a', 'b'] },
-    );
+    expect(mockPost).toHaveBeenCalledWith('/training/courses/course-1/classes/reorder', { class_ids: ['c', 'a', 'b'] });
   });
 
   it('autofills offsets from a meeting pattern', async () => {
@@ -104,10 +93,10 @@ describe('courseSyllabusService', () => {
       start_weekday: 0,
     });
 
-    expect(mockPost).toHaveBeenCalledWith(
-      '/training/courses/course-1/classes/autofill',
-      { meeting_days: [1, 3], start_weekday: 0 },
-    );
+    expect(mockPost).toHaveBeenCalledWith('/training/courses/course-1/classes/autofill', {
+      meeting_days: [1, 3],
+      start_weekday: 0,
+    });
   });
 });
 
@@ -221,13 +210,10 @@ describe('courseCohortService', () => {
       scheduled_end: '2026-10-06T02:00:00.000Z',
     });
 
-    expect(mockPatch).toHaveBeenCalledWith(
-      '/training/cohorts/co1/classes/cx1',
-      {
-        scheduled_start: '2026-10-05T23:00:00.000Z',
-        scheduled_end: '2026-10-06T02:00:00.000Z',
-      },
-    );
+    expect(mockPatch).toHaveBeenCalledWith('/training/cohorts/co1/classes/cx1', {
+      scheduled_start: '2026-10-05T23:00:00.000Z',
+      scheduled_end: '2026-10-06T02:00:00.000Z',
+    });
   });
 
   it('cancels one class with a reason', async () => {
@@ -235,10 +221,7 @@ describe('courseCohortService', () => {
 
     await courseCohortService.cancelClass('co1', 'cx1', 'Instructor ill');
 
-    expect(mockPost).toHaveBeenCalledWith(
-      '/training/cohorts/co1/classes/cx1/cancel',
-      { reason: 'Instructor ill' },
-    );
+    expect(mockPost).toHaveBeenCalledWith('/training/cohorts/co1/classes/cx1/cancel', { reason: 'Instructor ill' });
   });
 
   it('adds an ad-hoc class', async () => {

@@ -22,12 +22,18 @@ const EquipmentRequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<EquipmentRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('pending');
-  const [reviewModal, setReviewModal] = useState<{ open: boolean; request: EquipmentRequestItem | null }>({ open: false, request: null });
+  const [reviewModal, setReviewModal] = useState<{ open: boolean; request: EquipmentRequestItem | null }>({
+    open: false,
+    request: null,
+  });
   const [reviewNotes, setReviewNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Fulfillment of an approved request
-  const [fulfillModal, setFulfillModal] = useState<{ open: boolean; request: EquipmentRequestItem | null }>({ open: false, request: null });
+  const [fulfillModal, setFulfillModal] = useState<{ open: boolean; request: EquipmentRequestItem | null }>({
+    open: false,
+    request: null,
+  });
   const [fulfillItemId, setFulfillItemId] = useState('');
   const [fulfillQuantity, setFulfillQuantity] = useState('1');
   const [fulfillReturnAt, setFulfillReturnAt] = useState('');
@@ -111,36 +117,40 @@ const EquipmentRequestsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         <Link
           to="/inventory/admin"
-          className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 mb-6"
+          className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Admin
         </Link>
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-purple-600 rounded-lg p-2">
-              <ClipboardList className="w-5 h-5 text-white" />
+            <div className="rounded-lg bg-purple-600 p-2">
+              <ClipboardList className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-theme-text-primary">Equipment Requests</h1>
-              <p className="text-sm text-theme-text-muted">Review member requests for equipment</p>
+              <h1 className="text-theme-text-primary text-xl font-bold">Equipment Requests</h1>
+              <p className="text-theme-text-muted text-sm">Review member requests for equipment</p>
             </div>
           </div>
           <button
-            onClick={() => { void loadRequests(); }}
+            onClick={() => {
+              void loadRequests();
+            }}
             className="btn-secondary btn-md"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
 
         {/* Filter */}
         <div className="mb-6">
-          <label htmlFor="status-filter" className="sr-only">Filter by status</label>
+          <label htmlFor="status-filter" className="sr-only">
+            Filter by status
+          </label>
           <select
             id="status-filter"
             value={statusFilter}
@@ -158,12 +168,12 @@ const EquipmentRequestsPage: React.FC = () => {
         {/* Requests list */}
         {loading ? (
           <div className="flex justify-center py-12" role="status" aria-live="polite">
-            <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
+            <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
           </div>
         ) : requests.length === 0 ? (
           <div className="card-secondary p-8 text-center">
-            <ClipboardList className="w-12 h-12 text-theme-text-muted mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-theme-text-primary mb-2">No Requests</h3>
+            <ClipboardList className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
+            <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Requests</h3>
             <p className="text-theme-text-muted text-sm">No {statusFilter || 'equipment'} requests found.</p>
           </div>
         ) : (
@@ -172,27 +182,27 @@ const EquipmentRequestsPage: React.FC = () => {
               <div key={req.id} className="card-secondary p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-semibold text-theme-text-primary">{req.item_name}</h3>
-                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${REQUEST_STATUS_BADGES[req.status] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}>
+                    <div className="mb-1 flex items-center gap-2">
+                      <h3 className="text-theme-text-primary text-sm font-semibold">{req.item_name}</h3>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_BADGES[req.status] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}
+                      >
                         {req.status}
                       </span>
-                      <span className="px-2 py-0.5 text-xs rounded-full bg-theme-surface-secondary text-theme-text-muted">
+                      <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-xs">
                         {req.request_type}
                       </span>
                     </div>
-                    <p className="text-xs text-theme-text-muted">
+                    <p className="text-theme-text-muted text-xs">
                       Requested by {req.requester_name ?? 'Unknown'} on {fmtDate(req.created_at)}
                       {req.quantity > 1 && ` — Qty: ${req.quantity}`}
                     </p>
-                    {req.reason && (
-                      <p className="text-xs text-theme-text-secondary mt-1">{req.reason}</p>
-                    )}
+                    {req.reason && <p className="text-theme-text-secondary mt-1 text-xs">{req.reason}</p>}
                     {req.review_notes && (
-                      <p className="text-xs text-theme-text-muted mt-1 italic">Review: {req.review_notes}</p>
+                      <p className="text-theme-text-muted mt-1 text-xs italic">Review: {req.review_notes}</p>
                     )}
                     {req.status === 'fulfilled' && req.fulfillment_type && (
-                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                      <p className="mt-1 text-xs text-green-600 dark:text-green-400">
                         Fulfilled via {req.fulfillment_type}
                         {req.fulfilled_at ? ` on ${fmtDate(req.fulfilled_at)}` : ''}
                       </p>
@@ -204,7 +214,7 @@ const EquipmentRequestsPage: React.FC = () => {
                         setReviewModal({ open: true, request: req });
                         setReviewNotes('');
                       }}
-                      className="btn-info px-3 py-1.5 text-xs shrink-0"
+                      className="btn-info shrink-0 px-3 py-1.5 text-xs"
                     >
                       Review
                     </button>
@@ -212,9 +222,9 @@ const EquipmentRequestsPage: React.FC = () => {
                   {req.status === 'approved' && (
                     <button
                       onClick={() => openFulfill(req)}
-                      className="btn-success px-3 py-1.5 text-xs shrink-0 inline-flex items-center gap-1"
+                      className="btn-success inline-flex shrink-0 items-center gap-1 px-3 py-1.5 text-xs"
                     >
-                      <PackageCheck className="w-3.5 h-3.5" />
+                      <PackageCheck className="h-3.5 w-3.5" />
                       Fulfill
                     </button>
                   )}
@@ -229,16 +239,28 @@ const EquipmentRequestsPage: React.FC = () => {
           actions={[
             {
               id: 'filter',
-              label: statusFilter === 'pending' ? 'Show Approved' : statusFilter === 'approved' ? 'Show Denied' : statusFilter === 'denied' ? 'Show All' : 'Show Pending',
-              icon: <Filter className="w-5 h-5" />,
-              onClick: () => setStatusFilter((prev) => prev === 'pending' ? 'approved' : prev === 'approved' ? 'denied' : prev === 'denied' ? '' : 'pending'),
+              label:
+                statusFilter === 'pending'
+                  ? 'Show Approved'
+                  : statusFilter === 'approved'
+                    ? 'Show Denied'
+                    : statusFilter === 'denied'
+                      ? 'Show All'
+                      : 'Show Pending',
+              icon: <Filter className="h-5 w-5" />,
+              onClick: () =>
+                setStatusFilter((prev) =>
+                  prev === 'pending' ? 'approved' : prev === 'approved' ? 'denied' : prev === 'denied' ? '' : 'pending'
+                ),
               color: 'bg-purple-600',
             },
             {
               id: 'refresh',
               label: 'Refresh',
-              icon: <RefreshCw className="w-5 h-5" />,
-              onClick: () => { void loadRequests(); },
+              icon: <RefreshCw className="h-5 w-5" />,
+              onClick: () => {
+                void loadRequests();
+              },
               color: 'bg-blue-600',
             },
           ]}
@@ -254,7 +276,7 @@ const EquipmentRequestsPage: React.FC = () => {
         >
           {reviewModal.request && (
             <div className="space-y-4">
-              <div className="text-sm text-theme-text-secondary">
+              <div className="text-theme-text-secondary text-sm">
                 <p>Requester: {reviewModal.request.requester_name ?? 'Unknown'}</p>
                 <p>Type: {reviewModal.request.request_type}</p>
                 <p>Quantity: {reviewModal.request.quantity}</p>
@@ -262,7 +284,7 @@ const EquipmentRequestsPage: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="review-notes" className="block text-sm font-medium text-theme-text-primary mb-1">
+                <label htmlFor="review-notes" className="text-theme-text-primary mb-1 block text-sm font-medium">
                   Review Notes (optional)
                 </label>
                 <textarea
@@ -275,21 +297,25 @@ const EquipmentRequestsPage: React.FC = () => {
                 />
               </div>
 
-              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
+              <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <button
-                  onClick={() => { void handleReview('denied'); }}
+                  onClick={() => {
+                    void handleReview('denied');
+                  }}
                   disabled={submitting}
                   className="btn-primary btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  <XCircle className="w-4 h-4" />
+                  <XCircle className="h-4 w-4" />
                   Deny
                 </button>
                 <button
-                  onClick={() => { void handleReview('approved'); }}
+                  onClick={() => {
+                    void handleReview('approved');
+                  }}
                   disabled={submitting}
                   className="btn-success btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4" />
+                  <Check className="h-4 w-4" />
                   Approve
                 </button>
               </div>
@@ -306,13 +332,13 @@ const EquipmentRequestsPage: React.FC = () => {
         >
           {fulfillModal.request && (
             <div className="space-y-4">
-              <div className="text-sm text-theme-text-secondary">
+              <div className="text-theme-text-secondary text-sm">
                 <p>Requester: {fulfillModal.request.requester_name ?? 'Unknown'}</p>
                 <p>Type: {fulfillModal.request.request_type}</p>
               </div>
 
               <div>
-                <label htmlFor="fulfill-item" className="block text-sm font-medium text-theme-text-primary mb-1">
+                <label htmlFor="fulfill-item" className="text-theme-text-primary mb-1 block text-sm font-medium">
                   Item to fulfill with
                 </label>
                 <select
@@ -326,19 +352,22 @@ const EquipmentRequestsPage: React.FC = () => {
                     const tag = it.serial_number || it.asset_tag || it.barcode;
                     return (
                       <option key={it.id} value={it.id}>
-                        {it.name}{tag ? ` — ${tag}` : ''}{it.tracking_type === 'pool' ? ` (pool: ${it.quantity} on hand)` : ''}
+                        {it.name}
+                        {tag ? ` — ${tag}` : ''}
+                        {it.tracking_type === 'pool' ? ` (pool: ${it.quantity} on hand)` : ''}
                       </option>
                     );
                   })}
                 </select>
-                <p className="text-xs text-theme-text-muted mt-1">
-                  Pool items are issued; individual items are {fulfillModal.request.request_type === 'checkout' ? 'checked out' : 'assigned'}.
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Pool items are issued; individual items are{' '}
+                  {fulfillModal.request.request_type === 'checkout' ? 'checked out' : 'assigned'}.
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="fulfill-qty" className="block text-sm font-medium text-theme-text-primary mb-1">
+                  <label htmlFor="fulfill-qty" className="text-theme-text-primary mb-1 block text-sm font-medium">
                     Quantity
                   </label>
                   <input
@@ -352,7 +381,7 @@ const EquipmentRequestsPage: React.FC = () => {
                 </div>
                 {fulfillModal.request.request_type === 'checkout' && (
                   <div>
-                    <label htmlFor="fulfill-return" className="block text-sm font-medium text-theme-text-primary mb-1">
+                    <label htmlFor="fulfill-return" className="text-theme-text-primary mb-1 block text-sm font-medium">
                       Expected Return
                     </label>
                     <input
@@ -366,7 +395,7 @@ const EquipmentRequestsPage: React.FC = () => {
                 )}
               </div>
 
-              <label className="inline-flex items-center gap-2 text-sm text-theme-text-primary">
+              <label className="text-theme-text-primary inline-flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={fulfillOverride}
@@ -376,7 +405,7 @@ const EquipmentRequestsPage: React.FC = () => {
                 Override issuance allowance limit
               </label>
 
-              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
+              <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <button
                   onClick={() => setFulfillModal({ open: false, request: null })}
                   className="btn-secondary btn-md"
@@ -384,11 +413,13 @@ const EquipmentRequestsPage: React.FC = () => {
                   Cancel
                 </button>
                 <button
-                  onClick={() => { void handleFulfill(); }}
+                  onClick={() => {
+                    void handleFulfill();
+                  }}
                   disabled={submitting || !fulfillItemId.trim()}
                   className="btn-success btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <PackageCheck className="w-4 h-4" />}
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
                   Fulfill Request
                 </button>
               </div>

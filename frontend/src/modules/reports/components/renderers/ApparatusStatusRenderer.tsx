@@ -29,7 +29,9 @@ export const ApparatusStatusRenderer: React.FC<Props> = ({ data }) => {
           reserve: 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
         };
         return (
-          <span className={`rounded-sm px-2 py-0.5 text-xs capitalize ${colors[s] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}>
+          <span
+            className={`rounded-sm px-2 py-0.5 text-xs capitalize ${colors[s] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}
+          >
             {s.replace(/_/g, ' ')}
           </span>
         );

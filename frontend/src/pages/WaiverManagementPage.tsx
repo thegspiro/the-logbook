@@ -159,7 +159,9 @@ export const WaiverManagementPage: React.FC = () => {
   // Build members lookup
   const membersById = useMemo(() => {
     const map: Record<string, User> = {};
-    members.forEach((m) => { map[m.id] = m; });
+    members.forEach((m) => {
+      map[m.id] = m;
+    });
     return map;
   }, [members]);
 
@@ -218,9 +220,7 @@ export const WaiverManagementPage: React.FC = () => {
 
   // Active waivers (current period)
   const activeWaivers = useMemo(() => {
-    return unifiedWaivers.filter(
-      (w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today)
-    );
+    return unifiedWaivers.filter((w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today));
   }, [unifiedWaivers, today]);
 
   // Filtered history
@@ -254,7 +254,8 @@ export const WaiverManagementPage: React.FC = () => {
       if (formData.applies_to.length === 0) throw new Error('Please select at least one area');
       if (!formData.start_date) throw new Error('Start date is required');
       if (!formData.is_permanent && !formData.end_date) throw new Error('End date is required (or select Permanent)');
-      if (!formData.is_permanent && formData.end_date < formData.start_date) throw new Error('End date must be after start date');
+      if (!formData.is_permanent && formData.end_date < formData.start_date)
+        throw new Error('End date must be after start date');
 
       const endDate = formData.is_permanent ? undefined : formData.end_date;
       const hasTraining = formData.applies_to.includes('training');
@@ -321,14 +322,16 @@ export const WaiverManagementPage: React.FC = () => {
   // Active members sorted by name for the member picker
   const activeMembers = useMemo(() => {
     return members
-      .filter((m) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY || m.status === UserStatus.LEAVE)
+      .filter(
+        (m) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY || m.status === UserStatus.LEAVE
+      )
       .sort((a, b) => (a.full_name || a.username || '').localeCompare(b.full_name || b.username || ''));
   }, [members]);
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-        <div className="flex justify-center items-center h-64">
+      <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
+        <div className="flex h-64 items-center justify-center">
           <div className="text-theme-text-muted">Loading waiver data...</div>
         </div>
       </div>
@@ -338,35 +341,35 @@ export const WaiverManagementPage: React.FC = () => {
   return (
     <div>
       {/* Header + Tab Bar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+      <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-theme-text-primary">Waiver Management</h1>
-          <p className="mt-1 text-sm text-theme-text-muted">
+          <h1 className="text-theme-text-primary text-2xl font-bold">Waiver Management</h1>
+          <p className="text-theme-text-muted mt-1 text-sm">
             Manage waivers for training, meetings, and shifts across all members
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-700 dark:text-red-400 text-sm">
+          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-400">
             {error}
           </div>
         )}
 
-        <div className="border-b border-theme-surface-border">
+        <div className="border-theme-surface-border border-b">
           <nav className="flex space-x-1 overflow-x-auto" aria-label="Waiver tabs">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors focus:outline-hidden ${
+                className={`border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:outline-hidden ${
                   activeTab === tab.id
-                    ? 'border-red-500 text-theme-text-primary'
-                    : 'border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border'
+                    ? 'text-theme-text-primary border-red-500'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
                 }`}
               >
                 {tab.label}
                 {tab.id === 'active' && activeWaivers.length > 0 && (
-                  <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-green-500/20 text-green-700 dark:text-green-400">
+                  <span className="ml-2 rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">
                     {activeWaivers.length}
                   </span>
                 )}
@@ -377,62 +380,101 @@ export const WaiverManagementPage: React.FC = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {/* Active Waivers Tab */}
         {activeTab === 'active' && (
           <div>
             {activeWaivers.length === 0 ? (
-              <div className="text-center py-12 bg-theme-surface rounded-lg border border-theme-surface-border">
+              <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
                 <p className="text-theme-text-muted">No active waivers at this time.</p>
                 <button
                   onClick={() => handleTabChange('create')}
-                  className="mt-3 text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                  className="mt-3 text-sm text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   Create a new waiver
                 </button>
               </div>
             ) : (
-              <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
-                <table className="min-w-full divide-y divide-theme-surface-border">
+              <div className="bg-theme-surface border-theme-surface-border overflow-hidden overflow-x-auto rounded-lg border">
+                <table className="divide-theme-surface-border min-w-full divide-y">
                   <thead className="bg-theme-surface-hover">
                     <tr>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Member</th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Type</th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Applies To</th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Period</th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Reason</th>
-                      <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">Actions</th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Member
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Type
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Applies To
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Period
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Reason
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                      >
+                        Actions
+                      </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-theme-surface-border">
+                  <tbody className="divide-theme-surface-border divide-y">
                     {activeWaivers.map((waiver) => (
                       <tr key={`${waiver.source}-${waiver.id}`} className="hover:bg-theme-surface-hover">
                         <td className="px-4 py-3">
-                          <Link to={`/members/${waiver.user_id}`} className="text-sm font-medium text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
+                          <Link
+                            to={`/members/${waiver.user_id}`}
+                            className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                          >
                             {waiver.member_name}
                           </Link>
                         </td>
-                        <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                        <td className="text-theme-text-secondary px-4 py-3 text-sm">
                           {getWaiverTypeLabel(waiver.waiver_type)}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-xs px-2 py-1 rounded-full bg-theme-surface-hover text-theme-text-secondary">
-                            {waiver.applies_to === 'all' ? 'Training, Meetings, Shifts' :
-                             waiver.applies_to === 'training' ? 'Training Only' :
-                             waiver.applies_to === 'meetings' ? 'Meetings & Shifts' :
-                             waiver.applies_to}
+                          <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-2 py-1 text-xs">
+                            {waiver.applies_to === 'all'
+                              ? 'Training, Meetings, Shifts'
+                              : waiver.applies_to === 'training'
+                                ? 'Training Only'
+                                : waiver.applies_to === 'meetings'
+                                  ? 'Meetings & Shifts'
+                                  : waiver.applies_to}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-theme-text-secondary">
-                          {formatDate(waiver.start_date, tz)} - {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
+                        <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                          {formatDate(waiver.start_date, tz)} -{' '}
+                          {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
                         </td>
-                        <td className="px-4 py-3 text-sm text-theme-text-muted max-w-xs truncate">
+                        <td className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
                           {waiver.reason || '-'}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
-                            onClick={() => { void handleDeactivate(waiver); }}
-                            className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                            onClick={() => {
+                              void handleDeactivate(waiver);
+                            }}
+                            className="text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                           >
                             Deactivate
                           </button>
@@ -449,28 +491,33 @@ export const WaiverManagementPage: React.FC = () => {
         {/* Create Waiver Tab */}
         {activeTab === 'create' && (
           <div className="max-w-2xl">
-            <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-6">
-              <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Create New Waiver</h2>
+            <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-6">
+              <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Create New Waiver</h2>
 
               {createSuccess && (
-                <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-green-700 dark:text-green-400 text-sm">
+                <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-700 dark:text-green-400">
                   {createSuccess}
                 </div>
               )}
               {createError && (
-                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-700 dark:text-red-400 text-sm">
+                <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
                   {createError}
                 </div>
               )}
 
-              <form onSubmit={(e) => { void handleCreateWaiver(e); }} className="space-y-4">
+              <form
+                onSubmit={(e) => {
+                  void handleCreateWaiver(e);
+                }}
+                className="space-y-4"
+              >
                 {/* Member Selection */}
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Member</label>
+                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Member</label>
                   <select
                     value={formData.user_id}
                     onChange={(e) => setFormData({ ...formData, user_id: e.target.value })}
-                    className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                     required
                   >
                     <option value="">Select a member...</option>
@@ -484,24 +531,29 @@ export const WaiverManagementPage: React.FC = () => {
 
                 {/* Waiver Type */}
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Waiver Type</label>
+                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Waiver Type</label>
                   <select
                     value={formData.waiver_type}
                     onChange={(e) => setFormData({ ...formData, waiver_type: e.target.value })}
-                    className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   >
                     {WAIVER_TYPES.map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 {/* Applies To */}
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Applies To</label>
-                  <div className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
+                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Applies To</label>
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-2">
                     {APPLIES_TO_OPTIONS.map((o) => (
-                      <label key={o.value} className="flex items-center gap-2 cursor-pointer text-sm text-theme-text-primary">
+                      <label
+                        key={o.value}
+                        className="text-theme-text-primary flex cursor-pointer items-center gap-2 text-sm"
+                      >
                         <input
                           type="checkbox"
                           checked={formData.applies_to.includes(o.value)}
@@ -511,20 +563,23 @@ export const WaiverManagementPage: React.FC = () => {
                               : formData.applies_to.filter((v) => v !== o.value);
                             setFormData({ ...formData, applies_to: updated });
                           }}
-                          className="rounded-sm border-theme-surface-border text-blue-600 focus:ring-theme-focus-ring"
+                          className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
                         />
                         {o.label}
                       </label>
                     ))}
                   </div>
-                  <p className="mt-1 text-xs text-theme-text-muted">
+                  <p className="text-theme-text-muted mt-1 text-xs">
                     {formData.applies_to.length === 0
                       ? 'Select at least one area to waive.'
-                      : formData.applies_to.includes('training') && !formData.applies_to.includes('meetings') && !formData.applies_to.includes('shifts')
-                      ? 'Creates a standalone training waiver without a leave of absence.'
-                      : !formData.applies_to.includes('training') && (formData.applies_to.includes('meetings') || formData.applies_to.includes('shifts'))
-                      ? 'Creates a leave of absence but keeps training requirements active.'
-                      : 'Creates a leave of absence that automatically generates a training waiver.'}
+                      : formData.applies_to.includes('training') &&
+                          !formData.applies_to.includes('meetings') &&
+                          !formData.applies_to.includes('shifts')
+                        ? 'Creates a standalone training waiver without a leave of absence.'
+                        : !formData.applies_to.includes('training') &&
+                            (formData.applies_to.includes('meetings') || formData.applies_to.includes('shifts'))
+                          ? 'Creates a leave of absence but keeps training requirements active.'
+                          : 'Creates a leave of absence that automatically generates a training waiver.'}
                   </p>
                 </div>
 
@@ -532,63 +587,58 @@ export const WaiverManagementPage: React.FC = () => {
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date</label>
+                      <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Start Date</label>
                       <input
                         type="date"
                         value={formData.start_date}
                         onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                        className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                         required
                       />
                     </div>
                     {!formData.is_permanent && (
                       <div>
-                        <label className="block text-sm font-medium text-theme-text-secondary mb-1">End Date</label>
+                        <label className="text-theme-text-secondary mb-1 block text-sm font-medium">End Date</label>
                         <input
                           type="date"
                           value={formData.end_date}
                           onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                          className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                          className="border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                           required
                         />
                       </div>
                     )}
                   </div>
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className="flex cursor-pointer items-center gap-2">
                     <input
                       type="checkbox"
                       checked={formData.is_permanent}
                       onChange={(e) => setFormData({ ...formData, is_permanent: e.target.checked, end_date: '' })}
-                      className="rounded-sm border-theme-surface-border text-blue-600 focus:ring-theme-focus-ring"
+                      className="border-theme-surface-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
                     />
-                    <span className="text-sm text-theme-text-secondary">
-                      Permanent (no end date)
-                    </span>
+                    <span className="text-theme-text-secondary text-sm">Permanent (no end date)</span>
                   </label>
                   {formData.is_permanent && (
-                    <p className="text-xs text-theme-text-muted">
-                      This waiver will remain active indefinitely until manually deactivated. Use for long-service members exempt from certain requirements.
+                    <p className="text-theme-text-muted text-xs">
+                      This waiver will remain active indefinitely until manually deactivated. Use for long-service
+                      members exempt from certain requirements.
                     </p>
                   )}
                 </div>
 
                 {/* Reason */}
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
+                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Reason</label>
                   <textarea
                     value={formData.reason}
                     onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                     rows={3}
-                    className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    className="border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                     placeholder="Reason for the waiver..."
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="btn-primary font-medium text-sm w-full"
-                >
+                <button type="submit" disabled={creating} className="btn-primary w-full text-sm font-medium">
                   {creating ? 'Creating...' : 'Create Waiver'}
                 </button>
               </form>
@@ -600,8 +650,8 @@ export const WaiverManagementPage: React.FC = () => {
         {activeTab === 'history' && (
           <div>
             {/* Filters */}
-            <div className="flex flex-wrap gap-3 mb-4">
-              <div className="flex rounded-lg border border-theme-surface-border overflow-hidden">
+            <div className="mb-4 flex flex-wrap gap-3">
+              <div className="border-theme-surface-border flex overflow-hidden rounded-lg border">
                 {(['all', 'active', 'future', 'inactive'] as const).map((f) => (
                   <button
                     key={f}
@@ -620,69 +670,114 @@ export const WaiverManagementPage: React.FC = () => {
                 type="text"
                 value={memberFilter}
                 onChange={(e) => setMemberFilter(e.target.value)}
-                aria-label="Search by member name..." placeholder="Search by member name..."
-                className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring w-64"
+                aria-label="Search by member name..."
+                placeholder="Search by member name..."
+                className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring w-64 rounded-lg border px-3 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
               />
-              <div className="ml-auto text-xs text-theme-text-muted self-center">
+              <div className="text-theme-text-muted ml-auto self-center text-xs">
                 {filteredHistory.length} waiver{filteredHistory.length !== 1 ? 's' : ''}
               </div>
             </div>
 
             {filteredHistory.length === 0 ? (
-              <div className="text-center py-12 bg-theme-surface rounded-lg border border-theme-surface-border">
+              <div className="bg-theme-surface border-theme-surface-border rounded-lg border py-12 text-center">
                 <p className="text-theme-text-muted">No waivers match the current filter.</p>
               </div>
             ) : (
-              <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden overflow-x-auto">
-                <table className="min-w-full divide-y divide-theme-surface-border">
+              <div className="bg-theme-surface border-theme-surface-border overflow-hidden overflow-x-auto rounded-lg border">
+                <table className="divide-theme-surface-border min-w-full divide-y">
                   <thead className="bg-theme-surface-hover">
                     <tr>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Member</th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Status</th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Type</th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Applies To</th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Period</th>
-                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">Reason</th>
-                      <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-theme-text-muted uppercase tracking-wider">Actions</th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Member
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Status
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Type
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Applies To
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Period
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                      >
+                        Reason
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-muted px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                      >
+                        Actions
+                      </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-theme-surface-border">
+                  <tbody className="divide-theme-surface-border divide-y">
                     {filteredHistory.map((waiver) => {
                       const badge = getStatusBadge(waiver, today);
                       return (
                         <tr key={`${waiver.source}-${waiver.id}`} className="hover:bg-theme-surface-hover">
                           <td className="px-4 py-3">
-                            <Link to={`/members/${waiver.user_id}`} className="text-sm font-medium text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
+                            <Link
+                              to={`/members/${waiver.user_id}`}
+                              className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                            >
                               {waiver.member_name}
                             </Link>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${badge.color}`}>
+                            <span className={`rounded-full px-2 py-1 text-xs font-medium ${badge.color}`}>
                               {badge.label}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                          <td className="text-theme-text-secondary px-4 py-3 text-sm">
                             {getWaiverTypeLabel(waiver.waiver_type)}
                           </td>
                           <td className="px-4 py-3">
-                            <span className="text-xs px-2 py-1 rounded-full bg-theme-surface-hover text-theme-text-secondary">
-                              {waiver.applies_to === 'all' ? 'All' :
-                               waiver.applies_to === 'training' ? 'Training' :
-                               waiver.applies_to === 'meetings' ? 'Meetings/Shifts' :
-                               waiver.applies_to}
+                            <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-2 py-1 text-xs">
+                              {waiver.applies_to === 'all'
+                                ? 'All'
+                                : waiver.applies_to === 'training'
+                                  ? 'Training'
+                                  : waiver.applies_to === 'meetings'
+                                    ? 'Meetings/Shifts'
+                                    : waiver.applies_to}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-sm text-theme-text-secondary">
-                            {formatDate(waiver.start_date, tz)} - {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
+                          <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                            {formatDate(waiver.start_date, tz)} -{' '}
+                            {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
                           </td>
-                          <td className="px-4 py-3 text-sm text-theme-text-muted max-w-xs truncate">
+                          <td className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
                             {waiver.reason || '-'}
                           </td>
                           <td className="px-4 py-3 text-right">
                             {waiver.active && (
                               <button
-                                onClick={() => { void handleDeactivate(waiver); }}
-                                className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                                onClick={() => {
+                                  void handleDeactivate(waiver);
+                                }}
+                                className="text-xs text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                               >
                                 Deactivate
                               </button>

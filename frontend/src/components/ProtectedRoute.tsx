@@ -37,10 +37,17 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Show loading state while checking authentication
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600" role="status" aria-live="polite" aria-label="Loading" />
-          <p className="mt-4 text-theme-text-secondary" aria-live="polite">Loading...</p>
+          <div
+            className="inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-red-600"
+            role="status"
+            aria-live="polite"
+            aria-label="Loading"
+          />
+          <p className="text-theme-text-secondary mt-4" aria-live="polite">
+            Loading...
+          </p>
         </div>
       </div>
     );
@@ -50,10 +57,17 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // instead of redirecting. loadUser() will resolve this on the next render.
   if (!isAuthenticated && hasStoredToken && !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600" role="status" aria-live="polite" aria-label="Loading" />
-          <p className="mt-4 text-theme-text-secondary" aria-live="polite">Loading...</p>
+          <div
+            className="inline-block h-12 w-12 animate-spin rounded-full border-b-2 border-red-600"
+            role="status"
+            aria-live="polite"
+            aria-label="Loading"
+          />
+          <p className="text-theme-text-secondary mt-4" aria-live="polite">
+            Loading...
+          </p>
         </div>
       </div>
     );
@@ -79,20 +93,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Check for required permission (single, AND) or any-of (OR)
   const lacksSingle = requiredPermission && !checkPermission(requiredPermission);
   const lacksAny =
-    requiredAnyPermission &&
-    requiredAnyPermission.length > 0 &&
-    !requiredAnyPermission.some((p) => checkPermission(p));
+    requiredAnyPermission && requiredAnyPermission.length > 0 && !requiredAnyPermission.some((p) => checkPermission(p));
   if (lacksSingle || lacksAny) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="max-w-md w-full text-center">
-          <h2 className="text-2xl font-bold text-theme-text-primary mb-4">Access Denied</h2>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="w-full max-w-md text-center">
+          <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">Access Denied</h2>
           <p className="text-theme-text-secondary mb-6">
             You do not have the required permissions to access this page.
           </p>
           <Link
             to="/dashboard"
-            className="btn-primary inline-flex items-center px-4 py-2 text-sm font-medium rounded-md"
+            className="btn-primary inline-flex items-center rounded-md px-4 py-2 text-sm font-medium"
           >
             Return to Dashboard
           </Link>
@@ -104,15 +116,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Check for required role
   if (requiredRole && !hasRole(requiredRole)) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="max-w-md w-full text-center">
-          <h2 className="text-2xl font-bold text-theme-text-primary mb-4">Access Denied</h2>
-          <p className="text-theme-text-secondary mb-6">
-            You do not have the required role to access this page.
-          </p>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="w-full max-w-md text-center">
+          <h2 className="text-theme-text-primary mb-4 text-2xl font-bold">Access Denied</h2>
+          <p className="text-theme-text-secondary mb-6">You do not have the required role to access this page.</p>
           <Link
             to="/dashboard"
-            className="btn-primary inline-flex items-center px-4 py-2 text-sm font-medium rounded-md"
+            className="btn-primary inline-flex items-center rounded-md px-4 py-2 text-sm font-medium"
           >
             Return to Dashboard
           </Link>

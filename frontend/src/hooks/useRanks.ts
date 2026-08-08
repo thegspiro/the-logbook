@@ -51,7 +51,7 @@ export function useRanks(activeOnly = true) {
       if (found) return found.display_name;
       return code.replace(/_/g, ' ');
     },
-    [ranks],
+    [ranks]
   );
 
   return { ranks, rankOptions, loading, refetch, formatRank };

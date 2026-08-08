@@ -32,12 +32,7 @@ import { EmptyState } from '../../components/ux/EmptyState';
 import { ConfirmDialog } from '../../components/ux/ConfirmDialog';
 import DateTimeQuarterHour from '../../components/ux/DateTimeQuarterHour';
 import { useTimezone } from '../../hooks/useTimezone';
-import {
-  formatDate,
-  formatForDateTimeInput,
-  formatShortDateTime,
-  localToUTC,
-} from '../../utils/dateFormatting';
+import { formatDate, formatForDateTimeInput, formatShortDateTime, localToUTC } from '../../utils/dateFormatting';
 import {
   COHORT_CLASS_STATUS_COLORS,
   COHORT_MEMBER_STATUS_COLORS,
@@ -46,10 +41,7 @@ import {
   CohortClassStatus,
 } from '../../constants/enums';
 import { getErrorMessage } from '../../utils/errorHandling';
-import type {
-  CourseCohortClass,
-  CourseCohortDetail,
-} from '../../types/training';
+import type { CourseCohortClass, CourseCohortDetail } from '../../types/training';
 
 type TabId = 'classes' | 'roster';
 
@@ -65,9 +57,7 @@ export const CohortDetailPage: React.FC = () => {
 
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [rescheduleValue, setRescheduleValue] = useState('');
-  const [cancelTarget, setCancelTarget] = useState<CourseCohortClass | null>(
-    null,
-  );
+  const [cancelTarget, setCancelTarget] = useState<CourseCohortClass | null>(null);
   const [showShift, setShowShift] = useState(false);
   const [shiftDays, setShiftDays] = useState('7');
   const [removeTarget, setRemoveTarget] = useState<{
@@ -105,14 +95,10 @@ export const CohortDetailPage: React.FC = () => {
       if (!cohortId || !rescheduleValue) return;
       try {
         const utcStart = localToUTC(rescheduleValue, tz);
-        const durationMs =
-          new Date(item.scheduled_end).getTime() -
-          new Date(item.scheduled_start).getTime();
+        const durationMs = new Date(item.scheduled_end).getTime() - new Date(item.scheduled_start).getTime();
         await courseCohortService.rescheduleClass(cohortId, item.id, {
           scheduled_start: utcStart,
-          scheduled_end: new Date(
-            new Date(utcStart).getTime() + durationMs,
-          ).toISOString(),
+          scheduled_end: new Date(new Date(utcStart).getTime() + durationMs).toISOString(),
         });
         toast.success('Class moved — the calendar event moved with it');
         setReschedulingId(null);
@@ -126,11 +112,7 @@ export const CohortDetailPage: React.FC = () => {
     withBusy(async () => {
       if (!cohortId || !cancelTarget) return;
       try {
-        await courseCohortService.cancelClass(
-          cohortId,
-          cancelTarget.id,
-          'Cancelled by the training officer',
-        );
+        await courseCohortService.cancelClass(cohortId, cancelTarget.id, 'Cancelled by the training officer');
         toast.success('Class cancelled — attendees will see the cancellation');
         setCancelTarget(null);
         await load();
@@ -151,9 +133,7 @@ export const CohortDetailPage: React.FC = () => {
         const result = await courseCohortService.shiftClasses(cohortId, {
           days,
         });
-        toast.success(
-          `Moved ${result.success_count} upcoming class${result.success_count === 1 ? '' : 'es'}`,
-        );
+        toast.success(`Moved ${result.success_count} upcoming class${result.success_count === 1 ? '' : 'es'}`);
         setShowShift(false);
         await load();
       } catch (err: unknown) {
@@ -169,9 +149,7 @@ export const CohortDetailPage: React.FC = () => {
         if (result.success_count === 0) {
           toast.success('Every class already has an event');
         } else {
-          toast.success(
-            `Created ${result.success_count} missing event${result.success_count === 1 ? '' : 's'}`,
-          );
+          toast.success(`Created ${result.success_count} missing event${result.success_count === 1 ? '' : 's'}`);
         }
         result.warnings.forEach((w) => toast.error(w));
         await load();
@@ -205,7 +183,9 @@ export const CohortDetailPage: React.FC = () => {
           actions={[
             {
               label: 'Back to cohorts',
-              onClick: () => { void navigate('/training/cohorts'); },
+              onClick: () => {
+                void navigate('/training/cohorts');
+              },
             },
           ]}
         />
@@ -213,16 +193,16 @@ export const CohortDetailPage: React.FC = () => {
     );
   }
 
-  const missingEvents = cohort.classes.filter(
-    (c) => !c.event_id && c.status !== CohortClassStatus.CANCELLED,
-  ).length;
+  const missingEvents = cohort.classes.filter((c) => !c.event_id && c.status !== CohortClassStatus.CANCELLED).length;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <button
         type="button"
-        onClick={() => { void navigate('/training/cohorts'); }}
-        className="mb-4 flex items-center gap-1 text-sm text-theme-text-muted hover:text-theme-text-primary"
+        onClick={() => {
+          void navigate('/training/cohorts');
+        }}
+        className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center gap-1 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         <span>All cohorts</span>
@@ -231,16 +211,12 @@ export const CohortDetailPage: React.FC = () => {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-bold text-theme-text-primary">
-              {cohort.name}
-            </h1>
-            <span
-              className={`badge ${COHORT_STATUS_COLORS[cohort.status] ?? ''}`}
-            >
+            <h1 className="text-theme-text-primary text-2xl font-bold">{cohort.name}</h1>
+            <span className={`badge ${COHORT_STATUS_COLORS[cohort.status] ?? ''}`}>
               {COHORT_STATUS_LABELS[cohort.status] ?? cohort.status}
             </span>
           </div>
-          <p className="mt-1 text-sm text-theme-text-muted">
+          <p className="text-theme-text-muted mt-1 text-sm">
             {cohort.course_name} · starts {formatDate(cohort.start_date, tz)}
             {cohort.program_name ? ` · ${cohort.program_name}` : ''}
           </p>
@@ -251,7 +227,7 @@ export const CohortDetailPage: React.FC = () => {
             type="button"
             onClick={() => setShowShift((s) => !s)}
             disabled={busy}
-            className="btn-icon flex items-center gap-2 border border-theme-surface-border px-3 text-sm"
+            className="btn-icon border-theme-surface-border flex items-center gap-2 border px-3 text-sm"
           >
             <CalendarClock className="h-4 w-4" />
             <span>Shift remaining</span>
@@ -286,38 +262,28 @@ export const CohortDetailPage: React.FC = () => {
               onChange={(e) => setShiftDays(e.target.value)}
               className="form-input md:max-w-[10rem]"
             />
-            <p className="mt-1 text-xs text-theme-text-muted">
-              Days. Negative pulls the schedule forward. Classes that already
-              happened are left alone.
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Days. Negative pulls the schedule forward. Classes that already happened are left alone.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void handleShift()}
-            disabled={busy}
-            className="btn-primary"
-          >
+          <button type="button" onClick={() => void handleShift()} disabled={busy} className="btn-primary">
             Apply
           </button>
         </div>
       )}
 
       <div className="tab-scroll mb-4">
-        {(
-          [
-            { id: 'classes' as const, label: `Classes (${cohort.classes.length})` },
-            { id: 'roster' as const, label: `Roster (${cohort.members.length})` },
-          ]
-        ).map((t) => (
+        {[
+          { id: 'classes' as const, label: `Classes (${cohort.classes.length})` },
+          { id: 'roster' as const, label: `Roster (${cohort.members.length})` },
+        ].map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             aria-current={tab === t.id ? 'page' : undefined}
-            className={`mobile-touch-target whitespace-nowrap px-4 text-sm ${
-              tab === t.id
-                ? 'border-b-2 border-red-500 font-medium text-theme-text-primary'
-                : 'text-theme-text-muted'
+            className={`mobile-touch-target px-4 text-sm whitespace-nowrap ${
+              tab === t.id ? 'text-theme-text-primary border-b-2 border-red-500 font-medium' : 'text-theme-text-muted'
             }`}
           >
             {t.label}
@@ -330,39 +296,26 @@ export const CohortDetailPage: React.FC = () => {
           {cohort.classes.map((item) => {
             const cancelled = item.status === CohortClassStatus.CANCELLED;
             return (
-              <li
-                key={item.id}
-                className={`card-secondary p-4 ${cancelled ? 'opacity-60' : ''}`}
-              >
+              <li key={item.id} className={`card-secondary p-4 ${cancelled ? 'opacity-60' : ''}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-theme-surface text-xs font-semibold">
+                      <span className="bg-theme-surface flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
                         {item.sequence}
                       </span>
-                      <span className="font-medium text-theme-text-primary">
-                        {item.title}
-                      </span>
-                      <span
-                        className={`badge ${COHORT_CLASS_STATUS_COLORS[item.status] ?? ''}`}
-                      >
-                        {item.status}
-                      </span>
+                      <span className="text-theme-text-primary font-medium">{item.title}</span>
+                      <span className={`badge ${COHORT_CLASS_STATUS_COLORS[item.status] ?? ''}`}>{item.status}</span>
                       {!item.event_id && !cancelled && (
-                        <span className="badge bg-amber-500/20 text-amber-700 dark:text-amber-400">
-                          No event
-                        </span>
+                        <span className="badge bg-amber-500/20 text-amber-700 dark:text-amber-400">No event</span>
                       )}
                     </div>
 
-                    <p className="mt-1 text-sm text-theme-text-secondary">
+                    <p className="text-theme-text-secondary mt-1 text-sm">
                       {formatShortDateTime(item.scheduled_start, tz)}
                     </p>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-theme-text-muted">
-                      {item.credit_hours != null && (
-                        <span>{item.credit_hours} credits</span>
-                      )}
+                    <div className="text-theme-text-muted mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                      {item.credit_hours != null && <span>{item.credit_hours} credits</span>}
                       {item.instructor && <span>{item.instructor}</span>}
                       {item.rsvp_count != null && (
                         <span className="flex items-center gap-1">
@@ -370,13 +323,12 @@ export const CohortDetailPage: React.FC = () => {
                           {item.rsvp_count} signed up
                         </span>
                       )}
-                      {item.checked_in_count != null &&
-                        item.checked_in_count > 0 && (
-                          <span className="flex items-center gap-1 text-green-700 dark:text-green-400">
-                            <CheckCircle2 className="h-3 w-3" />
-                            {item.checked_in_count} attended
-                          </span>
-                        )}
+                      {item.checked_in_count != null && item.checked_in_count > 0 && (
+                        <span className="flex items-center gap-1 text-green-700 dark:text-green-400">
+                          <CheckCircle2 className="h-3 w-3" />
+                          {item.checked_in_count} attended
+                        </span>
+                      )}
                       {item.event_id && (
                         <Link
                           to={`/events/${item.event_id}`}
@@ -389,9 +341,7 @@ export const CohortDetailPage: React.FC = () => {
                     </div>
 
                     {cancelled && item.cancellation_reason && (
-                      <p className="mt-1 text-xs text-theme-text-muted">
-                        {item.cancellation_reason}
-                      </p>
+                      <p className="text-theme-text-muted mt-1 text-xs">{item.cancellation_reason}</p>
                     )}
                   </div>
 
@@ -401,9 +351,7 @@ export const CohortDetailPage: React.FC = () => {
                         type="button"
                         onClick={() => {
                           setReschedulingId(item.id);
-                          setRescheduleValue(
-                            formatForDateTimeInput(item.scheduled_start, tz),
-                          );
+                          setRescheduleValue(formatForDateTimeInput(item.scheduled_start, tz));
                         }}
                         className="btn-icon"
                         aria-label={`Reschedule ${item.title}`}
@@ -425,7 +373,7 @@ export const CohortDetailPage: React.FC = () => {
                 </div>
 
                 {reschedulingId === item.id && (
-                  <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-theme-surface-border pt-3">
+                  <div className="border-theme-surface-border mt-3 flex flex-wrap items-end gap-2 border-t pt-3">
                     <DateTimeQuarterHour
                       value={rescheduleValue}
                       onChange={(value: string) => setRescheduleValue(value)}
@@ -438,11 +386,7 @@ export const CohortDetailPage: React.FC = () => {
                     >
                       Move class
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setReschedulingId(null)}
-                      className="btn-icon px-3"
-                    >
+                    <button type="button" onClick={() => setReschedulingId(null)} className="btn-icon px-3">
                       Cancel
                     </button>
                   </div>
@@ -472,36 +416,25 @@ export const CohortDetailPage: React.FC = () => {
           ) : (
             <ul className="space-y-2">
               {cohort.members.map((member) => (
-                <li
-                  key={member.id}
-                  className="card-secondary flex flex-wrap items-center justify-between gap-3 p-4"
-                >
+                <li key={member.id} className="card-secondary flex flex-wrap items-center justify-between gap-3 p-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-theme-text-primary">
-                        {member.full_name ?? 'Member'}
-                      </span>
-                      <span
-                        className={`badge ${COHORT_MEMBER_STATUS_COLORS[member.status] ?? ''}`}
-                      >
+                      <span className="text-theme-text-primary font-medium">{member.full_name ?? 'Member'}</span>
+                      <span className={`badge ${COHORT_MEMBER_STATUS_COLORS[member.status] ?? ''}`}>
                         {member.status}
                       </span>
                     </div>
-                    {member.email && (
-                      <p className="text-xs text-theme-text-muted">
-                        {member.email}
-                      </p>
-                    )}
+                    {member.email && <p className="text-theme-text-muted text-xs">{member.email}</p>}
                   </div>
 
                   <div className="flex items-center gap-3">
                     {member.progress_percentage != null && (
                       <div className="w-32">
-                        <div className="mb-1 flex justify-between text-xs text-theme-text-muted">
+                        <div className="text-theme-text-muted mb-1 flex justify-between text-xs">
                           <span>Progress</span>
                           <span>{Math.round(member.progress_percentage)}%</span>
                         </div>
-                        <div className="h-1.5 w-full rounded-full bg-theme-surface">
+                        <div className="bg-theme-surface h-1.5 w-full rounded-full">
                           <div
                             className="h-1.5 rounded-full bg-red-600"
                             style={{

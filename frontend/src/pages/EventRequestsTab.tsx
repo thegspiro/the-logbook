@@ -47,10 +47,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 
-const STATUS_CONFIG: Record<
-  EventRequestStatus,
-  { label: string; color: string; icon: React.ElementType }
-> = {
+const STATUS_CONFIG: Record<EventRequestStatus, { label: string; color: string; icon: React.ElementType }> = {
   submitted: {
     label: 'Submitted',
     color: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
@@ -331,7 +328,9 @@ const EventRequestsTab: React.FC = () => {
       await refreshDetail(requestId);
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to schedule request.');
-      toast.error(message.includes('already booked') ? message : 'Failed to schedule request. The room may be double-booked.');
+      toast.error(
+        message.includes('already booked') ? message : 'Failed to schedule request. The room may be double-booked.'
+      );
     } finally {
       setActionLoading(false);
     }
@@ -416,14 +415,13 @@ const EventRequestsTab: React.FC = () => {
     return acc;
   }, {});
 
-  const isActiveStatus = (s: EventRequestStatus) =>
-    s !== 'declined' && s !== 'cancelled' && s !== 'completed';
+  const isActiveStatus = (s: EventRequestStatus) => s !== 'declined' && s !== 'cancelled' && s !== 'completed';
 
   if (loading && requests.length === 0) {
     return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
-          <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
+          <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
         </div>
       </div>
     );
@@ -431,12 +429,12 @@ const EventRequestsTab: React.FC = () => {
 
   if (error) {
     return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
             onClick={() => void fetchRequests()}
-            className="mt-2 text-sm text-red-700 dark:text-red-400 underline"
+            className="mt-2 text-sm text-red-700 underline dark:text-red-400"
           >
             Try again
           </button>
@@ -446,24 +444,22 @@ const EventRequestsTab: React.FC = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h2 className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-red-700" />
+          <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-bold">
+            <ClipboardList className="h-5 w-5 text-red-700" />
             Public Outreach Requests
           </h2>
-          <p className="text-sm text-theme-text-muted mt-1">
-            Review and manage event requests from the community.
-          </p>
+          <p className="text-theme-text-muted mt-1 text-sm">Review and manage event requests from the community.</p>
         </div>
 
         {/* Status filter chips */}
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setStatusFilter('')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
               statusFilter === ''
                 ? 'bg-red-600 text-white'
                 : 'bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -477,10 +473,8 @@ const EventRequestsTab: React.FC = () => {
               <button
                 key={s}
                 onClick={() => setStatusFilter(statusFilter === s ? '' : s)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  statusFilter === s
-                    ? 'bg-red-600 text-white'
-                    : `${cfg.color}`
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  statusFilter === s ? 'bg-red-600 text-white' : `${cfg.color}`
                 }`}
               >
                 {cfg.label} ({counts[s] || 0})
@@ -491,14 +485,10 @@ const EventRequestsTab: React.FC = () => {
 
         {/* Requests list */}
         {requests.length === 0 ? (
-          <div className="text-center py-16 bg-theme-surface-secondary rounded-lg">
-            <ClipboardList className="w-12 h-12 text-theme-text-muted mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-theme-text-primary mb-1">
-              No event requests yet
-            </h3>
-            <p className="text-sm text-theme-text-muted">
-              Community event requests will appear here once submitted.
-            </p>
+          <div className="bg-theme-surface-secondary rounded-lg py-16 text-center">
+            <ClipboardList className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
+            <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No event requests yet</h3>
+            <p className="text-theme-text-muted text-sm">Community event requests will appear here once submitted.</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -511,50 +501,47 @@ const EventRequestsTab: React.FC = () => {
               return (
                 <div
                   key={req.id}
-                  className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden"
+                  className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border"
                 >
                   {/* Summary row */}
                   <button
                     onClick={() => void toggleExpand(req.id)}
-                    className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-surface-secondary transition-colors"
+                    className="hover:bg-theme-surface-secondary flex w-full items-center justify-between p-4 text-left transition-colors"
                   >
-                    <div className="flex items-center gap-4 min-w-0 flex-1">
-                      <StatusIcon className="w-5 h-5 shrink-0 text-theme-text-muted" />
+                    <div className="flex min-w-0 flex-1 items-center gap-4">
+                      <StatusIcon className="text-theme-text-muted h-5 w-5 shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-theme-text-primary truncate">
-                            {req.contact_name}
-                          </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-theme-text-primary truncate font-medium">{req.contact_name}</span>
                           {req.organization_name && (
-                            <span className="text-sm text-theme-text-muted truncate">
-                              — {req.organization_name}
-                            </span>
+                            <span className="text-theme-text-muted truncate text-sm">— {req.organization_name}</span>
                           )}
                           {req.assignee_name && (
-                            <span className="text-xs text-theme-text-muted flex items-center gap-1">
-                              <UserCheck className="w-3 h-3" />
+                            <span className="text-theme-text-muted flex items-center gap-1 text-xs">
+                              <UserCheck className="h-3 w-3" />
                               {req.assignee_name}
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 mt-1 text-sm text-theme-text-muted">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusCfg.color}`}>
+                        <div className="text-theme-text-muted mt-1 flex items-center gap-3 text-sm">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusCfg.color}`}
+                          >
                             {statusCfg.label}
                           </span>
                           <span>{getOutreachLabel(req.outreach_type)}</span>
                           <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
+                            <Calendar className="h-3 w-3" />
                             {getDatePreferenceDisplay(req)}
                           </span>
                           {req.audience_size && (
                             <span className="flex items-center gap-1">
-                              <Users className="w-3 h-3" />
-                              ~{req.audience_size}
+                              <Users className="h-3 w-3" />~{req.audience_size}
                             </span>
                           )}
                           {taskProgress && (
                             <span className="flex items-center gap-1 text-xs">
-                              <CheckSquare className="w-3 h-3" />
+                              <CheckSquare className="h-3 w-3" />
                               {taskProgress}
                             </span>
                           )}
@@ -562,25 +549,25 @@ const EventRequestsTab: React.FC = () => {
                       </div>
                     </div>
                     {isExpanded ? (
-                      <ChevronUp className="w-5 h-5 text-theme-text-muted shrink-0" />
+                      <ChevronUp className="text-theme-text-muted h-5 w-5 shrink-0" />
                     ) : (
-                      <ChevronDown className="w-5 h-5 text-theme-text-muted shrink-0" />
+                      <ChevronDown className="text-theme-text-muted h-5 w-5 shrink-0" />
                     )}
                   </button>
 
                   {/* Expanded detail */}
                   {isExpanded && (
-                    <div className="border-t border-theme-surface-border p-4 bg-theme-surface-secondary">
+                    <div className="border-theme-surface-border bg-theme-surface-secondary border-t p-4">
                       {detailLoading ? (
                         <div className="flex justify-center py-8" role="status" aria-live="polite">
-                          <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
+                          <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />
                         </div>
                       ) : expandedDetail ? (
                         <div className="space-y-6">
                           {/* Contact & Details grid */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                             <div className="space-y-3">
-                              <h4 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">
+                              <h4 className="text-theme-text-secondary text-sm font-semibold tracking-wider uppercase">
                                 Contact Info
                               </h4>
                               <dl className="space-y-1 text-sm">
@@ -608,7 +595,7 @@ const EventRequestsTab: React.FC = () => {
                             </div>
 
                             <div className="space-y-3">
-                              <h4 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">
+                              <h4 className="text-theme-text-secondary text-sm font-semibold tracking-wider uppercase">
                                 Event Details
                               </h4>
                               <dl className="space-y-1 text-sm">
@@ -633,7 +620,7 @@ const EventRequestsTab: React.FC = () => {
                                 <div className="flex gap-2">
                                   <dt className="text-theme-text-muted w-24 shrink-0">Venue:</dt>
                                   <dd className="text-theme-text-primary flex items-center gap-1">
-                                    <MapPin className="w-3 h-3" />
+                                    <MapPin className="h-3 w-3" />
                                     {getVenueLabel(expandedDetail.venue_preference)}
                                   </dd>
                                 </div>
@@ -648,10 +635,10 @@ const EventRequestsTab: React.FC = () => {
                           </div>
 
                           {/* Assignment */}
-                          <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider flex items-center gap-2">
-                                <UserCheck className="w-4 h-4" />
+                          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+                            <div className="mb-2 flex items-center justify-between">
+                              <h4 className="text-theme-text-secondary flex items-center gap-2 text-sm font-semibold tracking-wider uppercase">
+                                <UserCheck className="h-4 w-4" />
                                 Coordinator
                               </h4>
                               {assigningId !== expandedDetail.id && (
@@ -665,9 +652,9 @@ const EventRequestsTab: React.FC = () => {
                               )}
                             </div>
                             {expandedDetail.assignee_name ? (
-                              <p className="text-sm text-theme-text-primary">{expandedDetail.assignee_name}</p>
+                              <p className="text-theme-text-primary text-sm">{expandedDetail.assignee_name}</p>
                             ) : (
-                              <p className="text-sm text-theme-text-muted italic">Not yet assigned</p>
+                              <p className="text-theme-text-muted text-sm italic">Not yet assigned</p>
                             )}
                             {assigningId === expandedDetail.id && (
                               <select
@@ -680,10 +667,13 @@ const EventRequestsTab: React.FC = () => {
                                 disabled={actionLoading}
                                 className="form-input mt-2 text-sm"
                               >
-                                <option value="" disabled>Select a coordinator...</option>
+                                <option value="" disabled>
+                                  Select a coordinator...
+                                </option>
                                 {members.map((m) => (
                                   <option key={m.id} value={m.id}>
-                                    {m.first_name} {m.last_name}{m.rank ? ` — ${m.rank}` : ''}
+                                    {m.first_name} {m.last_name}
+                                    {m.rank ? ` — ${m.rank}` : ''}
                                   </option>
                                 ))}
                               </select>
@@ -691,26 +681,29 @@ const EventRequestsTab: React.FC = () => {
                           </div>
 
                           {/* Date preferences */}
-                          <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
-                            <h4 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-2">
+                          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
+                            <h4 className="text-theme-text-secondary mb-2 text-sm font-semibold tracking-wider uppercase">
                               Date Preference
                             </h4>
-                            <div className="text-sm space-y-1">
+                            <div className="space-y-1 text-sm">
                               <p className="text-theme-text-primary">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mr-2 ${
-                                  expandedDetail.date_flexibility === 'flexible'
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                                    : expandedDetail.date_flexibility === 'general_timeframe'
-                                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
-                                      : 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
-                                }`}>
+                                <span
+                                  className={`mr-2 inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${
+                                    expandedDetail.date_flexibility === 'flexible'
+                                      ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                                      : expandedDetail.date_flexibility === 'general_timeframe'
+                                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                                        : 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
+                                  }`}
+                                >
                                   {DATE_FLEXIBILITY_LABELS[expandedDetail.date_flexibility]}
                                 </span>
-                                {expandedDetail.preferred_time_of_day && expandedDetail.preferred_time_of_day !== 'flexible' && (
-                                  <span className="text-theme-text-muted">
-                                    Prefers {expandedDetail.preferred_time_of_day}
-                                  </span>
-                                )}
+                                {expandedDetail.preferred_time_of_day &&
+                                  expandedDetail.preferred_time_of_day !== 'flexible' && (
+                                    <span className="text-theme-text-muted">
+                                      Prefers {expandedDetail.preferred_time_of_day}
+                                    </span>
+                                  )}
                               </p>
                               {expandedDetail.preferred_timeframe && (
                                 <p className="text-theme-text-primary italic">
@@ -721,12 +714,11 @@ const EventRequestsTab: React.FC = () => {
                                 <p className="text-theme-text-muted">
                                   {expandedDetail.preferred_date_end
                                     ? `${formatShortDateTime(expandedDetail.preferred_date_start, tz)} — ${formatShortDateTime(expandedDetail.preferred_date_end, tz)}`
-                                    : `From ${formatShortDateTime(expandedDetail.preferred_date_start, tz)}`
-                                  }
+                                    : `From ${formatShortDateTime(expandedDetail.preferred_date_start, tz)}`}
                                 </p>
                               )}
                               {expandedDetail.event_date && (
-                                <p className="text-green-700 dark:text-green-400 font-semibold mt-2">
+                                <p className="mt-2 font-semibold text-green-700 dark:text-green-400">
                                   Confirmed: {formatShortDateTime(expandedDetail.event_date, tz)}
                                   {expandedDetail.event_location_name && ` @ ${expandedDetail.event_location_name}`}
                                 </p>
@@ -736,20 +728,20 @@ const EventRequestsTab: React.FC = () => {
 
                           {/* Description */}
                           <div>
-                            <h4 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-2">
+                            <h4 className="text-theme-text-secondary mb-2 text-sm font-semibold tracking-wider uppercase">
                               Description
                             </h4>
-                            <p className="text-sm text-theme-text-primary whitespace-pre-wrap bg-theme-surface rounded-lg p-3 border border-theme-surface-border">
+                            <p className="text-theme-text-primary bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-sm whitespace-pre-wrap">
                               {expandedDetail.description}
                             </p>
                           </div>
 
                           {expandedDetail.special_requests && (
                             <div>
-                              <h4 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-2">
+                              <h4 className="text-theme-text-secondary mb-2 text-sm font-semibold tracking-wider uppercase">
                                 Special Requests
                               </h4>
-                              <p className="text-sm text-theme-text-primary whitespace-pre-wrap bg-theme-surface rounded-lg p-3 border border-theme-surface-border">
+                              <p className="text-theme-text-primary bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-sm whitespace-pre-wrap">
                                 {expandedDetail.special_requests}
                               </p>
                             </div>
@@ -758,7 +750,7 @@ const EventRequestsTab: React.FC = () => {
                           {/* Pipeline Tasks Checklist */}
                           {pipelineTasks.length > 0 && isActiveStatus(expandedDetail.status) && (
                             <div>
-                              <h4 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-3">
+                              <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold tracking-wider uppercase">
                                 Pipeline Tasks
                               </h4>
                               <div className="space-y-1">
@@ -771,19 +763,21 @@ const EventRequestsTab: React.FC = () => {
                                       key={task.id}
                                       onClick={() => void handleTaskToggle(expandedDetail.id, task.id, isCompleted)}
                                       disabled={actionLoading}
-                                      className="w-full flex items-center gap-3 p-2.5 rounded-lg text-left hover:bg-theme-surface transition-colors disabled:opacity-50"
+                                      className="hover:bg-theme-surface flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors disabled:opacity-50"
                                     >
                                       {isCompleted ? (
-                                        <CheckSquare className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
+                                        <CheckSquare className="h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
                                       ) : (
-                                        <Square className="w-5 h-5 text-theme-text-muted shrink-0" />
+                                        <Square className="text-theme-text-muted h-5 w-5 shrink-0" />
                                       )}
                                       <div className="min-w-0">
-                                        <span className={`text-sm font-medium ${isCompleted ? 'text-theme-text-muted line-through' : 'text-theme-text-primary'}`}>
+                                        <span
+                                          className={`text-sm font-medium ${isCompleted ? 'text-theme-text-muted line-through' : 'text-theme-text-primary'}`}
+                                        >
                                           {task.label}
                                         </span>
                                         {task.description && task.description !== task.label && (
-                                          <p className="text-xs text-theme-text-muted">{task.description}</p>
+                                          <p className="text-theme-text-muted text-xs">{task.description}</p>
                                         )}
                                       </div>
                                     </button>
@@ -795,18 +789,18 @@ const EventRequestsTab: React.FC = () => {
 
                           {/* Status token + copy link */}
                           {expandedDetail.status_token && (
-                            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                            <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
                               <div className="flex items-center justify-between">
                                 <p className="text-xs text-blue-700 dark:text-blue-300">
-                                  <Eye className="w-3 h-3 inline mr-1" />
+                                  <Eye className="mr-1 inline h-3 w-3" />
                                   Public status link available
                                 </p>
                                 <button
                                   type="button"
                                   onClick={() => copyStatusLink(expandedDetail.status_token ?? '')}
-                                  className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200 transition-colors"
+                                  className="flex items-center gap-1 text-xs text-blue-700 transition-colors hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
                                 >
-                                  <Copy className="w-3 h-3" />
+                                  <Copy className="h-3 w-3" />
                                   Copy Link
                                 </button>
                               </div>
@@ -815,29 +809,31 @@ const EventRequestsTab: React.FC = () => {
 
                           {/* Send email template */}
                           {emailTemplates.length > 0 && isActiveStatus(expandedDetail.status) && (
-                            <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-3">
-                              <h4 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-2 flex items-center gap-2">
-                                <Mail className="w-4 h-4" />
+                            <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3">
+                              <h4 className="text-theme-text-secondary mb-2 flex items-center gap-2 text-sm font-semibold tracking-wider uppercase">
+                                <Mail className="h-4 w-4" />
                                 Send Email
                               </h4>
                               <div className="flex items-center gap-2">
                                 <select
                                   value={selectedTemplateId}
                                   onChange={(e) => setSelectedTemplateId(e.target.value)}
-                                  className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                                 >
                                   <option value="">Choose a template...</option>
                                   {emailTemplates.map((tpl) => (
-                                    <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                                    <option key={tpl.id} value={tpl.id}>
+                                      {tpl.name}
+                                    </option>
                                   ))}
                                 </select>
                                 <button
                                   type="button"
                                   onClick={() => void handleSendTemplate(expandedDetail.id)}
                                   disabled={actionLoading || !selectedTemplateId}
-                                  className="btn-info flex font-medium gap-1 items-center px-3 text-sm"
+                                  className="btn-info flex items-center gap-1 px-3 text-sm font-medium"
                                 >
-                                  <Send className="w-3 h-3" />
+                                  <Send className="h-3 w-3" />
                                   Send
                                 </button>
                               </div>
@@ -846,8 +842,8 @@ const EventRequestsTab: React.FC = () => {
 
                           {/* Status Actions */}
                           {isActiveStatus(expandedDetail.status) && (
-                            <div className="border-t border-theme-surface-border pt-4 space-y-3">
-                              <h4 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider">
+                            <div className="border-theme-surface-border space-y-3 border-t pt-4">
+                              <h4 className="text-theme-text-secondary text-sm font-semibold tracking-wider uppercase">
                                 Actions
                               </h4>
 
@@ -856,7 +852,7 @@ const EventRequestsTab: React.FC = () => {
                                   <button
                                     onClick={() => void handleStatusChange(expandedDetail.id, 'in_progress')}
                                     disabled={actionLoading}
-                                    className="px-4 py-2 text-sm font-medium text-yellow-700 bg-yellow-100 hover:bg-yellow-200 dark:text-yellow-300 dark:bg-yellow-500/20 dark:hover:bg-yellow-500/30 rounded-lg disabled:opacity-50 transition-colors"
+                                    className="rounded-lg bg-yellow-100 px-4 py-2 text-sm font-medium text-yellow-700 transition-colors hover:bg-yellow-200 disabled:opacity-50 dark:bg-yellow-500/20 dark:text-yellow-300 dark:hover:bg-yellow-500/30"
                                   >
                                     Start Working
                                   </button>
@@ -866,9 +862,9 @@ const EventRequestsTab: React.FC = () => {
                                   <button
                                     onClick={() => setShowScheduleForm(!showScheduleForm)}
                                     disabled={actionLoading}
-                                    className="px-4 py-2 text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 dark:text-purple-300 dark:bg-purple-500/20 dark:hover:bg-purple-500/30 rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1"
+                                    className="flex items-center gap-1 rounded-lg bg-purple-100 px-4 py-2 text-sm font-medium text-purple-700 transition-colors hover:bg-purple-200 disabled:opacity-50 dark:bg-purple-500/20 dark:text-purple-300 dark:hover:bg-purple-500/30"
                                   >
-                                    <Calendar className="w-4 h-4" />
+                                    <Calendar className="h-4 w-4" />
                                     Schedule Event
                                   </button>
                                 )}
@@ -877,9 +873,9 @@ const EventRequestsTab: React.FC = () => {
                                   <button
                                     onClick={() => setShowPostponeForm(!showPostponeForm)}
                                     disabled={actionLoading}
-                                    className="px-4 py-2 text-sm font-medium text-orange-700 bg-orange-100 hover:bg-orange-200 dark:text-orange-300 dark:bg-orange-500/20 dark:hover:bg-orange-500/30 rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1"
+                                    className="flex items-center gap-1 rounded-lg bg-orange-100 px-4 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-200 disabled:opacity-50 dark:bg-orange-500/20 dark:text-orange-300 dark:hover:bg-orange-500/30"
                                   >
-                                    <Pause className="w-4 h-4" />
+                                    <Pause className="h-4 w-4" />
                                     Postpone
                                   </button>
                                 )}
@@ -888,7 +884,7 @@ const EventRequestsTab: React.FC = () => {
                                   <button
                                     onClick={() => void handleStatusChange(expandedDetail.id, 'in_progress')}
                                     disabled={actionLoading}
-                                    className="px-4 py-2 text-sm font-medium text-yellow-700 bg-yellow-100 hover:bg-yellow-200 dark:text-yellow-300 dark:bg-yellow-500/20 dark:hover:bg-yellow-500/30 rounded-lg disabled:opacity-50 transition-colors"
+                                    className="rounded-lg bg-yellow-100 px-4 py-2 text-sm font-medium text-yellow-700 transition-colors hover:bg-yellow-200 disabled:opacity-50 dark:bg-yellow-500/20 dark:text-yellow-300 dark:hover:bg-yellow-500/30"
                                   >
                                     Resume Work
                                   </button>
@@ -898,7 +894,7 @@ const EventRequestsTab: React.FC = () => {
                                   <button
                                     onClick={() => void handleStatusChange(expandedDetail.id, 'completed')}
                                     disabled={actionLoading}
-                                    className="px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/20 dark:hover:bg-emerald-500/30 rounded-lg disabled:opacity-50 transition-colors"
+                                    className="rounded-lg bg-emerald-100 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-200 disabled:opacity-50 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30"
                                   >
                                     Mark as Completed
                                   </button>
@@ -909,13 +905,15 @@ const EventRequestsTab: React.FC = () => {
                                     type="text"
                                     value={declineReason}
                                     onChange={(e) => setDeclineReason(e.target.value)}
-                                    className="px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                                     placeholder="Reason for declining..."
                                   />
                                   <button
-                                    onClick={() => void handleStatusChange(expandedDetail.id, 'declined', undefined, declineReason)}
+                                    onClick={() =>
+                                      void handleStatusChange(expandedDetail.id, 'declined', undefined, declineReason)
+                                    }
                                     disabled={actionLoading}
-                                    className="px-4 py-2 text-sm font-medium text-red-700 bg-red-100 hover:bg-red-200 dark:text-red-300 dark:bg-red-500/20 dark:hover:bg-red-500/30 rounded-lg disabled:opacity-50 transition-colors"
+                                    className="rounded-lg bg-red-100 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-200 disabled:opacity-50 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30"
                                   >
                                     Decline
                                   </button>
@@ -924,7 +922,7 @@ const EventRequestsTab: React.FC = () => {
                                 <button
                                   onClick={() => void handleStatusChange(expandedDetail.id, 'cancelled')}
                                   disabled={actionLoading}
-                                  className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg disabled:opacity-50 transition-colors"
+                                  className="text-theme-text-secondary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
                                 >
                                   Cancel Request
                                 </button>
@@ -932,13 +930,13 @@ const EventRequestsTab: React.FC = () => {
 
                               {/* Schedule form */}
                               {showScheduleForm && (
-                                <div className="bg-theme-surface rounded-lg border border-purple-200 dark:border-purple-500/30 p-4 space-y-3">
+                                <div className="bg-theme-surface space-y-3 rounded-lg border border-purple-200 p-4 dark:border-purple-500/30">
                                   <h5 className="text-sm font-semibold text-purple-700 dark:text-purple-400">
                                     Schedule Event
                                   </h5>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <div>
-                                      <label className="block text-xs font-medium text-theme-text-muted mb-1">
+                                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">
                                         Start Date & Time *
                                       </label>
                                       <DateTimeQuarterHour
@@ -948,7 +946,7 @@ const EventRequestsTab: React.FC = () => {
                                       />
                                     </div>
                                     <div>
-                                      <label className="block text-xs font-medium text-theme-text-muted mb-1">
+                                      <label className="text-theme-text-muted mb-1 block text-xs font-medium">
                                         End Date & Time
                                       </label>
                                       <DateTimeQuarterHour
@@ -959,7 +957,7 @@ const EventRequestsTab: React.FC = () => {
                                     </div>
                                   </div>
                                   <div>
-                                    <label className="block text-xs font-medium text-theme-text-muted mb-1">
+                                    <label className="text-theme-text-muted mb-1 block text-xs font-medium">
                                       Location / Room
                                     </label>
                                     <select
@@ -970,7 +968,8 @@ const EventRequestsTab: React.FC = () => {
                                       <option value="">Off-site or none</option>
                                       {locations.map((loc) => (
                                         <option key={loc.id} value={loc.id}>
-                                          {loc.name}{loc.capacity ? ` (cap: ${loc.capacity})` : ''}
+                                          {loc.name}
+                                          {loc.capacity ? ` (cap: ${loc.capacity})` : ''}
                                         </option>
                                       ))}
                                     </select>
@@ -987,14 +986,14 @@ const EventRequestsTab: React.FC = () => {
                                       type="button"
                                       onClick={() => void handleSchedule(expandedDetail.id)}
                                       disabled={actionLoading || !scheduleDate}
-                                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg disabled:opacity-50 transition-colors"
+                                      className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
                                     >
                                       Confirm & Create Calendar Event
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setShowScheduleForm(false)}
-                                      className="px-4 py-2 text-sm font-medium text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                                      className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 text-sm font-medium transition-colors"
                                     >
                                       Cancel
                                     </button>
@@ -1004,7 +1003,7 @@ const EventRequestsTab: React.FC = () => {
 
                               {/* Postpone form */}
                               {showPostponeForm && (
-                                <div className="bg-theme-surface rounded-lg border border-orange-200 dark:border-orange-500/30 p-4 space-y-3">
+                                <div className="bg-theme-surface space-y-3 rounded-lg border border-orange-200 p-4 dark:border-orange-500/30">
                                   <h5 className="text-sm font-semibold text-orange-700 dark:text-orange-400">
                                     Postpone Event
                                   </h5>
@@ -1016,7 +1015,7 @@ const EventRequestsTab: React.FC = () => {
                                     className="form-input placeholder-theme-text-muted text-sm"
                                   />
                                   <div>
-                                    <label className="block text-xs font-medium text-theme-text-muted mb-1">
+                                    <label className="text-theme-text-muted mb-1 block text-xs font-medium">
                                       New tentative date (optional — leave blank for TBD)
                                     </label>
                                     <DateTimeQuarterHour
@@ -1030,14 +1029,14 @@ const EventRequestsTab: React.FC = () => {
                                       type="button"
                                       onClick={() => void handlePostpone(expandedDetail.id)}
                                       disabled={actionLoading}
-                                      className="px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-lg disabled:opacity-50 transition-colors"
+                                      className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:opacity-50"
                                     >
                                       Confirm Postpone
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => setShowPostponeForm(false)}
-                                      className="px-4 py-2 text-sm font-medium text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                                      className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 text-sm font-medium transition-colors"
                                     >
                                       Cancel
                                     </button>
@@ -1048,25 +1047,27 @@ const EventRequestsTab: React.FC = () => {
                           )}
 
                           {/* Comment thread */}
-                          <div className="border-t border-theme-surface-border pt-4">
-                            <h4 className="text-sm font-semibold text-theme-text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
-                              <MessageSquare className="w-4 h-4" />
+                          <div className="border-theme-surface-border border-t pt-4">
+                            <h4 className="text-theme-text-secondary mb-3 flex items-center gap-2 text-sm font-semibold tracking-wider uppercase">
+                              <MessageSquare className="h-4 w-4" />
                               Comments & Activity
                             </h4>
-                            <div className="space-y-2 mb-3">
+                            <div className="mb-3 space-y-2">
                               {expandedDetail.activity_log.map((entry) => {
                                 const isComment = entry.action === 'comment';
                                 return (
                                   <div
                                     key={entry.id}
                                     className={`flex items-start gap-3 text-sm ${
-                                      isComment ? 'bg-theme-surface rounded-lg p-3 border border-theme-surface-border' : ''
+                                      isComment
+                                        ? 'bg-theme-surface border-theme-surface-border rounded-lg border p-3'
+                                        : ''
                                     }`}
                                   >
                                     {isComment ? (
-                                      <MessageSquare className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                                      <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
                                     ) : (
-                                      <div className="w-2 h-2 rounded-full bg-theme-text-muted mt-1.5 shrink-0" />
+                                      <div className="bg-theme-text-muted mt-1.5 h-2 w-2 shrink-0 rounded-full" />
                                     )}
                                     <div className="min-w-0 flex-1">
                                       {isComment ? (
@@ -1074,20 +1075,30 @@ const EventRequestsTab: React.FC = () => {
                                       ) : (
                                         <p className="text-theme-text-primary">
                                           {entry.new_status && (
-                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium mr-1 ${STATUS_CONFIG[entry.new_status as EventRequestStatus]?.color || 'bg-theme-surface-secondary text-theme-text-muted'}`}>
-                                              {STATUS_CONFIG[entry.new_status as EventRequestStatus]?.label || entry.new_status}
+                                            <span
+                                              className={`mr-1 inline-flex items-center rounded-sm px-1.5 py-0.5 text-xs font-medium ${STATUS_CONFIG[entry.new_status as EventRequestStatus]?.color || 'bg-theme-surface-secondary text-theme-text-muted'}`}
+                                            >
+                                              {STATUS_CONFIG[entry.new_status as EventRequestStatus]?.label ||
+                                                entry.new_status}
                                             </span>
                                           )}
                                           {entry.action.startsWith('task_') && (
-                                            <span className="text-xs text-theme-text-muted">
-                                              {entry.action.includes('completed') ? 'Completed task' : 'Uncompleted task'}
-                                              {entry.details && typeof entry.details === 'object' && 'task_id' in entry.details && (
-                                                <span className="font-medium"> {String(entry.details.task_id).replace(/_/g, ' ')}</span>
-                                              )}
+                                            <span className="text-theme-text-muted text-xs">
+                                              {entry.action.includes('completed')
+                                                ? 'Completed task'
+                                                : 'Uncompleted task'}
+                                              {entry.details &&
+                                                typeof entry.details === 'object' &&
+                                                'task_id' in entry.details && (
+                                                  <span className="font-medium">
+                                                    {' '}
+                                                    {String(entry.details.task_id).replace(/_/g, ' ')}
+                                                  </span>
+                                                )}
                                             </span>
                                           )}
                                           {entry.action === 'assigned' && entry.details && (
-                                            <span className="text-xs text-theme-text-muted">
+                                            <span className="text-theme-text-muted text-xs">
                                               Assigned to{' '}
                                               <span className="font-medium">
                                                 {typeof entry.details === 'object' && 'assignee_name' in entry.details
@@ -1097,17 +1108,20 @@ const EventRequestsTab: React.FC = () => {
                                             </span>
                                           )}
                                           {entry.action === 'email_sent' && (
-                                            <span className="text-xs text-theme-text-muted flex items-center gap-1">
-                                              <Mail className="w-3 h-3" />
+                                            <span className="text-theme-text-muted flex items-center gap-1 text-xs">
+                                              <Mail className="h-3 w-3" />
                                               {entry.notes}
                                             </span>
                                           )}
-                                          {!isComment && !entry.new_status && !entry.action.startsWith('task_') && entry.action !== 'assigned' && entry.action !== 'email_sent' && entry.notes && (
-                                            <span className="text-theme-text-muted">{entry.notes}</span>
-                                          )}
+                                          {!isComment &&
+                                            !entry.new_status &&
+                                            !entry.action.startsWith('task_') &&
+                                            entry.action !== 'assigned' &&
+                                            entry.action !== 'email_sent' &&
+                                            entry.notes && <span className="text-theme-text-muted">{entry.notes}</span>}
                                         </p>
                                       )}
-                                      <p className="text-xs text-theme-text-muted mt-0.5">
+                                      <p className="text-theme-text-muted mt-0.5 text-xs">
                                         {entry.performer_name || 'System'} &middot;{' '}
                                         {formatShortDateTime(entry.created_at, tz)}
                                       </p>
@@ -1129,15 +1143,15 @@ const EventRequestsTab: React.FC = () => {
                                   }
                                 }}
                                 placeholder="Add a comment..."
-                                className="flex-1 px-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                               />
                               <button
                                 type="button"
                                 onClick={() => void handleAddComment(expandedDetail.id)}
                                 disabled={actionLoading || !commentText.trim()}
-                                className="btn-primary font-medium px-3 text-sm"
+                                className="btn-primary px-3 text-sm font-medium"
                               >
-                                <Send className="w-4 h-4" />
+                                <Send className="h-4 w-4" />
                               </button>
                             </div>
                           </div>

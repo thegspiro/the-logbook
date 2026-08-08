@@ -15,15 +15,9 @@ import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const ElectionsPage = lazyWithRetry(() => import('../../pages/ElectionsPage'));
-const ElectionDetailPage = lazyWithRetry(
-  () => import('../../pages/ElectionDetailPage'),
-);
-const ElectionsSettingsPage = lazyWithRetry(
-  () => import('../../pages/ElectionsSettingsPage'),
-);
-const BallotVotingPage = lazyWithRetry(
-  () => import('../../pages/BallotVotingPage'),
-);
+const ElectionDetailPage = lazyWithRetry(() => import('../../pages/ElectionDetailPage'));
+const ElectionsSettingsPage = lazyWithRetry(() => import('../../pages/ElectionsSettingsPage'));
+const BallotVotingPage = lazyWithRetry(() => import('../../pages/BallotVotingPage'));
 
 /** Protected election routes (rendered inside AppLayout). */
 export const getElectionsRoutes = () => (

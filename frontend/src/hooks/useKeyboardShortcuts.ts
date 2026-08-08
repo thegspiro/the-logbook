@@ -36,7 +36,7 @@ export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]): void {
       }
 
       for (const shortcut of shortcuts) {
-        const ctrlMatch = shortcut.ctrlKey ? (e.metaKey || e.ctrlKey) : !(e.metaKey || e.ctrlKey);
+        const ctrlMatch = shortcut.ctrlKey ? e.metaKey || e.ctrlKey : !(e.metaKey || e.ctrlKey);
         const shiftMatch = shortcut.shiftKey ? e.shiftKey : !e.shiftKey;
 
         if (e.key.toLowerCase() === shortcut.key.toLowerCase() && ctrlMatch && shiftMatch) {
@@ -66,8 +66,13 @@ export function useNavigationShortcuts(): void {
     { key: 't', handler: () => void navigate('/training/my-training'), description: 'Go to Training' },
     { key: 'i', handler: () => void navigate('/inventory'), description: 'Go to Inventory' },
     { key: 'n', handler: () => void navigate('/notifications'), description: 'Go to Notifications' },
-    { key: '?', shiftKey: true, handler: () => {
-      // Could open a shortcuts help modal in the future
-    }, description: 'Show keyboard shortcuts' },
+    {
+      key: '?',
+      shiftKey: true,
+      handler: () => {
+        // Could open a shortcuts help modal in the future
+      },
+      description: 'Show keyboard shortcuts',
+    },
   ]);
 }

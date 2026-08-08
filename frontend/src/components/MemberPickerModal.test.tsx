@@ -13,15 +13,15 @@ vi.mock('../services/api', () => ({
 
 // Stub the camera scanner so the picker can be tested without html5-qrcode.
 vi.mock('./MemberIdScannerModal', () => ({
-  MemberIdScannerModal: ({ isOpen, onMemberIdentified }: {
+  MemberIdScannerModal: ({
+    isOpen,
+    onMemberIdentified,
+  }: {
     isOpen: boolean;
     onMemberIdentified: (m: { userId: string; memberName: string }) => void;
   }) =>
     isOpen ? (
-      <button
-        type="button"
-        onClick={() => onMemberIdentified({ userId: 'scanned-9', memberName: 'Scanned Member' })}
-      >
+      <button type="button" onClick={() => onMemberIdentified({ userId: 'scanned-9', memberName: 'Scanned Member' })}>
         simulate-scan
       </button>
     ) : null,

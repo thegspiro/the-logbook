@@ -142,7 +142,12 @@ function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
       continue;
     }
 
-    const label = PATH_LABELS[segment] || segment.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const label =
+      PATH_LABELS[segment] ||
+      segment
+        .split('-')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
     const isLast = i === segments.length - 1;
 
     crumbs.push({
@@ -162,23 +167,23 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
 
   return (
     <nav aria-label="Breadcrumb" className={`mb-4 ${className}`}>
-      <ol className="flex items-center flex-wrap gap-1 text-sm">
+      <ol className="flex flex-wrap items-center gap-1 text-sm">
         <li className="flex items-center">
           <Link
             to="/dashboard"
             className="text-theme-text-muted hover:text-theme-text-primary transition-all duration-150 hover:scale-110"
             aria-label="Home"
           >
-            <Home className="w-4 h-4" />
+            <Home className="h-4 w-4" />
           </Link>
         </li>
         {crumbs.map((crumb, index) => (
           <li key={index} className="flex items-center">
-            <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted mx-1 shrink-0" aria-hidden="true" />
+            <ChevronRight className="text-theme-text-muted mx-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             {crumb.path ? (
               <Link
                 to={crumb.path}
-                className="text-theme-text-muted hover:text-theme-text-primary transition-colors duration-150 hover:underline underline-offset-2"
+                className="text-theme-text-muted hover:text-theme-text-primary underline-offset-2 transition-colors duration-150 hover:underline"
               >
                 {crumb.label}
               </Link>

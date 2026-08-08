@@ -54,11 +54,9 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
   const [isPinned, setIsPinned] = useState(message?.is_pinned ?? false);
   const [isPersistent, setIsPersistent] = useState(message?.is_persistent ?? false);
   const [requiresAck, setRequiresAck] = useState(message?.requires_acknowledgment ?? false);
-  const [expiresAt, setExpiresAt] = useState(
-    message?.expires_at ? formatForDateTimeInput(message.expires_at, tz) : '',
-  );
+  const [expiresAt, setExpiresAt] = useState(message?.expires_at ? formatForDateTimeInput(message.expires_at, tz) : '');
   const [scheduledAt, setScheduledAt] = useState(
-    message?.scheduled_at ? formatForDateTimeInput(message.scheduled_at, tz) : '',
+    message?.scheduled_at ? formatForDateTimeInput(message.scheduled_at, tz) : ''
   );
 
   const [roles, setRoles] = useState<RoleOption[]>([]);
@@ -151,9 +149,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
       onSaved();
     } catch {
       setError(
-        isEditing
-          ? 'Unable to save your changes. Please try again.'
-          : 'Unable to post the message. Please try again.',
+        isEditing ? 'Unable to save your changes. Please try again.' : 'Unable to post the message. Please try again.'
       );
     } finally {
       setSubmitting(false);
@@ -349,9 +345,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
             value={scheduledAt}
             onChange={(e) => setScheduledAt(e.target.value)}
           />
-          <p className="text-theme-text-muted mt-1 text-xs">
-            Leave blank to publish immediately.
-          </p>
+          <p className="text-theme-text-muted mt-1 text-xs">Leave blank to publish immediately.</p>
         </div>
         <div>
           <label htmlFor="msg-expires" className={labelClass}>

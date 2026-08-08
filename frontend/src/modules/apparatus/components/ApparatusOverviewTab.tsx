@@ -6,14 +6,7 @@
  */
 
 import React from 'react';
-import {
-  Truck,
-  Gauge,
-  DollarSign,
-  Clock,
-  Calendar,
-  Shield,
-} from 'lucide-react';
+import { Truck, Gauge, DollarSign, Clock, Calendar, Shield } from 'lucide-react';
 import { ApparatusTypeBadge } from './ApparatusTypeBadge';
 import type { Apparatus, ApparatusType } from '../types';
 import { formatCurrency } from '@/utils/currencyFormatting';
@@ -31,16 +24,16 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
   timezone,
 }) => {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Main Info Card */}
-      <div className="lg:col-span-2 space-y-6">
+      <div className="space-y-6 lg:col-span-2">
         {/* Vehicle Details */}
         <div className="card p-6">
-          <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
-            <Truck className="w-5 h-5" />
+          <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 font-bold">
+            <Truck className="h-5 w-5" />
             Vehicle Details
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             <div>
               <p className="text-theme-text-muted text-xs uppercase">Type</p>
               {apparatusType && <ApparatusTypeBadge type={apparatusType} />}
@@ -82,22 +75,26 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
 
         {/* Specifications */}
         <div className="card p-6">
-          <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
-            <Gauge className="w-5 h-5" />
+          <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 font-bold">
+            <Gauge className="h-5 w-5" />
             Specifications
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <div>
               <p className="text-theme-text-muted text-xs uppercase">Minimum Staffing</p>
               <p className="text-theme-text-primary">{currentApparatus.minStaffing} crew</p>
             </div>
             <div>
               <p className="text-theme-text-muted text-xs uppercase">Fuel Type</p>
-              <p className="text-theme-text-primary capitalize">{currentApparatus.fuelType?.replace('_', ' ') || '-'}</p>
+              <p className="text-theme-text-primary capitalize">
+                {currentApparatus.fuelType?.replace('_', ' ') || '-'}
+              </p>
             </div>
             <div>
               <p className="text-theme-text-muted text-xs uppercase">Fuel Capacity</p>
-              <p className="text-theme-text-primary">{currentApparatus.fuelCapacityGallons ? `${currentApparatus.fuelCapacityGallons} gal` : '-'}</p>
+              <p className="text-theme-text-primary">
+                {currentApparatus.fuelCapacityGallons ? `${currentApparatus.fuelCapacityGallons} gal` : '-'}
+              </p>
             </div>
             <div>
               <p className="text-theme-text-muted text-xs uppercase">Seating Capacity</p>
@@ -105,7 +102,9 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
             </div>
             <div>
               <p className="text-theme-text-muted text-xs uppercase">GVWR</p>
-              <p className="text-theme-text-primary">{currentApparatus.gvwr ? `${formatNumber(currentApparatus.gvwr)} lbs` : '-'}</p>
+              <p className="text-theme-text-primary">
+                {currentApparatus.gvwr ? `${formatNumber(currentApparatus.gvwr)} lbs` : '-'}
+              </p>
             </div>
             {currentApparatus.pumpCapacityGpm && (
               <div>
@@ -136,11 +135,11 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
 
         {/* Financial Info */}
         <div className="card p-6">
-          <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
-            <DollarSign className="w-5 h-5" />
+          <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 font-bold">
+            <DollarSign className="h-5 w-5" />
             Financial Information
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <div>
               <p className="text-theme-text-muted text-xs uppercase">Purchase Date</p>
               <p className="text-theme-text-primary">{formatDate(currentApparatus.purchaseDate, timezone)}</p>
@@ -181,11 +180,11 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
       <div className="space-y-6">
         {/* Quick Stats */}
         <div className="card p-6">
-          <h2 className="text-theme-text-primary font-bold mb-4">Quick Stats</h2>
+          <h2 className="text-theme-text-primary mb-4 font-bold">Quick Stats</h2>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-theme-text-muted">
-                <Gauge className="w-4 h-4" />
+              <div className="text-theme-text-muted flex items-center gap-2">
+                <Gauge className="h-4 w-4" />
                 <span>Mileage</span>
               </div>
               <span className="text-theme-text-primary font-semibold">
@@ -193,8 +192,8 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-theme-text-muted">
-                <Clock className="w-4 h-4" />
+              <div className="text-theme-text-muted flex items-center gap-2">
+                <Clock className="h-4 w-4" />
                 <span>Hours</span>
               </div>
               <span className="text-theme-text-primary font-semibold">
@@ -206,8 +205,8 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
 
         {/* Important Dates */}
         <div className="card p-6">
-          <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
-            <Calendar className="w-5 h-5" />
+          <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 font-bold">
+            <Calendar className="h-5 w-5" />
             Important Dates
           </h2>
           <div className="space-y-3">
@@ -241,21 +240,19 @@ export const ApparatusOverviewTab: React.FC<ApparatusOverviewTabProps> = ({
         {/* NFPA Compliance */}
         {currentApparatus.nfpaTrackingEnabled && (
           <div className="card p-6">
-            <h2 className="text-theme-text-primary font-bold mb-4 flex items-center gap-2">
-              <Shield className="w-5 h-5" />
+            <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 font-bold">
+              <Shield className="h-5 w-5" />
               NFPA Compliance
             </h2>
-            <p className="text-green-700 dark:text-green-400 text-sm">Tracking Enabled</p>
+            <p className="text-sm text-green-700 dark:text-green-400">Tracking Enabled</p>
           </div>
         )}
 
         {/* Notes */}
         {currentApparatus.notes && (
           <div className="card p-6">
-            <h2 className="text-theme-text-primary font-bold mb-4">Notes</h2>
-            <p className="text-theme-text-secondary text-sm whitespace-pre-wrap">
-              {currentApparatus.notes}
-            </p>
+            <h2 className="text-theme-text-primary mb-4 font-bold">Notes</h2>
+            <p className="text-theme-text-secondary text-sm whitespace-pre-wrap">{currentApparatus.notes}</p>
           </div>
         )}
       </div>

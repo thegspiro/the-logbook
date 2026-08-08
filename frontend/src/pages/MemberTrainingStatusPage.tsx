@@ -12,22 +12,26 @@ import { ChevronLeft, ChevronRight, Download, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { trainingService } from '../services/trainingServices';
-import type {
-  MemberComplianceStatusColor,
-  MemberPeriodStatusRow,
-} from '../types/training';
+import type { MemberComplianceStatusColor, MemberPeriodStatusRow } from '../types/training';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { SkeletonCard } from '../components/ux/Skeleton';
 import { EmptyState } from '../components/ux/EmptyState';
-import {
-  SortableHeader,
-  type SortDirection,
-} from '../components/ux/SortableHeader';
+import { SortableHeader, type SortDirection } from '../components/ux/SortableHeader';
 
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -36,10 +40,7 @@ const lastDayOfMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
 
 type Mode = 'month' | 'range';
 
-const STATUS_META: Record<
-  MemberComplianceStatusColor,
-  { label: string; cls: string }
-> = {
+const STATUS_META: Record<MemberComplianceStatusColor, { label: string; cls: string }> = {
   green: {
     label: 'Compliant',
     cls: 'bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30',
@@ -72,7 +73,7 @@ const MemberTrainingStatusPage: React.FC = () => {
   const [month, setMonth] = useState(initialMonth); // 1-based
   const [rangeStart, setRangeStart] = useState(isoDate(initialYear, initialMonth, 1));
   const [rangeEnd, setRangeEnd] = useState(
-    isoDate(initialYear, initialMonth, lastDayOfMonth(initialYear, initialMonth)),
+    isoDate(initialYear, initialMonth, lastDayOfMonth(initialYear, initialMonth))
   );
 
   const [rows, setRows] = useState<MemberPeriodStatusRow[]>([]);
@@ -139,17 +140,24 @@ const MemberTrainingStatusPage: React.FC = () => {
       let bv: number | string;
       switch (sortField) {
         case 'trainings_completed':
-          av = a.trainings_completed; bv = b.trainings_completed; break;
+          av = a.trainings_completed;
+          bv = b.trainings_completed;
+          break;
         case 'hours_completed':
-          av = a.hours_completed; bv = b.hours_completed; break;
+          av = a.hours_completed;
+          bv = b.hours_completed;
+          break;
         case 'last_activity':
-          av = a.last_activity ?? ''; bv = b.last_activity ?? ''; break;
+          av = a.last_activity ?? '';
+          bv = b.last_activity ?? '';
+          break;
         case 'compliance_status':
           av = statusRank[a.compliance_status] ?? 9;
           bv = statusRank[b.compliance_status] ?? 9;
           break;
         default:
-          av = a.member_name.toLowerCase(); bv = b.member_name.toLowerCase();
+          av = a.member_name.toLowerCase();
+          bv = b.member_name.toLowerCase();
       }
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
@@ -166,8 +174,13 @@ const MemberTrainingStatusPage: React.FC = () => {
 
   const exportCsv = () => {
     const header = [
-      'Member', 'Trainings Completed', 'Hours', 'Last Activity',
-      'Compliance Status', 'Requirements Met', 'Requirements Total',
+      'Member',
+      'Trainings Completed',
+      'Hours',
+      'Last Activity',
+      'Compliance Status',
+      'Requirements Met',
+      'Requirements Total',
     ];
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const lines = sortedRows.map((r) =>
@@ -179,7 +192,7 @@ const MemberTrainingStatusPage: React.FC = () => {
         STATUS_META[r.compliance_status].label,
         r.requirements_met,
         r.requirements_total,
-      ].join(','),
+      ].join(',')
     );
     const csv = [header.join(','), ...lines].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -196,7 +209,7 @@ const MemberTrainingStatusPage: React.FC = () => {
       {/* Controls */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-theme-surface-border overflow-hidden">
+          <div className="border-theme-surface-border inline-flex overflow-hidden rounded-lg border">
             <button
               onClick={() => setMode('month')}
               className={`px-3 py-1.5 text-sm ${mode === 'month' ? 'bg-red-600/20 text-red-700 dark:text-red-400' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
@@ -213,21 +226,13 @@ const MemberTrainingStatusPage: React.FC = () => {
 
           {mode === 'month' ? (
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => shiftMonth(-1)}
-                aria-label="Previous month"
-                className="btn-icon"
-              >
+              <button onClick={() => shiftMonth(-1)} aria-label="Previous month" className="btn-icon">
                 <ChevronLeft className="h-5 w-5" />
               </button>
-              <span className="min-w-[9rem] text-center text-sm font-semibold text-theme-text-primary">
+              <span className="text-theme-text-primary min-w-[9rem] text-center text-sm font-semibold">
                 {MONTHS[month - 1]} {year}
               </span>
-              <button
-                onClick={() => shiftMonth(1)}
-                aria-label="Next month"
-                className="btn-icon"
-              >
+              <button onClick={() => shiftMonth(1)} aria-label="Next month" className="btn-icon">
                 <ChevronRight className="h-5 w-5" />
               </button>
             </div>
@@ -273,8 +278,8 @@ const MemberTrainingStatusPage: React.FC = () => {
           { label: 'Behind on requirements', value: summary.behind },
         ].map((t) => (
           <div key={t.label} className="card">
-            <p className="text-2xl font-bold text-theme-text-primary">{t.value}</p>
-            <p className="text-xs text-theme-text-muted">{t.label}</p>
+            <p className="text-theme-text-primary text-2xl font-bold">{t.value}</p>
+            <p className="text-theme-text-muted text-xs">{t.label}</p>
           </div>
         ))}
       </div>
@@ -289,35 +294,72 @@ const MemberTrainingStatusPage: React.FC = () => {
           description="No active members were found for this period."
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-theme-surface-border">
+        <div className="border-theme-surface-border overflow-x-auto rounded-lg border">
           <table className="min-w-full text-sm">
             <thead className="bg-theme-surface-secondary">
               <tr>
-                <SortableHeader label="Member" field="member_name" currentSort={sortField} currentDirection={sortDir} onSort={handleSort} className="px-4 py-2 text-left" />
-                <SortableHeader label="Trainings" field="trainings_completed" currentSort={sortField} currentDirection={sortDir} onSort={handleSort} className="px-4 py-2 text-left" />
-                <SortableHeader label="Hours" field="hours_completed" currentSort={sortField} currentDirection={sortDir} onSort={handleSort} className="px-4 py-2 text-left" />
-                <SortableHeader label="Last activity" field="last_activity" currentSort={sortField} currentDirection={sortDir} onSort={handleSort} className="px-4 py-2 text-left" />
-                <SortableHeader label="Status" field="compliance_status" currentSort={sortField} currentDirection={sortDir} onSort={handleSort} className="px-4 py-2 text-left" />
+                <SortableHeader
+                  label="Member"
+                  field="member_name"
+                  currentSort={sortField}
+                  currentDirection={sortDir}
+                  onSort={handleSort}
+                  className="px-4 py-2 text-left"
+                />
+                <SortableHeader
+                  label="Trainings"
+                  field="trainings_completed"
+                  currentSort={sortField}
+                  currentDirection={sortDir}
+                  onSort={handleSort}
+                  className="px-4 py-2 text-left"
+                />
+                <SortableHeader
+                  label="Hours"
+                  field="hours_completed"
+                  currentSort={sortField}
+                  currentDirection={sortDir}
+                  onSort={handleSort}
+                  className="px-4 py-2 text-left"
+                />
+                <SortableHeader
+                  label="Last activity"
+                  field="last_activity"
+                  currentSort={sortField}
+                  currentDirection={sortDir}
+                  onSort={handleSort}
+                  className="px-4 py-2 text-left"
+                />
+                <SortableHeader
+                  label="Status"
+                  field="compliance_status"
+                  currentSort={sortField}
+                  currentDirection={sortDir}
+                  onSort={handleSort}
+                  className="px-4 py-2 text-left"
+                />
               </tr>
             </thead>
             <tbody>
               {sortedRows.map((r) => {
                 const meta = STATUS_META[r.compliance_status];
                 return (
-                  <tr key={r.user_id} className="border-t border-theme-surface-border">
-                    <td className="px-4 py-2 font-medium text-theme-text-primary">{r.member_name}</td>
-                    <td className="px-4 py-2 text-theme-text-secondary">{r.trainings_completed}</td>
-                    <td className="px-4 py-2 text-theme-text-secondary">{r.hours_completed.toFixed(1)}</td>
-                    <td className="px-4 py-2 text-theme-text-muted">
+                  <tr key={r.user_id} className="border-theme-surface-border border-t">
+                    <td className="text-theme-text-primary px-4 py-2 font-medium">{r.member_name}</td>
+                    <td className="text-theme-text-secondary px-4 py-2">{r.trainings_completed}</td>
+                    <td className="text-theme-text-secondary px-4 py-2">{r.hours_completed.toFixed(1)}</td>
+                    <td className="text-theme-text-muted px-4 py-2">
                       {r.last_activity ? formatDate(r.last_activity, tz) : '—'}
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
-                        <span className={`inline-block rounded-full border px-2 py-0.5 text-xs font-medium ${meta.cls}`}>
+                        <span
+                          className={`inline-block rounded-full border px-2 py-0.5 text-xs font-medium ${meta.cls}`}
+                        >
                           {meta.label}
                         </span>
                         {r.compliance_status !== 'exempt' && (
-                          <span className="text-xs text-theme-text-muted">
+                          <span className="text-theme-text-muted text-xs">
                             {r.requirements_met}/{r.requirements_total} met
                           </span>
                         )}

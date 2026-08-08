@@ -8,14 +8,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
-import {
-  ArrowUp,
-  ArrowDown,
-  Plus,
-  Trash2,
-  BookOpen,
-  CheckCircle,
-} from 'lucide-react';
+import { ArrowUp, ArrowDown, Plus, Trash2, BookOpen, CheckCircle } from 'lucide-react';
 import { eventService } from '../../../services/api';
 import { electionService } from '../../../services/electionService';
 import { minutesService } from '../services/api';
@@ -92,14 +85,22 @@ export const MinutesDetailPage: React.FC = () => {
   // Motion form
   const [showMotionForm, setShowMotionForm] = useState(false);
   const [motionForm, setMotionForm] = useState<MotionCreate>({
-    motion_text: '', moved_by: '', seconded_by: '', status: 'passed',
-    votes_for: undefined, votes_against: undefined, votes_abstain: undefined,
+    motion_text: '',
+    moved_by: '',
+    seconded_by: '',
+    status: 'passed',
+    votes_for: undefined,
+    votes_against: undefined,
+    votes_abstain: undefined,
   });
 
   // Action item form
   const [showActionForm, setShowActionForm] = useState(false);
   const [actionForm, setActionForm] = useState<ActionItemCreate>({
-    description: '', assignee_name: '', due_date: undefined, priority: 'medium',
+    description: '',
+    assignee_name: '',
+    due_date: undefined,
+    priority: 'medium',
   });
 
   // Linked event
@@ -133,8 +134,9 @@ export const MinutesDetailPage: React.FC = () => {
   // Fetch linked event details when minutes load
   useEffect(() => {
     if (minutes?.event_id) {
-      eventService.getEvent(minutes.event_id)
-        .then(ev => setLinkedEvent(ev))
+      eventService
+        .getEvent(minutes.event_id)
+        .then((ev) => setLinkedEvent(ev))
         .catch(() => setLinkedEvent(null));
     } else {
       setLinkedEvent(null);
@@ -144,8 +146,9 @@ export const MinutesDetailPage: React.FC = () => {
   // Fetch elections linked to this meeting record
   useEffect(() => {
     if (minutesId) {
-      electionService.getElectionsByMeeting(minutesId)
-        .then(elections => setLinkedElections(elections))
+      electionService
+        .getElectionsByMeeting(minutesId)
+        .then((elections) => setLinkedElections(elections))
         .catch(() => setLinkedElections([]));
     } else {
       setLinkedElections([]);
@@ -160,9 +163,7 @@ export const MinutesDetailPage: React.FC = () => {
     if (!minutesId || !minutes) return;
     try {
       setSaving(true);
-      const updatedSections = minutes.sections.map(s =>
-        s.key === sectionKey ? { ...s, content: sectionValue } : s
-      );
+      const updatedSections = minutes.sections.map((s) => (s.key === sectionKey ? { ...s, content: sectionValue } : s));
       const updated = await minutesService.updateMinutes(minutesId, { sections: updatedSections });
       setMinutes(updated);
       setEditingSection(null);
@@ -198,7 +199,11 @@ export const MinutesDetailPage: React.FC = () => {
 
   const handleAddSection = async () => {
     if (!minutesId || !minutes || !newSectionTitle.trim()) return;
-    const key = newSectionTitle.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const key = newSectionTitle
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-z0-9_]/g, '');
     const newSection: SectionEntry = {
       order: minutes.sections.length,
       key,
@@ -224,9 +229,7 @@ export const MinutesDetailPage: React.FC = () => {
 
   const handleDeleteSection = async (sectionKey: string) => {
     if (!minutesId || !minutes || !confirm('Delete this section?')) return;
-    const filtered = minutes.sections
-      .filter(s => s.key !== sectionKey)
-      .map((s, i) => ({ ...s, order: i }));
+    const filtered = minutes.sections.filter((s) => s.key !== sectionKey).map((s, i) => ({ ...s, order: i }));
 
     try {
       setSaving(true);
@@ -300,10 +303,18 @@ export const MinutesDetailPage: React.FC = () => {
     try {
       await minutesService.addMotion(minutesId, {
         ...motionForm,
-        order: (minutes?.motions.length || 0),
+        order: minutes?.motions.length || 0,
       });
       setShowMotionForm(false);
-      setMotionForm({ motion_text: '', moved_by: '', seconded_by: '', status: 'passed', votes_for: undefined, votes_against: undefined, votes_abstain: undefined });
+      setMotionForm({
+        motion_text: '',
+        moved_by: '',
+        seconded_by: '',
+        status: 'passed',
+        votes_for: undefined,
+        votes_against: undefined,
+        votes_abstain: undefined,
+      });
       void fetchMinutes();
       toast.success('Motion added');
     } catch (err: unknown) {
@@ -413,8 +424,10 @@ export const MinutesDetailPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          <div className="text-theme-text-muted text-center py-12" role="status" aria-live="polite">Loading minutes...</div>
+        <div className="mx-auto max-w-5xl px-4 py-8">
+          <div className="text-theme-text-muted py-12 text-center" role="status" aria-live="polite">
+            Loading minutes...
+          </div>
         </div>
       </div>
     );
@@ -423,8 +436,8 @@ export const MinutesDetailPage: React.FC = () => {
   if (error || !minutes) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
+        <div className="mx-auto max-w-5xl px-4 py-8">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
             <p className="text-sm text-red-700 dark:text-red-300">{error || 'Minutes not found'}</p>
           </div>
         </div>
@@ -434,767 +447,878 @@ export const MinutesDetailPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-6">
-        <Link to="/minutes" className="text-blue-600 hover:text-blue-700 text-sm">
-          &larr; Back to Minutes
-        </Link>
-        <div className="flex justify-between items-start mt-2">
-          <div>
-            <h1 className="text-2xl font-bold text-theme-text-primary">{minutes.title}</h1>
-            <p className="text-theme-text-muted mt-1">
-              {formatDateTime(minutes.meeting_date, tz)}
-              {minutes.location && ` \u00b7 ${minutes.location}`}
-              {minutes.called_by && ` \u00b7 Called by ${minutes.called_by}`}
-            </p>
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-6">
+          <Link to="/minutes" className="text-sm text-blue-600 hover:text-blue-700">
+            &larr; Back to Minutes
+          </Link>
+          <div className="mt-2 flex items-start justify-between">
+            <div>
+              <h1 className="text-theme-text-primary text-2xl font-bold">{minutes.title}</h1>
+              <p className="text-theme-text-muted mt-1">
+                {formatDateTime(minutes.meeting_date, tz)}
+                {minutes.location && ` \u00b7 ${minutes.location}`}
+                {minutes.called_by && ` \u00b7 Called by ${minutes.called_by}`}
+              </p>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-sm font-semibold ${STATUS_BADGES[minutes.status]}`}>
+              {minutes.status}
+            </span>
           </div>
-          <span className={`px-3 py-1 text-sm font-semibold rounded-full ${STATUS_BADGES[minutes.status]}`}>
-            {minutes.status}
-          </span>
+
+          {/* Rejection notice */}
+          {minutes.status === 'rejected' && minutes.rejection_reason && (
+            <div className="mt-3 border-l-4 border-red-500 bg-red-500/10 p-4">
+              <p className="text-sm font-medium text-red-700 dark:text-red-300">Rejection Reason:</p>
+              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{minutes.rejection_reason}</p>
+            </div>
+          )}
         </div>
 
-        {/* Rejection notice */}
-        {minutes.status === 'rejected' && minutes.rejection_reason && (
-          <div className="mt-3 bg-red-500/10 border-l-4 border-red-500 p-4">
-            <p className="text-sm font-medium text-red-700 dark:text-red-300">Rejection Reason:</p>
-            <p className="text-sm text-red-700 dark:text-red-300 mt-1">{minutes.rejection_reason}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Linked Event */}
-      {(linkedEvent || (canManage && isEditable)) && (
-        <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 mb-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-medium text-theme-text-secondary">Linked Meeting Event</h3>
-            {canManage && isEditable && (
-              <div className="flex gap-2">
-                {linkedEvent && (
+        {/* Linked Event */}
+        {(linkedEvent || (canManage && isEditable)) && (
+          <div className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs">
+            <div className="flex items-center justify-between">
+              <h3 className="text-theme-text-secondary text-sm font-medium">Linked Meeting Event</h3>
+              {canManage && isEditable && (
+                <div className="flex gap-2">
+                  {linkedEvent && (
+                    <button
+                      onClick={() => {
+                        void handleUnlinkEvent();
+                      }}
+                      className="text-xs text-red-500 hover:text-red-700"
+                    >
+                      Unlink
+                    </button>
+                  )}
                   <button
-                    onClick={() => { void handleUnlinkEvent(); }}
-                    className="text-xs text-red-500 hover:text-red-700"
+                    onClick={() => {
+                      void handleOpenLinkEvent();
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                   >
-                    Unlink
+                    {linkedEvent ? 'Change' : 'Link to Event'}
                   </button>
-                )}
-                <button
-                  onClick={() => { void handleOpenLinkEvent(); }}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                >
-                  {linkedEvent ? 'Change' : 'Link to Event'}
-                </button>
-              </div>
-            )}
-          </div>
-          {linkedEvent ? (
-            <div className="mt-2 flex items-center gap-3">
-              <span className="text-xs px-2 py-0.5 rounded-sm bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">Business Meeting</span>
-              <Link
-                to={`/events/${linkedEvent.id}`}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-              >
-                {linkedEvent.title}
-              </Link>
-              <span className="text-xs text-theme-text-muted">
-                {formatDate(linkedEvent.start_datetime, tz)}
-              </span>
-              {linkedEvent.location && (
-                <span className="text-xs text-theme-text-muted">{linkedEvent.location}</span>
+                </div>
               )}
             </div>
-          ) : (
-            canManage && isEditable && (
-              <p className="mt-1 text-xs text-theme-text-muted italic">
-                No event linked. Link to a scheduled meeting to connect attendance and event data.
-              </p>
-            )
-          )}
-        </div>
-      )}
-
-      {/* Linked Elections */}
-      {linkedElections.length > 0 && (
-        <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 mb-6">
-          <h3 className="text-sm font-medium text-theme-text-secondary mb-3">Linked Elections</h3>
-          <div className="space-y-2">
-            {linkedElections.map((election) => (
-              <Link
-                key={election.id}
-                to={`/elections/${election.id}`}
-                className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover transition-colors"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-theme-text-primary truncate">{election.title}</p>
-                  <p className="text-xs text-theme-text-muted mt-0.5">
-                    {election.election_type.replace(/_/g, ' ')}
-                    {election.positions && election.positions.length > 0
-                      ? ` · ${election.positions.join(', ')}`
-                      : ''}
-                  </p>
-                </div>
-                <span className={`ml-3 shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(election.status)}`}>
-                  {election.status}
+            {linkedEvent ? (
+              <div className="mt-2 flex items-center gap-3">
+                <span className="rounded-sm bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
+                  Business Meeting
                 </span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Workflow Actions */}
-      {canManage && (
-        <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 mb-6">
-          <div className="flex flex-wrap gap-3">
-            {(minutes.status === 'draft' || minutes.status === 'rejected') && (
-              <button
-                onClick={() => { void handleSubmit(); }}
-                className="btn-info rounded-md"
-              >
-                Submit for Approval
-              </button>
-            )}
-            {minutes.status === 'submitted' && (
-              <>
-                <button
-                  onClick={() => { void handleApprove(); }}
-                  className="btn-success rounded-md"
+                <Link
+                  to={`/events/${linkedEvent.id}`}
+                  className="text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                 >
-                  Approve Minutes
-                </button>
-                <button
-                  onClick={() => setShowRejectModal(true)}
-                  className="btn-primary rounded-md"
-                >
-                  Reject Minutes
-                </button>
-              </>
-            )}
-            {minutes.status === 'approved' && (
-              <button
-                onClick={() => { void handlePublish(); }}
-                disabled={publishing}
-                className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50 inline-flex items-center gap-2"
-              >
-                <BookOpen className="w-4 h-4" aria-hidden="true" />
-                {publishing ? 'Publishing...' : minutes.published_document_id ? 'Re-publish to Documents' : 'Publish to Documents'}
-              </button>
-            )}
-            {minutes.published_document_id && (
-              <Link
-                to="/documents"
-                className="px-4 py-2 border border-green-500/30 text-green-700 dark:text-green-300 rounded-md hover:bg-green-500/10 inline-flex items-center gap-2"
-              >
-                <CheckCircle className="w-4 h-4" aria-hidden="true" />
-                View in Documents
-              </Link>
-            )}
-            {minutes.status === 'draft' && (
-              <button
-                onClick={() => { void handleDelete(); }}
-                className="px-4 py-2 bg-theme-surface text-theme-text-primary rounded-md hover:bg-theme-surface-hover"
-              >
-                Delete Draft
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Meeting Info */}
-      <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6 mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          {minutes.called_to_order_at && (
-            <div>
-              <span className="text-theme-text-muted">Called to Order:</span>
-              <div className="font-medium text-theme-text-primary">{formatDateTime(minutes.called_to_order_at, tz)}</div>
-            </div>
-          )}
-          {minutes.adjourned_at && (
-            <div>
-              <span className="text-theme-text-muted">Adjourned:</span>
-              <div className="font-medium text-theme-text-primary">{formatDateTime(minutes.adjourned_at, tz)}</div>
-            </div>
-          )}
-          {minutes.quorum_met !== null && minutes.quorum_met !== undefined && (
-            <div>
-              <span className="text-theme-text-muted">Quorum:</span>
-              <div className={`font-medium ${minutes.quorum_met ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
-                {minutes.quorum_met ? 'Met' : 'Not Met'}
-                {minutes.quorum_count !== null && ` (${minutes.quorum_count})`}
+                  {linkedEvent.title}
+                </Link>
+                <span className="text-theme-text-muted text-xs">{formatDate(linkedEvent.start_datetime, tz)}</span>
+                {linkedEvent.location && <span className="text-theme-text-muted text-xs">{linkedEvent.location}</span>}
               </div>
-            </div>
-          )}
-        </div>
+            ) : (
+              canManage &&
+              isEditable && (
+                <p className="text-theme-text-muted mt-1 text-xs italic">
+                  No event linked. Link to a scheduled meeting to connect attendance and event data.
+                </p>
+              )
+            )}
+          </div>
+        )}
 
-        {/* Attendees */}
-        {minutes.attendees && minutes.attendees.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-theme-surface-border">
-            <h3 className="text-sm font-medium text-theme-text-secondary mb-2">Attendees ({minutes.attendees.length})</h3>
-            <div className="flex flex-wrap gap-2">
-              {minutes.attendees.map((a, i) => (
-                <span
-                  key={i}
-                  className={`text-xs px-2 py-1 rounded-sm ${a.present ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 line-through'}`}
+        {/* Linked Elections */}
+        {linkedElections.length > 0 && (
+          <div className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs">
+            <h3 className="text-theme-text-secondary mb-3 text-sm font-medium">Linked Elections</h3>
+            <div className="space-y-2">
+              {linkedElections.map((election) => (
+                <Link
+                  key={election.id}
+                  to={`/elections/${election.id}`}
+                  className="border-theme-surface-border hover:bg-theme-surface-hover flex items-center justify-between rounded-lg border p-3 transition-colors"
                 >
-                  {a.name}{a.role ? ` (${a.role})` : ''}
-                </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-theme-text-primary truncate text-sm font-medium">{election.title}</p>
+                    <p className="text-theme-text-muted mt-0.5 text-xs">
+                      {election.election_type.replace(/_/g, ' ')}
+                      {election.positions && election.positions.length > 0 ? ` · ${election.positions.join(', ')}` : ''}
+                    </p>
+                  </div>
+                  <span
+                    className={`ml-3 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadgeClass(election.status)}`}
+                  >
+                    {election.status}
+                  </span>
+                </Link>
               ))}
             </div>
           </div>
         )}
-      </div>
 
-      {/* Dynamic Content Sections */}
-      <div className="space-y-4 mb-6">
-        <div className="flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-theme-text-primary">Meeting Sections</h2>
-          {canManage && isEditable && (
-            <button
-              onClick={() => setShowAddSection(!showAddSection)}
-              className="px-3 py-1.5 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700 inline-flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Section
-            </button>
-          )}
-        </div>
-
-        {/* Add Section Form */}
-        {showAddSection && (
-          <div className="card-secondary flex gap-3 items-end p-4" role="form" aria-label="Add new section">
-            <div className="flex-1">
-              <label htmlFor="new-section-title" className="block text-sm font-medium text-theme-text-secondary mb-1">Section Title</label>
-              <input
-                id="new-section-title"
-                type="text"
-                value={newSectionTitle}
-                onChange={(e) => setNewSectionTitle(e.target.value)}
-                placeholder="e.g., Fire Prevention Report"
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-              />
+        {/* Workflow Actions */}
+        {canManage && (
+          <div className="bg-theme-surface mb-6 rounded-lg p-4 shadow-sm backdrop-blur-xs">
+            <div className="flex flex-wrap gap-3">
+              {(minutes.status === 'draft' || minutes.status === 'rejected') && (
+                <button
+                  onClick={() => {
+                    void handleSubmit();
+                  }}
+                  className="btn-info rounded-md"
+                >
+                  Submit for Approval
+                </button>
+              )}
+              {minutes.status === 'submitted' && (
+                <>
+                  <button
+                    onClick={() => {
+                      void handleApprove();
+                    }}
+                    className="btn-success rounded-md"
+                  >
+                    Approve Minutes
+                  </button>
+                  <button onClick={() => setShowRejectModal(true)} className="btn-primary rounded-md">
+                    Reject Minutes
+                  </button>
+                </>
+              )}
+              {minutes.status === 'approved' && (
+                <button
+                  onClick={() => {
+                    void handlePublish();
+                  }}
+                  disabled={publishing}
+                  className="inline-flex items-center gap-2 rounded-md bg-cyan-600 px-4 py-2 text-white hover:bg-cyan-700 disabled:opacity-50"
+                >
+                  <BookOpen className="h-4 w-4" aria-hidden="true" />
+                  {publishing
+                    ? 'Publishing...'
+                    : minutes.published_document_id
+                      ? 'Re-publish to Documents'
+                      : 'Publish to Documents'}
+                </button>
+              )}
+              {minutes.published_document_id && (
+                <Link
+                  to="/documents"
+                  className="inline-flex items-center gap-2 rounded-md border border-green-500/30 px-4 py-2 text-green-700 hover:bg-green-500/10 dark:text-green-300"
+                >
+                  <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                  View in Documents
+                </Link>
+              )}
+              {minutes.status === 'draft' && (
+                <button
+                  onClick={() => {
+                    void handleDelete();
+                  }}
+                  className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover rounded-md px-4 py-2"
+                >
+                  Delete Draft
+                </button>
+              )}
             </div>
-            <button
-              onClick={() => { void handleAddSection(); }}
-              disabled={!newSectionTitle.trim() || saving}
-              className="px-4 py-2 bg-cyan-600 text-white text-sm rounded-md hover:bg-cyan-700 disabled:opacity-50"
-            >
-              Add
-            </button>
-            <button
-              onClick={() => { setShowAddSection(false); setNewSectionTitle(''); }}
-              className="px-4 py-2 border border-theme-surface-border text-sm text-theme-text-secondary rounded-md hover:bg-theme-surface-hover"
-            >
-              Cancel
-            </button>
           </div>
         )}
 
-        {minutes.sections.length === 0 ? (
-          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-8 text-center">
-            <p className="text-theme-text-muted">No sections defined for these minutes.</p>
+        {/* Meeting Info */}
+        <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
+          <div className="grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
+            {minutes.called_to_order_at && (
+              <div>
+                <span className="text-theme-text-muted">Called to Order:</span>
+                <div className="text-theme-text-primary font-medium">
+                  {formatDateTime(minutes.called_to_order_at, tz)}
+                </div>
+              </div>
+            )}
+            {minutes.adjourned_at && (
+              <div>
+                <span className="text-theme-text-muted">Adjourned:</span>
+                <div className="text-theme-text-primary font-medium">{formatDateTime(minutes.adjourned_at, tz)}</div>
+              </div>
+            )}
+            {minutes.quorum_met !== null && minutes.quorum_met !== undefined && (
+              <div>
+                <span className="text-theme-text-muted">Quorum:</span>
+                <div
+                  className={`font-medium ${minutes.quorum_met ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}
+                >
+                  {minutes.quorum_met ? 'Met' : 'Not Met'}
+                  {minutes.quorum_count !== null && ` (${minutes.quorum_count})`}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Attendees */}
+          {minutes.attendees && minutes.attendees.length > 0 && (
+            <div className="border-theme-surface-border mt-4 border-t pt-4">
+              <h3 className="text-theme-text-secondary mb-2 text-sm font-medium">
+                Attendees ({minutes.attendees.length})
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {minutes.attendees.map((a, i) => (
+                  <span
+                    key={i}
+                    className={`rounded-sm px-2 py-1 text-xs ${a.present ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' : 'bg-red-100 text-red-800 line-through dark:bg-red-500/20 dark:text-red-400'}`}
+                  >
+                    {a.name}
+                    {a.role ? ` (${a.role})` : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Dynamic Content Sections */}
+        <div className="mb-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-theme-text-primary text-lg font-semibold">Meeting Sections</h2>
             {canManage && isEditable && (
               <button
-                onClick={() => setShowAddSection(true)}
-                className="mt-3 text-sm text-cyan-600 hover:text-cyan-800"
+                onClick={() => setShowAddSection(!showAddSection)}
+                className="inline-flex items-center gap-1 rounded-md bg-cyan-600 px-3 py-1.5 text-sm text-white hover:bg-cyan-700"
               >
-                Add your first section
+                <Plus className="h-3.5 w-3.5" />
+                Add Section
               </button>
             )}
           </div>
-        ) : (
-          minutes.sections
-            .sort((a, b) => a.order - b.order)
-            .map((section, idx) => {
-              const isEditing = editingSection === section.key;
 
-              return (
-                <div key={section.key} className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="flex items-center gap-2">
-                      {canManage && isEditable && (
-                        <div className="flex flex-col" role="group" aria-label={`Reorder ${section.title}`}>
-                          <button
-                            onClick={() => { void handleReorderSection(idx, 'up'); }}
-                            disabled={idx === 0 || saving}
-                            className="text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 p-0.5"
-                            aria-label={`Move ${section.title} up`}
-                          >
-                            <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
-                          </button>
-                          <button
-                            onClick={() => { void handleReorderSection(idx, 'down'); }}
-                            disabled={idx === minutes.sections.length - 1 || saving}
-                            className="text-theme-text-muted hover:text-theme-text-secondary disabled:opacity-30 p-0.5"
-                            aria-label={`Move ${section.title} down`}
-                          >
-                            <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
-                          </button>
-                        </div>
-                      )}
-                      <h3 className="text-md font-semibold text-theme-text-primary">{section.title}</h3>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {canManage && isEditable && !isEditing && (
-                        <>
-                          <button
-                            onClick={() => { setEditingSection(section.key); setSectionValue(section.content || ''); }}
-                            className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                            aria-label={`Edit ${section.title}`}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => { void handleDeleteSection(section.key); }}
-                            className="text-theme-text-muted hover:text-red-800 dark:hover:text-red-400 p-1"
-                            aria-label={`Delete ${section.title} section`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
+          {/* Add Section Form */}
+          {showAddSection && (
+            <div className="card-secondary flex items-end gap-3 p-4" role="form" aria-label="Add new section">
+              <div className="flex-1">
+                <label htmlFor="new-section-title" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  Section Title
+                </label>
+                <input
+                  id="new-section-title"
+                  type="text"
+                  value={newSectionTitle}
+                  onChange={(e) => setNewSectionTitle(e.target.value)}
+                  placeholder="e.g., Fire Prevention Report"
+                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  void handleAddSection();
+                }}
+                disabled={!newSectionTitle.trim() || saving}
+                className="rounded-md bg-cyan-600 px-4 py-2 text-sm text-white hover:bg-cyan-700 disabled:opacity-50"
+              >
+                Add
+              </button>
+              <button
+                onClick={() => {
+                  setShowAddSection(false);
+                  setNewSectionTitle('');
+                }}
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
 
-                  {isEditing ? (
-                    <div>
-                      <label htmlFor={`section-edit-${section.key}`} className="sr-only">Edit {section.title} content</label>
-                      <textarea
-                        id={`section-edit-${section.key}`}
-                        rows={6}
-                        value={sectionValue}
-                        onChange={(e) => setSectionValue(e.target.value)}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                        aria-label={`${section.title} content`}
-                      />
-                      <div className="mt-2 flex gap-2">
-                        <button
-                          onClick={() => { void handleSaveSection(section.key); }}
-                          disabled={saving}
-                          className="px-3 py-1.5 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50"
-                        >
-                          {saving ? 'Saving...' : 'Save'}
-                        </button>
-                        <button
-                          onClick={() => setEditingSection(null)}
-                          className="px-3 py-1.5 text-sm border border-theme-surface-border text-theme-text-secondary rounded-md hover:bg-theme-surface-hover"
-                        >
-                          Cancel
-                        </button>
+          {minutes.sections.length === 0 ? (
+            <div className="bg-theme-surface rounded-lg p-8 text-center shadow-sm backdrop-blur-xs">
+              <p className="text-theme-text-muted">No sections defined for these minutes.</p>
+              {canManage && isEditable && (
+                <button
+                  onClick={() => setShowAddSection(true)}
+                  className="mt-3 text-sm text-cyan-600 hover:text-cyan-800"
+                >
+                  Add your first section
+                </button>
+              )}
+            </div>
+          ) : (
+            minutes.sections
+              .sort((a, b) => a.order - b.order)
+              .map((section, idx) => {
+                const isEditing = editingSection === section.key;
+
+                return (
+                  <div key={section.key} className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {canManage && isEditable && (
+                          <div className="flex flex-col" role="group" aria-label={`Reorder ${section.title}`}>
+                            <button
+                              onClick={() => {
+                                void handleReorderSection(idx, 'up');
+                              }}
+                              disabled={idx === 0 || saving}
+                              className="text-theme-text-muted hover:text-theme-text-secondary p-0.5 disabled:opacity-30"
+                              aria-label={`Move ${section.title} up`}
+                            >
+                              <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                void handleReorderSection(idx, 'down');
+                              }}
+                              disabled={idx === minutes.sections.length - 1 || saving}
+                              className="text-theme-text-muted hover:text-theme-text-secondary p-0.5 disabled:opacity-30"
+                              aria-label={`Move ${section.title} down`}
+                            >
+                              <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                          </div>
+                        )}
+                        <h3 className="text-md text-theme-text-primary font-semibold">{section.title}</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {canManage && isEditable && !isEditing && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setEditingSection(section.key);
+                                setSectionValue(section.content || '');
+                              }}
+                              className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                              aria-label={`Edit ${section.title}`}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => {
+                                void handleDeleteSection(section.key);
+                              }}
+                              className="text-theme-text-muted p-1 hover:text-red-800 dark:hover:text-red-400"
+                              aria-label={`Delete ${section.title} section`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
-                  ) : section.content ? (
-                    <div className="text-sm text-theme-text-secondary whitespace-pre-wrap">{section.content}</div>
-                  ) : (
-                    <p className="text-sm text-theme-text-muted italic">
-                      No content yet.{' '}
-                      {canManage && isEditable && (
-                        <button
-                          onClick={() => { setEditingSection(section.key); setSectionValue(''); }}
-                          className="text-blue-600 hover:underline"
-                        >
-                          Add content
-                        </button>
-                      )}
-                    </p>
-                  )}
-                </div>
-              );
-            })
-        )}
-      </div>
 
-      {/* Motions */}
-      <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-theme-text-primary">Motions ({minutes.motions.length})</h3>
-          {canManage && isEditable && (
-            <button
-              onClick={() => setShowMotionForm(!showMotionForm)}
-              className="px-3 py-1.5 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700"
-            >
-              {showMotionForm ? 'Cancel' : 'Add Motion'}
-            </button>
-          )}
-        </div>
-
-        {showMotionForm && (
-          <div className="card-secondary mb-4 p-4 space-y-3" role="form" aria-label="Add motion">
-            <label htmlFor="motion-text" className="sr-only">Motion text</label>
-            <textarea
-              id="motion-text"
-              rows={3}
-              value={motionForm.motion_text}
-              onChange={(e) => setMotionForm({ ...motionForm, motion_text: e.target.value })}
-              placeholder="Motion text..."
-              aria-label="Motion text"
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label htmlFor="moved-by" className="sr-only">Moved by</label>
-                <input
-                  id="moved-by"
-                  type="text"
-                  value={motionForm.moved_by || ''}
-                  onChange={(e) => setMotionForm({ ...motionForm, moved_by: e.target.value })}
-                  placeholder="Moved by"
-                  aria-label="Moved by"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                />
-              </div>
-              <div>
-                <label htmlFor="seconded-by" className="sr-only">Seconded by</label>
-                <input
-                  id="seconded-by"
-                  type="text"
-                  value={motionForm.seconded_by || ''}
-                  onChange={(e) => setMotionForm({ ...motionForm, seconded_by: e.target.value })}
-                  placeholder="Seconded by"
-                  aria-label="Seconded by"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                />
-              </div>
-              <div>
-                <label htmlFor="motion-status" className="sr-only">Motion status</label>
-                <select
-                  id="motion-status"
-                  value={motionForm.status}
-                  onChange={(e) => setMotionForm({ ...motionForm, status: e.target.value as MotionStatus })}
-                  aria-label="Motion status"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                >
-                  <option value="passed">Passed</option>
-                  <option value="failed">Failed</option>
-                  <option value="tabled">Tabled</option>
-                  <option value="withdrawn">Withdrawn</option>
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label htmlFor="votes-for" className="sr-only">Votes for</label>
-                <input
-                  id="votes-for"
-                  type="number"
-                  min={0}
-                  value={motionForm.votes_for ?? ''}
-                  onChange={(e) => setMotionForm({ ...motionForm, votes_for: e.target.value ? parseInt(e.target.value) : undefined })}
-                  placeholder="Votes for"
-                  aria-label="Votes for"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                />
-              </div>
-              <div>
-                <label htmlFor="votes-against" className="sr-only">Votes against</label>
-                <input
-                  id="votes-against"
-                  type="number"
-                  min={0}
-                  value={motionForm.votes_against ?? ''}
-                  onChange={(e) => setMotionForm({ ...motionForm, votes_against: e.target.value ? parseInt(e.target.value) : undefined })}
-                  placeholder="Votes against"
-                  aria-label="Votes against"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                />
-              </div>
-              <div>
-                <label htmlFor="votes-abstain" className="sr-only">Abstentions</label>
-                <input
-                  id="votes-abstain"
-                  type="number"
-                  min={0}
-                  value={motionForm.votes_abstain ?? ''}
-                  onChange={(e) => setMotionForm({ ...motionForm, votes_abstain: e.target.value ? parseInt(e.target.value) : undefined })}
-                  placeholder="Abstentions"
-                  aria-label="Abstentions"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                />
-              </div>
-            </div>
-            <button
-              onClick={() => { void handleAddMotion(); }}
-              disabled={!motionForm.motion_text.trim()}
-              className="px-4 py-2 bg-cyan-600 text-white text-sm rounded-md hover:bg-cyan-700 disabled:opacity-50"
-            >
-              Add Motion
-            </button>
-          </div>
-        )}
-
-        {minutes.motions.length === 0 ? (
-          <p className="text-sm text-theme-text-muted">No motions recorded.</p>
-        ) : (
-          <div className="space-y-3">
-            {minutes.motions.map((motion, i) => (
-              <div key={motion.id} className="border border-theme-surface-border rounded-lg p-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs text-theme-text-muted font-mono">#{i + 1}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-sm font-medium ${MOTION_STATUS_BADGES[motion.status]}`}>
-                        {motion.status}
-                      </span>
-                    </div>
-                    <p className="text-sm text-theme-text-primary">{motion.motion_text}</p>
-                    <div className="mt-2 text-xs text-theme-text-muted space-x-4">
-                      {motion.moved_by && <span>Moved by: {motion.moved_by}</span>}
-                      {motion.seconded_by && <span>Seconded by: {motion.seconded_by}</span>}
-                      {motion.votes_for !== null && motion.votes_for !== undefined && (
-                        <span>
-                          Vote: {motion.votes_for}-{motion.votes_against || 0}
-                          {motion.votes_abstain ? ` (${motion.votes_abstain} abstain)` : ''}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {canManage && isEditable && (
-                    <button
-                      onClick={() => { void handleDeleteMotion(motion.id); }}
-                      className="text-xs text-red-500 hover:text-red-700 ml-2"
-                    >
-                      Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Action Items */}
-      <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-theme-text-primary">Action Items ({minutes.action_items.length})</h3>
-          {canManage && isEditable && (
-            <button
-              onClick={() => setShowActionForm(!showActionForm)}
-              className="px-3 py-1.5 text-sm bg-cyan-600 text-white rounded-md hover:bg-cyan-700"
-            >
-              {showActionForm ? 'Cancel' : 'Add Action Item'}
-            </button>
-          )}
-        </div>
-
-        {showActionForm && (
-          <div className="card-secondary mb-4 p-4 space-y-3" role="form" aria-label="Add action item">
-            <label htmlFor="action-description" className="sr-only">Action item description</label>
-            <textarea
-              id="action-description"
-              rows={2}
-              value={actionForm.description}
-              onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
-              placeholder="Action item description..."
-              aria-label="Action item description"
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label htmlFor="action-assignee" className="sr-only">Assignee name</label>
-                <input
-                  id="action-assignee"
-                  type="text"
-                  value={actionForm.assignee_name || ''}
-                  onChange={(e) => setActionForm({ ...actionForm, assignee_name: e.target.value })}
-                  placeholder="Assignee name"
-                  aria-label="Assignee name"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                />
-              </div>
-              <div>
-                <label htmlFor="action-due-date" className="sr-only">Due date</label>
-                <input
-                  id="action-due-date"
-                  type="date"
-                  value={actionForm.due_date || ''}
-                  onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value || undefined })}
-                  aria-label="Due date"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                />
-              </div>
-              <div>
-                <label htmlFor="action-priority" className="sr-only">Priority</label>
-                <select
-                  id="action-priority"
-                  value={actionForm.priority}
-                  onChange={(e) => setActionForm({ ...actionForm, priority: e.target.value as ActionItemPriority })}
-                  aria-label="Priority"
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-              </div>
-            </div>
-            <button
-              onClick={() => { void handleAddActionItem(); }}
-              disabled={!actionForm.description.trim()}
-              className="px-4 py-2 bg-cyan-600 text-white text-sm rounded-md hover:bg-cyan-700 disabled:opacity-50"
-            >
-              Add Action Item
-            </button>
-          </div>
-        )}
-
-        {minutes.action_items.length === 0 ? (
-          <p className="text-sm text-theme-text-muted">No action items.</p>
-        ) : (
-          <div className="space-y-3">
-            {minutes.action_items.map(item => (
-              <div key={item.id} className="border border-theme-surface-border rounded-lg p-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs px-2 py-0.5 rounded-sm font-medium ${ACTION_STATUS_BADGES[item.status]}`}>
-                        {item.status.replace('_', ' ')}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-sm ${PRIORITY_BADGES[item.priority]}`}>
-                        {item.priority}
-                      </span>
-                    </div>
-                    <p className="text-sm text-theme-text-primary">{item.description}</p>
-                    <div className="mt-2 text-xs text-theme-text-muted space-x-4">
-                      {item.assignee_name && <span>Assigned to: {item.assignee_name}</span>}
-                      {item.due_date && (
-                        <span>
-                          Due: {formatDate(item.due_date, tz)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 ml-2">
-                    {canManage && item.status !== 'completed' && item.status !== 'cancelled' && (
-                      <select
-                        value={item.status}
-                        onChange={(e) => { void handleUpdateActionItemStatus(item.id, e.target.value); }}
-                        aria-label={`Update status for: ${item.description.substring(0, 30)}`}
-                        className="text-xs bg-theme-input-bg border border-theme-input-border rounded-sm px-2 py-1 text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring"
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
+                    {isEditing ? (
+                      <div>
+                        <label htmlFor={`section-edit-${section.key}`} className="sr-only">
+                          Edit {section.title} content
+                        </label>
+                        <textarea
+                          id={`section-edit-${section.key}`}
+                          rows={6}
+                          value={sectionValue}
+                          onChange={(e) => setSectionValue(e.target.value)}
+                          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                          aria-label={`${section.title} content`}
+                        />
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            onClick={() => {
+                              void handleSaveSection(section.key);
+                            }}
+                            disabled={saving}
+                            className="rounded-md bg-cyan-600 px-3 py-1.5 text-sm text-white hover:bg-cyan-700 disabled:opacity-50"
+                          >
+                            {saving ? 'Saving...' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => setEditingSection(null)}
+                            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-3 py-1.5 text-sm"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : section.content ? (
+                      <div className="text-theme-text-secondary text-sm whitespace-pre-wrap">{section.content}</div>
+                    ) : (
+                      <p className="text-theme-text-muted text-sm italic">
+                        No content yet.{' '}
+                        {canManage && isEditable && (
+                          <button
+                            onClick={() => {
+                              setEditingSection(section.key);
+                              setSectionValue('');
+                            }}
+                            className="text-blue-600 hover:underline"
+                          >
+                            Add content
+                          </button>
+                        )}
+                      </p>
                     )}
+                  </div>
+                );
+              })
+          )}
+        </div>
+
+        {/* Motions */}
+        <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-theme-text-primary text-lg font-semibold">Motions ({minutes.motions.length})</h3>
+            {canManage && isEditable && (
+              <button
+                onClick={() => setShowMotionForm(!showMotionForm)}
+                className="rounded-md bg-cyan-600 px-3 py-1.5 text-sm text-white hover:bg-cyan-700"
+              >
+                {showMotionForm ? 'Cancel' : 'Add Motion'}
+              </button>
+            )}
+          </div>
+
+          {showMotionForm && (
+            <div className="card-secondary mb-4 space-y-3 p-4" role="form" aria-label="Add motion">
+              <label htmlFor="motion-text" className="sr-only">
+                Motion text
+              </label>
+              <textarea
+                id="motion-text"
+                rows={3}
+                value={motionForm.motion_text}
+                onChange={(e) => setMotionForm({ ...motionForm, motion_text: e.target.value })}
+                placeholder="Motion text..."
+                aria-label="Motion text"
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+              />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label htmlFor="moved-by" className="sr-only">
+                    Moved by
+                  </label>
+                  <input
+                    id="moved-by"
+                    type="text"
+                    value={motionForm.moved_by || ''}
+                    onChange={(e) => setMotionForm({ ...motionForm, moved_by: e.target.value })}
+                    placeholder="Moved by"
+                    aria-label="Moved by"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="seconded-by" className="sr-only">
+                    Seconded by
+                  </label>
+                  <input
+                    id="seconded-by"
+                    type="text"
+                    value={motionForm.seconded_by || ''}
+                    onChange={(e) => setMotionForm({ ...motionForm, seconded_by: e.target.value })}
+                    placeholder="Seconded by"
+                    aria-label="Seconded by"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="motion-status" className="sr-only">
+                    Motion status
+                  </label>
+                  <select
+                    id="motion-status"
+                    value={motionForm.status}
+                    onChange={(e) => setMotionForm({ ...motionForm, status: e.target.value as MotionStatus })}
+                    aria-label="Motion status"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  >
+                    <option value="passed">Passed</option>
+                    <option value="failed">Failed</option>
+                    <option value="tabled">Tabled</option>
+                    <option value="withdrawn">Withdrawn</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label htmlFor="votes-for" className="sr-only">
+                    Votes for
+                  </label>
+                  <input
+                    id="votes-for"
+                    type="number"
+                    min={0}
+                    value={motionForm.votes_for ?? ''}
+                    onChange={(e) =>
+                      setMotionForm({ ...motionForm, votes_for: e.target.value ? parseInt(e.target.value) : undefined })
+                    }
+                    placeholder="Votes for"
+                    aria-label="Votes for"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="votes-against" className="sr-only">
+                    Votes against
+                  </label>
+                  <input
+                    id="votes-against"
+                    type="number"
+                    min={0}
+                    value={motionForm.votes_against ?? ''}
+                    onChange={(e) =>
+                      setMotionForm({
+                        ...motionForm,
+                        votes_against: e.target.value ? parseInt(e.target.value) : undefined,
+                      })
+                    }
+                    placeholder="Votes against"
+                    aria-label="Votes against"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="votes-abstain" className="sr-only">
+                    Abstentions
+                  </label>
+                  <input
+                    id="votes-abstain"
+                    type="number"
+                    min={0}
+                    value={motionForm.votes_abstain ?? ''}
+                    onChange={(e) =>
+                      setMotionForm({
+                        ...motionForm,
+                        votes_abstain: e.target.value ? parseInt(e.target.value) : undefined,
+                      })
+                    }
+                    placeholder="Abstentions"
+                    aria-label="Abstentions"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  void handleAddMotion();
+                }}
+                disabled={!motionForm.motion_text.trim()}
+                className="rounded-md bg-cyan-600 px-4 py-2 text-sm text-white hover:bg-cyan-700 disabled:opacity-50"
+              >
+                Add Motion
+              </button>
+            </div>
+          )}
+
+          {minutes.motions.length === 0 ? (
+            <p className="text-theme-text-muted text-sm">No motions recorded.</p>
+          ) : (
+            <div className="space-y-3">
+              {minutes.motions.map((motion, i) => (
+                <div key={motion.id} className="border-theme-surface-border rounded-lg border p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="text-theme-text-muted font-mono text-xs">#{i + 1}</span>
+                        <span
+                          className={`rounded-sm px-2 py-0.5 text-xs font-medium ${MOTION_STATUS_BADGES[motion.status]}`}
+                        >
+                          {motion.status}
+                        </span>
+                      </div>
+                      <p className="text-theme-text-primary text-sm">{motion.motion_text}</p>
+                      <div className="text-theme-text-muted mt-2 space-x-4 text-xs">
+                        {motion.moved_by && <span>Moved by: {motion.moved_by}</span>}
+                        {motion.seconded_by && <span>Seconded by: {motion.seconded_by}</span>}
+                        {motion.votes_for !== null && motion.votes_for !== undefined && (
+                          <span>
+                            Vote: {motion.votes_for}-{motion.votes_against || 0}
+                            {motion.votes_abstain ? ` (${motion.votes_abstain} abstain)` : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                     {canManage && isEditable && (
                       <button
-                        onClick={() => { void handleDeleteActionItem(item.id); }}
-                        className="text-xs text-red-500 hover:text-red-700"
+                        onClick={() => {
+                          void handleDeleteMotion(motion.id);
+                        }}
+                        className="ml-2 text-xs text-red-500 hover:text-red-700"
                       >
                         Delete
                       </button>
                     )}
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Link Event Modal */}
-      {showLinkEventModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="link-event-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowLinkEventModal(false); }}
-        >
-          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full">
-            <div className="px-6 py-4 border-b border-theme-surface-border flex justify-between items-center">
-              <h3 id="link-event-title" className="text-lg font-medium text-theme-text-primary">Link to Meeting Event</h3>
-              <button onClick={() => setShowLinkEventModal(false)} className="text-theme-text-muted hover:text-theme-text-secondary" aria-label="Close dialog">
-                <span aria-hidden="true">&times;</span>
-              </button>
+              ))}
             </div>
-            <div className="px-6 py-4 max-h-96 overflow-y-auto">
-              {loadingEvents ? (
-                <p className="text-sm text-theme-text-muted">Loading events...</p>
-              ) : availableEvents.length === 0 ? (
-                <p className="text-sm text-theme-text-muted">No business meeting events found.</p>
-              ) : (
-                <div className="space-y-2">
-                  {availableEvents.map(ev => (
-                    <button
-                      key={ev.id}
-                      onClick={() => { void handleLinkEvent(ev.id); }}
-                      className={`w-full text-left p-3 border rounded-lg hover:bg-cyan-500/10 hover:border-cyan-500/30 transition-colors ${
-                        minutes?.event_id === ev.id ? 'border-cyan-500 bg-cyan-500/10' : 'border-theme-surface-border'
-                      }`}
-                    >
-                      <div className="text-sm font-medium text-theme-text-primary">{ev.title}</div>
-                      <div className="text-xs text-theme-text-muted mt-1">
-                        {formatDateTime(ev.start_datetime, tz)}
-                        {ev.location && ` \u00b7 ${ev.location}`}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="px-6 py-3 bg-theme-surface-secondary flex justify-end rounded-b-lg">
-              <button
-                onClick={() => setShowLinkEventModal(false)}
-                className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+          )}
         </div>
-      )}
 
-      {/* Reject Modal */}
-      {showRejectModal && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="reject-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setShowRejectModal(false); setRejectReason(''); } }}
-        >
-          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-theme-surface-border">
-              <h3 id="reject-title" className="text-lg font-medium text-theme-text-primary">Reject Minutes</h3>
-            </div>
-            <div className="px-6 py-4">
-              <label htmlFor="reject-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">
-                Reason for Rejection <span aria-hidden="true">*</span> <span className="text-xs text-theme-text-muted">(min 10 characters)</span>
+        {/* Action Items */}
+        <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-sm backdrop-blur-xs">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-theme-text-primary text-lg font-semibold">
+              Action Items ({minutes.action_items.length})
+            </h3>
+            {canManage && isEditable && (
+              <button
+                onClick={() => setShowActionForm(!showActionForm)}
+                className="rounded-md bg-cyan-600 px-3 py-1.5 text-sm text-white hover:bg-cyan-700"
+              >
+                {showActionForm ? 'Cancel' : 'Add Action Item'}
+              </button>
+            )}
+          </div>
+
+          {showActionForm && (
+            <div className="card-secondary mb-4 space-y-3 p-4" role="form" aria-label="Add action item">
+              <label htmlFor="action-description" className="sr-only">
+                Action item description
               </label>
               <textarea
-                id="reject-reason"
-                rows={4}
-                required
-                aria-required="true"
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Describe what needs to be corrected..."
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                id="action-description"
+                rows={2}
+                value={actionForm.description}
+                onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
+                placeholder="Action item description..."
+                aria-label="Action item description"
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
               />
-              <div className="mt-4 flex justify-end gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label htmlFor="action-assignee" className="sr-only">
+                    Assignee name
+                  </label>
+                  <input
+                    id="action-assignee"
+                    type="text"
+                    value={actionForm.assignee_name || ''}
+                    onChange={(e) => setActionForm({ ...actionForm, assignee_name: e.target.value })}
+                    placeholder="Assignee name"
+                    aria-label="Assignee name"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="action-due-date" className="sr-only">
+                    Due date
+                  </label>
+                  <input
+                    id="action-due-date"
+                    type="date"
+                    value={actionForm.due_date || ''}
+                    onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value || undefined })}
+                    aria-label="Due date"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="action-priority" className="sr-only">
+                    Priority
+                  </label>
+                  <select
+                    id="action-priority"
+                    value={actionForm.priority}
+                    onChange={(e) => setActionForm({ ...actionForm, priority: e.target.value as ActionItemPriority })}
+                    aria-label="Priority"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  void handleAddActionItem();
+                }}
+                disabled={!actionForm.description.trim()}
+                className="rounded-md bg-cyan-600 px-4 py-2 text-sm text-white hover:bg-cyan-700 disabled:opacity-50"
+              >
+                Add Action Item
+              </button>
+            </div>
+          )}
+
+          {minutes.action_items.length === 0 ? (
+            <p className="text-theme-text-muted text-sm">No action items.</p>
+          ) : (
+            <div className="space-y-3">
+              {minutes.action_items.map((item) => (
+                <div key={item.id} className="border-theme-surface-border rounded-lg border p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="mb-1 flex items-center gap-2">
+                        <span
+                          className={`rounded-sm px-2 py-0.5 text-xs font-medium ${ACTION_STATUS_BADGES[item.status]}`}
+                        >
+                          {item.status.replace('_', ' ')}
+                        </span>
+                        <span className={`rounded-sm px-2 py-0.5 text-xs ${PRIORITY_BADGES[item.priority]}`}>
+                          {item.priority}
+                        </span>
+                      </div>
+                      <p className="text-theme-text-primary text-sm">{item.description}</p>
+                      <div className="text-theme-text-muted mt-2 space-x-4 text-xs">
+                        {item.assignee_name && <span>Assigned to: {item.assignee_name}</span>}
+                        {item.due_date && <span>Due: {formatDate(item.due_date, tz)}</span>}
+                      </div>
+                    </div>
+                    <div className="ml-2 flex items-center gap-2">
+                      {canManage && item.status !== 'completed' && item.status !== 'cancelled' && (
+                        <select
+                          value={item.status}
+                          onChange={(e) => {
+                            void handleUpdateActionItemStatus(item.id, e.target.value);
+                          }}
+                          aria-label={`Update status for: ${item.description.substring(0, 30)}`}
+                          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-sm border px-2 py-1 text-xs focus:ring-1 focus:outline-hidden"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="completed">Completed</option>
+                          <option value="cancelled">Cancelled</option>
+                        </select>
+                      )}
+                      {canManage && isEditable && (
+                        <button
+                          onClick={() => {
+                            void handleDeleteActionItem(item.id);
+                          }}
+                          className="text-xs text-red-500 hover:text-red-700"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Link Event Modal */}
+        {showLinkEventModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="link-event-title"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setShowLinkEventModal(false);
+            }}
+          >
+            <div className="bg-theme-surface-modal w-full max-w-lg rounded-lg shadow-xl">
+              <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
+                <h3 id="link-event-title" className="text-theme-text-primary text-lg font-medium">
+                  Link to Meeting Event
+                </h3>
                 <button
-                  onClick={() => { setShowRejectModal(false); setRejectReason(''); }}
-                  className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover"
+                  onClick={() => setShowLinkEventModal(false)}
+                  className="text-theme-text-muted hover:text-theme-text-secondary"
+                  aria-label="Close dialog"
+                >
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              <div className="max-h-96 overflow-y-auto px-6 py-4">
+                {loadingEvents ? (
+                  <p className="text-theme-text-muted text-sm">Loading events...</p>
+                ) : availableEvents.length === 0 ? (
+                  <p className="text-theme-text-muted text-sm">No business meeting events found.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {availableEvents.map((ev) => (
+                      <button
+                        key={ev.id}
+                        onClick={() => {
+                          void handleLinkEvent(ev.id);
+                        }}
+                        className={`w-full rounded-lg border p-3 text-left transition-colors hover:border-cyan-500/30 hover:bg-cyan-500/10 ${
+                          minutes?.event_id === ev.id ? 'border-cyan-500 bg-cyan-500/10' : 'border-theme-surface-border'
+                        }`}
+                      >
+                        <div className="text-theme-text-primary text-sm font-medium">{ev.title}</div>
+                        <div className="text-theme-text-muted mt-1 text-xs">
+                          {formatDateTime(ev.start_datetime, tz)}
+                          {ev.location && ` \u00b7 ${ev.location}`}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="bg-theme-surface-secondary flex justify-end rounded-b-lg px-6 py-3">
+                <button
+                  onClick={() => setShowLinkEventModal(false)}
+                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2"
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={() => { void handleReject(); }}
-                  disabled={rejectReason.trim().length < 10}
-                  className="btn-primary rounded-md"
-                >
-                  Reject
-                </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        {/* Reject Modal */}
+        {showRejectModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reject-title"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setShowRejectModal(false);
+                setRejectReason('');
+              }
+            }}
+          >
+            <div className="bg-theme-surface-modal w-full max-w-md rounded-lg shadow-xl">
+              <div className="border-theme-surface-border border-b px-6 py-4">
+                <h3 id="reject-title" className="text-theme-text-primary text-lg font-medium">
+                  Reject Minutes
+                </h3>
+              </div>
+              <div className="px-6 py-4">
+                <label htmlFor="reject-reason" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  Reason for Rejection <span aria-hidden="true">*</span>{' '}
+                  <span className="text-theme-text-muted text-xs">(min 10 characters)</span>
+                </label>
+                <textarea
+                  id="reject-reason"
+                  rows={4}
+                  required
+                  aria-required="true"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Describe what needs to be corrected..."
+                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+                />
+                <div className="mt-4 flex justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setShowRejectModal(false);
+                      setRejectReason('');
+                    }}
+                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      void handleReject();
+                    }}
+                    disabled={rejectReason.trim().length < 10}
+                    className="btn-primary rounded-md"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

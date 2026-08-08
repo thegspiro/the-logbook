@@ -60,7 +60,7 @@ export const TopProgressBar: React.FC = () => {
          eating its 2px height — otherwise the bar vanishes on notched
          devices in standalone mode, where it would render under the
          status bar and give no loading feedback at all. */
-      className="fixed top-0 left-0 right-0 z-60 h-0.5 box-content bg-transparent pointer-events-none safe-top"
+      className="safe-top pointer-events-none fixed top-0 right-0 left-0 z-60 box-content h-0.5 bg-transparent"
       role="progressbar"
       aria-valuenow={progress}
       aria-valuemin={0}

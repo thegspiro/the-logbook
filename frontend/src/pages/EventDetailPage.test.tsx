@@ -137,9 +137,7 @@ describe('EventDetailPage', () => {
 
   describe('Loading State', () => {
     it('should display loading spinner initially', () => {
-      vi.mocked(eventService.getEvent).mockImplementation(
-        () => new Promise(() => {})
-      );
+      vi.mocked(eventService.getEvent).mockImplementation(() => new Promise(() => {}));
 
       renderWithRouter(<EventDetailPage />);
 
@@ -149,9 +147,7 @@ describe('EventDetailPage', () => {
 
   describe('Error State', () => {
     it('should display error when event fails to load', async () => {
-      vi.mocked(eventService.getEvent).mockRejectedValue(
-        makeApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getEvent).mockRejectedValue(makeApiError('Event not found', 404));
 
       renderWithRouter(<EventDetailPage />);
 
@@ -161,9 +157,7 @@ describe('EventDetailPage', () => {
     });
 
     it('should show back to events button on error', async () => {
-      vi.mocked(eventService.getEvent).mockRejectedValue(
-        makeApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getEvent).mockRejectedValue(makeApiError('Event not found', 404));
 
       renderWithRouter(<EventDetailPage />);
 
@@ -174,9 +168,7 @@ describe('EventDetailPage', () => {
     });
 
     it('should navigate to events on back button click', async () => {
-      vi.mocked(eventService.getEvent).mockRejectedValue(
-        makeApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getEvent).mockRejectedValue(makeApiError('Event not found', 404));
 
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
@@ -308,9 +300,12 @@ describe('EventDetailPage', () => {
       await user.click(submitButton);
 
       await waitFor(() => {
-        expect(eventService.createOrUpdateRSVP).toHaveBeenCalledWith('evt-1', expect.objectContaining({
-          status: 'going',
-        }));
+        expect(eventService.createOrUpdateRSVP).toHaveBeenCalledWith(
+          'evt-1',
+          expect.objectContaining({
+            status: 'going',
+          })
+        );
       });
     });
 
@@ -461,7 +456,9 @@ describe('EventDetailPage', () => {
 
       // Modal should be open
       await waitFor(() => {
-        expect(screen.getByText('This action cannot be undone. The event will be marked as cancelled.')).toBeInTheDocument();
+        expect(
+          screen.getByText('This action cannot be undone. The event will be marked as cancelled.')
+        ).toBeInTheDocument();
       });
 
       // Fill in reason
@@ -470,14 +467,20 @@ describe('EventDetailPage', () => {
 
       // Submit via the modal's submit button (type="submit")
       const submitButtons = screen.getAllByRole('button', { name: /cancel event/i });
-      const modalSubmitButton = submitButtons.find(btn => btn.getAttribute('type') === 'submit') ?? submitButtons[submitButtons.length - 1] ?? document.body;
+      const modalSubmitButton =
+        submitButtons.find((btn) => btn.getAttribute('type') === 'submit') ??
+        submitButtons[submitButtons.length - 1] ??
+        document.body;
       await user.click(modalSubmitButton);
 
       await waitFor(() => {
-        expect(eventService.cancelEvent).toHaveBeenCalledWith('evt-1', expect.objectContaining({
-          cancellation_reason: 'The venue is no longer available for this date',
-          send_notifications: false,
-        }));
+        expect(eventService.cancelEvent).toHaveBeenCalledWith(
+          'evt-1',
+          expect.objectContaining({
+            cancellation_reason: 'The venue is no longer available for this date',
+            send_notifications: false,
+          })
+        );
       });
     });
 
@@ -508,13 +511,19 @@ describe('EventDetailPage', () => {
       await user.type(reasonInput, 'Weather emergency - event postponed');
 
       const submitButtons2 = screen.getAllByRole('button', { name: /cancel event/i });
-      const modalSubmitBtn = submitButtons2.find(btn => btn.getAttribute('type') === 'submit') ?? submitButtons2[submitButtons2.length - 1] ?? document.body;
+      const modalSubmitBtn =
+        submitButtons2.find((btn) => btn.getAttribute('type') === 'submit') ??
+        submitButtons2[submitButtons2.length - 1] ??
+        document.body;
       await user.click(modalSubmitBtn);
 
       await waitFor(() => {
-        expect(eventService.cancelEvent).toHaveBeenCalledWith('evt-1', expect.objectContaining({
-          send_notifications: true,
-        }));
+        expect(eventService.cancelEvent).toHaveBeenCalledWith(
+          'evt-1',
+          expect.objectContaining({
+            send_notifications: true,
+          })
+        );
       });
     });
   });
@@ -649,9 +658,7 @@ describe('EventDetailPage', () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
       vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
       vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
-      vi.mocked(eventService.duplicateEvent).mockRejectedValue(
-        makeApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.duplicateEvent).mockRejectedValue(makeApiError('Event not found', 404));
 
       const user = userEvent.setup();
       renderWithRouter(<EventDetailPage />);
@@ -747,9 +754,7 @@ describe('EventDetailPage', () => {
 
   describe('Accessibility', () => {
     it('should have accessible error alerts', async () => {
-      vi.mocked(eventService.getEvent).mockRejectedValue(
-        makeApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getEvent).mockRejectedValue(makeApiError('Event not found', 404));
 
       renderWithRouter(<EventDetailPage />);
 

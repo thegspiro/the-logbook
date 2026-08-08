@@ -7,16 +7,7 @@
 
 import React, { useEffect } from 'react';
 import { useParams, Link } from 'react-router';
-import {
-  ArrowLeft,
-  AlertTriangle,
-  FileCheck,
-  CheckCircle,
-  Clock,
-  XCircle,
-  Ban,
-  Send,
-} from 'lucide-react';
+import { ArrowLeft, AlertTriangle, FileCheck, CheckCircle, Clock, XCircle, Ban, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { checkRequestService } from '../services/api';
@@ -26,11 +17,7 @@ import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { formatCurrency } from '@/utils/currencyFormatting';
-import {
-  CheckRequestStatus,
-  CHECK_REQUEST_STATUS_COLORS,
-  APPROVAL_STEP_STATUS_COLORS,
-} from '../types';
+import { CheckRequestStatus, CHECK_REQUEST_STATUS_COLORS, APPROVAL_STEP_STATUS_COLORS } from '../types';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
@@ -55,7 +42,7 @@ const APPROVAL_STEP_LABELS: Record<string, string> = {
 const DetailSkeleton: React.FC = () => (
   <div className="space-y-6" aria-label="Loading check request" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
       <div className="mb-4 flex items-center gap-3">
         <Skeleton className="h-10 w-10" rounded="lg" />
         <div className="space-y-2">
@@ -78,13 +65,7 @@ const DetailSkeleton: React.FC = () => (
 const CheckRequestDetailPage: React.FC = () => {
   const tz = useTimezone();
   const { id } = useParams<{ id: string }>();
-  const {
-    selectedCheckRequest: cr,
-    isLoading,
-    error,
-    fetchCheckRequest,
-    submitCheckRequest,
-  } = useFinanceStore();
+  const { selectedCheckRequest: cr, isLoading, error, fetchCheckRequest, submitCheckRequest } = useFinanceStore();
 
   useEffect(() => {
     if (id) {
@@ -132,7 +113,7 @@ const CheckRequestDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/check-requests"
-          className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Check Requests
@@ -148,7 +129,7 @@ const CheckRequestDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/check-requests"
-          className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Check Requests
@@ -164,44 +145,38 @@ const CheckRequestDetailPage: React.FC = () => {
 
   const canSubmit = cr.status === CheckRequestStatus.DRAFT;
   const canIssue = cr.status === CheckRequestStatus.APPROVED;
-  const canVoid =
-    cr.status !== CheckRequestStatus.VOIDED &&
-    cr.status !== CheckRequestStatus.CANCELLED;
+  const canVoid = cr.status !== CheckRequestStatus.VOIDED && cr.status !== CheckRequestStatus.CANCELLED;
 
   return (
     <div className="space-y-6">
       <Breadcrumbs />
       <Link
         to="/finance/check-requests"
-        className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Check Requests
       </Link>
 
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
       )}
 
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-theme-text-primary">
-                {cr.payeeName}
-              </h1>
+              <h1 className="text-theme-text-primary text-xl font-bold">{cr.payeeName}</h1>
               <span
                 className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${CHECK_REQUEST_STATUS_COLORS[cr.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
               >
                 {STATUS_LABELS[cr.status] ?? cr.status}
               </span>
             </div>
-            <p className="mt-1 text-sm text-theme-text-secondary">
-              {cr.requestNumber}
-            </p>
+            <p className="text-theme-text-secondary mt-1 text-sm">{cr.requestNumber}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {canSubmit && (
@@ -239,63 +214,55 @@ const CheckRequestDetailPage: React.FC = () => {
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           <div>
-            <p className="text-xs text-theme-text-secondary">Amount</p>
-            <p className="text-sm font-semibold text-theme-text-primary">
-              {formatCurrency(cr.amount)}
-            </p>
+            <p className="text-theme-text-secondary text-xs">Amount</p>
+            <p className="text-theme-text-primary text-sm font-semibold">{formatCurrency(cr.amount)}</p>
           </div>
           <div>
-            <p className="text-xs text-theme-text-secondary">Payee</p>
-            <p className="text-sm text-theme-text-primary">{cr.payeeName}</p>
+            <p className="text-theme-text-secondary text-xs">Payee</p>
+            <p className="text-theme-text-primary text-sm">{cr.payeeName}</p>
           </div>
           {cr.checkNumber && (
             <div>
-              <p className="text-xs text-theme-text-secondary">Check Number</p>
-              <p className="text-sm text-theme-text-primary">{cr.checkNumber}</p>
+              <p className="text-theme-text-secondary text-xs">Check Number</p>
+              <p className="text-theme-text-primary text-sm">{cr.checkNumber}</p>
             </div>
           )}
           <div>
-            <p className="text-xs text-theme-text-secondary">Created</p>
-            <p className="text-sm text-theme-text-primary">
-              {formatDateTime(cr.createdAt, tz)}
-            </p>
+            <p className="text-theme-text-secondary text-xs">Created</p>
+            <p className="text-theme-text-primary text-sm">{formatDateTime(cr.createdAt, tz)}</p>
           </div>
           {cr.approvedAt && (
             <div>
-              <p className="text-xs text-theme-text-secondary">Approved</p>
-              <p className="text-sm text-theme-text-primary">
-                {formatDateTime(cr.approvedAt, tz)}
-              </p>
+              <p className="text-theme-text-secondary text-xs">Approved</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(cr.approvedAt, tz)}</p>
             </div>
           )}
           {cr.checkDate && (
             <div>
-              <p className="text-xs text-theme-text-secondary">Check Date</p>
-              <p className="text-sm text-theme-text-primary">
-                {formatDateTime(cr.checkDate, tz)}
-              </p>
+              <p className="text-theme-text-secondary text-xs">Check Date</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(cr.checkDate, tz)}</p>
             </div>
           )}
         </div>
 
         {cr.payeeAddress && (
-          <div className="mt-4 border-t border-theme-surface-border pt-4">
-            <p className="text-xs font-medium text-theme-text-secondary">Payee Address</p>
-            <p className="mt-1 text-sm text-theme-text-primary">{cr.payeeAddress}</p>
+          <div className="border-theme-surface-border mt-4 border-t pt-4">
+            <p className="text-theme-text-secondary text-xs font-medium">Payee Address</p>
+            <p className="text-theme-text-primary mt-1 text-sm">{cr.payeeAddress}</p>
           </div>
         )}
 
         {cr.purpose && (
-          <div className="mt-4 border-t border-theme-surface-border pt-4">
-            <p className="text-xs font-medium text-theme-text-secondary">Purpose</p>
-            <p className="mt-1 text-sm text-theme-text-primary">{cr.purpose}</p>
+          <div className="border-theme-surface-border mt-4 border-t pt-4">
+            <p className="text-theme-text-secondary text-xs font-medium">Purpose</p>
+            <p className="text-theme-text-primary mt-1 text-sm">{cr.purpose}</p>
           </div>
         )}
 
         {cr.memo && (
-          <div className="mt-4 border-t border-theme-surface-border pt-4">
-            <p className="text-xs font-medium text-theme-text-secondary">Memo</p>
-            <p className="mt-1 text-sm text-theme-text-primary">{cr.memo}</p>
+          <div className="border-theme-surface-border mt-4 border-t pt-4">
+            <p className="text-theme-text-secondary text-xs font-medium">Memo</p>
+            <p className="text-theme-text-primary mt-1 text-sm">{cr.memo}</p>
           </div>
         )}
 
@@ -308,10 +275,8 @@ const CheckRequestDetailPage: React.FC = () => {
       </div>
 
       {cr.approvalSteps.length > 0 && (
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-          <h2 className="mb-4 text-lg font-semibold text-theme-text-primary">
-            Approval Timeline
-          </h2>
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Approval Timeline</h2>
           <div className="space-y-0">
             {[...cr.approvalSteps]
               .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
@@ -327,9 +292,7 @@ const CheckRequestDetailPage: React.FC = () => {
                         : 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400';
                 return (
                   <div key={step.id} className="relative flex gap-4 pb-6">
-                    {!isLast && (
-                      <div className="absolute left-4 top-8 h-full w-0.5 bg-theme-surface-border" />
-                    )}
+                    {!isLast && <div className="bg-theme-surface-border absolute top-8 left-4 h-full w-0.5" />}
                     <div className={`z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconColor}`}>
                       {step.status === 'approved' || step.status === 'auto_approved' ? (
                         <CheckCircle className="h-4 w-4" />
@@ -343,7 +306,7 @@ const CheckRequestDetailPage: React.FC = () => {
                     </div>
                     <div className="flex-1 pt-0.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-theme-text-primary">
+                        <span className="text-theme-text-primary text-sm font-medium">
                           {step.stepName ?? `Step ${String((step.stepOrder ?? 0) + 1)}`}
                         </span>
                         <span
@@ -353,13 +316,9 @@ const CheckRequestDetailPage: React.FC = () => {
                         </span>
                       </div>
                       {step.actedAt && (
-                        <p className="mt-0.5 text-xs text-theme-text-secondary">
-                          {formatDateTime(step.actedAt, tz)}
-                        </p>
+                        <p className="text-theme-text-secondary mt-0.5 text-xs">{formatDateTime(step.actedAt, tz)}</p>
                       )}
-                      {step.notes && (
-                        <p className="mt-1 text-sm text-theme-text-secondary">{step.notes}</p>
-                      )}
+                      {step.notes && <p className="text-theme-text-secondary mt-1 text-sm">{step.notes}</p>}
                     </div>
                   </div>
                 );

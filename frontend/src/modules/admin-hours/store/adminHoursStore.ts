@@ -79,7 +79,11 @@ interface AdminHoursState {
   editEntry: (entryId: string, data: AdminHoursEntryEdit) => Promise<void>;
   reviewEntry: (entryId: string, action: 'approve' | 'reject', reason?: string) => Promise<void>;
   bulkApprove: (entryIds: string[]) => Promise<number>;
-  fetchSummary: (params?: { userId?: string | undefined; startDate?: string | undefined; endDate?: string | undefined }) => Promise<void>;
+  fetchSummary: (params?: {
+    userId?: string | undefined;
+    startDate?: string | undefined;
+    endDate?: string | undefined;
+  }) => Promise<void>;
   fetchPendingCount: () => Promise<void>;
 
   // Active sessions (admin)

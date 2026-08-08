@@ -133,9 +133,7 @@ test.describe('mobile presentation', () => {
           };
 
           const targets = [
-            ...document.querySelectorAll(
-              'button, a[href], [role="button"], select, input:not([type=hidden])',
-            ),
+            ...document.querySelectorAll('button, a[href], [role="button"], select, input:not([type=hidden])'),
           ].filter(isVisible);
 
           const small = targets.filter((el) => {
@@ -154,13 +152,8 @@ test.describe('mobile presentation', () => {
             return b.height < minTap || b.width < minTap;
           });
 
-          const tiny = [
-            ...document.querySelectorAll('p, span, div, td, li, label'),
-          ].filter(
-            (el) =>
-              isVisible(el) &&
-              !!el.textContent?.trim() &&
-              parseFloat(getComputedStyle(el).fontSize) < minFont,
+          const tiny = [...document.querySelectorAll('p, span, div, td, li, label')].filter(
+            (el) => isVisible(el) && !!el.textContent?.trim() && parseFloat(getComputedStyle(el).fontSize) < minFont
           );
 
           return {
@@ -174,11 +167,7 @@ test.describe('mobile presentation', () => {
             smallTargets: small.length,
             smallExamples: small.slice(0, 4).map((el) => {
               const b = el.getBoundingClientRect();
-              const label = (
-                el.getAttribute('aria-label') ||
-                (el as HTMLElement).innerText ||
-                el.tagName
-              )
+              const label = (el.getAttribute('aria-label') || (el as HTMLElement).innerText || el.tagName)
                 .trim()
                 .slice(0, 24);
               return `${label} ${Math.round(b.width)}x${Math.round(b.height)}`;
@@ -186,7 +175,7 @@ test.describe('mobile presentation', () => {
             tinyText: tiny.length,
           };
         },
-        { minTap: MIN_TAP, minFont: MIN_FONT_PX },
+        { minTap: MIN_TAP, minFont: MIN_FONT_PX }
       );
 
       if (m.crashed) crashed.push(route.path);
@@ -194,13 +183,11 @@ test.describe('mobile presentation', () => {
       if (m.smallTargets > route.maxSmallTargets) {
         tapBudgetBusted.push(
           `${route.path}: ${m.smallTargets} under ${MIN_TAP}px, budget ${route.maxSmallTargets}` +
-            (m.smallExamples.length ? ` — e.g. ${m.smallExamples.join(', ')}` : ''),
+            (m.smallExamples.length ? ` — e.g. ${m.smallExamples.join(', ')}` : '')
         );
       }
       if (m.tinyText > route.maxTinyText) {
-        textBudgetBusted.push(
-          `${route.path}: ${m.tinyText} nodes under ${MIN_FONT_PX}px, budget ${route.maxTinyText}`,
-        );
+        textBudgetBusted.push(`${route.path}: ${m.tinyText} nodes under ${MIN_FONT_PX}px, budget ${route.maxTinyText}`);
       }
       // Reported, not asserted: under the E2E mock a page can legitimately be
       // empty, so this cannot distinguish "no data" from "rendered nothing".
@@ -214,15 +201,13 @@ test.describe('mobile presentation', () => {
           `tiny ${String(m.tinyText).padStart(2)}`,
           `text ${String(m.textLength).padStart(5)}`,
           route.chromeOnly ? '(chrome only)' : '',
-        ].join('  '),
+        ].join('  ')
       );
     }
 
     console.log('\nMobile presentation — 390x844\n' + table.join('\n'));
     if (blank.length) {
-      console.log(
-        `\nRendered little content (check these are genuinely empty, not broken):\n  ${blank.join('\n  ')}`,
-      );
+      console.log(`\nRendered little content (check these are genuinely empty, not broken):\n  ${blank.join('\n  ')}`);
     }
 
     expect(crashed, 'routes that hit the ErrorBoundary').toEqual([]);

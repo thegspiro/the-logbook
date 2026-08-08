@@ -23,11 +23,7 @@ function ThrowingChild({ shouldThrow }: { shouldThrow: boolean }) {
 
 // A stateful wrapper that lets us toggle the throwing behavior via a ref callback
 // so we can test the "Try Again" recovery path.
-function TogglableThrowingChild({
-  shouldThrowRef,
-}: {
-  shouldThrowRef: { current: boolean };
-}) {
+function TogglableThrowingChild({ shouldThrowRef }: { shouldThrowRef: { current: boolean } }) {
   if (shouldThrowRef.current) {
     throw new Error('Test error from child');
   }
@@ -56,7 +52,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <div>Hello World</div>
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     expect(screen.getByText('Hello World')).toBeInTheDocument();
@@ -66,7 +62,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild shouldThrow={true} />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     expect(screen.queryByText('Child content rendered successfully')).not.toBeInTheDocument();
@@ -77,7 +73,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild shouldThrow={true} />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     expect(screen.getByRole('button', { name: /Try Again/i })).toBeInTheDocument();
@@ -92,7 +88,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <TogglableThrowingChild shouldThrowRef={shouldThrowRef} />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     // Verify fallback UI is showing
@@ -117,7 +113,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild shouldThrow={true} />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     const copyButton = screen.getByRole('button', { name: /Copy error details/i });
@@ -125,9 +121,7 @@ describe('ErrorBoundary', () => {
 
     expect(writeTextMock).toHaveBeenCalledTimes(1);
     // The copied text should contain the error message
-    expect(writeTextMock).toHaveBeenCalledWith(
-      expect.stringContaining('Test error from child'),
-    );
+    expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('Test error from child'));
 
     // Should show feedback text after copying
     await screen.findByText('Copied to clipboard!');
@@ -143,7 +137,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild shouldThrow={true} />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     const copyButton = screen.getByRole('button', { name: /Copy error details/i });
@@ -158,7 +152,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild shouldThrow={true} />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     expect(mockedLogError).toHaveBeenCalledTimes(1);
@@ -169,7 +163,7 @@ describe('ErrorBoundary', () => {
         additionalContext: expect.objectContaining({
           componentStack: expect.any(String) as unknown,
         }) as unknown,
-      }) as unknown,
+      }) as unknown
     );
   });
 
@@ -184,7 +178,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild shouldThrow={true} />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Reload Page/i }));
@@ -202,7 +196,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild shouldThrow={true} />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Go to Dashboard/i }));

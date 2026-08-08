@@ -36,23 +36,16 @@ describe('EditDatesModal', () => {
     await user.click(screen.getByRole('button', { name: '15 Min' }));
     await user.click(screen.getByRole('button', { name: 'Save Window' }));
 
-    expect(onSubmit).toHaveBeenCalledWith(
-      expect.any(String) as string,
-      expect.any(String) as string
-    );
+    expect(onSubmit).toHaveBeenCalledWith(expect.any(String) as string, expect.any(String) as string);
     const [start, end] = onSubmit.mock.calls[0] as [string, string];
-    expect(new Date(end).getTime() - new Date(start).getTime()).toBe(
-      15 * 60 * 1000
-    );
+    expect(new Date(end).getTime() - new Date(start).getTime()).toBe(15 * 60 * 1000);
   });
 
   it('renders the error and closes on cancel', async () => {
     const user = userEvent.setup();
     render(<EditDatesModal {...defaultProps} error="End date must be after start date" />);
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'End date must be after start date'
-    );
+    expect(screen.getByRole('alert')).toHaveTextContent('End date must be after start date');
 
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onClose).toHaveBeenCalledTimes(1);

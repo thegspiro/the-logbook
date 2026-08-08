@@ -98,13 +98,29 @@ export const ITEM_TYPES = [
 
 /** Item status options with display colors */
 export const STATUS_OPTIONS = [
-  { value: 'available', label: 'Available', color: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30' },
+  {
+    value: 'available',
+    label: 'Available',
+    color: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30',
+  },
   { value: 'assigned', label: 'Assigned', color: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30' },
-  { value: 'checked_out', label: 'Checked Out', color: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' },
-  { value: 'in_maintenance', label: 'In Maintenance', color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30' },
+  {
+    value: 'checked_out',
+    label: 'Checked Out',
+    color: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30',
+  },
+  {
+    value: 'in_maintenance',
+    label: 'In Maintenance',
+    color: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30',
+  },
   { value: 'lost', label: 'Lost', color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30' },
   { value: 'stolen', label: 'Stolen', color: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30' },
-  { value: 'retired', label: 'Retired', color: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border' },
+  {
+    value: 'retired',
+    label: 'Retired',
+    color: 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border',
+  },
 ] as const;
 
 /** Storage area type options */
@@ -135,8 +151,23 @@ export const STANDARD_SIZES = [
 
 /** Shoe/boot size options */
 export const SHOE_SIZES = [
-  '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5',
-  '10', '10.5', '11', '11.5', '12', '12.5', '13', '14', '15',
+  '6',
+  '6.5',
+  '7',
+  '7.5',
+  '8',
+  '8.5',
+  '9',
+  '9.5',
+  '10',
+  '10.5',
+  '11',
+  '11.5',
+  '12',
+  '12.5',
+  '13',
+  '14',
+  '15',
 ] as const;
 
 /** Garment style options */
@@ -175,20 +206,27 @@ export const REQUEST_STATUS_BADGES: Record<string, string> = {
 
 /** Get the display style for an item status */
 export function getStatusStyle(status: string): string {
-  const found = STATUS_OPTIONS.find(s => s.value === status);
+  const found = STATUS_OPTIONS.find((s) => s.value === status);
   return found?.color ?? 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border';
 }
 
 /** Get the text color class for an item condition */
 export function getConditionColor(condition: string): string {
   switch (condition) {
-    case 'excellent': return 'text-green-700 dark:text-green-400';
-    case 'good': return 'text-emerald-700 dark:text-emerald-400';
-    case 'fair': return 'text-yellow-700 dark:text-yellow-400';
-    case 'poor': return 'text-orange-700 dark:text-orange-400';
-    case 'damaged': return 'text-red-700 dark:text-red-400';
-    case 'out_of_service': return 'text-red-700 dark:text-red-500';
-    default: return 'text-theme-text-muted';
+    case 'excellent':
+      return 'text-green-700 dark:text-green-400';
+    case 'good':
+      return 'text-emerald-700 dark:text-emerald-400';
+    case 'fair':
+      return 'text-yellow-700 dark:text-yellow-400';
+    case 'poor':
+      return 'text-orange-700 dark:text-orange-400';
+    case 'damaged':
+      return 'text-red-700 dark:text-red-400';
+    case 'out_of_service':
+      return 'text-red-700 dark:text-red-500';
+    default:
+      return 'text-theme-text-muted';
   }
 }
 

@@ -129,16 +129,12 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
         facilitiesService.getInspections({}),
       ]);
 
-      const operationalCount = facilities.filter(
-        (f) => f.statusRecord?.isOperational !== false,
-      ).length;
+      const operationalCount = facilities.filter((f) => f.statusRecord?.isOperational !== false).length;
 
       const now = new Date();
       const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-      const overdueMaintenanceRecords = maintenance.filter(
-        (r) => r.isOverdue && !r.isCompleted,
-      );
+      const overdueMaintenanceRecords = maintenance.filter((r) => r.isOverdue && !r.isCompleted);
 
       const upcomingInspections = inspections.filter((i) => {
         if (!i.nextInspectionDate) return false;

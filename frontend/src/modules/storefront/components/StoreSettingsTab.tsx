@@ -143,8 +143,7 @@ const NOTICE_GROUPS: NoticeGroup[] = [
         key: 'sendStatusUpdates',
         notice: 'status_change',
         label: 'Status changes',
-        detail:
-          'To the member when their order becomes ordered, ready for pickup, picked up, or cancelled.',
+        detail: 'To the member when their order becomes ordered, ready for pickup, picked up, or cancelled.',
       },
       {
         key: 'sendPaymentReceipts',
@@ -192,8 +191,7 @@ const NOTICE_GROUPS: NoticeGroup[] = [
         key: 'sendVendorOrderUpdates',
         notice: 'vendor_order_placed',
         label: 'Order placed with the vendor',
-        detail:
-          'To everyone who ordered, when you record the vendor order — the update members chase.',
+        detail: 'To everyone who ordered, when you record the vendor order — the update members chase.',
       },
     ],
   },
@@ -687,9 +685,8 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
         <div>
           <h2 className="text-theme-text-primary text-sm font-semibold">Notifications</h2>
           <p className="text-theme-text-secondary mt-1 text-xs">
-            Every email the store can send is listed here. Unticking one stops it for the
-            whole department; the &ldquo;email members&rdquo; box on an individual action can
-            still skip a single send.
+            Every email the store can send is listed here. Unticking one stops it for the whole department; the
+            &ldquo;email members&rdquo; box on an individual action can still skip a single send.
           </p>
         </div>
 
@@ -716,12 +713,8 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
                       onChange={(e) => update(notice.key, e.target.checked)}
                     />
                     <span>
-                      <span className="text-theme-text-primary block text-sm font-medium">
-                        {notice.label}
-                      </span>
-                      <span className="text-theme-text-secondary block text-xs">
-                        {notice.detail}
-                      </span>
+                      <span className="text-theme-text-primary block text-sm font-medium">{notice.label}</span>
+                      <span className="text-theme-text-secondary block text-xs">{notice.detail}</span>
                     </span>
                   </label>
                   <button
@@ -829,12 +822,7 @@ export const StoreSettingsTab: React.FC<StoreSettingsTabProps> = ({ onChanged })
         </button>
       </div>
 
-      {previewNotice && (
-        <NotificationPreviewModal
-          notice={previewNotice}
-          onClose={() => setPreviewNotice(null)}
-        />
-      )}
+      {previewNotice && <NotificationPreviewModal notice={previewNotice} onClose={() => setPreviewNotice(null)} />}
     </div>
   );
 };

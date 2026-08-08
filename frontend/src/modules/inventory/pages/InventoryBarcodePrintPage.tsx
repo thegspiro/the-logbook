@@ -14,7 +14,17 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router';
 import JsBarcode from 'jsbarcode';
-import { ArrowLeft, Printer, Loader2, AlertCircle, Settings2, Download, AlertTriangle, RotateCw, TestTube2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Printer,
+  Loader2,
+  AlertCircle,
+  Settings2,
+  Download,
+  AlertTriangle,
+  RotateCw,
+  TestTube2,
+} from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type { InventoryItem } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -54,88 +64,136 @@ const LABEL_PRESETS: LabelPreset[] = [
     id: 'dymo_30252',
     name: 'Dymo 30252',
     description: '1.125" x 3.5" — Standard address label',
-    width: '3.5in', height: '1.125in',
-    barcodeHeight: 40, barcodeWidth: 1.5, barcodeFontSize: 10,
-    nameFontSize: '9pt', subtitleFontSize: '7pt',
+    width: '3.5in',
+    height: '1.125in',
+    barcodeHeight: 40,
+    barcodeWidth: 1.5,
+    barcodeFontSize: 10,
+    nameFontSize: '9pt',
+    subtitleFontSize: '7pt',
     padding: '0.06in 0.1in',
-    pageWidth: '3.5in', pageHeight: '1.125in', columns: 1,
+    pageWidth: '3.5in',
+    pageHeight: '1.125in',
+    columns: 1,
     autoRotate: false,
   },
   {
     id: 'dymo_30256',
     name: 'Dymo 30256',
     description: '2.3125" x 4" — Shipping label',
-    width: '4in', height: '2.3125in',
-    barcodeHeight: 50, barcodeWidth: 1.8, barcodeFontSize: 14,
-    nameFontSize: '11pt', subtitleFontSize: '8pt',
+    width: '4in',
+    height: '2.3125in',
+    barcodeHeight: 50,
+    barcodeWidth: 1.8,
+    barcodeFontSize: 14,
+    nameFontSize: '11pt',
+    subtitleFontSize: '8pt',
     padding: '0.08in 0.12in',
-    pageWidth: '4in', pageHeight: '2.3125in', columns: 1,
+    pageWidth: '4in',
+    pageHeight: '2.3125in',
+    columns: 1,
     autoRotate: false,
   },
   {
     id: 'dymo_30334',
     name: 'Dymo 30334',
     description: '2.25" x 1.25" — Multi-purpose label',
-    width: '2.25in', height: '1.25in',
-    barcodeHeight: 35, barcodeWidth: 1.1, barcodeFontSize: 9,
-    nameFontSize: '8pt', subtitleFontSize: '6.5pt',
+    width: '2.25in',
+    height: '1.25in',
+    barcodeHeight: 35,
+    barcodeWidth: 1.1,
+    barcodeFontSize: 9,
+    nameFontSize: '8pt',
+    subtitleFontSize: '6.5pt',
     padding: '0.05in 0.08in',
-    pageWidth: '2.25in', pageHeight: '1.25in', columns: 1,
+    pageWidth: '2.25in',
+    pageHeight: '1.25in',
+    columns: 1,
     autoRotate: false,
   },
   {
     id: 'dymo_30336',
     name: 'Dymo 30336',
     description: '1" x 2.125" — Small multipurpose label',
-    width: '2.125in', height: '1in',
-    barcodeHeight: 30, barcodeWidth: 1, barcodeFontSize: 8,
-    nameFontSize: '7pt', subtitleFontSize: '6pt',
+    width: '2.125in',
+    height: '1in',
+    barcodeHeight: 30,
+    barcodeWidth: 1,
+    barcodeFontSize: 8,
+    nameFontSize: '7pt',
+    subtitleFontSize: '6pt',
     padding: '0.04in 0.08in',
-    pageWidth: '2.125in', pageHeight: '1in', columns: 1,
+    pageWidth: '2.125in',
+    pageHeight: '1in',
+    columns: 1,
     autoRotate: false,
   },
   {
     id: 'rollo_4x6',
     name: 'Rollo 4" x 6"',
     description: '4" x 6" — Shipping label',
-    width: '4in', height: '6in',
-    barcodeHeight: 60, barcodeWidth: 2, barcodeFontSize: 16,
-    nameFontSize: '14pt', subtitleFontSize: '10pt',
+    width: '4in',
+    height: '6in',
+    barcodeHeight: 60,
+    barcodeWidth: 2,
+    barcodeFontSize: 16,
+    nameFontSize: '14pt',
+    subtitleFontSize: '10pt',
     padding: '0.12in 0.2in',
-    pageWidth: '4in', pageHeight: '6in', columns: 1,
+    pageWidth: '4in',
+    pageHeight: '6in',
+    columns: 1,
     autoRotate: true,
   },
   {
     id: 'rollo_2x1',
     name: 'Rollo / Thermal 2" x 1"',
     description: '2" x 1" — Small thermal label',
-    width: '2in', height: '1in',
-    barcodeHeight: 32, barcodeWidth: 1, barcodeFontSize: 8,
-    nameFontSize: '7pt', subtitleFontSize: '6pt',
+    width: '2in',
+    height: '1in',
+    barcodeHeight: 32,
+    barcodeWidth: 1,
+    barcodeFontSize: 8,
+    nameFontSize: '7pt',
+    subtitleFontSize: '6pt',
     padding: '0.04in 0.08in',
-    pageWidth: '2in', pageHeight: '1in', columns: 1,
+    pageWidth: '2in',
+    pageHeight: '1in',
+    columns: 1,
     autoRotate: true,
   },
   {
     id: 'thermal_1x1',
     name: 'Thermal 1" x 1"',
     description: '1" x 1" — Square asset tag',
-    width: '1in', height: '1in',
-    barcodeHeight: 24, barcodeWidth: 0.8, barcodeFontSize: 6,
-    nameFontSize: '6pt', subtitleFontSize: '5pt',
+    width: '1in',
+    height: '1in',
+    barcodeHeight: 24,
+    barcodeWidth: 0.8,
+    barcodeFontSize: 6,
+    nameFontSize: '6pt',
+    subtitleFontSize: '5pt',
     padding: '0.03in',
-    pageWidth: '1in', pageHeight: '1in', columns: 1,
+    pageWidth: '1in',
+    pageHeight: '1in',
+    columns: 1,
     autoRotate: true,
   },
   {
     id: 'letter',
     name: 'Letter Paper (Grid)',
     description: '8.5" x 11" — 30 labels per page (Avery 5160)',
-    width: '2.625in', height: '1in',
-    barcodeHeight: 35, barcodeWidth: 1.2, barcodeFontSize: 8,
-    nameFontSize: '8pt', subtitleFontSize: '6.5pt',
+    width: '2.625in',
+    height: '1in',
+    barcodeHeight: 35,
+    barcodeWidth: 1.2,
+    barcodeFontSize: 8,
+    nameFontSize: '8pt',
+    subtitleFontSize: '6.5pt',
     padding: '0.05in 0.1in',
-    pageWidth: '8.5in', pageHeight: '11in', columns: 3,
+    pageWidth: '8.5in',
+    pageHeight: '11in',
+    columns: 3,
     autoRotate: false,
   },
 ];
@@ -155,10 +213,7 @@ const CUSTOM_DIMS_STORAGE_KEY = 'inventory:labelCustomDims';
 function loadStoredPresetId(): string {
   try {
     const stored = localStorage.getItem(PRESET_STORAGE_KEY);
-    if (
-      stored &&
-      (stored === CUSTOM_PRESET_ID || LABEL_PRESETS.some((p) => p.id === stored))
-    ) {
+    if (stored && (stored === CUSTOM_PRESET_ID || LABEL_PRESETS.some((p) => p.id === stored))) {
       return stored;
     }
   } catch {
@@ -195,8 +250,7 @@ function presetKey(preset: string, width: string, height: string): string {
  *  on-screen preview and @page size track the entered dimensions. The PDF is
  *  generated by the backend at the exact custom size. */
 function buildCustomPreset(widthIn: number, heightIn: number): LabelPreset {
-  const clamp = (v: number, lo: number, hi: number) =>
-    Math.max(lo, Math.min(hi, v));
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
   const minDim = Math.min(widthIn, heightIn);
   return {
     id: CUSTOM_PRESET_ID,
@@ -251,7 +305,8 @@ function buildExtraText(item: InventoryItem, extraLines?: string[]): string | nu
       if (loc) parts.push(loc);
     }
     if (key === 'category' && item.category_name) parts.push(item.category_name);
-    if (key === 'condition' && item.condition) parts.push(item.condition.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+    if (key === 'condition' && item.condition)
+      parts.push(item.condition.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
   }
   return parts.length > 0 ? parts.join(' | ') : null;
 }
@@ -293,9 +348,15 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, o
       <div
         className="barcode-label"
         style={{
-          width: preset.width, height: preset.height, padding: preset.padding,
-          display: 'flex', flexDirection: 'column', alignItems: 'center',
-          justifyContent: 'center', overflow: 'hidden', boxSizing: 'border-box',
+          width: preset.width,
+          height: preset.height,
+          padding: preset.padding,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          boxSizing: 'border-box',
           pageBreakInside: 'avoid',
         }}
       >
@@ -311,27 +372,40 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, o
 
   // Show secondary identifier only if it differs from the barcode value,
   // avoiding redundant text on the label.
-  const subtitle = item.asset_tag && item.asset_tag !== barcodeValue
-    ? `AT: ${item.asset_tag}`
-    : item.serial_number && item.serial_number !== barcodeValue
-      ? `S/N: ${item.serial_number}`
-      : null;
+  const subtitle =
+    item.asset_tag && item.asset_tag !== barcodeValue
+      ? `AT: ${item.asset_tag}`
+      : item.serial_number && item.serial_number !== barcodeValue
+        ? `S/N: ${item.serial_number}`
+        : null;
 
   return (
     <div
       className="barcode-label"
       style={{
-        width: preset.width, height: preset.height, padding: preset.padding,
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        justifyContent: 'center', overflow: 'hidden', boxSizing: 'border-box',
+        width: preset.width,
+        height: preset.height,
+        padding: preset.padding,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        boxSizing: 'border-box',
         pageBreakInside: 'avoid',
       }}
     >
       <div
         style={{
-          fontSize: preset.nameFontSize, fontWeight: 600, textAlign: 'center',
-          lineHeight: 1.2, maxWidth: '100%', overflow: 'hidden',
-          textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#000',
+          fontSize: preset.nameFontSize,
+          fontWeight: 600,
+          textAlign: 'center',
+          lineHeight: 1.2,
+          maxWidth: '100%',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          color: '#000',
         }}
       >
         {item.name}
@@ -339,13 +413,24 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, o
       <svg
         ref={svgRef}
         style={{
-          maxWidth: '100%', flexShrink: 0, display: 'block',
-          colorAdjust: 'exact', WebkitPrintColorAdjust: 'exact',
+          maxWidth: '100%',
+          flexShrink: 0,
+          display: 'block',
+          colorAdjust: 'exact',
+          WebkitPrintColorAdjust: 'exact',
           printColorAdjust: 'exact',
         }}
       />
       {subtitle && (
-        <div style={{ fontSize: preset.subtitleFontSize, color: '#444', textAlign: 'center', lineHeight: 1.1, marginTop: '1px' }}>
+        <div
+          style={{
+            fontSize: preset.subtitleFontSize,
+            color: '#444',
+            textAlign: 'center',
+            lineHeight: 1.1,
+            marginTop: '1px',
+          }}
+        >
           {subtitle}
         </div>
       )}
@@ -354,7 +439,19 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, o
         if (!extra) return null;
         const smallerSize = `calc(${preset.subtitleFontSize} - 1pt)`;
         return (
-          <div style={{ fontSize: smallerSize, color: '#666', textAlign: 'center', lineHeight: 1.1, marginTop: '1px', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div
+            style={{
+              fontSize: smallerSize,
+              color: '#666',
+              textAlign: 'center',
+              lineHeight: 1.1,
+              marginTop: '1px',
+              maxWidth: '100%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {extra}
           </div>
         );
@@ -378,9 +475,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [autoRotateOverride, setAutoRotateOverride] = useState<boolean | null>(null);
   const [extraLines, setExtraLines] = useState<string[]>([]);
-  const [{ width: initialCustomWidth, height: initialCustomHeight }] = useState(
-    loadStoredCustomDims,
-  );
+  const [{ width: initialCustomWidth, height: initialCustomHeight }] = useState(loadStoredCustomDims);
   const [customWidth, setCustomWidth] = useState(initialCustomWidth);
   const [customHeight, setCustomHeight] = useState(initialCustomHeight);
   const renderedCountRef = useRef(0);
@@ -406,7 +501,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     customH <= 11;
   const preset = isCustom
     ? buildCustomPreset(customValid ? customW : 2, customValid ? customH : 1)
-    : LABEL_PRESETS.find((p) => p.id === presetId) ?? firstPreset;
+    : (LABEL_PRESETS.find((p) => p.id === presetId) ?? firstPreset);
   const effectiveAutoRotate = autoRotateOverride ?? preset.autoRotate;
   const isLandscape = parseFloat(preset.width) > parseFloat(preset.height);
   const isThermal = preset.columns === 1;
@@ -454,10 +549,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
 
   useEffect(() => {
     try {
-      localStorage.setItem(
-        CUSTOM_DIMS_STORAGE_KEY,
-        JSON.stringify({ width: customWidth, height: customHeight }),
-      );
+      localStorage.setItem(CUSTOM_DIMS_STORAGE_KEY, JSON.stringify({ width: customWidth, height: customHeight }));
     } catch {
       // Best-effort.
     }
@@ -555,7 +647,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     }
   }, []);
 
-  const itemsWithoutBarcodes = items.filter(item => !getBarcodeValue(item));
+  const itemsWithoutBarcodes = items.filter((item) => !getBarcodeValue(item));
 
   const handlePrint = () => {
     if (!barcodesReady) {
@@ -574,7 +666,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
       return;
     }
     const svgs = container.querySelectorAll('.barcode-label svg');
-    const emptyCount = Array.from(svgs).filter(svg => !svg.innerHTML || svg.innerHTML.trim().length < 20).length;
+    const emptyCount = Array.from(svgs).filter((svg) => !svg.innerHTML || svg.innerHTML.trim().length < 20).length;
     if (emptyCount > 0 && emptyCount === svgs.length) {
       toast.error('No barcodes rendered. Check that items have barcode, asset tag, or serial number values.');
       return;
@@ -634,10 +726,14 @@ const InventoryBarcodePrintPage: React.FC = () => {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  ${isThermal ? `
+  ${
+    isThermal
+      ? `
     .barcode-label { page-break-after: always; }
     .barcode-label:last-child { page-break-after: auto; }
-  ` : ''}
+  `
+      : ''
+  }
 </style>
 </head>
 <body>
@@ -678,12 +774,12 @@ const InventoryBarcodePrintPage: React.FC = () => {
     try {
       // preset.id matches backend LABEL_FORMATS keys directly ('custom' too).
       const { blob, autoPopulated } = await inventoryService.generateBarcodeLabels(
-        items.map(i => i.id),
+        items.map((i) => i.id),
         preset.id,
         isCustom ? customW : undefined,
         isCustom ? customH : undefined,
         effectiveAutoRotate,
-        extraLines,
+        extraLines
       );
       if (autoPopulated > 0) {
         toast.success(`${autoPopulated} item${autoPopulated !== 1 ? 's' : ''} had barcode values auto-generated`);
@@ -714,7 +810,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
         isCustom ? customW : undefined,
         isCustom ? customH : undefined,
         effectiveAutoRotate,
-        extraLines,
+        extraLines
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -739,23 +835,23 @@ const InventoryBarcodePrintPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen" role="status" aria-live="polite">
-        <Loader2 className="h-6 w-6 animate-spin text-theme-text-muted" />
-        <span className="ml-2 text-theme-text-secondary">Loading items...</span>
+      <div className="flex min-h-screen items-center justify-center" role="status" aria-live="polite">
+        <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+        <span className="text-theme-text-secondary ml-2">Loading items...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-md mx-auto p-6 mt-12">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-          <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+      <div className="mx-auto mt-12 max-w-md p-6">
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </div>
         <Link
           to="/inventory"
-          className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1"
+          className="text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Inventory
@@ -836,14 +932,18 @@ const InventoryBarcodePrintPage: React.FC = () => {
               print-color-adjust: exact !important;
             }
 
-            ${isThermal ? `
+            ${
+              isThermal
+                ? `
               .barcode-label {
                 page-break-after: always;
               }
               .barcode-label:last-child {
                 page-break-after: auto;
               }
-            ` : ''}
+            `
+                : ''
+            }
 
             /* Suppress the global rule that appends link URLs after text */
             a[href]:after { content: "" !important; }
@@ -860,35 +960,38 @@ const InventoryBarcodePrintPage: React.FC = () => {
 
       {/* Screen-only controls */}
       <div className="print-controls min-h-screen">
-        <div className="max-w-4xl mx-auto px-4 py-6">
+        <div className="mx-auto max-w-4xl px-4 py-6">
           <Link
             to="/inventory"
-            className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 mb-6"
+            className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Inventory
           </Link>
 
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <h1 className="text-xl font-bold text-theme-text-primary">Print Barcode Labels</h1>
-              <p className="text-sm text-theme-text-muted mt-1">
-                {items.length} item{items.length !== 1 ? 's' : ''} &middot; {labelItems.length} label{labelItems.length !== 1 ? 's' : ''} total
+              <h1 className="text-theme-text-primary text-xl font-bold">Print Barcode Labels</h1>
+              <p className="text-theme-text-muted mt-1 text-sm">
+                {items.length} item{items.length !== 1 ? 's' : ''} &middot; {labelItems.length} label
+                {labelItems.length !== 1 ? 's' : ''} total
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 onClick={() => setShowSettings(!showSettings)}
-                className="flex items-center gap-2 px-3 py-2 border border-theme-surface-border rounded-lg text-sm text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+                className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
               >
                 <Settings2 className="h-4 w-4" />
                 <span className="hidden sm:inline">Settings</span>
               </button>
               <button
-                onClick={() => { void handleDownloadPdf(); }}
+                onClick={() => {
+                  void handleDownloadPdf();
+                }}
                 disabled={downloadingPdf || items.length === 0 || (isCustom && !customValid)}
-                className="flex items-center gap-2 px-3 py-2 border border-theme-surface-border rounded-lg text-sm text-theme-text-primary hover:bg-theme-surface-secondary transition-colors disabled:opacity-50"
+                className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
               >
                 {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 PDF
@@ -896,7 +999,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
               <button
                 onClick={handlePrint}
                 disabled={!barcodesReady || (isCustom && !customValid)}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
               >
                 <Printer className="h-4 w-4" />
                 <span className="hidden sm:inline">Print</span> Labels
@@ -906,79 +1009,88 @@ const InventoryBarcodePrintPage: React.FC = () => {
 
           {/* Warning for items without barcodes */}
           {itemsWithoutBarcodes.length > 0 && (
-            <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
+            <div className="mb-4 flex items-start gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
               <div>
                 <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
-                  {itemsWithoutBarcodes.length} item{itemsWithoutBarcodes.length !== 1 ? 's' : ''} missing barcode values
+                  {itemsWithoutBarcodes.length} item{itemsWithoutBarcodes.length !== 1 ? 's' : ''} missing barcode
+                  values
                 </p>
-                <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
-                  These items have no barcode, asset tag, or serial number and will print without a scannable barcode:
-                  {' '}{itemsWithoutBarcodes.map(i => i.name).join(', ')}
+                <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                  These items have no barcode, asset tag, or serial number and will print without a scannable barcode:{' '}
+                  {itemsWithoutBarcodes.map((i) => i.name).join(', ')}
                 </p>
               </div>
             </div>
           )}
 
           {/* Print scaling warning — scaling barcodes makes them unscannable */}
-          <div className="mb-4 bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <div className="mb-4 flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
             <div>
               <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
                 Set scaling to 100% in the print dialog
               </p>
-              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                Barcodes must print at exact size to scan correctly.
-                In the print dialog, set <strong>Scale</strong> to <strong>100%</strong> (or disable &quot;Fit to page&quot; / &quot;Shrink to fit&quot;).
-                Set margins to <strong>{isThermal ? 'None' : '0.5" top/bottom, 0.19" sides'}</strong> and
-                paper size to <strong>{preset.pageWidth} x {preset.pageHeight}</strong>.
-                For thermal printers, the <strong>PDF</strong> download often produces better results than browser printing.
+              <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+                Barcodes must print at exact size to scan correctly. In the print dialog, set <strong>Scale</strong> to{' '}
+                <strong>100%</strong> (or disable &quot;Fit to page&quot; / &quot;Shrink to fit&quot;). Set margins to{' '}
+                <strong>{isThermal ? 'None' : '0.5" top/bottom, 0.19" sides'}</strong> and paper size to{' '}
+                <strong>
+                  {preset.pageWidth} x {preset.pageHeight}
+                </strong>
+                . For thermal printers, the <strong>PDF</strong> download often produces better results than browser
+                printing.
               </p>
             </div>
           </div>
 
           {/* Settings panel */}
           {showSettings && (
-            <div className="card-secondary p-4 mb-6 space-y-4">
-              <h3 className="text-sm font-semibold text-theme-text-primary">Label Settings</h3>
+            <div className="card-secondary mb-6 space-y-4 p-4">
+              <h3 className="text-theme-text-primary text-sm font-semibold">Label Settings</h3>
 
               <div>
-                <label className="block text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2">
+                <label className="text-theme-text-muted mb-2 block text-xs font-medium tracking-wider uppercase">
                   Label Size
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {LABEL_PRESETS.map((p) => (
                     <button
                       key={p.id}
                       onClick={() => setPresetId(p.id)}
-                      className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                      className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
                         presetId === p.id
                           ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500'
                           : 'border-theme-surface-border hover:bg-theme-surface-secondary'
                       }`}
                     >
-                      <span className="block text-sm font-medium text-theme-text-primary">{p.name}</span>
-                      <span className="block text-xs text-theme-text-muted">{p.description}</span>
+                      <span className="text-theme-text-primary block text-sm font-medium">{p.name}</span>
+                      <span className="text-theme-text-muted block text-xs">{p.description}</span>
                     </button>
                   ))}
                   <button
                     key={CUSTOM_PRESET_ID}
                     onClick={() => setPresetId(CUSTOM_PRESET_ID)}
-                    className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${
+                    className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
                       isCustom
                         ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500'
                         : 'border-theme-surface-border hover:bg-theme-surface-secondary'
                     }`}
                   >
-                    <span className="block text-sm font-medium text-theme-text-primary">Custom size</span>
-                    <span className="block text-xs text-theme-text-muted">Enter exact label dimensions for any sticker printer</span>
+                    <span className="text-theme-text-primary block text-sm font-medium">Custom size</span>
+                    <span className="text-theme-text-muted block text-xs">
+                      Enter exact label dimensions for any sticker printer
+                    </span>
                   </button>
                 </div>
 
                 {isCustom && (
                   <div className="mt-3 flex flex-wrap items-end gap-3">
                     <div>
-                      <label htmlFor="custom-width" className="block text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-1">
+                      <label
+                        htmlFor="custom-width"
+                        className="text-theme-text-muted mb-1 block text-xs font-medium tracking-wider uppercase"
+                      >
                         Width (in)
                       </label>
                       <input
@@ -993,7 +1105,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label htmlFor="custom-height" className="block text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-1">
+                      <label
+                        htmlFor="custom-height"
+                        className="text-theme-text-muted mb-1 block text-xs font-medium tracking-wider uppercase"
+                      >
                         Height (in)
                       </label>
                       <input
@@ -1008,7 +1123,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                       />
                     </div>
                     {!customValid && (
-                      <p className="text-xs text-red-600 dark:text-red-400 pb-2">
+                      <p className="pb-2 text-xs text-red-600 dark:text-red-400">
                         Enter a width of 0.5–8&quot; and a height of 0.5–11&quot;.
                       </p>
                     )}
@@ -1017,7 +1132,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="label-copies" className="block text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-1">
+                <label
+                  htmlFor="label-copies"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium tracking-wider uppercase"
+                >
                   Copies per item
                 </label>
                 <input
@@ -1033,10 +1151,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
 
               {/* Additional label content */}
               <div>
-                <label className="block text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2">
+                <label className="text-theme-text-muted mb-2 block text-xs font-medium tracking-wider uppercase">
                   Additional Info on Label
                 </label>
-                <p className="text-xs text-theme-text-muted mb-2">
+                <p className="text-theme-text-muted mb-2 text-xs">
                   Show extra details below the barcode identifier, space permitting.
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -1050,10 +1168,10 @@ const InventoryBarcodePrintPage: React.FC = () => {
                       <button
                         key={key}
                         type="button"
-                        onClick={() => setExtraLines(prev =>
-                          active ? prev.filter(k => k !== key) : [...prev, key]
-                        )}
-                        className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                        onClick={() =>
+                          setExtraLines((prev) => (active ? prev.filter((k) => k !== key) : [...prev, key]))
+                        }
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                           active
                             ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
                             : 'border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-secondary'
@@ -1065,7 +1183,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                   })}
                 </div>
                 {extraLines.length > 0 && (
-                  <p className="text-xs text-theme-text-muted mt-1.5">
+                  <p className="text-theme-text-muted mt-1.5 text-xs">
                     On small labels, extra text may be truncated or omitted if it doesn&apos;t fit.
                   </p>
                 )}
@@ -1074,50 +1192,50 @@ const InventoryBarcodePrintPage: React.FC = () => {
               {/* Rotation control — only relevant for thermal presets with landscape labels */}
               {isThermal && (
                 <div>
-                  <label className="block text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2">
+                  <label className="text-theme-text-muted mb-2 block text-xs font-medium tracking-wider uppercase">
                     Label Orientation (PDF only)
                   </label>
                   <div className="flex items-start gap-3">
                     <button
                       onClick={() => setAutoRotateOverride(effectiveAutoRotate ? false : true)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
                         effectiveAutoRotate
-                          ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500 text-theme-text-primary'
+                          ? 'text-theme-text-primary border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500'
                           : 'border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-secondary'
                       }`}
                     >
                       <RotateCw className="h-4 w-4" />
                       Auto-rotate for roll-fed
                     </button>
-                    <div className="flex-1 text-xs text-theme-text-muted">
+                    <div className="text-theme-text-muted flex-1 text-xs">
                       {effectiveAutoRotate ? (
                         <p>
-                          <strong className="text-theme-text-primary">On:</strong> PDF content is rotated to match how roll-fed printers
-                          (Rollo, Brother, generic thermal) feed labels narrow-edge first.
+                          <strong className="text-theme-text-primary">On:</strong> PDF content is rotated to match how
+                          roll-fed printers (Rollo, Brother, generic thermal) feed labels narrow-edge first.
                           {isLandscape && ' The landscape content will be rotated 90° in the PDF.'}
                         </p>
                       ) : (
                         <p>
-                          <strong className="text-theme-text-primary">Off:</strong> PDF matches the visual layout.
-                          Use this for Dymo printers whose driver handles rotation automatically.
+                          <strong className="text-theme-text-primary">Off:</strong> PDF matches the visual layout. Use
+                          this for Dymo printers whose driver handles rotation automatically.
                         </p>
                       )}
                     </div>
                   </div>
                   {/* Feed direction diagram */}
                   {isLandscape && (
-                    <div className="mt-2 flex items-center gap-3 bg-theme-surface-secondary rounded-lg p-2.5">
+                    <div className="bg-theme-surface-secondary mt-2 flex items-center gap-3 rounded-lg p-2.5">
                       <div
-                        className="border border-theme-surface-border bg-white rounded flex items-center justify-center shrink-0"
+                        className="border-theme-surface-border flex shrink-0 items-center justify-center rounded border bg-white"
                         style={{
                           width: effectiveAutoRotate ? '24px' : '60px',
                           height: effectiveAutoRotate ? '60px' : '24px',
                         }}
                       >
-                        <span className="text-[6px] text-gray-400 font-mono">ABC</span>
+                        <span className="font-mono text-[6px] text-gray-400">ABC</span>
                       </div>
-                      <div className="text-xs text-theme-text-muted">
-                        <span className="font-medium text-theme-text-primary">
+                      <div className="text-theme-text-muted text-xs">
+                        <span className="text-theme-text-primary font-medium">
                           {effectiveAutoRotate ? 'Portrait page' : 'Landscape page'}
                         </span>
                         {' — '}
@@ -1134,32 +1252,38 @@ const InventoryBarcodePrintPage: React.FC = () => {
               {isThermal && items.length > 0 && (
                 <div>
                   <button
-                    onClick={() => { void handleTestPrint(); }}
+                    onClick={() => {
+                      void handleTestPrint();
+                    }}
                     disabled={downloadingPdf || (isCustom && !customValid)}
-                    className="flex items-center gap-2 px-3 py-2 border border-theme-surface-border rounded-lg text-sm text-theme-text-primary hover:bg-theme-surface-secondary transition-colors disabled:opacity-50"
+                    className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
                   >
                     {downloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
                     Download Test Label
                   </button>
-                  <p className="text-xs text-theme-text-muted mt-1">
+                  <p className="text-theme-text-muted mt-1 text-xs">
                     Downloads a single-label PDF to verify orientation and alignment before printing the full batch.
                   </p>
                 </div>
               )}
 
               <div className="bg-theme-surface-secondary rounded-lg p-3">
-                <p className="text-xs font-medium text-theme-text-primary mb-1">Printer Tips</p>
+                <p className="text-theme-text-primary mb-1 text-xs font-medium">Printer Tips</p>
                 {isThermal ? (
-                  <ul className="text-xs text-theme-text-muted space-y-0.5">
-                    <li>Set your printer&apos;s paper size to match ({preset.width} x {preset.height})</li>
+                  <ul className="text-theme-text-muted space-y-0.5 text-xs">
+                    <li>
+                      Set your printer&apos;s paper size to match ({preset.width} x {preset.height})
+                    </li>
                     <li>In the print dialog, set margins to &quot;None&quot; or &quot;Minimum&quot;</li>
                     <li>Disable &quot;Scale to fit&quot; or set scaling to 100%</li>
                     <li>For Dymo: select the correct label type in Dymo Print Utility</li>
                     <li>For Rollo: the printer auto-detects label size</li>
-                    <li>Alternatively, use the <strong>PDF</strong> button above for better thermal printer compatibility</li>
+                    <li>
+                      Alternatively, use the <strong>PDF</strong> button above for better thermal printer compatibility
+                    </li>
                   </ul>
                 ) : (
-                  <ul className="text-xs text-theme-text-muted space-y-0.5">
+                  <ul className="text-theme-text-muted space-y-0.5 text-xs">
                     <li>Use Avery 5160 or compatible label sheets (30 labels per page)</li>
                     <li>Set margins to 0.5&quot; top/bottom, 0.19&quot; left/right</li>
                     <li>Disable &quot;Scale to fit&quot; or set scaling to 100%</li>
@@ -1168,14 +1292,13 @@ const InventoryBarcodePrintPage: React.FC = () => {
               </div>
             </div>
           )}
-
         </div>
       </div>
 
       {/* Label preview — outside print-controls so it remains visible during print */}
-      <div className="max-w-4xl mx-auto px-4 pb-6 print:max-w-none print:p-0">
-        <div className="card-secondary p-4 print:bg-white print:p-0 print:border-0 print:shadow-none">
-          <h3 className="text-sm font-medium text-theme-text-muted mb-3 print:hidden">Preview</h3>
+      <div className="mx-auto max-w-4xl px-4 pb-6 print:max-w-none print:p-0">
+        <div className="card-secondary p-4 print:border-0 print:bg-white print:p-0 print:shadow-none">
+          <h3 className="text-theme-text-muted mb-3 text-sm font-medium print:hidden">Preview</h3>
           {/* Fixed inch-width label grid can exceed a phone's viewport — scroll
               it horizontally on screen. print:overflow-visible keeps a direct
               browser print from clipping the sheet. */}

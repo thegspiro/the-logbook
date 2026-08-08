@@ -56,13 +56,15 @@ export interface UserWithRoles {
   address_state?: string | undefined;
   address_zip?: string | undefined;
   address_country?: string | undefined;
-  emergency_contacts?: Array<{
-    name: string;
-    relationship: string;
-    phone: string;
-    email?: string | undefined;
-    is_primary: boolean;
-  }> | undefined;
+  emergency_contacts?:
+    | Array<{
+        name: string;
+        relationship: string;
+        phone: string;
+        email?: string | undefined;
+        is_primary: boolean;
+      }>
+    | undefined;
   notification_preferences?: NotificationPreferences | undefined;
   roles: Role[];
 }

@@ -69,23 +69,26 @@ const AllEntriesTab: React.FC = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-theme-text-primary">All Entries</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-theme-text-primary text-xl font-semibold">All Entries</h2>
         <button
           onClick={handleExportCSV}
-          className="flex items-center gap-2 px-3 py-2 bg-theme-surface text-theme-text-secondary rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover transition text-sm"
+          className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition"
         >
-          <Download className="w-4 h-4" />
+          <Download className="h-4 w-4" />
           Export CSV
         </button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <select
           value={allStatusFilter}
-          onChange={(e) => { setAllStatusFilter(e.target.value); setAllPage(0); }}
-          className="px-3 py-1.5 bg-theme-surface border border-theme-surface-border rounded-lg text-sm text-theme-text-primary"
+          onChange={(e) => {
+            setAllStatusFilter(e.target.value);
+            setAllPage(0);
+          }}
+          className="bg-theme-surface border-theme-surface-border text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm"
         >
           <option value="">All Statuses</option>
           <option value="approved">Approved</option>
@@ -95,60 +98,85 @@ const AllEntriesTab: React.FC = () => {
         </select>
         <select
           value={allCategoryFilter}
-          onChange={(e) => { setAllCategoryFilter(e.target.value); setAllPage(0); }}
-          className="px-3 py-1.5 bg-theme-surface border border-theme-surface-border rounded-lg text-sm text-theme-text-primary"
+          onChange={(e) => {
+            setAllCategoryFilter(e.target.value);
+            setAllPage(0);
+          }}
+          className="bg-theme-surface border-theme-surface-border text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm"
         >
           <option value="">All Categories</option>
           {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.name}</option>
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
           ))}
         </select>
         {allEntriesTotal > 0 && (
-          <span className="text-xs text-theme-text-muted ml-auto">
-            Showing {allPage * DEFAULT_PAGE_SIZE + 1}-{Math.min((allPage + 1) * DEFAULT_PAGE_SIZE, allEntriesTotal)} of {allEntriesTotal}
+          <span className="text-theme-text-muted ml-auto text-xs">
+            Showing {allPage * DEFAULT_PAGE_SIZE + 1}-{Math.min((allPage + 1) * DEFAULT_PAGE_SIZE, allEntriesTotal)} of{' '}
+            {allEntriesTotal}
           </span>
         )}
       </div>
 
       {entriesLoading ? (
-        <div className="text-center py-8 text-theme-text-secondary">Loading...</div>
+        <div className="text-theme-text-secondary py-8 text-center">Loading...</div>
       ) : allEntries.length === 0 ? (
-        <div className="text-center py-12 bg-theme-surface rounded-lg">
+        <div className="bg-theme-surface rounded-lg py-12 text-center">
           <p className="text-theme-text-secondary">No entries found</p>
         </div>
       ) : (
         <>
-          <div className="bg-theme-surface rounded-lg shadow-md overflow-hidden overflow-x-auto">
+          <div className="bg-theme-surface overflow-hidden overflow-x-auto rounded-lg shadow-md">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-theme-surface-border">
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Member</th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Category</th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Date</th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Duration</th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Method</th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Status</th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">Reviewed By</th>
+                <tr className="border-theme-surface-border border-b">
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase">
+                    Member
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase">
+                    Category
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase">
+                    Date
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase">
+                    Duration
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase">
+                    Method
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase">
+                    Status
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase">
+                    Reviewed By
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-theme-surface-border">
+              <tbody className="divide-theme-surface-border divide-y">
                 {allEntries.map((entry) => (
                   <tr key={entry.id}>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">{entry.userName ?? '-'}</td>
+                    <td className="text-theme-text-primary px-4 py-3 text-sm">{entry.userName ?? '-'}</td>
                     <td className="px-4 py-3 text-sm">
                       <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.categoryColor ?? '#6B7280' }} />
+                        <div
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: entry.categoryColor ?? '#6B7280' }}
+                        />
                         <span className="text-theme-text-primary">{entry.categoryName}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary">{formatDate(entry.clockInAt, tz)}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary">{formatDuration(entry.durationMinutes)}</td>
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm">{formatDate(entry.clockInAt, tz)}</td>
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                      {formatDuration(entry.durationMinutes)}
+                    </td>
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
                       <span className="capitalize">{entry.entryMethod.replace(/_/g, ' ')}</span>
                       {entry.entryMethod === 'event_attendance' && entry.sourceEventId && (
                         <Link
                           to={`/events/${entry.sourceEventId}`}
-                          className="block text-xs text-theme-accent-blue hover:underline mt-0.5 truncate max-w-[160px]"
+                          className="text-theme-accent-blue mt-0.5 block max-w-[160px] truncate text-xs hover:underline"
                           title={entry.sourceEventName ?? 'View event'}
                         >
                           {entry.sourceEventName ?? 'View event'}
@@ -156,16 +184,21 @@ const AllEntriesTab: React.FC = () => {
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        entry.status === 'approved' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
-                        entry.status === 'pending' ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400' :
-                        entry.status === 'rejected' ? 'bg-red-500/20 text-red-700 dark:text-red-400' :
-                        'bg-blue-500/20 text-blue-700 dark:text-blue-400'
-                      }`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                          entry.status === 'approved'
+                            ? 'bg-green-500/20 text-green-700 dark:text-green-400'
+                            : entry.status === 'pending'
+                              ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'
+                              : entry.status === 'rejected'
+                                ? 'bg-red-500/20 text-red-700 dark:text-red-400'
+                                : 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
+                        }`}
+                      >
                         {entry.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-muted">{entry.approverName ?? '-'}</td>
+                    <td className="text-theme-text-muted px-4 py-3 text-sm">{entry.approverName ?? '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -174,23 +207,23 @@ const AllEntriesTab: React.FC = () => {
 
           {/* All Entries Pagination */}
           {allTotalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 mt-4">
+            <div className="mt-4 flex items-center justify-center gap-4">
               <button
                 onClick={() => setAllPage((p) => Math.max(0, p - 1))}
                 disabled={allPage === 0}
-                className="flex items-center gap-1 px-3 py-1 text-sm text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                className="text-theme-text-secondary hover:text-theme-text-primary flex items-center gap-1 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <ChevronLeft className="w-4 h-4" /> Previous
+                <ChevronLeft className="h-4 w-4" /> Previous
               </button>
-              <span className="text-sm text-theme-text-muted">
+              <span className="text-theme-text-muted text-sm">
                 Page {allPage + 1} of {allTotalPages}
               </span>
               <button
                 onClick={() => setAllPage((p) => Math.min(allTotalPages - 1, p + 1))}
                 disabled={allPage >= allTotalPages - 1}
-                className="flex items-center gap-1 px-3 py-1 text-sm text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                className="text-theme-text-secondary hover:text-theme-text-primary flex items-center gap-1 px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Next <ChevronRight className="w-4 h-4" />
+                Next <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           )}

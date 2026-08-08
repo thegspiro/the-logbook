@@ -11,8 +11,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  FileText, Loader2, Search, User as UserIcon,
-  X, Save, ChevronDown, ChevronUp, AlertCircle,
+  FileText,
+  Loader2,
+  Search,
+  User as UserIcon,
+  X,
+  Save,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
@@ -23,15 +30,9 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import {
-  DEFAULT_CALL_TYPE_OPTIONS,
-} from '../../modules/scheduling/constants/shiftReportConstants';
+import { DEFAULT_CALL_TYPE_OPTIONS } from '../../modules/scheduling/constants/shiftReportConstants';
 import { StarRating } from '../../modules/scheduling/components/StarRating';
-import type {
-  BatchShiftReportCreate,
-  CrewMemberEvaluation,
-  TrainingModuleConfig,
-} from '../../types/training';
+import type { BatchShiftReportCreate, CrewMemberEvaluation, TrainingModuleConfig } from '../../types/training';
 import type { User } from '../../types/user';
 
 /** Calculate hours between two datetime strings, handling midnight crossover. */
@@ -44,13 +45,8 @@ function calculateHours(startDate: string, startTime: string, endDate: string, e
   return Math.round((diffMs / 3_600_000) * 100) / 100;
 }
 
-const toggleCallType = (
-  setter: React.Dispatch<React.SetStateAction<string[]>>,
-  type: string,
-) => {
-  setter(prev =>
-    prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type],
-  );
+const toggleCallType = (setter: React.Dispatch<React.SetStateAction<string[]>>, type: string) => {
+  setter((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
 };
 
 interface CrewEntry {
@@ -95,14 +91,18 @@ export const ManualShiftReportPage: React.FC = () => {
   // Auto-calculated hours
   const calculatedHours = useMemo(
     () => calculateHours(shiftDate, startTime, endDate, endTime),
-    [shiftDate, startTime, endDate, endTime],
+    [shiftDate, startTime, endDate, endTime]
   );
 
   // Load config, members, apparatus
   useEffect(() => {
-    userService.getUsers().then(setMembers).catch(() => {});
-    trainingModuleConfigService.getConfig()
-      .then(cfg => {
+    userService
+      .getUsers()
+      .then(setMembers)
+      .catch(() => {});
+    trainingModuleConfigService
+      .getConfig()
+      .then((cfg) => {
         setConfig(cfg);
         if (cfg.manual_entry_default_start_time) {
           setStartTime(cfg.manual_entry_default_start_time);
@@ -123,8 +123,9 @@ export const ManualShiftReportPage: React.FC = () => {
       })
       .catch(() => {});
     setLoadingApparatus(true);
-    schedulingService.getApparatusOptions()
-      .then(res => setApparatusOptions(res.options.filter(o => o.source !== 'default')))
+    schedulingService
+      .getApparatusOptions()
+      .then((res) => setApparatusOptions(res.options.filter((o) => o.source !== 'default')))
       .catch(() => {})
       .finally(() => setLoadingApparatus(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -133,19 +134,19 @@ export const ManualShiftReportPage: React.FC = () => {
   const availableApparatus = useMemo(() => {
     const allowedIds = config?.manual_entry_apparatus_ids;
     if (!allowedIds || allowedIds.length === 0) return apparatusOptions;
-    return apparatusOptions.filter(a => a.id && allowedIds.includes(a.id));
+    return apparatusOptions.filter((a) => a.id && allowedIds.includes(a.id));
   }, [apparatusOptions, config?.manual_entry_apparatus_ids]);
 
   const filteredMembers = useMemo(() => {
     if (memberSearch.trim().length < 2) return [];
     const q = memberSearch.toLowerCase();
     return members
-      .filter(m => {
+      .filter((m) => {
         const name = `${m.first_name || ''} ${m.last_name || ''}`.toLowerCase();
         return (
-          (name.includes(q) || (m.username || '').toLowerCase().includes(q))
-          && !crew.some(c => c.user_id === m.id)
-          && m.id !== user?.id
+          (name.includes(q) || (m.username || '').toLowerCase().includes(q)) &&
+          !crew.some((c) => c.user_id === m.id) &&
+          m.id !== user?.id
         );
       })
       .slice(0, 10);
@@ -153,22 +154,31 @@ export const ManualShiftReportPage: React.FC = () => {
 
   const addMember = (m: User) => {
     const name = `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.username;
-    setCrew(prev => [...prev, { user_id: m.id, user_name: name }]);
-    setSelectedIds(prev => new Set([...prev, m.id]));
+    setCrew((prev) => [...prev, { user_id: m.id, user_name: name }]);
+    setSelectedIds((prev) => new Set([...prev, m.id]));
     setMemberSearch('');
   };
 
   const removeMember = (userId: string) => {
-    setCrew(prev => prev.filter(c => c.user_id !== userId));
-    setSelectedIds(prev => { const n = new Set(prev); n.delete(userId); return n; });
+    setCrew((prev) => prev.filter((c) => c.user_id !== userId));
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      n.delete(userId);
+      return n;
+    });
   };
 
   const toggleMember = (userId: string) => {
-    setSelectedIds(prev => { const n = new Set(prev); if (n.has(userId)) n.delete(userId); else n.add(userId); return n; });
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (n.has(userId)) n.delete(userId);
+      else n.add(userId);
+      return n;
+    });
   };
 
   const updateEval = (userId: string, field: keyof CrewMemberEvaluation, value: unknown) => {
-    setTraineeEvals(prev => ({
+    setTraineeEvals((prev) => ({
       ...prev,
       [userId]: { ...prev[userId], user_id: userId, [field]: value },
     }));
@@ -197,12 +207,13 @@ export const ManualShiftReportPage: React.FC = () => {
     }
 
     const evaluations: CrewMemberEvaluation[] = Array.from(selectedIds)
-      .map(id => traineeEvals[id])
-      .filter((ev): ev is CrewMemberEvaluation =>
-        !!ev && !!(ev.performance_rating || ev.areas_of_strength || ev.areas_for_improvement || ev.remarks),
+      .map((id) => traineeEvals[id])
+      .filter(
+        (ev): ev is CrewMemberEvaluation =>
+          !!ev && !!(ev.performance_rating || ev.areas_of_strength || ev.areas_for_improvement || ev.remarks)
       );
 
-    const selectedApparatus = availableApparatus.find(a => a.id === apparatusId);
+    const selectedApparatus = availableApparatus.find((a) => a.id === apparatusId);
     const apparatusLabel = selectedApparatus
       ? `${selectedApparatus.name}${selectedApparatus.unit_number ? ` (${selectedApparatus.unit_number})` : ''}`
       : '';
@@ -211,7 +222,9 @@ export const ManualShiftReportPage: React.FC = () => {
       apparatusLabel ? `Apparatus: ${apparatusLabel}` : '',
       `Shift: ${shiftDate} ${startTime} — ${endDate} ${endTime}`,
       narrative,
-    ].filter(Boolean).join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     const payload: BatchShiftReportCreate = {
       shift_date: shiftDate,
@@ -246,48 +259,48 @@ export const ManualShiftReportPage: React.FC = () => {
   const includeTraining = config?.shift_reports_include_training ?? true;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-theme-text-primary">Log Shift Report</h1>
-          <p className="text-sm text-theme-text-muted mt-1">
+          <h1 className="text-theme-text-primary text-xl font-bold">Log Shift Report</h1>
+          <p className="text-theme-text-muted mt-1 text-sm">
             Manually log hours, calls, and evaluations for your crew.
           </p>
         </div>
         <button
           onClick={() => void navigate(-1)}
-          className="px-3 py-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors"
+          className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border rounded-lg border px-3 py-1.5 text-sm transition-colors"
         >
           Cancel
         </button>
       </div>
 
-      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 space-y-5">
-
+      <div className="bg-theme-surface border-theme-surface-border space-y-5 rounded-xl border p-5">
         {/* Apparatus Selection */}
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
             Apparatus{config?.manual_entry_require_apparatus ? ' *' : ''}
           </label>
           {loadingApparatus ? (
-            <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
-              <Loader2 className="w-4 h-4 animate-spin" /> Loading apparatus...
+            <div className="text-theme-text-muted flex items-center gap-2 py-2 text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading apparatus...
             </div>
           ) : availableApparatus.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
-              <AlertCircle className="w-4 h-4" />
+            <div className="text-theme-text-muted flex items-center gap-2 py-2 text-sm">
+              <AlertCircle className="h-4 w-4" />
               No apparatus configured. Contact an administrator.
             </div>
           ) : (
             <select
               value={apparatusId}
-              onChange={e => setApparatusId(e.target.value)}
-              className="form-input focus:ring-violet-500 text-sm"
+              onChange={(e) => setApparatusId(e.target.value)}
+              className="form-input text-sm focus:ring-violet-500"
             >
               <option value="">Select apparatus...</option>
-              {availableApparatus.map(a => (
+              {availableApparatus.map((a) => (
                 <option key={a.id || a.name} value={a.id || a.name}>
-                  {a.name}{a.unit_number ? ` (${a.unit_number})` : ''} — {a.apparatus_type}
+                  {a.name}
+                  {a.unit_number ? ` (${a.unit_number})` : ''} — {a.apparatus_type}
                 </option>
               ))}
             </select>
@@ -295,65 +308,68 @@ export const ManualShiftReportPage: React.FC = () => {
         </div>
 
         {/* Date & Time */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date *</label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Start Date *</label>
             <input
               type="date"
               value={shiftDate}
-              onChange={e => { setShiftDate(e.target.value); if (!endDate || endDate < e.target.value) setEndDate(e.target.value); }}
-              className="form-input focus:ring-violet-500 text-sm"
+              onChange={(e) => {
+                setShiftDate(e.target.value);
+                if (!endDate || endDate < e.target.value) setEndDate(e.target.value);
+              }}
+              className="form-input text-sm focus:ring-violet-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Time *</label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Start Time *</label>
             <input
               type="time"
               value={startTime}
-              onChange={e => setStartTime(e.target.value)}
-              className="form-input focus:ring-violet-500 text-sm"
+              onChange={(e) => setStartTime(e.target.value)}
+              className="form-input text-sm focus:ring-violet-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">End Date *</label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">End Date *</label>
             <input
               type="date"
               value={endDate}
               min={shiftDate}
-              onChange={e => setEndDate(e.target.value)}
-              className="form-input focus:ring-violet-500 text-sm"
+              onChange={(e) => setEndDate(e.target.value)}
+              className="form-input text-sm focus:ring-violet-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">End Time *</label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">End Time *</label>
             <input
               type="time"
               value={endTime}
-              onChange={e => setEndTime(e.target.value)}
-              className="form-input focus:ring-violet-500 text-sm"
+              onChange={(e) => setEndTime(e.target.value)}
+              className="form-input text-sm focus:ring-violet-500"
             />
           </div>
         </div>
 
         {/* Calculated hours display */}
         {calculatedHours > 0 && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-green-500/5 border border-green-500/20 rounded-lg text-sm text-green-700 dark:text-green-400">
-            <FileText className="w-4 h-4 shrink-0" />
+          <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2 text-sm text-green-700 dark:text-green-400">
+            <FileText className="h-4 w-4 shrink-0" />
             <span className="font-medium">{calculatedHours}h</span> shift duration
-            {calculatedHours > 24 && <span className="text-xs text-theme-text-muted">(multi-day shift)</span>}
+            {calculatedHours > 24 && <span className="text-theme-text-muted text-xs">(multi-day shift)</span>}
           </div>
         )}
 
         {/* Calls */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Calls Responded</label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Calls Responded</label>
             <input
               type="number"
               min="0"
               value={callsResponded || 0}
-              onChange={e => setCallsResponded(parseInt(e.target.value) || 0)}
-              className="form-input focus:ring-violet-500 text-sm"
+              onChange={(e) => setCallsResponded(parseInt(e.target.value) || 0)}
+              className="form-input text-sm focus:ring-violet-500"
             />
           </div>
         </div>
@@ -361,16 +377,16 @@ export const ManualShiftReportPage: React.FC = () => {
         {/* Call Types */}
         {callTypeOptions.length > 0 && (
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1.5">Call Types</label>
+            <label className="text-theme-text-secondary mb-1.5 block text-sm font-medium">Call Types</label>
             <div className="flex flex-wrap gap-1.5">
               {callTypeOptions.map((type: string) => (
                 <button
                   key={type}
                   type="button"
                   onClick={() => toggleCallType(setCallTypes, type)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                     callTypes.includes(type)
-                      ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30'
+                      ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400'
                       : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-blue-500/30'
                   }`}
                 >
@@ -383,29 +399,29 @@ export const ManualShiftReportPage: React.FC = () => {
 
         {/* Narrative */}
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">Overall Shift Narrative</label>
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Overall Shift Narrative</label>
           <textarea
             rows={3}
             value={narrative}
-            onChange={e => setNarrative(e.target.value)}
+            onChange={(e) => setNarrative(e.target.value)}
             placeholder="General observations about the shift for leadership review..."
-            className="form-input focus:ring-violet-500 resize-none text-sm"
+            className="form-input resize-none text-sm focus:ring-violet-500"
           />
         </div>
 
         {/* Crew Members */}
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+          <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
             Crew Members
             {crew.length > 0 && (
-              <span className="ml-2 text-xs font-normal text-theme-text-muted">
+              <span className="text-theme-text-muted ml-2 text-xs font-normal">
                 ({selectedIds.size} of {crew.length} selected)
               </span>
             )}
           </label>
 
           <div className="relative mb-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+            <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
             <input
               autoCapitalize="none"
               autoCorrect="off"
@@ -413,101 +429,116 @@ export const ManualShiftReportPage: React.FC = () => {
               type="text"
               placeholder="Search members to add..."
               value={memberSearch}
-              onChange={e => setMemberSearch(e.target.value)}
-              className="form-input focus:ring-violet-500 pl-9 pr-3 text-sm"
+              onChange={(e) => setMemberSearch(e.target.value)}
+              className="form-input pr-3 pl-9 text-sm focus:ring-violet-500"
             />
           </div>
 
           {filteredMembers.length > 0 && (
-            <div className="mb-3 max-h-40 overflow-y-auto border border-theme-surface-border rounded-lg bg-theme-surface">
-              {filteredMembers.map(m => (
+            <div className="border-theme-surface-border bg-theme-surface mb-3 max-h-40 overflow-y-auto rounded-lg border">
+              {filteredMembers.map((m) => (
                 <button
                   key={m.id}
                   type="button"
                   onClick={() => addMember(m)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-theme-surface-hover transition-colors flex items-center gap-2"
+                  className="hover:bg-theme-surface-hover flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
                 >
-                  <UserIcon className="w-3.5 h-3.5 text-theme-text-muted shrink-0" />
-                  <span>{m.first_name} {m.last_name}</span>
-                  <span className="text-xs text-theme-text-muted">@{m.username}</span>
+                  <UserIcon className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    {m.first_name} {m.last_name}
+                  </span>
+                  <span className="text-theme-text-muted text-xs">@{m.username}</span>
                 </button>
               ))}
             </div>
           )}
           {memberSearch.trim().length >= 2 && filteredMembers.length === 0 && (
-            <p className="mb-3 px-3 py-2 text-xs text-theme-text-muted border border-theme-surface-border rounded-lg">
+            <p className="text-theme-text-muted border-theme-surface-border mb-3 rounded-lg border px-3 py-2 text-xs">
               No matching members found.
             </p>
           )}
 
           {crew.length === 0 ? (
-            <p className="text-sm text-theme-text-muted py-4">Search and add members above.</p>
+            <p className="text-theme-text-muted py-4 text-sm">Search and add members above.</p>
           ) : (
             <div className="space-y-2">
-              {crew.map(member => {
+              {crew.map((member) => {
                 const isSelected = selectedIds.has(member.user_id);
                 const isExpanded = expandedMemberId === member.user_id;
                 const eval_ = traineeEvals[member.user_id];
 
                 return (
-                  <div key={member.user_id} className="border border-theme-surface-border rounded-lg">
+                  <div key={member.user_id} className="border-theme-surface-border rounded-lg border">
                     <div className="flex items-center gap-3 px-3 py-2.5">
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleMember(member.user_id)}
-                        className="rounded border-theme-surface-border text-violet-600 focus:ring-violet-500"
+                        className="border-theme-surface-border rounded text-violet-600 focus:ring-violet-500"
                       />
-                      <span className="text-sm text-theme-text-primary flex-1">{member.user_name}</span>
+                      <span className="text-theme-text-primary flex-1 text-sm">{member.user_name}</span>
                       {includeTraining && (
                         <button
                           type="button"
                           onClick={() => setExpandedMemberId(isExpanded ? null : member.user_id)}
-                          className="text-xs text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1"
+                          className="inline-flex items-center gap-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
                         >
-                          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                           Evaluate
                         </button>
                       )}
                       <button
                         type="button"
                         onClick={() => removeMember(member.user_id)}
-                        className="text-theme-text-muted hover:text-red-500 transition-colors"
+                        className="text-theme-text-muted transition-colors hover:text-red-500"
                         aria-label={`Remove ${member.user_name}`}
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
 
                     {isExpanded && (
-                      <div className="px-4 pb-3 pt-1 border-t border-theme-surface-border space-y-3">
+                      <div className="border-theme-surface-border space-y-3 border-t px-4 pt-1 pb-3">
                         <div>
-                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">Performance Rating</label>
+                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                            Performance Rating
+                          </label>
                           <StarRating
                             value={eval_?.performance_rating || 0}
-                            onChange={v => updateEval(member.user_id, 'performance_rating', v)}
+                            onChange={(v) => updateEval(member.user_id, 'performance_rating', v)}
                             size="sm"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">Strengths</label>
-                          <input type="text" value={eval_?.areas_of_strength || ''}
-                            onChange={e => updateEval(member.user_id, 'areas_of_strength', e.target.value)}
-                            className="form-input text-sm focus:ring-violet-500" placeholder="Areas of strength..."
+                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Strengths</label>
+                          <input
+                            type="text"
+                            value={eval_?.areas_of_strength || ''}
+                            onChange={(e) => updateEval(member.user_id, 'areas_of_strength', e.target.value)}
+                            className="form-input text-sm focus:ring-violet-500"
+                            placeholder="Areas of strength..."
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
-                          <input type="text" value={eval_?.areas_for_improvement || ''}
-                            onChange={e => updateEval(member.user_id, 'areas_for_improvement', e.target.value)}
-                            className="form-input text-sm focus:ring-violet-500" placeholder="Areas to work on..."
+                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">
+                            Areas for Improvement
+                          </label>
+                          <input
+                            type="text"
+                            value={eval_?.areas_for_improvement || ''}
+                            onChange={(e) => updateEval(member.user_id, 'areas_for_improvement', e.target.value)}
+                            className="form-input text-sm focus:ring-violet-500"
+                            placeholder="Areas to work on..."
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-theme-text-secondary mb-1">Remarks</label>
-                          <textarea rows={2} value={eval_?.remarks || ''}
-                            onChange={e => updateEval(member.user_id, 'remarks', e.target.value)}
-                            className="form-input text-sm focus:ring-violet-500 resize-none" placeholder="Additional notes..."
+                          <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Remarks</label>
+                          <textarea
+                            rows={2}
+                            value={eval_?.remarks || ''}
+                            onChange={(e) => updateEval(member.user_id, 'remarks', e.target.value)}
+                            className="form-input resize-none text-sm focus:ring-violet-500"
+                            placeholder="Additional notes..."
                           />
                         </div>
                       </div>
@@ -520,17 +551,25 @@ export const ManualShiftReportPage: React.FC = () => {
         </div>
 
         {/* Submit */}
-        <div className="flex items-center gap-3 pt-2 border-t border-theme-surface-border">
-          <button onClick={() => { void handleSubmit(true); }} disabled={savingDraft || submitting}
-            className="px-5 py-2.5 text-sm font-medium border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
+        <div className="border-theme-surface-border flex items-center gap-3 border-t pt-2">
+          <button
+            onClick={() => {
+              void handleSubmit(true);
+            }}
+            disabled={savingDraft || submitting}
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
           >
-            {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save as Draft
           </button>
-          <button onClick={() => { void handleSubmit(false); }} disabled={submitting || savingDraft}
-            className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
+          <button
+            onClick={() => {
+              void handleSubmit(false);
+            }}
+            disabled={submitting || savingDraft}
+            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
           >
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             Submit Report{selectedIds.size > 1 ? `s (${selectedIds.size})` : ''}
           </button>
         </div>

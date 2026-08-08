@@ -34,15 +34,13 @@ const EmailSection: React.FC<EmailSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-theme-text-primary">Email Configuration</h3>
-        <p className="text-sm text-theme-text-muted mt-1">
-          Notification triggers and reusable email templates.
-        </p>
+        <h3 className="text-theme-text-primary text-lg font-semibold">Email Configuration</h3>
+        <p className="text-theme-text-muted mt-1 text-sm">Notification triggers and reusable email templates.</p>
       </div>
 
       {/* Email Triggers */}
       <div>
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
+        <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
           Notification Triggers
         </h4>
         <div className="space-y-2">
@@ -51,25 +49,21 @@ const EmailSection: React.FC<EmailSectionProps> = ({
             return (
               <div
                 key={key}
-                className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border"
+                className="border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
               >
-                <span className="text-sm font-medium text-theme-text-primary">{label}</span>
+                <span className="text-theme-text-primary text-sm font-medium">{label}</span>
                 <button
                   type="button"
                   onClick={() => onToggleEmailTrigger(key)}
                   disabled={saving}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:cursor-not-allowed ${
+                  className={`focus:ring-theme-focus-ring relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 ${
                     config.enabled ? 'bg-green-500' : 'bg-theme-surface-hover'
                   }`}
                   role="switch"
                   aria-checked={config.enabled}
                   aria-label={label}
                 >
-                  <span
-                    className={`toggle-knob-sm ${
-                      config.enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
+                  <span className={`toggle-knob-sm ${config.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
                 </button>
               </div>
             );
@@ -78,26 +72,25 @@ const EmailSection: React.FC<EmailSectionProps> = ({
       </div>
 
       {/* Email Templates */}
-      <div className="border-t border-theme-surface-border pt-4">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted">
-            Email Templates
-          </h4>
+      <div className="border-theme-surface-border border-t pt-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h4 className="text-theme-text-muted text-xs font-semibold tracking-wider uppercase">Email Templates</h4>
           <button
             type="button"
             onClick={() => onToggleTemplateForm(!showTemplateForm)}
-            className="btn-primary flex font-medium gap-1.5 items-center px-3 py-1.5 text-sm"
+            className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="h-4 w-4" />
             New Template
           </button>
         </div>
-        <p className="text-xs text-theme-text-muted mb-3">
-          Reusable email messages for coordinators. Variables: {'{{contact_name}}'}, {'{{outreach_type}}'}, {'{{event_date}}'}.
+        <p className="text-theme-text-muted mb-3 text-xs">
+          Reusable email messages for coordinators. Variables: {'{{contact_name}}'}, {'{{outreach_type}}'},{' '}
+          {'{{event_date}}'}.
         </p>
 
         {showTemplateForm && (
-          <div className="mb-4 p-4 space-y-3 rounded-lg border border-theme-surface-border bg-theme-surface-secondary/30">
+          <div className="border-theme-surface-border bg-theme-surface-secondary/30 mb-4 space-y-3 rounded-lg border p-4">
             <input
               type="text"
               value={newTemplateName}
@@ -123,25 +116,27 @@ const EmailSection: React.FC<EmailSectionProps> = ({
               <select
                 value={newTemplateTrigger}
                 onChange={(e) => onNewTemplateTriggerChange(e.target.value)}
-                className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
               >
                 <option value="">Manual send only</option>
                 {Object.entries(TRIGGER_LABELS).map(([key, triggerLabel]) => (
-                  <option key={key} value={key}>{triggerLabel}</option>
+                  <option key={key} value={key}>
+                    {triggerLabel}
+                  </option>
                 ))}
               </select>
               <button
                 type="button"
                 onClick={onCreateTemplate}
                 disabled={saving}
-                className="btn-primary font-medium text-sm"
+                className="btn-primary text-sm font-medium"
               >
                 Save Template
               </button>
               <button
                 type="button"
                 onClick={() => onToggleTemplateForm(false)}
-                className="px-4 py-2 text-sm font-medium text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                className="text-theme-text-muted hover:text-theme-text-primary px-4 py-2 text-sm font-medium transition-colors"
               >
                 Cancel
               </button>
@@ -153,14 +148,14 @@ const EmailSection: React.FC<EmailSectionProps> = ({
           {emailTemplates.map((tpl) => (
             <div
               key={tpl.id}
-              className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border"
+              className="border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
             >
               <div>
-                <span className="text-sm font-medium text-theme-text-primary">{tpl.name}</span>
-                <p className="text-xs text-theme-text-muted mt-0.5">
+                <span className="text-theme-text-primary text-sm font-medium">{tpl.name}</span>
+                <p className="text-theme-text-muted mt-0.5 text-xs">
                   Subject: {tpl.subject}
                   {tpl.trigger && (
-                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
+                    <span className="ml-2 inline-flex items-center rounded-sm bg-blue-100 px-1.5 py-0.5 text-xs text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                       Auto: {TRIGGER_LABELS[tpl.trigger] || tpl.trigger}
                     </span>
                   )}
@@ -169,15 +164,15 @@ const EmailSection: React.FC<EmailSectionProps> = ({
               <button
                 type="button"
                 onClick={() => onDeleteTemplate(tpl.id)}
-                className="text-sm text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                className="text-theme-text-muted text-sm transition-colors hover:text-red-600 dark:hover:text-red-400"
                 title="Delete template"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="h-4 w-4" />
               </button>
             </div>
           ))}
           {emailTemplates.length === 0 && !showTemplateForm && (
-            <p className="text-sm text-theme-text-muted italic py-4 text-center">
+            <p className="text-theme-text-muted py-4 text-center text-sm italic">
               No email templates yet. Create one to send standardized messages to requesters.
             </p>
           )}

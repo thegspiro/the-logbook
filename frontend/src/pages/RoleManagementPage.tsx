@@ -132,9 +132,11 @@ export const RoleManagementPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex justify-center items-center h-64">
-            <div className="text-theme-text-muted" role="status" aria-live="polite">Loading...</div>
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex h-64 items-center justify-center">
+            <div className="text-theme-text-muted" role="status" aria-live="polite">
+              Loading...
+            </div>
           </div>
         </div>
       </div>
@@ -143,73 +145,66 @@ export const RoleManagementPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6 flex justify-between items-center">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-6 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-theme-text-primary">Role Management</h2>
-            <p className="mt-1 text-sm text-theme-text-muted">
-              Create and manage custom roles and permissions
-            </p>
+            <h2 className="text-theme-text-primary text-2xl font-bold">Role Management</h2>
+            <p className="text-theme-text-muted mt-1 text-sm">Create and manage custom roles and permissions</p>
           </div>
-          <button
-            onClick={handleCreate}
-            className="btn-info font-medium inline-flex items-center rounded-md text-sm"
-          >
+          <button onClick={handleCreate} className="btn-info inline-flex items-center rounded-md text-sm font-medium">
             Create Custom Role
           </button>
         </div>
 
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 rounded-lg p-4">
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
         )}
 
-        <div className="bg-theme-surface backdrop-blur-xs shadow-sm overflow-hidden sm:rounded-lg">
-          <ul className="divide-y divide-theme-surface-border">
+        <div className="bg-theme-surface overflow-hidden shadow-sm backdrop-blur-xs sm:rounded-lg">
+          <ul className="divide-theme-surface-border divide-y">
             {roles.map((role) => (
               <li key={role.id} className="px-6 py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-medium text-theme-text-primary">{role.name}</h3>
+                      <h3 className="text-theme-text-primary text-lg font-medium">{role.name}</h3>
                       {role.is_system && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
+                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
                           System Role
                         </span>
                       )}
-                      <span className="text-sm text-theme-text-muted">Priority: {role.priority}</span>
+                      <span className="text-theme-text-muted text-sm">Priority: {role.priority}</span>
                     </div>
-                    {role.description && (
-                      <p className="mt-1 text-sm text-theme-text-muted">{role.description}</p>
-                    )}
+                    {role.description && <p className="text-theme-text-muted mt-1 text-sm">{role.description}</p>}
                     <div className="mt-2 flex flex-wrap gap-1">
                       {role.permissions.slice(0, 5).map((perm) => (
                         <span
                           key={perm}
-                          className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-theme-surface text-theme-text-secondary"
+                          className="bg-theme-surface text-theme-text-secondary inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium"
                         >
                           {perm.split('.').pop()}
                         </span>
                       ))}
                       {role.permissions.length > 5 && (
-                        <span className="text-xs text-theme-text-muted">
-                          +{role.permissions.length - 5} more
-                        </span>
+                        <span className="text-theme-text-muted text-xs">+{role.permissions.length - 5} more</span>
                       )}
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleEdit(role)}
-                      className="text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium"
+                      className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                     >
                       Edit
                     </button>
                     {!role.is_system && (
                       <button
-                        onClick={() => { void handleDelete(role); }}
-                        className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm font-medium"
+                        onClick={() => {
+                          void handleDelete(role);
+                        }}
+                        className="text-sm font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                       >
                         Delete
                       </button>
@@ -224,22 +219,24 @@ export const RoleManagementPage: React.FC = () => {
         {/* Create/Edit Role Modal */}
         {showCreateModal && (
           <div
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
             role="dialog"
             aria-modal="true"
             aria-labelledby="role-modal-title"
-            onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setShowCreateModal(false);
+            }}
           >
-            <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90dvh] overflow-y-auto">
-              <div className="px-6 py-4 border-b border-theme-surface-border">
-                <h3 id="role-modal-title" className="text-lg font-medium text-theme-text-primary">
+            <div className="bg-theme-surface-modal mx-4 max-h-[90dvh] w-full max-w-4xl overflow-y-auto rounded-lg shadow-xl">
+              <div className="border-theme-surface-border border-b px-6 py-4">
+                <h3 id="role-modal-title" className="text-theme-text-primary text-lg font-medium">
                   {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
                 </h3>
               </div>
 
-              <div className="px-6 py-4 space-y-4">
+              <div className="space-y-4 px-6 py-4">
                 {editingRole?.is_system && (
-                  <div className="bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/30 rounded-lg p-4">
+                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
                     <p className="text-sm text-yellow-800 dark:text-yellow-400">
                       This is a system role. Only the description and permissions can be modified.
                     </p>
@@ -247,7 +244,9 @@ export const RoleManagementPage: React.FC = () => {
                 )}
 
                 <div>
-                  <label htmlFor="role-name" className="block text-sm font-medium text-theme-text-secondary">Role Name</label>
+                  <label htmlFor="role-name" className="text-theme-text-secondary block text-sm font-medium">
+                    Role Name
+                  </label>
                   <input
                     id="role-name"
                     type="text"
@@ -256,24 +255,28 @@ export const RoleManagementPage: React.FC = () => {
                     disabled={editingRole?.is_system}
                     required
                     aria-required="true"
-                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-xs focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm disabled:bg-theme-surface-hover"
+                    className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary focus:border-theme-focus-ring focus:ring-theme-focus-ring disabled:bg-theme-surface-hover mt-1 block w-full rounded-md shadow-xs sm:text-sm"
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="role-description" className="block text-sm font-medium text-theme-text-secondary">Description</label>
+                  <label htmlFor="role-description" className="text-theme-text-secondary block text-sm font-medium">
+                    Description
+                  </label>
                   <textarea
                     id="role-description"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={2}
-                    className="mt-1 block w-full rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-xs focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm"
+                    className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary focus:border-theme-focus-ring focus:ring-theme-focus-ring mt-1 block w-full rounded-md shadow-xs sm:text-sm"
                   />
                 </div>
 
                 {!editingRole?.is_system && (
                   <div>
-                    <label htmlFor="role-priority" className="block text-sm font-medium text-theme-text-secondary">Priority (0-100)</label>
+                    <label htmlFor="role-priority" className="text-theme-text-secondary block text-sm font-medium">
+                      Priority (0-100)
+                    </label>
                     <input
                       id="role-priority"
                       type="number"
@@ -281,14 +284,14 @@ export const RoleManagementPage: React.FC = () => {
                       max="100"
                       value={formData.priority}
                       onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })}
-                      className="mt-1 block w-32 rounded-md border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary shadow-xs focus:border-theme-focus-ring focus:ring-theme-focus-ring sm:text-sm"
+                      className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary focus:border-theme-focus-ring focus:ring-theme-focus-ring mt-1 block w-32 rounded-md shadow-xs sm:text-sm"
                     />
-                    <p className="mt-1 text-xs text-theme-text-muted">Higher priority roles have more authority</p>
+                    <p className="text-theme-text-muted mt-1 text-xs">Higher priority roles have more authority</p>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-3">Permissions</label>
+                  <label className="text-theme-text-secondary mb-3 block text-sm font-medium">Permissions</label>
                   <div className="space-y-4">
                     {permissionCategories.map((category) => {
                       const categoryPermissions = category.permissions.map((p) => p.name);
@@ -296,8 +299,8 @@ export const RoleManagementPage: React.FC = () => {
                       const someSelected = categoryPermissions.some((p) => formData.permissions.includes(p));
 
                       return (
-                        <div key={category.category} className="border border-theme-surface-border rounded-lg p-4">
-                          <label className="flex items-center mb-2 cursor-pointer">
+                        <div key={category.category} className="border-theme-surface-border rounded-lg border p-4">
+                          <label className="mb-2 flex cursor-pointer items-center">
                             <input
                               type="checkbox"
                               checked={allSelected}
@@ -307,13 +310,13 @@ export const RoleManagementPage: React.FC = () => {
                               onChange={() => handleToggleCategory(category)}
                               className="form-checkbox border-theme-surface-border"
                             />
-                            <span className="ml-2 text-sm font-medium text-theme-text-primary uppercase">
+                            <span className="text-theme-text-primary ml-2 text-sm font-medium uppercase">
                               {category.category.replace(/_/g, ' ')}
                             </span>
                           </label>
                           <div className="ml-6 space-y-1">
                             {category.permissions.map((perm) => (
-                              <label key={perm.name} className="flex items-start cursor-pointer">
+                              <label key={perm.name} className="flex cursor-pointer items-start">
                                 <input
                                   type="checkbox"
                                   checked={formData.permissions.includes(perm.name)}
@@ -321,8 +324,8 @@ export const RoleManagementPage: React.FC = () => {
                                   className="form-checkbox border-theme-surface-border mt-0.5"
                                 />
                                 <div className="ml-2">
-                                  <div className="text-sm text-theme-text-primary">{perm.name}</div>
-                                  <div className="text-xs text-theme-text-muted">{perm.description}</div>
+                                  <div className="text-theme-text-primary text-sm">{perm.name}</div>
+                                  <div className="text-theme-text-muted text-xs">{perm.description}</div>
                                 </div>
                               </label>
                             ))}
@@ -334,16 +337,18 @@ export const RoleManagementPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="px-6 py-4 border-t border-theme-surface-border flex justify-end gap-3">
+              <div className="border-theme-surface-border flex justify-end gap-3 border-t px-6 py-4">
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
+                  className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => { void handleSubmit(); }}
-                  className="btn-info font-medium rounded-md text-sm"
+                  onClick={() => {
+                    void handleSubmit();
+                  }}
+                  className="btn-info rounded-md text-sm font-medium"
                 >
                   {editingRole ? 'Save Changes' : 'Create Role'}
                 </button>

@@ -24,71 +24,43 @@ interface BudgetInfoProps {
   categoryName: string;
 }
 
-const BudgetInfoCard: React.FC<BudgetInfoProps> = ({
-  budget,
-  categoryName,
-}) => {
-  const remaining =
-    budget.amountBudgeted - budget.amountSpent - budget.amountEncumbered;
+const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName }) => {
+  const remaining = budget.amountBudgeted - budget.amountSpent - budget.amountEncumbered;
   const pctUsed =
-    budget.amountBudgeted > 0
-      ? ((budget.amountSpent + budget.amountEncumbered) /
-          budget.amountBudgeted) *
-        100
-      : 0;
-  const spentPct =
-    budget.amountBudgeted > 0
-      ? Math.min((budget.amountSpent / budget.amountBudgeted) * 100, 100)
-      : 0;
+    budget.amountBudgeted > 0 ? ((budget.amountSpent + budget.amountEncumbered) / budget.amountBudgeted) * 100 : 0;
+  const spentPct = budget.amountBudgeted > 0 ? Math.min((budget.amountSpent / budget.amountBudgeted) * 100, 100) : 0;
   const encPct =
-    budget.amountBudgeted > 0
-      ? Math.min(
-          (budget.amountEncumbered / budget.amountBudgeted) * 100,
-          100 - spentPct,
-        )
-      : 0;
+    budget.amountBudgeted > 0 ? Math.min((budget.amountEncumbered / budget.amountBudgeted) * 100, 100 - spentPct) : 0;
 
   return (
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
       <div className="mb-4 flex items-center gap-3">
-        <div className="rounded-lg bg-green-100 dark:bg-green-500/20 p-2">
+        <div className="rounded-lg bg-green-100 p-2 dark:bg-green-500/20">
           <DollarSign className="h-5 w-5 text-green-600" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold text-theme-text-primary">
-            {categoryName}
-          </h2>
-          {budget.notes && (
-            <p className="text-sm text-theme-text-secondary">{budget.notes}</p>
-          )}
+          <h2 className="text-theme-text-primary text-lg font-semibold">{categoryName}</h2>
+          {budget.notes && <p className="text-theme-text-secondary text-sm">{budget.notes}</p>}
         </div>
       </div>
 
       {/* Amounts grid */}
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div>
-          <p className="text-sm text-theme-text-secondary">Budgeted</p>
-          <p className="text-xl font-bold text-theme-text-primary">
-            {formatCurrencyWhole(budget.amountBudgeted)}
-          </p>
+          <p className="text-theme-text-secondary text-sm">Budgeted</p>
+          <p className="text-theme-text-primary text-xl font-bold">{formatCurrencyWhole(budget.amountBudgeted)}</p>
         </div>
         <div>
-          <p className="text-sm text-theme-text-secondary">Spent</p>
-          <p className="text-xl font-bold text-blue-600">
-            {formatCurrencyWhole(budget.amountSpent)}
-          </p>
+          <p className="text-theme-text-secondary text-sm">Spent</p>
+          <p className="text-xl font-bold text-blue-600">{formatCurrencyWhole(budget.amountSpent)}</p>
         </div>
         <div>
-          <p className="text-sm text-theme-text-secondary">Encumbered</p>
-          <p className="text-xl font-bold text-yellow-600">
-            {formatCurrencyWhole(budget.amountEncumbered)}
-          </p>
+          <p className="text-theme-text-secondary text-sm">Encumbered</p>
+          <p className="text-xl font-bold text-yellow-600">{formatCurrencyWhole(budget.amountEncumbered)}</p>
         </div>
         <div>
-          <p className="text-sm text-theme-text-secondary">Remaining</p>
-          <p
-            className={`text-xl font-bold ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}
-          >
+          <p className="text-theme-text-secondary text-sm">Remaining</p>
+          <p className={`text-xl font-bold ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}>
             {formatCurrencyWhole(remaining)}
           </p>
         </div>
@@ -97,28 +69,18 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({
       {/* Progress bar */}
       <div>
         <div className="mb-1 flex items-center justify-between text-sm">
-          <span className="text-theme-text-secondary">
-            {pctUsed.toFixed(1)}% utilized
-          </span>
+          <span className="text-theme-text-secondary">{pctUsed.toFixed(1)}% utilized</span>
           {pctUsed > 90 && (
-            <span className="font-medium text-red-600">
-              {pctUsed > 100 ? 'Over budget' : 'Near limit'}
-            </span>
+            <span className="font-medium text-red-600">{pctUsed > 100 ? 'Over budget' : 'Near limit'}</span>
           )}
         </div>
         <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
           <div className="flex h-full">
-            <div
-              className="h-full bg-blue-500 transition-all"
-              style={{ width: `${String(spentPct)}%` }}
-            />
-            <div
-              className="h-full bg-yellow-400 transition-all"
-              style={{ width: `${String(encPct)}%` }}
-            />
+            <div className="h-full bg-blue-500 transition-all" style={{ width: `${String(spentPct)}%` }} />
+            <div className="h-full bg-yellow-400 transition-all" style={{ width: `${String(encPct)}%` }} />
           </div>
         </div>
-        <div className="mt-2 flex items-center gap-4 text-xs text-theme-text-secondary">
+        <div className="text-theme-text-secondary mt-2 flex items-center gap-4 text-xs">
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
             Spent
@@ -144,7 +106,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({
 const DetailSkeleton: React.FC = () => (
   <div className="space-y-6" aria-label="Loading budget details" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
       <div className="mb-4 flex items-center gap-3">
         <Skeleton className="h-10 w-10" rounded="lg" />
         <div className="space-y-2">
@@ -162,7 +124,7 @@ const DetailSkeleton: React.FC = () => (
       </div>
       <Skeleton className="mt-6 h-3 w-full" />
     </div>
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
       <Skeleton className="mb-4 h-5 w-40" />
       {Array.from({ length: 5 }).map((_, i) => (
         <Skeleton key={`row-${String(i)}`} className="mb-3 h-10 w-full" />
@@ -177,31 +139,18 @@ const DetailSkeleton: React.FC = () => (
 
 const BudgetDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const {
-    budgets,
-    budgetCategories,
-    isLoading,
-    error,
-    fetchBudgets,
-    fetchBudgetCategories,
-  } = useFinanceStore();
+  const { budgets, budgetCategories, isLoading, error, fetchBudgets, fetchBudgetCategories } = useFinanceStore();
 
   useEffect(() => {
     void fetchBudgets();
     void fetchBudgetCategories();
   }, [fetchBudgets, fetchBudgetCategories]);
 
-  const budget = useMemo(
-    () => budgets.find((b) => b.id === id),
-    [budgets, id],
-  );
+  const budget = useMemo(() => budgets.find((b) => b.id === id), [budgets, id]);
 
   const categoryName = useMemo(() => {
     if (!budget) return 'Unknown';
-    return (
-      budgetCategories.find((c) => c.id === budget.categoryId)?.name ??
-      'Unknown'
-    );
+    return budgetCategories.find((c) => c.id === budget.categoryId)?.name ?? 'Unknown';
   }, [budget, budgetCategories]);
 
   if (isLoading && !budget) {
@@ -210,7 +159,7 @@ const BudgetDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/budgets"
-          className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Budgets
@@ -226,7 +175,7 @@ const BudgetDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/budgets"
-          className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Budgets
@@ -245,7 +194,7 @@ const BudgetDetailPage: React.FC = () => {
       {/* Back link */}
       <Link
         to="/finance/budgets"
-        className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Budgets
@@ -253,7 +202,7 @@ const BudgetDetailPage: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -263,10 +212,8 @@ const BudgetDetailPage: React.FC = () => {
       <BudgetInfoCard budget={budget} categoryName={categoryName} />
 
       {/* Transaction History Placeholder */}
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-        <h3 className="mb-4 text-lg font-semibold text-theme-text-primary">
-          Transaction History
-        </h3>
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Transaction History</h3>
         <EmptyState
           icon={FileText}
           title="No transactions yet"

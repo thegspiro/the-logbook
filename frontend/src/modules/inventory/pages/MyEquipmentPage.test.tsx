@@ -41,8 +41,12 @@ const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
   default: {
-    success: (...a: unknown[]): void => { mockToastSuccess(...a); },
-    error: (...a: unknown[]): void => { mockToastError(...a); },
+    success: (...a: unknown[]): void => {
+      mockToastSuccess(...a);
+    },
+    error: (...a: unknown[]): void => {
+      mockToastError(...a);
+    },
   },
 }));
 
@@ -203,10 +207,7 @@ describe('MyEquipmentPage', () => {
     await screen.findByRole('heading', { name: 'My Equipment' });
 
     await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
-    await user.type(
-      await screen.findByPlaceholderText('Search available items...'),
-      'Radio',
-    );
+    await user.type(await screen.findByPlaceholderText('Search available items...'), 'Radio');
     await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
     await user.click(screen.getByRole('button', { name: /Submit Request/ }));
 

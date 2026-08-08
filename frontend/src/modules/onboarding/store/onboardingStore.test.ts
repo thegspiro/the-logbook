@@ -178,9 +178,7 @@ describe('onboardingStore', () => {
       getState().setSelectedModules(['training']);
       getState().setModuleStatus('training', 'enabled');
 
-      const trainingCount = getState().selectedModules.filter(
-        (m) => m === 'training'
-      ).length;
+      const trainingCount = getState().selectedModules.filter((m) => m === 'training').length;
       expect(trainingCount).toBe(1);
     });
 
@@ -196,18 +194,13 @@ describe('onboardingStore', () => {
         scheduling: 'enabled',
         reports: 'skipped',
       });
-      expect(getState().selectedModules).toEqual(
-        expect.arrayContaining(['training', 'scheduling'])
-      );
+      expect(getState().selectedModules).toEqual(expect.arrayContaining(['training', 'scheduling']));
       expect(getState().selectedModules).not.toContain('reports');
     });
 
     it('setModulePermissionConfig sets positions for a module', () => {
       getState().setModulePermissionConfig('training', ['chief', 'captain']);
-      expect(getState().modulePermissionConfigs['training']).toEqual([
-        'chief',
-        'captain',
-      ]);
+      expect(getState().modulePermissionConfigs['training']).toEqual(['chief', 'captain']);
     });
 
     it('setModulePermissionConfig updates independently per module', () => {
@@ -215,10 +208,7 @@ describe('onboardingStore', () => {
       getState().setModulePermissionConfig('scheduling', ['captain', 'lieutenant']);
 
       expect(getState().modulePermissionConfigs['training']).toEqual(['chief']);
-      expect(getState().modulePermissionConfigs['scheduling']).toEqual([
-        'captain',
-        'lieutenant',
-      ]);
+      expect(getState().modulePermissionConfigs['scheduling']).toEqual(['captain', 'lieutenant']);
     });
   });
 
@@ -245,9 +235,7 @@ describe('onboardingStore', () => {
       getState().markStepCompleted('department');
       getState().markStepCompleted('department');
 
-      const count = getState().completedSteps.filter(
-        (s) => s === 'department'
-      ).length;
+      const count = getState().completedSteps.filter((s) => s === 'department').length;
       expect(count).toBe(1);
     });
 
@@ -256,11 +244,7 @@ describe('onboardingStore', () => {
       getState().markStepCompleted('modules');
       getState().markStepCompleted('it-team');
 
-      expect(getState().completedSteps).toEqual([
-        'department',
-        'modules',
-        'it-team',
-      ]);
+      expect(getState().completedSteps).toEqual(['department', 'modules', 'it-team']);
     });
   });
 

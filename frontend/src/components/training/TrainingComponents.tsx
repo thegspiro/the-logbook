@@ -18,12 +18,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { daysBetween } from '../../utils/dateFormatting';
-import type {
-  TrainingStatus,
-  TrainingType,
-  EnrollmentStatus,
-  ProgramPhase,
-} from '../../types/training';
+import type { TrainingStatus, TrainingType, EnrollmentStatus, ProgramPhase } from '../../types/training';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -45,21 +40,19 @@ interface TrainingStatusBadgeProps {
 
 const trainingStatusConfig: Record<TrainingStatus, { label: string; classes: string }> = {
   scheduled: { label: 'Scheduled', classes: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' },
-  in_progress: { label: 'In Progress', classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400' },
+  in_progress: {
+    label: 'In Progress',
+    classes: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  },
   completed: { label: 'Completed', classes: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400' },
   cancelled: { label: 'Cancelled', classes: 'bg-theme-surface-secondary text-theme-text-primary' },
   failed: { label: 'Failed', classes: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400' },
 };
 
-export const TrainingStatusBadge: React.FC<TrainingStatusBadgeProps> = ({
-  status,
-  size = 'md',
-}) => {
+export const TrainingStatusBadge: React.FC<TrainingStatusBadgeProps> = ({ status, size = 'md' }) => {
   const config = trainingStatusConfig[status] ?? trainingStatusConfig.scheduled;
   return (
-    <span
-      className={`inline-flex items-center rounded-full font-medium ${config.classes} ${sizeClasses[size]}`}
-    >
+    <span className={`inline-flex items-center rounded-full font-medium ${config.classes} ${sizeClasses[size]}`}>
       {config.label}
     </span>
   );
@@ -100,12 +93,12 @@ export const RequirementProgressBar: React.FC<RequirementProgressBarProps> = ({
     <div className="w-full">
       {(label || showPercentage) && (
         <div className="mb-1 flex items-center justify-between text-sm">
-          {label && <span className="font-medium text-theme-text-primary">{label}</span>}
+          {label && <span className="text-theme-text-primary font-medium">{label}</span>}
           {showPercentage && <span className="text-theme-text-muted">{Math.round(clamped)}%</span>}
         </div>
       )}
       <div
-        className={`w-full overflow-hidden rounded-full bg-theme-surface-secondary ${progressBarHeight[size]}`}
+        className={`bg-theme-surface-secondary w-full overflow-hidden rounded-full ${progressBarHeight[size]}`}
         role="progressbar"
         aria-valuenow={Math.round(clamped)}
         aria-valuemin={0}
@@ -151,16 +144,12 @@ export const CertificationExpiryBadge: React.FC<CertificationExpiryBadgeProps> =
   const { classes, label } = getExpiryStyle(daysRemaining);
 
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium ${classes}`}
-    >
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-medium ${classes}`}>
       <Clock className="h-3.5 w-3.5" />
       <span>{label}</span>
       {showDaysRemaining && (
         <span className="opacity-75">
-          {daysRemaining < 0
-            ? `(${Math.abs(daysRemaining)}d ago)`
-            : `(${daysRemaining}d)`}
+          {daysRemaining < 0 ? `(${Math.abs(daysRemaining)}d ago)` : `(${daysRemaining}d)`}
         </span>
       )}
     </span>
@@ -197,12 +186,7 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
 }
 
-export const TrainingCategoryBadge: React.FC<TrainingCategoryBadgeProps> = ({
-  name,
-  code,
-  color,
-  size = 'md',
-}) => {
+export const TrainingCategoryBadge: React.FC<TrainingCategoryBadgeProps> = ({ name, code, color, size = 'md' }) => {
   const rgb = color ? hexToRgb(color) : null;
 
   const style: React.CSSProperties = rgb
@@ -234,20 +218,27 @@ interface TrainingTypeBadgeProps {
 }
 
 const trainingTypeConfig: Record<TrainingType, { label: string; classes: string }> = {
-  certification: { label: 'Certification', classes: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400' },
+  certification: {
+    label: 'Certification',
+    classes: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
+  },
   continuing_education: { label: 'CE', classes: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400' },
-  skills_practice: { label: 'Skills', classes: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400' },
+  skills_practice: {
+    label: 'Skills',
+    classes: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
+  },
   orientation: { label: 'Orientation', classes: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400' },
   refresher: { label: 'Refresher', classes: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-400' },
-  specialty: { label: 'Specialty', classes: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400' },
+  specialty: {
+    label: 'Specialty',
+    classes: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
+  },
 };
 
 export const TrainingTypeBadge: React.FC<TrainingTypeBadgeProps> = ({ type, size = 'md' }) => {
   const config = trainingTypeConfig[type] ?? trainingTypeConfig.certification;
   return (
-    <span
-      className={`inline-flex items-center rounded-full font-medium ${config.classes} ${sizeClasses[size]}`}
-    >
+    <span className={`inline-flex items-center rounded-full font-medium ${config.classes} ${sizeClasses[size]}`}>
       {config.label}
     </span>
   );
@@ -273,9 +264,7 @@ const enrollmentStatusConfig: Record<EnrollmentStatus, { label: string; classes:
 export const EnrollmentStatusBadge: React.FC<EnrollmentStatusBadgeProps> = ({ status }) => {
   const config = enrollmentStatusConfig[status] ?? enrollmentStatusConfig.active;
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${config.classes}`}
-    >
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${config.classes}`}>
       {config.label}
     </span>
   );
@@ -321,11 +310,11 @@ export const ProgramPhaseTimeline: React.FC<ProgramPhaseTimelineProps> = ({
                   <CheckCircle className="h-6 w-6 text-green-700 dark:text-green-500" />
                 ) : isCurrent ? (
                   <div className="relative">
-                    <Circle className="h-6 w-6 text-blue-700 dark:text-blue-500 fill-blue-500" />
+                    <Circle className="h-6 w-6 fill-blue-500 text-blue-700 dark:text-blue-500" />
                     <span className="absolute inset-0 animate-ping rounded-full bg-blue-400 opacity-30" />
                   </div>
                 ) : (
-                  <Circle className="h-6 w-6 text-theme-text-secondary" />
+                  <Circle className="text-theme-text-secondary h-6 w-6" />
                 )}
               </div>
               <span
@@ -358,20 +347,16 @@ interface TrainingHoursDisplayProps {
   label?: string;
 }
 
-export const TrainingHoursDisplay: React.FC<TrainingHoursDisplayProps> = ({
-  completed,
-  required,
-  label,
-}) => {
+export const TrainingHoursDisplay: React.FC<TrainingHoursDisplayProps> = ({ completed, required, label }) => {
   const pct = required > 0 ? Math.min(100, (completed / required) * 100) : 0;
 
   return (
     <div className="w-full">
-      {label && <span className="mb-0.5 block text-xs font-medium text-theme-text-muted">{label}</span>}
-      <span className="text-sm font-semibold text-theme-text-primary">
-        {completed} <span className="font-normal text-theme-text-muted">/ {required} hrs</span>
+      {label && <span className="text-theme-text-muted mb-0.5 block text-xs font-medium">{label}</span>}
+      <span className="text-theme-text-primary text-sm font-semibold">
+        {completed} <span className="text-theme-text-muted font-normal">/ {required} hrs</span>
       </span>
-      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-theme-surface-secondary">
+      <div className="bg-theme-surface-secondary mt-1 h-1.5 w-full overflow-hidden rounded-full">
         <div
           className={`h-1.5 rounded-full transition-all duration-300 ${getProgressColor(pct)}`}
           style={{ width: `${pct}%` }}
@@ -392,49 +377,41 @@ interface EmptyTrainingStateProps {
   onAction?: () => void;
 }
 
-const emptyStateConfig: Record<
-  EmptyTrainingStateProps['type'],
-  { icon: React.ReactNode; defaultMessage: string }
-> = {
+const emptyStateConfig: Record<EmptyTrainingStateProps['type'], { icon: React.ReactNode; defaultMessage: string }> = {
   courses: {
-    icon: <BookOpen className="h-12 w-12 text-theme-text-muted" />,
+    icon: <BookOpen className="text-theme-text-muted h-12 w-12" />,
     defaultMessage: 'No training courses found.',
   },
   records: {
-    icon: <ClipboardList className="h-12 w-12 text-theme-text-muted" />,
+    icon: <ClipboardList className="text-theme-text-muted h-12 w-12" />,
     defaultMessage: 'No training records yet.',
   },
   requirements: {
-    icon: <ShieldCheck className="h-12 w-12 text-theme-text-muted" />,
+    icon: <ShieldCheck className="text-theme-text-muted h-12 w-12" />,
     defaultMessage: 'No training requirements configured.',
   },
   programs: {
-    icon: <GraduationCap className="h-12 w-12 text-theme-text-muted" />,
+    icon: <GraduationCap className="text-theme-text-muted h-12 w-12" />,
     defaultMessage: 'No training programs available.',
   },
   certifications: {
-    icon: <Award className="h-12 w-12 text-theme-text-muted" />,
+    icon: <Award className="text-theme-text-muted h-12 w-12" />,
     defaultMessage: 'No certifications on file.',
   },
 };
 
-export const EmptyTrainingState: React.FC<EmptyTrainingStateProps> = ({
-  type,
-  message,
-  actionLabel,
-  onAction,
-}) => {
+export const EmptyTrainingState: React.FC<EmptyTrainingStateProps> = ({ type, message, actionLabel, onAction }) => {
   const config = emptyStateConfig[type];
 
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       {config.icon}
-      <p className="mt-4 text-sm text-theme-text-muted">{message ?? config.defaultMessage}</p>
+      <p className="text-theme-text-muted mt-4 text-sm">{message ?? config.defaultMessage}</p>
       {actionLabel && onAction && (
         <button
           type="button"
           onClick={onAction}
-          className="btn-info font-medium gap-1.5 inline-flex items-center mt-4 px-3 rounded-md text-sm"
+          className="btn-info mt-4 inline-flex items-center gap-1.5 rounded-md px-3 text-sm font-medium"
         >
           <Plus className="h-4 w-4" />
           {actionLabel}

@@ -54,9 +54,7 @@ export const FinanceApprovalPage: React.FC = () => {
         if (active) setDetail(res.data);
       } catch (err: unknown) {
         if (active) {
-          setError(
-            getErrorMessage(err, 'This approval link is invalid or has expired.')
-          );
+          setError(getErrorMessage(err, 'This approval link is invalid or has expired.'));
         }
       } finally {
         if (active) setLoading(false);
@@ -74,17 +72,13 @@ export const FinanceApprovalPage: React.FC = () => {
       setSubmitting(true);
       setError(null);
       try {
-        const res = await axios.post<{ status: string; message: string }>(
-          `${BASE}/${token}/${action}`,
-          { notes: notes.trim() || undefined }
-        );
+        const res = await axios.post<{ status: string; message: string }>(`${BASE}/${token}/${action}`, {
+          notes: notes.trim() || undefined,
+        });
         setResultMessage(res.data.message);
       } catch (err: unknown) {
         setError(
-          getErrorMessage(
-            err,
-            'Could not record your response. The link may have expired or already been used.'
-          )
+          getErrorMessage(err, 'Could not record your response. The link may have expired or already been used.')
         );
       } finally {
         setSubmitting(false);
@@ -94,11 +88,9 @@ export const FinanceApprovalPage: React.FC = () => {
   );
 
   const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="flex min-h-screen items-center justify-center bg-theme-background p-4">
+    <div className="bg-theme-background flex min-h-screen items-center justify-center p-4">
       <div className="card w-full max-w-md">
-        <h1 className="mb-4 text-xl font-semibold text-theme-text-primary">
-          Approval Request
-        </h1>
+        <h1 className="text-theme-text-primary mb-4 text-xl font-semibold">Approval Request</h1>
         {children}
       </div>
     </div>
@@ -107,7 +99,7 @@ export const FinanceApprovalPage: React.FC = () => {
   if (loading) {
     return (
       <Shell>
-        <div className="flex items-center gap-3 text-theme-text-secondary">
+        <div className="text-theme-text-secondary flex items-center gap-3">
           <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
           <span>Loading approval…</span>
         </div>
@@ -119,10 +111,7 @@ export const FinanceApprovalPage: React.FC = () => {
     return (
       <Shell>
         <div className="flex items-start gap-3">
-          <CheckCircle
-            className="mt-0.5 h-6 w-6 flex-shrink-0 text-green-600"
-            aria-hidden="true"
-          />
+          <CheckCircle className="mt-0.5 h-6 w-6 flex-shrink-0 text-green-600" aria-hidden="true" />
           <p className="text-theme-text-primary">{resultMessage}</p>
         </div>
       </Shell>
@@ -133,10 +122,7 @@ export const FinanceApprovalPage: React.FC = () => {
     return (
       <Shell>
         <div className="flex items-start gap-3">
-          <XCircle
-            className="mt-0.5 h-6 w-6 flex-shrink-0 text-red-600"
-            aria-hidden="true"
-          />
+          <XCircle className="mt-0.5 h-6 w-6 flex-shrink-0 text-red-600" aria-hidden="true" />
           <p className="text-theme-text-primary">{error}</p>
         </div>
       </Shell>
@@ -150,10 +136,7 @@ export const FinanceApprovalPage: React.FC = () => {
     return (
       <Shell>
         <div className="flex items-start gap-3">
-          <Clock
-            className="mt-0.5 h-6 w-6 flex-shrink-0 text-theme-text-secondary"
-            aria-hidden="true"
-          />
+          <Clock className="text-theme-text-secondary mt-0.5 h-6 w-6 flex-shrink-0" aria-hidden="true" />
           <p className="text-theme-text-primary">{reason}</p>
         </div>
       </Shell>
@@ -173,9 +156,7 @@ export const FinanceApprovalPage: React.FC = () => {
       <dl className="mb-4 space-y-2 text-sm">
         <div className="flex justify-between gap-4">
           <dt className="text-theme-text-secondary">Item</dt>
-          <dd className="text-theme-text-primary">
-            {prettyEntity(detail.entity_type)}
-          </dd>
+          <dd className="text-theme-text-primary">{prettyEntity(detail.entity_type)}</dd>
         </div>
         <div className="flex justify-between gap-4">
           <dt className="text-theme-text-secondary">Approval step</dt>

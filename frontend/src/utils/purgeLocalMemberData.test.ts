@@ -125,9 +125,7 @@ describe('clearAllDrafts', () => {
 
   it('removes indexed drafts and any orphaned draft keys', async () => {
     vi.doUnmock('./shiftReportDrafts');
-    const { clearAllDrafts } = await vi.importActual<
-      typeof import('./shiftReportDrafts')
-    >('./shiftReportDrafts');
+    const { clearAllDrafts } = await vi.importActual<typeof import('./shiftReportDrafts')>('./shiftReportDrafts');
 
     localStorage.setItem(`${REAL_KEY_PREFIX}shift-1`, JSON.stringify({ a: 1 }));
     localStorage.setItem(`${REAL_KEY_PREFIX}shift-2`, JSON.stringify({ a: 2 }));

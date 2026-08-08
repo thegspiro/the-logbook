@@ -39,22 +39,26 @@ type FormState = {
 };
 
 const EMPTY: FormState = {
-  shirt_size: '', shirt_style: '', pant_waist: '', pant_inseam: '',
-  jacket_size: '', boot_size: '', boot_width: '', glove_size: '', hat_size: '',
+  shirt_size: '',
+  shirt_style: '',
+  pant_waist: '',
+  pant_inseam: '',
+  jacket_size: '',
+  boot_size: '',
+  boot_width: '',
+  glove_size: '',
+  hat_size: '',
 };
 
 const labelClass = 'block text-xs font-medium text-theme-text-primary mb-1';
 const inputClass = 'form-input w-full';
 
-export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({
-  isOpen, onClose, userId, memberName,
-}) => {
+export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOpen, onClose, userId, memberName }) => {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const set = (key: keyof FormState, value: string) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
+  const set = (key: keyof FormState, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,76 +121,133 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({
   const sizeOptions = (
     <>
       <option value="">--</option>
-      {STANDARD_SIZES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+      {STANDARD_SIZES.map((s) => (
+        <option key={s.value} value={s.value}>
+          {s.label}
+        </option>
+      ))}
     </>
   );
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={memberName ? `Sizes — ${memberName}` : 'My Sizes'}
-      size="md"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={memberName ? `Sizes — ${memberName}` : 'My Sizes'} size="md">
       {loading ? (
         <div className="flex justify-center py-10" role="status" aria-live="polite">
-          <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
+          <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={labelClass}>Shirt Size</label>
-              <select value={form.shirt_size} onChange={(e) => set('shirt_size', e.target.value)} className={inputClass}>{sizeOptions}</select>
+              <select
+                value={form.shirt_size}
+                onChange={(e) => set('shirt_size', e.target.value)}
+                className={inputClass}
+              >
+                {sizeOptions}
+              </select>
             </div>
             <div>
               <label className={labelClass}>Shirt Style</label>
-              <select value={form.shirt_style} onChange={(e) => set('shirt_style', e.target.value)} className={inputClass}>
+              <select
+                value={form.shirt_style}
+                onChange={(e) => set('shirt_style', e.target.value)}
+                className={inputClass}
+              >
                 <option value="">--</option>
-                {GARMENT_STYLES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+                {GARMENT_STYLES.map((g) => (
+                  <option key={g.value} value={g.value}>
+                    {g.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
               <label className={labelClass}>Pant Waist</label>
-              <input type="text" value={form.pant_waist} onChange={(e) => set('pant_waist', e.target.value)} className={inputClass} placeholder='e.g. 34' />
+              <input
+                type="text"
+                value={form.pant_waist}
+                onChange={(e) => set('pant_waist', e.target.value)}
+                className={inputClass}
+                placeholder="e.g. 34"
+              />
             </div>
             <div>
               <label className={labelClass}>Pant Inseam</label>
-              <input type="text" value={form.pant_inseam} onChange={(e) => set('pant_inseam', e.target.value)} className={inputClass} placeholder='e.g. 32' />
+              <input
+                type="text"
+                value={form.pant_inseam}
+                onChange={(e) => set('pant_inseam', e.target.value)}
+                className={inputClass}
+                placeholder="e.g. 32"
+              />
             </div>
             <div>
               <label className={labelClass}>Jacket Size</label>
-              <select value={form.jacket_size} onChange={(e) => set('jacket_size', e.target.value)} className={inputClass}>{sizeOptions}</select>
+              <select
+                value={form.jacket_size}
+                onChange={(e) => set('jacket_size', e.target.value)}
+                className={inputClass}
+              >
+                {sizeOptions}
+              </select>
             </div>
             <div>
               <label className={labelClass}>Glove Size</label>
-              <select value={form.glove_size} onChange={(e) => set('glove_size', e.target.value)} className={inputClass}>{sizeOptions}</select>
+              <select
+                value={form.glove_size}
+                onChange={(e) => set('glove_size', e.target.value)}
+                className={inputClass}
+              >
+                {sizeOptions}
+              </select>
             </div>
             <div>
               <label className={labelClass}>Boot Size</label>
               <select value={form.boot_size} onChange={(e) => set('boot_size', e.target.value)} className={inputClass}>
                 <option value="">--</option>
-                {SHOE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {SHOE_SIZES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
               <label className={labelClass}>Boot Width</label>
-              <input type="text" value={form.boot_width} onChange={(e) => set('boot_width', e.target.value)} className={inputClass} placeholder='e.g. D, EE' />
+              <input
+                type="text"
+                value={form.boot_width}
+                onChange={(e) => set('boot_width', e.target.value)}
+                className={inputClass}
+                placeholder="e.g. D, EE"
+              />
             </div>
             <div>
               <label className={labelClass}>Hat Size</label>
-              <input type="text" value={form.hat_size} onChange={(e) => set('hat_size', e.target.value)} className={inputClass} placeholder='e.g. 7 1/4' />
+              <input
+                type="text"
+                value={form.hat_size}
+                onChange={(e) => set('hat_size', e.target.value)}
+                className={inputClass}
+                placeholder="e.g. 7 1/4"
+              />
             </div>
           </div>
 
-          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
-            <button onClick={onClose} className="btn-secondary btn-md">Cancel</button>
+          <div className="flex flex-col-reverse items-stretch justify-end gap-2 pt-2 sm:flex-row sm:items-center">
+            <button onClick={onClose} className="btn-secondary btn-md">
+              Cancel
+            </button>
             <button
-              onClick={() => { void handleSave(); }}
+              onClick={() => {
+                void handleSave();
+              }}
               disabled={saving}
               className="btn-info btn-md inline-flex items-center justify-center gap-1"
             >
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               Save Sizes
             </button>
           </div>

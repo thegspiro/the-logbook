@@ -38,10 +38,7 @@ describe('SimpleMarkdown', () => {
 
     it('renders a mailto link', () => {
       render(<SimpleMarkdown text="[mail](mailto:chief@dept.org)" />);
-      expect(screen.getByRole('link', { name: 'mail' })).toHaveAttribute(
-        'href',
-        'mailto:chief@dept.org',
-      );
+      expect(screen.getByRole('link', { name: 'mail' })).toHaveAttribute('href', 'mailto:chief@dept.org');
     });
 
     it('downgrades a javascript: URL to plain text (no anchor)', () => {

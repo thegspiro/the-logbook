@@ -1,13 +1,5 @@
 import React from 'react';
-import {
-  AlertTriangle,
-  Globe,
-  ClipboardCheck,
-  Plug,
-  Clipboard,
-  FileText,
-  Send,
-} from 'lucide-react';
+import { AlertTriangle, Globe, ClipboardCheck, Plug, Clipboard, FileText, Send } from 'lucide-react';
 
 /** Target fields each integration type expects the user to map. */
 export const INTEGRATION_TARGET_FIELDS: Record<string, { key: string; label: string; required: boolean }[]> = {
@@ -84,7 +76,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Supervisor Notified', field_type: 'radio', required: true },
       { label: 'Additional Notes', field_type: 'textarea', required: false },
     ],
-    icon: <AlertTriangle className="w-6 h-6" aria-hidden="true" />,
+    icon: <AlertTriangle className="h-6 w-6" aria-hidden="true" />,
     color: 'text-red-700 dark:text-red-400',
   },
   {
@@ -102,10 +94,15 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'City', field_type: 'text', required: false },
       { label: 'State', field_type: 'text', required: false },
       { label: 'Zip Code', field_type: 'text', required: false },
-      { label: 'Membership Type', field_type: 'select', required: false, options: [
-        { value: 'regular', label: 'Regular Member' },
-        { value: 'administrative', label: 'Administrative Member' },
-      ] },
+      {
+        label: 'Membership Type',
+        field_type: 'select',
+        required: false,
+        options: [
+          { value: 'regular', label: 'Regular Member' },
+          { value: 'administrative', label: 'Administrative Member' },
+        ],
+      },
       { label: 'Previous Fire/EMS Experience', field_type: 'radio', required: true },
       { label: 'Experience Details', field_type: 'textarea', required: false },
       { label: 'Why are you interested in joining?', field_type: 'textarea', required: true },
@@ -113,7 +110,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Availability', field_type: 'select', required: true },
       { label: 'Additional Information', field_type: 'textarea', required: false },
     ],
-    icon: <Globe className="w-6 h-6" aria-hidden="true" />,
+    icon: <Globe className="h-6 w-6" aria-hidden="true" />,
     color: 'text-cyan-700 dark:text-cyan-400',
     isPublic: true,
     integrationHint: 'membership_interest',
@@ -137,7 +134,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Pass/Fail', field_type: 'radio', required: true },
       { label: 'Next Inspection Due', field_type: 'date', required: false },
     ],
-    icon: <ClipboardCheck className="w-6 h-6" aria-hidden="true" />,
+    icon: <ClipboardCheck className="h-6 w-6" aria-hidden="true" />,
     color: 'text-emerald-700 dark:text-emerald-400',
   },
   {
@@ -157,7 +154,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Acknowledgment', field_type: 'checkbox', required: true },
       { label: 'Notes', field_type: 'textarea', required: false },
     ],
-    icon: <Plug className="w-6 h-6" aria-hidden="true" />,
+    icon: <Plug className="h-6 w-6" aria-hidden="true" />,
     color: 'text-orange-700 dark:text-orange-400',
     integrationHint: 'equipment_assignment',
   },
@@ -188,7 +185,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Actions Taken', field_type: 'textarea', required: false },
       { label: 'Overall Status', field_type: 'radio', required: true },
     ],
-    icon: <Clipboard className="w-6 h-6" aria-hidden="true" />,
+    icon: <Clipboard className="h-6 w-6" aria-hidden="true" />,
     color: 'text-blue-700 dark:text-blue-400',
   },
   {
@@ -208,7 +205,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Equipment requests', field_type: 'textarea', required: false },
       { label: 'Additional comments', field_type: 'textarea', required: false },
     ],
-    icon: <FileText className="w-6 h-6" aria-hidden="true" />,
+    icon: <FileText className="h-6 w-6" aria-hidden="true" />,
     color: 'text-purple-700 dark:text-purple-400',
   },
   {
@@ -230,7 +227,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       { label: 'Venue Address', field_type: 'text', required: false },
       { label: 'Special Requests', field_type: 'textarea', required: false },
     ],
-    icon: <Send className="w-6 h-6" aria-hidden="true" />,
+    icon: <Send className="h-6 w-6" aria-hidden="true" />,
     color: 'text-teal-700 dark:text-teal-400',
     isPublic: true,
     integrationHint: 'event_request',

@@ -60,9 +60,9 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
   return (
     <>
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
-            <Wrench className="w-5 h-5" />
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-theme-text-primary flex items-center gap-2 font-bold">
+            <Wrench className="h-5 w-5" />
             Maintenance Records
           </h2>
           <button onClick={handleAdd} className="btn-primary text-sm">
@@ -70,18 +70,15 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
           </button>
         </div>
         {loadingTab ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
+          <div className="py-8 text-center">
+            <div className="border-theme-text-primary mx-auto h-8 w-8 animate-spin rounded-full border-b-2"></div>
           </div>
         ) : maintenanceRecords.length === 0 ? (
-          <p className="text-theme-text-muted text-center py-8">No maintenance records found.</p>
+          <p className="text-theme-text-muted py-8 text-center">No maintenance records found.</p>
         ) : (
           <div className="space-y-3">
             {maintenanceRecords.map((record) => (
-              <div
-                key={record.id}
-                className="card-secondary p-4"
-              >
+              <div key={record.id} className="card-secondary p-4">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
                     <p className="text-theme-text-primary font-medium">
@@ -93,24 +90,20 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                         : `Due ${formatDate(record.dueDate, timezone)}`}
                     </p>
                     {record.description && (
-                      <p className="text-theme-text-secondary text-sm mt-1 truncate">{record.description}</p>
+                      <p className="text-theme-text-secondary mt-1 truncate text-sm">{record.description}</p>
                     )}
-                    {record.vendor && (
-                      <p className="text-theme-text-muted text-xs mt-1">Vendor: {record.vendor}</p>
-                    )}
+                    {record.vendor && <p className="text-theme-text-muted mt-1 text-xs">Vendor: {record.vendor}</p>}
                   </div>
-                  <div className="flex items-center gap-3 ml-4">
+                  <div className="ml-4 flex items-center gap-3">
                     <div className="text-right">
-                      {record.cost != null && (
-                        <p className="text-theme-text-primary">{formatCurrency(record.cost)}</p>
-                      )}
+                      {record.cost != null && <p className="text-theme-text-primary">{formatCurrency(record.cost)}</p>}
                       <span
-                        className={`px-2 py-1 text-xs rounded ${
+                        className={`rounded px-2 py-1 text-xs ${
                           record.isCompleted
                             ? 'bg-green-500/10 text-green-700 dark:text-green-400'
                             : record.isOverdue
-                            ? 'bg-red-500/10 text-red-700 dark:text-red-400'
-                            : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+                              ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                              : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
                         }`}
                       >
                         {record.isCompleted ? 'Completed' : record.isOverdue ? 'Overdue' : 'Pending'}
@@ -119,17 +112,17 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                     <div className="flex flex-col gap-1">
                       <button
                         onClick={() => handleEdit(record)}
-                        className="p-1.5 text-theme-text-muted hover:text-theme-text-primary transition-colors rounded-md hover:bg-theme-surface-secondary"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors"
                         title="Edit record"
                       >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setDeleteTarget(record)}
-                        className="p-1.5 text-theme-text-muted hover:text-red-600 transition-colors rounded-md hover:bg-theme-surface-secondary"
+                        className="text-theme-text-muted hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors hover:text-red-600"
                         title="Delete record"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </div>

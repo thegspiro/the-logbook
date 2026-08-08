@@ -67,9 +67,7 @@ describe('userService', () => {
   // ── getUsersWithRoles ────────────────────────────────────────────────
   describe('getUsersWithRoles', () => {
     it('should GET /users/with-roles and return users with roles', async () => {
-      const usersWithRoles = [
-        { id: 'u1', username: 'alice', roles: [{ id: 'r1', name: 'Admin' }] },
-      ];
+      const usersWithRoles = [{ id: 'u1', username: 'alice', roles: [{ id: 'r1', name: 'Admin' }] }];
       mockGet.mockResolvedValue({ data: usersWithRoles });
 
       const result = await userService.getUsersWithRoles();
@@ -355,11 +353,9 @@ describe('userService', () => {
       const file = new File(['photo-data'], 'avatar.jpg', { type: 'image/jpeg' });
       const result = await userService.uploadPhoto('u1', file);
 
-      expect(mockPost).toHaveBeenCalledWith(
-        '/users/u1/photo',
-        expect.any(FormData),
-        { headers: { 'Content-Type': 'multipart/form-data' } },
-      );
+      expect(mockPost).toHaveBeenCalledWith('/users/u1/photo', expect.any(FormData), {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       expect(result).toEqual(response);
 
       // Verify the FormData contains the file
@@ -622,11 +618,9 @@ describe('organizationService', () => {
 
       const result = await organizationService.acknowledgeSetupChecklistItem('org_settings');
 
-      expect(mockPost).toHaveBeenCalledWith(
-        '/organization/setup-checklist/org_settings/acknowledge',
-        null,
-        { params: { acknowledged: true } }
-      );
+      expect(mockPost).toHaveBeenCalledWith('/organization/setup-checklist/org_settings/acknowledge', null, {
+        params: { acknowledged: true },
+      });
       expect(result).toEqual(response);
     });
 
@@ -635,11 +629,9 @@ describe('organizationService', () => {
 
       await organizationService.acknowledgeSetupChecklistItem('modules', false);
 
-      expect(mockPost).toHaveBeenCalledWith(
-        '/organization/setup-checklist/modules/acknowledge',
-        null,
-        { params: { acknowledged: false } }
-      );
+      expect(mockPost).toHaveBeenCalledWith('/organization/setup-checklist/modules/acknowledge', null, {
+        params: { acknowledged: false },
+      });
     });
   });
 
@@ -719,9 +711,7 @@ describe('roleService', () => {
   // ── getPermissionsByCategory ─────────────────────────────────────────
   describe('getPermissionsByCategory', () => {
     it('should GET /roles/permissions/by-category', async () => {
-      const categories = [
-        { category: 'Events', permissions: [{ id: 'p1', name: 'events.view' }] },
-      ];
+      const categories = [{ category: 'Events', permissions: [{ id: 'p1', name: 'events.view' }] }];
       mockGet.mockResolvedValue({ data: categories });
 
       const result = await roleService.getPermissionsByCategory();

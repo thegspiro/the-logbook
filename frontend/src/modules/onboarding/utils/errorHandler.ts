@@ -20,36 +20,21 @@ export interface ApiError {
  * Type guard: checks if value is an object with a string `message` property
  */
 function hasMessage(value: unknown): value is { message: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'message' in value &&
-    typeof value.message === 'string'
-  );
+  return typeof value === 'object' && value !== null && 'message' in value && typeof value.message === 'string';
 }
 
 /**
  * Type guard: checks if value is an object with a string `name` property
  */
 function hasName(value: unknown): value is { name: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'name' in value &&
-    typeof value.name === 'string'
-  );
+  return typeof value === 'object' && value !== null && 'name' in value && typeof value.name === 'string';
 }
 
 /**
  * Type guard: checks if value is an object with a string `detail` property
  */
 function hasDetail(value: unknown): value is { detail: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'detail' in value &&
-    typeof value.detail === 'string'
-  );
+  return typeof value === 'object' && value !== null && 'detail' in value && typeof value.detail === 'string';
 }
 
 /**
@@ -132,7 +117,7 @@ export function handleApiError(error: unknown, context?: string): string {
       case 401:
         return 'Session expired. Please log in again.';
       case 403:
-        return 'Access denied. You don\'t have permission to perform this action.';
+        return "Access denied. You don't have permission to perform this action.";
       case 404:
         return context
           ? `${context} not found. It may have been deleted or moved.`
@@ -170,7 +155,7 @@ export function handleApiError(error: unknown, context?: string): string {
       case 401:
         return 'Session expired. Please log in again.';
       case 403:
-        return 'Access denied. You don\'t have permission to perform this action.';
+        return "Access denied. You don't have permission to perform this action.";
       case 404:
         return context
           ? `${context} not found. It may have been deleted or moved.`
@@ -244,7 +229,7 @@ function containsTechnicalJargon(message: string): boolean {
   ];
 
   const lowerMessage = message.toLowerCase();
-  return technicalTerms.some(term => lowerMessage.includes(term));
+  return technicalTerms.some((term) => lowerMessage.includes(term));
 }
 
 /**
@@ -296,8 +281,7 @@ export function formatValidationErrors(validationErrors: ValidationErrorEntry[])
   const errorMessages = validationErrors
     .filter((error): error is ValidationErrorEntry => error != null)
     .map(
-      error =>
-        `• ${capitalizeFirst(validationErrorField(error))}: ${error.message || error.msg || 'Invalid value'}`
+      (error) => `• ${capitalizeFirst(validationErrorField(error))}: ${error.message || error.msg || 'Invalid value'}`
     );
 
   return `Please fix the following errors:\n${errorMessages.join('\n')}`;

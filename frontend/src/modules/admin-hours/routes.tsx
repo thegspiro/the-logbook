@@ -9,18 +9,10 @@ import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const AdminHoursPage = lazyWithRetry(
-  () => import('./pages/AdminHoursPage'),
-);
-const AdminHoursManagePage = lazyWithRetry(
-  () => import('./pages/AdminHoursManagePage'),
-);
-const AdminHoursQRCodePage = lazyWithRetry(
-  () => import('./pages/AdminHoursQRCodePage'),
-);
-const AdminHoursClockInPage = lazyWithRetry(
-  () => import('./pages/AdminHoursClockInPage'),
-);
+const AdminHoursPage = lazyWithRetry(() => import('./pages/AdminHoursPage'));
+const AdminHoursManagePage = lazyWithRetry(() => import('./pages/AdminHoursManagePage'));
+const AdminHoursQRCodePage = lazyWithRetry(() => import('./pages/AdminHoursQRCodePage'));
+const AdminHoursClockInPage = lazyWithRetry(() => import('./pages/AdminHoursClockInPage'));
 
 export const getAdminHoursRoutes = () => {
   return (

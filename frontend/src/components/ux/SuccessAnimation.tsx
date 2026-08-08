@@ -37,12 +37,16 @@ export const SuccessAnimation: React.FC<SuccessAnimationProps> = ({
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-0 z-70 flex items-center justify-center pointer-events-none" role="status" aria-live="polite">
-      <div className="bg-theme-surface-modal/95 backdrop-blur-xs rounded-2xl p-8 shadow-2xl border border-theme-surface-border animate-success-pop">
+    <div
+      className="pointer-events-none fixed inset-0 z-70 flex items-center justify-center"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="bg-theme-surface-modal/95 border-theme-surface-border animate-success-pop rounded-2xl border p-8 shadow-2xl backdrop-blur-xs">
         {/* Animated checkmark circle */}
-        <div className="mx-auto w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-3">
+        <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
           <svg
-            className="w-10 h-10 text-green-500 animate-success-check"
+            className="animate-success-check h-10 w-10 text-green-500"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -56,7 +60,7 @@ export const SuccessAnimation: React.FC<SuccessAnimationProps> = ({
             />
           </svg>
         </div>
-        <p className="text-center text-theme-text-primary font-medium">{message}</p>
+        <p className="text-theme-text-primary text-center font-medium">{message}</p>
       </div>
     </div>
   );

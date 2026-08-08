@@ -83,9 +83,7 @@ describe('NotificationPreviewModal', () => {
   });
 
   it('names the other emails the same switch controls', async () => {
-    mockPreviewNotification.mockResolvedValue(
-      preview({ alsoGoverns: ['Waived balances', 'Refunds'] }),
-    );
+    mockPreviewNotification.mockResolvedValue(preview({ alsoGoverns: ['Waived balances', 'Refunds'] }));
     render(<NotificationPreviewModal notice="payment_receipt" onClose={vi.fn()} />);
 
     expect(await screen.findByText(/Waived balances, Refunds/)).toBeInTheDocument();
@@ -115,9 +113,7 @@ describe('NotificationPreviewModal', () => {
     await user.click(screen.getByRole('button', { name: /Send this to me/ }));
 
     expect(mockSendNotificationTest).toHaveBeenCalledWith('order_confirmation');
-    await waitFor(() =>
-      expect(mockToastSuccess).toHaveBeenCalledWith('Test message sent to quinn@example.org.'),
-    );
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Test message sent to quinn@example.org.'));
   });
 
   it('says so plainly when email is not configured, rather than claiming success', async () => {
@@ -135,9 +131,7 @@ describe('NotificationPreviewModal', () => {
     await user.click(screen.getByRole('button', { name: /Send this to me/ }));
 
     await waitFor(() =>
-      expect(mockToastError).toHaveBeenCalledWith(
-        'Email is not configured for this organization, so nothing was sent.',
-      ),
+      expect(mockToastError).toHaveBeenCalledWith('Email is not configured for this organization, so nothing was sent.')
     );
     expect(mockToastSuccess).not.toHaveBeenCalled();
   });

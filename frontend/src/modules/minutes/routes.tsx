@@ -11,9 +11,7 @@ import { Route } from 'react-router';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const MinutesPage = lazyWithRetry(() => import('./pages/MinutesPage'));
-const MinutesDetailPage = lazyWithRetry(
-  () => import('./pages/MinutesDetailPage'),
-);
+const MinutesDetailPage = lazyWithRetry(() => import('./pages/MinutesDetailPage'));
 
 /** Protected minutes routes (rendered inside AppLayout). */
 export const getMinutesRoutes = () => (

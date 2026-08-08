@@ -219,7 +219,7 @@ describe('financeStore', () => {
           name: 'FY2026',
           startDate: '2026-01-01',
           endDate: '2026-12-31',
-        }),
+        })
       ).rejects.toThrow('Duplicate name');
 
       expect(getState().error).toBe('Duplicate name');
@@ -355,7 +355,7 @@ describe('financeStore', () => {
           fiscalYearId: 'fy1',
           categoryId: 'cat1',
           amountBudgeted: 10000,
-        }),
+        })
       ).rejects.toThrow('Budget exists');
 
       expect(getState().error).toBe('Budget exists');
@@ -405,9 +405,7 @@ describe('financeStore', () => {
     it('should throw and set error on failure', async () => {
       mockApprovalChainCreate.mockRejectedValue(new Error('Invalid'));
 
-      await expect(
-        getState().createApprovalChain({ name: 'Bad' }),
-      ).rejects.toThrow('Invalid');
+      await expect(getState().createApprovalChain({ name: 'Bad' })).rejects.toThrow('Invalid');
 
       expect(getState().error).toBe('Invalid');
     });
@@ -453,9 +451,7 @@ describe('financeStore', () => {
 
   describe('fetchPendingApprovals', () => {
     it('should load pending approvals', async () => {
-      const pending = [
-        { stepRecordId: 'sr1', entityType: 'purchase_request', entityTitle: 'New Hose' },
-      ];
+      const pending = [{ stepRecordId: 'sr1', entityType: 'purchase_request', entityTitle: 'New Hose' }];
       mockApprovalGetPending.mockResolvedValue(pending);
 
       await getState().fetchPendingApprovals();
@@ -615,9 +611,7 @@ describe('financeStore', () => {
     it('should throw and set error on failure', async () => {
       mockPRCreate.mockRejectedValue(new Error('Missing fields'));
 
-      await expect(
-        getState().createPurchaseRequest({ title: '' }),
-      ).rejects.toThrow('Missing fields');
+      await expect(getState().createPurchaseRequest({ title: '' })).rejects.toThrow('Missing fields');
 
       expect(getState().error).toBe('Missing fields');
     });
@@ -747,9 +741,7 @@ describe('financeStore', () => {
     it('should throw and set error on failure', async () => {
       mockERCreate.mockRejectedValue(new Error('Validation error'));
 
-      await expect(
-        getState().createExpenseReport({ title: '' }),
-      ).rejects.toThrow('Validation error');
+      await expect(getState().createExpenseReport({ title: '' })).rejects.toThrow('Validation error');
 
       expect(getState().error).toBe('Validation error');
     });
@@ -876,9 +868,7 @@ describe('financeStore', () => {
     it('should throw and set error on failure', async () => {
       mockCRCreate.mockRejectedValue(new Error('Missing payee'));
 
-      await expect(
-        getState().createCheckRequest({ payeeName: '' }),
-      ).rejects.toThrow('Missing payee');
+      await expect(getState().createCheckRequest({ payeeName: '' })).rejects.toThrow('Missing payee');
 
       expect(getState().error).toBe('Missing payee');
     });
@@ -1081,9 +1071,7 @@ describe('financeStore', () => {
     });
 
     it('sets isLoading true at start of fetch', async () => {
-      mockBudgetList.mockImplementation(
-        () => new Promise(() => {}),
-      );
+      mockBudgetList.mockImplementation(() => new Promise(() => {}));
 
       void getState().fetchBudgets();
 

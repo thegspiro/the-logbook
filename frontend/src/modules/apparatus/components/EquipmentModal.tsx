@@ -9,11 +9,7 @@ import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { apparatusEquipmentService } from '../services/api';
-import type {
-  ApparatusEquipment,
-  ApparatusEquipmentCreate,
-  ApparatusEquipmentUpdate,
-} from '../types';
+import type { ApparatusEquipment, ApparatusEquipmentCreate, ApparatusEquipmentUpdate } from '../types';
 
 interface EquipmentModalProps {
   isOpen: boolean;
@@ -135,15 +131,10 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={editEquipment ? 'Edit Equipment' : 'Add Equipment'}
-      size="md"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={editEquipment ? 'Edit Equipment' : 'Add Equipment'} size="md">
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         {/* Name & Quantity */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="sm:col-span-2">
             <label className={labelClass}>Name *</label>
             <input
@@ -157,62 +148,89 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
           </div>
           <div>
             <label className={labelClass}>Quantity</label>
-            <input type="number" min="1" className={inputClass} value={f.quantity} onChange={(e) => up('quantity', e.target.value)} />
+            <input
+              type="number"
+              min="1"
+              className={inputClass}
+              value={f.quantity}
+              onChange={(e) => up('quantity', e.target.value)}
+            />
           </div>
         </div>
 
         {/* Description */}
         <div>
           <label className={labelClass}>Description</label>
-          <textarea className={inputClass} rows={2} value={f.description} onChange={(e) => up('description', e.target.value)} />
+          <textarea
+            className={inputClass}
+            rows={2}
+            value={f.description}
+            onChange={(e) => up('description', e.target.value)}
+          />
         </div>
 
         {/* Location */}
         <div>
           <label className={labelClass}>Location on Apparatus</label>
-          <input type="text" className={inputClass} value={f.locationOnApparatus} onChange={(e) => up('locationOnApparatus', e.target.value)} placeholder="e.g. Compartment 3, Driver Side" />
+          <input
+            type="text"
+            className={inputClass}
+            value={f.locationOnApparatus}
+            onChange={(e) => up('locationOnApparatus', e.target.value)}
+            placeholder="e.g. Compartment 3, Driver Side"
+          />
         </div>
 
         {/* Serial & Asset Tag */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Serial Number</label>
-            <input type="text" className={inputClass} value={f.serialNumber} onChange={(e) => up('serialNumber', e.target.value)} />
+            <input
+              type="text"
+              className={inputClass}
+              value={f.serialNumber}
+              onChange={(e) => up('serialNumber', e.target.value)}
+            />
           </div>
           <div>
             <label className={labelClass}>Asset Tag</label>
-            <input type="text" className={inputClass} value={f.assetTag} onChange={(e) => up('assetTag', e.target.value)} />
+            <input
+              type="text"
+              className={inputClass}
+              value={f.assetTag}
+              onChange={(e) => up('assetTag', e.target.value)}
+            />
           </div>
         </div>
 
         {/* Flags */}
         <div className="flex flex-wrap gap-6">
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               checked={f.isRequired}
               onChange={(e) => up('isRequired', e.target.checked)}
-              className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+              className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
             />
-            <span className="text-sm text-theme-text-secondary">Required</span>
+            <span className="text-theme-text-secondary text-sm">Required</span>
           </label>
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               checked={f.isMounted}
               onChange={(e) => up('isMounted', e.target.checked)}
-              className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+              className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
             />
-            <span className="text-sm text-theme-text-secondary">Mounted</span>
+            <span className="text-theme-text-secondary text-sm">Mounted</span>
           </label>
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               checked={f.isPresent}
               onChange={(e) => up('isPresent', e.target.checked)}
-              className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+              className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
             />
-            <span className="text-sm text-theme-text-secondary">Present</span>
+            <span className="text-theme-text-secondary text-sm">Present</span>
           </label>
         </div>
 
@@ -223,8 +241,12 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-theme-surface-border">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors">
+        <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+          >
             Cancel
           </button>
           <button type="submit" disabled={saving} className="btn-primary px-6 py-2">

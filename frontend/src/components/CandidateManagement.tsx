@@ -37,10 +37,7 @@ const emptyCandidateForm: CandidateFormState = {
   is_write_in: false,
 };
 
-export const CandidateManagement: React.FC<CandidateManagementProps> = ({
-  electionId,
-  election,
-}) => {
+export const CandidateManagement: React.FC<CandidateManagementProps> = ({ electionId, election }) => {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +60,9 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
         userService.getUsers(),
       ]);
       setCandidates(candidateData);
-      setMembers(memberData.filter((m: User) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY));
+      setMembers(
+        memberData.filter((m: User) => m.status === UserStatus.ACTIVE || m.status === UserStatus.PROBATIONARY)
+      );
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load candidates'));
     } finally {
@@ -72,10 +71,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
   };
 
   // Members already added as candidates
-  const candidateUserIds = useMemo(
-    () => new Set(candidates.map((c) => c.user_id).filter(Boolean)),
-    [candidates]
-  );
+  const candidateUserIds = useMemo(() => new Set(candidates.map((c) => c.user_id).filter(Boolean)), [candidates]);
 
   // Filtered members for the search picker
   const filteredMembers = useMemo(() => {
@@ -216,8 +212,8 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
-        <div className="text-theme-text-muted text-center py-4">Loading candidates...</div>
+      <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+        <div className="text-theme-text-muted py-4 text-center">Loading candidates...</div>
       </div>
     );
   }
@@ -225,11 +221,9 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
   const isClosed = election.status === ElectionStatus.CLOSED || election.status === ElectionStatus.CANCELLED;
 
   return (
-    <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium text-theme-text-primary">
-          Candidates ({candidates.length})
-        </h3>
+    <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-theme-text-primary text-lg font-medium">Candidates ({candidates.length})</h3>
         {!isClosed && (
           <button
             type="button"
@@ -247,7 +241,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       </div>
 
       {error && (
-        <div role="alert" aria-live="assertive" className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3">
+        <div role="alert" aria-live="assertive" className="mb-4 rounded-sm border border-red-500/30 bg-red-500/10 p-3">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
@@ -255,11 +249,11 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
       {/* Add Candidate Form */}
       {showAddForm && (
         <div className="card-secondary mb-6 p-4">
-          <h4 className="text-sm font-semibold text-theme-text-primary mb-3">Add New Candidate</h4>
+          <h4 className="text-theme-text-primary mb-3 text-sm font-semibold">Add New Candidate</h4>
           <div className="space-y-3">
             {positions.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-theme-text-primary">Position</label>
+                <label className="text-theme-text-primary block text-sm font-medium">Position</label>
                 <select
                   value={formData.position}
                   onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
@@ -277,7 +271,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
             {/* Member Search */}
             <div>
-              <label className="block text-sm font-medium text-theme-text-primary">Select Member</label>
+              <label className="text-theme-text-primary block text-sm font-medium">Select Member</label>
               <div className="relative">
                 <input
                   type="text"
@@ -287,19 +281,19 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                   placeholder="Search members by name or membership number..."
                 />
                 {filteredMembers.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-theme-surface-modal border border-theme-input-border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  <div className="bg-theme-surface-modal border-theme-input-border absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border shadow-lg">
                     {filteredMembers.map((member) => (
                       <button
                         key={member.id}
                         type="button"
                         onClick={() => selectMember(member)}
-                        className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center justify-between text-sm"
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-white/10"
                       >
                         <span className="text-theme-text-primary">
                           {member.first_name} {member.last_name}
                         </span>
                         {member.membership_number && (
-                          <span className="text-xs text-theme-text-muted">#{member.membership_number}</span>
+                          <span className="text-theme-text-muted text-xs">#{member.membership_number}</span>
                         )}
                       </button>
                     ))}
@@ -312,7 +306,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                   <button
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, name: '', user_id: '' }))}
-                    className="ml-2 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400"
+                    className="text-theme-text-muted ml-2 hover:text-red-800 dark:hover:text-red-400"
                     aria-label="Clear selected member"
                   >
                     (clear)
@@ -323,7 +317,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
             {/* Manual name entry (fallback or override) */}
             <div>
-              <label className="block text-sm font-medium text-theme-text-primary">
+              <label className="text-theme-text-primary block text-sm font-medium">
                 Name {formData.user_id ? '' : '*'}
               </label>
               <input
@@ -336,7 +330,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-theme-text-primary">Statement</label>
+              <label className="text-theme-text-primary block text-sm font-medium">Statement</label>
               <textarea
                 value={formData.statement}
                 onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
@@ -364,13 +358,13 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                     }));
                     if (checked) setMemberSearch('');
                   }}
-                  className="rounded-sm border-theme-input-border text-blue-600"
+                  className="border-theme-input-border rounded-sm text-blue-600"
                 />
-                <label htmlFor="is_write_in" className="text-sm text-theme-text-primary">
+                <label htmlFor="is_write_in" className="text-theme-text-primary text-sm">
                   Write-in candidate
                 </label>
               </div>
-              <p className="mt-1 text-xs text-theme-text-muted ml-6">
+              <p className="text-theme-text-muted mt-1 ml-6 text-xs">
                 Adds this candidate as a write-in nomination (not from the official slate).
               </p>
             </div>
@@ -379,13 +373,15 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="px-3 py-2 text-sm border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md border px-3 py-2 text-sm"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={() => { void handleAdd(); }}
+                onClick={() => {
+                  void handleAdd();
+                }}
                 disabled={submitting || (!formData.name.trim() && !formData.is_write_in)}
                 className="btn-info rounded-md text-sm"
               >
@@ -398,16 +394,16 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
 
       {/* Candidates List */}
       {candidates.length === 0 ? (
-        <div className="text-center py-8 text-theme-text-muted">
+        <div className="text-theme-text-muted py-8 text-center">
           <p>No candidates yet.</p>
-          {!isClosed && <p className="text-sm mt-1">Click "Add Candidate" to get started.</p>}
+          {!isClosed && <p className="mt-1 text-sm">Click "Add Candidate" to get started.</p>}
         </div>
       ) : (
         <div className="space-y-6">
           {Object.entries(groupedCandidates).map(([groupName, groupCandidates]) => (
             <div key={groupName}>
               {Object.keys(groupedCandidates).length > 1 && (
-                <h4 className="text-sm font-semibold text-theme-text-muted uppercase tracking-wider mb-3">
+                <h4 className="text-theme-text-muted mb-3 text-sm font-semibold tracking-wider uppercase">
                   {groupName} ({groupCandidates.length})
                 </h4>
               )}
@@ -416,7 +412,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                 {groupCandidates.map((candidate) => (
                   <div
                     key={candidate.id}
-                    className={`p-4 rounded-lg border ${
+                    className={`rounded-lg border p-4 ${
                       candidate.accepted
                         ? 'border-theme-surface-border bg-theme-surface-secondary'
                         : 'border-yellow-500/30 bg-yellow-500/10'
@@ -427,18 +423,14 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                         <input
                           type="text"
                           value={formData.name}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, name: e.target.value }))
-                          }
-                          className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary text-sm"
+                          onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary block w-full rounded-md border px-3 py-2 text-sm shadow-xs"
                         />
                         {positions.length > 0 && (
                           <select
                             value={formData.position}
-                            onChange={(e) =>
-                              setFormData((prev) => ({ ...prev, position: e.target.value }))
-                            }
-                            className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                            onChange={(e) => setFormData((prev) => ({ ...prev, position: e.target.value }))}
+                            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
                           >
                             <option value="">Select position...</option>
                             {positions.map((pos) => (
@@ -450,17 +442,17 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                         )}
                         <textarea
                           value={formData.statement}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, statement: e.target.value }))
-                          }
+                          onChange={(e) => setFormData((prev) => ({ ...prev, statement: e.target.value }))}
                           rows={2}
-                          className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary text-sm"
+                          className="bg-theme-input-bg border-theme-input-border text-theme-text-primary block w-full rounded-md border px-3 py-2 text-sm shadow-xs"
                           placeholder="Statement..."
                         />
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={() => { void handleEdit(candidate.id); }}
+                            onClick={() => {
+                              void handleEdit(candidate.id);
+                            }}
                             disabled={submitting}
                             className="btn-info rounded-sm px-3 py-1 text-sm"
                           >
@@ -469,7 +461,7 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                           <button
                             type="button"
                             onClick={cancelEdit}
-                            className="px-3 py-1 text-sm border border-theme-surface-border rounded-sm text-theme-text-secondary hover:bg-theme-surface-secondary"
+                            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded-sm border px-3 py-1 text-sm"
                           >
                             Cancel
                           </button>
@@ -479,35 +471,35 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-theme-text-primary">{candidate.name}</span>
+                            <span className="text-theme-text-primary font-medium">{candidate.name}</span>
                             {candidate.is_write_in && (
-                              <span className="px-2 py-0.5 text-xs bg-theme-surface text-theme-text-secondary rounded-sm">
+                              <span className="bg-theme-surface text-theme-text-secondary rounded-sm px-2 py-0.5 text-xs">
                                 Write-in
                               </span>
                             )}
                             {!candidate.accepted && (
-                              <span className="px-2 py-0.5 text-xs bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 rounded-sm">
+                              <span className="rounded-sm bg-yellow-500/20 px-2 py-0.5 text-xs text-yellow-700 dark:text-yellow-300">
                                 Pending
                               </span>
                             )}
                           </div>
                           {candidate.statement && (
-                            <p className="mt-1 text-sm text-theme-text-muted line-clamp-2">
-                              {candidate.statement}
-                            </p>
+                            <p className="text-theme-text-muted mt-1 line-clamp-2 text-sm">{candidate.statement}</p>
                           )}
                         </div>
 
                         {!isClosed && (
-                          <div className="flex items-center gap-2 ml-4">
+                          <div className="ml-4 flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => { void handleToggleAccepted(candidate); }}
+                              onClick={() => {
+                                void handleToggleAccepted(candidate);
+                              }}
                               aria-label={`${candidate.accepted ? 'Accepted' : 'Accept'} ${candidate.name}`}
-                              className={`px-2 py-1 text-xs rounded ${
+                              className={`rounded px-2 py-1 text-xs ${
                                 candidate.accepted
-                                  ? 'bg-green-500/20 text-green-700 dark:text-green-300 hover:bg-green-500/30'
-                                  : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-500/30'
+                                  ? 'bg-green-500/20 text-green-700 hover:bg-green-500/30 dark:text-green-300'
+                                  : 'bg-yellow-500/20 text-yellow-700 hover:bg-yellow-500/30 dark:text-yellow-300'
                               }`}
                             >
                               {candidate.accepted ? 'Accepted' : 'Accept'}
@@ -516,15 +508,17 @@ export const CandidateManagement: React.FC<CandidateManagementProps> = ({
                               type="button"
                               onClick={() => startEdit(candidate)}
                               aria-label={`Edit ${candidate.name}`}
-                              className="px-2 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover"
+                              className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover rounded-sm px-2 py-1 text-xs"
                             >
                               Edit
                             </button>
                             <button
                               type="button"
-                              onClick={() => { void handleDelete(candidate.id, candidate.name); }}
+                              onClick={() => {
+                                void handleDelete(candidate.id, candidate.name);
+                              }}
                               aria-label={`Remove ${candidate.name}`}
-                              className="px-2 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded-sm hover:bg-red-500/30"
+                              className="rounded-sm bg-red-500/20 px-2 py-1 text-xs text-red-700 hover:bg-red-500/30 dark:text-red-300"
                             >
                               Remove
                             </button>

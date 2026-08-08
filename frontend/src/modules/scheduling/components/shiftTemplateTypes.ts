@@ -1,40 +1,67 @@
 import React from 'react';
-import {
-  Clock,
-  Truck,
-  PartyPopper,
-  Flag,
-  Trophy,
-  Megaphone,
-  Zap,
-  Home,
-  ShieldCheck,
-  Heart,
-  Bike,
-} from 'lucide-react';
+import { Clock, Truck, PartyPopper, Flag, Trophy, Megaphone, Zap, Home, ShieldCheck, Heart, Bike } from 'lucide-react';
 
 export type TemplateCategory = 'standard' | 'specialty' | 'event';
 
-export const TEMPLATE_CATEGORIES: { value: TemplateCategory; label: string; icon: React.ElementType; description: string }[] = [
+export const TEMPLATE_CATEGORIES: {
+  value: TemplateCategory;
+  label: string;
+  icon: React.ElementType;
+  description: string;
+}[] = [
   { value: 'standard', label: 'Standard', icon: Clock, description: 'Regular day, night, or rotating shifts' },
-  { value: 'specialty', label: 'Specialty Vehicle', icon: Truck, description: 'Templates for specialty apparatus (Hazmat, Tower, etc.)' },
-  { value: 'event', label: 'Event / Special', icon: PartyPopper, description: 'Parades, SantaMobile, community events, details' },
+  {
+    value: 'specialty',
+    label: 'Specialty Vehicle',
+    icon: Truck,
+    description: 'Templates for specialty apparatus (Hazmat, Tower, etc.)',
+  },
+  {
+    value: 'event',
+    label: 'Event / Special',
+    icon: PartyPopper,
+    description: 'Parades, SantaMobile, community events, details',
+  },
 ];
 
 export const FALLBACK_APPARATUS_TYPES = [
-  'engine', 'ladder', 'ambulance', 'rescue', 'tanker', 'brush',
-  'tower', 'hazmat', 'boat', 'chief', 'utility',
+  'engine',
+  'ladder',
+  'ambulance',
+  'rescue',
+  'tanker',
+  'brush',
+  'tower',
+  'hazmat',
+  'boat',
+  'chief',
+  'utility',
 ];
 
 export type EventType = 'parade' | 'sporting' | 'community' | 'racing' | 'open_house' | 'detail' | 'other';
 
 export const EVENT_TYPES: { value: EventType; label: string; icon: React.ElementType; description: string }[] = [
   { value: 'parade', label: 'Parade', icon: Flag, description: 'Parades, processions, SantaMobile' },
-  { value: 'sporting', label: 'Sporting Event', icon: Trophy, description: 'School games, tournaments, athletic events' },
-  { value: 'community', label: 'Community Event', icon: Megaphone, description: 'Festivals, block parties, fundraisers' },
+  {
+    value: 'sporting',
+    label: 'Sporting Event',
+    icon: Trophy,
+    description: 'School games, tournaments, athletic events',
+  },
+  {
+    value: 'community',
+    label: 'Community Event',
+    icon: Megaphone,
+    description: 'Festivals, block parties, fundraisers',
+  },
   { value: 'racing', label: 'Racing Event', icon: Zap, description: 'Marathons, triathlons, car/bike races' },
   { value: 'open_house', label: 'Open House', icon: Home, description: 'Station tours, Fire Prevention Week' },
-  { value: 'detail', label: 'Detail / Standby', icon: ShieldCheck, description: 'Standby coverage, fire watch, inspections' },
+  {
+    value: 'detail',
+    label: 'Detail / Standby',
+    icon: ShieldCheck,
+    description: 'Standby coverage, fire watch, inspections',
+  },
   { value: 'other', label: 'Other', icon: PartyPopper, description: 'Any other special event' },
 ];
 
@@ -45,18 +72,66 @@ export interface ResourceUnit {
   positions: string[];
 }
 
-export const RESOURCE_TYPE_OPTIONS: { value: string; label: string; icon: React.ElementType; defaultPositions: string[]; defaultQty: number }[] = [
-  { value: 'engine', label: 'Engine', icon: Truck, defaultPositions: ['officer', 'driver', 'firefighter', 'firefighter'], defaultQty: 1 },
+export const RESOURCE_TYPE_OPTIONS: {
+  value: string;
+  label: string;
+  icon: React.ElementType;
+  defaultPositions: string[];
+  defaultQty: number;
+}[] = [
+  {
+    value: 'engine',
+    label: 'Engine',
+    icon: Truck,
+    defaultPositions: ['officer', 'driver', 'firefighter', 'firefighter'],
+    defaultQty: 1,
+  },
   { value: 'ambulance', label: 'Ambulance', icon: Truck, defaultPositions: ['driver', 'ems', 'ems'], defaultQty: 1 },
-  { value: 'ladder', label: 'Ladder / Tower', icon: Truck, defaultPositions: ['officer', 'driver', 'firefighter', 'firefighter'], defaultQty: 1 },
-  { value: 'rescue', label: 'Rescue', icon: Truck, defaultPositions: ['officer', 'driver', 'firefighter'], defaultQty: 1 },
-  { value: 'first_aid_station', label: 'First Aid Station', icon: Heart, defaultPositions: ['ems', 'ems'], defaultQty: 1 },
+  {
+    value: 'ladder',
+    label: 'Ladder / Tower',
+    icon: Truck,
+    defaultPositions: ['officer', 'driver', 'firefighter', 'firefighter'],
+    defaultQty: 1,
+  },
+  {
+    value: 'rescue',
+    label: 'Rescue',
+    icon: Truck,
+    defaultPositions: ['officer', 'driver', 'firefighter'],
+    defaultQty: 1,
+  },
+  {
+    value: 'first_aid_station',
+    label: 'First Aid Station',
+    icon: Heart,
+    defaultPositions: ['ems', 'ems'],
+    defaultQty: 1,
+  },
   { value: 'bicycle_team', label: 'Bicycle Team', icon: Bike, defaultPositions: ['ems', 'ems'], defaultQty: 1 },
-  { value: 'command_post', label: 'Command Post', icon: ShieldCheck, defaultPositions: ['officer', 'captain'], defaultQty: 1 },
-  { value: 'rehab_station', label: 'Rehab Station', icon: Heart, defaultPositions: ['ems', 'firefighter'], defaultQty: 1 },
+  {
+    value: 'command_post',
+    label: 'Command Post',
+    icon: ShieldCheck,
+    defaultPositions: ['officer', 'captain'],
+    defaultQty: 1,
+  },
+  {
+    value: 'rehab_station',
+    label: 'Rehab Station',
+    icon: Heart,
+    defaultPositions: ['ems', 'firefighter'],
+    defaultQty: 1,
+  },
   { value: 'utility_vehicle', label: 'Utility / Support', icon: Truck, defaultPositions: ['driver'], defaultQty: 1 },
   { value: 'tanker', label: 'Tanker', icon: Truck, defaultPositions: ['driver', 'firefighter'], defaultQty: 1 },
-  { value: 'hazmat', label: 'HazMat Unit', icon: Truck, defaultPositions: ['officer', 'driver', 'firefighter', 'firefighter'], defaultQty: 1 },
+  {
+    value: 'hazmat',
+    label: 'HazMat Unit',
+    icon: Truck,
+    defaultPositions: ['officer', 'driver', 'firefighter', 'firefighter'],
+    defaultQty: 1,
+  },
   { value: 'chief_vehicle', label: 'Chief / Battalion', icon: Truck, defaultPositions: ['officer'], defaultQty: 1 },
   { value: 'boat', label: 'Boat', icon: Truck, defaultPositions: ['officer', 'driver'], defaultQty: 1 },
 ];
@@ -77,7 +152,10 @@ export const EVENT_TEMPLATE_STARTERS: EventTemplateStarter[] = [
     name: 'Parade Detail',
     eventType: 'parade',
     description: 'Standard parade standby with engine and ambulance coverage',
-    duration_hours: '4', start_time_of_day: '09:00', end_time_of_day: '13:00', color: '#7c3aed',
+    duration_hours: '4',
+    start_time_of_day: '09:00',
+    end_time_of_day: '13:00',
+    color: '#7c3aed',
     resources: [
       { type: 'engine', label: 'Engine', quantity: 1, positions: ['officer', 'driver', 'firefighter', 'firefighter'] },
       { type: 'ambulance', label: 'Ambulance', quantity: 1, positions: ['driver', 'ems', 'ems'] },
@@ -87,9 +165,17 @@ export const EVENT_TEMPLATE_STARTERS: EventTemplateStarter[] = [
     name: 'SantaMobile',
     eventType: 'parade',
     description: 'Holiday SantaMobile community event with engine escort',
-    duration_hours: '5', start_time_of_day: '17:00', end_time_of_day: '22:00', color: '#dc2626',
+    duration_hours: '5',
+    start_time_of_day: '17:00',
+    end_time_of_day: '22:00',
+    color: '#dc2626',
     resources: [
-      { type: 'engine', label: 'Engine (Santa)', quantity: 1, positions: ['officer', 'driver', 'firefighter', 'firefighter'] },
+      {
+        type: 'engine',
+        label: 'Engine (Santa)',
+        quantity: 1,
+        positions: ['officer', 'driver', 'firefighter', 'firefighter'],
+      },
       { type: 'utility_vehicle', label: 'Utility / Lead', quantity: 1, positions: ['driver'] },
     ],
   },
@@ -97,7 +183,10 @@ export const EVENT_TEMPLATE_STARTERS: EventTemplateStarter[] = [
     name: 'School Sporting Event',
     eventType: 'sporting',
     description: 'High school football/soccer game standby with first aid',
-    duration_hours: '4', start_time_of_day: '16:00', end_time_of_day: '20:00', color: '#2563eb',
+    duration_hours: '4',
+    start_time_of_day: '16:00',
+    end_time_of_day: '20:00',
+    color: '#2563eb',
     resources: [
       { type: 'ambulance', label: 'Ambulance', quantity: 1, positions: ['driver', 'ems', 'ems'] },
       { type: 'first_aid_station', label: 'First Aid Station', quantity: 1, positions: ['ems', 'ems'] },
@@ -107,7 +196,10 @@ export const EVENT_TEMPLATE_STARTERS: EventTemplateStarter[] = [
     name: 'Marathon / Road Race',
     eventType: 'racing',
     description: 'Full marathon or road race coverage with bicycle EMS teams and aid stations',
-    duration_hours: '8', start_time_of_day: '05:00', end_time_of_day: '13:00', color: '#f59e0b',
+    duration_hours: '8',
+    start_time_of_day: '05:00',
+    end_time_of_day: '13:00',
+    color: '#f59e0b',
     resources: [
       { type: 'ambulance', label: 'Ambulance', quantity: 2, positions: ['driver', 'ems', 'ems'] },
       { type: 'first_aid_station', label: 'First Aid Station', quantity: 3, positions: ['ems', 'ems'] },
@@ -120,7 +212,10 @@ export const EVENT_TEMPLATE_STARTERS: EventTemplateStarter[] = [
     name: 'Community Festival',
     eventType: 'community',
     description: 'Block party, festival, or large community gathering',
-    duration_hours: '6', start_time_of_day: '10:00', end_time_of_day: '16:00', color: '#10b981',
+    duration_hours: '6',
+    start_time_of_day: '10:00',
+    end_time_of_day: '16:00',
+    color: '#10b981',
     resources: [
       { type: 'engine', label: 'Engine', quantity: 1, positions: ['officer', 'driver', 'firefighter', 'firefighter'] },
       { type: 'ambulance', label: 'Ambulance', quantity: 1, positions: ['driver', 'ems', 'ems'] },
@@ -131,16 +226,27 @@ export const EVENT_TEMPLATE_STARTERS: EventTemplateStarter[] = [
     name: 'Open House',
     eventType: 'open_house',
     description: 'Station open house, Fire Prevention Week, public tours',
-    duration_hours: '4', start_time_of_day: '10:00', end_time_of_day: '14:00', color: '#ef4444',
+    duration_hours: '4',
+    start_time_of_day: '10:00',
+    end_time_of_day: '14:00',
+    color: '#ef4444',
     resources: [
-      { type: 'engine', label: 'Engine (Demo)', quantity: 1, positions: ['officer', 'driver', 'firefighter', 'firefighter'] },
+      {
+        type: 'engine',
+        label: 'Engine (Demo)',
+        quantity: 1,
+        positions: ['officer', 'driver', 'firefighter', 'firefighter'],
+      },
     ],
   },
   {
     name: 'Triathlon',
     eventType: 'racing',
     description: 'Triathlon coverage with water and land EMS teams',
-    duration_hours: '8', start_time_of_day: '06:00', end_time_of_day: '14:00', color: '#f59e0b',
+    duration_hours: '8',
+    start_time_of_day: '06:00',
+    end_time_of_day: '14:00',
+    color: '#f59e0b',
     resources: [
       { type: 'ambulance', label: 'Ambulance', quantity: 2, positions: ['driver', 'ems', 'ems'] },
       { type: 'first_aid_station', label: 'First Aid Station', quantity: 2, positions: ['ems', 'ems'] },
@@ -211,13 +317,15 @@ export const getPositionOptions = (): { value: string; label: string }[] => {
       const custom = settings.customPositions ?? [];
       const merged = [...BUILTIN_POSITION_OPTIONS];
       for (const cp of custom) {
-        if (!merged.some(p => p.value === cp.value)) {
+        if (!merged.some((p) => p.value === cp.value)) {
           merged.push(cp);
         }
       }
       return merged;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return BUILTIN_POSITION_OPTIONS;
 };
 

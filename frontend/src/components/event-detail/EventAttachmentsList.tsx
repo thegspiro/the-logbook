@@ -22,34 +22,33 @@ export const EventAttachmentsList: React.FC<EventAttachmentsListProps> = ({
 }) => {
   if (attachments.length === 0) {
     return (
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
-        <h2 className="text-lg font-medium text-theme-text-primary mb-4 flex items-center gap-2">
+      <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+        <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 text-lg font-medium">
           <Paperclip className="h-5 w-5" />
           Attachments
         </h2>
-        <EmptyState
-          icon={Paperclip}
-          title="No attachments"
-          description="No files have been attached to this event."
-        />
+        <EmptyState icon={Paperclip} title="No attachments" description="No files have been attached to this event." />
       </div>
     );
   }
 
   return (
-    <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
-      <h2 className="text-lg font-medium text-theme-text-primary mb-4 flex items-center gap-2">
+    <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+      <h2 className="text-theme-text-primary mb-4 flex items-center gap-2 text-lg font-medium">
         <Paperclip className="h-5 w-5" />
         Attachments ({attachments.length})
       </h2>
       <div className="space-y-2">
         {attachments.map((attachment) => (
-          <div key={attachment.id} className="flex items-center justify-between p-3 bg-theme-surface-secondary rounded-lg">
-            <div className="flex items-center gap-3 min-w-0">
-              <Paperclip className="h-4 w-4 text-theme-text-muted shrink-0" />
+          <div
+            key={attachment.id}
+            className="bg-theme-surface-secondary flex items-center justify-between rounded-lg p-3"
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <Paperclip className="text-theme-text-muted h-4 w-4 shrink-0" />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-theme-text-primary truncate">{attachment.file_name}</p>
-                <p className="text-xs text-theme-text-muted">
+                <p className="text-theme-text-primary truncate text-sm font-medium">{attachment.file_name}</p>
+                <p className="text-theme-text-muted text-xs">
                   {attachment.file_size < 1024 * 1024
                     ? `${Math.round(attachment.file_size / 1024)} KB`
                     : `${(attachment.file_size / (1024 * 1024)).toFixed(1)} MB`}

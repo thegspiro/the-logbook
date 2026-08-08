@@ -607,7 +607,13 @@ describe('inventoryService', () => {
   describe('fulfillEquipmentRequest', () => {
     it('should PUT /inventory/requests/:id/fulfill with fulfillment data', async () => {
       const data = { item_id: 'i9', quantity: 2, override_allowance: false };
-      const response = { id: 'r1', status: 'fulfilled', fulfillment_type: 'issuance', fulfillment_reference_id: 'iss-1', message: 'Request fulfilled' };
+      const response = {
+        id: 'r1',
+        status: 'fulfilled',
+        fulfillment_type: 'issuance',
+        fulfillment_reference_id: 'iss-1',
+        message: 'Request fulfilled',
+      };
       mockPut.mockResolvedValueOnce({ data: response });
 
       const result = await inventoryService.fulfillEquipmentRequest('r1', data);
@@ -855,9 +861,7 @@ describe('inventoryService', () => {
     it('should propagate API errors from PUT requests', async () => {
       mockPut.mockRejectedValueOnce(new Error('Validation Error'));
 
-      await expect(
-        inventoryService.updateStorageArea('bad-id', {}),
-      ).rejects.toThrow('Validation Error');
+      await expect(inventoryService.updateStorageArea('bad-id', {})).rejects.toThrow('Validation Error');
     });
 
     it('should propagate API errors from DELETE requests', async () => {

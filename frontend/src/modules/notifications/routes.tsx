@@ -9,9 +9,7 @@ import React, { Suspense } from 'react';
 import { Route } from 'react-router';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const NotificationsPage = lazyWithRetry(
-  () => import('../../pages/NotificationsPage'),
-);
+const NotificationsPage = lazyWithRetry(() => import('../../pages/NotificationsPage'));
 
 export const getNotificationsRoutes = () => {
   return (

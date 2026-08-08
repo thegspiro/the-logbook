@@ -35,14 +35,21 @@ export const PositionEditor: React.FC<PositionEditorProps> = ({
     return (
       <select
         value={currentPosition}
-        onChange={e => { onSave(assignmentId, e.target.value, currentPosition); setIsEditing(false); }}
-        onBlur={() => { if (!updatingPosition) setIsEditing(false); }}
+        onChange={(e) => {
+          onSave(assignmentId, e.target.value, currentPosition);
+          setIsEditing(false);
+        }}
+        onBlur={() => {
+          if (!updatingPosition) setIsEditing(false);
+        }}
         disabled={updatingPosition}
-        className="text-xs bg-theme-input-bg border border-theme-input-border rounded-sm px-1 py-0.5 text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
+        className="bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-sm border px-1 py-0.5 text-xs focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
         autoFocus
       >
         {positionOptions.map(([val, label]) => (
-          <option key={val} value={val}>{label}</option>
+          <option key={val} value={val}>
+            {label}
+          </option>
         ))}
       </select>
     );
@@ -53,13 +60,13 @@ export const PositionEditor: React.FC<PositionEditorProps> = ({
   return (
     <button
       type="button"
-      className={`text-xs capitalize ${editable ? 'text-theme-text-muted hover:text-violet-500 transition-colors inline-flex items-center gap-0.5' : 'text-theme-text-muted'}`}
+      className={`text-xs capitalize ${editable ? 'text-theme-text-muted inline-flex items-center gap-0.5 transition-colors hover:text-violet-500' : 'text-theme-text-muted'}`}
       onClick={editable ? () => setIsEditing(true) : undefined}
       disabled={!editable}
       title={editable ? 'Click to change position' : undefined}
     >
       {label}
-      {editable && <Pencil className="w-2.5 h-2.5 ml-0.5 opacity-50" />}
+      {editable && <Pencil className="ml-0.5 h-2.5 w-2.5 opacity-50" />}
     </button>
   );
 };

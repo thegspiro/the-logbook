@@ -17,10 +17,7 @@ interface IPExceptionRequestFormProps {
 const inputClass = 'form-input';
 const labelClass = 'form-label';
 
-export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({
-  onSubmit,
-  isSaving,
-}) => {
+export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({ onSubmit, isSaving }) => {
   const [ipAddress, setIpAddress] = useState('');
   const [reason, setReason] = useState('');
   const [useCase, setUseCase] = useState('');
@@ -45,9 +42,16 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({
   };
 
   return (
-    <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
+    <form
+      onSubmit={(e) => {
+        void handleSubmit(e);
+      }}
+      className="space-y-4"
+    >
       <div>
-        <label htmlFor="ip-address" className={labelClass}>IP Address</label>
+        <label htmlFor="ip-address" className={labelClass}>
+          IP Address
+        </label>
         <input
           id="ip-address"
           type="text"
@@ -59,9 +63,11 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="use-case" className={labelClass}>Use Case</label>
+          <label htmlFor="use-case" className={labelClass}>
+            Use Case
+          </label>
           <select
             id="use-case"
             value={useCase}
@@ -79,7 +85,9 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({
         </div>
 
         <div>
-          <label htmlFor="duration" className={labelClass}>Duration (days)</label>
+          <label htmlFor="duration" className={labelClass}>
+            Duration (days)
+          </label>
           <input
             id="duration"
             type="number"
@@ -94,7 +102,9 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({
       </div>
 
       <div>
-        <label htmlFor="reason" className={labelClass}>Justification</label>
+        <label htmlFor="reason" className={labelClass}>
+          Justification
+        </label>
         <textarea
           id="reason"
           value={reason}
@@ -107,7 +117,9 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({
       </div>
 
       <div>
-        <label htmlFor="description" className={labelClass}>Additional Details (optional)</label>
+        <label htmlFor="description" className={labelClass}>
+          Additional Details (optional)
+        </label>
         <textarea
           id="description"
           value={description}
@@ -121,9 +133,9 @@ export const IPExceptionRequestForm: React.FC<IPExceptionRequestFormProps> = ({
       <button
         type="submit"
         disabled={isSaving || !ipAddress.trim() || !reason.trim() || !useCase}
-        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <Send className="w-4 h-4" />
+        <Send className="h-4 w-4" />
         {isSaving ? 'Submitting...' : 'Submit Request'}
       </button>
     </form>

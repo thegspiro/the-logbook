@@ -16,9 +16,7 @@ import { TEST_USER, gotoDashboard, navItem, signIn, signOut } from './helpers';
 test.describe('Navigation', () => {
   test.describe('Unauthenticated Access', () => {
     for (const path of ['/dashboard', '/events', '/members']) {
-      test(`should redirect unauthenticated users from ${path} to /login`, async ({
-        page,
-      }) => {
+      test(`should redirect unauthenticated users from ${path} to /login`, async ({ page }) => {
         await signOut(page);
         await page.goto(path);
 
@@ -76,9 +74,7 @@ test.describe('Navigation', () => {
       await expect(page).toHaveURL(/\/events/, { timeout: 10000 });
     });
 
-    test('should navigate to the Inventory section via the Operations menu', async ({
-      page,
-    }) => {
+    test('should navigate to the Inventory section via the Operations menu', async ({ page }) => {
       // Inventory is a child of the collapsible "Operations" group.
       await navItem(page, 'Operations').click();
       await navItem(page, 'Inventory').click();

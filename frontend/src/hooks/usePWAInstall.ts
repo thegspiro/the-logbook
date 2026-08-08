@@ -14,10 +14,7 @@ function isIOS(): boolean {
   const ua = navigator.userAgent;
   // iPadOS 13+ reports itself as a Mac; the touch-point check separates it
   // from a real desktop Safari, which never supports Add to Home Screen.
-  return (
-    /iPad|iPhone|iPod/.test(ua) ||
-    (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
-  );
+  return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
 }
 
 /** Add to Home Screen on iOS is a Safari feature. Third-party browsers on iOS

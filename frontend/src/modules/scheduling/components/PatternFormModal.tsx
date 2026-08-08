@@ -2,14 +2,8 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { X } from 'lucide-react';
-import type {
-  PatternFormData,
-  ShiftTemplate,
-} from './shiftTemplateTypes';
-import {
-  PATTERN_TYPES,
-  emptyPatternForm,
-} from './shiftTemplateTypes';
+import type { PatternFormData, ShiftTemplate } from './shiftTemplateTypes';
+import { PATTERN_TYPES, emptyPatternForm } from './shiftTemplateTypes';
 
 interface PatternFormModalProps {
   isOpen: boolean;
@@ -63,31 +57,40 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pattern-modal-title"
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90dvh] overflow-y-auto">
-        <div className="p-6 border-b border-theme-surface-border flex items-center justify-between">
-          <h2 id="pattern-modal-title" className="text-xl font-bold text-theme-text-primary">{title}</h2>
+      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-lg">
+        <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+          <h2 id="pattern-modal-title" className="text-theme-text-primary text-xl font-bold">
+            {title}
+          </h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
-            <X className="w-5 h-5" aria-hidden="true" />
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
-        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
+        <form
+          onSubmit={(e) => {
+            void handleSubmit(e);
+          }}
+          className="space-y-4 p-6"
+        >
           <div>
-            <label htmlFor="pattern-name" className="block text-sm font-medium text-theme-text-secondary mb-1">
+            <label htmlFor="pattern-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
               Name <span aria-hidden="true">*</span>
             </label>
             <input
               id="pattern-name"
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
               placeholder="e.g., 24/48 Rotation"
               required
               aria-required="true"
@@ -95,93 +98,99 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
           </div>
 
           <div>
-            <label htmlFor="pattern-description" className="block text-sm font-medium text-theme-text-secondary mb-1">
+            <label htmlFor="pattern-description" className="text-theme-text-secondary mb-1 block text-sm font-medium">
               Description
             </label>
             <textarea
               id="pattern-description"
               value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+              onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
               rows={2}
               placeholder="Optional description"
             />
           </div>
 
           <div>
-            <label htmlFor="pattern-type" className="block text-sm font-medium text-theme-text-secondary mb-1">
+            <label htmlFor="pattern-type" className="text-theme-text-secondary mb-1 block text-sm font-medium">
               Pattern Type <span aria-hidden="true">*</span>
             </label>
             <select
               id="pattern-type"
               value={formData.pattern_type}
-              onChange={(e) => setFormData(prev => ({ ...prev, pattern_type: e.target.value as PatternFormData['pattern_type'] }))}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, pattern_type: e.target.value as PatternFormData['pattern_type'] }))
+              }
+              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
               required
             >
-              {PATTERN_TYPES.map(pt => (
-                <option key={pt.value} value={pt.value}>{pt.label} - {pt.description}</option>
+              {PATTERN_TYPES.map((pt) => (
+                <option key={pt.value} value={pt.value}>
+                  {pt.label} - {pt.description}
+                </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label htmlFor="pattern-template" className="block text-sm font-medium text-theme-text-secondary mb-1">
+            <label htmlFor="pattern-template" className="text-theme-text-secondary mb-1 block text-sm font-medium">
               Shift Template
             </label>
             <select
               id="pattern-template"
               value={formData.template_id}
-              onChange={(e) => setFormData(prev => ({ ...prev, template_id: e.target.value }))}
-              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+              onChange={(e) => setFormData((prev) => ({ ...prev, template_id: e.target.value }))}
+              className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
             >
               <option value="">No template</option>
-              {templates.map(t => (
-                <option key={t.id} value={t.id}>{t.name} ({t.start_time_of_day} - {t.end_time_of_day})</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.start_time_of_day} - {t.end_time_of_day})
+                </option>
               ))}
             </select>
           </div>
 
           {(formData.pattern_type === 'platoon' || formData.pattern_type === 'custom') && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
-                <label htmlFor="pattern-rotation" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                <label htmlFor="pattern-rotation" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                   Rotation Days
                 </label>
                 <input
                   id="pattern-rotation"
                   type="number"
                   value={formData.rotation_days}
-                  onChange={(e) => setFormData(prev => ({ ...prev, rotation_days: e.target.value }))}
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, rotation_days: e.target.value }))}
+                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
                   min="1"
                   placeholder="e.g., 3"
                 />
               </div>
               <div>
-                <label htmlFor="pattern-days-on" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                <label htmlFor="pattern-days-on" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                   Days On
                 </label>
                 <input
                   id="pattern-days-on"
                   type="number"
                   value={formData.days_on}
-                  onChange={(e) => setFormData(prev => ({ ...prev, days_on: e.target.value }))}
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, days_on: e.target.value }))}
+                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
                   min="1"
                   placeholder="e.g., 1"
                 />
               </div>
               <div>
-                <label htmlFor="pattern-days-off" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                <label htmlFor="pattern-days-off" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                   Days Off
                 </label>
                 <input
                   id="pattern-days-off"
                   type="number"
                   value={formData.days_off}
-                  onChange={(e) => setFormData(prev => ({ ...prev, days_off: e.target.value }))}
-                  className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, days_off: e.target.value }))}
+                  className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
                   min="1"
                   placeholder="e.g., 2"
                 />
@@ -189,47 +198,43 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="pattern-start-date" className="block text-sm font-medium text-theme-text-secondary mb-1">
+              <label htmlFor="pattern-start-date" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                 Start Date <span aria-hidden="true">*</span>
               </label>
               <input
                 id="pattern-start-date"
                 type="date"
                 value={formData.start_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                onChange={(e) => setFormData((prev) => ({ ...prev, start_date: e.target.value }))}
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
                 required
               />
             </div>
             <div>
-              <label htmlFor="pattern-end-date" className="block text-sm font-medium text-theme-text-secondary mb-1">
+              <label htmlFor="pattern-end-date" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                 End Date
               </label>
               <input
                 id="pattern-end-date"
                 type="date"
                 value={formData.end_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                onChange={(e) => setFormData((prev) => ({ ...prev, end_date: e.target.value }))}
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-3 py-2 focus:ring-1 focus:outline-hidden"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-theme-surface-border">
+          <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary"
+              className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2"
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="btn-primary px-6"
-            >
+            <button type="submit" disabled={isSubmitting} className="btn-primary px-6">
               {isSubmitting ? 'Saving...' : 'Save Pattern'}
             </button>
           </div>

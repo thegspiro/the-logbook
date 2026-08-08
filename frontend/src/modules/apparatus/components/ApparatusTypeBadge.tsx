@@ -84,11 +84,7 @@ const getSizeClasses = (size: 'sm' | 'md' | 'lg') => {
   }
 };
 
-export const ApparatusTypeBadge: React.FC<ApparatusTypeBadgeProps> = ({
-  type,
-  size = 'md',
-  showIcon = true,
-}) => {
+export const ApparatusTypeBadge: React.FC<ApparatusTypeBadgeProps> = ({ type, size = 'md', showIcon = true }) => {
   const colors = getCategoryColors(type.category);
   const sizeClasses = getSizeClasses(size);
   const IconComponent = type.icon ? getApparatusIcon(type.icon) : null;
@@ -96,14 +92,14 @@ export const ApparatusTypeBadge: React.FC<ApparatusTypeBadgeProps> = ({
   if (type.color) {
     return (
       <span
-        className={`${sizeClasses} font-semibold rounded-sm border inline-flex items-center gap-1`}
+        className={`${sizeClasses} inline-flex items-center gap-1 rounded-sm border font-semibold`}
         style={{
           backgroundColor: `${type.color}20`,
           color: type.color,
           borderColor: `${type.color}50`,
         }}
       >
-        {showIcon && IconComponent && <IconComponent className="w-3 h-3" />}
+        {showIcon && IconComponent && <IconComponent className="h-3 w-3" />}
         {type.name}
       </span>
     );
@@ -111,9 +107,9 @@ export const ApparatusTypeBadge: React.FC<ApparatusTypeBadgeProps> = ({
 
   return (
     <span
-      className={`${sizeClasses} ${colors.background} ${colors.text} ${colors.border} font-semibold rounded-sm border inline-flex items-center gap-1`}
+      className={`${sizeClasses} ${colors.background} ${colors.text} ${colors.border} inline-flex items-center gap-1 rounded-sm border font-semibold`}
     >
-      {showIcon && IconComponent && <IconComponent className="w-3 h-3" />}
+      {showIcon && IconComponent && <IconComponent className="h-3 w-3" />}
       {type.name}
     </span>
   );

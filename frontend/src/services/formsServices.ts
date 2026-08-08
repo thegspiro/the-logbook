@@ -5,10 +5,20 @@
 import axios from 'axios';
 import api from './apiClient';
 import type {
-  FormsSummary, FormsListResponse, FormDetailDef, FormCreate, FormUpdate,
-  FormFieldCreate, FormField, FormSubmission, SubmissionsListResponse,
-  FormIntegrationCreate, FormIntegration, MemberLookupResponse,
-  PublicFormDef, PublicFormSubmissionResponse,
+  FormsSummary,
+  FormsListResponse,
+  FormDetailDef,
+  FormCreate,
+  FormUpdate,
+  FormFieldCreate,
+  FormField,
+  FormSubmission,
+  SubmissionsListResponse,
+  FormIntegrationCreate,
+  FormIntegration,
+  MemberLookupResponse,
+  PublicFormDef,
+  PublicFormSubmissionResponse,
 } from './formTypes';
 
 export const formsService = {
@@ -77,10 +87,13 @@ export const formsService = {
     return response.data;
   },
 
-  async getSubmissions(formId: string, params?: {
-    skip?: number;
-    limit?: number;
-  }): Promise<SubmissionsListResponse> {
+  async getSubmissions(
+    formId: string,
+    params?: {
+      skip?: number;
+      limit?: number;
+    }
+  ): Promise<SubmissionsListResponse> {
     const response = await api.get<SubmissionsListResponse>(`/forms/${formId}/submissions`, { params });
     return response.data;
   },
@@ -100,7 +113,11 @@ export const formsService = {
     return response.data;
   },
 
-  async updateIntegration(formId: string, integrationId: string, data: Partial<FormIntegrationCreate>): Promise<FormIntegration> {
+  async updateIntegration(
+    formId: string,
+    integrationId: string,
+    data: Partial<FormIntegrationCreate>
+  ): Promise<FormIntegration> {
     const response = await api.patch<FormIntegration>(`/forms/${formId}/integrations/${integrationId}`, data);
     return response.data;
   },
@@ -133,13 +150,15 @@ const PUBLIC_API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/v\d+
 
 export const publicFormsService = {
   async getForm(slug: string): Promise<PublicFormDef> {
-    const response = await axios.get<PublicFormDef>(
-      `${PUBLIC_API_BASE}/public/v1/forms/${slug}`
-    );
+    const response = await axios.get<PublicFormDef>(`${PUBLIC_API_BASE}/public/v1/forms/${slug}`);
     return response.data;
   },
 
-  async submitForm(slug: string, data: Record<string, unknown>, honeypot?: string): Promise<PublicFormSubmissionResponse> {
+  async submitForm(
+    slug: string,
+    data: Record<string, unknown>,
+    honeypot?: string
+  ): Promise<PublicFormSubmissionResponse> {
     const payload: Record<string, unknown> = { data };
     // Honeypot field - only sent if bot filled it in (real users never will)
     if (honeypot) {

@@ -8,10 +8,7 @@
  * grandchild-dropping) logic can be unit-tested independently of React.
  */
 
-import type {
-  CheckTemplateCompartment,
-  CheckTemplateItem,
-} from '../types/equipmentCheck';
+import type { CheckTemplateCompartment, CheckTemplateItem } from '../types/equipmentCheck';
 import { containerTypeLabel } from '../types/equipmentCheck';
 
 export interface FlattenedCompartments {
@@ -21,18 +18,12 @@ export interface FlattenedCompartments {
   storagePathByItemId: Map<string, string>;
 }
 
-function subHeaderName(
-  child: CheckTemplateCompartment,
-  depth: number,
-): string {
+function subHeaderName(child: CheckTemplateCompartment, depth: number): string {
   const indent = '› '.repeat(depth);
   const ct = (child.containerType ?? '').trim();
   // Only prefix the container kind when it is something other than the
   // generic default, so a plain "Compartment: Cab" doesn't add noise.
-  const prefix =
-    ct && ct !== 'compartment'
-      ? `${containerTypeLabel(child.containerType)}: `
-      : '';
+  const prefix = ct && ct !== 'compartment' ? `${containerTypeLabel(child.containerType)}: ` : '';
   return `${indent}${prefix}${child.name}`;
 }
 
@@ -42,9 +33,7 @@ function subHeaderName(
  * item that names it (with its container type and depth), so no items are ever
  * dropped regardless of nesting depth.
  */
-export function flattenCompartmentTree(
-  raw: CheckTemplateCompartment[],
-): FlattenedCompartments {
+export function flattenCompartmentTree(raw: CheckTemplateCompartment[]): FlattenedCompartments {
   const childrenByParent = new Map<string, CheckTemplateCompartment[]>();
   const topLevel: CheckTemplateCompartment[] = [];
   for (const c of raw) {
@@ -56,10 +45,7 @@ export function flattenCompartmentTree(
       topLevel.push(c);
     }
   }
-  const bySortOrder = (
-    a: CheckTemplateCompartment,
-    b: CheckTemplateCompartment,
-  ) => a.sortOrder - b.sortOrder;
+  const bySortOrder = (a: CheckTemplateCompartment, b: CheckTemplateCompartment) => a.sortOrder - b.sortOrder;
   topLevel.sort(bySortOrder);
   for (const siblings of childrenByParent.values()) siblings.sort(bySortOrder);
 
@@ -70,7 +56,7 @@ export function flattenCompartmentTree(
     comp: CheckTemplateCompartment,
     parentPath: string,
     depth: number,
-    out: CheckTemplateItem[],
+    out: CheckTemplateItem[]
   ) => {
     for (const child of childrenByParent.get(comp.id) ?? []) {
       if (seen.has(child.id)) continue; // guard against parent-cycle loops

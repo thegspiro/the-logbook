@@ -39,7 +39,9 @@ export function useNotificationPoller() {
 
   const startPolling = useCallback(() => {
     if (intervalRef.current) return;
-    intervalRef.current = setInterval(() => { void fetchCount(); }, POLL_INTERVAL_MS);
+    intervalRef.current = setInterval(() => {
+      void fetchCount();
+    }, POLL_INTERVAL_MS);
   }, [fetchCount]);
 
   const stopPolling = useCallback(() => {

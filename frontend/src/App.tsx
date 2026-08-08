@@ -188,10 +188,7 @@ function App() {
                 <Route path="/privacy" element={<LegalPage />} />
                 <Route path="/terms" element={<LegalPage />} />
                 {/* Public external-approver page (token-authenticated) */}
-                <Route
-                  path="/finance/approvals/:token"
-                  element={<FinanceApprovalPage />}
-                />
+                <Route path="/finance/approvals/:token" element={<FinanceApprovalPage />} />
 
                 {/* Catch all - redirect to welcome */}
                 <Route path="*" element={<Navigate to="/" replace />} />

@@ -9,9 +9,22 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
 import {
-  ArrowLeft, Target, RefreshCw, Users, ShoppingCart, CheckCircle2,
-  Ruler, Download, Loader2, Search, Truck, FileText, PackageCheck,
-  Trash2, Save, Send,
+  ArrowLeft,
+  Target,
+  RefreshCw,
+  Users,
+  ShoppingCart,
+  CheckCircle2,
+  Ruler,
+  Download,
+  Loader2,
+  Search,
+  Truck,
+  FileText,
+  PackageCheck,
+  Trash2,
+  Save,
+  Send,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
@@ -55,19 +68,19 @@ const CheckGroup: React.FC<CheckGroupProps> = ({ label, options, selected, onTog
   <div>
     <label className={labelClass}>{label}</label>
     {options.length === 0 ? (
-      <p className="text-xs text-theme-text-muted italic">None available</p>
+      <p className="text-theme-text-muted text-xs italic">None available</p>
     ) : (
-      <div className="max-h-40 overflow-y-auto space-y-1 pr-1 rounded-lg border border-theme-surface-border bg-theme-surface p-2">
+      <div className="border-theme-surface-border bg-theme-surface max-h-40 space-y-1 overflow-y-auto rounded-lg border p-2 pr-1">
         {options.map((opt) => (
           <label
             key={opt.value}
-            className="flex items-center gap-2 text-sm text-theme-text-primary cursor-pointer hover:bg-theme-surface-hover rounded px-1.5 py-1"
+            className="text-theme-text-primary hover:bg-theme-surface-hover flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm"
           >
             <input
               type="checkbox"
               checked={selected.includes(opt.value)}
               onChange={() => onToggle(opt.value)}
-              className="rounded border-theme-surface-border text-blue-600 focus:ring-blue-500/40"
+              className="border-theme-surface-border rounded text-blue-600 focus:ring-blue-500/40"
             />
             <span className="truncate">{opt.label}</span>
           </label>
@@ -85,19 +98,16 @@ interface StatCardProps {
 }
 
 const StatCard: React.FC<StatCardProps> = ({ icon, value, label, iconBg }) => (
-  <div className="card-secondary p-4 flex items-center gap-3">
-    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
-      {icon}
-    </div>
+  <div className="card-secondary flex items-center gap-3 p-4">
+    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconBg}`}>{icon}</div>
     <div className="min-w-0">
-      <p className="text-2xl font-bold text-theme-text-primary leading-tight">{value}</p>
-      <p className="text-xs text-theme-text-muted">{label}</p>
+      <p className="text-theme-text-primary text-2xl leading-tight font-bold">{value}</p>
+      <p className="text-theme-text-muted text-xs">{label}</p>
     </div>
   </div>
 );
 
-const csvEscape = (value: string): string =>
-  /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+const csvEscape = (value: string): string => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
 
 const ImpactPlannerPage: React.FC = () => {
   const [options, setOptions] = useState<ImpactPlannerOptions | null>(null);
@@ -164,18 +174,32 @@ const ImpactPlannerPage: React.FC = () => {
   };
 
   // Assemble the current filter selections into a request payload.
-  const buildRequest = useCallback((): ImpactPlannerRequest => ({
-    statuses: statuses.length ? statuses : undefined,
-    membership_types: membershipTypes.length ? membershipTypes : undefined,
-    ranks: ranks.length ? ranks : undefined,
-    stations: stations.length ? stations : undefined,
-    position_ids: positionIds.length ? positionIds : undefined,
-    related_category_id: relatedCategoryId || undefined,
-    replacement_aware: relatedCategoryId ? replacementAware : undefined,
-    size_field: sizeField || undefined,
-    stock_category_id: sizeField ? stockCategoryId || undefined : undefined,
-    allowance_aware: sizeField && stockCategoryId ? allowanceAware : undefined,
-  }), [statuses, membershipTypes, ranks, stations, positionIds, relatedCategoryId, replacementAware, sizeField, stockCategoryId, allowanceAware]);
+  const buildRequest = useCallback(
+    (): ImpactPlannerRequest => ({
+      statuses: statuses.length ? statuses : undefined,
+      membership_types: membershipTypes.length ? membershipTypes : undefined,
+      ranks: ranks.length ? ranks : undefined,
+      stations: stations.length ? stations : undefined,
+      position_ids: positionIds.length ? positionIds : undefined,
+      related_category_id: relatedCategoryId || undefined,
+      replacement_aware: relatedCategoryId ? replacementAware : undefined,
+      size_field: sizeField || undefined,
+      stock_category_id: sizeField ? stockCategoryId || undefined : undefined,
+      allowance_aware: sizeField && stockCategoryId ? allowanceAware : undefined,
+    }),
+    [
+      statuses,
+      membershipTypes,
+      ranks,
+      stations,
+      positionIds,
+      relatedCategoryId,
+      replacementAware,
+      sizeField,
+      stockCategoryId,
+      allowanceAware,
+    ]
+  );
 
   const runAnalysis = useCallback(async () => {
     setAnalyzing(true);
@@ -207,11 +231,14 @@ const ImpactPlannerPage: React.FC = () => {
     setAllowanceAware(f.allowance_aware ?? false);
   }, []);
 
-  const onSelectPlan = useCallback((id: string) => {
-    setSelectedPlanId(id);
-    const plan = savedPlans.find((p) => p.id === id);
-    if (plan) applyPlan(plan);
-  }, [savedPlans, applyPlan]);
+  const onSelectPlan = useCallback(
+    (id: string) => {
+      setSelectedPlanId(id);
+      const plan = savedPlans.find((p) => p.id === id);
+      if (plan) applyPlan(plan);
+    },
+    [savedPlans, applyPlan]
+  );
 
   const savePlan = useCallback(async () => {
     const name = planName.trim();
@@ -219,11 +246,10 @@ const ImpactPlannerPage: React.FC = () => {
     setSavingPlan(true);
     try {
       const created = await inventoryService.createImpactPlan({
-        name, filters: buildRequest(),
+        name,
+        filters: buildRequest(),
       });
-      setSavedPlans((prev) =>
-        [...prev, created].sort((a, b) => a.name.localeCompare(b.name)),
-      );
+      setSavedPlans((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
       setSelectedPlanId(created.id);
       setShowSaveForm(false);
       setPlanName('');
@@ -256,9 +282,7 @@ const ImpactPlannerPage: React.FC = () => {
         urgency: reorderUrgency,
       });
       setReorderDone(res);
-      toast.success(
-        `Created ${res.created_count} reorder request${res.created_count === 1 ? '' : 's'}`,
-      );
+      toast.success(`Created ${res.created_count} reorder request${res.created_count === 1 ? '' : 's'}`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to create reorder requests'));
     } finally {
@@ -273,7 +297,7 @@ const ImpactPlannerPage: React.FC = () => {
     return result.members.filter((m) =>
       [m.full_name, m.membership_number, m.rank, m.station, m.needed_size]
         .filter(Boolean)
-        .some((field) => (field as string).toLowerCase().includes(q)),
+        .some((field) => (field as string).toLowerCase().includes(q))
     );
   }, [result, memberSearch]);
 
@@ -293,10 +317,7 @@ const ImpactPlannerPage: React.FC = () => {
     setSortDir(direction);
   }, []);
 
-  const maxNeeding = useMemo(
-    () => Math.max(1, ...(result?.size_breakdown ?? []).map((b) => b.needing)),
-    [result],
-  );
+  const maxNeeding = useMemo(() => Math.max(1, ...(result?.size_breakdown ?? []).map((b) => b.needing)), [result]);
 
   const sizeFieldLabel = useMemo(() => {
     if (!result?.size_field || !options) return null;
@@ -310,9 +331,7 @@ const ImpactPlannerPage: React.FC = () => {
       const res = await inventoryService.bulkIssueFromPlan(lastRequest);
       setIssueDone(res);
       setIssueConfirmOpen(false);
-      toast.success(
-        `Issued to ${res.issued_count} member${res.issued_count === 1 ? '' : 's'}`,
-      );
+      toast.success(`Issued to ${res.issued_count} member${res.issued_count === 1 ? '' : 's'}`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to issue items'));
     } finally {
@@ -326,9 +345,7 @@ const ImpactPlannerPage: React.FC = () => {
     try {
       const res = await inventoryService.requestMemberSizes(lastRequest);
       setSizesRequested(res);
-      toast.success(
-        `Requested sizes from ${res.notified_count} member${res.notified_count === 1 ? '' : 's'}`,
-      );
+      toast.success(`Requested sizes from ${res.notified_count} member${res.notified_count === 1 ? '' : 's'}`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to request sizes'));
     } finally {
@@ -358,9 +375,17 @@ const ImpactPlannerPage: React.FC = () => {
   const exportCsv = useCallback(() => {
     if (!result) return;
     const headers = [
-      'Name', 'Membership #', 'Rank', 'Station', 'Status',
-      'Needed Size', 'Already Has Item', 'Needs Replacement', 'Existing Items',
-      'Email', 'Phone',
+      'Name',
+      'Membership #',
+      'Rank',
+      'Station',
+      'Status',
+      'Needed Size',
+      'Already Has Item',
+      'Needs Replacement',
+      'Existing Items',
+      'Email',
+      'Phone',
     ];
     const rows = result.members.map((m) => [
       m.full_name || '',
@@ -375,9 +400,7 @@ const ImpactPlannerPage: React.FC = () => {
       m.email || '',
       m.phone || '',
     ]);
-    const csv = [headers, ...rows]
-      .map((row) => row.map((cell) => csvEscape(String(cell))).join(','))
-      .join('\n');
+    const csv = [headers, ...rows].map((row) => row.map((cell) => csvEscape(String(cell))).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -389,40 +412,42 @@ const ImpactPlannerPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
         <Link
           to="/inventory/admin"
-          className="inline-flex items-center gap-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary mb-4"
+          className="text-theme-text-muted hover:text-theme-text-primary mb-4 inline-flex items-center gap-1.5 text-sm"
         >
-          <ArrowLeft className="w-4 h-4" /> Back to Inventory Admin
+          <ArrowLeft className="h-4 w-4" /> Back to Inventory Admin
         </Link>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="bg-purple-600 rounded-lg p-2 shrink-0">
-              <Target className="w-6 h-6 text-white" />
+        <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="shrink-0 rounded-lg bg-purple-600 p-2">
+              <Target className="h-6 w-6 text-white" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl font-bold text-theme-text-primary truncate">Impact Planner</h1>
-              <p className="text-sm text-theme-text-muted">
+              <h1 className="text-theme-text-primary truncate text-xl font-bold sm:text-2xl">Impact Planner</h1>
+              <p className="text-theme-text-muted text-sm">
                 Plan a new issue: who is impacted, the sizes they need, and who to contact
               </p>
             </div>
           </div>
           <button
-            onClick={() => { void loadOptions(); }}
+            onClick={() => {
+              void loadOptions();
+            }}
             className="btn-secondary btn-md self-start sm:self-auto"
             title="Reload filter options"
           >
-            <RefreshCw className={`w-4 h-4 ${optionsLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${optionsLoading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
           {/* Filter panel */}
-          <div className="card p-4 sm:p-5 space-y-4 h-fit">
-            <h2 className="text-sm font-semibold text-theme-text-primary">Who fits the category?</h2>
+          <div className="card h-fit space-y-4 p-4 sm:p-5">
+            <h2 className="text-theme-text-primary text-sm font-semibold">Who fits the category?</h2>
 
             {optionsLoading ? (
               <div className="space-y-4" aria-label="Loading filters" role="status">
@@ -436,7 +461,7 @@ const ImpactPlannerPage: React.FC = () => {
             ) : options ? (
               <>
                 {/* Saved plans */}
-                <div className="pb-4 mb-1 border-b border-theme-surface-border">
+                <div className="border-theme-surface-border mb-1 border-b pb-4">
                   <label className={labelClass}>Saved plans</label>
                   <div className="flex items-center gap-2">
                     <select
@@ -447,21 +472,25 @@ const ImpactPlannerPage: React.FC = () => {
                     >
                       <option value="">— New plan —</option>
                       {savedPlans.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
                       ))}
                     </select>
                     {selectedPlanId && (
                       <button
-                        onClick={() => { void deletePlan(); }}
+                        onClick={() => {
+                          void deletePlan();
+                        }}
                         className="btn-secondary btn-sm shrink-0"
                         title="Delete plan"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     )}
                   </div>
                   {showSaveForm ? (
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className="mt-2 flex items-center gap-2">
                       <input
                         type="text"
                         value={planName}
@@ -470,15 +499,20 @@ const ImpactPlannerPage: React.FC = () => {
                         className={selectClass}
                       />
                       <button
-                        onClick={() => { void savePlan(); }}
+                        onClick={() => {
+                          void savePlan();
+                        }}
                         disabled={savingPlan || !planName.trim()}
                         className="btn-primary btn-sm shrink-0"
                         aria-label="Save plan"
                       >
-                        {savingPlan ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        {savingPlan ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                       </button>
                       <button
-                        onClick={() => { setShowSaveForm(false); setPlanName(''); }}
+                        onClick={() => {
+                          setShowSaveForm(false);
+                          setPlanName('');
+                        }}
                         className="btn-secondary btn-sm shrink-0"
                       >
                         Cancel
@@ -487,7 +521,7 @@ const ImpactPlannerPage: React.FC = () => {
                   ) : (
                     <button
                       onClick={() => setShowSaveForm(true)}
-                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-2"
+                      className="mt-2 text-xs text-blue-600 hover:underline dark:text-blue-400"
                     >
                       Save current filters as a plan
                     </button>
@@ -506,12 +540,7 @@ const ImpactPlannerPage: React.FC = () => {
                   selected={membershipTypes}
                   onToggle={toggle(setMembershipTypes)}
                 />
-                <CheckGroup
-                  label="Rank"
-                  options={options.ranks}
-                  selected={ranks}
-                  onToggle={toggle(setRanks)}
-                />
+                <CheckGroup label="Rank" options={options.ranks} selected={ranks} onToggle={toggle(setRanks)} />
                 <CheckGroup
                   label="Station"
                   options={options.stations.map((s) => ({ value: s, label: s }))}
@@ -535,16 +564,18 @@ const ImpactPlannerPage: React.FC = () => {
                   >
                     <option value="">— Don't check existing items —</option>
                     {options.categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
                     ))}
                   </select>
                   {relatedCategoryId && (
-                    <label className="flex items-start gap-2 mt-2 text-xs text-theme-text-secondary cursor-pointer">
+                    <label className="text-theme-text-secondary mt-2 flex cursor-pointer items-start gap-2 text-xs">
                       <input
                         type="checkbox"
                         checked={replacementAware}
                         onChange={(e) => setReplacementAware(e.target.checked)}
-                        className="mt-0.5 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500/40"
+                        className="border-theme-surface-border mt-0.5 rounded text-blue-600 focus:ring-blue-500/40"
                       />
                       <span>Count worn or expired items as needing replacement</span>
                     </label>
@@ -561,7 +592,9 @@ const ImpactPlannerPage: React.FC = () => {
                   >
                     <option value="">— No size breakdown —</option>
                     {options.size_fields.map((s) => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -577,16 +610,18 @@ const ImpactPlannerPage: React.FC = () => {
                     >
                       <option value="">— Don't subtract current stock —</option>
                       {options.categories.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
                       ))}
                     </select>
                     {stockCategoryId && (
-                      <label className="flex items-start gap-2 mt-2 text-xs text-theme-text-secondary cursor-pointer">
+                      <label className="text-theme-text-secondary mt-2 flex cursor-pointer items-start gap-2 text-xs">
                         <input
                           type="checkbox"
                           checked={allowanceAware}
                           onChange={(e) => setAllowanceAware(e.target.checked)}
-                          className="mt-0.5 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500/40"
+                          className="border-theme-surface-border mt-0.5 rounded text-blue-600 focus:ring-blue-500/40"
                         />
                         <span>Warn when members are over their issuance allowance</span>
                       </label>
@@ -595,16 +630,18 @@ const ImpactPlannerPage: React.FC = () => {
                 )}
 
                 <button
-                  onClick={() => { void runAnalysis(); }}
+                  onClick={() => {
+                    void runAnalysis();
+                  }}
                   disabled={analyzing}
                   className="btn-primary btn-md w-full justify-center"
                 >
-                  {analyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />}
+                  {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />}
                   {analyzing ? 'Analyzing…' : 'Analyze Impact'}
                 </button>
               </>
             ) : (
-              <p className="text-sm text-theme-text-muted">Unable to load filter options.</p>
+              <p className="text-theme-text-muted text-sm">Unable to load filter options.</p>
             )}
           </div>
 
@@ -621,27 +658,27 @@ const ImpactPlannerPage: React.FC = () => {
             ) : (
               <div className="space-y-6">
                 {/* Summary stats */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   <StatCard
-                    icon={<Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+                    icon={<Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
                     value={result.total_members}
                     label="Members matched"
                     iconBg="bg-blue-500/10"
                   />
                   <StatCard
-                    icon={<ShoppingCart className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+                    icon={<ShoppingCart className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
                     value={result.members_needing_item}
                     label="Need the item"
                     iconBg="bg-purple-500/10"
                   />
                   <StatCard
-                    icon={<CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />}
+                    icon={<CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />}
                     value={result.members_with_related_item}
                     label="Already have one"
                     iconBg="bg-green-500/10"
                   />
                   <StatCard
-                    icon={<Ruler className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
+                    icon={<Ruler className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
                     value={result.members_missing_sizes}
                     label="Missing size info"
                     iconBg="bg-amber-500/10"
@@ -650,23 +687,26 @@ const ImpactPlannerPage: React.FC = () => {
 
                 {/* Request sizes from members with no size on file */}
                 {result.members_missing_sizes > 0 && (
-                  <div className="card-secondary p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <span className="text-sm text-theme-text-muted flex items-center gap-2">
-                      <Ruler className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                      {result.members_missing_sizes} member{result.members_missing_sizes === 1 ? '' : 's'} need the item but have no size on file.
+                  <div className="card-secondary flex flex-col justify-between gap-2 p-3 sm:flex-row sm:items-center">
+                    <span className="text-theme-text-muted flex items-center gap-2 text-sm">
+                      <Ruler className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                      {result.members_missing_sizes} member{result.members_missing_sizes === 1 ? '' : 's'} need the item
+                      but have no size on file.
                     </span>
                     {sizesRequested ? (
-                      <span className="text-sm text-green-700 dark:text-green-400 flex items-center gap-1.5 shrink-0">
-                        <CheckCircle2 className="w-4 h-4" />
+                      <span className="flex shrink-0 items-center gap-1.5 text-sm text-green-700 dark:text-green-400">
+                        <CheckCircle2 className="h-4 w-4" />
                         Requested from {sizesRequested.notified_count}
                       </span>
                     ) : (
                       <button
-                        onClick={() => { void requestSizes(); }}
+                        onClick={() => {
+                          void requestSizes();
+                        }}
                         disabled={requestingSizes}
                         className="btn-secondary btn-sm shrink-0"
                       >
-                        {requestingSizes ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        {requestingSizes ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                         Request sizes
                       </button>
                     )}
@@ -676,19 +716,19 @@ const ImpactPlannerPage: React.FC = () => {
                 {/* Size breakdown for purchasing */}
                 {result.size_breakdown.length > 0 && (
                   <div className="card p-4 sm:p-5">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                      <h3 className="text-sm font-semibold text-theme-text-primary">
+                    <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                      <h3 className="text-theme-text-primary text-sm font-semibold">
                         Sizes to purchase{sizeFieldLabel ? ` — ${sizeFieldLabel}` : ''}
                       </h3>
                       <div className="flex flex-wrap items-center gap-2">
                         {result.stock_checked && result.total_to_purchase != null && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-400 px-3 py-1 text-xs font-semibold">
-                            <ShoppingCart className="w-3.5 h-3.5" />
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-500/10 px-3 py-1 text-xs font-semibold text-purple-700 dark:text-purple-400">
+                            <ShoppingCart className="h-3.5 w-3.5" />
                             {result.total_to_purchase} to buy
                           </span>
                         )}
                         {result.cost_estimated && result.estimated_total_cost != null && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 px-3 py-1 text-xs font-semibold">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-700 dark:text-green-400">
                             ~{formatCurrency(result.estimated_total_cost)} est.
                           </span>
                         )}
@@ -698,11 +738,14 @@ const ImpactPlannerPage: React.FC = () => {
                     <div className="space-y-1.5">
                       {result.size_breakdown.map((b) => (
                         <div key={b.size} className="flex items-center gap-3">
-                          <span className="w-14 shrink-0 text-sm font-semibold text-theme-text-primary truncate" title={b.size}>
+                          <span
+                            className="text-theme-text-primary w-14 shrink-0 truncate text-sm font-semibold"
+                            title={b.size}
+                          >
                             {b.size}
                           </span>
                           <div
-                            className="relative flex-1 h-5 rounded bg-theme-surface-secondary overflow-hidden"
+                            className="bg-theme-surface-secondary relative h-5 flex-1 overflow-hidden rounded"
                             role="img"
                             aria-label={`${b.size}: ${b.needing} needed`}
                           >
@@ -712,80 +755,84 @@ const ImpactPlannerPage: React.FC = () => {
                             />
                           </div>
                           {result.stock_checked ? (
-                            <span className="shrink-0 text-xs text-theme-text-muted">
+                            <span className="text-theme-text-muted shrink-0 text-xs">
                               need {b.needing} &middot; {b.on_hand ?? 0} on hand &middot;{' '}
                               <span className="font-semibold text-purple-600 dark:text-purple-400">
                                 buy {b.shortfall ?? b.needing}
                               </span>
                               {result.cost_estimated && b.estimated_cost != null && (
                                 <span className="text-green-700 dark:text-green-400">
-                                  {' '}&middot; {formatCurrency(b.estimated_cost)}
+                                  {' '}
+                                  &middot; {formatCurrency(b.estimated_cost)}
                                 </span>
                               )}
                             </span>
                           ) : (
-                            <span className="shrink-0 text-xs text-theme-text-muted">
-                              need <span className="font-semibold text-purple-600 dark:text-purple-400">{b.needing}</span>
+                            <span className="text-theme-text-muted shrink-0 text-xs">
+                              need{' '}
+                              <span className="font-semibold text-purple-600 dark:text-purple-400">{b.needing}</span>
                               {b.total !== b.needing && ` of ${b.total}`}
                             </span>
                           )}
                         </div>
                       ))}
                     </div>
-                    <p className="text-xs text-theme-text-muted mt-3">
+                    <p className="text-theme-text-muted mt-3 text-xs">
                       &ldquo;need&rdquo; excludes members who already hold an item in the selected category.
-                      {result.stock_checked && ' On-hand stock is matched to needed sizes by label; members with no size on file can’t be matched.'}
+                      {result.stock_checked &&
+                        ' On-hand stock is matched to needed sizes by label; members with no size on file can’t be matched.'}
                     </p>
 
                     {/* Bulk issue: give out the stock you already have */}
                     {result.stock_checked &&
                       result.size_breakdown.some(
-                        (b) => (b.on_hand ?? 0) > 0 && b.needing > 0 && b.size !== 'Unknown',
+                        (b) => (b.on_hand ?? 0) > 0 && b.needing > 0 && b.size !== 'Unknown'
                       ) && (
-                      <div className="mt-4 pt-4 border-t border-theme-surface-border">
-                        {issueDone ? (
-                          <div className="rounded-lg bg-green-500/10 px-3 py-2 text-sm">
-                            <span className="text-green-700 dark:text-green-400 flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4 shrink-0" />
-                              Issued to {issueDone.issued_count} member{issueDone.issued_count === 1 ? '' : 's'}
-                              {issueDone.skipped_count > 0 && `, ${issueDone.skipped_count} skipped`}
-                            </span>
-                            {issueDone.skipped_count > 0 && (
-                              <ul className="mt-1 ml-6 list-disc text-xs text-theme-text-muted">
-                                {issueDone.skipped.slice(0, 5).map((s) => (
-                                  <li key={s.user_id}>{s.name || s.user_id}: {s.reason}</li>
-                                ))}
-                                {issueDone.skipped.length > 5 && (
-                                  <li>…and {issueDone.skipped.length - 5} more</li>
-                                )}
-                              </ul>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            <p className="text-xs text-theme-text-muted">
-                              Issue matching on-hand stock to members who need it now.
-                            </p>
-                            <button
-                              onClick={() => setIssueConfirmOpen(true)}
-                              className="btn-info btn-md justify-center shrink-0"
-                            >
-                              <PackageCheck className="w-4 h-4" />
-                              Issue on-hand stock
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                        <div className="border-theme-surface-border mt-4 border-t pt-4">
+                          {issueDone ? (
+                            <div className="rounded-lg bg-green-500/10 px-3 py-2 text-sm">
+                              <span className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                Issued to {issueDone.issued_count} member{issueDone.issued_count === 1 ? '' : 's'}
+                                {issueDone.skipped_count > 0 && `, ${issueDone.skipped_count} skipped`}
+                              </span>
+                              {issueDone.skipped_count > 0 && (
+                                <ul className="text-theme-text-muted mt-1 ml-6 list-disc text-xs">
+                                  {issueDone.skipped.slice(0, 5).map((s) => (
+                                    <li key={s.user_id}>
+                                      {s.name || s.user_id}: {s.reason}
+                                    </li>
+                                  ))}
+                                  {issueDone.skipped.length > 5 && <li>…and {issueDone.skipped.length - 5} more</li>}
+                                </ul>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                              <p className="text-theme-text-muted text-xs">
+                                Issue matching on-hand stock to members who need it now.
+                              </p>
+                              <button
+                                onClick={() => setIssueConfirmOpen(true)}
+                                className="btn-info btn-md shrink-0 justify-center"
+                              >
+                                <PackageCheck className="h-4 w-4" />
+                                Issue on-hand stock
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                     {/* One-click reorder: turn the shortfall into draft POs */}
                     {result.stock_checked && (result.total_to_purchase ?? 0) > 0 && (
-                      <div className="mt-4 pt-4 border-t border-theme-surface-border">
+                      <div className="border-theme-surface-border mt-4 border-t pt-4">
                         {reorderDone ? (
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg bg-green-500/10 px-3 py-2">
-                            <span className="text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4 shrink-0" />
-                              Created {reorderDone.created_count} reorder request{reorderDone.created_count === 1 ? '' : 's'}
+                          <div className="flex flex-col justify-between gap-2 rounded-lg bg-green-500/10 px-3 py-2 sm:flex-row sm:items-center">
+                            <span className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
+                              <CheckCircle2 className="h-4 w-4 shrink-0" />
+                              Created {reorderDone.created_count} reorder request
+                              {reorderDone.created_count === 1 ? '' : 's'}
                               {reorderDone.skipped_unknown_size > 0 &&
                                 ` (${reorderDone.skipped_unknown_size} member${reorderDone.skipped_unknown_size === 1 ? '' : 's'} skipped — no size on file)`}
                             </span>
@@ -794,7 +841,7 @@ const ImpactPlannerPage: React.FC = () => {
                             </Link>
                           </div>
                         ) : (
-                          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                             <div>
                               <label className={labelClass}>Reorder urgency</label>
                               <select
@@ -803,19 +850,26 @@ const ImpactPlannerPage: React.FC = () => {
                                 className={selectClass}
                               >
                                 {URGENCY_OPTIONS.map((u) => (
-                                  <option key={u.value} value={u.value}>{u.label}</option>
+                                  <option key={u.value} value={u.value}>
+                                    {u.label}
+                                  </option>
                                 ))}
                               </select>
                             </div>
                             <button
-                              onClick={() => { void createReorders(); }}
+                              onClick={() => {
+                                void createReorders();
+                              }}
                               disabled={creatingReorder}
                               className="btn-primary btn-md justify-center"
                             >
-                              {creatingReorder
-                                ? <Loader2 className="w-4 h-4 animate-spin" />
-                                : <Truck className="w-4 h-4" />}
-                              Create reorder request{(result.size_breakdown.filter((b) => (b.shortfall ?? 0) > 0).length) === 1 ? '' : 's'}
+                              {creatingReorder ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Truck className="h-4 w-4" />
+                              )}
+                              Create reorder request
+                              {result.size_breakdown.filter((b) => (b.shortfall ?? 0) > 0).length === 1 ? '' : 's'}
                             </button>
                           </div>
                         )}
@@ -826,44 +880,46 @@ const ImpactPlannerPage: React.FC = () => {
 
                 {/* Members table */}
                 <div className="card p-4 sm:p-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-theme-text-primary">
+                      <h3 className="text-theme-text-primary text-sm font-semibold">
                         Impacted Members ({filteredMembers.length})
                       </h3>
                       {result.replacement_aware && result.members_needing_replacement > 0 && (
-                        <span className="inline-flex items-center rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 text-xs font-medium">
+                        <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
                           {result.members_needing_replacement} to replace
                         </span>
                       )}
                       {result.allowance_aware && result.members_over_allowance > 0 && (
-                        <span className="inline-flex items-center rounded-full bg-red-500/10 text-red-700 dark:text-red-400 px-2 py-0.5 text-xs font-medium">
+                        <span className="inline-flex items-center rounded-full bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
                           {result.members_over_allowance} over allowance
                         </span>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="relative">
-                        <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted" />
+                        <Search className="text-theme-text-muted absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2" />
                         <input
                           type="text"
                           value={memberSearch}
                           onChange={(e) => setMemberSearch(e.target.value)}
                           placeholder="Filter list…"
-                          className="rounded-lg border border-theme-surface-border bg-theme-surface pl-8 pr-3 py-1.5 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                          className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border py-1.5 pr-3 pl-8 text-sm focus:ring-2 focus:ring-blue-500/40 focus:outline-none"
                         />
                       </div>
                       <button onClick={exportCsv} className="btn-secondary btn-sm" title="Export to CSV">
-                        <Download className="w-4 h-4" />
+                        <Download className="h-4 w-4" />
                         <span className="hidden sm:inline">CSV</span>
                       </button>
                       <button
-                        onClick={() => { void exportPdf(); }}
+                        onClick={() => {
+                          void exportPdf();
+                        }}
                         disabled={exportingPdf}
                         className="btn-secondary btn-sm"
                         title="Download PDF summary"
                       >
-                        {exportingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                        {exportingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                         <span className="hidden sm:inline">PDF</span>
                       </button>
                     </div>
@@ -879,89 +935,116 @@ const ImpactPlannerPage: React.FC = () => {
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="text-left border-b border-theme-surface-border">
+                          <tr className="border-theme-surface-border border-b text-left">
                             <th className="py-2 pr-3">
-                              <SortableHeader label="Member" field="full_name" currentSort={sortField} currentDirection={sortDir} onSort={onSort} />
+                              <SortableHeader
+                                label="Member"
+                                field="full_name"
+                                currentSort={sortField}
+                                currentDirection={sortDir}
+                                onSort={onSort}
+                              />
                             </th>
-                            <th className="py-2 px-3 hidden sm:table-cell">
-                              <SortableHeader label="Rank / Station" field="rank" currentSort={sortField} currentDirection={sortDir} onSort={onSort} />
+                            <th className="hidden px-3 py-2 sm:table-cell">
+                              <SortableHeader
+                                label="Rank / Station"
+                                field="rank"
+                                currentSort={sortField}
+                                currentDirection={sortDir}
+                                onSort={onSort}
+                              />
                             </th>
                             {result.size_field && (
-                              <th className="py-2 px-3">
-                                <SortableHeader label="Size" field="needed_size" currentSort={sortField} currentDirection={sortDir} onSort={onSort} />
+                              <th className="px-3 py-2">
+                                <SortableHeader
+                                  label="Size"
+                                  field="needed_size"
+                                  currentSort={sortField}
+                                  currentDirection={sortDir}
+                                  onSort={onSort}
+                                />
                               </th>
                             )}
-                            {relatedCategoryId && <th className="py-2 px-3 text-xs font-semibold uppercase tracking-wider text-theme-text-secondary">Existing</th>}
-                            <th className="py-2 pl-3 text-xs font-semibold uppercase tracking-wider text-theme-text-secondary">Contact</th>
+                            {relatedCategoryId && (
+                              <th className="text-theme-text-secondary px-3 py-2 text-xs font-semibold tracking-wider uppercase">
+                                Existing
+                              </th>
+                            )}
+                            <th className="text-theme-text-secondary py-2 pl-3 text-xs font-semibold tracking-wider uppercase">
+                              Contact
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           {sortedMembers.map((m) => (
-                            <tr key={m.user_id} className="border-b border-theme-surface-border/50 last:border-0">
+                            <tr key={m.user_id} className="border-theme-surface-border/50 border-b last:border-0">
                               <td className="py-2.5 pr-3">
                                 <Link
                                   to={`/members/${m.user_id}`}
-                                  className="font-medium text-theme-text-primary hover:text-blue-600 dark:hover:text-blue-400"
+                                  className="text-theme-text-primary font-medium hover:text-blue-600 dark:hover:text-blue-400"
                                 >
                                   {m.full_name || 'Unknown'}
                                 </Link>
                                 {m.membership_number && (
-                                  <span className="block text-xs text-theme-text-muted">#{m.membership_number}</span>
+                                  <span className="text-theme-text-muted block text-xs">#{m.membership_number}</span>
                                 )}
                                 {m.over_allowance && (
-                                  <span className="inline-flex items-center rounded-full bg-red-500/10 text-red-700 dark:text-red-400 px-1.5 py-0.5 text-[10px] font-medium mt-0.5">
+                                  <span className="mt-0.5 inline-flex items-center rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:text-red-400">
                                     over allowance
                                   </span>
                                 )}
                               </td>
-                              <td className="py-2.5 px-3 text-theme-text-secondary hidden sm:table-cell">
+                              <td className="text-theme-text-secondary hidden px-3 py-2.5 sm:table-cell">
                                 <span className="capitalize">{m.rank || '—'}</span>
-                                {m.station && <span className="block text-xs text-theme-text-muted">{m.station}</span>}
+                                {m.station && <span className="text-theme-text-muted block text-xs">{m.station}</span>}
                               </td>
                               {result.size_field && (
-                                <td className="py-2.5 px-3">
+                                <td className="px-3 py-2.5">
                                   {m.needed_size ? (
-                                    <span className="font-medium text-theme-text-primary">{m.needed_size}</span>
+                                    <span className="text-theme-text-primary font-medium">{m.needed_size}</span>
                                   ) : (
                                     <span className="text-xs text-amber-600 dark:text-amber-400">No size on file</span>
                                   )}
                                 </td>
                               )}
                               {relatedCategoryId && (
-                                <td className="py-2.5 px-3">
+                                <td className="px-3 py-2.5">
                                   {m.has_related_item ? (
                                     <span
-                                      className="inline-flex items-center gap-1 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 px-2 py-0.5 text-xs font-medium"
+                                      className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-green-400"
                                       title={m.related_item_names.join(', ')}
                                     >
                                       Has item
                                     </span>
                                   ) : m.needs_replacement ? (
                                     <span
-                                      className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 text-xs font-medium"
+                                      className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400"
                                       title={m.related_item_names.join(', ')}
                                     >
                                       Replace
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-400 px-2 py-0.5 text-xs font-medium">
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-xs font-medium text-purple-700 dark:text-purple-400">
                                       Needs item
                                     </span>
                                   )}
                                 </td>
                               )}
-                              <td className="py-2.5 pl-3 text-theme-text-secondary">
+                              <td className="text-theme-text-secondary py-2.5 pl-3">
                                 {m.email ? (
-                                  <a href={`mailto:${m.email}`} className="hover:text-blue-600 dark:hover:text-blue-400 break-all">
+                                  <a
+                                    href={`mailto:${m.email}`}
+                                    className="break-all hover:text-blue-600 dark:hover:text-blue-400"
+                                  >
                                     {m.email}
                                   </a>
                                 ) : m.phone ? (
                                   <span>{m.phone}</span>
                                 ) : (
-                                  <span className="text-xs text-theme-text-muted">—</span>
+                                  <span className="text-theme-text-muted text-xs">—</span>
                                 )}
                                 {m.email && m.phone && (
-                                  <span className="block text-xs text-theme-text-muted">{m.phone}</span>
+                                  <span className="text-theme-text-muted block text-xs">{m.phone}</span>
                                 )}
                               </td>
                             </tr>
@@ -980,7 +1063,9 @@ const ImpactPlannerPage: React.FC = () => {
       <ConfirmDialog
         isOpen={issueConfirmOpen}
         onClose={() => setIssueConfirmOpen(false)}
-        onConfirm={() => { void bulkIssue(); }}
+        onConfirm={() => {
+          void bulkIssue();
+        }}
         title="Issue on-hand stock"
         message="This issues one matching-size item to each member who needs it and has stock available. Members with no size on file or no matching stock are skipped. Continue?"
         confirmLabel="Issue items"

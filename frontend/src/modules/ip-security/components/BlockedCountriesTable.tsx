@@ -14,15 +14,12 @@ interface BlockedCountriesTableProps {
   onRemove?: (countryCode: string) => void;
 }
 
-export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({
-  countries,
-  onRemove,
-}) => {
+export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({ countries, onRemove }) => {
   const tz = useTimezone();
   if (countries.length === 0) {
     return (
-      <div className="text-center py-12 text-theme-text-muted">
-        <Globe className="w-12 h-12 mx-auto mb-3 opacity-50" />
+      <div className="text-theme-text-muted py-12 text-center">
+        <Globe className="mx-auto mb-3 h-12 w-12 opacity-50" />
         <p>No blocked countries configured</p>
       </div>
     );
@@ -32,49 +29,57 @@ export const BlockedCountriesTable: React.FC<BlockedCountriesTableProps> = ({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-theme-surface-border text-left text-theme-text-muted">
-            <th scope="col" className="py-3 px-4 font-medium">Country</th>
-            <th scope="col" className="py-3 px-4 font-medium">Code</th>
-            <th scope="col" className="py-3 px-4 font-medium">Risk Level</th>
-            <th scope="col" className="py-3 px-4 font-medium">Reason</th>
-            <th scope="col" className="py-3 px-4 font-medium">Blocked Attempts</th>
-            <th scope="col" className="py-3 px-4 font-medium">Added</th>
-            <th scope="col" className="py-3 px-4 font-medium">Actions</th>
+          <tr className="border-theme-surface-border text-theme-text-muted border-b text-left">
+            <th scope="col" className="px-4 py-3 font-medium">
+              Country
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Code
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Risk Level
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Reason
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Blocked Attempts
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Added
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
           {countries.map((c) => (
             <tr
               key={c.id}
-              className="border-b border-theme-surface-border/50 hover:bg-theme-surface-hover transition-colors"
+              className="border-theme-surface-border/50 hover:bg-theme-surface-hover border-b transition-colors"
             >
-              <td className="py-3 px-4 text-theme-text-primary font-medium">
-                {c.countryName ?? c.countryCode}
-              </td>
-              <td className="py-3 px-4 font-mono text-theme-text-secondary">{c.countryCode}</td>
-              <td className="py-3 px-4">
+              <td className="text-theme-text-primary px-4 py-3 font-medium">{c.countryName ?? c.countryCode}</td>
+              <td className="text-theme-text-secondary px-4 py-3 font-mono">{c.countryCode}</td>
+              <td className="px-4 py-3">
                 {c.riskLevel && (
                   <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${COUNTRY_RISK_LEVEL_COLORS[c.riskLevel] ?? ''}`}
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${COUNTRY_RISK_LEVEL_COLORS[c.riskLevel] ?? ''}`}
                   >
                     {c.riskLevel}
                   </span>
                 )}
               </td>
-              <td className="py-3 px-4 text-theme-text-secondary max-w-xs truncate">
-                {c.reason}
-              </td>
-              <td className="py-3 px-4 text-theme-text-muted">{c.blockedAttemptsCount ?? 0}</td>
-              <td className="py-3 px-4 text-theme-text-muted">
-                {c.createdAt ? formatDateTime(c.createdAt, tz) : '—'}
-              </td>
-              <td className="py-3 px-4">
+              <td className="text-theme-text-secondary max-w-xs truncate px-4 py-3">{c.reason}</td>
+              <td className="text-theme-text-muted px-4 py-3">{c.blockedAttemptsCount ?? 0}</td>
+              <td className="text-theme-text-muted px-4 py-3">{c.createdAt ? formatDateTime(c.createdAt, tz) : '—'}</td>
+              <td className="px-4 py-3">
                 <button
                   onClick={() => onRemove?.(c.countryCode)}
-                  className="p-1.5 rounded-lg text-red-600 hover:bg-red-500/10 transition-colors"
+                  className="rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-500/10"
                   title="Remove country block"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="h-4 w-4" />
                 </button>
               </td>
             </tr>

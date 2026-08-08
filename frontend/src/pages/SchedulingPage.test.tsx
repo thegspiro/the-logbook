@@ -96,9 +96,7 @@ describe('SchedulingPage', () => {
 
       // Admin links should be actual links, not tabs
       const links = screen.getAllByRole('link');
-      const adminLinks = links.filter((link) =>
-        link.getAttribute('href')?.startsWith('/scheduling/'),
-      );
+      const adminLinks = links.filter((link) => link.getAttribute('href')?.startsWith('/scheduling/'));
       const hrefs = adminLinks.map((link) => link.getAttribute('href'));
       expect(hrefs).toContain('/scheduling/templates');
       expect(hrefs).toContain('/scheduling/patterns');

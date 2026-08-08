@@ -30,7 +30,7 @@ interface AutoSaveNotificationProps {
 export const AutoSaveNotification: React.FC<AutoSaveNotificationProps> = ({
   className = '',
   showTimestamp = false,
-  lastSaved
+  lastSaved,
 }) => {
   const tz = useTimezone();
   const formatTimestamp = (isoString: string) => {
@@ -38,19 +38,17 @@ export const AutoSaveNotification: React.FC<AutoSaveNotificationProps> = ({
   };
 
   return (
-    <div className={`flex items-center gap-2 text-sm text-theme-text-muted ${className}`}>
+    <div className={`text-theme-text-muted flex items-center gap-2 text-sm ${className}`}>
       <div className="flex items-center gap-1.5">
-        <Cloud className="w-4 h-4 text-green-700 dark:text-green-400" />
+        <Cloud className="h-4 w-4 text-green-700 dark:text-green-400" />
         <span className="text-theme-text-secondary">
-          <CheckCircle className="w-3 h-3 inline mr-1 text-green-700 dark:text-green-400" />
+          <CheckCircle className="mr-1 inline h-3 w-3 text-green-700 dark:text-green-400" />
           Settings saved after each step
         </span>
       </div>
 
       {showTimestamp && lastSaved && (
-        <span className="text-xs text-theme-text-muted">
-          Last saved: {formatTimestamp(lastSaved)}
-        </span>
+        <span className="text-theme-text-muted text-xs">Last saved: {formatTimestamp(lastSaved)}</span>
       )}
     </div>
   );

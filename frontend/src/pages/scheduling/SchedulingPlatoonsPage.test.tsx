@@ -23,7 +23,7 @@ const renderPage = () =>
   render(
     <MemoryRouter>
       <SchedulingPlatoonsPage />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 
 const overview = {
@@ -60,9 +60,7 @@ describe('SchedulingPlatoonsPage', () => {
   it('shows a warning when platoon scheduling is disabled', async () => {
     mockGetOverview.mockResolvedValue({ ...overview, platoons_enabled: false });
     renderPage();
-    expect(
-      await screen.findByText(/platoon scheduling is turned off/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/platoon scheduling is turned off/i)).toBeInTheDocument();
   });
 
   it('bulk-assigns selected members to the chosen platoon', async () => {

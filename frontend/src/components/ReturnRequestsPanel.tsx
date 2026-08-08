@@ -22,7 +22,10 @@ const ReturnRequestsPanel: React.FC = () => {
   const [requests, setRequests] = useState<ReturnRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('pending');
-  const [reviewModal, setReviewModal] = useState<{ open: boolean; request: ReturnRequestItem | null }>({ open: false, request: null });
+  const [reviewModal, setReviewModal] = useState<{ open: boolean; request: ReturnRequestItem | null }>({
+    open: false,
+    request: null,
+  });
   const [reviewAction, setReviewAction] = useState<'approved' | 'denied'>('approved');
   const [reviewNotes, setReviewNotes] = useState('');
   const [overrideCondition, setOverrideCondition] = useState('');
@@ -40,7 +43,9 @@ const ReturnRequestsPanel: React.FC = () => {
     }
   }, [filter]);
 
-  useEffect(() => { void loadRequests(); }, [loadRequests]);
+  useEffect(() => {
+    void loadRequests();
+  }, [loadRequests]);
 
   const handleReview = async () => {
     if (!reviewModal.request) return;
@@ -63,15 +68,15 @@ const ReturnRequestsPanel: React.FC = () => {
     }
   };
 
-  const pendingCount = requests.filter(r => r.status === RequestStatus.PENDING).length;
+  const pendingCount = requests.filter((r) => r.status === RequestStatus.PENDING).length;
 
   return (
     <div className="space-y-4">
       {/* Header with count */}
       {pendingCount > 0 && (
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 flex items-center gap-2">
-          <Clock className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-          <span className="text-sm text-yellow-700 dark:text-yellow-400 font-medium">
+        <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
+          <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+          <span className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
             {pendingCount} return request{pendingCount !== 1 ? 's' : ''} awaiting review
           </span>
         </div>
@@ -79,8 +84,15 @@ const ReturnRequestsPanel: React.FC = () => {
 
       {/* Filter */}
       <div className="flex items-center gap-2">
-        <label htmlFor="rr-filter" className="text-sm text-theme-text-secondary">Status:</label>
-        <select id="rr-filter" value={filter} onChange={(e) => setFilter(e.target.value)} className="form-input text-sm max-w-[200px]">
+        <label htmlFor="rr-filter" className="text-theme-text-secondary text-sm">
+          Status:
+        </label>
+        <select
+          id="rr-filter"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="form-input max-w-[200px] text-sm"
+        >
           <option value="pending">Pending</option>
           <option value="">All</option>
           <option value="completed">Completed</option>
@@ -90,59 +102,71 @@ const ReturnRequestsPanel: React.FC = () => {
 
       {/* List */}
       {loading ? (
-        <div className="bg-theme-surface rounded-lg p-8 border border-theme-surface-border text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto" />
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-b-2 border-emerald-500" />
         </div>
       ) : requests.length === 0 ? (
-        <div className="bg-theme-surface rounded-lg p-8 border border-theme-surface-border text-center">
-          <ArrowDownToLine className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
+        <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-8 text-center">
+          <ArrowDownToLine className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-secondary">No return requests found.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {requests.map((req) => (
-            <div key={req.id} className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
+            <div key={req.id} className="bg-theme-surface border-theme-surface-border rounded-lg border p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="text-sm font-medium text-theme-text-primary truncate">{req.item_name}</h4>
+                  <div className="mb-1 flex items-center gap-2">
+                    <h4 className="text-theme-text-primary truncate text-sm font-medium">{req.item_name}</h4>
                     {req.quantity_returning > 1 && (
-                      <span className="text-xs text-theme-text-muted">x{req.quantity_returning}</span>
+                      <span className="text-theme-text-muted text-xs">x{req.quantity_returning}</span>
                     )}
                   </div>
-                  <p className="text-xs text-theme-text-secondary">
+                  <p className="text-theme-text-secondary text-xs">
                     {req.requester_name || 'Unknown member'} — <span className="capitalize">{req.return_type}</span>
                   </p>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-xs text-theme-text-muted">
-                    <span>Reported condition: <span className="capitalize">{req.reported_condition.replace('_', ' ')}</span></span>
+                  <div className="text-theme-text-muted mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+                    <span>
+                      Reported condition: <span className="capitalize">{req.reported_condition.replace('_', ' ')}</span>
+                    </span>
                     <span>{formatDate(req.created_at, tz)}</span>
                   </div>
                   {req.member_notes && (
-                    <p className="text-xs text-theme-text-muted mt-1 italic">&ldquo;{req.member_notes}&rdquo;</p>
+                    <p className="text-theme-text-muted mt-1 text-xs italic">&ldquo;{req.member_notes}&rdquo;</p>
                   )}
-                  {req.review_notes && (
-                    <p className="text-xs text-theme-text-muted mt-1">Review: {req.review_notes}</p>
-                  )}
+                  {req.review_notes && <p className="text-theme-text-muted mt-1 text-xs">Review: {req.review_notes}</p>}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_BADGES[req.status] ?? ''}`}>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGES[req.status] ?? ''}`}
+                  >
                     {req.status}
                   </span>
                   {req.status === RequestStatus.PENDING && (
                     <div className="flex gap-1">
                       <button
-                        onClick={() => { setReviewModal({ open: true, request: req }); setReviewAction('approved'); setOverrideCondition(''); setReviewNotes(''); }}
-                        className="p-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-colors"
+                        onClick={() => {
+                          setReviewModal({ open: true, request: req });
+                          setReviewAction('approved');
+                          setOverrideCondition('');
+                          setReviewNotes('');
+                        }}
+                        className="rounded-lg bg-green-600 p-1.5 text-white transition-colors hover:bg-green-700"
                         title="Approve return"
                       >
-                        <CheckCircle className="w-4 h-4" />
+                        <CheckCircle className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => { setReviewModal({ open: true, request: req }); setReviewAction('denied'); setOverrideCondition(''); setReviewNotes(''); }}
-                        className="p-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+                        onClick={() => {
+                          setReviewModal({ open: true, request: req });
+                          setReviewAction('denied');
+                          setOverrideCondition('');
+                          setReviewNotes('');
+                        }}
+                        className="rounded-lg bg-red-600 p-1.5 text-white transition-colors hover:bg-red-700"
                         title="Deny return"
                       >
-                        <XCircle className="w-4 h-4" />
+                        <XCircle className="h-4 w-4" />
                       </button>
                     </div>
                   )}
@@ -155,31 +179,47 @@ const ReturnRequestsPanel: React.FC = () => {
 
       {/* Review Modal */}
       {reviewModal.open && reviewModal.request && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === 'Escape') setReviewModal({ open: false, request: null }); }}>
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-black/60" onClick={() => setReviewModal({ open: false, request: null })} aria-hidden="true" />
-            <div className="relative bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full border border-theme-surface-border">
-              <div className="px-4 sm:px-6 pt-5 pb-4">
-                <h3 className="text-lg font-medium text-theme-text-primary mb-4">
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setReviewModal({ open: false, request: null });
+          }}
+        >
+          <div className="flex min-h-screen items-center justify-center px-4">
+            <div
+              className="fixed inset-0 bg-black/60"
+              onClick={() => setReviewModal({ open: false, request: null })}
+              aria-hidden="true"
+            />
+            <div className="bg-theme-surface-modal border-theme-surface-border relative w-full max-w-md rounded-lg border shadow-xl">
+              <div className="px-4 pt-5 pb-4 sm:px-6">
+                <h3 className="text-theme-text-primary mb-4 text-lg font-medium">
                   {reviewAction === RequestStatus.APPROVED ? 'Approve Return' : 'Deny Return'}
                 </h3>
                 <div className="space-y-4">
                   <div className="bg-theme-surface-secondary rounded-lg p-3">
-                    <p className="text-sm text-theme-text-primary font-medium">{reviewModal.request.item_name}</p>
-                    <p className="text-xs text-theme-text-muted">
+                    <p className="text-theme-text-primary text-sm font-medium">{reviewModal.request.item_name}</p>
+                    <p className="text-theme-text-muted text-xs">
                       {reviewModal.request.requester_name} — Qty: {reviewModal.request.quantity_returning}
                     </p>
-                    <p className="text-xs text-theme-text-muted capitalize mt-1">
+                    <p className="text-theme-text-muted mt-1 text-xs capitalize">
                       Member reported: {reviewModal.request.reported_condition.replace('_', ' ')}
                     </p>
                     {reviewModal.request.member_notes && (
-                      <p className="text-xs text-theme-text-muted mt-1 italic">&ldquo;{reviewModal.request.member_notes}&rdquo;</p>
+                      <p className="text-theme-text-muted mt-1 text-xs italic">
+                        &ldquo;{reviewModal.request.member_notes}&rdquo;
+                      </p>
                     )}
                   </div>
 
                   {reviewAction === RequestStatus.APPROVED && (
                     <div>
-                      <label htmlFor="override-condition" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                      <label
+                        htmlFor="override-condition"
+                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                      >
                         Actual Condition (override if different)
                       </label>
                       <select
@@ -188,16 +228,20 @@ const ReturnRequestsPanel: React.FC = () => {
                         onChange={(e) => setOverrideCondition(e.target.value)}
                         className="form-input"
                       >
-                        <option value="">Use member&apos;s report ({reviewModal.request.reported_condition.replace('_', ' ')})</option>
-                        {CONDITION_OPTIONS.map(c => (
-                          <option key={c} value={c}>{c.replace('_', ' ')}</option>
+                        <option value="">
+                          Use member&apos;s report ({reviewModal.request.reported_condition.replace('_', ' ')})
+                        </option>
+                        {CONDITION_OPTIONS.map((c) => (
+                          <option key={c} value={c}>
+                            {c.replace('_', ' ')}
+                          </option>
                         ))}
                       </select>
                     </div>
                   )}
 
                   <div>
-                    <label htmlFor="review-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                    <label htmlFor="review-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                       Notes (optional)
                     </label>
                     <textarea
@@ -211,13 +255,22 @@ const ReturnRequestsPanel: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="bg-theme-input-bg px-4 sm:px-6 py-3 flex justify-end gap-3 rounded-b-lg">
-                <button onClick={() => setReviewModal({ open: false, request: null })} className="px-4 py-2 border border-theme-input-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors">Cancel</button>
+              <div className="bg-theme-input-bg flex justify-end gap-3 rounded-b-lg px-4 py-3 sm:px-6">
                 <button
-                  onClick={() => { void handleReview(); }}
+                  onClick={() => setReviewModal({ open: false, request: null })}
+                  className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    void handleReview();
+                  }}
                   disabled={submitting}
-                  className={`px-4 py-2 rounded-lg text-white transition-colors disabled:opacity-50 ${
-                    reviewAction === RequestStatus.APPROVED ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                  className={`rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50 ${
+                    reviewAction === RequestStatus.APPROVED
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-red-600 hover:bg-red-700'
                   }`}
                 >
                   {submitting ? 'Processing...' : reviewAction === RequestStatus.APPROVED ? 'Approve & Return' : 'Deny'}

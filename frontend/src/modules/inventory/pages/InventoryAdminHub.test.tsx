@@ -109,10 +109,21 @@ describe('InventoryAdminHub', () => {
       expect(screen.getByText('Items')).toBeInTheDocument();
     });
     const navTitles = [
-      'Items', 'Pool Items', 'Categories', 'Members',
-      'Maintenance', 'Checkouts', 'Charges', 'Return Requests',
-      'Storage Areas', 'Import / Export', 'Equipment Requests', 'Write-Offs',
-      'Reorder Requests', 'Equipment Kits', 'Variant Groups',
+      'Items',
+      'Pool Items',
+      'Categories',
+      'Members',
+      'Maintenance',
+      'Checkouts',
+      'Charges',
+      'Return Requests',
+      'Storage Areas',
+      'Import / Export',
+      'Equipment Requests',
+      'Write-Offs',
+      'Reorder Requests',
+      'Equipment Kits',
+      'Variant Groups',
     ];
     for (const title of navTitles) {
       expect(screen.getByText(title)).toBeInTheDocument();

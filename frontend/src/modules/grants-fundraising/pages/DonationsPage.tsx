@@ -1,13 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import {
-  DollarSign,
-  Plus,
-  Search,
-  Filter,
-  Receipt,
-  Heart,
-} from 'lucide-react';
+import { DollarSign, Plus, Search, Filter, Receipt, Heart } from 'lucide-react';
 import { fundraisingService } from '../services/api';
 import type { Donation } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -62,22 +55,15 @@ const DonationsPage: React.FC = () => {
     return matchesSearch && matchesMethod;
   });
 
-  const totalAmount = filtered.reduce(
-    (sum: number, d: Donation) => sum + Number(d.amount),
-    0,
-  );
+  const totalAmount = filtered.reduce((sum: number, d: Donation) => sum + Number(d.amount), 0);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">
-            Donations
-          </h1>
-          <p className="mt-1 text-sm text-theme-text-secondary">
-            Track and manage all donation records
-          </p>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Donations</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">Track and manage all donation records</p>
         </div>
         <Link
           to="/grants/donations/new"
@@ -89,18 +75,14 @@ const DonationsPage: React.FC = () => {
       </div>
 
       {/* Summary Card */}
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
         <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-green-100 dark:bg-green-500/20 p-2">
+          <div className="rounded-lg bg-green-100 p-2 dark:bg-green-500/20">
             <DollarSign className="h-5 w-5 text-green-600" />
           </div>
           <div>
-            <p className="text-sm text-theme-text-secondary">
-              Total ({filtered.length} donations)
-            </p>
-            <p className="text-xl font-bold text-theme-text-primary">
-              {formatCurrency(totalAmount)}
-            </p>
+            <p className="text-theme-text-secondary text-sm">Total ({filtered.length} donations)</p>
+            <p className="text-theme-text-primary text-xl font-bold">{formatCurrency(totalAmount)}</p>
           </div>
         </div>
       </div>
@@ -108,24 +90,25 @@ const DonationsPage: React.FC = () => {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-secondary" />
+          <Search className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             type="text"
-            aria-label="Search by donor name or email..." placeholder="Search by donor name or email..."
+            aria-label="Search by donor name or email..."
+            placeholder="Search by donor name or email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-theme-surface-border bg-theme-surface py-2 pl-10 pr-4 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            className="border-theme-surface-border bg-theme-surface text-theme-text-primary placeholder:text-theme-text-secondary w-full rounded-lg border py-2 pr-4 pl-10 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 focus:outline-none"
           />
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-theme-text-secondary" />
+          <Filter className="text-theme-text-secondary h-4 w-4" />
           <select
             value={methodFilter}
             onChange={(e) => setMethodFilter(e.target.value)}
-            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="border-theme-input-border bg-theme-input-bg text-theme-text-primary rounded-lg border px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
           >
             <option value="">All Methods</option>
             {Object.entries(PAYMENT_METHOD_LABELS).map(([key, label]) => (
@@ -138,98 +121,105 @@ const DonationsPage: React.FC = () => {
       </div>
 
       {/* Donations Table */}
-      <div className="overflow-hidden rounded-lg border border-theme-surface-border bg-theme-surface">
+      <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
         {isLoading ? (
           <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-red-500 border-t-transparent" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <Heart className="mb-3 h-12 w-12 text-theme-text-secondary opacity-40" />
+            <Heart className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
             <p className="text-theme-text-secondary">No donations found</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-theme-surface-border bg-theme-surface">
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                <tr className="border-theme-surface-border bg-theme-surface border-b">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Date
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Donor
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Amount
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Method
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Status
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Receipt
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                  <th
+                    scope="col"
+                    className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Dedication
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-theme-surface-border">
+              <tbody className="divide-theme-surface-border divide-y">
                 {filtered.map((donation) => (
-                  <tr
-                    key={donation.id}
-                    className="hover:bg-theme-surface-hover transition-colors"
-                  >
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-primary">
+                  <tr key={donation.id} className="hover:bg-theme-surface-hover transition-colors">
+                    <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
                       {formatDate(donation.donationDate, tz)}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <div>
-                        <span className="font-medium text-theme-text-primary">
-                          {donation.isAnonymous
-                            ? 'Anonymous'
-                            : donation.donorName ?? 'Unknown'}
+                        <span className="text-theme-text-primary font-medium">
+                          {donation.isAnonymous ? 'Anonymous' : (donation.donorName ?? 'Unknown')}
                         </span>
                         {donation.donorEmail && (
-                          <p className="text-xs text-theme-text-secondary">
-                            {donation.donorEmail}
-                          </p>
+                          <p className="text-theme-text-secondary text-xs">{donation.donorEmail}</p>
                         )}
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-theme-text-primary">
+                    <td className="text-theme-text-primary px-4 py-3 text-sm font-semibold whitespace-nowrap">
                       {formatCurrency(Number(donation.amount))}
-                      {donation.isRecurring && (
-                        <span className="ml-1 text-xs text-blue-600">
-                          (Recurring)
-                        </span>
-                      )}
+                      {donation.isRecurring && <span className="ml-1 text-xs text-blue-600">(Recurring)</span>}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
-                      {PAYMENT_METHOD_LABELS[donation.paymentMethod] ??
-                        donation.paymentMethod}
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                      {PAYMENT_METHOD_LABELS[donation.paymentMethod] ?? donation.paymentMethod}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_STATUS_COLORS[donation.paymentStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                       >
                         {donation.paymentStatus}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {donation.receiptSent ? (
                         <span className="flex items-center gap-1 text-xs text-green-600">
                           <Receipt className="h-3 w-3" /> Sent
                         </span>
                       ) : (
-                        <span className="text-xs text-theme-text-secondary">
-                          —
-                        </span>
+                        <span className="text-theme-text-secondary text-xs">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
                       {donation.dedicationType
                         ? `${donation.dedicationType === 'in_honor' ? 'In honor of' : 'In memory of'} ${donation.dedicationName ?? ''}`
                         : '—'}

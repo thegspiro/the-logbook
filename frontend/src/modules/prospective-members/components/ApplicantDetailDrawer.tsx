@@ -28,10 +28,7 @@ import {
   Archive,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type {
-  Applicant,
-  StageHistoryEntry,
-} from '../types';
+import type { Applicant, StageHistoryEntry } from '../types';
 import { isSafeUrl, getInitials } from '../utils';
 import { STAGE_TYPE_ICONS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
@@ -64,12 +61,7 @@ const FORM_FIELD_LABELS: Record<string, string> = {
 
 /** Title-case fallback for keys not in FORM_FIELD_LABELS. */
 function fieldLabel(key: string): string {
-  return (
-    FORM_FIELD_LABELS[key] ??
-    key
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase())
-  );
+  return FORM_FIELD_LABELS[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /** Render a field value as a human-readable string. */
@@ -108,12 +100,12 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 }) => {
   const tz = useTimezone();
 
-  const {
-    isLoadingApplicant,
-  } = useProspectiveMembersStore();
+  const { isLoadingApplicant } = useProspectiveMembersStore();
 
   const [showPii, setShowPii] = useState(true);
-  const [activityLog, setActivityLog] = useState<Array<{ id: string; action: string; details: Record<string, unknown>; performer_name: string; created_at: string }>>([]);
+  const [activityLog, setActivityLog] = useState<
+    Array<{ id: string; action: string; details: Record<string, unknown>; performer_name: string; created_at: string }>
+  >([]);
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
 
@@ -132,7 +124,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     address_zip: '',
   });
 
-  const isOnElectionStage = applicant?.current_stage_type === StageTypeEnum.ELECTION_VOTE && applicant?.status === ApplicantStatus.ACTIVE;
+  const isOnElectionStage =
+    applicant?.current_stage_type === StageTypeEnum.ELECTION_VOTE && applicant?.status === ApplicantStatus.ACTIVE;
 
   // Reset editing state when applicant changes
   useEffect(() => {
@@ -228,40 +221,36 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
   if (!isOpen) return null;
 
-  const maskValue = (value: string) => showPii ? value : '••••••••';
+  const maskValue = (value: string) => (showPii ? value : '••••••••');
 
   return (
     <>
       {/* Overlay */}
-      <div
-        className="fixed inset-0 bg-black/40 z-40"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
 
       {/* Drawer */}
       <div className="drawer-panel">
         {/* Loading */}
         {isLoadingApplicant && (
-          <div className="flex-1 flex items-center justify-center" role="status" aria-live="polite">
-            <Loader2 className="w-8 h-8 animate-spin text-red-500" />
+          <div className="flex flex-1 items-center justify-center" role="status" aria-live="polite">
+            <Loader2 className="h-8 w-8 animate-spin text-red-500" />
           </div>
         )}
 
         {applicant && !isLoadingApplicant && (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-theme-surface-border">
+            <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-linear-to-br from-red-500 to-red-700 flex items-center justify-center text-sm font-bold text-white">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-br from-red-500 to-red-700 text-sm font-bold text-white">
                   {getInitials(applicant.first_name, applicant.last_name)}
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-theme-text-primary">
+                  <h2 className="text-theme-text-primary text-lg font-bold">
                     {applicant.first_name} {applicant.last_name}
                   </h2>
-                  <p className="text-sm text-theme-text-muted capitalize">
-                    {applicant.status.replace('_', ' ')} &middot;{' '}
-                    {applicant.target_membership_type} member
+                  <p className="text-theme-text-muted text-sm capitalize">
+                    {applicant.status.replace('_', ' ')} &middot; {applicant.target_membership_type} member
                   </p>
                 </div>
               </div>
@@ -272,34 +261,36 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                   title={showPii ? 'Hide personal info' : 'Show personal info'}
                   aria-label={showPii ? 'Hide personal info' : 'Show personal info'}
                 >
-                  {showPii ? <EyeOff className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}
+                  {showPii ? (
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
                 </button>
                 <button
                   onClick={onClose}
                   className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
                   aria-label="Close detail panel"
                 >
-                  <X className="w-5 h-5" aria-hidden="true" />
+                  <X className="h-5 w-5" aria-hidden="true" />
                 </button>
               </div>
             </div>
 
             {/* Inactive Notice */}
             {applicant.status === ApplicantStatus.INACTIVE && (
-              <div className="mx-4 mt-4 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+              <div className="mx-4 mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                <div className="mb-1 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                   <span className="text-sm font-medium text-amber-600 dark:text-amber-300">Application Inactive</span>
                 </div>
-                <p className="text-xs text-theme-text-muted">
+                <p className="text-theme-text-muted text-xs">
                   This application was marked inactive due to no activity
-                  {applicant.deactivated_at && (
-                    <> since {formatDate(applicant.deactivated_at, tz)}</>
-                  )}.
-                  A coordinator can reactivate it, or the individual may resubmit an interest form.
+                  {applicant.deactivated_at && <> since {formatDate(applicant.deactivated_at, tz)}</>}. A coordinator
+                  can reactivate it, or the individual may resubmit an interest form.
                 </p>
                 {applicant.reactivated_at && (
-                  <p className="text-xs text-theme-text-muted mt-1">
+                  <p className="text-theme-text-muted mt-1 text-xs">
                     Previously reactivated on {formatDate(applicant.reactivated_at, tz)}
                   </p>
                 )}
@@ -308,21 +299,17 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
             {/* Withdrawn Notice */}
             {applicant.status === ApplicantStatus.WITHDRAWN && (
-              <div className="mx-4 mt-4 p-3 bg-theme-surface-secondary border border-theme-surface-border rounded-lg">
-                <div className="flex items-center gap-2 mb-1">
-                  <Archive className="w-4 h-4 text-theme-text-muted" />
-                  <span className="text-sm font-medium text-theme-text-secondary">Application Withdrawn</span>
+              <div className="bg-theme-surface-secondary border-theme-surface-border mx-4 mt-4 rounded-lg border p-3">
+                <div className="mb-1 flex items-center gap-2">
+                  <Archive className="text-theme-text-muted h-4 w-4" />
+                  <span className="text-theme-text-secondary text-sm font-medium">Application Withdrawn</span>
                 </div>
-                <p className="text-xs text-theme-text-muted">
+                <p className="text-theme-text-muted text-xs">
                   This applicant voluntarily withdrew from the pipeline
-                  {applicant.withdrawn_at && (
-                    <> on {formatDate(applicant.withdrawn_at, tz)}</>
-                  )}.
+                  {applicant.withdrawn_at && <> on {formatDate(applicant.withdrawn_at, tz)}</>}.
                 </p>
                 {applicant.withdrawal_reason && (
-                  <p className="text-xs text-theme-text-muted mt-1">
-                    Reason: {applicant.withdrawal_reason}
-                  </p>
+                  <p className="text-theme-text-muted mt-1 text-xs">Reason: {applicant.withdrawal_reason}</p>
                 )}
               </div>
             )}
@@ -330,33 +317,35 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
               {/* Contact Info */}
-              <div className="p-4 border-b border-theme-surface-border">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+              <div className="border-theme-surface-border border-b p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-theme-text-muted text-xs font-medium tracking-wider uppercase">
                     Contact Information
                   </h3>
                   {!isEditingContact ? (
                     <button
                       onClick={startEditingContact}
-                      className="flex items-center gap-1 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                      className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors"
                     >
-                      <Pencil className="w-3 h-3" />
+                      <Pencil className="h-3 w-3" />
                       Edit
                     </button>
                   ) : (
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setIsEditingContact(false)}
-                        className="text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
                       >
                         Cancel
                       </button>
                       <button
-                        onClick={() => { void saveContactEdits(); }}
+                        onClick={() => {
+                          void saveContactEdits();
+                        }}
                         disabled={isSavingContact}
-                        className="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-500 disabled:opacity-50 transition-colors"
+                        className="flex items-center gap-1 text-xs text-emerald-600 transition-colors hover:text-emerald-500 disabled:opacity-50"
                       >
-                        {isSavingContact ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                        {isSavingContact ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                         Save
                       </button>
                     </div>
@@ -372,7 +361,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, first_name: e.target.value }))}
                         placeholder="First name"
                         aria-label="First name"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
                       />
                       <input
                         type="text"
@@ -380,7 +369,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, last_name: e.target.value }))}
                         placeholder="Last name"
                         aria-label="Last name"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
                       />
                     </div>
                     <input
@@ -389,7 +378,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setEditFields((f) => ({ ...f, email: e.target.value }))}
                       placeholder="Email"
                       aria-label="Email address"
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
                     />
                     <input
                       type="text"
@@ -397,14 +386,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setEditFields((f) => ({ ...f, phone: e.target.value }))}
                       placeholder="Phone"
                       aria-label="Phone number"
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
                     />
                     <input
                       type="date"
                       value={editFields.date_of_birth}
                       onChange={(e) => setEditFields((f) => ({ ...f, date_of_birth: e.target.value }))}
                       aria-label="Date of birth"
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
                     />
                     <input
                       type="text"
@@ -412,7 +401,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       onChange={(e) => setEditFields((f) => ({ ...f, address_street: e.target.value }))}
                       placeholder="Street address"
                       aria-label="Street address"
-                      className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
                     />
                     <div className="form-grid-3">
                       <input
@@ -421,7 +410,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, address_city: e.target.value }))}
                         placeholder="City"
                         aria-label="City"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
                       />
                       <input
                         type="text"
@@ -429,7 +418,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, address_state: e.target.value }))}
                         placeholder="State"
                         aria-label="State"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
                       />
                       <input
                         type="text"
@@ -437,25 +426,25 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         onChange={(e) => setEditFields((f) => ({ ...f, address_zip: e.target.value }))}
                         placeholder="ZIP"
                         aria-label="ZIP code"
-                        className="w-full px-2 py-1.5 text-sm bg-theme-input-bg border border-theme-surface-border rounded-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="bg-theme-input-bg border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-sm border px-2 py-1.5 text-sm focus:ring-2 focus:outline-hidden"
                       />
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-sm">
-                      <Mail className="w-4 h-4 text-theme-text-muted" />
+                      <Mail className="text-theme-text-muted h-4 w-4" />
                       <span className="text-theme-text-secondary">{maskValue(applicant.email)}</span>
                     </div>
                     {applicant.phone && (
                       <div className="flex items-center gap-2 text-sm">
-                        <Phone className="w-4 h-4 text-theme-text-muted" />
+                        <Phone className="text-theme-text-muted h-4 w-4" />
                         <span className="text-theme-text-secondary">{maskValue(applicant.phone)}</span>
                       </div>
                     )}
                     {applicant.date_of_birth && (
                       <div className="flex items-center gap-2 text-sm">
-                        <Calendar className="w-4 h-4 text-theme-text-muted" />
+                        <Calendar className="text-theme-text-muted h-4 w-4" />
                         <span className="text-theme-text-secondary">
                           DOB: {showPii ? formatDate(applicant.date_of_birth, tz) : '••/••/••••'}
                         </span>
@@ -463,10 +452,15 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     )}
                     {applicant.address?.city && (
                       <div className="flex items-center gap-2 text-sm">
-                        <MapPin className="w-4 h-4 text-theme-text-muted" />
+                        <MapPin className="text-theme-text-muted h-4 w-4" />
                         <span className="text-theme-text-secondary">
                           {showPii
-                            ? [applicant.address.street, applicant.address.city, applicant.address.state, applicant.address.zip_code]
+                            ? [
+                                applicant.address.street,
+                                applicant.address.city,
+                                applicant.address.state,
+                                applicant.address.zip_code,
+                              ]
                                 .filter(Boolean)
                                 .join(', ')
                             : '••••••••'}
@@ -478,8 +472,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               </div>
 
               {/* Desired Membership Type */}
-              <div className="p-4 border-b border-theme-surface-border">
-                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+              <div className="border-theme-surface-border border-b p-4">
+                <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
                   Desired Membership Type
                 </h3>
                 <div className="flex items-center gap-2">
@@ -492,24 +486,27 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                         key={type}
                         disabled={isSelected}
                         onClick={() => {
-                          void applicantService.updateApplicant(applicant.id, { target_membership_type: type }).then(() => {
-                            toast.success(`Membership type changed to ${label.toLowerCase()}`);
-                            const { fetchApplicant } = useProspectiveMembersStore.getState();
-                            if (fetchApplicant) {
-                              void fetchApplicant(applicant.id);
-                            }
-                          }).catch(() => {
-                            toast.error('Failed to update membership type');
-                          });
+                          void applicantService
+                            .updateApplicant(applicant.id, { target_membership_type: type })
+                            .then(() => {
+                              toast.success(`Membership type changed to ${label.toLowerCase()}`);
+                              const { fetchApplicant } = useProspectiveMembersStore.getState();
+                              if (fetchApplicant) {
+                                void fetchApplicant(applicant.id);
+                              }
+                            })
+                            .catch(() => {
+                              toast.error('Failed to update membership type');
+                            });
                         }}
-                        className={`flex-1 p-2.5 rounded-lg border text-left transition-all ${
+                        className={`flex-1 rounded-lg border p-2.5 text-left transition-all ${
                           isSelected
                             ? 'border-red-500 bg-red-500/10'
                             : 'border-theme-surface-border bg-theme-surface-hover hover:border-theme-surface-border cursor-pointer'
                         }`}
                       >
-                        <p className="text-sm font-medium text-theme-text-primary">{label}</p>
-                        <p className="text-xs text-theme-text-muted">{desc}</p>
+                        <p className="text-theme-text-primary text-sm font-medium">{label}</p>
+                        <p className="text-theme-text-muted text-xs">{desc}</p>
                       </button>
                     );
                   })}
@@ -524,16 +521,16 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 if (!formArtifact?.data) return null;
                 const fields = formArtifact.data;
                 return (
-                  <div className="p-4 border-b border-theme-surface-border">
-                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5" />
+                  <div className="border-theme-surface-border border-b p-4">
+                    <h3 className="text-theme-text-muted mb-2 flex items-center gap-1.5 text-xs font-medium tracking-wider uppercase">
+                      <FileText className="h-3.5 w-3.5" />
                       Application Data
                     </h3>
                     <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
                       {Object.entries(fields).map(([key, value]) => (
                         <div key={key} className="contents">
-                          <dt className="text-xs text-theme-text-muted">{fieldLabel(key)}</dt>
-                          <dd className="text-xs text-theme-text-primary">{formatFieldValue(value)}</dd>
+                          <dt className="text-theme-text-muted text-xs">{fieldLabel(key)}</dt>
+                          <dd className="text-theme-text-primary text-xs">{formatFieldValue(value)}</dd>
                         </div>
                       ))}
                     </dl>
@@ -542,227 +539,252 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
               })()}
 
               {/* Current Stage */}
-              <div className="p-4 border-b border-theme-surface-border">
-                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+              <div className="border-theme-surface-border border-b p-4">
+                <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
                   Current Stage
                 </h3>
-                <div className="bg-theme-surface rounded-lg p-3 border border-theme-surface-border">
-                  <div className="flex items-center gap-2 mb-1">
-                    {applicant.current_stage_type && (
+                <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3">
+                  <div className="mb-1 flex items-center gap-2">
+                    {applicant.current_stage_type &&
                       (() => {
                         const Icon = STAGE_TYPE_ICONS[applicant.current_stage_type];
-                        return <Icon className="w-4 h-4 text-red-700 dark:text-red-400" />;
-                      })()
-                    )}
-                    <span className="text-sm font-medium text-theme-text-primary">
+                        return <Icon className="h-4 w-4 text-red-700 dark:text-red-400" />;
+                      })()}
+                    <span className="text-theme-text-primary text-sm font-medium">
                       {applicant.current_stage_name ?? 'Unknown stage'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-theme-text-muted mt-1">
-                    <Clock className="w-3 h-3" />
+                  <div className="text-theme-text-muted mt-1 flex items-center gap-1 text-xs">
+                    <Clock className="h-3 w-3" />
                     Entered {formatDateTime(applicant.stage_entered_at, tz)}
                   </div>
                 </div>
 
                 {/* Target Role */}
                 {applicant.target_role_name && (
-                  <div className="mt-3 flex items-center gap-2 text-sm text-theme-text-muted">
-                    <User className="w-4 h-4" />
+                  <div className="text-theme-text-muted mt-3 flex items-center gap-2 text-sm">
+                    <User className="h-4 w-4" />
                     Target role: <span className="text-theme-text-secondary">{applicant.target_role_name}</span>
                   </div>
                 )}
               </div>
 
               {/* Election Package Section */}
-              {isOnElectionStage && (
-                <ElectionPackageSection applicant={applicant} tz={tz} />
-              )}
+              {isOnElectionStage && <ElectionPackageSection applicant={applicant} tz={tz} />}
 
               {/* Linked Events */}
               <LinkedEventsSection applicant={applicant} tz={tz} />
 
               {/* Checklist Stage Section */}
-              {applicant.current_stage_type === StageTypeEnum.CHECKLIST && applicant.status === ApplicantStatus.ACTIVE && (() => {
-                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
-                const actionResult = currentEntry?.action_result ?? {};
-                const completedItems = (actionResult.completed_items as string[] | undefined) ?? [];
-                const totalItems = (actionResult.total_items as number | undefined) ?? 0;
-                return (
-                  <div className="p-4 border-b border-theme-surface-border">
-                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
-                      Checklist Progress
-                    </h3>
-                    {totalItems > 0 ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs text-theme-text-secondary">
-                          <span>{completedItems.length} of {totalItems} items completed</span>
-                          <span className={completedItems.length === totalItems ? 'text-emerald-500' : 'text-amber-500'}>
-                            {Math.round((completedItems.length / totalItems) * 100)}%
-                          </span>
+              {applicant.current_stage_type === StageTypeEnum.CHECKLIST &&
+                applicant.status === ApplicantStatus.ACTIVE &&
+                (() => {
+                  const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                  const actionResult = currentEntry?.action_result ?? {};
+                  const completedItems = (actionResult.completed_items as string[] | undefined) ?? [];
+                  const totalItems = (actionResult.total_items as number | undefined) ?? 0;
+                  return (
+                    <div className="border-theme-surface-border border-b p-4">
+                      <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                        Checklist Progress
+                      </h3>
+                      {totalItems > 0 ? (
+                        <div className="space-y-2">
+                          <div className="text-theme-text-secondary flex items-center justify-between text-xs">
+                            <span>
+                              {completedItems.length} of {totalItems} items completed
+                            </span>
+                            <span
+                              className={completedItems.length === totalItems ? 'text-emerald-500' : 'text-amber-500'}
+                            >
+                              {Math.round((completedItems.length / totalItems) * 100)}%
+                            </span>
+                          </div>
+                          <div className="bg-theme-surface-hover h-1.5 w-full rounded-full">
+                            <div
+                              className={`h-1.5 rounded-full transition-all ${completedItems.length === totalItems ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                              style={{ width: `${(completedItems.length / totalItems) * 100}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="w-full bg-theme-surface-hover rounded-full h-1.5">
-                          <div
-                            className={`h-1.5 rounded-full transition-all ${completedItems.length === totalItems ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                            style={{ width: `${(completedItems.length / totalItems) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-theme-text-muted">No checklist data recorded yet.</p>
-                    )}
-                  </div>
-                );
-              })()}
+                      ) : (
+                        <p className="text-theme-text-muted text-xs">No checklist data recorded yet.</p>
+                      )}
+                    </div>
+                  );
+                })()}
 
               {/* Multi-Approval Stage Section */}
-              {applicant.current_stage_type === StageTypeEnum.MULTI_APPROVAL && applicant.status === ApplicantStatus.ACTIVE && (() => {
-                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
-                const actionResult = currentEntry?.action_result ?? {};
-                const approvals = (actionResult.approvals as Array<{ role: string; approved_by?: string; approved_at?: string }> | undefined) ?? [];
-                const requiredApprovers = (actionResult.required_approvers as string[] | undefined) ?? [];
-                return (
-                  <div className="p-4 border-b border-theme-surface-border">
-                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
-                      Approval Status
-                    </h3>
-                    {requiredApprovers.length > 0 ? (
-                      <div className="space-y-2">
-                        {requiredApprovers.map((role) => {
-                          const approval = approvals.find((a) => a.role === role);
-                          return (
-                            <div key={role} className="flex items-center justify-between text-xs">
-                              <span className="text-theme-text-secondary capitalize">{role.replace(/_/g, ' ')}</span>
-                              {approval ? (
-                                <span className="flex items-center gap-1 text-emerald-500">
-                                  <CheckCircle className="w-3 h-3" />
-                                  Approved
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-theme-text-muted">
-                                  <Clock className="w-3 h-3" />
-                                  Pending
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-theme-text-muted">No approval data recorded yet.</p>
-                    )}
-                  </div>
-                );
-              })()}
+              {applicant.current_stage_type === StageTypeEnum.MULTI_APPROVAL &&
+                applicant.status === ApplicantStatus.ACTIVE &&
+                (() => {
+                  const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                  const actionResult = currentEntry?.action_result ?? {};
+                  const approvals =
+                    (actionResult.approvals as
+                      Array<{ role: string; approved_by?: string; approved_at?: string }> | undefined) ?? [];
+                  const requiredApprovers = (actionResult.required_approvers as string[] | undefined) ?? [];
+                  return (
+                    <div className="border-theme-surface-border border-b p-4">
+                      <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                        Approval Status
+                      </h3>
+                      {requiredApprovers.length > 0 ? (
+                        <div className="space-y-2">
+                          {requiredApprovers.map((role) => {
+                            const approval = approvals.find((a) => a.role === role);
+                            return (
+                              <div key={role} className="flex items-center justify-between text-xs">
+                                <span className="text-theme-text-secondary capitalize">{role.replace(/_/g, ' ')}</span>
+                                {approval ? (
+                                  <span className="flex items-center gap-1 text-emerald-500">
+                                    <CheckCircle className="h-3 w-3" />
+                                    Approved
+                                  </span>
+                                ) : (
+                                  <span className="text-theme-text-muted flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    Pending
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-theme-text-muted text-xs">No approval data recorded yet.</p>
+                      )}
+                    </div>
+                  );
+                })()}
 
               {/* Reference Check Stage Section */}
-              {applicant.current_stage_type === StageTypeEnum.REFERENCE_CHECK && applicant.status === ApplicantStatus.ACTIVE && (() => {
-                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
-                const actionResult = currentEntry?.action_result ?? {};
-                const references = (actionResult.references as Array<{ name?: string; status?: string; submitted_at?: string }> | undefined) ?? [];
-                const requiredCount = (actionResult.required_count as number | undefined) ?? 0;
-                return (
-                  <div className="p-4 border-b border-theme-surface-border">
-                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
-                      Reference Checks
-                    </h3>
-                    <div className="space-y-2">
-                      <p className="text-xs text-theme-text-secondary">
-                        {references.length} of {requiredCount || '?'} references received
-                      </p>
-                      {references.map((ref, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-xs bg-theme-surface rounded-lg p-2 border border-theme-surface-border">
-                          <span className="text-theme-text-primary">{ref.name ?? `Reference ${idx + 1}`}</span>
-                          <span className={ref.status === 'completed' ? 'text-emerald-500' : 'text-amber-500'}>
-                            {ref.status ?? 'pending'}
-                          </span>
-                        </div>
-                      ))}
-                      {references.length === 0 && (
-                        <p className="text-xs text-theme-text-muted">No references submitted yet.</p>
-                      )}
+              {applicant.current_stage_type === StageTypeEnum.REFERENCE_CHECK &&
+                applicant.status === ApplicantStatus.ACTIVE &&
+                (() => {
+                  const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                  const actionResult = currentEntry?.action_result ?? {};
+                  const references =
+                    (actionResult.references as
+                      Array<{ name?: string; status?: string; submitted_at?: string }> | undefined) ?? [];
+                  const requiredCount = (actionResult.required_count as number | undefined) ?? 0;
+                  return (
+                    <div className="border-theme-surface-border border-b p-4">
+                      <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                        Reference Checks
+                      </h3>
+                      <div className="space-y-2">
+                        <p className="text-theme-text-secondary text-xs">
+                          {references.length} of {requiredCount || '?'} references received
+                        </p>
+                        {references.map((ref, idx) => (
+                          <div
+                            key={idx}
+                            className="bg-theme-surface border-theme-surface-border flex items-center justify-between rounded-lg border p-2 text-xs"
+                          >
+                            <span className="text-theme-text-primary">{ref.name ?? `Reference ${idx + 1}`}</span>
+                            <span className={ref.status === 'completed' ? 'text-emerald-500' : 'text-amber-500'}>
+                              {ref.status ?? 'pending'}
+                            </span>
+                          </div>
+                        ))}
+                        {references.length === 0 && (
+                          <p className="text-theme-text-muted text-xs">No references submitted yet.</p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
 
               {/* Interview Requirement Stage Section */}
-              {applicant.current_stage_type === StageTypeEnum.INTERVIEW_REQUIREMENT && applicant.status === ApplicantStatus.ACTIVE && (() => {
-                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
-                const actionResult = currentEntry?.action_result ?? {};
-                const interviewCount = (actionResult.interview_count as number | undefined) ?? 0;
-                const requiredCount = (actionResult.required_count as number | undefined) ?? 1;
-                return (
-                  <div className="p-4 border-b border-theme-surface-border">
-                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
-                      Interview Requirement
-                    </h3>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-theme-text-secondary">
-                        {interviewCount} of {requiredCount} interview{requiredCount !== 1 ? 's' : ''} completed
-                      </span>
-                      {interviewCount >= requiredCount ? (
-                        <span className="flex items-center gap-1 text-emerald-500">
-                          <CheckCircle className="w-3 h-3" />
-                          Requirement met
+              {applicant.current_stage_type === StageTypeEnum.INTERVIEW_REQUIREMENT &&
+                applicant.status === ApplicantStatus.ACTIVE &&
+                (() => {
+                  const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                  const actionResult = currentEntry?.action_result ?? {};
+                  const interviewCount = (actionResult.interview_count as number | undefined) ?? 0;
+                  const requiredCount = (actionResult.required_count as number | undefined) ?? 1;
+                  return (
+                    <div className="border-theme-surface-border border-b p-4">
+                      <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                        Interview Requirement
+                      </h3>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-theme-text-secondary">
+                          {interviewCount} of {requiredCount} interview{requiredCount !== 1 ? 's' : ''} completed
                         </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-amber-500">
-                          <Clock className="w-3 h-3" />
-                          In progress
-                        </span>
-                      )}
+                        {interviewCount >= requiredCount ? (
+                          <span className="flex items-center gap-1 text-emerald-500">
+                            <CheckCircle className="h-3 w-3" />
+                            Requirement met
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-amber-500">
+                            <Clock className="h-3 w-3" />
+                            In progress
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
 
               {/* Medical Screening Stage Section */}
-              {applicant.current_stage_type === StageTypeEnum.MEDICAL_SCREENING && applicant.status === ApplicantStatus.ACTIVE && (() => {
-                const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
-                const actionResult = currentEntry?.action_result ?? {};
-                const screenings = (actionResult.screenings as Array<{ type: string; status: string; date?: string }> | undefined) ?? [];
-                const requiredScreenings = (actionResult.required_screenings as string[] | undefined) ?? [];
-                return (
-                  <div className="p-4 border-b border-theme-surface-border">
-                    <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
-                      Medical Screenings
-                    </h3>
-                    {requiredScreenings.length > 0 || screenings.length > 0 ? (
-                      <div className="space-y-2">
-                        {(requiredScreenings.length > 0 ? requiredScreenings : screenings.map((s) => s.type)).map((type) => {
-                          const screening = screenings.find((s) => s.type === type);
-                          const isPassed = screening?.status === 'passed' || screening?.status === 'completed';
-                          return (
-                            <div key={type} className="flex items-center justify-between text-xs bg-theme-surface rounded-lg p-2 border border-theme-surface-border">
-                              <span className="text-theme-text-primary capitalize">{type.replace(/_/g, ' ')}</span>
-                              {screening ? (
-                                <span className={`flex items-center gap-1 ${isPassed ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                  {isPassed ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                                  {screening.status.replace(/_/g, ' ')}
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-theme-text-muted">
-                                  <Clock className="w-3 h-3" />
-                                  Not started
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-theme-text-muted">No screening data recorded yet.</p>
-                    )}
-                  </div>
-                );
-              })()}
+              {applicant.current_stage_type === StageTypeEnum.MEDICAL_SCREENING &&
+                applicant.status === ApplicantStatus.ACTIVE &&
+                (() => {
+                  const currentEntry = applicant.stage_history[applicant.stage_history.length - 1];
+                  const actionResult = currentEntry?.action_result ?? {};
+                  const screenings =
+                    (actionResult.screenings as Array<{ type: string; status: string; date?: string }> | undefined) ??
+                    [];
+                  const requiredScreenings = (actionResult.required_screenings as string[] | undefined) ?? [];
+                  return (
+                    <div className="border-theme-surface-border border-b p-4">
+                      <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
+                        Medical Screenings
+                      </h3>
+                      {requiredScreenings.length > 0 || screenings.length > 0 ? (
+                        <div className="space-y-2">
+                          {(requiredScreenings.length > 0 ? requiredScreenings : screenings.map((s) => s.type)).map(
+                            (type) => {
+                              const screening = screenings.find((s) => s.type === type);
+                              const isPassed = screening?.status === 'passed' || screening?.status === 'completed';
+                              return (
+                                <div
+                                  key={type}
+                                  className="bg-theme-surface border-theme-surface-border flex items-center justify-between rounded-lg border p-2 text-xs"
+                                >
+                                  <span className="text-theme-text-primary capitalize">{type.replace(/_/g, ' ')}</span>
+                                  {screening ? (
+                                    <span
+                                      className={`flex items-center gap-1 ${isPassed ? 'text-emerald-500' : 'text-amber-500'}`}
+                                    >
+                                      {isPassed ? <CheckCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                                      {screening.status.replace(/_/g, ' ')}
+                                    </span>
+                                  ) : (
+                                    <span className="text-theme-text-muted flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      Not started
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            }
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-theme-text-muted text-xs">No screening data recorded yet.</p>
+                      )}
+                    </div>
+                  );
+                })()}
 
               {/* Visual Stage Progress */}
               {applicant.total_stages > 0 && (
-                <div className="p-4 border-b border-theme-surface-border">
-                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
-                    Progress
-                  </h3>
+                <div className="border-theme-surface-border border-b p-4">
+                  <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">Progress</h3>
                   <div className="flex items-center gap-1 overflow-x-auto pb-1">
                     {applicant.stage_history.map((entry, idx) => {
                       const isComplete = !!entry.completed_at;
@@ -771,23 +793,21 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                       return (
                         <React.Fragment key={entry.id}>
                           {idx > 0 && (
-                            <div className={`shrink-0 w-4 h-0.5 ${isComplete || isCurrent ? 'bg-emerald-400' : 'bg-theme-surface-border'}`} />
+                            <div
+                              className={`h-0.5 w-4 shrink-0 ${isComplete || isCurrent ? 'bg-emerald-400' : 'bg-theme-surface-border'}`}
+                            />
                           )}
                           <div
-                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs shrink-0 ${
+                            className={`flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs ${
                               isComplete
                                 ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
                                 : isCurrent
-                                ? 'bg-red-500/10 text-red-700 dark:text-red-400 ring-1 ring-red-500/30'
-                                : 'bg-theme-surface-hover text-theme-text-muted'
+                                  ? 'bg-red-500/10 text-red-700 ring-1 ring-red-500/30 dark:text-red-400'
+                                  : 'bg-theme-surface-hover text-theme-text-muted'
                             }`}
                             title={`${entry.stage_name}${isComplete ? ' (Complete)' : isCurrent ? ' (Current)' : ''}`}
                           >
-                            {isComplete ? (
-                              <CheckCircle2 className="w-3 h-3" />
-                            ) : (
-                              <StageIcon className="w-3 h-3" />
-                            )}
+                            {isComplete ? <CheckCircle2 className="h-3 w-3" /> : <StageIcon className="h-3 w-3" />}
                             <span className="max-w-[80px] truncate">{entry.stage_name}</span>
                           </div>
                         </React.Fragment>
@@ -796,177 +816,163 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     {/* Placeholder bubbles for unreached pipeline stages */}
                     {Array.from({ length: applicant.total_stages - applicant.stage_history.length }).map((_, idx) => (
                       <React.Fragment key={`pending-${idx}`}>
-                        <div className="shrink-0 w-4 h-0.5 bg-theme-surface-border" />
+                        <div className="bg-theme-surface-border h-0.5 w-4 shrink-0" />
                         <div
-                          className="flex items-center gap-1 px-2 py-1 rounded text-xs shrink-0 bg-theme-surface-hover text-theme-text-muted opacity-50"
+                          className="bg-theme-surface-hover text-theme-text-muted flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs opacity-50"
                           title="Upcoming"
                         >
-                          <Circle className="w-3 h-3" />
+                          <Circle className="h-3 w-3" />
                         </div>
                       </React.Fragment>
                     ))}
                   </div>
                   {/* Time in pipeline summary */}
-                  <p className="text-xs text-theme-text-muted mt-2">
-                    {applicant.stage_history.filter((e) => e.completed_at).length} of {applicant.total_stages} stages completed
-                    &middot; In pipeline since {formatDate(applicant.created_at, tz)}
+                  <p className="text-theme-text-muted mt-2 text-xs">
+                    {applicant.stage_history.filter((e) => e.completed_at).length} of {applicant.total_stages} stages
+                    completed &middot; In pipeline since {formatDate(applicant.created_at, tz)}
                   </p>
                 </div>
               )}
 
               {/* Stage History Timeline */}
-              <div className="p-4 border-b border-theme-surface-border">
-                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
+              <div className="border-theme-surface-border border-b p-4">
+                <h3 className="text-theme-text-muted mb-3 text-xs font-medium tracking-wider uppercase">
                   Stage History
                 </h3>
                 {applicant.stage_history.length === 0 ? (
-                  <p className="text-sm text-theme-text-muted">No history yet.</p>
+                  <p className="text-theme-text-muted text-sm">No history yet.</p>
                 ) : (
                   <div className="space-y-0">
-                    {applicant.stage_history.map(
-                      (entry: StageHistoryEntry, idx: number) => {
-                        const isComplete = !!entry.completed_at;
-                        const isCurrent = idx === applicant.stage_history.length - 1 && !isComplete;
+                    {applicant.stage_history.map((entry: StageHistoryEntry, idx: number) => {
+                      const isComplete = !!entry.completed_at;
+                      const isCurrent = idx === applicant.stage_history.length - 1 && !isComplete;
 
-                        return (
-                          <div key={entry.id} className="flex gap-3">
-                            {/* Timeline line */}
-                            <div className="flex flex-col items-center">
-                              {isComplete ? (
-                                <CheckCircle2 className="w-5 h-5 text-emerald-700 dark:text-emerald-400 shrink-0" />
-                              ) : isCurrent ? (
-                                <div className="w-5 h-5 rounded-full border-2 border-red-500 bg-red-500/20 shrink-0" />
-                              ) : (
-                                <Circle className="w-5 h-5 text-theme-text-muted shrink-0" />
-                              )}
-                              {idx < applicant.stage_history.length - 1 && (
-                                <div className="w-px h-full min-h-[24px] bg-theme-surface-border my-1" />
-                              )}
-                            </div>
+                      return (
+                        <div key={entry.id} className="flex gap-3">
+                          {/* Timeline line */}
+                          <div className="flex flex-col items-center">
+                            {isComplete ? (
+                              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-400" />
+                            ) : isCurrent ? (
+                              <div className="h-5 w-5 shrink-0 rounded-full border-2 border-red-500 bg-red-500/20" />
+                            ) : (
+                              <Circle className="text-theme-text-muted h-5 w-5 shrink-0" />
+                            )}
+                            {idx < applicant.stage_history.length - 1 && (
+                              <div className="bg-theme-surface-border my-1 h-full min-h-[24px] w-px" />
+                            )}
+                          </div>
 
-                            {/* Content */}
-                            <div className="pb-4 min-w-0">
-                              <p className={`text-sm font-medium ${isComplete ? 'text-theme-text-secondary' : isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
-                                {entry.stage_name}
+                          {/* Content */}
+                          <div className="min-w-0 pb-4">
+                            <p
+                              className={`text-sm font-medium ${isComplete ? 'text-theme-text-secondary' : isCurrent ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}
+                            >
+                              {entry.stage_name}
+                            </p>
+                            <p className="text-theme-text-muted mt-0.5 text-xs">
+                              Entered {formatDateTime(entry.entered_at, tz)}
+                              {entry.completed_at && <> &middot; Completed {formatDateTime(entry.completed_at, tz)}</>}
+                            </p>
+                            {entry.completed_by_name && (
+                              <p className="text-theme-text-muted mt-0.5 text-xs">By {entry.completed_by_name}</p>
+                            )}
+                            {entry.notes && (
+                              <p className="text-theme-text-muted bg-theme-surface-secondary mt-1 rounded-sm px-2 py-1 text-xs">
+                                {entry.notes}
                               </p>
-                              <p className="text-xs text-theme-text-muted mt-0.5">
-                                Entered {formatDateTime(entry.entered_at, tz)}
-                                {entry.completed_at && (
-                                  <> &middot; Completed {formatDateTime(entry.completed_at, tz)}</>
-                                )}
-                              </p>
-                              {entry.completed_by_name && (
-                                <p className="text-xs text-theme-text-muted mt-0.5">
-                                  By {entry.completed_by_name}
-                                </p>
-                              )}
-                              {entry.notes && (
-                                <p className="text-xs text-theme-text-muted mt-1 bg-theme-surface-secondary rounded-sm px-2 py-1">
-                                  {entry.notes}
-                                </p>
-                              )}
-                              {entry.artifacts.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                  {entry.artifacts.map((artifact) => {
-                                    if (artifact.type === StageTypeEnum.FORM_SUBMISSION && artifact.data) {
-                                      const fields = artifact.data;
-                                      return (
-                                        <div key={artifact.id} className="bg-theme-surface-secondary rounded px-3 py-2">
-                                          <p className="text-xs font-medium text-theme-text-secondary mb-1.5 flex items-center gap-1">
-                                            <FileText className="w-3 h-3" />
-                                            {artifact.name}
-                                          </p>
-                                          <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                            {Object.entries(fields).map(([key, value]) => (
-                                              <div key={key} className="contents">
-                                                <dt className="text-xs text-theme-text-muted">
-                                                  {fieldLabel(key)}
-                                                </dt>
-                                                <dd className="text-xs text-theme-text-primary">
-                                                  {formatFieldValue(value)}
-                                                </dd>
-                                              </div>
-                                            ))}
-                                          </dl>
-                                        </div>
-                                      );
-                                    }
+                            )}
+                            {entry.artifacts.length > 0 && (
+                              <div className="mt-2 space-y-1">
+                                {entry.artifacts.map((artifact) => {
+                                  if (artifact.type === StageTypeEnum.FORM_SUBMISSION && artifact.data) {
+                                    const fields = artifact.data;
                                     return (
-                                      <div
-                                        key={artifact.id}
-                                        className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400"
-                                      >
-                                        <FileText className="w-3 h-3" />
-                                        {artifact.url && isSafeUrl(artifact.url) ? (
-                                          <a
-                                            href={artifact.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="hover:underline"
-                                          >
-                                            {artifact.name}
-                                          </a>
-                                        ) : (
-                                          <span>{artifact.name}</span>
-                                        )}
+                                      <div key={artifact.id} className="bg-theme-surface-secondary rounded px-3 py-2">
+                                        <p className="text-theme-text-secondary mb-1.5 flex items-center gap-1 text-xs font-medium">
+                                          <FileText className="h-3 w-3" />
+                                          {artifact.name}
+                                        </p>
+                                        <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                          {Object.entries(fields).map(([key, value]) => (
+                                            <div key={key} className="contents">
+                                              <dt className="text-theme-text-muted text-xs">{fieldLabel(key)}</dt>
+                                              <dd className="text-theme-text-primary text-xs">
+                                                {formatFieldValue(value)}
+                                              </dd>
+                                            </div>
+                                          ))}
+                                        </dl>
                                       </div>
                                     );
-                                  })}
-                                </div>
-                              )}
-                            </div>
+                                  }
+                                  return (
+                                    <div
+                                      key={artifact.id}
+                                      className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400"
+                                    >
+                                      <FileText className="h-3 w-3" />
+                                      {artifact.url && isSafeUrl(artifact.url) ? (
+                                        <a
+                                          href={artifact.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="hover:underline"
+                                        >
+                                          {artifact.name}
+                                        </a>
+                                      ) : (
+                                        <span>{artifact.name}</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
-                        );
-                      }
-                    )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
               {/* Notes */}
               {applicant.notes && (
-                <div className="p-4 border-b border-theme-surface-border">
-                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2">
-                    Notes
-                  </h3>
-                  <p className="text-sm text-theme-text-secondary">{applicant.notes}</p>
+                <div className="border-theme-surface-border border-b p-4">
+                  <h3 className="text-theme-text-muted mb-2 text-xs font-medium tracking-wider uppercase">Notes</h3>
+                  <p className="text-theme-text-secondary text-sm">{applicant.notes}</p>
                 </div>
               )}
 
               {/* Activity Log */}
-              <div className="p-4 border-b border-theme-surface-border">
+              <div className="border-theme-surface-border border-b p-4">
                 <button
                   onClick={() => setShowActivityLog(!showActivityLog)}
-                  className="flex items-center gap-2 w-full text-left"
+                  className="flex w-full items-center gap-2 text-left"
                 >
-                  <Activity className="w-3.5 h-3.5 text-theme-text-muted" />
-                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider">
-                    Activity Log
-                  </h3>
-                  <span className="text-xs text-theme-text-muted ml-auto">
-                    {showActivityLog ? '▾' : '▸'}
-                  </span>
+                  <Activity className="text-theme-text-muted h-3.5 w-3.5" />
+                  <h3 className="text-theme-text-muted text-xs font-medium tracking-wider uppercase">Activity Log</h3>
+                  <span className="text-theme-text-muted ml-auto text-xs">{showActivityLog ? '▾' : '▸'}</span>
                 </button>
                 {showActivityLog && (
-                  <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                  <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
                     {isLoadingActivity ? (
                       <div className="flex items-center justify-center py-4" role="status" aria-live="polite">
-                        <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
+                        <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />
                       </div>
                     ) : activityLog.length === 0 ? (
-                      <p className="text-xs text-theme-text-muted py-2">No activity recorded yet.</p>
+                      <p className="text-theme-text-muted py-2 text-xs">No activity recorded yet.</p>
                     ) : (
                       activityLog.map((entry) => (
                         <div key={entry.id} className="flex items-start gap-2 text-xs">
-                          <div className="w-1.5 h-1.5 rounded-full bg-theme-text-muted mt-1.5 shrink-0" />
+                          <div className="bg-theme-text-muted mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" />
                           <div className="min-w-0">
                             <span className="text-theme-text-secondary font-medium">{entry.action}</span>
                             {entry.performer_name && (
                               <span className="text-theme-text-muted"> by {entry.performer_name}</span>
                             )}
-                            <div className="text-theme-text-muted">
-                              {formatDateTime(entry.created_at, tz)}
-                            </div>
+                            <div className="text-theme-text-muted">{formatDateTime(entry.created_at, tz)}</div>
                           </div>
                         </div>
                       ))
@@ -977,22 +983,14 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
               {/* Metadata */}
               <div className="p-4">
-                <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2">
-                  Details
-                </h3>
-                <div className="text-xs text-theme-text-muted space-y-1">
+                <h3 className="text-theme-text-muted mb-2 text-xs font-medium tracking-wider uppercase">Details</h3>
+                <div className="text-theme-text-muted space-y-1 text-xs">
                   <p>Applied: {formatDate(applicant.created_at, tz)}</p>
                   <p>Last updated: {formatDate(applicant.updated_at, tz)}</p>
                   <p>Last activity: {formatDate(applicant.last_activity_at, tz)}</p>
-                  {applicant.pipeline_name && (
-                    <p>Pipeline: {applicant.pipeline_name}</p>
-                  )}
-                  {applicant.deactivated_at && (
-                    <p>Deactivated: {formatDate(applicant.deactivated_at, tz)}</p>
-                  )}
-                  {applicant.reactivated_at && (
-                    <p>Last reactivated: {formatDate(applicant.reactivated_at, tz)}</p>
-                  )}
+                  {applicant.pipeline_name && <p>Pipeline: {applicant.pipeline_name}</p>}
+                  {applicant.deactivated_at && <p>Deactivated: {formatDate(applicant.deactivated_at, tz)}</p>}
+                  {applicant.reactivated_at && <p>Last reactivated: {formatDate(applicant.reactivated_at, tz)}</p>}
                 </div>
               </div>
             </div>

@@ -11,14 +11,7 @@ import type {
   RunoffType,
   QuorumType,
 } from '../constants/enums';
-export type {
-  ElectionStatus,
-  VotingMethod,
-  VictoryCondition,
-  BallotChoice,
-  RunoffType,
-  QuorumType,
-};
+export type { ElectionStatus, VotingMethod, VictoryCondition, BallotChoice, RunoffType, QuorumType };
 
 export type TiePolicy = 'co_winners' | 'runoff' | 'revote' | 'chair_decides';
 

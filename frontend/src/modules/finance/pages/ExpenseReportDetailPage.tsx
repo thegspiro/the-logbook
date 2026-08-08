@@ -7,16 +7,7 @@
 
 import React, { useEffect } from 'react';
 import { useParams, Link } from 'react-router';
-import {
-  ArrowLeft,
-  AlertTriangle,
-  Receipt,
-  Send,
-  CheckCircle,
-  Clock,
-  XCircle,
-  Ban,
-} from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Receipt, Send, CheckCircle, Clock, XCircle, Ban } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { Skeleton } from '@/components/ux/Skeleton';
@@ -25,11 +16,7 @@ import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { formatCurrency } from '@/utils/currencyFormatting';
-import {
-  ExpenseReportStatus,
-  EXPENSE_REPORT_STATUS_COLORS,
-  APPROVAL_STEP_STATUS_COLORS,
-} from '../types';
+import { ExpenseReportStatus, EXPENSE_REPORT_STATUS_COLORS, APPROVAL_STEP_STATUS_COLORS } from '../types';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
@@ -53,7 +40,7 @@ const APPROVAL_STEP_LABELS: Record<string, string> = {
 const DetailSkeleton: React.FC = () => (
   <div className="space-y-6" aria-label="Loading expense report" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
       <div className="mb-4 flex items-center gap-3">
         <Skeleton className="h-10 w-10" rounded="lg" />
         <div className="space-y-2">
@@ -76,13 +63,7 @@ const DetailSkeleton: React.FC = () => (
 const ExpenseReportDetailPage: React.FC = () => {
   const tz = useTimezone();
   const { id } = useParams<{ id: string }>();
-  const {
-    selectedExpenseReport: er,
-    isLoading,
-    error,
-    fetchExpenseReport,
-    submitExpenseReport,
-  } = useFinanceStore();
+  const { selectedExpenseReport: er, isLoading, error, fetchExpenseReport, submitExpenseReport } = useFinanceStore();
 
   useEffect(() => {
     if (id) {
@@ -106,7 +87,7 @@ const ExpenseReportDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/expenses"
-          className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Expense Reports
@@ -122,7 +103,7 @@ const ExpenseReportDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/expenses"
-          className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Expense Reports
@@ -142,35 +123,31 @@ const ExpenseReportDetailPage: React.FC = () => {
     <div className="space-y-6">
       <Link
         to="/finance/expenses"
-        className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Expense Reports
       </Link>
 
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
       )}
 
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-theme-text-primary">
-                {er.title}
-              </h1>
+              <h1 className="text-theme-text-primary text-xl font-bold">{er.title}</h1>
               <span
                 className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${EXPENSE_REPORT_STATUS_COLORS[er.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
               >
                 {STATUS_LABELS[er.status] ?? er.status}
               </span>
             </div>
-            <p className="mt-1 text-sm text-theme-text-secondary">
-              {er.reportNumber}
-            </p>
+            <p className="text-theme-text-secondary mt-1 text-sm">{er.reportNumber}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {canSubmit && (
@@ -188,45 +165,37 @@ const ExpenseReportDetailPage: React.FC = () => {
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           <div>
-            <p className="text-xs text-theme-text-secondary">Total Amount</p>
-            <p className="text-sm font-semibold text-theme-text-primary">
-              {formatCurrency(er.totalAmount)}
-            </p>
+            <p className="text-theme-text-secondary text-xs">Total Amount</p>
+            <p className="text-theme-text-primary text-sm font-semibold">{formatCurrency(er.totalAmount)}</p>
           </div>
           <div>
-            <p className="text-xs text-theme-text-secondary">Created</p>
-            <p className="text-sm text-theme-text-primary">
-              {formatDateTime(er.createdAt, tz)}
-            </p>
+            <p className="text-theme-text-secondary text-xs">Created</p>
+            <p className="text-theme-text-primary text-sm">{formatDateTime(er.createdAt, tz)}</p>
           </div>
           {er.approvedAt && (
             <div>
-              <p className="text-xs text-theme-text-secondary">Approved</p>
-              <p className="text-sm text-theme-text-primary">
-                {formatDateTime(er.approvedAt, tz)}
-              </p>
+              <p className="text-theme-text-secondary text-xs">Approved</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(er.approvedAt, tz)}</p>
             </div>
           )}
           {er.paidAt && (
             <div>
-              <p className="text-xs text-theme-text-secondary">Paid</p>
-              <p className="text-sm text-theme-text-primary">
-                {formatDateTime(er.paidAt, tz)}
-              </p>
+              <p className="text-theme-text-secondary text-xs">Paid</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(er.paidAt, tz)}</p>
             </div>
           )}
           {er.paymentMethod && (
             <div>
-              <p className="text-xs text-theme-text-secondary">Payment Method</p>
-              <p className="text-sm capitalize text-theme-text-primary">{er.paymentMethod}</p>
+              <p className="text-theme-text-secondary text-xs">Payment Method</p>
+              <p className="text-theme-text-primary text-sm capitalize">{er.paymentMethod}</p>
             </div>
           )}
         </div>
 
         {er.description && (
-          <div className="mt-4 border-t border-theme-surface-border pt-4">
-            <p className="text-xs font-medium text-theme-text-secondary">Description</p>
-            <p className="mt-1 text-sm text-theme-text-primary">{er.description}</p>
+          <div className="border-theme-surface-border mt-4 border-t pt-4">
+            <p className="text-theme-text-secondary text-xs font-medium">Description</p>
+            <p className="text-theme-text-primary mt-1 text-sm">{er.description}</p>
           </div>
         )}
 
@@ -240,32 +209,44 @@ const ExpenseReportDetailPage: React.FC = () => {
 
       {/* Line Items */}
       {er.lineItems.length > 0 && (
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-          <h2 className="mb-4 text-lg font-semibold text-theme-text-primary">
-            Line Items
-          </h2>
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Line Items</h2>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b border-theme-surface-border">
+              <thead className="border-theme-surface-border border-b">
                 <tr>
-                  <th scope="col" className="px-4 py-2 text-left text-xs text-theme-text-muted uppercase">Description</th>
-                  <th scope="col" className="px-4 py-2 text-left text-xs text-theme-text-muted uppercase">Type</th>
-                  <th scope="col" className="px-4 py-2 text-right text-xs text-theme-text-muted uppercase">Amount</th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
+                    Description
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs uppercase">
+                    Type
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-right text-xs uppercase">
+                    Amount
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-theme-surface-border">
+              <tbody className="divide-theme-surface-border divide-y">
                 {er.lineItems.map((item) => (
                   <tr key={item.id}>
-                    <td className="px-4 py-3 text-sm text-theme-text-primary">{item.description}</td>
-                    <td className="px-4 py-3 text-sm capitalize text-theme-text-secondary">{item.expenseType ?? '--'}</td>
-                    <td className="px-4 py-3 text-right text-sm text-theme-text-primary">{formatCurrency(item.amount)}</td>
+                    <td className="text-theme-text-primary px-4 py-3 text-sm">{item.description}</td>
+                    <td className="text-theme-text-secondary px-4 py-3 text-sm capitalize">
+                      {item.expenseType ?? '--'}
+                    </td>
+                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm">
+                      {formatCurrency(item.amount)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-theme-surface-border">
-                  <td colSpan={2} className="px-4 py-3 text-sm font-semibold text-theme-text-primary">Total</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">{formatCurrency(er.totalAmount)}</td>
+                <tr className="border-theme-surface-border border-t-2">
+                  <td colSpan={2} className="text-theme-text-primary px-4 py-3 text-sm font-semibold">
+                    Total
+                  </td>
+                  <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold">
+                    {formatCurrency(er.totalAmount)}
+                  </td>
                 </tr>
               </tfoot>
             </table>
@@ -275,10 +256,8 @@ const ExpenseReportDetailPage: React.FC = () => {
 
       {/* Approval Timeline */}
       {er.approvalSteps.length > 0 && (
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-          <h2 className="mb-4 text-lg font-semibold text-theme-text-primary">
-            Approval Timeline
-          </h2>
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Approval Timeline</h2>
           <div className="space-y-0">
             {[...er.approvalSteps]
               .sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
@@ -294,9 +273,7 @@ const ExpenseReportDetailPage: React.FC = () => {
                         : 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400';
                 return (
                   <div key={step.id} className="relative flex gap-4 pb-6">
-                    {!isLast && (
-                      <div className="absolute left-4 top-8 h-full w-0.5 bg-theme-surface-border" />
-                    )}
+                    {!isLast && <div className="bg-theme-surface-border absolute top-8 left-4 h-full w-0.5" />}
                     <div className={`z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconColor}`}>
                       {step.status === 'approved' || step.status === 'auto_approved' ? (
                         <CheckCircle className="h-4 w-4" />
@@ -310,7 +287,7 @@ const ExpenseReportDetailPage: React.FC = () => {
                     </div>
                     <div className="flex-1 pt-0.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-theme-text-primary">
+                        <span className="text-theme-text-primary text-sm font-medium">
                           {step.stepName ?? `Step ${String((step.stepOrder ?? 0) + 1)}`}
                         </span>
                         <span
@@ -320,13 +297,9 @@ const ExpenseReportDetailPage: React.FC = () => {
                         </span>
                       </div>
                       {step.actedAt && (
-                        <p className="mt-0.5 text-xs text-theme-text-secondary">
-                          {formatDateTime(step.actedAt, tz)}
-                        </p>
+                        <p className="text-theme-text-secondary mt-0.5 text-xs">{formatDateTime(step.actedAt, tz)}</p>
                       )}
-                      {step.notes && (
-                        <p className="mt-1 text-sm text-theme-text-secondary">{step.notes}</p>
-                      )}
+                      {step.notes && <p className="text-theme-text-secondary mt-1 text-sm">{step.notes}</p>}
                     </div>
                   </div>
                 );

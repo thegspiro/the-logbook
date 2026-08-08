@@ -29,10 +29,7 @@ export interface LabelPreviewItem {
 }
 
 export const labelService = {
-  async preview(
-    module: string,
-    ids: string[],
-  ): Promise<{ items: LabelPreviewItem[] }> {
+  async preview(module: string, ids: string[]): Promise<{ items: LabelPreviewItem[] }> {
     const res = await api.post<{ items: LabelPreviewItem[] }>('/labels/preview', {
       module,
       ids,
@@ -47,7 +44,7 @@ export const labelService = {
 
   async setPreset(
     module: string,
-    data: { preset: string; custom_width?: number; custom_height?: number },
+    data: { preset: string; custom_width?: number; custom_height?: number }
   ): Promise<LabelPresetResponse> {
     const res = await api.put<LabelPresetResponse>(`/label-preset/${module}`, data);
     return res.data;
@@ -56,17 +53,10 @@ export const labelService = {
   async generate(
     module: string,
     ids: string[],
-    opts: GenerateLabelsOptions,
+    opts: GenerateLabelsOptions
   ): Promise<{ blob: Blob; autoPopulated: number }> {
-    const res = await api.post<Blob>(
-      '/labels/generate',
-      { module, ids, ...opts },
-      { responseType: 'blob' },
-    );
-    const auto = parseInt(
-      (res.headers?.['x-barcodes-auto-populated'] as string) ?? '0',
-      10,
-    );
+    const res = await api.post<Blob>('/labels/generate', { module, ids, ...opts }, { responseType: 'blob' });
+    const auto = parseInt((res.headers?.['x-barcodes-auto-populated'] as string) ?? '0', 10);
     return { blob: res.data, autoPopulated: isNaN(auto) ? 0 : auto };
   },
 };

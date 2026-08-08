@@ -11,10 +11,7 @@
  *   <FormResultsPanel formId="uuid" />
  */
 import { useState, useEffect, useMemo } from 'react';
-import {
-  RefreshCw, AlertCircle, BarChart3, Hash, Type, Calendar,
-  FileText, Download, Users,
-} from 'lucide-react';
+import { RefreshCw, AlertCircle, BarChart3, Hash, Type, Calendar, FileText, Download, Users } from 'lucide-react';
 import { formsService } from '../../services/api';
 import type { FormField, FormSubmission } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -104,7 +101,12 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
     const sorted = [...fields].sort((a, b) => a.sort_order - b.sort_order);
 
     return sorted
-      .filter((f) => f.field_type !== FieldType.SECTION_HEADER && f.field_type !== FieldType.FILE && f.field_type !== FieldType.SIGNATURE)
+      .filter(
+        (f) =>
+          f.field_type !== FieldType.SECTION_HEADER &&
+          f.field_type !== FieldType.FILE &&
+          f.field_type !== FieldType.SIGNATURE
+      )
       .map((field) => {
         // Gather all non-empty values for this field
         const values: string[] = [];
@@ -126,7 +128,10 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
           field.options?.forEach((opt) => counts.set(opt.value, 0));
           for (const val of values) {
             // Multiselect / checkbox store comma-separated values
-            const parts = val.split(',').map((v) => v.trim()).filter(Boolean);
+            const parts = val
+              .split(',')
+              .map((v) => v.trim())
+              .filter(Boolean);
             for (const p of parts) {
               counts.set(p, (counts.get(p) ?? 0) + 1);
             }
@@ -192,7 +197,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
       lines.push(
         [s.field.label, s.field.field_type, String(s.responseCount), summaryText]
           .map((v) => `"${v.replace(/"/g, '""')}"`)
-          .join(','),
+          .join(',')
       );
     }
 
@@ -208,18 +213,23 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
   if (loading) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg p-8 text-center">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-theme-text-muted" />
-        <p className="text-sm text-theme-text-muted">Analyzing responses...</p>
+        <RefreshCw className="text-theme-text-muted mx-auto mb-2 h-6 w-6 animate-spin" />
+        <p className="text-theme-text-muted text-sm">Analyzing responses...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 rounded-lg flex items-center gap-2 bg-red-500/10 border border-red-500/30">
-        <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 flex-shrink-0" />
+      <div className="flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+        <AlertCircle className="h-4 w-4 flex-shrink-0 text-red-700 dark:text-red-400" />
         <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-        <button onClick={() => { void loadData(); }} className="ml-auto text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 underline">
+        <button
+          onClick={() => {
+            void loadData();
+          }}
+          className="ml-auto text-xs text-red-700 underline hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+        >
           Retry
         </button>
       </div>
@@ -229,8 +239,10 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
   if (submissions.length === 0) {
     return (
       <div className="card-secondary p-8 text-center">
-        <BarChart3 className="w-10 h-10 text-theme-text-muted mx-auto mb-3" />
-        <p className="text-sm text-theme-text-muted">No submissions yet. Results will appear here once responses come in.</p>
+        <BarChart3 className="text-theme-text-muted mx-auto mb-3 h-10 w-10" />
+        <p className="text-theme-text-muted text-sm">
+          No submissions yet. Results will appear here once responses come in.
+        </p>
       </div>
     );
   }
@@ -243,17 +255,17 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
   return (
     <div>
       {/* Summary header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-theme-text-muted" />
-            <span className="text-sm text-theme-text-muted">
-              <span className="text-lg font-bold text-theme-text-primary">{submissions.length}</span>{' '}
+            <Users className="text-theme-text-muted h-4 w-4" />
+            <span className="text-theme-text-muted text-sm">
+              <span className="text-theme-text-primary text-lg font-bold">{submissions.length}</span>{' '}
               {submissions.length === 1 ? 'response' : 'responses'}
             </span>
           </div>
           {firstSubmission && lastSubmission && (
-            <span className="text-xs text-theme-text-muted">
+            <span className="text-theme-text-muted text-xs">
               {formatShortDateTime(firstSubmission, tz)} &mdash; {formatShortDateTime(lastSubmission, tz)}
             </span>
           )}
@@ -261,9 +273,9 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
         <button
           type="button"
           onClick={exportResultsCsv}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface-hover rounded-lg transition-colors"
+          className="text-theme-text-muted hover:text-theme-text-primary bg-theme-surface-secondary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors"
         >
-          <Download className="w-3.5 h-3.5" />
+          <Download className="h-3.5 w-3.5" />
           Export Summary
         </button>
       </div>
@@ -273,20 +285,20 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
         {summaries.map((summary) => (
           <div key={summary.field.id} className="card-secondary p-5">
             {/* Field header */}
-            <div className="flex items-center justify-between mb-3">
+            <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {CHOICE_TYPES.has(summary.field.field_type) ? (
-                  <BarChart3 className="w-4 h-4 text-red-700 dark:text-red-400" />
+                  <BarChart3 className="h-4 w-4 text-red-700 dark:text-red-400" />
                 ) : summary.field.field_type === FieldType.NUMBER ? (
-                  <Hash className="w-4 h-4 text-cyan-700 dark:text-cyan-400" />
+                  <Hash className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />
                 ) : DATE_TYPES.has(summary.field.field_type) ? (
-                  <Calendar className="w-4 h-4 text-green-700 dark:text-green-400" />
+                  <Calendar className="h-4 w-4 text-green-700 dark:text-green-400" />
                 ) : (
-                  <Type className="w-4 h-4 text-theme-text-muted" />
+                  <Type className="text-theme-text-muted h-4 w-4" />
                 )}
-                <h4 className="text-sm font-semibold text-theme-text-primary">{summary.field.label}</h4>
+                <h4 className="text-theme-text-primary text-sm font-semibold">{summary.field.label}</h4>
               </div>
-              <span className="text-xs text-theme-text-muted">
+              <span className="text-theme-text-muted text-xs">
                 {summary.responseCount} / {submissions.length} answered
               </span>
             </div>
@@ -296,15 +308,15 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
               <div className="space-y-2">
                 {summary.choices.map((choice) => (
                   <div key={choice.value}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm text-theme-text-secondary truncate mr-3">{choice.label}</span>
-                      <span className="text-xs text-theme-text-muted flex-shrink-0">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-theme-text-secondary mr-3 truncate text-sm">{choice.label}</span>
+                      <span className="text-theme-text-muted flex-shrink-0 text-xs">
                         {choice.count} ({choice.percent}%)
                       </span>
                     </div>
-                    <div className="w-full bg-theme-surface-secondary rounded-full h-2.5 overflow-hidden">
+                    <div className="bg-theme-surface-secondary h-2.5 w-full overflow-hidden rounded-full">
                       <div
-                        className="bg-red-600 h-full rounded-full transition-all duration-500"
+                        className="h-full rounded-full bg-red-600 transition-all duration-500"
                         style={{ width: `${Math.max(choice.percent, choice.count > 0 ? 2 : 0)}%` }}
                       />
                     </div>
@@ -315,36 +327,36 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
 
             {/* Number field — stat cards */}
             {summary.numStats && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-theme-text-muted mb-1">Average</p>
-                  <p className="text-xl font-bold text-theme-text-primary">{summary.numStats.avg}</p>
+                  <p className="text-theme-text-muted mb-1 text-[10px] tracking-wide uppercase">Average</p>
+                  <p className="text-theme-text-primary text-xl font-bold">{summary.numStats.avg}</p>
                 </div>
                 <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-theme-text-muted mb-1">Median</p>
-                  <p className="text-xl font-bold text-theme-text-primary">{summary.numStats.median}</p>
+                  <p className="text-theme-text-muted mb-1 text-[10px] tracking-wide uppercase">Median</p>
+                  <p className="text-theme-text-primary text-xl font-bold">{summary.numStats.median}</p>
                 </div>
                 <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-theme-text-muted mb-1">Min</p>
-                  <p className="text-xl font-bold text-theme-text-primary">{summary.numStats.min}</p>
+                  <p className="text-theme-text-muted mb-1 text-[10px] tracking-wide uppercase">Min</p>
+                  <p className="text-theme-text-primary text-xl font-bold">{summary.numStats.min}</p>
                 </div>
                 <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                  <p className="text-[10px] uppercase tracking-wide text-theme-text-muted mb-1">Max</p>
-                  <p className="text-xl font-bold text-theme-text-primary">{summary.numStats.max}</p>
+                  <p className="text-theme-text-muted mb-1 text-[10px] tracking-wide uppercase">Max</p>
+                  <p className="text-theme-text-primary text-xl font-bold">{summary.numStats.max}</p>
                 </div>
               </div>
             )}
 
             {/* Date field — range */}
             {summary.dateRange && (
-              <div className="flex items-center gap-3 text-sm text-theme-text-secondary">
+              <div className="text-theme-text-secondary flex items-center gap-3 text-sm">
                 <div className="bg-theme-surface-secondary rounded-lg px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-wide text-theme-text-muted">Earliest</p>
+                  <p className="text-theme-text-muted text-[10px] tracking-wide uppercase">Earliest</p>
                   <p className="font-medium">{summary.dateRange.earliest}</p>
                 </div>
                 <span className="text-theme-text-muted">&rarr;</span>
                 <div className="bg-theme-surface-secondary rounded-lg px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-wide text-theme-text-muted">Latest</p>
+                  <p className="text-theme-text-muted text-[10px] tracking-wide uppercase">Latest</p>
                   <p className="font-medium">{summary.dateRange.latest}</p>
                 </div>
               </div>
@@ -353,29 +365,25 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
             {/* Text field — recent answers */}
             {summary.recentAnswers && (
               <div>
-                <p className="text-xs text-theme-text-muted mb-2">Recent answers:</p>
+                <p className="text-theme-text-muted mb-2 text-xs">Recent answers:</p>
                 <div className="space-y-1.5">
                   {summary.recentAnswers.map((answer, i) => (
                     <div key={i} className="bg-theme-surface-secondary rounded-lg px-3 py-2">
-                      <p className="text-sm text-theme-text-secondary break-words">
-                        <FileText className="w-3 h-3 inline-block mr-1.5 text-theme-text-muted align-text-top" />
+                      <p className="text-theme-text-secondary text-sm break-words">
+                        <FileText className="text-theme-text-muted mr-1.5 inline-block h-3 w-3 align-text-top" />
                         {answer}
                       </p>
                     </div>
                   ))}
                   {summary.responseCount > 5 && (
-                    <p className="text-xs text-theme-text-muted">
-                      + {summary.responseCount - 5} more responses
-                    </p>
+                    <p className="text-theme-text-muted text-xs">+ {summary.responseCount - 5} more responses</p>
                   )}
                 </div>
               </div>
             )}
 
             {/* No responses for this field */}
-            {summary.responseCount === 0 && (
-              <p className="text-sm text-theme-text-muted italic">No responses yet</p>
-            )}
+            {summary.responseCount === 0 && <p className="text-theme-text-muted text-sm italic">No responses yet</p>}
           </div>
         ))}
       </div>

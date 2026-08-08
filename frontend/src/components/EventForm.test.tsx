@@ -14,15 +14,17 @@ vi.mock('../hooks/useTimezone', () => ({
 // Mock the API module
 vi.mock('../services/api', () => ({
   eventService: {
-    getVisibleEventTypes: vi.fn().mockResolvedValue([
-      'business_meeting',
-      'public_education',
-      'training',
-      'social',
-      'fundraiser',
-      'ceremony',
-      'other',
-    ]),
+    getVisibleEventTypes: vi
+      .fn()
+      .mockResolvedValue([
+        'business_meeting',
+        'public_education',
+        'training',
+        'social',
+        'fundraiser',
+        'ceremony',
+        'other',
+      ]),
     getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({
       visible_event_types: [
         'business_meeting',
@@ -58,16 +60,14 @@ describe('EventForm', () => {
 
   describe('Rendering', () => {
     it('should render all form sections', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       await waitFor(() => {
         expect(screen.getAllByRole('heading', { level: 2 }).length).toBeGreaterThan(0);
       });
 
       const headings = screen.getAllByRole('heading', { level: 2 });
-      const headingTexts = headings.map(h => h.textContent);
+      const headingTexts = headings.map((h) => h.textContent);
       expect(headingTexts).toContain('Event Details');
       expect(headingTexts).toContain('Notifications');
       expect(headingTexts).toContain('Check-In Settings');
@@ -78,26 +78,20 @@ describe('EventForm', () => {
     });
 
     it('should render submit and cancel buttons', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} submitLabel="Create Event" />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} submitLabel="Create Event" />);
 
       expect(screen.getByRole('button', { name: /create event/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
     });
 
     it('should use custom submit label', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} submitLabel="Save Changes" />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} submitLabel="Save Changes" />);
 
       expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
     });
 
     it('should show Saving... when isSubmitting is true', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} isSubmitting={true} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} isSubmitting={true} />);
 
       expect(screen.getByRole('button', { name: /saving\.\.\./i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /saving\.\.\./i })).toBeDisabled();
@@ -106,9 +100,7 @@ describe('EventForm', () => {
 
   describe('Event Details Section', () => {
     it('should render title input', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const titleInput = screen.getByLabelText(/title/i);
       expect(titleInput).toBeInTheDocument();
@@ -116,26 +108,20 @@ describe('EventForm', () => {
     });
 
     it('should render description textarea', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
     });
 
     it('should render event type dropdown with all options', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const typeSelect = screen.getByLabelText(/event type/i);
       expect(typeSelect).toBeInTheDocument();
     });
 
     it('should show training warning when training type selected', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
       const typeSelect = screen.getByLabelText(/event type/i);
@@ -149,18 +135,14 @@ describe('EventForm', () => {
 
   describe('Schedule Section', () => {
     it('should render start and end datetime inputs', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       expect(screen.getByLabelText(/start date & time/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/end date & time/i)).toBeInTheDocument();
     });
 
     it('should render quick duration buttons', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       expect(screen.getByRole('button', { name: /1 hour/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /2 hours/i })).toBeInTheDocument();
@@ -171,9 +153,7 @@ describe('EventForm', () => {
 
   describe('Location Section', () => {
     it('should load and display locations', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       await waitFor(() => {
         expect(screen.getByText('Station 1 Conference Room')).toBeInTheDocument();
@@ -182,9 +162,7 @@ describe('EventForm', () => {
     });
 
     it('should toggle between select and manual location modes', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       await waitFor(() => {
         expect(screen.getByLabelText(/location/i)).toBeInTheDocument();
@@ -202,9 +180,7 @@ describe('EventForm', () => {
     it('should fall back to text input when no locations are available', async () => {
       vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue([]);
 
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/station 1 conference room/i)).toBeInTheDocument();
@@ -214,18 +190,14 @@ describe('EventForm', () => {
 
   describe('RSVP Settings', () => {
     it('should hide RSVP options by default', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       expect(screen.queryByLabelText(/rsvp deadline/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/max attendees/i)).not.toBeInTheDocument();
     });
 
     it('should show RSVP options when Require RSVP is checked', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
       const rsvpCheckbox = screen.getByLabelText(/require rsvp/i);
@@ -239,9 +211,7 @@ describe('EventForm', () => {
     });
 
     it('should show RSVP status options when RSVP is enabled', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
       await user.click(screen.getByLabelText(/require rsvp/i));
@@ -257,18 +227,14 @@ describe('EventForm', () => {
 
   describe('Check-In Settings', () => {
     it('should render check-in window dropdown', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const checkinSelect = screen.getByLabelText(/check-in window/i);
       expect(checkinSelect).toBeInTheDocument();
     });
 
     it('should show window options when Window type is selected', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
       const checkinSelect = screen.getByLabelText(/check-in window/i);
@@ -281,9 +247,7 @@ describe('EventForm', () => {
     });
 
     it('should render require checkout checkbox', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       expect(screen.getByLabelText(/require manual check-out/i)).toBeInTheDocument();
     });
@@ -291,26 +255,20 @@ describe('EventForm', () => {
 
   describe('Notifications Section', () => {
     it('should have send reminders checked by default', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const remindersCheckbox = screen.getByLabelText(/send event reminders/i);
       expect(remindersCheckbox).toBeChecked();
     });
 
     it('should show reminder schedule when reminders enabled', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       expect(screen.getByText(/reminder schedule/i)).toBeInTheDocument();
     });
 
     it('should hide reminder schedule when reminders disabled', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
       await user.click(screen.getByLabelText(/send event reminders/i));
@@ -323,21 +281,15 @@ describe('EventForm', () => {
 
   describe('Attendance Section', () => {
     it('should render mandatory checkbox', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       expect(screen.getByLabelText(/mandatory attendance/i)).toBeInTheDocument();
     });
 
     it('should render attendance section with mandatory checkbox', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
-      const heading = screen.getAllByRole('heading', { level: 2 }).find(
-        (h) => h.textContent?.includes('Attendance')
-      );
+      const heading = screen.getAllByRole('heading', { level: 2 }).find((h) => h.textContent?.includes('Attendance'));
       expect(heading).toBeInTheDocument();
       expect(screen.getByLabelText(/mandatory attendance/i)).toBeInTheDocument();
     });
@@ -347,9 +299,7 @@ describe('EventForm', () => {
     it('should call onSubmit with form data', async () => {
       mockOnSubmit.mockResolvedValue(undefined);
 
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
 
@@ -376,9 +326,7 @@ describe('EventForm', () => {
     });
 
     it('should show error when end date is before start date', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
 
@@ -401,9 +349,7 @@ describe('EventForm', () => {
     });
 
     it('should call onCancel when cancel button is clicked', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
       const cancelButton = screen.getByRole('button', { name: /cancel/i });
@@ -439,9 +385,7 @@ describe('EventForm', () => {
 
   describe('Accessibility', () => {
     it('should have proper form labels', () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       expect(screen.getByLabelText(/title/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
@@ -451,9 +395,7 @@ describe('EventForm', () => {
     });
 
     it('should have error role for validation messages', async () => {
-      renderWithRouter(
-        <EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
-      );
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
 

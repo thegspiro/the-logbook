@@ -1,20 +1,15 @@
-import React from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Users,
-  Truck,
-} from "lucide-react";
-import type { ShiftRecord } from "../../modules/scheduling";
-import { normalizePositions } from "../../modules/scheduling/services/api";
-import { useSchedulingStore } from "../../modules/scheduling/store/schedulingStore";
-import { formatTime } from "../../utils/dateFormatting";
-import { colorCardStyle } from "../../utils/colorContrast";
+import React from 'react';
+import { AlertTriangle, CheckCircle2, Users, Truck } from 'lucide-react';
+import type { ShiftRecord } from '../../modules/scheduling';
+import { normalizePositions } from '../../modules/scheduling/services/api';
+import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
+import { formatTime } from '../../utils/dateFormatting';
+import { colorCardStyle } from '../../utils/colorContrast';
 
 /** Returns the minimum staffing target for a shift, or null if none is configured. */
 const getStaffingTarget = (shift: ShiftRecord): number | null => {
   const positions = normalizePositions(shift.apparatus_positions ?? shift.positions);
-  const requiredCount = positions.filter(p => p.required).length;
+  const requiredCount = positions.filter((p) => p.required).length;
   if (requiredCount > 0) return requiredCount;
   if (shift.min_staffing != null && shift.min_staffing > 0) return shift.min_staffing;
   return null;
@@ -32,15 +27,13 @@ const isFullyStaffed = (shift: ShiftRecord): boolean => {
 
 const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
   if (shift.color) return undefined;
-  const timePart = shift.start_time.includes("T")
-    ? shift.start_time.split("T")[1] ?? ""
-    : shift.start_time;
-  const startHour = parseInt(timePart.split(":")[0] ?? "0", 10);
+  const timePart = shift.start_time.includes('T') ? (shift.start_time.split('T')[1] ?? '') : shift.start_time;
+  const startHour = parseInt(timePart.split(':')[0] ?? '0', 10);
   if (startHour >= 5 && startHour < 10)
-    return "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30";
+    return 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30';
   if (startHour >= 10 && startHour < 17)
-    return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
-  return "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30";
+    return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30';
+  return 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30';
 };
 
 /**
@@ -52,67 +45,70 @@ const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
  */
 const getShiftCardAppearance = (
   shift: ShiftRecord,
-  resolvedTheme: "light" | "dark" | "high-contrast",
+  resolvedTheme: 'light' | 'dark' | 'high-contrast'
 ): { className: string; style: React.CSSProperties | undefined } => {
   if (isFullyStaffed(shift)) {
     return {
-      className: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
+      className: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30',
       style: undefined,
     };
   }
   if (isUnderstaffed(shift)) {
     return {
-      className: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
+      className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
       style: undefined,
     };
   }
   return {
-    className: getShiftTemplateColor(shift) ?? "",
+    className: getShiftTemplateColor(shift) ?? '',
     style: shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined,
   };
 };
 
-type ShiftCardVariant = "desktop-week" | "mobile" | "compact";
+type ShiftCardVariant = 'desktop-week' | 'mobile' | 'compact';
 
 interface ShiftCardProps {
   shift: ShiftRecord;
   variant?: ShiftCardVariant;
   selected?: boolean;
-  resolvedTheme: "light" | "dark" | "high-contrast";
+  resolvedTheme: 'light' | 'dark' | 'high-contrast';
   timezone: string;
   onClick?: (shift: ShiftRecord) => void;
   /** Mobile month cards use active:ring instead of hover:ring for touch UX */
   touchOnly?: boolean;
 }
 
-const VARIANT_STYLES: Record<ShiftCardVariant, {
-  button: string;
-  iconSize: string;
-  gap: string;
-  showNotes: boolean;
-  showEndTime: boolean;
-  showStaffSuffix: boolean;
-}> = {
-  "desktop-week": {
-    button: "mb-2 p-2 rounded-lg border text-xs",
-    iconSize: "w-3 h-3",
-    gap: "gap-2",
+const VARIANT_STYLES: Record<
+  ShiftCardVariant,
+  {
+    button: string;
+    iconSize: string;
+    gap: string;
+    showNotes: boolean;
+    showEndTime: boolean;
+    showStaffSuffix: boolean;
+  }
+> = {
+  'desktop-week': {
+    button: 'mb-2 p-2 rounded-lg border text-xs',
+    iconSize: 'w-3 h-3',
+    gap: 'gap-2',
     showNotes: true,
     showEndTime: true,
     showStaffSuffix: false,
   },
   mobile: {
-    button: "p-3 rounded-lg border text-sm",
-    iconSize: "w-3.5 h-3.5",
-    gap: "gap-3",
+    button: 'p-3 rounded-lg border text-sm',
+    iconSize: 'w-3.5 h-3.5',
+    gap: 'gap-3',
     showNotes: true,
     showEndTime: true,
     showStaffSuffix: true,
   },
   compact: {
-    button: "mb-1 px-1.5 py-1 rounded-sm border text-xs",
-    iconSize: "w-3 h-3",
-    gap: "",
+    button: 'mb-1 px-1.5 py-1 rounded-sm border text-xs',
+    iconSize: 'w-3 h-3',
+    gap: '',
     showNotes: false,
     showEndTime: false,
     showStaffSuffix: false,
@@ -121,7 +117,7 @@ const VARIANT_STYLES: Record<ShiftCardVariant, {
 
 const ShiftCard: React.FC<ShiftCardProps> = ({
   shift,
-  variant = "desktop-week",
+  variant = 'desktop-week',
   selected = false,
   resolvedTheme,
   timezone,
@@ -132,94 +128,85 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
   const v = VARIANT_STYLES[variant];
   const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
   const showPlatoon = platoonsEnabled && !!shift.platoon;
-  const isCancelled = shift.status === "cancelled";
-  const hoverRing = touchOnly
-    ? "active:ring-2 active:ring-violet-500/50"
-    : "hover:ring-2 hover:ring-violet-500/50";
-  const selectedRing = selected ? "ring-2 ring-violet-500" : "";
+  const isCancelled = shift.status === 'cancelled';
+  const hoverRing = touchOnly ? 'active:ring-2 active:ring-violet-500/50' : 'hover:ring-2 hover:ring-violet-500/50';
+  const selectedRing = selected ? 'ring-2 ring-violet-500' : '';
 
-  if (variant === "compact") {
+  if (variant === 'compact') {
     return (
       <button
         onClick={() => onClick?.(shift)}
-        className={`${v.button} w-full text-left cursor-pointer ${hoverRing} transition-all ${selectedRing} ${card.className} ${isCancelled ? "opacity-50" : ""}`}
+        className={`${v.button} w-full cursor-pointer text-left ${hoverRing} transition-all ${selectedRing} ${card.className} ${isCancelled ? 'opacity-50' : ''}`}
         style={card.style}
       >
-        <p className={`font-medium truncate ${isCancelled ? "line-through" : ""}`}>
+        <p className={`truncate font-medium ${isCancelled ? 'line-through' : ''}`}>
           {isUnderstaffed(shift) ? (
-            <AlertTriangle className="w-3 h-3 inline text-amber-600 dark:text-amber-400 mr-0.5" />
+            <AlertTriangle className="mr-0.5 inline h-3 w-3 text-amber-600 dark:text-amber-400" />
           ) : isFullyStaffed(shift) ? (
-            <CheckCircle2 className="w-3 h-3 inline text-green-600 dark:text-green-400 mr-0.5" />
+            <CheckCircle2 className="mr-0.5 inline h-3 w-3 text-green-600 dark:text-green-400" />
           ) : null}
           {formatTime(shift.start_time, timezone)}
-          {shift.apparatus_unit_number && (
-            <span className="ml-1 opacity-70">
-              {shift.apparatus_unit_number}
-            </span>
-          )}
+          {shift.apparatus_unit_number && <span className="ml-1 opacity-70">{shift.apparatus_unit_number}</span>}
           <span className="ml-1 opacity-70">
             ({shift.attendee_count}
             {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`})
           </span>
-          {showPlatoon && <span className="ml-1 font-semibold text-violet-700 dark:text-violet-300">{shift.platoon}</span>}
+          {showPlatoon && (
+            <span className="ml-1 font-semibold text-violet-700 dark:text-violet-300">{shift.platoon}</span>
+          )}
         </p>
       </button>
     );
   }
 
-  const iconGap = variant === "mobile" ? "gap-1" : "gap-0.5";
+  const iconGap = variant === 'mobile' ? 'gap-1' : 'gap-0.5';
 
   return (
     <button
       onClick={() => onClick?.(shift)}
-      className={`${v.button} w-full text-left cursor-pointer ${hoverRing} transition-all ${selectedRing} ${card.className} ${isCancelled ? "opacity-50" : ""}`}
+      className={`${v.button} w-full cursor-pointer text-left ${hoverRing} transition-all ${selectedRing} ${card.className} ${isCancelled ? 'opacity-50' : ''}`}
       style={card.style}
     >
       {isCancelled && (
-        <span className="inline-block mb-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-300">
+        <span className="mb-0.5 inline-block rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-700 uppercase dark:text-amber-300">
           Cancelled
         </span>
       )}
-      <p className={`font-medium ${variant === "desktop-week" ? "truncate" : ""} ${isCancelled ? "line-through" : ""}`}>
+      <p className={`font-medium ${variant === 'desktop-week' ? 'truncate' : ''} ${isCancelled ? 'line-through' : ''}`}>
         {formatTime(shift.start_time, timezone)}
-        {v.showEndTime && shift.end_time
-          ? ` - ${formatTime(shift.end_time, timezone)}`
-          : ""}
+        {v.showEndTime && shift.end_time ? ` - ${formatTime(shift.end_time, timezone)}` : ''}
       </p>
-      {v.showNotes && shift.notes && (
-        <p className="mt-1 opacity-80 line-clamp-2">
-          {shift.notes}
-        </p>
-      )}
-      <div className={`flex items-center ${v.gap} ${variant === "desktop-week" ? "mt-1" : "mt-1.5"}`}>
+      {v.showNotes && shift.notes && <p className="mt-1 line-clamp-2 opacity-80">{shift.notes}</p>}
+      <div className={`flex items-center ${v.gap} ${variant === 'desktop-week' ? 'mt-1' : 'mt-1.5'}`}>
         {isUnderstaffed(shift) ? (
           <span
-            className={`text-amber-600 dark:text-amber-400 flex items-center ${iconGap} ${variant === "mobile" ? "text-xs" : ""}`}
+            className={`flex items-center text-amber-600 dark:text-amber-400 ${iconGap} ${variant === 'mobile' ? 'text-xs' : ''}`}
             title={`Understaffed: ${shift.attendee_count}/${getStaffingTarget(shift)} filled`}
           >
             <AlertTriangle className={v.iconSize} />
           </span>
         ) : isFullyStaffed(shift) ? (
           <span
-            className={`text-green-600 dark:text-green-400 flex items-center ${iconGap} ${variant === "mobile" ? "text-xs" : ""}`}
+            className={`flex items-center text-green-600 dark:text-green-400 ${iconGap} ${variant === 'mobile' ? 'text-xs' : ''}`}
             title="Fully staffed"
           >
             <CheckCircle2 className={v.iconSize} />
           </span>
         ) : null}
-        <span className={`opacity-70 flex items-center ${iconGap} ${variant === "mobile" ? "text-xs" : ""}`}>
-          <Users className={v.iconSize} />{" "}
-          {shift.attendee_count}
-          {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`}{v.showStaffSuffix ? " staff" : ""}
+        <span className={`flex items-center opacity-70 ${iconGap} ${variant === 'mobile' ? 'text-xs' : ''}`}>
+          <Users className={v.iconSize} /> {shift.attendee_count}
+          {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`}
+          {v.showStaffSuffix ? ' staff' : ''}
         </span>
         {shift.apparatus_unit_number && (
-          <span className={`opacity-70 flex items-center ${iconGap} ${variant === "mobile" ? "text-xs" : ""}`}>
-            <Truck className={v.iconSize} />{" "}
-            {shift.apparatus_unit_number}
+          <span className={`flex items-center opacity-70 ${iconGap} ${variant === 'mobile' ? 'text-xs' : ''}`}>
+            <Truck className={v.iconSize} /> {shift.apparatus_unit_number}
           </span>
         )}
         {showPlatoon && (
-          <span className={`flex items-center rounded px-1 font-medium bg-violet-500/15 text-violet-700 dark:text-violet-300 ${variant === "mobile" ? "text-xs" : "text-[10px]"}`}>
+          <span
+            className={`flex items-center rounded bg-violet-500/15 px-1 font-medium text-violet-700 dark:text-violet-300 ${variant === 'mobile' ? 'text-xs' : 'text-[10px]'}`}
+          >
             {shift.platoon}
           </span>
         )}

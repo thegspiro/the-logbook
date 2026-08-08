@@ -21,7 +21,12 @@ const ActiveSessionsTab: React.FC = () => {
   const forceClockOut = useAdminHoursStore((s) => s.forceClockOut);
 
   const handleForceClockOut = async (entryId: string, userName: string) => {
-    if (!window.confirm(`Are you sure you want to end ${userName}'s active session? The entry will be moved to pending review.`)) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to end ${userName}'s active session? The entry will be moved to pending review.`
+      )
+    )
+      return;
     try {
       await forceClockOut(entryId);
       toast.success(`${userName}'s session has been ended`);
@@ -32,81 +37,99 @@ const ActiveSessionsTab: React.FC = () => {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-theme-text-primary">Active Sessions</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-theme-text-primary text-xl font-semibold">Active Sessions</h2>
         <button
-          onClick={() => { void fetchActiveSessions(); }}
-          className="flex items-center gap-2 px-3 py-2 bg-theme-surface text-theme-text-secondary rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover transition text-sm"
+          onClick={() => {
+            void fetchActiveSessions();
+          }}
+          className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className="h-4 w-4" />
           Refresh
         </button>
       </div>
       {activeSessionsLoading ? (
-        <div className="text-center py-8 text-theme-text-secondary">Loading active sessions...</div>
+        <div className="text-theme-text-secondary py-8 text-center">Loading active sessions...</div>
       ) : activeSessions.length === 0 ? (
-        <div className="text-center py-12 bg-theme-surface rounded-lg">
-          <Timer className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
+        <div className="bg-theme-surface rounded-lg py-12 text-center">
+          <Timer className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-secondary">No active sessions right now</p>
-          <p className="text-sm text-theme-text-muted mt-1">Sessions appear here when members are clocked in</p>
+          <p className="text-theme-text-muted mt-1 text-sm">Sessions appear here when members are clocked in</p>
         </div>
       ) : (
         <div className="space-y-3">
           {activeSessions.map((session) => {
-            const isOverLimit = session.maxSessionMinutes !== null && session.elapsedMinutes >= session.maxSessionMinutes;
-            const isNearLimit = !isOverLimit && session.maxSessionMinutes !== null && session.elapsedMinutes >= session.maxSessionMinutes * 0.8;
+            const isOverLimit =
+              session.maxSessionMinutes !== null && session.elapsedMinutes >= session.maxSessionMinutes;
+            const isNearLimit =
+              !isOverLimit &&
+              session.maxSessionMinutes !== null &&
+              session.elapsedMinutes >= session.maxSessionMinutes * 0.8;
             return (
               <div
                 key={session.id}
-                className={`bg-theme-surface rounded-lg shadow-md p-4 border-l-4 ${
+                className={`bg-theme-surface rounded-lg border-l-4 p-4 shadow-md ${
                   isOverLimit ? 'border-l-red-500' : isNearLimit ? 'border-l-orange-500' : 'border-l-blue-500'
                 }`}
               >
                 <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <div className="flex min-w-0 flex-1 items-center gap-4">
                     <div className="relative shrink-0">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        isOverLimit ? 'bg-red-500/20' : isNearLimit ? 'bg-orange-500/20' : 'bg-blue-500/20'
-                      }`}>
-                        <Timer className={`w-5 h-5 ${
-                          isOverLimit ? 'text-red-700 dark:text-red-400' : isNearLimit ? 'text-orange-700 dark:text-orange-400' : 'text-blue-700 dark:text-blue-400'
-                        }`} />
+                      <div
+                        className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                          isOverLimit ? 'bg-red-500/20' : isNearLimit ? 'bg-orange-500/20' : 'bg-blue-500/20'
+                        }`}
+                      >
+                        <Timer
+                          className={`h-5 w-5 ${
+                            isOverLimit
+                              ? 'text-red-700 dark:text-red-400'
+                              : isNearLimit
+                                ? 'text-orange-700 dark:text-orange-400'
+                                : 'text-blue-700 dark:text-blue-400'
+                          }`}
+                        />
                       </div>
-                      <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full animate-pulse border-2 border-theme-surface" />
+                      <span className="border-theme-surface absolute -top-0.5 -right-0.5 h-3 w-3 animate-pulse rounded-full border-2 bg-green-500" />
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-semibold text-theme-text-primary">{session.userName}</span>
+                      <div className="mb-0.5 flex items-center gap-2">
+                        <span className="text-theme-text-primary font-semibold">{session.userName}</span>
                         <span className="text-theme-text-muted">-</span>
                         <div className="flex items-center gap-1.5">
                           <div
-                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
                             style={{ backgroundColor: session.categoryColor ?? '#6B7280' }}
                           />
-                          <span className="text-sm text-theme-text-secondary">{session.categoryName}</span>
+                          <span className="text-theme-text-secondary text-sm">{session.categoryName}</span>
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                        <span className={`font-medium ${
-                          isOverLimit ? 'text-red-700 dark:text-red-400' : isNearLimit ? 'text-orange-700 dark:text-orange-400' : 'text-blue-700 dark:text-blue-400'
-                        }`}>
+                        <span
+                          className={`font-medium ${
+                            isOverLimit
+                              ? 'text-red-700 dark:text-red-400'
+                              : isNearLimit
+                                ? 'text-orange-700 dark:text-orange-400'
+                                : 'text-blue-700 dark:text-blue-400'
+                          }`}
+                        >
                           {formatDuration(session.elapsedMinutes)}
                         </span>
-                        <span className="text-theme-text-muted">
-                          Started {formatTime(session.clockInAt, tz)}
-                        </span>
+                        <span className="text-theme-text-muted">Started {formatTime(session.clockInAt, tz)}</span>
                         {session.maxSessionMinutes !== null && (
                           <span className="text-theme-text-muted">
                             Limit: {formatDuration(session.maxSessionMinutes)}
                           </span>
                         )}
                         {isOverLimit && (
-                          <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-700 dark:text-red-400 rounded-full font-medium">
+                          <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
                             Over limit
                           </span>
                         )}
                         {isNearLimit && (
-                          <span className="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-700 dark:text-orange-400 rounded-full font-medium">
+                          <span className="rounded-full bg-orange-500/20 px-2 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-400">
                             Near limit
                           </span>
                         )}
@@ -114,11 +137,13 @@ const ActiveSessionsTab: React.FC = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => { void handleForceClockOut(session.id, session.userName); }}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium shrink-0"
+                    onClick={() => {
+                      void handleForceClockOut(session.id, session.userName);
+                    }}
+                    className="flex shrink-0 items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
                     title="End this session on behalf of the member"
                   >
-                    <StopCircle className="w-4 h-4" />
+                    <StopCircle className="h-4 w-4" />
                     End Session
                   </button>
                 </div>

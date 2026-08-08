@@ -16,10 +16,7 @@ function renderAt(token: string) {
   return render(
     <MemoryRouter initialEntries={[`/finance/approvals/${token}`]}>
       <Routes>
-        <Route
-          path="/finance/approvals/:token"
-          element={<FinanceApprovalPage />}
-        />
+        <Route path="/finance/approvals/:token" element={<FinanceApprovalPage />} />
       </Routes>
     </MemoryRouter>
   );
@@ -52,10 +49,7 @@ describe('FinanceApprovalPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /approve/i }));
 
     await waitFor(() =>
-      expect(mockPost).toHaveBeenCalledWith(
-        '/api/public/v1/finance/approvals/tok-123/approve',
-        { notes: undefined }
-      )
+      expect(mockPost).toHaveBeenCalledWith('/api/public/v1/finance/approvals/tok-123/approve', { notes: undefined })
     );
     expect(await screen.findByText(/Approval recorded/)).toBeInTheDocument();
   });
@@ -74,9 +68,7 @@ describe('FinanceApprovalPage', () => {
     renderAt('tok-x');
 
     expect(await screen.findByText(/already been approved/i)).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /approve/i })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
   });
 
   it('shows no actions when the token is invalid', async () => {
@@ -84,11 +76,7 @@ describe('FinanceApprovalPage', () => {
 
     renderAt('bad');
 
-    await waitFor(() =>
-      expect(screen.queryByText('Loading approval…')).not.toBeInTheDocument()
-    );
-    expect(
-      screen.queryByRole('button', { name: /approve/i })
-    ).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Loading approval…')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
   });
 });

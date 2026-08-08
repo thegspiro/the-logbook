@@ -8,12 +8,7 @@ import { toLocalISODate, formatDate as fmtDate, formatTime as fmtTime } from '..
 
 /** Escape HTML special characters to prevent XSS in generated HTML. */
 const escapeHtml = (s: string): string =>
-  s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /** Safely convert any unknown value to a display string. */
 export const toStr = (v: unknown, fallback = ''): string => {

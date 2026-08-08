@@ -64,25 +64,25 @@ export const CalendarSubscribeCard: React.FC = () => {
   return (
     <div className="card">
       <button
-        onClick={() => { void handleOpen(); }}
+        onClick={() => {
+          void handleOpen();
+        }}
         className="flex w-full items-center gap-2 text-left"
         aria-expanded={open}
       >
-        <CalendarPlus className="h-4 w-4 text-violet-500 shrink-0" />
-        <span className="text-sm font-medium text-theme-text-primary">Subscribe to my shifts</span>
-        <span className="ml-auto text-xs text-theme-text-muted">
-          {open ? 'Hide' : 'Add to calendar app'}
-        </span>
+        <CalendarPlus className="h-4 w-4 shrink-0 text-violet-500" />
+        <span className="text-theme-text-primary text-sm font-medium">Subscribe to my shifts</span>
+        <span className="text-theme-text-muted ml-auto text-xs">{open ? 'Hide' : 'Add to calendar app'}</span>
       </button>
 
       {open && (
         <div className="mt-3 space-y-2">
-          <p className="text-xs text-theme-text-muted">
-            Add this link in Google Calendar, Apple Calendar, or Outlook to see your shifts.
-            The link is private to you — don&apos;t share it.
+          <p className="text-theme-text-muted text-xs">
+            Add this link in Google Calendar, Apple Calendar, or Outlook to see your shifts. The link is private to you
+            — don&apos;t share it.
           </p>
           {loading ? (
-            <div className="flex items-center gap-2 text-xs text-theme-text-muted">
+            <div className="text-theme-text-muted flex items-center gap-2 text-xs">
               <Loader2 className="h-3 w-3 animate-spin" /> Loading your link…
             </div>
           ) : fullUrl ? (
@@ -97,7 +97,9 @@ export const CalendarSubscribeCard: React.FC = () => {
                   aria-label="Calendar subscription URL"
                 />
                 <button
-                  onClick={() => { void handleCopy(); }}
+                  onClick={() => {
+                    void handleCopy();
+                  }}
                   className="btn-icon shrink-0"
                   aria-label="Copy calendar link"
                   title="Copy link"
@@ -106,9 +108,11 @@ export const CalendarSubscribeCard: React.FC = () => {
                 </button>
               </div>
               <button
-                onClick={() => { void handleRotate(); }}
+                onClick={() => {
+                  void handleRotate();
+                }}
                 disabled={rotating}
-                className="inline-flex items-center gap-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary disabled:opacity-50"
+                className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 text-xs disabled:opacity-50"
               >
                 {rotating ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                 Reset link

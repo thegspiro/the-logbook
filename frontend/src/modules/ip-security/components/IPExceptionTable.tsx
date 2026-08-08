@@ -33,8 +33,8 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
   const tz = useTimezone();
   if (exceptions.length === 0) {
     return (
-      <div className="text-center py-12 text-theme-text-muted">
-        <Shield className="w-12 h-12 mx-auto mb-3 opacity-50" />
+      <div className="text-theme-text-muted py-12 text-center">
+        <Shield className="mx-auto mb-3 h-12 w-12 opacity-50" />
         <p>No IP exceptions found</p>
       </div>
     );
@@ -44,76 +44,90 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-theme-surface-border text-left text-theme-text-muted">
-            <th scope="col" className="py-3 px-4 font-medium">IP Address</th>
-            <th scope="col" className="py-3 px-4 font-medium">Use Case</th>
-            <th scope="col" className="py-3 px-4 font-medium">Status</th>
-            <th scope="col" className="py-3 px-4 font-medium">Duration</th>
-            <th scope="col" className="py-3 px-4 font-medium">Country</th>
-            <th scope="col" className="py-3 px-4 font-medium">Requested</th>
-            {showActions && <th scope="col" className="py-3 px-4 font-medium">Actions</th>}
+          <tr className="border-theme-surface-border text-theme-text-muted border-b text-left">
+            <th scope="col" className="px-4 py-3 font-medium">
+              IP Address
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Use Case
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Status
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Duration
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Country
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Requested
+            </th>
+            {showActions && (
+              <th scope="col" className="px-4 py-3 font-medium">
+                Actions
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
           {exceptions.map((exc) => (
             <tr
               key={exc.id}
-              className="border-b border-theme-surface-border/50 hover:bg-theme-surface-hover transition-colors"
+              className="border-theme-surface-border/50 hover:bg-theme-surface-hover border-b transition-colors"
             >
-              <td className="py-3 px-4 font-mono text-theme-text-primary">{exc.ipAddress}</td>
-              <td className="py-3 px-4 text-theme-text-secondary">
+              <td className="text-theme-text-primary px-4 py-3 font-mono">{exc.ipAddress}</td>
+              <td className="text-theme-text-secondary px-4 py-3">
                 {IP_EXCEPTION_USE_CASE_LABELS[exc.useCase ?? ''] ?? exc.useCase ?? '—'}
               </td>
-              <td className="py-3 px-4">
+              <td className="px-4 py-3">
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${IP_EXCEPTION_STATUS_COLORS[exc.approvalStatus] ?? ''}`}
+                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${IP_EXCEPTION_STATUS_COLORS[exc.approvalStatus] ?? ''}`}
                 >
                   {exc.approvalStatus}
                 </span>
               </td>
-              <td className="py-3 px-4 text-theme-text-secondary">
+              <td className="text-theme-text-secondary px-4 py-3">
                 {exc.approvedDurationDays ?? exc.requestedDurationDays} days
               </td>
-              <td className="py-3 px-4 text-theme-text-secondary">
-                {exc.countryName ?? exc.countryCode ?? '—'}
-              </td>
-              <td className="py-3 px-4 text-theme-text-muted">
+              <td className="text-theme-text-secondary px-4 py-3">{exc.countryName ?? exc.countryCode ?? '—'}</td>
+              <td className="text-theme-text-muted px-4 py-3">
                 {exc.requestedAt ? formatDateTime(exc.requestedAt, tz) : '—'}
               </td>
               {showActions && (
-                <td className="py-3 px-4">
+                <td className="px-4 py-3">
                   <div className="flex items-center gap-1">
                     {exc.approvalStatus === IPExceptionApprovalStatus.PENDING && (
                       <>
                         <button
                           onClick={() => onApprove?.(exc.id)}
-                          className="p-1.5 rounded-lg text-green-600 hover:bg-green-500/10 transition-colors"
+                          className="rounded-lg p-1.5 text-green-600 transition-colors hover:bg-green-500/10"
                           title="Approve"
                         >
-                          <Check className="w-4 h-4" />
+                          <Check className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => onReject?.(exc.id)}
-                          className="p-1.5 rounded-lg text-red-600 hover:bg-red-500/10 transition-colors"
+                          className="rounded-lg p-1.5 text-red-600 transition-colors hover:bg-red-500/10"
                           title="Reject"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="h-4 w-4" />
                         </button>
                       </>
                     )}
                     {exc.approvalStatus === IPExceptionApprovalStatus.APPROVED && (
                       <button
                         onClick={() => onRevoke?.(exc.id)}
-                        className="p-1.5 rounded-lg text-orange-600 hover:bg-orange-500/10 transition-colors"
+                        className="rounded-lg p-1.5 text-orange-600 transition-colors hover:bg-orange-500/10"
                         title="Revoke"
                       >
-                        <Ban className="w-4 h-4" />
+                        <Ban className="h-4 w-4" />
                       </button>
                     )}
                     {(exc.approvalStatus === IPExceptionApprovalStatus.EXPIRED ||
                       exc.approvalStatus === IPExceptionApprovalStatus.REJECTED ||
                       exc.approvalStatus === IPExceptionApprovalStatus.REVOKED) && (
-                      <Clock className="w-4 h-4 text-theme-text-muted" />
+                      <Clock className="text-theme-text-muted h-4 w-4" />
                     )}
                   </div>
                 </td>

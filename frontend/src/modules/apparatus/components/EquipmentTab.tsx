@@ -21,12 +21,7 @@ interface EquipmentTabProps {
   onRefresh: () => void;
 }
 
-export const EquipmentTab: React.FC<EquipmentTabProps> = ({
-  equipment,
-  loadingTab,
-  apparatusId,
-  onRefresh,
-}) => {
+export const EquipmentTab: React.FC<EquipmentTabProps> = ({ equipment, loadingTab, apparatusId, onRefresh }) => {
   const [showModal, setShowModal] = useState(false);
   const [editEquipment, setEditEquipment] = useState<ApparatusEquipment | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApparatusEquipment | null>(null);
@@ -56,9 +51,9 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
   return (
     <>
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
-            <Package className="w-5 h-5" />
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-theme-text-primary flex items-center gap-2 font-bold">
+            <Package className="h-5 w-5" />
             Equipment
           </h2>
           <button onClick={handleAdd} className="btn-primary text-sm">
@@ -66,64 +61,65 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
           </button>
         </div>
         {loadingTab ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
+          <div className="py-8 text-center">
+            <div className="border-theme-text-primary mx-auto h-8 w-8 animate-spin rounded-full border-b-2"></div>
           </div>
         ) : equipment.length === 0 ? (
-          <p className="text-theme-text-muted text-center py-8">No equipment assigned.</p>
+          <p className="text-theme-text-muted py-8 text-center">No equipment assigned.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {equipment.map((item) => (
-              <div
-                key={item.id}
-                className="card-secondary p-4"
-              >
-                <div className="flex items-center justify-between mb-2">
+              <div key={item.id} className="card-secondary p-4">
+                <div className="mb-2 flex items-center justify-between">
                   <p className="text-theme-text-primary font-medium">{item.name}</p>
                   <div className="flex items-center gap-2">
                     <span className="text-theme-text-muted text-sm">Qty: {item.quantity}</span>
                     <button
                       onClick={() => handleEdit(item)}
-                      className="p-1 text-theme-text-muted hover:text-theme-text-primary transition-colors rounded-md hover:bg-theme-surface"
+                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-md p-1 transition-colors"
                       title="Edit equipment"
                     >
-                      <Pencil className="w-3.5 h-3.5" />
+                      <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => setDeleteTarget(item)}
-                      className="p-1 text-theme-text-muted hover:text-red-600 transition-colors rounded-md hover:bg-theme-surface"
+                      className="text-theme-text-muted hover:bg-theme-surface rounded-md p-1 transition-colors hover:text-red-600"
                       title="Remove equipment"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
-                {item.description && (
-                  <p className="text-theme-text-muted text-sm mb-2 truncate">{item.description}</p>
-                )}
+                {item.description && <p className="text-theme-text-muted mb-2 truncate text-sm">{item.description}</p>}
                 {item.locationOnApparatus && (
-                  <p className="text-theme-text-muted text-sm flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
+                  <p className="text-theme-text-muted flex items-center gap-1 text-sm">
+                    <MapPin className="h-3 w-3" />
                     {item.locationOnApparatus}
                   </p>
                 )}
                 {(item.serialNumber || item.assetTag) && (
-                  <p className="text-theme-text-muted text-xs mt-1">
+                  <p className="text-theme-text-muted mt-1 text-xs">
                     {item.serialNumber && `S/N: ${item.serialNumber}`}
                     {item.serialNumber && item.assetTag && ' • '}
                     {item.assetTag && `Asset: ${item.assetTag}`}
                   </p>
                 )}
-                <div className="flex gap-2 mt-2">
+                <div className="mt-2 flex gap-2">
                   {item.isRequired && (
-                    <span className="px-2 py-0.5 bg-red-500/10 text-red-700 dark:text-red-400 text-xs rounded-sm">Required</span>
+                    <span className="rounded-sm bg-red-500/10 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
+                      Required
+                    </span>
                   )}
                   {item.isMounted && (
-                    <span className="px-2 py-0.5 bg-blue-500/10 text-blue-700 dark:text-blue-400 text-xs rounded-sm">Mounted</span>
+                    <span className="rounded-sm bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 dark:text-blue-400">
+                      Mounted
+                    </span>
                   )}
                   <span
-                    className={`px-2 py-0.5 text-xs rounded ${
-                      item.isPresent ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+                    className={`rounded px-2 py-0.5 text-xs ${
+                      item.isPresent
+                        ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                        : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
                     }`}
                   >
                     {item.isPresent ? 'Present' : 'Missing'}

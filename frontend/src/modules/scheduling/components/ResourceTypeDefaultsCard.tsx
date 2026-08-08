@@ -5,13 +5,9 @@
  * (first aid stations, bicycle teams, etc.). Uses the shared PositionListEditor.
  */
 
-import React, { useState } from "react";
-import { PositionListEditor } from "./PositionListEditor";
-import type {
-  PositionOption,
-  ResourceTypeDefaults,
-  ShiftSettings,
-} from "../types/shiftSettings";
+import React, { useState } from 'react';
+import { PositionListEditor } from './PositionListEditor';
+import type { PositionOption, ResourceTypeDefaults, ShiftSettings } from '../types/shiftSettings';
 
 interface ResourceTypeDefaultsCardProps {
   settings: ShiftSettings;
@@ -19,9 +15,11 @@ interface ResourceTypeDefaultsCardProps {
   allPositionOptions: PositionOption[];
 }
 
-export const ResourceTypeDefaultsCard: React.FC<
-  ResourceTypeDefaultsCardProps
-> = ({ settings, onSettingsChange, allPositionOptions }) => {
+export const ResourceTypeDefaultsCard: React.FC<ResourceTypeDefaultsCardProps> = ({
+  settings,
+  onSettingsChange,
+  allPositionOptions,
+}) => {
   const [editingType, setEditingType] = useState<string | null>(null);
   const [editPositions, setEditPositions] = useState<string[]>([]);
 
@@ -55,95 +53,81 @@ export const ResourceTypeDefaultsCard: React.FC<
   };
 
   return (
-    <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
-      <h3 className="text-base font-semibold text-theme-text-primary mb-1">
-        Event Resource Defaults
-      </h3>
-      <p className="text-xs text-theme-text-muted mb-4">
-        Define default staffing for non-vehicle resources used during events
-        (first aid stations, bicycle teams, etc.). These defaults are used
-        when adding resources to event templates.
+    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+      <h3 className="text-theme-text-primary mb-1 text-base font-semibold">Event Resource Defaults</h3>
+      <p className="text-theme-text-muted mb-4 text-xs">
+        Define default staffing for non-vehicle resources used during events (first aid stations, bicycle teams, etc.).
+        These defaults are used when adding resources to event templates.
       </p>
       <div className="space-y-2">
-        {Object.entries(settings.resourceTypeDefaults).map(
-          ([type, defaults]: [string, ResourceTypeDefaults]) => {
-            const isEditing = editingType === type;
-            return (
-              <div
-                key={type}
-                className="p-3 bg-theme-surface-hover/50 rounded-lg"
-              >
-                {isEditing ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-theme-text-primary">
-                        {defaults.label}
-                      </h4>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={cancelEdit}
-                          className="text-xs text-theme-text-muted hover:text-theme-text-primary"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => saveEdit(type)}
-                          className="text-xs text-violet-600 dark:text-violet-400 font-medium hover:underline"
-                        >
-                          Save
-                        </button>
-                      </div>
+        {Object.entries(settings.resourceTypeDefaults).map(([type, defaults]: [string, ResourceTypeDefaults]) => {
+          const isEditing = editingType === type;
+          return (
+            <div key={type} className="bg-theme-surface-hover/50 rounded-lg p-3">
+              {isEditing ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-theme-text-primary text-sm font-semibold">{defaults.label}</h4>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={cancelEdit}
+                        className="text-theme-text-muted hover:text-theme-text-primary text-xs"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => saveEdit(type)}
+                        className="text-xs font-medium text-violet-600 hover:underline dark:text-violet-400"
+                      >
+                        Save
+                      </button>
                     </div>
-                    <PositionListEditor
-                      positions={editPositions}
-                      onChange={setEditPositions}
-                      availablePositions={allPositionOptions}
-                      label="Default Positions"
-                      defaultNewPosition="ems"
-                      addButtonLabel="Add position"
-                    />
                   </div>
-                ) : (
-                  <div className="flex items-start sm:items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-semibold text-theme-text-primary">
-                          {defaults.label}
-                        </h4>
-                        <span className="text-[10px] text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded-sm">
-                          {defaults.positions.length} positions
-                        </span>
-                      </div>
-                      {defaults.positions.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          {defaults.positions.map((pos, i) => {
-                            const label =
-                              allPositionOptions.find((o) => o.value === pos)
-                                ?.label || pos;
-                            return (
-                              <span
-                                key={i}
-                                className="px-1.5 py-0.5 text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-400 rounded-sm capitalize"
-                              >
-                                {label}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
+                  <PositionListEditor
+                    positions={editPositions}
+                    onChange={setEditPositions}
+                    availablePositions={allPositionOptions}
+                    label="Default Positions"
+                    defaultNewPosition="ems"
+                    addButtonLabel="Add position"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-2 sm:items-center">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-theme-text-primary text-sm font-semibold">{defaults.label}</h4>
+                      <span className="text-theme-text-muted bg-theme-surface-hover rounded-sm px-1.5 py-0.5 text-[10px]">
+                        {defaults.positions.length} positions
+                      </span>
                     </div>
-                    <button
-                      onClick={() => startEdit(type)}
-                      className="text-xs text-violet-600 dark:text-violet-400 hover:underline shrink-0"
-                    >
-                      Edit
-                    </button>
+                    {defaults.positions.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {defaults.positions.map((pos, i) => {
+                          const label = allPositionOptions.find((o) => o.value === pos)?.label || pos;
+                          return (
+                            <span
+                              key={i}
+                              className="rounded-sm bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-700 capitalize dark:text-purple-400"
+                            >
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          },
-        )}
+                  <button
+                    onClick={() => startEdit(type)}
+                    className="shrink-0 text-xs text-violet-600 hover:underline dark:text-violet-400"
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -83,7 +83,14 @@ export interface FieldEditorProps {
 const inputClass =
   'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring';
 
-const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields = [], editingFieldId }: FieldEditorProps) => {
+const FieldEditor = ({
+  field,
+  onSave,
+  onClose,
+  nextSortOrder = 0,
+  siblingFields = [],
+  editingFieldId,
+}: FieldEditorProps) => {
   const isEditing = !!field;
 
   const [fieldType, setFieldType] = useState(field?.field_type || 'text');
@@ -140,7 +147,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
   const needsOptions = NEEDS_OPTIONS.includes(fieldType);
   const isSectionHeader = fieldType === FieldType.SECTION_HEADER;
   const isNumeric = fieldType === FieldType.NUMBER;
-  const isTextLike = ([FieldType.TEXT, FieldType.TEXTAREA, FieldType.EMAIL, FieldType.PHONE] as string[]).includes(fieldType);
+  const isTextLike = ([FieldType.TEXT, FieldType.TEXTAREA, FieldType.EMAIL, FieldType.PHONE] as string[]).includes(
+    fieldType
+  );
 
   // Available sibling fields for condition (exclude self)
   const conditionTargets = siblingFields.filter(
@@ -163,7 +172,10 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
     updated[index] = { ...updated[index], [key]: val } as FormFieldOption;
     // Auto-generate value from label if value is empty
     if (key === 'label' && !updated[index]?.value) {
-      updated[index].value = val.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+      updated[index].value = val
+        .toLowerCase()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]/g, '');
     }
     setOptions(updated);
   };
@@ -247,40 +259,46 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
       role="dialog"
       aria-modal="true"
       aria-labelledby="field-editor-title"
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={onClose} aria-hidden="true" />
 
       {/* Modal */}
-      <div className="relative bg-theme-surface-modal border border-theme-surface-border rounded-xl w-full max-w-lg max-h-[90dvh] overflow-y-auto shadow-2xl">
+      <div className="bg-theme-surface-modal border-theme-surface-border relative max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl border shadow-2xl">
         {/* Header */}
-        <div className="sticky top-0 bg-theme-surface-modal border-b border-theme-surface-border px-6 py-4 flex items-center justify-between z-10">
-          <h3 id="field-editor-title" className="text-lg font-semibold text-theme-text-primary">
+        <div className="bg-theme-surface-modal border-theme-surface-border sticky top-0 z-10 flex items-center justify-between border-b px-6 py-4">
+          <h3 id="field-editor-title" className="text-theme-text-primary text-lg font-semibold">
             {isEditing ? 'Edit Field' : 'Add Field'}
           </h3>
-          <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary p-1 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg)" aria-label="Close dialog">
-            <X className="w-5 h-5" aria-hidden="true" />
+          <button
+            onClick={onClose}
+            className="text-theme-text-muted hover:text-theme-text-primary focus:ring-theme-focus-ring rounded-sm p-1 focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden"
+            aria-label="Close dialog"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-5">
+        <div className="space-y-5 px-6 py-5">
           {/* Field Type Selector */}
           <div role="radiogroup" aria-label="Field Type">
-            <label className="block text-sm font-medium text-theme-text-secondary mb-2">Field Type</label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Field Type</label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
               {FIELD_TYPES.map((ft) => (
                 <button
                   key={ft.value}
                   type="button"
                   onClick={() => setFieldType(ft.value)}
-                  className={`px-2 py-2 rounded-lg text-xs font-medium text-center transition-colors ${
+                  className={`rounded-lg px-2 py-2 text-center text-xs font-medium transition-colors ${
                     fieldType === ft.value
                       ? 'bg-red-600 text-white'
-                      : 'bg-theme-surface-secondary text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary border border-theme-surface-border'
+                      : 'bg-theme-surface-secondary text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary border-theme-surface-border border'
                   }`}
                 >
-                  <span className="block text-base mb-0.5">{ft.icon}</span>
+                  <span className="mb-0.5 block text-base">{ft.icon}</span>
                   {ft.label}
                 </button>
               ))}
@@ -289,7 +307,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
 
           {/* Label */}
           <div>
-            <label htmlFor="field-label" className="block text-sm font-medium text-theme-text-secondary mb-1">
+            <label htmlFor="field-label" className="text-theme-text-secondary mb-1 block text-sm font-medium">
               {isSectionHeader ? 'Section Title' : 'Field Label'}
             </label>
             <input
@@ -302,12 +320,12 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
               aria-required="true"
               className={`${inputClass} ${errors.label ? 'border-red-500/50' : ''}`}
             />
-            {errors.label && <p className="text-xs text-red-700 dark:text-red-400 mt-1">{errors.label}</p>}
+            {errors.label && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.label}</p>}
           </div>
 
           {/* Help Text (all types) */}
           <div>
-            <label htmlFor="field-help-text" className="block text-sm font-medium text-theme-text-secondary mb-1">
+            <label htmlFor="field-help-text" className="text-theme-text-secondary mb-1 block text-sm font-medium">
               {isSectionHeader ? 'Subtitle (optional)' : 'Help Text (optional)'}
             </label>
             <input
@@ -325,7 +343,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
             <>
               {/* Placeholder */}
               <div>
-                <label htmlFor="field-placeholder" className="block text-sm font-medium text-theme-text-secondary mb-1">Placeholder (optional)</label>
+                <label htmlFor="field-placeholder" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  Placeholder (optional)
+                </label>
                 <input
                   id="field-placeholder"
                   type="text"
@@ -338,7 +358,12 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
 
               {/* Default Value */}
               <div>
-                <label htmlFor="field-default-value" className="block text-sm font-medium text-theme-text-secondary mb-1">Default Value (optional)</label>
+                <label
+                  htmlFor="field-default-value"
+                  className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                >
+                  Default Value (optional)
+                </label>
                 <input
                   id="field-default-value"
                   type="text"
@@ -351,14 +376,14 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
 
               {/* Required + Width row */}
               <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex cursor-pointer items-center gap-2">
                   <input
                     type="checkbox"
                     checked={required}
                     onChange={(e) => setRequired(e.target.checked)}
-                    className="w-4 h-4 text-red-600 rounded-sm"
+                    className="h-4 w-4 rounded-sm text-red-600"
                   />
-                  <span className="text-sm text-theme-text-secondary">Required</span>
+                  <span className="text-theme-text-secondary text-sm">Required</span>
                 </label>
 
                 <div className="flex-1">
@@ -366,10 +391,12 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                     value={width}
                     onChange={(e) => setWidth(e.target.value)}
                     aria-label="Field width"
-                    className="bg-theme-input-bg border border-theme-input-border rounded-lg focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-sm text-theme-text-primary w-full"
+                    className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
                   >
                     {WIDTH_OPTIONS.map((w) => (
-                      <option key={w.value} value={w.value}>{w.label}</option>
+                      <option key={w.value} value={w.value}>
+                        {w.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -380,32 +407,47 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                 <>
                   <div className="flex gap-3">
                     <div className="flex-1">
-                      <label htmlFor="field-min-length" className="block text-xs font-medium text-theme-text-muted mb-1">Min Length</label>
+                      <label
+                        htmlFor="field-min-length"
+                        className="text-theme-text-muted mb-1 block text-xs font-medium"
+                      >
+                        Min Length
+                      </label>
                       <input
                         id="field-min-length"
                         type="number"
                         value={minLength ?? ''}
                         onChange={(e) => setMinLength(e.target.value ? Number(e.target.value) : undefined)}
                         min={0}
-                        className="bg-theme-input-bg border border-theme-input-border rounded-lg focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-sm text-theme-text-primary w-full"
+                        className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
                       />
                     </div>
                     <div className="flex-1">
-                      <label htmlFor="field-max-length" className="block text-xs font-medium text-theme-text-muted mb-1">Max Length</label>
+                      <label
+                        htmlFor="field-max-length"
+                        className="text-theme-text-muted mb-1 block text-xs font-medium"
+                      >
+                        Max Length
+                      </label>
                       <input
                         id="field-max-length"
                         type="number"
                         value={maxLength ?? ''}
                         onChange={(e) => setMaxLength(e.target.value ? Number(e.target.value) : undefined)}
                         min={0}
-                        className="bg-theme-input-bg border border-theme-input-border rounded-lg focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-sm text-theme-text-primary w-full"
+                        className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
                       />
                     </div>
                   </div>
 
                   {/* Validation pattern presets */}
                   <div>
-                    <label htmlFor="field-validation-preset" className="block text-xs font-medium text-theme-text-muted mb-1">Validation Pattern</label>
+                    <label
+                      htmlFor="field-validation-preset"
+                      className="text-theme-text-muted mb-1 block text-xs font-medium"
+                    >
+                      Validation Pattern
+                    </label>
                     <select
                       id="field-validation-preset"
                       value={validationPreset}
@@ -418,10 +460,12 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                           setValidationPattern(preset);
                         }
                       }}
-                      className="bg-theme-input-bg border border-theme-input-border rounded-lg focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-sm text-theme-text-primary w-full"
+                      className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
                     >
                       {VALIDATION_PRESETS.map((p) => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
                       ))}
                     </select>
                     {validationPreset === 'custom' && (
@@ -434,16 +478,16 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                           placeholder="e.g., ^[A-Z]{2}\d{4}$"
                           className={`${inputClass} font-mono text-xs ${errors.validation ? 'border-red-500/50' : ''}`}
                         />
-                        {errors.validation && <p className="text-xs text-red-700 dark:text-red-400 mt-1">{errors.validation}</p>}
-                        <p className="text-[10px] text-theme-text-muted mt-1">
+                        {errors.validation && (
+                          <p className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.validation}</p>
+                        )}
+                        <p className="text-theme-text-muted mt-1 text-[10px]">
                           JavaScript regex pattern. Value must match the entire input.
                         </p>
                       </div>
                     )}
                     {validationPreset && validationPreset !== 'custom' && (
-                      <p className="text-[10px] text-theme-text-muted mt-1 font-mono">
-                        Pattern: {validationPattern}
-                      </p>
+                      <p className="text-theme-text-muted mt-1 font-mono text-[10px]">Pattern: {validationPattern}</p>
                     )}
                   </div>
                 </>
@@ -453,24 +497,28 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
               {isNumeric && (
                 <div className="flex gap-3">
                   <div className="flex-1">
-                    <label htmlFor="field-min-value" className="block text-xs font-medium text-theme-text-muted mb-1">Min Value</label>
+                    <label htmlFor="field-min-value" className="text-theme-text-muted mb-1 block text-xs font-medium">
+                      Min Value
+                    </label>
                     <input
                       id="field-min-value"
                       type="number"
                       value={minValue ?? ''}
                       onChange={(e) => setMinValue(e.target.value ? Number(e.target.value) : undefined)}
-                      className="bg-theme-input-bg border border-theme-input-border rounded-lg focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-sm text-theme-text-primary w-full"
+                      className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
                       placeholder="No minimum"
                     />
                   </div>
                   <div className="flex-1">
-                    <label htmlFor="field-max-value" className="block text-xs font-medium text-theme-text-muted mb-1">Max Value</label>
+                    <label htmlFor="field-max-value" className="text-theme-text-muted mb-1 block text-xs font-medium">
+                      Max Value
+                    </label>
                     <input
                       id="field-max-value"
                       type="number"
                       value={maxValue ?? ''}
                       onChange={(e) => setMaxValue(e.target.value ? Number(e.target.value) : undefined)}
-                      className="bg-theme-input-bg border border-theme-input-border rounded-lg focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-sm text-theme-text-primary w-full"
+                      className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
                       placeholder="No maximum"
                     />
                   </div>
@@ -480,19 +528,19 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
               {/* Options editor (select, multiselect, checkbox, radio) */}
               {needsOptions && (
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Options</label>
-                  {errors.options && <p className="text-xs text-red-700 dark:text-red-400 mb-2">{errors.options}</p>}
+                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Options</label>
+                  {errors.options && <p className="mb-2 text-xs text-red-700 dark:text-red-400">{errors.options}</p>}
                   <div className="space-y-2">
                     {options.map((opt, i) => (
                       <div key={i} className="flex items-center gap-2">
-                        <GripVertical className="w-4 h-4 text-theme-text-muted shrink-0" aria-hidden="true" />
+                        <GripVertical className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
                         <input
                           type="text"
                           value={opt.label}
                           onChange={(e) => updateOption(i, 'label', e.target.value)}
                           placeholder="Option label"
                           aria-label={`Option ${i + 1} label`}
-                          className="bg-theme-input-bg border border-theme-input-border rounded-lg flex-1 focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring placeholder-theme-text-muted px-3 py-1.5 text-sm text-theme-text-primary"
+                          className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring placeholder-theme-text-muted text-theme-text-primary flex-1 rounded-lg border px-3 py-1.5 text-sm focus:ring-2"
                         />
                         <input
                           type="text"
@@ -500,16 +548,16 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                           onChange={(e) => updateOption(i, 'value', e.target.value)}
                           placeholder="value"
                           aria-label={`Option ${i + 1} value`}
-                          className="bg-theme-input-bg border border-theme-input-border rounded-lg focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring placeholder-theme-text-muted px-3 py-1.5 text-sm text-theme-text-primary w-28"
+                          className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring placeholder-theme-text-muted text-theme-text-primary w-28 rounded-lg border px-3 py-1.5 text-sm focus:ring-2"
                         />
                         <button
                           type="button"
                           onClick={() => removeOption(i)}
                           disabled={options.length <= 1}
-                          className="p-1 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 disabled:opacity-30"
+                          className="text-theme-text-muted p-1 hover:text-red-700 disabled:opacity-30 dark:hover:text-red-400"
                           aria-label={`Remove option ${i + 1}`}
                         >
-                          <Trash2 className="w-4 h-4" aria-hidden="true" />
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </button>
                       </div>
                     ))}
@@ -517,9 +565,9 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                   <button
                     type="button"
                     onClick={addOption}
-                    className="mt-2 flex items-center gap-1 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                    className="mt-2 flex items-center gap-1 text-xs text-red-700 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   >
-                    <Plus className="w-3 h-3" aria-hidden="true" />
+                    <Plus className="h-3 w-3" aria-hidden="true" />
                     Add Option
                   </button>
                 </div>
@@ -529,19 +577,21 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
 
           {/* ── Conditional Visibility ── */}
           {conditionTargets.length > 0 && (
-            <div className="border-t border-theme-surface-border pt-5">
-              <label className="flex items-center gap-2 text-sm font-medium text-theme-text-secondary mb-3">
-                <GitBranch className="w-4 h-4" aria-hidden="true" />
+            <div className="border-theme-surface-border border-t pt-5">
+              <label className="text-theme-text-secondary mb-3 flex items-center gap-2 text-sm font-medium">
+                <GitBranch className="h-4 w-4" aria-hidden="true" />
                 Conditional Visibility
               </label>
-              <p className="text-xs text-theme-text-muted mb-3">
+              <p className="text-theme-text-muted mb-3 text-xs">
                 Only show this field when another question has a specific answer.
               </p>
 
               {/* Condition Field */}
               <div className="space-y-3">
                 <div>
-                  <label htmlFor="condition-field" className="block text-xs font-medium text-theme-text-muted mb-1">Show when this field...</label>
+                  <label htmlFor="condition-field" className="text-theme-text-muted mb-1 block text-xs font-medium">
+                    Show when this field...
+                  </label>
                   <select
                     id="condition-field"
                     value={conditionFieldId}
@@ -552,18 +602,25 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                         setConditionValue('');
                       }
                     }}
-                    className="bg-theme-input-bg border border-theme-input-border rounded-lg focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-sm text-theme-text-primary w-full"
+                    className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
                   >
                     <option value="">No condition (always show)</option>
                     {conditionTargets.map((f) => (
-                      <option key={f.id} value={f.id}>{f.label}</option>
+                      <option key={f.id} value={f.id}>
+                        {f.label}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 {conditionFieldId && (
                   <div>
-                    <label htmlFor="condition-operator" className="block text-xs font-medium text-theme-text-muted mb-1">...meets this condition</label>
+                    <label
+                      htmlFor="condition-operator"
+                      className="text-theme-text-muted mb-1 block text-xs font-medium"
+                    >
+                      ...meets this condition
+                    </label>
                     <select
                       id="condition-operator"
                       value={conditionOperator}
@@ -573,10 +630,12 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                           setConditionValue('');
                         }
                       }}
-                      className="bg-theme-input-bg border border-theme-input-border rounded-lg focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-sm text-theme-text-primary w-full"
+                      className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
                     >
                       {CONDITION_OPERATORS.map((op) => (
-                        <option key={op.value} value={op.value}>{op.label}</option>
+                        <option key={op.value} value={op.value}>
+                          {op.label}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -584,18 +643,22 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
 
                 {conditionFieldId && conditionNeedsValue && (
                   <div>
-                    <label htmlFor="condition-value" className="block text-xs font-medium text-theme-text-muted mb-1">Value</label>
+                    <label htmlFor="condition-value" className="text-theme-text-muted mb-1 block text-xs font-medium">
+                      Value
+                    </label>
                     {/* If the parent field has options, show a dropdown; otherwise free text */}
                     {selectedConditionField?.options && selectedConditionField.options.length > 0 ? (
                       <select
                         id="condition-value"
                         value={conditionValue}
                         onChange={(e) => setConditionValue(e.target.value)}
-                        className="bg-theme-input-bg border border-theme-input-border rounded-lg focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-sm text-theme-text-primary w-full"
+                        className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
                       >
                         <option value="">Select a value...</option>
                         {selectedConditionField.options.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
                         ))}
                       </select>
                     ) : (
@@ -605,7 +668,7 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
                         value={conditionValue}
                         onChange={(e) => setConditionValue(e.target.value)}
                         placeholder="e.g., yes"
-                        className="bg-theme-input-bg border border-theme-input-border rounded-lg focus:border-theme-focus-ring focus:ring-2 focus:ring-theme-focus-ring placeholder-theme-text-muted px-3 py-2 text-sm text-theme-text-primary w-full"
+                        className="bg-theme-input-bg border-theme-input-border focus:border-theme-focus-ring focus:ring-theme-focus-ring placeholder-theme-text-muted text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2"
                       />
                     )}
                   </div>
@@ -616,19 +679,11 @@ const FieldEditor = ({ field, onSave, onClose, nextSortOrder = 0, siblingFields 
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-6 py-4 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn-secondary"
-          >
+        <div className="bg-theme-surface-modal border-theme-surface-border sticky bottom-0 flex items-center justify-end gap-3 border-t px-6 py-4">
+          <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="btn-primary"
-          >
+          <button type="button" onClick={handleSave} className="btn-primary">
             {isEditing ? 'Update Field' : 'Add Field'}
           </button>
         </div>

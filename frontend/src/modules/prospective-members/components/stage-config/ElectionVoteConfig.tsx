@@ -1,10 +1,6 @@
 import React from 'react';
 import { VictoryCondition } from '../../../../constants/enums';
-import type {
-  ElectionStageConfig,
-  ElectionPackageFieldConfig,
-  StageConfig,
-} from '../../types';
+import type { ElectionStageConfig, ElectionPackageFieldConfig, StageConfig } from '../../types';
 import { DEFAULT_ELECTION_PACKAGE_FIELDS } from '../../types';
 
 interface ElectionVoteConfigProps {
@@ -13,11 +9,7 @@ interface ElectionVoteConfigProps {
   errors: Record<string, string>;
 }
 
-const ElectionVoteConfig: React.FC<ElectionVoteConfigProps> = ({
-  config,
-  setConfig,
-  errors,
-}) => {
+const ElectionVoteConfig: React.FC<ElectionVoteConfigProps> = ({ config, setConfig, errors }) => {
   const electionConfig = config as ElectionStageConfig;
 
   return (
@@ -162,10 +154,7 @@ const ElectionVoteConfig: React.FC<ElectionVoteConfigProps> = ({
                 Include stage completion history
               </label>
               <div className="pt-1">
-                <label
-                  htmlFor="stage-custom-note-prompt"
-                  className="text-theme-text-muted mb-1 block text-xs"
-                >
+                <label htmlFor="stage-custom-note-prompt" className="text-theme-text-muted mb-1 block text-xs">
                   Custom note prompt (optional)
                 </label>
                 <input

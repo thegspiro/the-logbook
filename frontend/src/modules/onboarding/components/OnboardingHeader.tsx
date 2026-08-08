@@ -13,7 +13,7 @@ interface OnboardingHeaderProps {
 const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
   departmentName,
   logoPreview,
-  icon = <Shield aria-hidden="true" className="w-6 h-6 text-white" />,
+  icon = <Shield aria-hidden="true" className="h-6 w-6 text-white" />,
   subtitle = 'Setup in Progress',
 }) => {
   const { theme, setTheme } = useTheme();
@@ -26,35 +26,30 @@ const OnboardingHeader: React.FC<OnboardingHeaderProps> = ({
   };
 
   const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : theme === 'high-contrast' ? Contrast : Monitor;
-  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
+  const themeLabel =
+    theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : theme === 'high-contrast' ? 'High Contrast' : 'System';
 
   return (
-    <header className="bg-theme-nav-bg backdrop-blur-xs border-b border-theme-nav-border px-6 py-4">
-      <div className="max-w-7xl mx-auto flex items-center">
+    <header className="bg-theme-nav-bg border-theme-nav-border border-b px-6 py-4 backdrop-blur-xs">
+      <div className="mx-auto flex max-w-7xl items-center">
         {logoPreview ? (
-          <div className="w-12 h-12 bg-theme-surface rounded-lg flex items-center justify-center overflow-hidden mr-4">
-            <img
-              src={logoPreview}
-              alt={`${departmentName} logo`}
-              className="max-w-full max-h-full object-contain"
-            />
+          <div className="bg-theme-surface mr-4 flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg">
+            <img src={logoPreview} alt={`${departmentName} logo`} className="max-h-full max-w-full object-contain" />
           </div>
         ) : (
-          <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center mr-4">
-            {icon}
-          </div>
+          <div className="mr-4 flex h-12 w-12 items-center justify-center rounded-lg bg-red-600">{icon}</div>
         )}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-theme-text-primary text-lg font-semibold">{departmentName}</h1>
           <p className="text-theme-text-muted text-sm">{subtitle}</p>
         </div>
         <button
           onClick={cycleTheme}
-          className="ml-4 text-theme-text-secondary p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+          className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring ml-4 rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden"
           title={`Theme: ${themeLabel}`}
           aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
         >
-          <ThemeIcon className="w-5 h-5" aria-hidden="true" />
+          <ThemeIcon className="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
     </header>

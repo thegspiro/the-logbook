@@ -14,39 +14,34 @@
  * Module sections are conditionally rendered based on AVAILABLE_MODULES.
  */
 
-import React, { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router";
+import React, { useEffect, useState, useRef } from 'react';
+import { useParams, useNavigate, Link } from 'react-router';
 import {
   userService,
   organizationService,
   trainingService,
   inventoryService,
   memberStatusService,
-} from "../services/api";
-import { adminHoursEntryService, adminHoursComplianceService } from "../modules/admin-hours/services/api";
-import type { AdminHoursComplianceItem } from "../modules/admin-hours/types";
-import type { AdminHoursSummary } from "../modules/admin-hours/types";
-import type { LeaveOfAbsenceResponse } from "../services/api";
-import { CreditCard, Pencil } from "lucide-react";
-import { useAuthStore } from "../stores/authStore";
-import { getErrorMessage } from "../utils/errorHandling";
-import { useTimezone } from "../hooks/useTimezone";
-import { formatDate, formatDateCustom } from "../utils/dateFormatting";
-import type { UserWithRoles } from "../types/role";
-import type {
-  ContactInfoUpdate,
-  NotificationPreferences,
-  EmergencyContact,
-  UserProfileUpdate,
-} from "../types/user";
-import type { TrainingRecord, ComplianceSummary } from "../types/training";
-import { AVAILABLE_MODULES } from "../types/modules";
-import { MAX_AVATAR_SIZE } from "../constants/config";
-import { UserStatus } from "../constants/enums";
-import TrainingSection from "../components/member-profile/TrainingSection";
-import AdminHoursSection from "../components/member-profile/AdminHoursSection";
-import ContactInfoSection from "../components/member-profile/ContactInfoSection";
-import EmergencyContactsSection from "../components/member-profile/EmergencyContactsSection";
+} from '../services/api';
+import { adminHoursEntryService, adminHoursComplianceService } from '../modules/admin-hours/services/api';
+import type { AdminHoursComplianceItem } from '../modules/admin-hours/types';
+import type { AdminHoursSummary } from '../modules/admin-hours/types';
+import type { LeaveOfAbsenceResponse } from '../services/api';
+import { CreditCard, Pencil } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
+import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate, formatDateCustom } from '../utils/dateFormatting';
+import type { UserWithRoles } from '../types/role';
+import type { ContactInfoUpdate, NotificationPreferences, EmergencyContact, UserProfileUpdate } from '../types/user';
+import type { TrainingRecord, ComplianceSummary } from '../types/training';
+import { AVAILABLE_MODULES } from '../types/modules';
+import { MAX_AVATAR_SIZE } from '../constants/config';
+import { UserStatus } from '../constants/enums';
+import TrainingSection from '../components/member-profile/TrainingSection';
+import AdminHoursSection from '../components/member-profile/AdminHoursSection';
+import ContactInfoSection from '../components/member-profile/ContactInfoSection';
+import EmergencyContactsSection from '../components/member-profile/EmergencyContactsSection';
 
 // Types for inventory data
 interface InventoryItem {
@@ -68,8 +63,7 @@ function isExpiringSoon(record: TrainingRecord): boolean {
   if (!record.expiration_date) return false;
   const expDate = new Date(record.expiration_date);
   const now = new Date();
-  const daysUntilExpiry =
-    (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+  const daysUntilExpiry = (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
   return daysUntilExpiry > 0 && daysUntilExpiry <= 90;
 }
 
@@ -93,9 +87,9 @@ export const MemberProfilePage: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState<ContactInfoUpdate>({
-    email: "",
-    phone: "",
-    mobile: "",
+    email: '',
+    phone: '',
+    mobile: '',
     notification_preferences: {
       email: true,
       email_notifications: true,
@@ -113,12 +107,12 @@ export const MemberProfilePage: React.FC = () => {
   const [editingAddress, setEditingAddress] = useState(false);
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressForm, setAddressForm] = useState({
-    address_street: "",
-    address_city: "",
-    address_state: "",
-    address_zip: "",
-    address_country: "USA",
-    personal_email: "",
+    address_street: '',
+    address_city: '',
+    address_state: '',
+    address_zip: '',
+    address_country: 'USA',
+    personal_email: '',
   });
 
   // Emergency contacts edit state
@@ -129,39 +123,33 @@ export const MemberProfilePage: React.FC = () => {
   // Module data states
   const [trainings, setTrainings] = useState<TrainingRecord[]>([]);
   const [trainingsLoading, setTrainingsLoading] = useState(false);
-  const [complianceSummary, setComplianceSummary] =
-    useState<ComplianceSummary | null>(null);
+  const [complianceSummary, setComplianceSummary] = useState<ComplianceSummary | null>(null);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
-  const [activeLeaves, setActiveLeaves] = useState<LeaveOfAbsenceResponse[]>(
-    [],
-  );
-  const [adminHoursSummary, setAdminHoursSummary] =
-    useState<AdminHoursSummary | null>(null);
+  const [activeLeaves, setActiveLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
+  const [adminHoursSummary, setAdminHoursSummary] = useState<AdminHoursSummary | null>(null);
   const [adminHoursLoading, setAdminHoursLoading] = useState(false);
   const [adminHoursCompliance, setAdminHoursCompliance] = useState<AdminHoursComplianceItem[]>([]);
 
   // Status change modal state
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [statusChanging, setStatusChanging] = useState(false);
-  const [newStatus, setNewStatus] = useState<string>("");
-  const [statusReason, setStatusReason] = useState("");
+  const [newStatus, setNewStatus] = useState<string>('');
+  const [statusReason, setStatusReason] = useState('');
 
   // Module enablement checks
-  const trainingEnabled = isModuleEnabled("training");
+  const trainingEnabled = isModuleEnabled('training');
 
   const fetchInventoryItems = React.useCallback(async (uid: string) => {
     try {
       setInventoryLoading(true);
       const response = await inventoryService.getUserInventory(uid);
       // Transform the inventory response to match our InventoryItem interface
-      const items: InventoryItem[] = (
-        response?.permanent_assignments ?? []
-      ).map((item) => ({
+      const items: InventoryItem[] = (response?.permanent_assignments ?? []).map((item) => ({
         id: item.assignment_id,
         name: item.item_name,
-        item_number: item.serial_number || item.asset_tag || "",
-        category: "Equipment", // Category not in response, using default
+        item_number: item.serial_number || item.asset_tag || '',
+        category: 'Equipment', // Category not in response, using default
         condition: item.condition,
         assigned_date: item.assigned_date,
       }));
@@ -177,9 +165,7 @@ export const MemberProfilePage: React.FC = () => {
     async (uid: string) => {
       try {
         const response = await organizationService.getEnabledModules();
-        const inventoryEnabled = (response?.enabled_modules ?? []).includes(
-          "inventory",
-        );
+        const inventoryEnabled = (response?.enabled_modules ?? []).includes('inventory');
         setInventoryModuleEnabled(inventoryEnabled);
 
         // Fetch inventory if module is enabled
@@ -191,7 +177,7 @@ export const MemberProfilePage: React.FC = () => {
         setInventoryModuleEnabled(false);
       }
     },
-    [fetchInventoryItems],
+    [fetchInventoryItems]
   );
 
   const fetchUserData = React.useCallback(async (uid: string) => {
@@ -201,9 +187,7 @@ export const MemberProfilePage: React.FC = () => {
       const userData = await userService.getUserWithRoles(uid);
       setUser(userData);
     } catch (_err) {
-      setError(
-        "Unable to load member information. The member may not exist or you may not have access.",
-      );
+      setError('Unable to load member information. The member may not exist or you may not have access.');
     } finally {
       setLoading(false);
     }
@@ -277,12 +261,12 @@ export const MemberProfilePage: React.FC = () => {
     fetchComplianceSummary,
   ]);
 
-  const canManageMembers = checkPermission("members.manage");
+  const canManageMembers = checkPermission('members.manage');
 
   const handleOpenStatusModal = () => {
     if (!user) return;
     setNewStatus(user.status);
-    setStatusReason("");
+    setStatusReason('');
     setStatusModalOpen(true);
   };
 
@@ -301,9 +285,7 @@ export const MemberProfilePage: React.FC = () => {
       await fetchUserData(userId);
       setStatusModalOpen(false);
     } catch (err: unknown) {
-      setError(
-        getErrorMessage(err, "Unable to change member status. Please try again."),
-      );
+      setError(getErrorMessage(err, 'Unable to change member status. Please try again.'));
     } finally {
       setStatusChanging(false);
     }
@@ -311,9 +293,9 @@ export const MemberProfilePage: React.FC = () => {
 
   const handleEditClick = () => {
     setEditForm({
-      email: user?.email || "",
-      phone: user?.phone || "",
-      mobile: user?.mobile || "",
+      email: user?.email || '',
+      phone: user?.phone || '',
+      mobile: user?.mobile || '',
       notification_preferences: user?.notification_preferences || {
         email: true,
         email_notifications: true,
@@ -349,12 +331,7 @@ export const MemberProfilePage: React.FC = () => {
       setUser(updatedUser);
       setIsEditing(false);
     } catch (err: unknown) {
-      setError(
-        getErrorMessage(
-          err,
-          "Unable to update contact information. Please check your input and try again.",
-        ),
-      );
+      setError(getErrorMessage(err, 'Unable to update contact information. Please check your input and try again.'));
     } finally {
       setSaving(false);
     }
@@ -396,13 +373,13 @@ export const MemberProfilePage: React.FC = () => {
     if (!file || !userId) return;
 
     // Client-side validation
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
-      setError("Please select a JPEG, PNG, or WebP image.");
+      setError('Please select a JPEG, PNG, or WebP image.');
       return;
     }
     if (file.size > MAX_AVATAR_SIZE) {
-      setError("Image must be under 5MB.");
+      setError('Image must be under 5MB.');
       return;
     }
 
@@ -410,14 +387,12 @@ export const MemberProfilePage: React.FC = () => {
       setUploadingPhoto(true);
       setError(null);
       const result = await userService.uploadPhoto(userId, file);
-      setUser((prev) =>
-        prev ? { ...prev, photo_url: result.photo_url } : prev,
-      );
+      setUser((prev) => (prev ? { ...prev, photo_url: result.photo_url } : prev));
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Unable to upload photo."));
+      setError(getErrorMessage(err, 'Unable to upload photo.'));
     } finally {
       setUploadingPhoto(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -429,7 +404,7 @@ export const MemberProfilePage: React.FC = () => {
       await userService.deletePhoto(userId);
       setUser((prev) => (prev ? { ...prev, photo_url: undefined } : prev));
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Unable to remove photo."));
+      setError(getErrorMessage(err, 'Unable to remove photo.'));
     } finally {
       setUploadingPhoto(false);
     }
@@ -438,12 +413,12 @@ export const MemberProfilePage: React.FC = () => {
   // Address edit handlers
   const handleEditAddress = () => {
     setAddressForm({
-      address_street: user?.address_street || "",
-      address_city: user?.address_city || "",
-      address_state: user?.address_state || "",
-      address_zip: user?.address_zip || "",
-      address_country: user?.address_country || "USA",
-      personal_email: user?.personal_email || "",
+      address_street: user?.address_street || '',
+      address_city: user?.address_city || '',
+      address_state: user?.address_state || '',
+      address_zip: user?.address_zip || '',
+      address_country: user?.address_country || 'USA',
+      personal_email: user?.personal_email || '',
     });
     setEditingAddress(true);
   };
@@ -465,7 +440,7 @@ export const MemberProfilePage: React.FC = () => {
       setUser(updated);
       setEditingAddress(false);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Unable to update address."));
+      setError(getErrorMessage(err, 'Unable to update address.'));
     } finally {
       setSavingAddress(false);
     }
@@ -478,36 +453,27 @@ export const MemberProfilePage: React.FC = () => {
         ? user.emergency_contacts.map((ec) => ({ ...ec }))
         : [
             {
-              name: "",
-              relationship: "",
-              phone: "",
-              email: "",
+              name: '',
+              relationship: '',
+              phone: '',
+              email: '',
               is_primary: true,
             },
-          ],
+          ]
     );
     setEditingContacts(true);
   };
 
   const handleAddContact = () => {
-    setContactsForm((prev) => [
-      ...prev,
-      { name: "", relationship: "", phone: "", email: "", is_primary: false },
-    ]);
+    setContactsForm((prev) => [...prev, { name: '', relationship: '', phone: '', email: '', is_primary: false }]);
   };
 
   const handleRemoveContact = (index: number) => {
     setContactsForm((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleContactChange = (
-    index: number,
-    field: keyof EmergencyContact,
-    value: string | boolean,
-  ) => {
-    setContactsForm((prev) =>
-      prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)),
-    );
+  const handleContactChange = (index: number, field: keyof EmergencyContact, value: string | boolean) => {
+    setContactsForm((prev) => prev.map((c, i) => (i === index ? { ...c, [field]: value } : c)));
   };
 
   const handleSaveEmergencyContacts = async () => {
@@ -515,7 +481,7 @@ export const MemberProfilePage: React.FC = () => {
     // Validate at least name and phone for each contact
     const valid = contactsForm.every((c) => c.name.trim() && c.phone.trim());
     if (!valid) {
-      setError("Each emergency contact must have a name and phone number.");
+      setError('Each emergency contact must have a name and phone number.');
       return;
     }
     try {
@@ -527,15 +493,14 @@ export const MemberProfilePage: React.FC = () => {
       setUser(updated);
       setEditingContacts(false);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Unable to update emergency contacts."));
+      setError(getErrorMessage(err, 'Unable to update emergency contacts.'));
     } finally {
       setSavingContacts(false);
     }
   };
 
   // Check if current user can edit this profile (self or admin)
-  const isAdmin =
-    checkPermission("users.update") || checkPermission("members.manage");
+  const isAdmin = checkPermission('users.update') || checkPermission('members.manage');
   const canEdit = currentUser?.id === userId || isAdmin;
   // Emergency contacts are leadership-only server-side (members.manage or the
   // member themselves). Mirror that gate here so everyone else sees no section
@@ -546,8 +511,8 @@ export const MemberProfilePage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex justify-center items-center h-64">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex h-64 items-center justify-center">
             <div className="text-theme-text-muted">Loading...</div>
           </div>
         </div>
@@ -558,11 +523,9 @@ export const MemberProfilePage: React.FC = () => {
   if (error && !user) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
-            <p className="text-sm text-red-700 dark:text-red-400">
-              {error || "Member not found"}
-            </p>
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+            <p className="text-sm text-red-700 dark:text-red-400">{error || 'Member not found'}</p>
           </div>
         </div>
       </div>
@@ -572,8 +535,8 @@ export const MemberProfilePage: React.FC = () => {
   if (!user) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
             <p className="text-sm text-red-700 dark:text-red-400">Member not found</p>
           </div>
         </div>
@@ -583,21 +546,21 @@ export const MemberProfilePage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-6">
           <button
             onClick={() => void navigate('/members')}
-            className="text-sm text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1"
+            className="text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1 text-sm"
           >
             &larr; Back to Members
           </button>
 
-          <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
+          <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-4">
                 {/* Profile Photo with Upload */}
-                <div className="relative group">
+                <div className="group relative">
                   {user.photo_url ? (
                     <img
                       src={user.photo_url}
@@ -605,18 +568,14 @@ export const MemberProfilePage: React.FC = () => {
                       className="h-20 w-20 rounded-full object-cover"
                     />
                   ) : (
-                    <div className="h-20 w-20 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-indigo-100">
                       <span className="text-2xl font-bold text-indigo-600">
-                        {(
-                          user.first_name?.[0] ||
-                          user.username?.[0] ||
-                          "?"
-                        ).toUpperCase()}
+                        {(user.first_name?.[0] || user.username?.[0] || '?').toUpperCase()}
                       </span>
                     </div>
                   )}
                   {canEdit && (
-                    <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <div className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/50 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -627,14 +586,14 @@ export const MemberProfilePage: React.FC = () => {
                         }}
                       />
                       {uploadingPhoto ? (
-                        <span className="text-white text-xs">Uploading...</span>
+                        <span className="text-xs text-white">Uploading...</span>
                       ) : (
                         <button
                           onClick={handlePhotoClick}
-                          className="text-white text-xs font-medium"
+                          className="text-xs font-medium text-white"
                           aria-label="Upload photo"
                         >
-                          {user.photo_url ? "Change" : "Upload"}
+                          {user.photo_url ? 'Change' : 'Upload'}
                         </button>
                       )}
                     </div>
@@ -644,7 +603,7 @@ export const MemberProfilePage: React.FC = () => {
                       onClick={() => {
                         void handlePhotoRemove();
                       }}
-                      className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                      className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white transition-opacity hover:bg-red-600 sm:opacity-0 sm:group-hover:opacity-100"
                       aria-label="Remove photo"
                       title="Remove photo"
                     >
@@ -653,23 +612,19 @@ export const MemberProfilePage: React.FC = () => {
                   )}
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-theme-text-primary">
-                    {user.full_name || user.username}
-                  </h1>
+                  <h1 className="text-theme-text-primary text-3xl font-bold">{user.full_name || user.username}</h1>
                   <p className="text-theme-text-muted mt-1">@{user.username}</p>
                   {user.membership_number && (
-                    <p className="text-sm text-theme-text-secondary mt-1">
-                      #{user.membership_number}
-                    </p>
+                    <p className="text-theme-text-secondary mt-1 text-sm">#{user.membership_number}</p>
                   )}
-                  <div className="flex gap-2 mt-2">
+                  <div className="mt-2 flex gap-2">
                     {(user.roles || []).map((role) => (
                       <span
                         key={role.id}
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
                           role.is_system
-                            ? "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400"
-                            : "bg-theme-surface-secondary text-theme-text-secondary"
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                            : 'bg-theme-surface-secondary text-theme-text-secondary'
                         }`}
                       >
                         {role.name}
@@ -681,7 +636,7 @@ export const MemberProfilePage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Link
                   to={`/members/${userId}/id-card`}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-500/40 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-500/10 transition"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
                 >
                   <CreditCard className="h-4 w-4" />
                   ID Card
@@ -690,10 +645,10 @@ export const MemberProfilePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleOpenStatusModal}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 text-sm font-semibold rounded-full cursor-pointer transition hover:ring-2 hover:ring-offset-1 hover:ring-blue-400 ${
+                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold transition hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 ${
                       user.status === UserStatus.ACTIVE
-                        ? "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400"
-                        : "bg-theme-surface-secondary text-theme-text-secondary"
+                        ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                        : 'bg-theme-surface-secondary text-theme-text-secondary'
                     }`}
                     title="Change member status"
                   >
@@ -702,10 +657,10 @@ export const MemberProfilePage: React.FC = () => {
                   </button>
                 ) : (
                   <span
-                    className={`px-3 py-1 text-sm font-semibold rounded-full ${
+                    className={`rounded-full px-3 py-1 text-sm font-semibold ${
                       user.status === UserStatus.ACTIVE
-                        ? "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400"
-                        : "bg-theme-surface-secondary text-theme-text-secondary"
+                        ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                        : 'bg-theme-surface-secondary text-theme-text-secondary'
                     }`}
                   >
                     {user.status}
@@ -717,13 +672,13 @@ export const MemberProfilePage: React.FC = () => {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Left Column */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="space-y-6 lg:col-span-2">
             {/* Training & Certifications */}
             {trainingEnabled && (
               <TrainingSection
-                userId={userId ?? ""}
+                userId={userId ?? ''}
                 trainings={trainings}
                 trainingsLoading={trainingsLoading}
                 complianceSummary={complianceSummary}
@@ -733,83 +688,78 @@ export const MemberProfilePage: React.FC = () => {
 
             {/* Admin Hours Summary */}
             {adminHoursSummary && adminHoursSummary.totalEntries > 0 && (
-              <AdminHoursSection
-                adminHoursSummary={adminHoursSummary}
-                adminHoursCompliance={adminHoursCompliance}
-              />
+              <AdminHoursSection adminHoursSummary={adminHoursSummary} adminHoursCompliance={adminHoursCompliance} />
             )}
             {adminHoursLoading && (
-              <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-                <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
-                  Administrative Hours
-                </h2>
-                <div className="text-center py-4 text-theme-text-muted">
-                  Loading admin hours...
-                </div>
+              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+                <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Administrative Hours</h2>
+                <div className="text-theme-text-muted py-4 text-center">Loading admin hours...</div>
               </div>
             )}
 
             {/* Assigned Inventory - Only shown if inventory module is enabled */}
             {inventoryModuleEnabled && (
-              <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-                <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
-                  Assigned Inventory
-                </h2>
+              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+                <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Assigned Inventory</h2>
                 {inventoryLoading ? (
-                  <div className="text-center py-4 text-theme-text-muted">
-                    Loading inventory...
-                  </div>
+                  <div className="text-theme-text-muted py-4 text-center">Loading inventory...</div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-theme-surface-border">
+                    <table className="divide-theme-surface-border min-w-full divide-y">
                       <thead>
                         <tr>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
+                          <th
+                            scope="col"
+                            className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
+                          >
                             Item
                           </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
+                          <th
+                            scope="col"
+                            className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
+                          >
                             Item #
                           </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
+                          <th
+                            scope="col"
+                            className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
+                          >
                             Category
                           </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
+                          <th
+                            scope="col"
+                            className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
+                          >
                             Condition
                           </th>
-                          <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-theme-text-muted uppercase">
+                          <th
+                            scope="col"
+                            className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium uppercase"
+                          >
                             Assigned
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-theme-surface-border">
+                      <tbody className="divide-theme-surface-border divide-y">
                         {inventoryItems.map((item) => (
-                          <tr
-                            key={item.id}
-                            className="hover:bg-theme-surface-hover"
-                          >
-                            <td className="px-4 py-3 text-sm font-medium text-theme-text-primary">
-                              {item.name}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-theme-text-secondary">
-                              {item.item_number}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-theme-text-secondary">
-                              {item.category}
-                            </td>
+                          <tr key={item.id} className="hover:bg-theme-surface-hover">
+                            <td className="text-theme-text-primary px-4 py-3 text-sm font-medium">{item.name}</td>
+                            <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.item_number}</td>
+                            <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.category}</td>
                             <td className="px-4 py-3">
                               <span
-                                className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                                  item.condition === "Excellent"
-                                    ? "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400"
-                                    : item.condition === "Good"
-                                      ? "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400"
-                                      : "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400"
+                                className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                                  item.condition === 'Excellent'
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                                    : item.condition === 'Good'
+                                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
                                 }`}
                               >
                                 {item.condition}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                            <td className="text-theme-text-secondary px-4 py-3 text-sm">
                               {formatDate(item.assigned_date, tz)}
                             </td>
                           </tr>
@@ -840,15 +790,13 @@ export const MemberProfilePage: React.FC = () => {
             />
 
             {/* Address & Personal Email */}
-            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-theme-text-primary">
-                  Address
-                </h2>
+            <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-theme-text-primary text-lg font-semibold">Address</h2>
                 {canEdit && !editingAddress && (
                   <button
                     onClick={handleEditAddress}
-                    className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
+                    className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                   >
                     Edit
                   </button>
@@ -858,20 +806,14 @@ export const MemberProfilePage: React.FC = () => {
                 <div className="space-y-3">
                   {user.personal_email && (
                     <div>
-                      <p className="text-xs text-theme-text-muted uppercase font-medium">
-                        Personal Email
-                      </p>
-                      <p className="text-sm text-theme-text-primary mt-1">
-                        {user.personal_email}
-                      </p>
+                      <p className="text-theme-text-muted text-xs font-medium uppercase">Personal Email</p>
+                      <p className="text-theme-text-primary mt-1 text-sm">{user.personal_email}</p>
                     </div>
                   )}
                   {user.address_street || user.address_city ? (
                     <div>
-                      <p className="text-xs text-theme-text-muted uppercase font-medium">
-                        Mailing Address
-                      </p>
-                      <p className="text-sm text-theme-text-primary mt-1">
+                      <p className="text-theme-text-muted text-xs font-medium uppercase">Mailing Address</p>
+                      <p className="text-theme-text-primary mt-1 text-sm">
                         {user.address_street && (
                           <>
                             {user.address_street}
@@ -879,29 +821,23 @@ export const MemberProfilePage: React.FC = () => {
                           </>
                         )}
                         {user.address_city}
-                        {user.address_state
-                          ? `, ${user.address_state}`
-                          : ""}{" "}
-                        {user.address_zip}
-                        {user.address_country &&
-                          user.address_country !== "USA" && (
-                            <>
-                              <br />
-                              {user.address_country}
-                            </>
-                          )}
+                        {user.address_state ? `, ${user.address_state}` : ''} {user.address_zip}
+                        {user.address_country && user.address_country !== 'USA' && (
+                          <>
+                            <br />
+                            {user.address_country}
+                          </>
+                        )}
                       </p>
                     </div>
                   ) : (
-                    <p className="text-sm text-theme-text-muted">
-                      No address on file.
-                    </p>
+                    <p className="text-theme-text-muted text-sm">No address on file.</p>
                   )}
                 </div>
               ) : (
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
+                    <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">
                       Personal Email
                     </label>
                     <input
@@ -913,14 +849,12 @@ export const MemberProfilePage: React.FC = () => {
                           personal_email: e.target.value,
                         }))
                       }
-                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                       placeholder="Home email for post-separation contact"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
-                      Street
-                    </label>
+                    <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Street</label>
                     <input
                       type="text"
                       value={addressForm.address_street}
@@ -930,14 +864,12 @@ export const MemberProfilePage: React.FC = () => {
                           address_street: e.target.value,
                         }))
                       }
-                      className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                     />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
-                        City
-                      </label>
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">City</label>
                       <input
                         type="text"
                         value={addressForm.address_city}
@@ -947,13 +879,11 @@ export const MemberProfilePage: React.FC = () => {
                             address_city: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
-                        State
-                      </label>
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">State</label>
                       <input
                         type="text"
                         value={addressForm.address_state}
@@ -963,15 +893,13 @@ export const MemberProfilePage: React.FC = () => {
                             address_state: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <div>
-                      <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
-                        ZIP
-                      </label>
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">ZIP</label>
                       <input
                         type="text"
                         value={addressForm.address_zip}
@@ -981,13 +909,11 @@ export const MemberProfilePage: React.FC = () => {
                             address_zip: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
-                        Country
-                      </label>
+                      <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Country</label>
                       <input
                         type="text"
                         value={addressForm.address_country}
@@ -997,7 +923,7 @@ export const MemberProfilePage: React.FC = () => {
                             address_country: e.target.value,
                           }))
                         }
-                        className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="border-theme-surface-border text-theme-text-primary bg-theme-surface-secondary focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                       />
                     </div>
                   </div>
@@ -1007,14 +933,14 @@ export const MemberProfilePage: React.FC = () => {
                         void handleSaveAddress();
                       }}
                       disabled={savingAddress}
-                      className="btn-info flex-1 font-medium rounded-md text-sm"
+                      className="btn-info flex-1 rounded-md text-sm font-medium"
                     >
-                      {savingAddress ? "Saving..." : "Save"}
+                      {savingAddress ? 'Saving...' : 'Save'}
                     </button>
                     <button
                       onClick={() => setEditingAddress(false)}
                       disabled={savingAddress}
-                      className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50"
+                      className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex-1 rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50"
                     >
                       Cancel
                     </button>
@@ -1042,24 +968,18 @@ export const MemberProfilePage: React.FC = () => {
             )}
 
             {/* Employment Info */}
-            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-              <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
-                Employment
-              </h2>
+            <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Employment</h2>
               <div className="space-y-3">
                 <div>
-                  <p className="text-xs text-theme-text-muted uppercase font-medium">
-                    Status
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="text-sm text-theme-text-primary capitalize">
-                      {user.status.replace(/_/g, " ")}
-                    </p>
+                  <p className="text-theme-text-muted text-xs font-medium uppercase">Status</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="text-theme-text-primary text-sm capitalize">{user.status.replace(/_/g, ' ')}</p>
                     {canManageMembers && (
                       <button
                         type="button"
                         onClick={handleOpenStatusModal}
-                        className="text-theme-text-muted hover:text-blue-500 transition"
+                        className="text-theme-text-muted transition hover:text-blue-500"
                         title="Change status"
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -1069,75 +989,49 @@ export const MemberProfilePage: React.FC = () => {
                 </div>
                 {user.hire_date && (
                   <div>
-                    <p className="text-xs text-theme-text-muted uppercase font-medium">
-                      Hire Date
-                    </p>
-                    <p className="text-sm text-theme-text-primary mt-1">
-                      {formatDate(user.hire_date, tz)}
-                    </p>
+                    <p className="text-theme-text-muted text-xs font-medium uppercase">Hire Date</p>
+                    <p className="text-theme-text-primary mt-1 text-sm">{formatDate(user.hire_date, tz)}</p>
                   </div>
                 )}
               </div>
             </div>
 
             {/* Quick Stats */}
-            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-              <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
-                Quick Stats
-              </h2>
+            <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+              <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Quick Stats</h2>
               <div className="space-y-3">
                 {trainingEnabled && (
                   <>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-theme-text-secondary">
-                        Active Training
-                      </span>
-                      <span className="text-sm font-semibold text-theme-text-primary">
-                        {
-                          trainings.filter(
-                            (t) => t.status === "completed" && !isExpired(t),
-                          ).length
-                        }
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-text-secondary text-sm">Active Training</span>
+                      <span className="text-theme-text-primary text-sm font-semibold">
+                        {trainings.filter((t) => t.status === 'completed' && !isExpired(t)).length}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-theme-text-secondary">
-                        Expiring Soon
-                      </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-text-secondary text-sm">Expiring Soon</span>
                       <span className="text-sm font-semibold text-yellow-700 dark:text-yellow-400">
                         {trainings.filter((t) => isExpiringSoon(t)).length}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-theme-text-secondary">
-                        Total Hours
-                      </span>
-                      <span className="text-sm font-semibold text-theme-text-primary">
-                        {trainings.reduce(
-                          (sum, t) => sum + (t.hours_completed || 0),
-                          0,
-                        )}{" "}
-                        hrs
+                    <div className="flex items-center justify-between">
+                      <span className="text-theme-text-secondary text-sm">Total Hours</span>
+                      <span className="text-theme-text-primary text-sm font-semibold">
+                        {trainings.reduce((sum, t) => sum + (t.hours_completed || 0), 0)} hrs
                       </span>
                     </div>
                   </>
                 )}
                 {inventoryModuleEnabled && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-theme-text-secondary">
-                      Assigned Equipment
-                    </span>
-                    <span className="text-sm font-semibold text-theme-text-primary">
-                      {inventoryItems.length}
-                    </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-theme-text-secondary text-sm">Assigned Equipment</span>
+                    <span className="text-theme-text-primary text-sm font-semibold">{inventoryItems.length}</span>
                   </div>
                 )}
                 {adminHoursSummary && adminHoursSummary.totalEntries > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-theme-text-secondary">
-                      Admin Hours
-                    </span>
-                    <span className="text-sm font-semibold text-theme-text-primary">
+                  <div className="flex items-center justify-between">
+                    <span className="text-theme-text-secondary text-sm">Admin Hours</span>
+                    <span className="text-theme-text-primary text-sm font-semibold">
                       {adminHoursSummary.totalHours.toFixed(1)} hrs
                     </span>
                   </div>
@@ -1147,44 +1041,33 @@ export const MemberProfilePage: React.FC = () => {
 
             {/* Active Leaves of Absence */}
             {activeLeaves.length > 0 && (
-              <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-                <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
-                  Leave of Absence
-                </h2>
+              <div className="bg-theme-surface rounded-lg p-6 shadow-sm backdrop-blur-xs">
+                <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Leave of Absence</h2>
                 <div className="space-y-3">
                   {activeLeaves.map((leave) => (
-                    <div
-                      key={leave.id}
-                      className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-yellow-700 dark:text-yellow-400 capitalize">
-                          {(leave.leave_type ?? "").replace(/_/g, " ")}
+                    <div key={leave.id} className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3">
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className="text-sm font-medium text-yellow-700 capitalize dark:text-yellow-400">
+                          {(leave.leave_type ?? '').replace(/_/g, ' ')}
                         </span>
-                        <span className="text-xs text-theme-text-muted">
-                          Active
-                        </span>
+                        <span className="text-theme-text-muted text-xs">Active</span>
                       </div>
-                      <p className="text-xs text-theme-text-secondary">
+                      <p className="text-theme-text-secondary text-xs">
                         {formatDateCustom(
-                          leave.start_date + "T00:00:00",
-                          { year: "numeric", month: "2-digit", day: "2-digit" },
-                          tz,
-                        )}{" "}
-                        &ndash;{" "}
+                          leave.start_date + 'T00:00:00',
+                          { year: 'numeric', month: '2-digit', day: '2-digit' },
+                          tz
+                        )}{' '}
+                        &ndash;{' '}
                         {leave.end_date
                           ? formatDateCustom(
-                              leave.end_date + "T00:00:00",
-                              { year: "numeric", month: "2-digit", day: "2-digit" },
-                              tz,
+                              leave.end_date + 'T00:00:00',
+                              { year: 'numeric', month: '2-digit', day: '2-digit' },
+                              tz
                             )
-                          : "Permanent"}
+                          : 'Permanent'}
                       </p>
-                      {leave.reason && (
-                        <p className="text-xs text-theme-text-muted mt-1">
-                          {leave.reason}
-                        </p>
-                      )}
+                      {leave.reason && <p className="text-theme-text-muted mt-1 text-xs">{leave.reason}</p>}
                     </div>
                   ))}
                 </div>
@@ -1196,64 +1079,54 @@ export const MemberProfilePage: React.FC = () => {
         {/* Status Change Modal */}
         {statusModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-theme-surface rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
-              <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
-                Change Member Status
-              </h3>
+            <div className="bg-theme-surface mx-4 w-full max-w-md rounded-lg p-6 shadow-xl">
+              <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Change Member Status</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    New Status
-                  </label>
+                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">New Status</label>
                   <select
                     value={newStatus}
                     onChange={(e) => setNewStatus(e.target.value)}
-                    className="w-full rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     {Object.values(UserStatus).map((s) => (
                       <option key={s} value={s}>
-                        {s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                        {s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                    Reason (optional)
-                  </label>
+                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Reason (optional)</label>
                   <textarea
                     value={statusReason}
                     onChange={(e) => setStatusReason(e.target.value)}
                     rows={3}
                     placeholder="Reason for the status change..."
-                    className="w-full rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
-                {(newStatus === UserStatus.DROPPED_VOLUNTARY ||
-                  newStatus === UserStatus.DROPPED_INVOLUNTARY) && (
-                  <p className="text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 rounded-md p-2">
-                    Dropping a member will generate a property return report and may send
-                    an email notification.
+                {(newStatus === UserStatus.DROPPED_VOLUNTARY || newStatus === UserStatus.DROPPED_INVOLUNTARY) && (
+                  <p className="rounded-md border border-yellow-500/20 bg-yellow-500/10 p-2 text-xs text-yellow-600 dark:text-yellow-400">
+                    Dropping a member will generate a property return report and may send an email notification.
                   </p>
                 )}
-                {error && (
-                  <p className="text-sm text-red-500">{error}</p>
-                )}
+                {error && <p className="text-sm text-red-500">{error}</p>}
               </div>
-              <div className="flex gap-3 mt-6">
+              <div className="mt-6 flex gap-3">
                 <button
                   type="button"
                   onClick={() => void handleStatusChange()}
                   disabled={statusChanging || newStatus === user?.status}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {statusChanging ? "Saving..." : "Update Status"}
+                  {statusChanging ? 'Saving...' : 'Update Status'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setStatusModalOpen(false)}
                   disabled={statusChanging}
-                  className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50 transition"
+                  className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex-1 rounded-md border px-4 py-2 text-sm font-medium transition disabled:opacity-50"
                 >
                   Cancel
                 </button>

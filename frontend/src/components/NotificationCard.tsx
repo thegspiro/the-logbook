@@ -22,32 +22,32 @@ import type { NotificationLogRecord } from '../services/adminServices';
 
 const CATEGORY_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
   events: {
-    icon: <Calendar className="w-4 h-4" />,
+    icon: <Calendar className="h-4 w-4" />,
     color: 'text-blue-600 dark:text-blue-400',
     label: 'Event',
   },
   training: {
-    icon: <GraduationCap className="w-4 h-4" />,
+    icon: <GraduationCap className="h-4 w-4" />,
     color: 'text-purple-600 dark:text-purple-400',
     label: 'Training',
   },
   scheduling: {
-    icon: <Clock className="w-4 h-4" />,
+    icon: <Clock className="h-4 w-4" />,
     color: 'text-violet-600 dark:text-violet-400',
     label: 'Scheduling',
   },
   members: {
-    icon: <Users className="w-4 h-4" />,
+    icon: <Users className="h-4 w-4" />,
     color: 'text-green-600 dark:text-green-400',
     label: 'Members',
   },
   maintenance: {
-    icon: <AlertTriangle className="w-4 h-4" />,
+    icon: <AlertTriangle className="h-4 w-4" />,
     color: 'text-orange-600 dark:text-orange-400',
     label: 'Maintenance',
   },
   general: {
-    icon: <FileText className="w-4 h-4" />,
+    icon: <FileText className="h-4 w-4" />,
     color: 'text-cyan-600 dark:text-cyan-400',
     label: 'General',
   },
@@ -55,13 +55,15 @@ const CATEGORY_DISPLAY: Record<string, { icon: React.ReactNode; color: string; l
 
 function getCategoryDisplay(category: string | undefined) {
   if (!category) {
-    return { icon: <Wrench className="w-4 h-4" />, color: 'text-theme-text-muted', label: 'Notification' };
+    return { icon: <Wrench className="h-4 w-4" />, color: 'text-theme-text-muted', label: 'Notification' };
   }
-  return CATEGORY_DISPLAY[category] ?? {
-    icon: <Wrench className="w-4 h-4" />,
-    color: 'text-theme-text-muted',
-    label: category.charAt(0).toUpperCase() + category.slice(1),
-  };
+  return (
+    CATEGORY_DISPLAY[category] ?? {
+      icon: <Wrench className="h-4 w-4" />,
+      color: 'text-theme-text-muted',
+      label: category.charAt(0).toUpperCase() + category.slice(1),
+    }
+  );
 }
 
 interface CtaAction {
@@ -106,13 +108,13 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
   if (category === 'shift_reminder') {
     actions.push({
       label: 'View Shift',
-      icon: <ExternalLink className="w-3.5 h-3.5" />,
+      icon: <ExternalLink className="h-3.5 w-3.5" />,
       url: actionUrl,
     });
     if (isChecklistWindowActive(metadata)) {
       actions.push({
         label: 'Start Checklist',
-        icon: <ClipboardCheck className="w-3.5 h-3.5" />,
+        icon: <ClipboardCheck className="h-3.5 w-3.5" />,
         url: '/scheduling?tab=equipment-checks',
       });
     }
@@ -123,13 +125,13 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
   if (category === 'shift_validation') {
     actions.push({
       label: 'View Shift',
-      icon: <ExternalLink className="w-3.5 h-3.5" />,
+      icon: <ExternalLink className="h-3.5 w-3.5" />,
       url: actionUrl,
     });
     if (isChecklistWindowActive(metadata)) {
       actions.push({
         label: 'Start Checklist',
-        icon: <ClipboardCheck className="w-3.5 h-3.5" />,
+        icon: <ClipboardCheck className="h-3.5 w-3.5" />,
         url: '/scheduling?tab=equipment-checks',
       });
     }
@@ -137,7 +139,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
     if (shiftId) {
       actions.push({
         label: 'File Report',
-        icon: <FileText className="w-3.5 h-3.5" />,
+        icon: <FileText className="h-3.5 w-3.5" />,
         url: `/scheduling?tab=shift-reports&shift=${shiftId}`,
       });
     }
@@ -148,7 +150,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
   if (category === 'shift_swap' && subjectLower.includes('request')) {
     actions.push({
       label: 'Review Swap',
-      icon: <ArrowLeftRight className="w-3.5 h-3.5" />,
+      icon: <ArrowLeftRight className="h-3.5 w-3.5" />,
       url: actionUrl,
     });
     return actions;
@@ -167,7 +169,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
 
   actions.push({
     label,
-    icon: <ExternalLink className="w-3.5 h-3.5" />,
+    icon: <ExternalLink className="h-3.5 w-3.5" />,
     url: actionUrl,
   });
 
@@ -180,11 +182,7 @@ interface NotificationCardProps {
   onTogglePin: (id: string, pinned: boolean) => void;
 }
 
-const NotificationCard: React.FC<NotificationCardProps> = ({
-  notification,
-  onMarkRead,
-  onTogglePin,
-}) => {
+const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onMarkRead, onTogglePin }) => {
   const navigate = useNavigate();
   const tz = useTimezone();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -240,44 +238,40 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
 
   return (
     <div
-      className={`rounded-lg card overflow-hidden transition-all duration-300 ease-in-out ${
-        isVisuallyActive
-          ? 'border-l-4 border-l-blue-500 opacity-100'
-          : 'border-l-4 border-l-transparent opacity-60'
+      className={`card overflow-hidden rounded-lg transition-all duration-300 ease-in-out ${
+        isVisuallyActive ? 'border-l-4 border-l-blue-500 opacity-100' : 'border-l-4 border-l-transparent opacity-60'
       }`}
     >
       {/* Collapsed header — always visible */}
       <button
         onClick={handleToggle}
-        className="w-full text-left p-4 hover:bg-theme-surface-hover transition-colors"
+        className="hover:bg-theme-surface-hover w-full p-4 text-left transition-colors"
         aria-expanded={isExpanded}
         aria-controls={contentId}
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div className="flex min-w-0 flex-1 items-start gap-3">
             <span className={`mt-0.5 shrink-0 ${categoryDisplay.color}`} aria-hidden="true">
               {categoryDisplay.icon}
             </span>
-            <div className="flex-1 min-w-0">
-              <p className={`text-sm truncate transition-all duration-300 ${isVisuallyActive ? 'font-semibold text-theme-text-primary' : 'text-theme-text-muted'}`}>
+            <div className="min-w-0 flex-1">
+              <p
+                className={`truncate text-sm transition-all duration-300 ${isVisuallyActive ? 'text-theme-text-primary font-semibold' : 'text-theme-text-muted'}`}
+              >
                 {notification.subject || 'Notification'}
               </p>
               {!isExpanded && (
-                <p className="text-xs text-theme-text-muted mt-0.5 truncate">
-                  {notification.message || ''}
-                </p>
+                <p className="text-theme-text-muted mt-0.5 truncate text-xs">{notification.message || ''}</p>
               )}
             </div>
           </div>
-          <div className="flex items-center shrink-0 gap-2">
-            {notification.pinned && (
-              <Pin className="w-3.5 h-3.5 text-orange-500" aria-label="Pinned" />
-            )}
-            <span className="text-xs text-theme-text-muted whitespace-nowrap">
+          <div className="flex shrink-0 items-center gap-2">
+            {notification.pinned && <Pin className="h-3.5 w-3.5 text-orange-500" aria-label="Pinned" />}
+            <span className="text-theme-text-muted text-xs whitespace-nowrap">
               {formatRelativeTime(notification.sent_at)}
             </span>
             <ChevronDown
-              className={`w-4 h-4 text-theme-text-muted transition-transform duration-200 ${
+              className={`text-theme-text-muted h-4 w-4 transition-transform duration-200 ${
                 isExpanded ? 'rotate-180' : ''
               }`}
               aria-hidden="true"
@@ -292,18 +286,18 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         id={contentId}
         role="region"
         style={{ height: height !== undefined ? `${height}px` : 'auto' }}
-        className="transition-[height] duration-200 ease-in-out overflow-hidden"
+        className="overflow-hidden transition-[height] duration-200 ease-in-out"
       >
-        <div className="px-4 pb-4 border-t border-theme-surface-border">
+        <div className="border-theme-surface-border border-t px-4 pb-4">
           {/* Full message */}
           <div className="pt-3 pb-3">
-            <p className="text-sm text-theme-text-secondary whitespace-pre-line">
+            <p className="text-theme-text-secondary text-sm whitespace-pre-line">
               {notification.message || 'No additional details.'}
             </p>
           </div>
 
           {/* Metadata row */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-theme-text-muted pb-3">
+          <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 pb-3 text-xs">
             <span className={`inline-flex items-center gap-1 ${categoryDisplay.color}`}>
               {categoryDisplay.icon}
               {categoryDisplay.label}
@@ -319,10 +313,10 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
               <button
                 key={action.label}
                 onClick={() => handleNavigate(action.url)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] text-sm font-medium rounded-lg transition-colors ${
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                   idx === 0
-                    ? 'text-white bg-orange-600 hover:bg-orange-700'
-                    : 'border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+                    ? 'bg-orange-600 text-white hover:bg-orange-700'
+                    : 'border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover border'
                 }`}
               >
                 <span aria-hidden="true">{action.icon}</span>
@@ -331,21 +325,21 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
             ))}
             <button
               onClick={handlePinClick}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] text-sm rounded-lg border transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors max-md:min-h-[44px] ${
                 notification.pinned
-                  ? 'border-orange-300 dark:border-orange-600 text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30'
+                  ? 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/20 dark:text-orange-400 dark:hover:bg-orange-900/30'
                   : 'border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
               }`}
               title={notification.pinned ? 'Unpin notification' : 'Pin notification'}
             >
               {notification.pinned ? (
                 <>
-                  <PinOff className="w-3.5 h-3.5" aria-hidden="true" />
+                  <PinOff className="h-3.5 w-3.5" aria-hidden="true" />
                   Unpin
                 </>
               ) : (
                 <>
-                  <Pin className="w-3.5 h-3.5" aria-hidden="true" />
+                  <Pin className="h-3.5 w-3.5" aria-hidden="true" />
                   Pin
                 </>
               )}

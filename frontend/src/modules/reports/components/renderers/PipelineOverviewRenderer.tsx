@@ -34,9 +34,7 @@ export const PipelineOverviewRenderer: React.FC<Props> = ({ data }) => {
     {
       key: 'status',
       header: 'Status',
-      render: (v: unknown) => (
-        <span className="capitalize">{v != null ? toDisplayString(v) : '—'}</span>
-      ),
+      render: (v: unknown) => <span className="capitalize">{v != null ? toDisplayString(v) : '—'}</span>,
     },
     { key: 'current_group', header: 'Current Group' },
     { key: 'current_stage', header: 'Current Stage' },

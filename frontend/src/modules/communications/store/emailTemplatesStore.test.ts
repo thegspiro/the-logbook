@@ -108,9 +108,7 @@ describe('emailTemplatesStore', () => {
       selectedTemplate: sampleTemplate,
     });
 
-    await expect(
-      useEmailTemplatesStore.getState().updateTemplate('tmpl-1', { subject: 'New' }),
-    ).rejects.toThrow();
+    await expect(useEmailTemplatesStore.getState().updateTemplate('tmpl-1', { subject: 'New' })).rejects.toThrow();
 
     const state = useEmailTemplatesStore.getState();
     expect(state.error).toBe('Save failed');

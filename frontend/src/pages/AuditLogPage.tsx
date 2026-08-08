@@ -29,9 +29,9 @@ const SEVERITY_BADGE: Record<AuditSeverity, string> = {
 };
 
 const SEVERITY_ICON: Record<AuditSeverity, React.ReactNode> = {
-  info: <Info className="w-3.5 h-3.5" aria-hidden="true" />,
-  warning: <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />,
-  critical: <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" />,
+  info: <Info className="h-3.5 w-3.5" aria-hidden="true" />,
+  warning: <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />,
+  critical: <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />,
 };
 
 const inputClass =
@@ -61,17 +61,14 @@ const AuditLogPage: React.FC = () => {
       skip: (page - 1) * pageSize,
       limit: pageSize,
     }),
-    [search, severity, category, page, pageSize],
+    [search, severity, category, page, pageSize]
   );
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [list, statsData] = await Promise.all([
-        auditLogService.list(filters),
-        auditLogService.getStats(),
-      ]);
+      const [list, statsData] = await Promise.all([auditLogService.list(filters), auditLogService.getStats()]);
       setEntries(list.logs);
       setTotal(list.total);
       setStats(statsData);
@@ -103,11 +100,11 @@ const AuditLogPage: React.FC = () => {
   const categories = stats ? Object.keys(stats.by_category) : [];
 
   return (
-    <div className="min-h-screen max-w-7xl mx-auto p-4 sm:p-6">
-      <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+    <div className="mx-auto min-h-screen max-w-7xl p-4 sm:p-6">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-theme-text-primary flex items-center gap-2">
-            <ShieldCheck className="w-7 h-7 text-red-600 dark:text-red-400" aria-hidden="true" />
+          <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold sm:text-3xl">
+            <ShieldCheck className="h-7 w-7 text-red-600 dark:text-red-400" aria-hidden="true" />
             Audit Log
           </h1>
           <p className="text-theme-text-secondary mt-1 text-sm">
@@ -116,36 +113,36 @@ const AuditLogPage: React.FC = () => {
         </div>
         <button
           onClick={() => void load()}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+          className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm transition-colors"
           aria-label="Refresh audit log"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           Refresh
         </button>
       </div>
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <div className="card p-4">
-            <p className="text-xs font-medium uppercase text-theme-text-muted">Total events</p>
-            <p className="text-2xl sm:text-3xl font-bold text-theme-text-primary mt-1">{stats.total}</p>
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Total events</p>
+            <p className="text-theme-text-primary mt-1 text-2xl font-bold sm:text-3xl">{stats.total}</p>
           </div>
           <div className="card p-4">
-            <p className="text-xs font-medium uppercase text-theme-text-muted">Critical</p>
-            <p className="text-2xl sm:text-3xl font-bold text-red-700 dark:text-red-400 mt-1">
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Critical</p>
+            <p className="mt-1 text-2xl font-bold text-red-700 sm:text-3xl dark:text-red-400">
               {stats.by_severity.critical ?? 0}
             </p>
           </div>
           <div className="card p-4">
-            <p className="text-xs font-medium uppercase text-theme-text-muted">Warnings</p>
-            <p className="text-2xl sm:text-3xl font-bold text-amber-700 dark:text-amber-400 mt-1">
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Warnings</p>
+            <p className="mt-1 text-2xl font-bold text-amber-700 sm:text-3xl dark:text-amber-400">
               {stats.by_severity.warning ?? 0}
             </p>
           </div>
           <div className="card p-4">
-            <p className="text-xs font-medium uppercase text-theme-text-muted">Info</p>
-            <p className="text-2xl sm:text-3xl font-bold text-blue-700 dark:text-blue-400 mt-1">
+            <p className="text-theme-text-muted text-xs font-medium uppercase">Info</p>
+            <p className="mt-1 text-2xl font-bold text-blue-700 sm:text-3xl dark:text-blue-400">
               {stats.by_severity.info ?? 0}
             </p>
           </div>
@@ -155,10 +152,13 @@ const AuditLogPage: React.FC = () => {
       {/* Filters */}
       <form
         onSubmit={handleSearchSubmit}
-        className="card p-3 sm:p-4 mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+        className="card mb-4 grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-4"
       >
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" aria-hidden="true" />
+          <Search
+            className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+            aria-hidden="true"
+          />
           <input
             type="search"
             value={searchInput}
@@ -199,13 +199,13 @@ const AuditLogPage: React.FC = () => {
           ))}
         </select>
         <div className="flex items-center gap-2">
-          <button type="submit" className="btn-primary text-sm flex-1">
+          <button type="submit" className="btn-primary flex-1 text-sm">
             Apply
           </button>
           <button
             type="button"
             onClick={resetFilters}
-            className="px-3 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary border border-theme-surface-border rounded-md"
+            className="text-theme-text-secondary hover:text-theme-text-primary border-theme-surface-border rounded-md border px-3 py-2 text-sm"
           >
             Reset
           </button>
@@ -214,9 +214,11 @@ const AuditLogPage: React.FC = () => {
 
       {/* Table */}
       {error ? (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-red-700 dark:text-red-300 text-sm">{error}</div>
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
+          {error}
+        </div>
       ) : loading && entries.length === 0 ? (
-        <div className="card p-12 text-center text-theme-text-muted">Loading audit log…</div>
+        <div className="card text-theme-text-muted p-12 text-center">Loading audit log…</div>
       ) : entries.length === 0 ? (
         <div className="card">
           <EmptyState
@@ -237,17 +239,29 @@ const AuditLogPage: React.FC = () => {
       ) : (
         <div className="card overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-theme-surface-secondary text-left text-xs font-medium text-theme-text-muted uppercase">
+            <thead className="bg-theme-surface-secondary text-theme-text-muted text-left text-xs font-medium uppercase">
               <tr>
-                <th scope="col" className="px-4 py-3">When</th>
-                <th scope="col" className="px-4 py-3">Severity</th>
-                <th scope="col" className="px-4 py-3">Event</th>
-                <th scope="col" className="px-4 py-3 hidden md:table-cell">Category</th>
-                <th scope="col" className="px-4 py-3">User</th>
-                <th scope="col" className="px-4 py-3 hidden lg:table-cell">IP</th>
+                <th scope="col" className="px-4 py-3">
+                  When
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  Severity
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  Event
+                </th>
+                <th scope="col" className="hidden px-4 py-3 md:table-cell">
+                  Category
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  User
+                </th>
+                <th scope="col" className="hidden px-4 py-3 lg:table-cell">
+                  IP
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-theme-surface-border">
+            <tbody className="divide-theme-surface-border divide-y">
               {entries.map((entry) => {
                 const sev = entry.severity;
                 const expanded = expandedId === entry.id;
@@ -258,34 +272,34 @@ const AuditLogPage: React.FC = () => {
                       onClick={() => setExpandedId(expanded ? null : entry.id)}
                       aria-expanded={expanded}
                     >
-                      <td className="px-4 py-3 text-sm text-theme-text-secondary whitespace-nowrap">
+                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                         {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
                       </td>
                       <td className="px-4 py-3">
                         {sev && (
                           <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium uppercase ${SEVERITY_BADGE[sev]}`}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium uppercase ${SEVERITY_BADGE[sev]}`}
                           >
                             {SEVERITY_ICON[sev]}
                             {sev}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-theme-text-primary font-mono">{entry.event_type}</td>
-                      <td className="px-4 py-3 text-sm text-theme-text-secondary hidden md:table-cell">
+                      <td className="text-theme-text-primary px-4 py-3 font-mono text-sm">{entry.event_type}</td>
+                      <td className="text-theme-text-secondary hidden px-4 py-3 text-sm md:table-cell">
                         {entry.event_category}
                       </td>
-                      <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                      <td className="text-theme-text-secondary px-4 py-3 text-sm">
                         {entry.username || <span className="text-theme-text-muted italic">system</span>}
                       </td>
-                      <td className="px-4 py-3 text-sm text-theme-text-muted font-mono hidden lg:table-cell">
+                      <td className="text-theme-text-muted hidden px-4 py-3 font-mono text-sm lg:table-cell">
                         {entry.ip_address || '—'}
                       </td>
                     </tr>
                     {expanded && (
                       <tr className="bg-theme-surface-secondary">
                         <td colSpan={6} className="px-4 py-3">
-                          <pre className="text-xs text-theme-text-secondary whitespace-pre-wrap font-mono">
+                          <pre className="text-theme-text-secondary font-mono text-xs whitespace-pre-wrap">
                             {JSON.stringify(entry.event_data, null, 2)}
                           </pre>
                         </td>

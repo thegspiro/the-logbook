@@ -15,7 +15,7 @@ const renderModal = (overrides: Partial<React.ComponentProps<typeof CloneElectio
       onSubmit={onSubmit}
       onClose={onClose}
       {...overrides}
-    />,
+    />
   );
 
 describe('CloneElectionModal', () => {

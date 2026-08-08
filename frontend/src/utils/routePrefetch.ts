@@ -85,9 +85,8 @@ export function prefetchRoute(path: string): void {
 
   // Use requestIdleCallback where available so prefetching doesn't compete
   // with user-initiated work; fall back to a short setTimeout.
-  const schedule = typeof requestIdleCallback === 'function'
-    ? requestIdleCallback
-    : (cb: () => void) => setTimeout(cb, 50);
+  const schedule =
+    typeof requestIdleCallback === 'function' ? requestIdleCallback : (cb: () => void) => setTimeout(cb, 50);
 
   schedule(() => {
     importFn().catch(() => {

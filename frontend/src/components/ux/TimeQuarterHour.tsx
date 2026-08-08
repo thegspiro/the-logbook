@@ -80,7 +80,7 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
   const label = ariaLabel || placeholder || 'Time';
 
   return (
-    <div className="flex gap-1.5 items-center">
+    <div className="flex items-center gap-1.5">
       <select
         id={id}
         value={hour12Index !== null ? String(hour12Index) : ''}
@@ -89,9 +89,7 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
         required={required}
         aria-label={`${label} hour`}
       >
-        {hour12Index === null && (
-          <option value="">--</option>
-        )}
+        {hour12Index === null && <option value="">--</option>}
         {HOURS_12.map((h) => (
           <option key={h.value} value={String(h.value)}>
             {h.display}
@@ -108,9 +106,7 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
         required={required}
         aria-label={`${label} minute`}
       >
-        {minute === null && (
-          <option value="">--</option>
-        )}
+        {minute === null && <option value="">--</option>}
         {MINUTE_OPTIONS.map((m) => (
           <option key={m} value={m}>
             {m}

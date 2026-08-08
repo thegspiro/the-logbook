@@ -95,9 +95,7 @@ interface ItemResult {
 // Helpers
 // ============================================================================
 
-function getExpirationStatus(
-  item: CheckTemplateItem,
-): 'ok' | 'expiring_soon' | 'expired' | null {
+function getExpirationStatus(item: CheckTemplateItem): 'ok' | 'expiring_soon' | 'expired' | null {
   if (!item.hasExpiration || !item.expirationDate) return null;
 
   const now = new Date();
@@ -113,7 +111,7 @@ function getExpirationStatus(
 
 function getCompartmentStatus(
   compartment: CheckTemplateCompartment,
-  results: Record<string, ItemResult>,
+  results: Record<string, ItemResult>
 ): 'complete' | 'has_failures' | 'in_progress' | 'not_started' {
   const checkable = compartment.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
   if (checkable.length === 0) return 'complete';
@@ -136,14 +134,10 @@ function getCompartmentStatus(
 }
 
 const STATUS_COLORS = {
-  complete:
-    'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400',
-  has_failures:
-    'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400',
-  in_progress:
-    'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400',
-  not_started:
-    'border-theme-surface-border bg-theme-surface text-theme-text-muted',
+  complete: 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400',
+  has_failures: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400',
+  in_progress: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400',
+  not_started: 'border-theme-surface-border bg-theme-surface text-theme-text-muted',
 } as const;
 
 const STATUS_LABELS: Record<string, string> = {
@@ -181,9 +175,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const [results, setResults] = useState<Record<string, ItemResult>>({});
   // Lot swaps performed during this check: override the deployed item's lot /
   // expiration so the badge reflects the fresher unit that was swapped in.
-  const [swapOverrides, setSwapOverrides] = useState<
-    Record<string, { lotNumber?: string; expirationDate?: string }>
-  >({});
+  const [swapOverrides, setSwapOverrides] = useState<Record<string, { lotNumber?: string; expirationDate?: string }>>(
+    {}
+  );
   const [swapTarget, setSwapTarget] = useState<CheckTemplateItem | null>(null);
   const [swapLots, setSwapLots] = useState<InventoryLot[]>([]);
   const [swapLoading, setSwapLoading] = useState(false);
@@ -191,9 +185,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const [collapsedCompartments, setCollapsedCompartments] = useState<Set<string>>(new Set());
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [expandedPhotos, setExpandedPhotos] = useState<Set<string>>(new Set());
-  const [expandedSerialUpdate, setExpandedSerialUpdate] = useState<Set<string>>(
-    new Set(),
-  );
+  const [expandedSerialUpdate, setExpandedSerialUpdate] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [overallNotes, setOverallNotes] = useState('');
   const [lastCheckData, setLastCheckData] = useState<Record<string, LastCheckItemResult> | null>(null);
@@ -216,7 +208,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // reflect exactly where the item lives, not just its top-level compartment.
   const { compartments, storagePathByItemId } = useMemo(
     () => flattenCompartmentTree(template.compartments),
-    [template.compartments],
+    [template.compartments]
   );
 
   // --------------------------------------------------------------------------
@@ -234,10 +226,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
       for (const entry of pending) {
         try {
-          const record = await schedulingService.submitEquipmentCheck(
-            entry.shiftId,
-            entry.payload,
-          );
+          const record = await schedulingService.submitEquipmentCheck(entry.shiftId, entry.payload);
 
           // Upload queued photos
           const photosByItem = new Map<string, Array<{ blob: Blob; fileName: string }>>();
@@ -247,9 +236,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             photosByItem.set(photo.itemId, arr);
           }
           for (const [itemId, photos] of photosByItem) {
-            const files = photos.map(
-              (p) => new File([p.blob], p.fileName, { type: p.blob.type }),
-            );
+            const files = photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }));
             try {
               await schedulingService.uploadCheckItemPhotos(record.id, itemId, files);
             } catch {
@@ -290,21 +277,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Load pending count on mount
   useEffect(() => {
     if (previewMode) return;
-    void getPendingCount().then(setPendingQueueCount).catch(() => {});
+    void getPendingCount()
+      .then(setPendingQueueCount)
+      .catch(() => {});
   }, [previewMode]);
 
   // --------------------------------------------------------------------------
   // Progress
   // --------------------------------------------------------------------------
 
-  const allItems = useMemo(
-    () => compartments.flatMap((c) => c.items),
-    [compartments],
-  );
+  const allItems = useMemo(() => compartments.flatMap((c) => c.items), [compartments]);
 
   const checkableItems = useMemo(
     () => allItems.filter((item) => item.checkType !== 'header' && item.checkType !== 'text'),
-    [allItems],
+    [allItems]
   );
 
   const totalItems = checkableItems.length;
@@ -312,8 +298,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const result = results[item.id];
     return result && result.status !== 'not_checked';
   }).length;
-  const progressPercent =
-    totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
+  const progressPercent = totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
 
   const allRequiredChecked = checkableItems
     .filter((item) => item.isRequired)
@@ -326,19 +311,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Handlers
   // --------------------------------------------------------------------------
 
-  const updateResult = useCallback(
-    (itemId: string, patch: Partial<ItemResult>) => {
-      setResults((prev) => ({
-        ...prev,
-        [itemId]: {
-          ...prev[itemId],
-          status: prev[itemId]?.status ?? 'not_checked',
-          ...patch,
-        },
-      }));
-    },
-    [],
-  );
+  const updateResult = useCallback((itemId: string, patch: Partial<ItemResult>) => {
+    setResults((prev) => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        status: prev[itemId]?.status ?? 'not_checked',
+        ...patch,
+      },
+    }));
+  }, []);
 
   // Apply any in-check lot swap to an item so the badge and expiration reflect
   // the fresher unit that was swapped in (without needing a template re-fetch).
@@ -349,12 +331,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       return {
         ...item,
         ...(o.lotNumber !== undefined ? { lotNumber: o.lotNumber } : {}),
-        ...(o.expirationDate !== undefined
-          ? { hasExpiration: true, expirationDate: o.expirationDate }
-          : {}),
+        ...(o.expirationDate !== undefined ? { hasExpiration: true, expirationDate: o.expirationDate } : {}),
       };
     },
-    [swapOverrides],
+    [swapOverrides]
   );
 
   const openSwap = useCallback(async (item: CheckTemplateItem) => {
@@ -386,9 +366,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           ...prev,
           [swapTarget.id]: {
             ...(res.lotNumber !== undefined ? { lotNumber: res.lotNumber } : {}),
-            ...(res.expirationDate !== undefined
-              ? { expirationDate: res.expirationDate }
-              : {}),
+            ...(res.expirationDate !== undefined ? { expirationDate: res.expirationDate } : {}),
           },
         }));
         // Record the swapped-in lot as the found lot and clear the auto-fail.
@@ -404,7 +382,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         setSwapping(false);
       }
     },
-    [swapTarget, updateResult],
+    [swapTarget, updateResult]
   );
 
   const toggleNotes = useCallback((itemId: string) => {
@@ -464,7 +442,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         photoUrls: previewUrls,
       });
     },
-    [results, updateResult],
+    [results, updateResult]
   );
 
   const removePhoto = useCallback(
@@ -486,7 +464,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         photoUrls: newUrls.length > 0 ? newUrls : undefined,
       });
     },
-    [results, updateResult],
+    [results, updateResult]
   );
 
   // --------------------------------------------------------------------------
@@ -516,10 +494,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     if (previewMode) return;
     if (Object.keys(results).length === 0 && !overallNotes) return;
     try {
-      localStorage.setItem(
-        draftKey,
-        JSON.stringify({ results, overallNotes }),
-      );
+      localStorage.setItem(draftKey, JSON.stringify({ results, overallNotes }));
     } catch {
       // Storage full — ignore
     }
@@ -547,22 +522,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             if (item.checkType === 'quantity' && prev.quantity_found != null) {
               const required = item.requiredQuantity ?? item.expectedQuantity;
               seed[item.id] = {
-                status:
-                  required != null
-                    ? prev.quantity_found >= required
-                      ? 'pass'
-                      : 'fail'
-                    : 'pass',
+                status: required != null ? (prev.quantity_found >= required ? 'pass' : 'fail') : 'pass',
                 quantityFound: prev.quantity_found,
               };
-            } else if (
-              (item.checkType === 'level' || item.checkType === 'reading') &&
-              prev.level_reading != null
-            ) {
+            } else if ((item.checkType === 'level' || item.checkType === 'reading') && prev.level_reading != null) {
               const belowMin =
-                item.checkType === 'level' &&
-                item.minLevel != null &&
-                prev.level_reading < item.minLevel;
+                item.checkType === 'level' && item.minLevel != null && prev.level_reading < item.minLevel;
               seed[item.id] = {
                 status: belowMin ? 'fail' : 'pass',
                 levelReading: prev.level_reading,
@@ -577,8 +542,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       .catch(() => {
         // Non-critical — form works fine without previous data
       });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template.id, template.apparatusId, previewMode]);
 
   // --------------------------------------------------------------------------
@@ -616,7 +583,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       .catch(() => {
         toast.error('Failed to load existing check data');
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [existingCheckId, previewMode]);
 
   // --------------------------------------------------------------------------
@@ -688,7 +657,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return;
       }
     },
-    [compartments, collapsedCompartments],
+    [compartments, collapsedCompartments]
   );
 
   const updateResultAndAdvance = useCallback(
@@ -698,41 +667,37 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         setTimeout(() => focusNextItem(itemId), 150);
       }
     },
-    [updateResult, focusNextItem],
+    [updateResult, focusNextItem]
   );
 
-  const passAllInCompartment = useCallback(
-    (compartment: CheckTemplateCompartment) => {
-      setResults((prev) => {
-        const next = { ...prev };
-        for (const item of compartment.items) {
-          if (item.checkType === 'header' || item.checkType === 'text') continue;
-          const expStatus = getExpirationStatus(item);
-          if (expStatus === 'expired') continue;
-          const existing = next[item.id];
-          const patch: Partial<ItemResult> = { status: 'pass' };
-          if (item.checkType === 'quantity') {
-            const required = item.requiredQuantity ?? item.expectedQuantity;
-            if (required != null) {
-              patch.quantityFound = required;
-            }
+  const passAllInCompartment = useCallback((compartment: CheckTemplateCompartment) => {
+    setResults((prev) => {
+      const next = { ...prev };
+      for (const item of compartment.items) {
+        if (item.checkType === 'header' || item.checkType === 'text') continue;
+        const expStatus = getExpirationStatus(item);
+        if (expStatus === 'expired') continue;
+        const existing = next[item.id];
+        const patch: Partial<ItemResult> = { status: 'pass' };
+        if (item.checkType === 'quantity') {
+          const required = item.requiredQuantity ?? item.expectedQuantity;
+          if (required != null) {
+            patch.quantityFound = required;
           }
-          next[item.id] = {
-            status: 'not_checked',
-            ...existing,
-            ...patch,
-          };
         }
-        return next;
-      });
-    },
-    [],
-  );
+        next[item.id] = {
+          status: 'not_checked',
+          ...existing,
+          ...patch,
+        };
+      }
+      return next;
+    });
+  }, []);
 
   const hasQuantityItems = useCallback(
-    (compartment: CheckTemplateCompartment) =>
-      compartment.items.some((item) => item.checkType === 'quantity'),
-    [],
+    (compartment: CheckTemplateCompartment) => compartment.items.some((item) => item.checkType === 'quantity'),
+    []
   );
 
   // --------------------------------------------------------------------------
@@ -744,7 +709,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const uncheckedCount = totalItems - checkedItems;
       const confirmed = window.confirm(
         `${uncheckedCount} of ${totalItems} item${uncheckedCount === 1 ? '' : 's'} ha${uncheckedCount === 1 ? 's' : 've'} not been checked. ` +
-        `The report will be marked as incomplete.\n\nAre you sure you want to submit?`,
+          `The report will be marked as incomplete.\n\nAre you sure you want to submit?`
       );
       if (!confirmed) return;
     }
@@ -776,26 +741,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
           items.push({
             template_item_id: item.id,
-            compartment_name:
-              storagePathByItemId.get(item.id) ?? compartment.name,
+            compartment_name: storagePathByItemId.get(item.id) ?? compartment.name,
             item_name: item.name,
             check_type: item.checkType,
             status: result?.status || 'not_checked',
             quantity_found: result?.quantityFound,
-            required_quantity:
-              item.requiredQuantity ?? item.expectedQuantity,
-            critical_minimum_quantity:
-              item.criticalMinimumQuantity ?? undefined,
+            required_quantity: item.requiredQuantity ?? item.expectedQuantity,
+            critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
             level_reading: result?.levelReading,
             level_unit: item.levelUnit || undefined,
             serial_number: result?.serialNumber || undefined,
             lot_number: result?.lotNumber || undefined,
             serial_found: serialFound,
             lot_found: lotFound,
-            is_expired:
-              item.hasExpiration && item.expirationDate
-                ? new Date(item.expirationDate) < new Date()
-                : false,
+            is_expired: item.hasExpiration && item.expirationDate ? new Date(item.expirationDate) < new Date() : false,
             expiration_date: item.expirationDate || undefined,
             notes: result?.notes || undefined,
           });
@@ -815,7 +774,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         await enqueueCheck(shiftId, payload, itemsWithPhotos);
         const count = await getPendingCount();
         setPendingQueueCount(count);
-        try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+        try {
+          localStorage.removeItem(draftKey);
+        } catch {
+          /* ignore */
+        }
         toast.success('Check saved offline — will sync when connected');
         onComplete?.();
         return;
@@ -843,22 +806,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       if (itemsWithPhotos.length > 0 && checkResult.items) {
         await Promise.all(
           itemsWithPhotos.map(({ itemId, files }) => {
-            const checkItem = checkResult.items?.find(
-              (ci) => ci.templateItemId === itemId,
-            );
+            const checkItem = checkResult.items?.find((ci) => ci.templateItemId === itemId);
             if (!checkItem) return Promise.resolve();
-            return schedulingService
-              .uploadCheckItemPhotos(checkResult.id, checkItem.id, files)
-              .catch(() => {
-                toast.error(
-                  `Failed to upload photos for ${checkItem.itemName}`,
-                );
-              });
-          }),
+            return schedulingService.uploadCheckItemPhotos(checkResult.id, checkItem.id, files).catch(() => {
+              toast.error(`Failed to upload photos for ${checkItem.itemName}`);
+            });
+          })
         );
       }
 
-      try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {
+        /* ignore */
+      }
       toast.success('Equipment check submitted successfully');
       onComplete?.();
     } catch {
@@ -876,8 +837,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             }
             fallbackItems.push({
               template_item_id: item.id,
-              compartment_name:
-                storagePathByItemId.get(item.id) ?? compartment.name,
+              compartment_name: storagePathByItemId.get(item.id) ?? compartment.name,
               item_name: item.name,
               check_type: item.checkType,
               status: result?.status || 'not_checked',
@@ -890,7 +850,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               lot_number: result?.lotNumber || undefined,
               serial_found: result?.serialFound || undefined,
               lot_found: result?.lotFound || undefined,
-              is_expired: item.hasExpiration && item.expirationDate ? new Date(item.expirationDate) < new Date() : false,
+              is_expired:
+                item.hasExpiration && item.expirationDate ? new Date(item.expirationDate) < new Date() : false,
               expiration_date: item.expirationDate || undefined,
               notes: result?.notes || undefined,
             });
@@ -911,7 +872,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         }
         const count = await getPendingCount();
         setPendingQueueCount(count);
-        try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+        try {
+          localStorage.removeItem(draftKey);
+        } catch {
+          /* ignore */
+        }
         toast.success('Connection lost — check queued for sync');
         onComplete?.();
       } catch {
@@ -975,11 +940,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           data-action="pass"
           onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
           disabled={isExpired}
-          className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
+          className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'pass'
               ? 'bg-green-600 text-white'
-              : 'border border-theme-surface-border text-theme-text-muted hover:border-green-500 hover:text-green-600'
-          } ${isExpired ? 'opacity-50 cursor-not-allowed' : ''}`}
+              : 'border-theme-surface-border text-theme-text-muted border hover:border-green-500 hover:text-green-600'
+          } ${isExpired ? 'cursor-not-allowed opacity-50' : ''}`}
         >
           <CheckCircle className="h-4 w-4" />
           Pass
@@ -988,10 +953,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           type="button"
           data-action="fail"
           onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
-          className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
+          className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'fail'
               ? 'bg-red-600 text-white'
-              : 'border border-theme-surface-border text-theme-text-muted hover:border-red-500 hover:text-red-600'
+              : 'border-theme-surface-border text-theme-text-muted border hover:border-red-500 hover:text-red-600'
           }`}
         >
           <XCircle className="h-4 w-4" />
@@ -1012,10 +977,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               type="button"
               data-action="pass"
               onClick={() => updateResultAndAdvance(item.id, { status: 'pass' })}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
+              className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
                 effectiveStatus === 'pass'
                   ? 'bg-green-600 text-white'
-                  : 'border border-theme-surface-border text-theme-text-muted hover:border-green-500 hover:text-green-600'
+                  : 'border-theme-surface-border text-theme-text-muted border hover:border-green-500 hover:text-green-600'
               }`}
             >
               <Eye className="h-4 w-4" />
@@ -1025,10 +990,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               type="button"
               data-action="fail"
               onClick={() => updateResultAndAdvance(item.id, { status: 'fail' })}
-              className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors min-h-[48px] ${
+              className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
                 effectiveStatus === 'fail'
                   ? 'bg-red-600 text-white'
-                  : 'border border-theme-surface-border text-theme-text-muted hover:border-red-500 hover:text-red-600'
+                  : 'border-theme-surface-border text-theme-text-muted border hover:border-red-500 hover:text-red-600'
               }`}
             >
               <XCircle className="h-4 w-4" />
@@ -1058,37 +1023,28 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           const clamped = Math.max(0, qty);
           updateResult(item.id, {
             quantityFound: clamped,
-            status:
-              required != null
-                ? clamped >= required
-                  ? 'pass'
-                  : 'fail'
-                : 'pass',
+            status: required != null ? (clamped >= required ? 'pass' : 'fail') : 'pass',
           });
         };
 
         return (
           <div className="flex items-center justify-between gap-3">
-            <div className="text-xs min-w-0 space-y-0.5">
+            <div className="min-w-0 space-y-0.5 text-xs">
               {expected != null && (
                 <span className={`block ${getQtyColor()}`}>
                   {hasBeenSet ? currentQty : '—'}/{expected} Expected
                 </span>
               )}
               {hasBeenSet && isCritical && (
-                <span className="block text-[10px] text-red-600 dark:text-red-400 font-semibold">
+                <span className="block text-[10px] font-semibold text-red-600 dark:text-red-400">
                   CRITICAL — below minimum ({criticalMin})
                 </span>
               )}
               {hasBeenSet && !isAtPar && !isCritical && required != null && (
-                <span className="block text-[10px] text-orange-500">
-                  Below required ({required})
-                </span>
+                <span className="block text-[10px] text-orange-500">Below required ({required})</span>
               )}
               {prevQty != null && hasBeenSet && currentQty !== prevQty && (
-                <span className="block text-[10px] text-theme-text-muted">
-                  Last: {prevQty}
-                </span>
+                <span className="text-theme-text-muted block text-[10px]">Last: {prevQty}</span>
               )}
             </div>
             <div className="flex items-center gap-0">
@@ -1096,7 +1052,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 type="button"
                 onClick={() => setQuantity(currentQty - 1)}
                 disabled={isExpired || currentQty <= 0}
-                className="flex items-center justify-center w-11 h-11 rounded-l-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary active:bg-theme-surface-border disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary active:bg-theme-surface-border flex h-11 w-11 items-center justify-center rounded-l-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label={`Decrease ${item.name} quantity`}
               >
                 <Minus className="h-4 w-4" />
@@ -1106,9 +1062,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 type="number"
                 min="0"
                 inputMode="numeric"
-                className={`w-14 h-11 text-center border-y text-sm font-medium bg-theme-surface focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                className={`bg-theme-surface h-11 w-14 [appearance:textfield] border-y text-center text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none focus:ring-inset [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
                   hasBeenSet && isCritical
-                    ? 'border-red-600 text-red-600 dark:text-red-400 border-2'
+                    ? 'border-2 border-red-600 text-red-600 dark:text-red-400'
                     : hasBeenSet && !isAtPar
                       ? 'border-orange-500 text-orange-600 dark:text-orange-400'
                       : 'border-theme-surface-border text-theme-text-primary'
@@ -1131,7 +1087,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 type="button"
                 onClick={() => setQuantity(currentQty + 1)}
                 disabled={isExpired}
-                className="flex items-center justify-center w-11 h-11 rounded-r-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary active:bg-theme-surface-border disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary active:bg-theme-surface-border flex h-11 w-11 items-center justify-center rounded-r-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label={`Increase ${item.name} quantity`}
               >
                 <Plus className="h-4 w-4" />
@@ -1142,15 +1098,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       }
 
       case 'level': {
-        const belowMin =
-          item.minLevel != null &&
-          result?.levelReading != null &&
-          result.levelReading < item.minLevel;
+        const belowMin = item.minLevel != null && result?.levelReading != null && result.levelReading < item.minLevel;
 
         return (
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <label htmlFor={`level-${item.id}`} className="text-xs text-theme-text-secondary whitespace-nowrap">
+              <label htmlFor={`level-${item.id}`} className="text-theme-text-secondary text-xs whitespace-nowrap">
                 Reading:
               </label>
               <input
@@ -1159,10 +1112,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 min="0"
                 step="0.1"
                 inputMode="decimal"
-                className={`w-24 rounded-lg border px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 min-h-[48px] ${
-                  belowMin
-                    ? 'border-red-500 focus:ring-red-500'
-                    : 'border-theme-surface-border focus:ring-blue-500'
+                className={`text-theme-text-primary bg-theme-surface min-h-[48px] w-24 rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:outline-none ${
+                  belowMin ? 'border-red-500 focus:ring-red-500' : 'border-theme-surface-border focus:ring-blue-500'
                 }`}
                 value={result?.levelReading ?? ''}
                 onChange={(e) => {
@@ -1181,7 +1132,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   });
                 }}
               />
-              <span className="text-xs text-theme-text-muted">
+              <span className="text-theme-text-muted text-xs">
                 {item.levelUnit ?? ''}
                 {item.minLevel != null && ` (min: ${item.minLevel})`}
               </span>
@@ -1197,7 +1148,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           <div className="space-y-2">
             {/* Current serial/lot display */}
             {(item.serialNumber || item.lotNumber) && (
-              <div className="flex items-center gap-3 text-xs text-theme-text-muted bg-theme-surface-secondary rounded-lg px-3 py-2">
+              <div className="text-theme-text-muted bg-theme-surface-secondary flex items-center gap-3 rounded-lg px-3 py-2 text-xs">
                 {item.serialNumber && (
                   <span>
                     S/N: <span className="font-mono">{item.serialNumber}</span>
@@ -1212,35 +1163,31 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             )}
 
             {/* Verify serial/lot inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div>
-                <label htmlFor={`serial-${item.id}`} className="text-xs text-theme-text-secondary mb-1 block">
+                <label htmlFor={`serial-${item.id}`} className="text-theme-text-secondary mb-1 block text-xs">
                   Serial #
                 </label>
                 <input
                   id={`serial-${item.id}`}
                   type="text"
-                  className="w-full rounded-lg border border-theme-surface-border px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   placeholder={item.serialNumber ?? 'Serial number'}
                   value={result?.serialNumber ?? ''}
-                  onChange={(e) =>
-                    updateResult(item.id, { serialNumber: e.target.value })
-                  }
+                  onChange={(e) => updateResult(item.id, { serialNumber: e.target.value })}
                 />
               </div>
               <div>
-                <label htmlFor={`lot-${item.id}`} className="text-xs text-theme-text-secondary mb-1 block">
+                <label htmlFor={`lot-${item.id}`} className="text-theme-text-secondary mb-1 block text-xs">
                   Lot #
                 </label>
                 <input
                   id={`lot-${item.id}`}
                   type="text"
-                  className="w-full rounded-lg border border-theme-surface-border px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
+                  className="border-theme-surface-border text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   placeholder={item.lotNumber ?? 'Lot number'}
                   value={result?.lotNumber ?? ''}
-                  onChange={(e) =>
-                    updateResult(item.id, { lotNumber: e.target.value })
-                  }
+                  onChange={(e) => updateResult(item.id, { lotNumber: e.target.value })}
                 />
               </div>
             </div>
@@ -1249,22 +1196,19 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             <button
               type="button"
               onClick={() => toggleSerialUpdate(item.id)}
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors min-h-[32px]"
+              className="min-h-[32px] text-xs font-medium text-blue-600 transition-colors hover:text-blue-700"
             >
-              {showSerialUpdate
-                ? 'Cancel update'
-                : 'Item swapped? Update serial/lot on template'}
+              {showSerialUpdate ? 'Cancel update' : 'Item swapped? Update serial/lot on template'}
             </button>
 
             {showSerialUpdate && (
-              <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 space-y-2">
+              <div className="space-y-2 rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
                 <p className="text-xs text-blue-700 dark:text-blue-400">
-                  Enter the new serial/lot numbers. The template will be
-                  automatically updated.
+                  Enter the new serial/lot numbers. The template will be automatically updated.
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div>
-                    <label htmlFor={`new-serial-${item.id}`} className="text-xs text-theme-text-secondary mb-1 block">
+                    <label htmlFor={`new-serial-${item.id}`} className="text-theme-text-secondary mb-1 block text-xs">
                       New Serial #
                     </label>
                     <input
@@ -1273,7 +1217,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       spellCheck={false}
                       id={`new-serial-${item.id}`}
                       type="text"
-                      className="w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
+                      className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                       placeholder="New serial number"
                       value={result?.serialFound ?? ''}
                       onChange={(e) =>
@@ -1284,13 +1228,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     />
                   </div>
                   <div>
-                    <label htmlFor={`new-lot-${item.id}`} className="text-xs text-theme-text-secondary mb-1 block">
+                    <label htmlFor={`new-lot-${item.id}`} className="text-theme-text-secondary mb-1 block text-xs">
                       New Lot #
                     </label>
                     <input
                       id={`new-lot-${item.id}`}
                       type="text"
-                      className="w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
+                      className="text-theme-text-primary bg-theme-surface min-h-[48px] w-full rounded-lg border border-blue-500/30 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                       placeholder="New lot number"
                       value={result?.lotFound ?? ''}
                       onChange={(e) =>
@@ -1313,7 +1257,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return (
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <label htmlFor={`reading-${item.id}`} className="text-xs text-theme-text-secondary whitespace-nowrap">
+              <label htmlFor={`reading-${item.id}`} className="text-theme-text-secondary text-xs whitespace-nowrap">
                 Reading:
               </label>
               <input
@@ -1321,7 +1265,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 type="number"
                 step="0.01"
                 inputMode="decimal"
-                className="w-32 rounded-lg border border-theme-surface-border px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[48px]"
+                className="border-theme-surface-border text-theme-text-primary bg-theme-surface min-h-[48px] w-32 rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 value={result?.levelReading ?? ''}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -1354,37 +1298,22 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     if (item.checkType === 'header') {
       return (
         <div key={item.id} className="pt-3 first:pt-0">
-          <div className="border-b border-theme-surface-border pb-2">
-            <h3 className="text-sm font-bold text-theme-text-primary">
-              {item.name}
-            </h3>
+          <div className="border-theme-surface-border border-b pb-2">
+            <h3 className="text-theme-text-primary text-sm font-bold">{item.name}</h3>
           </div>
-          {item.description && (
-            <p className="mt-1 text-[11px] text-theme-text-muted">
-              {item.description}
-            </p>
-          )}
+          {item.description && <p className="text-theme-text-muted mt-1 text-[11px]">{item.description}</p>}
         </div>
       );
     }
 
     if (item.checkType === 'text') {
       return (
-        <div
-          key={item.id}
-          className="rounded-lg border border-theme-surface-border bg-theme-surface p-4"
-        >
+        <div key={item.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
           <div className="flex items-start gap-2">
-            <MessageSquare className="h-4 w-4 text-theme-text-muted flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <MessageSquare className="text-theme-text-muted mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
             <div>
-              <p className="text-sm font-medium text-theme-text-primary">
-                {item.name}
-              </p>
-              {item.description && (
-                <p className="mt-0.5 text-xs text-theme-text-muted">
-                  {item.description}
-                </p>
-              )}
+              <p className="text-theme-text-primary text-sm font-medium">{item.name}</p>
+              {item.description && <p className="text-theme-text-muted mt-0.5 text-xs">{item.description}</p>}
             </div>
           </div>
         </div>
@@ -1400,7 +1329,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     return (
       <div
         key={item.id}
-        ref={(el) => { itemRefs.current[item.id] = el; }}
+        ref={(el) => {
+          itemRefs.current[item.id] = el;
+        }}
         className={`rounded-lg border p-4 transition-colors ${isQuantity ? 'space-y-1' : 'space-y-3'} ${
           effectiveStatus === 'pass'
             ? 'border-green-500/30 bg-green-500/5'
@@ -1411,39 +1342,29 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       >
         {/* Item header */}
         <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              {!isQuantity && <TypeIcon className="h-4 w-4 text-theme-text-muted flex-shrink-0" />}
-              <span className="text-sm font-medium text-theme-text-primary">
-                {item.name}
-              </span>
-              {item.isRequired && (
-                <span className="text-[10px] text-red-500 font-medium uppercase">
-                  Required
-                </span>
-              )}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              {!isQuantity && <TypeIcon className="text-theme-text-muted h-4 w-4 flex-shrink-0" />}
+              <span className="text-theme-text-primary text-sm font-medium">{item.name}</span>
+              {item.isRequired && <span className="text-[10px] font-medium text-red-500 uppercase">Required</span>}
               {renderExpirationBadge(item)}
             </div>
             {swapOverrides[item.id] && (
               <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-green-700 dark:text-green-400">
                 <PackageCheck className="h-3 w-3" aria-hidden="true" />
                 Swapped in
-                {swapOverrides[item.id]?.lotNumber
-                  ? ` Lot ${swapOverrides[item.id]?.lotNumber}`
-                  : ' fresh stock'}
+                {swapOverrides[item.id]?.lotNumber ? ` Lot ${swapOverrides[item.id]?.lotNumber}` : ' fresh stock'}
                 {swapOverrides[item.id]?.expirationDate
                   ? ` · exp ${formatDate(swapOverrides[item.id]?.expirationDate, tz)}`
                   : ''}
               </p>
             )}
             {item.description && (
-              <p className={`mt-0.5 text-xs text-theme-text-muted ${isQuantity ? '' : 'ml-6'}`}>
-                {item.description}
-              </p>
+              <p className={`text-theme-text-muted mt-0.5 text-xs ${isQuantity ? '' : 'ml-6'}`}>{item.description}</p>
             )}
             {!isQuantity && (
-              <div className="flex items-center gap-2 mt-1 ml-6">
-                <span className="text-[10px] text-theme-text-muted">
+              <div className="mt-1 ml-6 flex items-center gap-2">
+                <span className="text-theme-text-muted text-[10px]">
                   {CHECK_TYPE_LABELS[item.checkType] ?? item.checkType}
                 </span>
               </div>
@@ -1453,7 +1374,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 <img
                   src={item.imageUrl}
                   alt={`Reference: ${item.name}`}
-                  className="rounded-md border border-theme-surface-border max-h-28 w-auto object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                  className="border-theme-surface-border max-h-28 w-auto cursor-pointer rounded-md border object-contain transition-opacity hover:opacity-80"
                   onClick={(e) => {
                     e.stopPropagation();
                     window.open(item.imageUrl, '_blank', 'noopener');
@@ -1474,7 +1395,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             type="button"
             onClick={() => toggleNotes(item.id)}
             aria-expanded={showNotesField}
-            className="flex items-center gap-1 text-xs text-theme-text-muted hover:text-theme-text-secondary transition-colors min-h-[36px]"
+            className="text-theme-text-muted hover:text-theme-text-secondary flex min-h-[36px] items-center gap-1 text-xs transition-colors"
           >
             <MessageSquare className="h-3 w-3" aria-hidden="true" />
             {showNotesField ? 'Hide' : 'Note'}
@@ -1483,27 +1404,26 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             type="button"
             onClick={() => togglePhotos(item.id)}
             aria-expanded={expandedPhotos.has(item.id)}
-            className={`flex items-center gap-1 text-xs transition-colors min-h-[36px] ${
+            className={`flex min-h-[36px] items-center gap-1 text-xs transition-colors ${
               (result?.photoFiles?.length ?? 0) > 0
-                ? 'text-blue-600 font-medium'
+                ? 'font-medium text-blue-600'
                 : 'text-theme-text-muted hover:text-theme-text-secondary'
             }`}
           >
             <Camera className="h-3 w-3" aria-hidden="true" />
             Photo
             {(result?.photoFiles?.length ?? 0) > 0 && (
-              <span className="text-[10px]">
-                ({result?.photoFiles?.length})
-              </span>
+              <span className="text-[10px]">({result?.photoFiles?.length})</span>
             )}
           </button>
           {item.inventoryItemId &&
-            (getExpirationStatus(item) === 'expired' ||
-              getExpirationStatus(item) === 'expiring_soon') && (
+            (getExpirationStatus(item) === 'expired' || getExpirationStatus(item) === 'expiring_soon') && (
               <button
                 type="button"
-                onClick={() => { void openSwap(item); }}
-                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors min-h-[36px] font-medium"
+                onClick={() => {
+                  void openSwap(item);
+                }}
+                className="flex min-h-[36px] items-center gap-1 text-xs font-medium text-blue-600 transition-colors hover:text-blue-700"
               >
                 <Repeat className="h-3 w-3" aria-hidden="true" />
                 Swap
@@ -1513,7 +1433,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         {showNotesField && (
           <textarea
             rows={2}
-            className="w-full rounded-lg border border-theme-surface-border px-3 py-2 text-sm bg-theme-surface text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
             placeholder="Notes for this item..."
             aria-label={`Notes for ${item.name}`}
             value={result?.notes ?? ''}
@@ -1524,20 +1444,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           <div className="space-y-2">
             {/* Photo thumbnails */}
             {result?.photoUrls && result.photoUrls.length > 0 && (
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex flex-wrap gap-2">
                 {result.photoUrls.map((url, idx) => (
-                  <div key={idx} className="relative group">
+                  <div key={idx} className="group relative">
                     <img
                       src={url}
                       alt={`Photo ${idx + 1}`}
                       loading="lazy"
                       decoding="async"
-                      className="w-16 h-16 rounded-lg object-cover border border-theme-surface-border"
+                      className="border-theme-surface-border h-16 w-16 rounded-lg border object-cover"
                     />
                     <button
                       type="button"
                       onClick={() => removePhoto(item.id, idx)}
-                      className="absolute -top-2 -right-2 w-7 h-7 sm:w-6 sm:h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-500"
+                      className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-sm text-white opacity-100 transition-opacity focus:opacity-100 focus:ring-2 focus:ring-red-500 focus:ring-offset-1 focus:outline-none sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
                       aria-label={`Remove photo ${idx + 1}`}
                     >
                       &times;
@@ -1562,10 +1482,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 />
                 <button
                   type="button"
-                  onClick={() =>
-                    photoInputRefs.current[item.id]?.click()
-                  }
-                  className="flex items-center gap-1.5 rounded-lg border border-dashed border-theme-surface-border px-3 py-2 text-xs text-theme-text-muted hover:border-blue-500 hover:text-blue-600 transition-colors min-h-[40px]"
+                  onClick={() => photoInputRefs.current[item.id]?.click()}
+                  className="border-theme-surface-border text-theme-text-muted flex min-h-[40px] items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-xs transition-colors hover:border-blue-500 hover:text-blue-600"
                 >
                   <Camera className="h-3.5 w-3.5" aria-hidden="true" />
                   Add photo (max 3)
@@ -1583,8 +1501,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const renderFlatView = () => {
-    const sections: { header?: typeof compartments[number]; comps: { comp: typeof compartments[number]; idx: number }[] }[] = [];
-    let currentSection: typeof sections[number] = { comps: [] };
+    const sections: {
+      header?: (typeof compartments)[number];
+      comps: { comp: (typeof compartments)[number]; idx: number }[];
+    }[] = [];
+    let currentSection: (typeof sections)[number] = { comps: [] };
 
     compartments.forEach((comp, idx) => {
       if (comp.isHeader) {
@@ -1605,12 +1526,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         {sections.map((section, sIdx) => (
           <div key={section.header?.id ?? `section-${sIdx}`} className="space-y-3">
             {section.header && (
-              <div className="border-b border-theme-surface-border pb-1 pt-2">
-                <h3 className="text-sm font-bold text-theme-text-primary">
-                  {section.header.name}
-                </h3>
+              <div className="border-theme-surface-border border-b pt-2 pb-1">
+                <h3 className="text-theme-text-primary text-sm font-bold">{section.header.name}</h3>
                 {section.header.description && (
-                  <p className="text-[10px] text-theme-text-muted mt-0.5">{section.header.description}</p>
+                  <p className="text-theme-text-muted mt-0.5 text-[10px]">{section.header.description}</p>
                 )}
               </div>
             )}
@@ -1635,25 +1554,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     aria-label={`${comp.name}, ${checked} of ${checkable.length} checked, ${STATUS_LABELS[status] ?? ''}`}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-base leading-tight">
-                          {comp.name}
-                        </p>
-                        {comp.description && (
-                          <p className="text-xs mt-0.5 opacity-75 truncate">
-                            {comp.description}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2 mt-1">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-base leading-tight font-bold">{comp.name}</p>
+                        {comp.description && <p className="mt-0.5 truncate text-xs opacity-75">{comp.description}</p>}
+                        <div className="mt-1 flex items-center gap-2">
                           <span className="text-xs opacity-75">
                             {checked}/{checkable.length} checked
                           </span>
-                          {status === 'complete' && (
-                            <CheckCircle className="h-4 w-4" aria-hidden="true" />
-                          )}
-                          {status === 'has_failures' && (
-                            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-                          )}
+                          {status === 'complete' && <CheckCircle className="h-4 w-4" aria-hidden="true" />}
+                          {status === 'has_failures' && <AlertTriangle className="h-4 w-4" aria-hidden="true" />}
                         </div>
                       </div>
                       {isCollapsed ? (
@@ -1666,15 +1575,22 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
                   {/* Items — visible when expanded */}
                   {!isCollapsed && (
-                    <div className="space-y-3 mt-3 ml-1">
+                    <div className="mt-3 ml-1 space-y-3">
                       {/* Pass All / Set All to Par */}
                       {!previewMode && checked < checkable.length && (
                         <div className="flex justify-end">
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); passAllInCompartment(comp); }}
-                            aria-label={hasQuantityItems(comp) ? `Set all items in ${comp.name} to par` : `Mark all items in ${comp.name} as passed`}
-                            className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 transition-colors whitespace-nowrap min-h-[40px]"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              passAllInCompartment(comp);
+                            }}
+                            aria-label={
+                              hasQuantityItems(comp)
+                                ? `Set all items in ${comp.name} to par`
+                                : `Mark all items in ${comp.name} as passed`
+                            }
+                            className="flex min-h-[40px] items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium whitespace-nowrap text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400"
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                             {hasQuantityItems(comp) ? 'Set All to Par' : 'Pass All'}
@@ -1683,7 +1599,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       )}
 
                       {comp.items.length === 0 && (
-                        <p className="text-sm text-theme-text-muted italic py-4 text-center">
+                        <p className="text-theme-text-muted py-4 text-center text-sm italic">
                           No items in this compartment.
                         </p>
                       )}
@@ -1700,13 +1616,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         {!previewMode && (
           <div className="space-y-3 pt-2">
             <div>
-              <label htmlFor="overall-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">
+              <label htmlFor="overall-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
                 Overall Notes
               </label>
               <textarea
                 id="overall-notes"
                 rows={3}
-                className="w-full rounded-lg border border-theme-surface-border px-3 py-2 text-sm bg-theme-surface text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border-theme-surface-border bg-theme-surface text-theme-text-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 placeholder="Any overall notes or observations..."
                 value={overallNotes}
                 onChange={(e) => setOverallNotes(e.target.value)}
@@ -1717,7 +1633,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               type="button"
               onClick={() => void handleSubmit()}
               disabled={submitting || !allRequiredChecked}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[52px]"
+              className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? (
                 <>
@@ -1726,19 +1642,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 </>
               ) : (
                 <>
-                  {isOnline ? (
-                    <CheckCircle className="h-4 w-4" />
-                  ) : (
-                    <WifiOff className="h-4 w-4" />
-                  )}
+                  {isOnline ? <CheckCircle className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
                   {isOnline ? 'Submit Report' : 'Save Offline'}
                 </>
               )}
             </button>
 
             {!allRequiredChecked && (
-              <p className="text-xs text-center text-theme-text-muted">
-                <AlertTriangle className="inline h-3 w-3 mr-1" />
+              <p className="text-theme-text-muted text-center text-xs">
+                <AlertTriangle className="mr-1 inline h-3 w-3" />
                 All required items must be checked before submitting.
               </p>
             )}
@@ -1753,7 +1665,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 pb-12 px-3">
+    <div className="mx-auto max-w-lg space-y-4 px-3 pb-12">
       {/* Offline banner */}
       {!isOnline && !previewMode && (
         <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-800 dark:text-yellow-300">
@@ -1767,19 +1679,17 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         <div className="flex items-center justify-between gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-800 dark:text-blue-300">
           <span className="flex items-center gap-2">
             {syncStatus === 'syncing' ? (
-              <RefreshCw className="h-4 w-4 animate-spin flex-shrink-0" />
+              <RefreshCw className="h-4 w-4 flex-shrink-0 animate-spin" />
             ) : (
               <Clock className="h-4 w-4 flex-shrink-0" />
             )}
-            {syncStatus === 'syncing'
-              ? 'Syncing queued checks…'
-              : `${pendingQueueCount} check(s) waiting to sync`}
+            {syncStatus === 'syncing' ? 'Syncing queued checks…' : `${pendingQueueCount} check(s) waiting to sync`}
           </span>
           {isOnline && syncStatus !== 'syncing' && (
             <button
               type="button"
               onClick={() => void syncPendingChecks()}
-              className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+              className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
             >
               Sync now
             </button>
@@ -1795,23 +1705,28 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               <button
                 type="button"
                 onClick={onBack}
-                className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors"
+                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg p-2 transition-colors"
                 aria-label="Go back"
               >
                 <ArrowLeft className="h-5 w-5" aria-hidden="true" />
               </button>
             )}
-            <h1 className="text-lg font-bold text-theme-text-primary">
-              {template.name}
-            </h1>
+            <h1 className="text-theme-text-primary text-lg font-bold">{template.name}</h1>
           </div>
-          <span className="text-sm font-medium text-theme-text-secondary">
+          <span className="text-theme-text-secondary text-sm font-medium">
             {checkedItems}/{totalItems}
           </span>
         </div>
 
         {/* Progress bar */}
-        <div className="w-full bg-theme-surface-border rounded-full h-2.5 overflow-hidden" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label={`${checkedItems} of ${totalItems} items checked`}>
+        <div
+          className="bg-theme-surface-border h-2.5 w-full overflow-hidden rounded-full"
+          role="progressbar"
+          aria-valuenow={progressPercent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${checkedItems} of ${totalItems} items checked`}
+        >
           <div
             className={`h-full rounded-full transition-all duration-300 ${
               progressPercent === 100 ? 'bg-green-500' : 'bg-blue-500'
@@ -1826,62 +1741,55 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
       {/* Lot swap modal — pick a ready replacement to put on the apparatus */}
       {swapTarget && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
-          <div className="w-full sm:max-w-md bg-theme-surface rounded-t-2xl sm:rounded-2xl border border-theme-surface-border shadow-xl max-h-[85dvh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between border-b border-theme-surface-border px-4 py-3">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+          <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
+            <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-theme-text-primary truncate">
-                  Swap in fresh stock
-                </h3>
-                <p className="text-xs text-theme-text-muted truncate">{swapTarget.name}</p>
+                <h3 className="text-theme-text-primary truncate text-sm font-semibold">Swap in fresh stock</h3>
+                <p className="text-theme-text-muted truncate text-xs">{swapTarget.name}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setSwapTarget(null)}
-                className="p-1.5 text-theme-text-muted hover:text-theme-text-primary"
+                className="text-theme-text-muted hover:text-theme-text-primary p-1.5"
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="overflow-auto px-4 py-3 space-y-2">
+            <div className="space-y-2 overflow-auto px-4 py-3">
               {swapLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-theme-text-muted" />
+                  <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
                 </div>
               ) : swapLots.length === 0 ? (
-                <p className="py-8 text-center text-sm text-theme-text-muted">
-                  No ready stock on hand. Ask the supply officer to add stock for
-                  this item.
+                <p className="text-theme-text-muted py-8 text-center text-sm">
+                  No ready stock on hand. Ask the supply officer to add stock for this item.
                 </p>
               ) : (
                 swapLots.map((lot) => (
                   <div
                     key={lot.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-theme-surface-border p-3"
+                    className="border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border p-3"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-theme-text-primary truncate">
+                      <p className="text-theme-text-primary truncate text-sm font-medium">
                         {lot.lot_number || 'No lot #'}
                       </p>
-                      <p className="text-xs text-theme-text-muted">
-                        {lot.expiration_date
-                          ? `Exp ${formatDate(lot.expiration_date, tz)}`
-                          : 'No expiration'}{' '}
-                        · {lot.quantity} ready
+                      <p className="text-theme-text-muted text-xs">
+                        {lot.expiration_date ? `Exp ${formatDate(lot.expiration_date, tz)}` : 'No expiration'} ·{' '}
+                        {lot.quantity} ready
                       </p>
                     </div>
                     <button
                       type="button"
                       disabled={swapping}
-                      onClick={() => { void doSwap(lot); }}
-                      className="btn-primary btn-sm inline-flex items-center gap-1 disabled:opacity-50 shrink-0"
+                      onClick={() => {
+                        void doSwap(lot);
+                      }}
+                      className="btn-primary btn-sm inline-flex shrink-0 items-center gap-1 disabled:opacity-50"
                     >
-                      {swapping ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <PackageCheck className="h-4 w-4" />
-                      )}
+                      {swapping ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
                       Swap in
                     </button>
                   </div>

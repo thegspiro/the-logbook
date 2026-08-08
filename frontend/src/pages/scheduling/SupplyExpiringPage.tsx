@@ -91,9 +91,7 @@ const SupplyExpiringPage: React.FC = () => {
       });
     } else {
       // Soonest first (expired items sort to the top via negative days).
-      sorted.sort(
-        (a, b) => (a.daysUntilExpiration ?? 0) - (b.daysUntilExpiration ?? 0),
-      );
+      sorted.sort((a, b) => (a.daysUntilExpiration ?? 0) - (b.daysUntilExpiration ?? 0));
     }
     return sorted;
   }, [items, filter, sortBy]);
@@ -133,24 +131,22 @@ const SupplyExpiringPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">Expiring on Apparatus</h1>
-          <p className="text-sm text-theme-text-muted mt-0.5">
+          <h1 className="text-theme-text-primary text-2xl font-bold">Expiring on Apparatus</h1>
+          <p className="text-theme-text-muted mt-0.5 text-sm">
             Items nearing expiration on the trucks, with ready replacement stock.
           </p>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-theme-surface-border p-1">
+        <div className="border-theme-surface-border flex items-center gap-1 rounded-lg border p-1">
           {WINDOW_OPTIONS.map((w) => (
             <button
               key={w}
               type="button"
               onClick={() => setDaysAhead(w)}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                daysAhead === w
-                  ? 'bg-blue-600 text-white'
-                  : 'text-theme-text-muted hover:text-theme-text-primary'
+              className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                daysAhead === w ? 'bg-blue-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               {w}d
@@ -162,27 +158,27 @@ const SupplyExpiringPage: React.FC = () => {
       {!loading && items.length > 0 && (
         <>
           <div className="flex flex-wrap gap-3 text-sm">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-theme-surface border border-theme-surface-border px-3 py-1 text-theme-text-muted">
-              <Clock className="w-4 h-4" /> {items.length} expiring
+            <span className="bg-theme-surface border-theme-surface-border text-theme-text-muted inline-flex items-center gap-1.5 rounded-full border px-3 py-1">
+              <Clock className="h-4 w-4" /> {items.length} expiring
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1">
-              <PackageCheck className="w-4 h-4" /> {withStock} with ready stock
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              <PackageCheck className="h-4 w-4" /> {withStock} with ready stock
             </span>
             {withoutStock > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-3 py-1">
-                <PackageX className="w-4 h-4" /> {withoutStock} need restock
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                <PackageX className="h-4 w-4" /> {withoutStock} need restock
               </span>
             )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="tab-scroll flex items-center gap-1 rounded-lg border border-theme-surface-border p-1">
+            <div className="tab-scroll border-theme-surface-border flex items-center gap-1 rounded-lg border p-1">
               {FILTERS.map((f) => (
                 <button
                   key={f.key}
                   type="button"
                   onClick={() => setFilter(f.key)}
-                  className={`px-3 py-1 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+                  className={`rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors ${
                     filter === f.key
                       ? 'bg-theme-surface-secondary text-theme-text-primary'
                       : 'text-theme-text-muted hover:text-theme-text-primary'
@@ -192,7 +188,7 @@ const SupplyExpiringPage: React.FC = () => {
                 </button>
               ))}
             </div>
-            <label className="flex items-center gap-2 text-sm text-theme-text-muted">
+            <label className="text-theme-text-muted flex items-center gap-2 text-sm">
               Sort
               <select
                 className="form-input py-1 text-sm"
@@ -209,17 +205,17 @@ const SupplyExpiringPage: React.FC = () => {
 
       {loading ? (
         <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
-          <Loader2 className="w-7 h-7 animate-spin text-theme-text-muted" />
+          <Loader2 className="text-theme-text-muted h-7 w-7 animate-spin" />
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-theme-surface-border p-10 text-center">
-          <PackageCheck className="w-10 h-10 text-green-500 mx-auto mb-3" />
-          <p className="text-sm text-theme-text-muted">
+        <div className="border-theme-surface-border rounded-lg border border-dashed p-10 text-center">
+          <PackageCheck className="mx-auto mb-3 h-10 w-10 text-green-500" />
+          <p className="text-theme-text-muted text-sm">
             Nothing expiring in the next {daysAhead} days. All stocked up.
           </p>
         </div>
       ) : visibleItems.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-theme-surface-border p-8 text-center text-sm text-theme-text-muted">
+        <div className="border-theme-surface-border text-theme-text-muted rounded-lg border border-dashed p-8 text-center text-sm">
           No items match this filter.
         </div>
       ) : (
@@ -235,42 +231,40 @@ const SupplyExpiringPage: React.FC = () => {
                     : 'border-theme-surface-border bg-theme-surface'
                 }`}
               >
-                <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-theme-text-primary">{item.itemName}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-theme-text-primary font-semibold">{item.itemName}</span>
                       {item.isExpired ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                          <AlertTriangle className="w-3 h-3" /> Expired
+                          <AlertTriangle className="h-3 w-3" /> Expired
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
-                          <Clock className="w-3 h-3" />
+                          <Clock className="h-3 w-3" />
                           {days != null ? `${days}d left` : 'Expiring'}
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-theme-text-muted mt-1 flex-wrap">
+                    <div className="text-theme-text-muted mt-1 flex flex-wrap items-center gap-2 text-xs">
                       {item.apparatusName && (
                         <span className="inline-flex items-center gap-1">
-                          <Truck className="w-3 h-3" /> {item.apparatusName}
+                          <Truck className="h-3 w-3" /> {item.apparatusName}
                         </span>
                       )}
                       {item.compartmentName && <span>· {item.compartmentName}</span>}
-                      {item.expirationDate && (
-                        <span>· Exp {formatDate(item.expirationDate, tz)}</span>
-                      )}
+                      {item.expirationDate && <span>· Exp {formatDate(item.expirationDate, tz)}</span>}
                       {item.lotNumber && <span>· Lot {item.lotNumber}</span>}
                     </div>
                   </div>
-                  <div className="shrink-0 flex flex-col items-end gap-1.5">
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
                     {item.readyStock > 0 ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 text-sm font-medium">
-                        <PackageCheck className="w-4 h-4" /> {item.readyStock} ready
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                        <PackageCheck className="h-4 w-4" /> {item.readyStock} ready
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-3 py-1 text-sm font-medium">
-                        <PackageX className="w-4 h-4" /> No stock
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                        <PackageX className="h-4 w-4" /> No stock
                       </span>
                     )}
                     {item.inventoryItemId ? (
@@ -280,20 +274,18 @@ const SupplyExpiringPage: React.FC = () => {
                           onClick={() => openAddStock(item)}
                           className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
                         >
-                          <PackagePlus className="w-3.5 h-3.5" /> Add stock
+                          <PackagePlus className="h-3.5 w-3.5" /> Add stock
                         </button>
                         <Link
                           to={`/inventory/items/${item.inventoryItemId}`}
-                          className="inline-flex items-center gap-0.5 text-xs text-theme-text-muted hover:text-theme-text-primary"
+                          className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-0.5 text-xs"
                         >
                           Manage
-                          <ChevronRight className="w-3 h-3" />
+                          <ChevronRight className="h-3 w-3" />
                         </Link>
                       </div>
                     ) : (
-                      <span className="text-[11px] text-theme-text-muted italic">
-                        Not linked to inventory
-                      </span>
+                      <span className="text-theme-text-muted text-[11px] italic">Not linked to inventory</span>
                     )}
                   </div>
                 </div>
@@ -302,7 +294,7 @@ const SupplyExpiringPage: React.FC = () => {
                     {item.readyLots.map((lot) => (
                       <span
                         key={lot.id}
-                        className="inline-flex items-center gap-1 rounded-md border border-theme-surface-border bg-theme-surface-secondary px-2 py-0.5 text-[11px] text-theme-text-muted"
+                        className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px]"
                       >
                         {lot.lotNumber || 'No lot'} · {lot.quantity}×
                         {lot.expirationDate ? ` · ${formatDate(lot.expirationDate, tz)}` : ''}
@@ -318,23 +310,23 @@ const SupplyExpiringPage: React.FC = () => {
 
       {/* Inline add-stock modal */}
       {stockTarget && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
-          <div className="w-full sm:max-w-md bg-theme-surface rounded-t-2xl sm:rounded-2xl border border-theme-surface-border shadow-xl">
-            <div className="flex items-center justify-between border-b border-theme-surface-border px-4 py-3">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+          <div className="bg-theme-surface border-theme-surface-border w-full rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
+            <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-theme-text-primary">Add ready stock</h3>
-                <p className="text-xs text-theme-text-muted truncate">{stockTarget.itemName}</p>
+                <h3 className="text-theme-text-primary text-sm font-semibold">Add ready stock</h3>
+                <p className="text-theme-text-muted truncate text-xs">{stockTarget.itemName}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setStockTarget(null)}
-                className="p-1.5 text-theme-text-muted hover:text-theme-text-primary"
+                className="text-theme-text-muted hover:text-theme-text-primary p-1.5"
                 aria-label="Close"
               >
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="px-4 py-4 space-y-3">
+            <div className="space-y-3 px-4 py-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="form-label">Lot Number</label>
@@ -382,18 +374,10 @@ const SupplyExpiringPage: React.FC = () => {
                   onClick={() => void submitAddStock()}
                   className="btn-primary btn-sm inline-flex items-center gap-1 disabled:opacity-50"
                 >
-                  {saving ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <PackagePlus className="w-4 h-4" />
-                  )}
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
                   Add stock
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setStockTarget(null)}
-                  className="btn-secondary btn-sm"
-                >
+                <button type="button" onClick={() => setStockTarget(null)} className="btn-secondary btn-sm">
                   Cancel
                 </button>
               </div>

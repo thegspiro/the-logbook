@@ -5,10 +5,7 @@
 
 import { PasswordStrength } from '../types';
 import { MAX_AVATAR_SIZE } from '../../../constants/config';
-import {
-  isValidEmailSecure,
-  isValidPhone,
-} from './security';
+import { isValidEmailSecure, isValidPhone } from './security';
 
 /**
  * Check password strength
@@ -33,7 +30,6 @@ export const checkPasswordStrength = (password: string): PasswordStrength => {
 export const isValidEmail = (email: string): boolean => {
   return isValidEmailSecure(email);
 };
-
 
 /**
  * Validate image file
@@ -98,11 +94,9 @@ export const isValidPort = (port: number): boolean => {
   return Number.isInteger(port) && port >= 1 && port <= 65535;
 };
 
-
 /**
  * Validate phone number
  */
 export const isValidPhoneNumber = (phone: string): boolean => {
   return isValidPhone(phone);
 };
-

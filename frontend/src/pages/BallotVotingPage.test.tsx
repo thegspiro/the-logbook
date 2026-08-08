@@ -166,22 +166,15 @@ describe('BallotVotingPage', () => {
       render(<BallotVotingPage />);
 
       // Rank Bob first, Alice second
-      await user.selectOptions(
-        await screen.findByRole('combobox', { name: 'Rank for Bob Baker' }),
-        '1',
-      );
+      await user.selectOptions(await screen.findByRole('combobox', { name: 'Rank for Bob Baker' }), '1');
       await user.selectOptions(screen.getByRole('combobox', { name: 'Rank for Alice Anderson' }), '2');
 
       await user.click(screen.getByRole('button', { name: 'Submit Ballot' }));
-      expect(
-        await screen.findByText(/Ranked: 1\. Bob Baker, 2\. Alice Anderson/),
-      ).toBeInTheDocument();
+      expect(await screen.findByText(/Ranked: 1\. Bob Baker, 2\. Alice Anderson/)).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Cast Ballot' }));
 
       await waitFor(() => {
-        expect(mockSubmitBallot).toHaveBeenCalledWith('tok', [
-          { ballot_item_id: 'board', rankings: ['c2', 'c1'] },
-        ]);
+        expect(mockSubmitBallot).toHaveBeenCalledWith('tok', [{ ballot_item_id: 'board', rankings: ['c2', 'c1'] }]);
       });
     });
 

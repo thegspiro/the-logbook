@@ -7,27 +7,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import {
-  ArrowLeft,
-  Plus,
-  Trash2,
-  ChevronDown,
-  ChevronRight,
-  AlertTriangle,
-  GitBranch,
-  ArrowRight,
-} from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ChevronDown, ChevronRight, AlertTriangle, GitBranch, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useFinanceStore } from '../store/financeStore';
 import { SkeletonPage } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { EmptyState } from '@/components/ux/EmptyState';
-import {
-  ApprovalEntityType,
-  ApprovalStepType,
-  ApproverType,
-} from '../types';
+import { ApprovalEntityType, ApprovalStepType, ApproverType } from '../types';
 import type { ApprovalChain } from '../types';
 
 // =============================================================================
@@ -71,24 +58,18 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
   const sortedSteps = [...chain.steps].sort((a, b) => a.stepOrder - b.stepOrder);
 
   return (
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
       {/* Header */}
       <div className="flex items-center justify-between p-4">
-        <button
-          type="button"
-          onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-3 text-left"
-        >
+        <button type="button" onClick={() => setExpanded(!expanded)} className="flex items-center gap-3 text-left">
           {expanded ? (
-            <ChevronDown className="h-4 w-4 text-theme-text-secondary" />
+            <ChevronDown className="text-theme-text-secondary h-4 w-4" />
           ) : (
-            <ChevronRight className="h-4 w-4 text-theme-text-secondary" />
+            <ChevronRight className="text-theme-text-secondary h-4 w-4" />
           )}
           <div>
-            <h3 className="font-semibold text-theme-text-primary">
-              {chain.name}
-            </h3>
-            <div className="mt-0.5 flex items-center gap-2 text-xs text-theme-text-secondary">
+            <h3 className="text-theme-text-primary font-semibold">{chain.name}</h3>
+            <div className="text-theme-text-secondary mt-0.5 flex items-center gap-2 text-xs">
               <span>{ENTITY_TYPE_LABELS[chain.appliesTo] ?? chain.appliesTo}</span>
               {chain.minAmount != null && (
                 <>
@@ -116,13 +97,13 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
           </div>
         </button>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-theme-text-secondary">
+          <span className="text-theme-text-secondary text-xs">
             {chain.steps.length} step{chain.steps.length !== 1 ? 's' : ''}
           </span>
           <button
             type="button"
             onClick={() => onDelete(chain.id)}
-            className="rounded p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-400"
+            className="rounded p-1 text-red-500 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-500/10 dark:hover:text-red-400"
             title="Delete chain"
           >
             <Trash2 className="h-4 w-4" />
@@ -132,53 +113,45 @@ const ChainCard: React.FC<ChainCardProps> = ({ chain, onDelete }) => {
 
       {/* Steps (expanded) */}
       {expanded && (
-        <div className="border-t border-theme-surface-border p-4">
-          {chain.description && (
-            <p className="mb-3 text-sm text-theme-text-secondary">
-              {chain.description}
-            </p>
-          )}
+        <div className="border-theme-surface-border border-t p-4">
+          {chain.description && <p className="text-theme-text-secondary mb-3 text-sm">{chain.description}</p>}
 
           {sortedSteps.length === 0 ? (
-            <p className="text-sm text-theme-text-secondary">
-              No steps configured.
-            </p>
+            <p className="text-theme-text-secondary text-sm">No steps configured.</p>
           ) : (
             <div className="space-y-2">
               {sortedSteps.map((step, index) => (
                 <div key={step.id} className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20 text-xs font-bold text-red-700 dark:text-red-400">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-500/20 dark:text-red-400">
                     {step.stepOrder}
                   </div>
-                  <div className="flex-1 rounded border border-theme-surface-border p-2">
+                  <div className="border-theme-surface-border flex-1 rounded border p-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-theme-text-primary">
-                        {step.name}
-                      </span>
+                      <span className="text-theme-text-primary text-sm font-medium">{step.name}</span>
                       <span
                         className={`rounded px-1.5 py-0.5 text-xs font-medium ${
                           step.stepType === ApprovalStepType.NOTIFICATION
-                            ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400'
-                            : 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400'
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
+                            : 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400'
                         }`}
                       >
                         {STEP_TYPE_LABELS[step.stepType] ?? step.stepType}
                       </span>
                       {step.approverType && (
-                        <span className="text-xs text-theme-text-secondary">
+                        <span className="text-theme-text-secondary text-xs">
                           {APPROVER_TYPE_LABELS[step.approverType] ?? step.approverType}
                           {step.approverValue ? `: ${step.approverValue}` : ''}
                         </span>
                       )}
                     </div>
                     {step.autoApproveUnder != null && (
-                      <p className="mt-0.5 text-xs text-theme-text-secondary">
+                      <p className="text-theme-text-secondary mt-0.5 text-xs">
                         Auto-approves under {formatCurrencyWhole(step.autoApproveUnder)}
                       </p>
                     )}
                   </div>
                   {index < sortedSteps.length - 1 && (
-                    <ArrowRight className="h-3 w-3 shrink-0 text-theme-text-secondary/50" />
+                    <ArrowRight className="text-theme-text-secondary/50 h-3 w-3 shrink-0" />
                   )}
                 </div>
               ))}
@@ -275,17 +248,15 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         <div className="flex items-center gap-4">
           <Link
             to="/finance/settings"
-            className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+            className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Settings
           </Link>
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">
-            Approval Chains
-          </h1>
-          <p className="mt-1 text-sm text-theme-text-secondary">
+          <h1 className="text-theme-text-primary text-2xl font-bold">Approval Chains</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">
             Configure multi-step approval workflows for financial requests
           </p>
         </div>
@@ -300,7 +271,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
       {/* Back link */}
       <Link
         to="/finance/settings"
-        className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Settings
@@ -309,17 +280,15 @@ const ApprovalChainsSettingsPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">
-            Approval Chains
-          </h1>
-          <p className="mt-1 text-sm text-theme-text-secondary">
+          <h1 className="text-theme-text-primary text-2xl font-bold">Approval Chains</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">
             Configure multi-step approval workflows for financial requests
           </p>
         </div>
         <button
           type="button"
           onClick={() => setShowCreateForm(!showCreateForm)}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
         >
           <Plus className="h-4 w-4" />
           New Chain
@@ -328,7 +297,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -336,10 +305,8 @@ const ApprovalChainsSettingsPage: React.FC = () => {
 
       {/* Create Form */}
       {showCreateForm && (
-        <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-          <h2 className="mb-4 text-lg font-semibold text-theme-text-primary">
-            New Approval Chain
-          </h2>
+        <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">New Approval Chain</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className={labelClass}>Name *</label>
@@ -366,9 +333,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
               <select
                 className={selectClass}
                 value={formData.appliesTo}
-                onChange={(e) =>
-                  setFormData({ ...formData, appliesTo: e.target.value as ApprovalEntityType })
-                }
+                onChange={(e) => setFormData({ ...formData, appliesTo: e.target.value as ApprovalEntityType })}
               >
                 <option value={ApprovalEntityType.PURCHASE_REQUEST}>Purchase Requests</option>
                 <option value={ApprovalEntityType.EXPENSE_REPORT}>Expense Reports</option>
@@ -384,7 +349,9 @@ const ApprovalChainsSettingsPage: React.FC = () => {
               >
                 <option value="">Any category</option>
                 {budgetCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -418,19 +385,19 @@ const ApprovalChainsSettingsPage: React.FC = () => {
                   type="checkbox"
                   checked={formData.isDefault}
                   onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
-                  className="rounded border-theme-surface-border"
+                  className="border-theme-surface-border rounded"
                 />
-                <span className="text-sm text-theme-text-primary">
+                <span className="text-theme-text-primary text-sm">
                   Set as default chain (used when no other chain matches)
                 </span>
               </label>
             </div>
           </div>
-          <div className="mt-4 flex items-center justify-end gap-3 border-t border-theme-surface-border pt-4">
+          <div className="border-theme-surface-border mt-4 flex items-center justify-end gap-3 border-t pt-4">
             <button
               type="button"
               onClick={() => setShowCreateForm(false)}
-              className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium"
             >
               Cancel
             </button>
@@ -462,11 +429,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
       ) : (
         <div className="space-y-3">
           {approvalChains.map((chain) => (
-            <ChainCard
-              key={chain.id}
-              chain={chain}
-              onDelete={(id) => void handleDelete(id)}
-            />
+            <ChainCard key={chain.id} chain={chain} onDelete={(id) => void handleDelete(id)} />
           ))}
         </div>
       )}

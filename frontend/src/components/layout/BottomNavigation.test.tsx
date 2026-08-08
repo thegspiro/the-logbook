@@ -24,7 +24,7 @@ function renderBar(props: { hidden?: boolean } = {}, initialPath = '/dashboard')
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <BottomNavigation {...props} />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 }
 
@@ -67,19 +67,13 @@ describe('BottomNavigation', () => {
 
   it('marks the active route with aria-current', () => {
     renderBar({}, '/events');
-    expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Home' })).not.toHaveAttribute('aria-current');
   });
 
   it('treats nested routes as active', () => {
     renderBar({}, '/events/abc123');
-    expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    expect(screen.getByRole('button', { name: 'Events' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('asks the drawer to open instead of navigating when More is tapped', async () => {
@@ -90,9 +84,7 @@ describe('BottomNavigation', () => {
 
     await user.click(screen.getByText('More'));
 
-    expect(listener).toHaveBeenCalledWith(
-      expect.objectContaining({ type: OPEN_MOBILE_NAV_EVENT }),
-    );
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ type: OPEN_MOBILE_NAV_EVENT }));
     expect(mockNavigate).not.toHaveBeenCalled();
     window.removeEventListener(OPEN_MOBILE_NAV_EVENT, listener);
   });

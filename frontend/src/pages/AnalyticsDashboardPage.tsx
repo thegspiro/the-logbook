@@ -42,7 +42,9 @@ const AnalyticsDashboardPage: React.FC = () => {
     };
 
     void loadMetrics();
-    const interval = setInterval(() => { void loadMetrics(); }, 10000); // Refresh every 10 seconds
+    const interval = setInterval(() => {
+      void loadMetrics();
+    }, 10000); // Refresh every 10 seconds
 
     return () => {
       cancelled = true;
@@ -63,7 +65,7 @@ const AnalyticsDashboardPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-theme-text-secondary">Loading analytics...</div>
       </div>
     );
@@ -71,12 +73,15 @@ const AnalyticsDashboardPage: React.FC = () => {
 
   if (error || !metrics) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <p className="text-red-700 dark:text-red-400 mb-4">{error || 'No analytics data available'}</p>
+          <p className="mb-4 text-red-700 dark:text-red-400">{error || 'No analytics data available'}</p>
           <button
-            onClick={() => { setLoading(true); setError(null); }}
-            className="btn-primary font-medium rounded-md text-sm"
+            onClick={() => {
+              setLoading(true);
+              setError(null);
+            }}
+            className="btn-primary rounded-md text-sm font-medium"
           >
             Retry
           </button>
@@ -86,50 +91,52 @@ const AnalyticsDashboardPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen max-w-7xl mx-auto p-6">
+    <div className="mx-auto min-h-screen max-w-7xl p-6">
       {/* Header */}
-      <div className="mb-6 flex justify-between items-start">
+      <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-theme-text-primary">QR Code Analytics</h1>
+          <h1 className="text-theme-text-primary text-3xl font-bold">QR Code Analytics</h1>
           <p className="text-theme-text-secondary mt-1">
             {eventId ? 'Event-specific metrics' : 'Platform-wide metrics'}
           </p>
         </div>
         <button
-          onClick={() => { void exportData(); }}
-          className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-700 dark:text-blue-400 bg-theme-surface hover:bg-theme-surface-hover"
+          onClick={() => {
+            void exportData();
+          }}
+          className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-400"
         >
           Export Data
         </button>
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <div className="text-theme-text-muted text-sm font-medium mb-1">Total Scans</div>
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <div className="text-theme-text-muted mb-1 text-sm font-medium">Total Scans</div>
           <div className="text-3xl font-bold text-blue-600">{metrics.totalScans}</div>
         </div>
 
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <div className="text-theme-text-muted text-sm font-medium mb-1">Successful Check-Ins</div>
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <div className="text-theme-text-muted mb-1 text-sm font-medium">Successful Check-Ins</div>
           <div className="text-3xl font-bold text-green-600">{metrics.successfulCheckIns}</div>
         </div>
 
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <div className="text-theme-text-muted text-sm font-medium mb-1">Success Rate</div>
-          <div className="text-3xl font-bold text-theme-text-primary">{metrics.successRate}%</div>
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <div className="text-theme-text-muted mb-1 text-sm font-medium">Success Rate</div>
+          <div className="text-theme-text-primary text-3xl font-bold">{metrics.successRate}%</div>
         </div>
 
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <div className="text-theme-text-muted text-sm font-medium mb-1">Avg Time to Check-In</div>
-          <div className="text-3xl font-bold text-theme-text-primary">{metrics.avgTimeToCheckIn}s</div>
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <div className="text-theme-text-muted mb-1 text-sm font-medium">Avg Time to Check-In</div>
+          <div className="text-theme-text-primary text-3xl font-bold">{metrics.avgTimeToCheckIn}s</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Device Breakdown */}
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Device Breakdown</h2>
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Device Breakdown</h2>
           <div className="space-y-3">
             {Object.entries(metrics.deviceBreakdown || {}).map(([device, count]) => {
               const total = Object.values(metrics.deviceBreakdown || {}).reduce((a, b) => a + b, 0);
@@ -143,9 +150,9 @@ const AnalyticsDashboardPage: React.FC = () => {
                       {count} ({Math.round(percentage)}%)
                     </span>
                   </div>
-                  <div className="w-full bg-theme-surface-secondary rounded-full h-2">
+                  <div className="bg-theme-surface-secondary h-2 w-full rounded-full">
                     <div
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      className="h-2 rounded-full bg-blue-600 transition-all duration-300"
                       style={{ width: `${percentage}%` }}
                     ></div>
                   </div>
@@ -156,12 +163,12 @@ const AnalyticsDashboardPage: React.FC = () => {
         </div>
 
         {/* Error Breakdown */}
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Error Breakdown</h2>
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Error Breakdown</h2>
           {Object.keys(metrics.errorBreakdown).length === 0 ? (
-            <div className="text-center py-8 text-theme-text-muted">
+            <div className="text-theme-text-muted py-8 text-center">
               <svg
-                className="mx-auto h-12 w-12 text-green-700 dark:text-green-400 mb-2"
+                className="mx-auto mb-2 h-12 w-12 text-green-700 dark:text-green-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -180,9 +187,9 @@ const AnalyticsDashboardPage: React.FC = () => {
               {Object.entries(metrics.errorBreakdown)
                 .sort(([, a], [, b]) => b - a)
                 .map(([errorType, count]) => (
-                  <div key={errorType} className="flex justify-between items-center">
-                    <span className="text-sm text-theme-text-secondary truncate flex-1">{errorType}</span>
-                    <span className="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400 rounded-sm text-xs font-semibold ml-2">
+                  <div key={errorType} className="flex items-center justify-between">
+                    <span className="text-theme-text-secondary flex-1 truncate text-sm">{errorType}</span>
+                    <span className="ml-2 rounded-sm bg-red-100 px-2 py-1 text-xs font-semibold text-red-800 dark:bg-red-500/20 dark:text-red-400">
                       {count}
                     </span>
                   </div>
@@ -193,21 +200,21 @@ const AnalyticsDashboardPage: React.FC = () => {
       </div>
 
       {/* Hourly Activity */}
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Activity by Hour</h2>
-        <div className="flex items-end justify-between gap-1 h-48">
+      <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
+        <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Activity by Hour</h2>
+        <div className="flex h-48 items-end justify-between gap-1">
           {(metrics.hourlyActivity || []).map(({ hour, count }) => {
-            const maxCount = Math.max(...(metrics.hourlyActivity || []).map(h => h.count), 1);
+            const maxCount = Math.max(...(metrics.hourlyActivity || []).map((h) => h.count), 1);
             const heightPercent = (count / maxCount) * 100;
 
             return (
-              <div key={hour} className="flex-1 flex flex-col items-center">
+              <div key={hour} className="flex flex-1 flex-col items-center">
                 <div
-                  className="w-full bg-blue-600 hover:bg-blue-700 rounded-t cursor-pointer transition-all"
+                  className="w-full cursor-pointer rounded-t bg-blue-600 transition-all hover:bg-blue-700"
                   style={{ height: `${heightPercent}%` }}
                   title={`${hour}:00 - ${count} events`}
                 ></div>
-                <div className="text-xs text-theme-text-muted mt-1">{hour}</div>
+                <div className="text-theme-text-muted mt-1 text-xs">{hour}</div>
               </div>
             );
           })}
@@ -216,26 +223,22 @@ const AnalyticsDashboardPage: React.FC = () => {
 
       {/* Check-In Trends */}
       {(metrics.checkInTrends || []).length > 0 && (
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-theme-text-primary mb-4">
-            Check-In Trends (Last 24 Hours)
-          </h2>
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Check-In Trends (Last 24 Hours)</h2>
           <div className="overflow-x-auto">
-            <div className="flex items-end gap-2 min-w-max h-32">
+            <div className="flex h-32 min-w-max items-end gap-2">
               {(metrics.checkInTrends || []).map(({ time, count }, index) => {
-                const maxCount = Math.max(...(metrics.checkInTrends || []).map(t => t.count), 1);
+                const maxCount = Math.max(...(metrics.checkInTrends || []).map((t) => t.count), 1);
                 const heightPercent = (count / maxCount) * 100;
 
                 return (
                   <div key={index} className="flex flex-col items-center">
                     <div
-                      className="w-8 bg-green-600 hover:bg-green-700 rounded-t cursor-pointer transition-all"
+                      className="w-8 cursor-pointer rounded-t bg-green-600 transition-all hover:bg-green-700"
                       style={{ height: `${heightPercent}px` }}
                       title={`${formatTime(time, tz)} - ${count} check-ins`}
                     ></div>
-                    <div className="text-xs text-theme-text-muted mt-1 whitespace-nowrap">
-                      {formatTime(time, tz)}
-                    </div>
+                    <div className="text-theme-text-muted mt-1 text-xs whitespace-nowrap">{formatTime(time, tz)}</div>
                   </div>
                 );
               })}

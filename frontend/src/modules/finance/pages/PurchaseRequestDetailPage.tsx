@@ -30,11 +30,7 @@ import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { formatCurrency } from '@/utils/currencyFormatting';
-import {
-  PurchaseRequestStatus,
-  PURCHASE_REQUEST_STATUS_COLORS,
-  APPROVAL_STEP_STATUS_COLORS,
-} from '../types';
+import { PurchaseRequestStatus, PURCHASE_REQUEST_STATUS_COLORS, APPROVAL_STEP_STATUS_COLORS } from '../types';
 
 // =============================================================================
 // Status Labels
@@ -68,7 +64,7 @@ const APPROVAL_STEP_LABELS: Record<string, string> = {
 const DetailSkeleton: React.FC = () => (
   <div className="space-y-6" aria-label="Loading purchase request" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
       <div className="mb-4 flex items-center gap-3">
         <Skeleton className="h-10 w-10" rounded="lg" />
         <div className="space-y-2">
@@ -85,7 +81,7 @@ const DetailSkeleton: React.FC = () => (
         ))}
       </div>
     </div>
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
       <Skeleton className="mb-4 h-5 w-40" />
       {Array.from({ length: 3 }).map((_, i) => (
         <Skeleton key={`s-${String(i)}`} className="mb-3 h-12 w-full" />
@@ -112,13 +108,11 @@ interface ApprovalTimelineProps {
 
 const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
   const tz = useTimezone();
-  const sorted = [...steps].sort(
-    (a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0),
-  );
+  const sorted = [...steps].sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0));
 
   if (sorted.length === 0) {
     return (
-      <p className="py-4 text-center text-sm text-theme-text-secondary">
+      <p className="text-theme-text-secondary py-4 text-center text-sm">
         No approval steps configured for this request.
       </p>
     );
@@ -140,13 +134,9 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
         return (
           <div key={step.id} className="relative flex gap-4 pb-6">
             {/* Vertical line */}
-            {!isLast && (
-              <div className="absolute left-4 top-8 h-full w-0.5 bg-theme-surface-border" />
-            )}
+            {!isLast && <div className="bg-theme-surface-border absolute top-8 left-4 h-full w-0.5" />}
             {/* Icon */}
-            <div
-              className={`z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconColor}`}
-            >
+            <div className={`z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${iconColor}`}>
               {step.status === 'approved' || step.status === 'auto_approved' ? (
                 <CheckCircle className="h-4 w-4" />
               ) : step.status === 'denied' ? (
@@ -160,7 +150,7 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
             {/* Content */}
             <div className="flex-1 pt-0.5">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-theme-text-primary">
+                <span className="text-theme-text-primary text-sm font-medium">
                   {step.stepName ?? `Step ${String((step.stepOrder ?? 0) + 1)}`}
                 </span>
                 <span
@@ -170,15 +160,9 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ steps }) => {
                 </span>
               </div>
               {step.actedAt && (
-                <p className="mt-0.5 text-xs text-theme-text-secondary">
-                  {formatDateTime(step.actedAt, tz)}
-                </p>
+                <p className="text-theme-text-secondary mt-0.5 text-xs">{formatDateTime(step.actedAt, tz)}</p>
               )}
-              {step.notes && (
-                <p className="mt-1 text-sm text-theme-text-secondary">
-                  {step.notes}
-                </p>
-              )}
+              {step.notes && <p className="text-theme-text-secondary mt-1 text-sm">{step.notes}</p>}
             </div>
           </div>
         );
@@ -269,7 +253,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/purchase-requests"
-          className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Purchase Requests
@@ -285,7 +269,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
         <Breadcrumbs />
         <Link
           to="/finance/purchase-requests"
-          className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+          className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Purchase Requests
@@ -304,16 +288,14 @@ const PurchaseRequestDetailPage: React.FC = () => {
   const canMarkOrdered = pr.status === PurchaseRequestStatus.APPROVED;
   const canMarkReceived = pr.status === PurchaseRequestStatus.ORDERED;
   const canMarkPaid = pr.status === PurchaseRequestStatus.RECEIVED;
-  const canCancel =
-    pr.status !== PurchaseRequestStatus.PAID &&
-    pr.status !== PurchaseRequestStatus.CANCELLED;
+  const canCancel = pr.status !== PurchaseRequestStatus.PAID && pr.status !== PurchaseRequestStatus.CANCELLED;
 
   return (
     <div className="space-y-6">
       {/* Back link */}
       <Link
         to="/finance/purchase-requests"
-        className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+        className="text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Purchase Requests
@@ -321,38 +303,32 @@ const PurchaseRequestDetailPage: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-500/10 dark:border-red-500/30 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
       )}
 
       {/* Request Header */}
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-theme-text-primary">
-                {pr.title}
-              </h1>
+              <h1 className="text-theme-text-primary text-xl font-bold">{pr.title}</h1>
               <span
                 className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${PURCHASE_REQUEST_STATUS_COLORS[pr.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
               >
                 {STATUS_LABELS[pr.status] ?? pr.status}
               </span>
             </div>
-            <p className="mt-1 text-sm text-theme-text-secondary">
-              {pr.requestNumber}
-            </p>
+            <p className="text-theme-text-secondary mt-1 text-sm">{pr.requestNumber}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {canEdit && (
               <button
                 type="button"
-                onClick={() =>
-                  void navigate(`/finance/purchase-requests/${pr.id}/edit`)
-                }
-                className="inline-flex items-center gap-1.5 rounded-lg border border-theme-surface-border px-3 py-1.5 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
+                onClick={() => void navigate(`/finance/purchase-requests/${pr.id}/edit`)}
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium"
               >
                 <Edit className="h-3.5 w-3.5" />
                 Edit
@@ -414,74 +390,52 @@ const PurchaseRequestDetailPage: React.FC = () => {
         {/* Details grid */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           <div>
-            <p className="text-xs text-theme-text-secondary">
-              Estimated Amount
-            </p>
-            <p className="text-sm font-semibold text-theme-text-primary">
-              {formatCurrency(pr.estimatedAmount)}
-            </p>
+            <p className="text-theme-text-secondary text-xs">Estimated Amount</p>
+            <p className="text-theme-text-primary text-sm font-semibold">{formatCurrency(pr.estimatedAmount)}</p>
           </div>
           {pr.actualAmount != null && (
             <div>
-              <p className="text-xs text-theme-text-secondary">Actual Amount</p>
-              <p className="text-sm font-semibold text-theme-text-primary">
-                {formatCurrency(pr.actualAmount)}
-              </p>
+              <p className="text-theme-text-secondary text-xs">Actual Amount</p>
+              <p className="text-theme-text-primary text-sm font-semibold">{formatCurrency(pr.actualAmount)}</p>
             </div>
           )}
           <div>
-            <p className="text-xs text-theme-text-secondary">Vendor</p>
-            <p className="text-sm text-theme-text-primary">
-              {pr.vendor ?? '--'}
-            </p>
+            <p className="text-theme-text-secondary text-xs">Vendor</p>
+            <p className="text-theme-text-primary text-sm">{pr.vendor ?? '--'}</p>
           </div>
           <div>
-            <p className="text-xs text-theme-text-secondary">Priority</p>
-            <p className="text-sm capitalize text-theme-text-primary">
-              {pr.priority}
-            </p>
+            <p className="text-theme-text-secondary text-xs">Priority</p>
+            <p className="text-theme-text-primary text-sm capitalize">{pr.priority}</p>
           </div>
           <div>
-            <p className="text-xs text-theme-text-secondary">Created</p>
-            <p className="text-sm text-theme-text-primary">
-              {formatDateTime(pr.createdAt, tz)}
-            </p>
+            <p className="text-theme-text-secondary text-xs">Created</p>
+            <p className="text-theme-text-primary text-sm">{formatDateTime(pr.createdAt, tz)}</p>
           </div>
           {pr.approvedAt && (
             <div>
-              <p className="text-xs text-theme-text-secondary">Approved</p>
-              <p className="text-sm text-theme-text-primary">
-                {formatDateTime(pr.approvedAt, tz)}
-              </p>
+              <p className="text-theme-text-secondary text-xs">Approved</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(pr.approvedAt, tz)}</p>
             </div>
           )}
           {pr.orderedAt && (
             <div>
-              <p className="text-xs text-theme-text-secondary">Ordered</p>
-              <p className="text-sm text-theme-text-primary">
-                {formatDateTime(pr.orderedAt, tz)}
-              </p>
+              <p className="text-theme-text-secondary text-xs">Ordered</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(pr.orderedAt, tz)}</p>
             </div>
           )}
           {pr.receivedAt && (
             <div>
-              <p className="text-xs text-theme-text-secondary">Received</p>
-              <p className="text-sm text-theme-text-primary">
-                {formatDateTime(pr.receivedAt, tz)}
-              </p>
+              <p className="text-theme-text-secondary text-xs">Received</p>
+              <p className="text-theme-text-primary text-sm">{formatDateTime(pr.receivedAt, tz)}</p>
             </div>
           )}
         </div>
 
         {/* Description */}
         {pr.description && (
-          <div className="mt-4 border-t border-theme-surface-border pt-4">
-            <p className="text-xs font-medium text-theme-text-secondary">
-              Description
-            </p>
-            <p className="mt-1 text-sm text-theme-text-primary">
-              {pr.description}
-            </p>
+          <div className="border-theme-surface-border mt-4 border-t pt-4">
+            <p className="text-theme-text-secondary text-xs font-medium">Description</p>
+            <p className="text-theme-text-primary mt-1 text-sm">{pr.description}</p>
           </div>
         )}
 
@@ -495,10 +449,8 @@ const PurchaseRequestDetailPage: React.FC = () => {
       </div>
 
       {/* Approval Timeline */}
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-        <h2 className="mb-4 text-lg font-semibold text-theme-text-primary">
-          Approval Timeline
-        </h2>
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+        <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Approval Timeline</h2>
         <ApprovalTimeline steps={pr.approvalSteps} />
       </div>
     </div>

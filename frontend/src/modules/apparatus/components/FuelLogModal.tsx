@@ -62,12 +62,7 @@ const inputClass =
 const labelClass = 'block text-sm font-medium text-theme-text-secondary mb-1';
 const selectClass = inputClass;
 
-export const FuelLogModal: React.FC<FuelLogModalProps> = ({
-  isOpen,
-  onClose,
-  onSaved,
-  apparatusId,
-}) => {
+export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onSaved, apparatusId }) => {
   const [f, setF] = useState<FormData>(EMPTY);
   const [saving, setSaving] = useState(false);
 
@@ -136,71 +131,125 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({
     <Modal isOpen={isOpen} onClose={onClose} title="Add Fuel Log" size="md">
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         {/* Date & Type */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Date *</label>
-            <input type="date" className={inputClass} value={f.fuelDate} onChange={(e) => up('fuelDate', e.target.value)} required />
+            <input
+              type="date"
+              className={inputClass}
+              value={f.fuelDate}
+              onChange={(e) => up('fuelDate', e.target.value)}
+              required
+            />
           </div>
           <div>
             <label className={labelClass}>Fuel Type *</label>
             <select className={selectClass} value={f.fuelType} onChange={(e) => up('fuelType', e.target.value)}>
               {FUEL_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
               ))}
             </select>
           </div>
         </div>
 
         {/* Gallons, Price, Total */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className={labelClass}>Gallons *</label>
-            <input type="number" step="0.01" min="0" className={inputClass} value={f.gallons} onChange={(e) => handleGallonsChange(e.target.value)} required />
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              className={inputClass}
+              value={f.gallons}
+              onChange={(e) => handleGallonsChange(e.target.value)}
+              required
+            />
           </div>
           <div>
             <label className={labelClass}>Price / Gallon ($)</label>
-            <input type="number" step="0.001" min="0" className={inputClass} value={f.pricePerGallon} onChange={(e) => handlePriceChange(e.target.value)} />
+            <input
+              type="number"
+              step="0.001"
+              min="0"
+              className={inputClass}
+              value={f.pricePerGallon}
+              onChange={(e) => handlePriceChange(e.target.value)}
+            />
           </div>
           <div>
             <label className={labelClass}>Total Cost ($)</label>
-            <input type="number" step="0.01" min="0" className={inputClass} value={f.totalCost} onChange={(e) => up('totalCost', e.target.value)} />
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              className={inputClass}
+              value={f.totalCost}
+              onChange={(e) => up('totalCost', e.target.value)}
+            />
           </div>
         </div>
 
         {/* Mileage & Hours */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Mileage at Fill</label>
-            <input type="number" min="0" className={inputClass} value={f.mileageAtFill} onChange={(e) => up('mileageAtFill', e.target.value)} />
+            <input
+              type="number"
+              min="0"
+              className={inputClass}
+              value={f.mileageAtFill}
+              onChange={(e) => up('mileageAtFill', e.target.value)}
+            />
           </div>
           <div>
             <label className={labelClass}>Engine Hours at Fill</label>
-            <input type="number" min="0" step="0.1" className={inputClass} value={f.hoursAtFill} onChange={(e) => up('hoursAtFill', e.target.value)} />
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              className={inputClass}
+              value={f.hoursAtFill}
+              onChange={(e) => up('hoursAtFill', e.target.value)}
+            />
           </div>
         </div>
 
         {/* Full Tank */}
         <div>
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               checked={f.isFullTank}
               onChange={(e) => up('isFullTank', e.target.checked)}
-              className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+              className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
             />
-            <span className="text-sm text-theme-text-secondary">Full tank fill-up</span>
+            <span className="text-theme-text-secondary text-sm">Full tank fill-up</span>
           </label>
         </div>
 
         {/* Station */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Station Name</label>
-            <input type="text" className={inputClass} value={f.stationName} onChange={(e) => up('stationName', e.target.value)} placeholder="Fuel station name" />
+            <input
+              type="text"
+              className={inputClass}
+              value={f.stationName}
+              onChange={(e) => up('stationName', e.target.value)}
+              placeholder="Fuel station name"
+            />
           </div>
           <div>
             <label className={labelClass}>Station Address</label>
-            <input type="text" className={inputClass} value={f.stationAddress} onChange={(e) => up('stationAddress', e.target.value)} />
+            <input
+              type="text"
+              className={inputClass}
+              value={f.stationAddress}
+              onChange={(e) => up('stationAddress', e.target.value)}
+            />
           </div>
         </div>
 
@@ -211,8 +260,12 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-theme-surface-border">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors">
+        <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+          >
             Cancel
           </button>
           <button type="submit" disabled={saving} className="btn-primary px-6 py-2">

@@ -71,7 +71,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-theme-text-secondary">Loading monitoring dashboard...</div>
       </div>
     );
@@ -79,13 +79,13 @@ const EventCheckInMonitoringPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
+      <div className="mx-auto max-w-4xl p-6">
+        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
           <p className="text-red-700 dark:text-red-300">{error}</p>
         </div>
         <Link
           to={`/events/${eventId}`}
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           ← Back to Event
         </Link>
@@ -95,11 +95,11 @@ const EventCheckInMonitoringPage: React.FC = () => {
 
   if (!stats) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="mx-auto max-w-4xl p-6">
         <p className="text-theme-text-secondary">No monitoring data available</p>
         <Link
           to={`/events/${eventId}`}
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mt-4 inline-block"
+          className="mt-4 inline-block text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           ← Back to Event
         </Link>
@@ -108,32 +108,30 @@ const EventCheckInMonitoringPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen max-w-7xl mx-auto p-6">
+    <div className="mx-auto min-h-screen max-w-7xl p-6">
       {/* Header */}
       <div className="mb-6">
         <Link
           to={`/events/${eventId}`}
-          className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mb-4 inline-block"
+          className="mb-4 inline-block text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           ← Back to Event
         </Link>
-        <div className="flex justify-between items-start">
+        <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-theme-text-primary">Check-In Monitoring</h1>
-            <p className="text-xl text-theme-text-secondary mt-1">{stats.event_name}</p>
+            <h1 className="text-theme-text-primary text-3xl font-bold">Check-In Monitoring</h1>
+            <p className="text-theme-text-secondary mt-1 text-xl">{stats.event_name}</p>
           </div>
           <div className="text-right">
-            <div className="text-sm text-theme-text-muted">
-              Last updated: {formatTime(lastUpdated, tz)}
-            </div>
+            <div className="text-theme-text-muted text-sm">Last updated: {formatTime(lastUpdated, tz)}</div>
             <div className="mt-1">
               {stats.is_check_in_active ? (
-                <span className="inline-flex items-center px-3 py-1 bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400 rounded-full text-sm font-medium">
-                  <span className="w-2 h-2 bg-green-600 rounded-full mr-2 animate-pulse"></span>
+                <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
+                  <span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-green-600"></span>
                   Check-In Active
                 </span>
               ) : (
-                <span className="inline-flex items-center px-3 py-1 bg-theme-surface text-theme-text-secondary rounded-full text-sm font-medium">
+                <span className="bg-theme-surface text-theme-text-secondary inline-flex items-center rounded-full px-3 py-1 text-sm font-medium">
                   Check-In Inactive
                 </span>
               )}
@@ -143,24 +141,22 @@ const EventCheckInMonitoringPage: React.FC = () => {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
         {/* Total Checked In */}
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <div className="text-theme-text-muted text-sm font-medium mb-1">Checked In</div>
-          <div className="text-3xl font-bold text-theme-text-primary">{stats.total_checked_in}</div>
-          <div className="text-sm text-theme-text-secondary mt-1">
-            of {stats.total_eligible_members} members
-          </div>
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <div className="text-theme-text-muted mb-1 text-sm font-medium">Checked In</div>
+          <div className="text-theme-text-primary text-3xl font-bold">{stats.total_checked_in}</div>
+          <div className="text-theme-text-secondary mt-1 text-sm">of {stats.total_eligible_members} members</div>
         </div>
 
         {/* Check-In Rate */}
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <div className="text-theme-text-muted text-sm font-medium mb-1">Check-In Rate</div>
-          <div className="text-3xl font-bold text-theme-text-primary">{stats.check_in_rate}%</div>
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <div className="text-theme-text-muted mb-1 text-sm font-medium">Check-In Rate</div>
+          <div className="text-theme-text-primary text-3xl font-bold">{stats.check_in_rate}%</div>
           <div className="mt-2">
-            <div className="w-full bg-theme-surface-secondary rounded-full h-2">
+            <div className="bg-theme-surface-secondary h-2 w-full rounded-full">
               <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                className="h-2 rounded-full bg-blue-600 transition-all duration-300"
                 style={{ width: `${Math.min(stats.check_in_rate, 100)}%` }}
               ></div>
             </div>
@@ -168,30 +164,26 @@ const EventCheckInMonitoringPage: React.FC = () => {
         </div>
 
         {/* Total RSVPs */}
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <div className="text-theme-text-muted text-sm font-medium mb-1">Total RSVPs</div>
-          <div className="text-3xl font-bold text-theme-text-primary">{stats.total_rsvps}</div>
-          <div className="text-sm text-theme-text-secondary mt-1">
-            {stats.total_checked_in} checked in
-          </div>
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <div className="text-theme-text-muted mb-1 text-sm font-medium">Total RSVPs</div>
+          <div className="text-theme-text-primary text-3xl font-bold">{stats.total_rsvps}</div>
+          <div className="text-theme-text-secondary mt-1 text-sm">{stats.total_checked_in} checked in</div>
         </div>
 
         {/* Average Check-In Time */}
-        <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <div className="text-theme-text-muted text-sm font-medium mb-1">Avg Check-In Time</div>
-          <div className="text-3xl font-bold text-theme-text-primary">
-            {stats.avg_check_in_time_minutes !== null
-              ? `${Math.round(stats.avg_check_in_time_minutes)}m`
-              : 'N/A'}
+        <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <div className="text-theme-text-muted mb-1 text-sm font-medium">Avg Check-In Time</div>
+          <div className="text-theme-text-primary text-3xl font-bold">
+            {stats.avg_check_in_time_minutes !== null ? `${Math.round(stats.avg_check_in_time_minutes)}m` : 'N/A'}
           </div>
-          <div className="text-sm text-theme-text-secondary mt-1">before event start</div>
+          <div className="text-theme-text-secondary mt-1 text-sm">before event start</div>
         </div>
       </div>
 
       {/* Event Info */}
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Event Details</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
+        <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Event Details</h2>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <span className="text-theme-text-secondary font-medium">Event Time:</span>
             <br />
@@ -211,62 +203,73 @@ const EventCheckInMonitoringPage: React.FC = () => {
       </div>
 
       {/* Recent Check-Ins */}
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-theme-text-primary">Recent Check-Ins</h2>
+      <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-theme-text-primary text-lg font-semibold">Recent Check-Ins</h2>
           {stats.last_check_in_at && (
-            <span className="text-sm text-theme-text-muted">
-              Last: {formatTimeAgo(stats.last_check_in_at)}
-            </span>
+            <span className="text-theme-text-muted text-sm">Last: {formatTimeAgo(stats.last_check_in_at)}</span>
           )}
         </div>
 
         {stats.recent_check_ins.length === 0 ? (
-          <div className="text-center py-8 text-theme-text-muted">
+          <div className="text-theme-text-muted py-8 text-center">
             No check-ins yet. Waiting for members to arrive...
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-theme-surface-border">
+            <table className="divide-theme-surface-border min-w-full divide-y">
               <thead>
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Member
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Email
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Status
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Guests
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Checked In
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-theme-surface-border">
+              <tbody className="divide-theme-surface-border divide-y">
                 {stats.recent_check_ins.map((activity) => (
                   <tr key={activity.user_id} className="hover:bg-theme-surface-hover">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-theme-text-primary">
-                        {activity.user_name}
-                      </div>
+                      <div className="text-theme-text-primary text-sm font-medium">{activity.user_name}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-theme-text-secondary">{activity.user_email}</div>
+                      <div className="text-theme-text-secondary text-sm">{activity.user_email}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
+                      <span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs leading-5 font-semibold text-green-800 dark:bg-green-500/20 dark:text-green-400">
                         {activity.rsvp_status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-secondary">
+                    <td className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
                       {activity.guest_count}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-secondary">
+                    <td className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
                       {formatTimeAgo(activity.checked_in_at)}
                     </td>
                   </tr>
@@ -278,9 +281,7 @@ const EventCheckInMonitoringPage: React.FC = () => {
       </div>
 
       {/* Auto-Refresh Indicator */}
-      <div className="mt-6 text-center text-sm text-theme-text-muted">
-        Auto-refreshing every 10 seconds
-      </div>
+      <div className="text-theme-text-muted mt-6 text-center text-sm">Auto-refreshing every 10 seconds</div>
     </div>
   );
 };

@@ -140,22 +140,27 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-theme-text-primary">Hour Categories</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-theme-text-primary text-xl font-semibold">Hour Categories</h2>
         <div className="flex gap-2">
           <button
-            onClick={() => { void handleCloseStaleSessions(); }}
-            className="flex items-center gap-2 px-3 py-2 bg-theme-surface text-theme-text-secondary rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover transition text-sm"
+            onClick={() => {
+              void handleCloseStaleSessions();
+            }}
+            className="bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition"
             title="Auto-close any sessions that exceeded their max hours limit"
           >
-            <AlertTriangle className="w-4 h-4" />
+            <AlertTriangle className="h-4 w-4" />
             Close Stale Sessions
           </button>
           <button
-            onClick={() => { resetForm(); setShowCreateForm(true); }}
-            className="btn-info flex gap-2 items-center transition"
+            onClick={() => {
+              resetForm();
+              setShowCreateForm(true);
+            }}
+            className="btn-info flex items-center gap-2 transition"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="h-4 w-4" />
             Add Category
           </button>
         </div>
@@ -166,7 +171,15 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
         <CategoryForm
           formData={formData}
           onChange={setFormData}
-          onSubmit={editingCategory ? (e) => { void handleUpdate(e); } : (e) => { void handleCreate(e); }}
+          onSubmit={
+            editingCategory
+              ? (e) => {
+                  void handleUpdate(e);
+                }
+              : (e) => {
+                  void handleCreate(e);
+                }
+          }
           isEditing={!!editingCategory}
           onCancel={resetForm}
         />
@@ -174,70 +187,69 @@ const CategoriesTab: React.FC<CategoriesTabProps> = ({ onDataReload }) => {
 
       {/* Categories List */}
       {categoriesLoading ? (
-        <div className="text-center py-8 text-theme-text-secondary">Loading categories...</div>
+        <div className="text-theme-text-secondary py-8 text-center">Loading categories...</div>
       ) : categories.length === 0 ? (
-        <div className="text-center py-12 bg-theme-surface rounded-lg">
-          <Clock className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
+        <div className="bg-theme-surface rounded-lg py-12 text-center">
+          <Clock className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-secondary mb-4">No categories yet. Load defaults or create your own.</p>
           <button
-            onClick={() => { void handleSeedDefaults(); }}
+            onClick={() => {
+              void handleSeedDefaults();
+            }}
             disabled={seeding}
-            className="btn-primary flex items-center gap-2 mx-auto text-sm"
+            className="btn-primary mx-auto flex items-center gap-2 text-sm"
           >
-            <Download className="w-4 h-4" />
+            <Download className="h-4 w-4" />
             {seeding ? 'Loading...' : 'Load Default Categories'}
           </button>
         </div>
       ) : (
         <div className="grid gap-4">
           {categories.map((cat) => (
-            <div key={cat.id} className="bg-theme-surface rounded-lg shadow-md p-4 flex items-center gap-4">
-              <div
-                className="w-4 h-4 rounded-full shrink-0"
-                style={{ backgroundColor: cat.color ?? '#6B7280' }}
-              />
-              <div className="flex-1 min-w-0">
+            <div key={cat.id} className="bg-theme-surface flex items-center gap-4 rounded-lg p-4 shadow-md">
+              <div className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: cat.color ?? '#6B7280' }} />
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-theme-text-primary">{cat.name}</h3>
+                  <h3 className="text-theme-text-primary font-semibold">{cat.name}</h3>
                   {!cat.isActive && (
-                    <span className="text-xs px-2 py-0.5 bg-red-500/20 text-red-700 dark:text-red-400 rounded-full">Inactive</span>
+                    <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
+                      Inactive
+                    </span>
                   )}
                 </div>
                 {cat.description && (
-                  <p className="text-sm text-theme-text-secondary mt-0.5 truncate">{cat.description}</p>
+                  <p className="text-theme-text-secondary mt-0.5 truncate text-sm">{cat.description}</p>
                 )}
-                <div className="flex gap-4 text-xs text-theme-text-muted mt-1">
+                <div className="text-theme-text-muted mt-1 flex gap-4 text-xs">
                   <span>Approval: {cat.requireApproval ? 'Required' : 'Auto-approve'}</span>
-                  {cat.autoApproveUnderHours && (
-                    <span>Auto-approve under {cat.autoApproveUnderHours}h</span>
-                  )}
-                  {cat.maxHoursPerSession && (
-                    <span>Max {cat.maxHoursPerSession}h/session</span>
-                  )}
+                  {cat.autoApproveUnderHours && <span>Auto-approve under {cat.autoApproveUnderHours}h</span>}
+                  {cat.maxHoursPerSession && <span>Max {cat.maxHoursPerSession}h/session</span>}
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Link
                   to={`/admin-hours/categories/${cat.id}/qr-code`}
-                  className="p-2 text-theme-text-secondary hover:text-blue-500 transition"
+                  className="text-theme-text-secondary p-2 transition hover:text-blue-500"
                   title="View QR Code"
                 >
-                  <QrCode className="w-5 h-5" />
+                  <QrCode className="h-5 w-5" />
                 </Link>
                 <button
                   onClick={() => startEdit(cat)}
-                  className="p-2 text-theme-text-secondary hover:text-blue-500 transition"
+                  className="text-theme-text-secondary p-2 transition hover:text-blue-500"
                   title="Edit"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <Pencil className="h-4 w-4" />
                 </button>
                 {cat.isActive && (
                   <button
-                    onClick={() => { void handleDelete(cat.id); }}
-                    className="p-2 text-theme-text-secondary hover:text-red-500 transition"
+                    onClick={() => {
+                      void handleDelete(cat.id);
+                    }}
+                    className="text-theme-text-secondary p-2 transition hover:text-red-500"
                     title="Deactivate"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 )}
               </div>

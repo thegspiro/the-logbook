@@ -12,14 +12,7 @@
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -51,12 +44,9 @@ import { ElectionStatus, VoteType, BallotItemType, VictoryCondition as VC } from
 // ─── Type color/icon/label maps ─────────────────────────────────
 
 const BALLOT_TYPE_COLORS: Record<string, string> = {
-  membership_approval:
-    'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30',
-  officer_election:
-    'text-purple-700 dark:text-purple-400 bg-purple-500/10 border border-purple-500/30',
-  general_vote:
-    'text-blue-700 dark:text-blue-400 bg-blue-500/10 border border-blue-500/30',
+  membership_approval: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30',
+  officer_election: 'text-purple-700 dark:text-purple-400 bg-purple-500/10 border border-purple-500/30',
+  general_vote: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border border-blue-500/30',
 };
 
 const BALLOT_TYPE_ICONS: Record<string, React.ElementType> = {
@@ -98,8 +88,7 @@ const selectClass = inputClass;
 const labelClass = 'form-label';
 
 /** Generates a unique ID for new ballot items using timestamp + random suffix. */
-const generateId = () =>
-  `item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const generateId = () => `item_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -166,14 +155,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
   onCancelDelete,
   onUpdateItem,
 }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
 
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(0);
@@ -219,7 +201,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
           {!isClosed && (
             <button
               type="button"
-              className="text-theme-text-muted shrink-0 cursor-grab active:cursor-grabbing touch-none"
+              className="text-theme-text-muted shrink-0 cursor-grab touch-none active:cursor-grabbing"
               aria-label="Drag to reorder"
               {...attributes}
               {...listeners}
@@ -229,46 +211,38 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
           )}
 
           {/* Number circle */}
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-theme-surface-hover text-sm font-bold text-theme-text-secondary">
+          <span className="bg-theme-surface-hover text-theme-text-secondary flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold">
             {index + 1}
           </span>
 
           {/* Type badge */}
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${typeColor}`}
-          >
+          <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${typeColor}`}>
             <TypeIcon className="h-3.5 w-3.5" />
             {typeLabel}
           </span>
 
           {/* From application badge */}
           {item.prospect_package_id && (
-            <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30">
+            <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
               <UserPlus className="h-3 w-3" />
               Application
             </span>
           )}
 
           {/* Title */}
-          <span className="min-w-0 flex-1 truncate font-medium text-theme-text-primary">
-            {item.title}
-          </span>
+          <span className="text-theme-text-primary min-w-0 flex-1 truncate font-medium">{item.title}</span>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex shrink-0 items-center gap-1">
             {/* Expand / collapse */}
             <button
               type="button"
               onClick={() => onToggleExpand(item.id)}
-              className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-secondary transition-colors"
+              className="text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-secondary flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md transition-colors"
               aria-expanded={isExpanded}
               aria-label={isExpanded ? 'Collapse' : 'Expand'}
             >
-              <ChevronDown
-                className={`h-4 w-4 transition-transform duration-200 ${
-                  isExpanded ? 'rotate-180' : ''
-                }`}
-              />
+              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
             </button>
 
             {/* Delete */}
@@ -280,14 +254,14 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                       type="button"
                       onClick={() => onConfirmDelete(item.id)}
                       disabled={saving}
-                      className="px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400 bg-red-500/10 border border-red-500/30 rounded-md hover:bg-red-500/20 transition-colors"
+                      className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-500/20 dark:text-red-400"
                     >
                       Confirm?
                     </button>
                     <button
                       type="button"
                       onClick={onCancelDelete}
-                      className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md text-theme-text-muted hover:bg-theme-surface-hover transition-colors"
+                      className="text-theme-text-muted hover:bg-theme-surface-hover flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md transition-colors"
                       aria-label="Cancel delete"
                     >
                       <X className="h-4 w-4" />
@@ -298,7 +272,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                     type="button"
                     onClick={() => onRequestDelete(item.id)}
                     disabled={saving}
-                    className="min-h-[36px] min-w-[36px] flex items-center justify-center rounded-md text-theme-text-muted sm:opacity-0 sm:group-hover:opacity-100 hover:text-red-600 dark:hover:text-red-400 transition-all"
+                    className="text-theme-text-muted flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md transition-all hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-red-400"
                     aria-label="Delete item"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -312,23 +286,23 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
         {/* ── Summary pills (collapsed only) ── */}
         {!isExpanded && (
           <div className="flex flex-wrap gap-1.5 px-4 pb-3 pl-[4.25rem]">
-            <span className="px-2 py-0.5 text-[11px] bg-theme-surface-secondary text-theme-text-muted rounded-md">
+            <span className="bg-theme-surface-secondary text-theme-text-muted rounded-md px-2 py-0.5 text-[11px]">
               {item.vote_type === VoteType.APPROVAL ? 'Yes/No Vote' : 'Candidate Selection'}
             </span>
-            <span className="px-2 py-0.5 text-[11px] bg-theme-surface-secondary text-theme-text-muted rounded-md">
+            <span className="bg-theme-surface-secondary text-theme-text-muted rounded-md px-2 py-0.5 text-[11px]">
               {getVoterTypeLabel(item.eligible_voter_types)}
             </span>
             {item.require_attendance && (
-              <span className="px-2 py-0.5 text-[11px] bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-md">
+              <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">
                 Attendance Req.
               </span>
             )}
             {victoryLabel ? (
-              <span className="px-2 py-0.5 text-[11px] bg-green-500/10 text-green-700 dark:text-green-400 rounded-md">
+              <span className="rounded-md bg-green-500/10 px-2 py-0.5 text-[11px] text-green-700 dark:text-green-400">
                 {victoryLabel}
               </span>
             ) : (
-              <span className="px-2 py-0.5 text-[11px] bg-theme-surface-secondary text-theme-text-muted rounded-md">
+              <span className="bg-theme-surface-secondary text-theme-text-muted rounded-md px-2 py-0.5 text-[11px]">
                 Election default
               </span>
             )}
@@ -339,10 +313,10 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
         <div
           ref={contentRef}
           style={{ height: height !== undefined ? `${height}px` : 'auto' }}
-          className="transition-[height] duration-200 ease-in-out overflow-hidden"
+          className="overflow-hidden transition-[height] duration-200 ease-in-out"
         >
-          <div className="border-t border-theme-surface-border bg-theme-surface-secondary/50 px-4 py-4 ml-12">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="border-theme-surface-border bg-theme-surface-secondary/50 ml-12 border-t px-4 py-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {/* Title */}
               <div className="sm:col-span-2">
                 <label className={labelClass}>Title</label>
@@ -382,12 +356,8 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   disabled={isClosed}
                 >
                   <option value={BallotItemType.GENERAL_VOTE}>General Vote</option>
-                  <option value={BallotItemType.MEMBERSHIP_APPROVAL}>
-                    Membership Approval
-                  </option>
-                  <option value={BallotItemType.OFFICER_ELECTION}>
-                    Officer Election
-                  </option>
+                  <option value={BallotItemType.MEMBERSHIP_APPROVAL}>Membership Approval</option>
+                  <option value={BallotItemType.OFFICER_ELECTION}>Officer Election</option>
                 </select>
               </div>
 
@@ -401,9 +371,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   disabled={isClosed}
                 >
                   <option value={VoteType.APPROVAL}>Approval (Yes/No)</option>
-                  <option value={VoteType.CANDIDATE_SELECTION}>
-                    Candidate Selection
-                  </option>
+                  <option value={VoteType.CANDIDATE_SELECTION}>Candidate Selection</option>
                 </select>
               </div>
 
@@ -434,27 +402,22 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   type="checkbox"
                   id={`attendance_${item.id}`}
                   checked={item.require_attendance ?? true}
-                  onChange={(e) =>
-                    onUpdateItem(item.id, { require_attendance: e.target.checked })
-                  }
+                  onChange={(e) => onUpdateItem(item.id, { require_attendance: e.target.checked })}
                   disabled={isClosed}
-                  className="h-4 w-4 text-red-600 rounded border-theme-input-border"
+                  className="border-theme-input-border h-4 w-4 rounded text-red-600"
                 />
-                <label
-                  htmlFor={`attendance_${item.id}`}
-                  className="text-sm text-theme-text-secondary"
-                >
+                <label htmlFor={`attendance_${item.id}`} className="text-theme-text-secondary text-sm">
                   Require meeting attendance
                 </label>
               </div>
             </div>
 
             {/* ── Approval Rules ── */}
-            <div className="mt-4 pt-4 border-t border-theme-surface-border">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-3">
+            <div className="border-theme-surface-border mt-4 border-t pt-4">
+              <h4 className="text-theme-text-muted mb-3 text-xs font-semibold tracking-wider uppercase">
                 Approval Rules
               </h4>
-              <div className="flex items-center gap-3 mb-3">
+              <div className="mb-3 flex items-center gap-3">
                 <input
                   type="checkbox"
                   id={`override_${item.id}`}
@@ -473,18 +436,15 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                     }
                   }}
                   disabled={isClosed}
-                  className="h-4 w-4 text-red-600 rounded border-theme-input-border"
+                  className="border-theme-input-border h-4 w-4 rounded text-red-600"
                 />
-                <label
-                  htmlFor={`override_${item.id}`}
-                  className="text-sm text-theme-text-secondary"
-                >
+                <label htmlFor={`override_${item.id}`} className="text-theme-text-secondary text-sm">
                   Override election default
                 </label>
               </div>
 
               {hasOverride ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className={labelClass}>Victory Condition</label>
                     <select
@@ -504,8 +464,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                       ))}
                     </select>
                   </div>
-                  {(item.victory_condition === VC.SUPERMAJORITY ||
-                    item.victory_condition === VC.THRESHOLD) && (
+                  {(item.victory_condition === VC.SUPERMAJORITY || item.victory_condition === VC.THRESHOLD) && (
                     <div>
                       <label className={labelClass}>Percentage</label>
                       <input
@@ -516,8 +475,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                         value={item.victory_percentage ?? 67}
                         onChange={(e) =>
                           onUpdateItem(item.id, {
-                            victory_percentage:
-                              parseInt(e.target.value, 10) || undefined,
+                            victory_percentage: parseInt(e.target.value, 10) || undefined,
                           })
                         }
                         disabled={isClosed}
@@ -526,12 +484,11 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-theme-text-muted">
+                <p className="text-theme-text-muted text-sm">
                   Using election default:{' '}
-                  <span className="font-medium text-theme-text-secondary">
-                    {VICTORY_CONDITION_OPTIONS.find(
-                      (o) => o.value === election.victory_condition,
-                    )?.label ?? election.victory_condition}
+                  <span className="text-theme-text-secondary font-medium">
+                    {VICTORY_CONDITION_OPTIONS.find((o) => o.value === election.victory_condition)?.label ??
+                      election.victory_condition}
                   </span>
                 </p>
               )}
@@ -551,15 +508,9 @@ interface BallotBuilderProps {
   onUpdate: (updatedElection: Election) => void;
 }
 
-export const BallotBuilder: React.FC<BallotBuilderProps> = ({
-  electionId,
-  election,
-  onUpdate,
-}) => {
+export const BallotBuilder: React.FC<BallotBuilderProps> = ({ electionId, election, onUpdate }) => {
   const [templates, setTemplates] = useState<BallotTemplate[]>([]);
-  const [ballotItems, setBallotItems] = useState<BallotItem[]>(
-    election.ballot_items || [],
-  );
+  const [ballotItems, setBallotItems] = useState<BallotItem[]>(election.ballot_items || []);
   const [saving, setSaving] = useState(false);
 
   // Template popover
@@ -581,20 +532,15 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const isClosed =
-    election.status === ElectionStatus.CLOSED ||
-    election.status === ElectionStatus.CANCELLED;
+  const isClosed = election.status === ElectionStatus.CLOSED || election.status === ElectionStatus.CANCELLED;
 
   // Positions already used by existing ballot items (one ballot item per position)
-  const usedPositions = useMemo(
-    () => new Set(ballotItems.map((item) => item.position).filter(Boolean)),
-    [ballotItems],
-  );
+  const usedPositions = useMemo(() => new Set(ballotItems.map((item) => item.position).filter(Boolean)), [ballotItems]);
 
   // Available positions that haven't been added to the ballot yet
   const availablePositions = useMemo(
     () => (election.positions || []).filter((pos) => !usedPositions.has(pos)),
-    [election.positions, usedPositions],
+    [election.positions, usedPositions]
   );
 
   // ── Sensors ──
@@ -602,7 +548,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    }),
+    })
   );
 
   // ── Load templates ──
@@ -613,10 +559,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   // Close template popover on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        templateRef.current &&
-        !templateRef.current.contains(e.target as Node)
-      ) {
+      if (templateRef.current && !templateRef.current.contains(e.target as Node)) {
         setShowTemplatePopover(false);
         setSelectedTemplate(null);
       }
@@ -653,7 +596,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
         setSaving(false);
       }
     },
-    [electionId, onUpdate],
+    [electionId, onUpdate]
   );
 
   // ── Drag handlers ──
@@ -696,9 +639,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   };
 
   const handleUpdateItem = (id: string, updates: Partial<BallotItem>) => {
-    const updated = ballotItems.map((item) =>
-      item.id === id ? { ...item, ...updates } : item,
-    );
+    const updated = ballotItems.map((item) => (item.id === id ? { ...item, ...updates } : item));
     setBallotItems(updated);
     void saveItems(updated);
   };
@@ -776,14 +717,12 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
   // ── Render ────────────────────────────────────────────────────
 
   return (
-    <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
+    <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
       {/* ── Header ── */}
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium text-theme-text-primary">
-          Ballot Items ({ballotItems.length})
-        </h3>
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-theme-text-primary text-lg font-medium">Ballot Items ({ballotItems.length})</h3>
         {!isClosed && (
-          <div className="flex gap-2 relative" ref={templateRef}>
+          <div className="relative flex gap-2" ref={templateRef}>
             {/* Template button + popover */}
             <div className="relative">
               <button
@@ -793,7 +732,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                   setSelectedTemplate(null);
                   setShowCustomForm(false);
                 }}
-                className="btn-primary rounded-md text-sm inline-flex items-center gap-1.5"
+                className="btn-primary inline-flex items-center gap-1.5 rounded-md text-sm"
               >
                 <LayoutTemplate className="h-4 w-4" />
                 Use Template
@@ -801,52 +740,39 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
 
               {/* Template popover dropdown — opens upward so it doesn't clip */}
               {showTemplatePopover && (
-                <div className="absolute right-0 bottom-full mb-2 z-30 w-[28rem] max-w-[calc(100vw-2rem)] max-h-[70dvh] overflow-y-auto bg-theme-surface-modal rounded-lg border border-theme-surface-border p-4 shadow-lg">
+                <div className="bg-theme-surface-modal border-theme-surface-border absolute right-0 bottom-full z-30 mb-2 max-h-[70dvh] w-[28rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border p-4 shadow-lg">
                   {!selectedTemplate ? (
                     <>
-                      <h4 className="text-sm font-semibold text-theme-text-primary mb-3">
-                        Select a Template
-                      </h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <h4 className="text-theme-text-primary mb-3 text-sm font-semibold">Select a Template</h4>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         {templates.map((template) => {
-                          const TIcon =
-                            BALLOT_TYPE_ICONS[template.type] ?? FileText;
-                          const tColor =
-                            BALLOT_TYPE_COLORS[template.type] ??
-                            BALLOT_TYPE_COLORS.general_vote;
+                          const TIcon = BALLOT_TYPE_ICONS[template.type] ?? FileText;
+                          const tColor = BALLOT_TYPE_COLORS[template.type] ?? BALLOT_TYPE_COLORS.general_vote;
                           return (
                             <button
                               key={template.id}
                               type="button"
                               onClick={() => handleSelectTemplate(template)}
-                              className="text-left p-3 bg-theme-surface-secondary rounded-lg border border-theme-surface-border hover:border-theme-text-muted hover:bg-theme-surface-hover transition-all"
+                              className="bg-theme-surface-secondary border-theme-surface-border hover:border-theme-text-muted hover:bg-theme-surface-hover rounded-lg border p-3 text-left transition-all"
                             >
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="mb-1 flex items-center gap-2">
                                 <span
                                   className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium ${tColor}`}
                                 >
                                   <TIcon className="h-3 w-3" />
                                 </span>
-                                <span className="font-medium text-theme-text-primary text-sm">
-                                  {template.name}
-                                </span>
+                                <span className="text-theme-text-primary text-sm font-medium">{template.name}</span>
                               </div>
-                              <p className="text-xs text-theme-text-muted mt-1">
-                                {template.description}
-                              </p>
-                              <div className="flex gap-2 mt-2 flex-wrap">
-                                <span className="px-2 py-0.5 text-[11px] bg-theme-surface text-theme-text-muted rounded-sm">
-                                  {template.vote_type === VoteType.APPROVAL
-                                    ? 'Yes/No'
-                                    : 'Candidates'}
+                              <p className="text-theme-text-muted mt-1 text-xs">{template.description}</p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <span className="bg-theme-surface text-theme-text-muted rounded-sm px-2 py-0.5 text-[11px]">
+                                  {template.vote_type === VoteType.APPROVAL ? 'Yes/No' : 'Candidates'}
                                 </span>
-                                <span className="px-2 py-0.5 text-[11px] bg-theme-surface text-theme-text-muted rounded-sm">
-                                  {getVoterTypeLabel(
-                                    template.eligible_voter_types,
-                                  )}
+                                <span className="bg-theme-surface text-theme-text-muted rounded-sm px-2 py-0.5 text-[11px]">
+                                  {getVoterTypeLabel(template.eligible_voter_types)}
                                 </span>
                                 {template.require_attendance && (
-                                  <span className="px-2 py-0.5 text-[11px] bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-sm">
+                                  <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">
                                     Attendance
                                   </span>
                                 )}
@@ -855,7 +781,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                           );
                         })}
                         {templates.length === 0 && (
-                          <p className="sm:col-span-2 text-sm text-theme-text-muted text-center py-4">
+                          <p className="text-theme-text-muted py-4 text-center text-sm sm:col-span-2">
                             No templates available.
                           </p>
                         )}
@@ -863,20 +789,14 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                     </>
                   ) : (
                     <>
-                      <h4 className="text-sm font-semibold text-theme-text-primary mb-1">
-                        {selectedTemplate.name}
-                      </h4>
-                      <p className="text-xs text-theme-text-muted mb-3">
-                        {selectedTemplate.description}
-                      </p>
+                      <h4 className="text-theme-text-primary mb-1 text-sm font-semibold">{selectedTemplate.name}</h4>
+                      <p className="text-theme-text-muted mb-3 text-xs">{selectedTemplate.description}</p>
                       <div className="space-y-3">
                         <div>
                           <label className={labelClass}>
-                            {selectedTemplate.type ===
-                            BallotItemType.MEMBERSHIP_APPROVAL
+                            {selectedTemplate.type === BallotItemType.MEMBERSHIP_APPROVAL
                               ? 'Member Name'
-                              : selectedTemplate.type ===
-                                  BallotItemType.OFFICER_ELECTION
+                              : selectedTemplate.type === BallotItemType.OFFICER_ELECTION
                                 ? 'Position Name'
                                 : 'Title / Topic'}
                           </label>
@@ -886,9 +806,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                             <>
                               <select
                                 value={templateNameInput}
-                                onChange={(e) =>
-                                  setTemplateNameInput(e.target.value)
-                                }
+                                onChange={(e) => setTemplateNameInput(e.target.value)}
                                 className={selectClass}
                                 autoFocus
                               >
@@ -909,16 +827,12 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                             <input
                               type="text"
                               value={templateNameInput}
-                              onChange={(e) =>
-                                setTemplateNameInput(e.target.value)
-                              }
+                              onChange={(e) => setTemplateNameInput(e.target.value)}
                               className={inputClass}
                               placeholder={
-                                selectedTemplate.type ===
-                                BallotItemType.MEMBERSHIP_APPROVAL
+                                selectedTemplate.type === BallotItemType.MEMBERSHIP_APPROVAL
                                   ? 'e.g., John Smith'
-                                  : selectedTemplate.type ===
-                                      BallotItemType.OFFICER_ELECTION
+                                  : selectedTemplate.type === BallotItemType.OFFICER_ELECTION
                                     ? 'e.g., Chief'
                                     : 'e.g., Approve new equipment purchase'
                               }
@@ -926,20 +840,17 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                             />
                           )}
                         </div>
-                        <div className="text-xs text-theme-text-muted">
+                        <div className="text-theme-text-muted text-xs">
                           Preview:{' '}
                           <span className="font-medium">
-                            {selectedTemplate.title_template.replace(
-                              '{name}',
-                              templateNameInput || '...',
-                            )}
+                            {selectedTemplate.title_template.replace('{name}', templateNameInput || '...')}
                           </span>
                         </div>
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => setSelectedTemplate(null)}
-                            className="px-3 py-2 text-sm border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
+                            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md border px-3 py-2 text-sm"
                           >
                             Back
                           </button>
@@ -968,7 +879,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 setShowTemplatePopover(false);
                 setSelectedTemplate(null);
               }}
-              className="btn-info rounded-md text-sm inline-flex items-center gap-1.5"
+              className="btn-info inline-flex items-center gap-1.5 rounded-md text-sm"
             >
               <PenLine className="h-4 w-4" />
               {showCustomForm ? 'Cancel' : 'Custom Item'}
@@ -980,22 +891,20 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
       {/* ── Empty state ── */}
       {ballotItems.length === 0 && !showCustomForm ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Vote className="h-12 w-12 text-theme-text-muted/50 mb-3" />
-          <h4 className="text-lg font-medium text-theme-text-secondary">
-            No ballot items yet
-          </h4>
-          <p className="text-sm text-theme-text-muted mt-1 max-w-md">
+          <Vote className="text-theme-text-muted/50 mb-3 h-12 w-12" />
+          <h4 className="text-theme-text-secondary text-lg font-medium">No ballot items yet</h4>
+          <p className="text-theme-text-muted mt-1 max-w-md text-sm">
             Add items from a template or create custom ones to build your ballot.
           </p>
           {!isClosed && (
-            <div className="flex gap-3 mt-4">
+            <div className="mt-4 flex gap-3">
               <button
                 type="button"
                 onClick={() => {
                   setShowTemplatePopover(true);
                   setShowCustomForm(false);
                 }}
-                className="btn-primary rounded-md text-sm inline-flex items-center gap-1.5"
+                className="btn-primary inline-flex items-center gap-1.5 rounded-md text-sm"
               >
                 <LayoutTemplate className="h-4 w-4" />
                 Use Template
@@ -1006,7 +915,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                   setShowCustomForm(true);
                   setShowTemplatePopover(false);
                 }}
-                className="btn-info rounded-md text-sm inline-flex items-center gap-1.5"
+                className="btn-info inline-flex items-center gap-1.5 rounded-md text-sm"
               >
                 <PenLine className="h-4 w-4" />
                 Custom Item
@@ -1024,10 +933,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
             >
-              <SortableContext
-                items={ballotItems.map((i) => i.id)}
-                strategy={verticalListSortingStrategy}
-              >
+              <SortableContext items={ballotItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-3">
                   {ballotItems.map((item, index) => (
                     <SortableBallotCard
@@ -1059,7 +965,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                 setShowCustomForm(true);
                 setShowTemplatePopover(false);
               }}
-              className="mt-3 w-full border-2 border-dashed border-theme-surface-border rounded-lg p-4 hover:border-red-500/50 transition-colors cursor-pointer flex items-center justify-center gap-2 text-sm text-theme-text-muted hover:text-theme-text-secondary"
+              className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-secondary mt-3 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed p-4 text-sm transition-colors hover:border-red-500/50"
             >
               <Plus className="h-4 w-4" />
               Add Item
@@ -1068,7 +974,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
 
           {showCustomForm && (
             <div className="card-secondary mt-3 p-4">
-              <h4 className="text-sm font-semibold text-theme-text-primary mb-3 flex items-center gap-2">
+              <h4 className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-semibold">
                 <PenLine className="h-4 w-4" />
                 Add Custom Ballot Item
               </h4>
@@ -1078,9 +984,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                   <input
                     type="text"
                     value={customForm.title || ''}
-                    onChange={(e) =>
-                      setCustomForm((prev) => ({ ...prev, title: e.target.value }))
-                    }
+                    onChange={(e) => setCustomForm((prev) => ({ ...prev, title: e.target.value }))}
                     className={inputClass}
                     placeholder="Ballot item title"
                     autoFocus
@@ -1103,7 +1007,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className={labelClass}>Item Type</label>
                     <select
@@ -1117,9 +1021,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       className={selectClass}
                     >
                       <option value="general_vote">General Vote</option>
-                      <option value="membership_approval">
-                        Membership Approval
-                      </option>
+                      <option value="membership_approval">Membership Approval</option>
                       <option value="officer_election">Officer Election</option>
                     </select>
                   </div>
@@ -1137,9 +1039,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       className={selectClass}
                     >
                       <option value="approval">Approval (Yes/No)</option>
-                      <option value="candidate_selection">
-                        Candidate Selection
-                      </option>
+                      <option value="candidate_selection">Candidate Selection</option>
                     </select>
                   </div>
                 </div>
@@ -1186,7 +1086,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                         placeholder="e.g., Chief"
                       />
                     )}
-                    <p className="mt-1 text-xs text-theme-text-muted">
+                    <p className="text-theme-text-muted mt-1 text-xs">
                       Links this ballot item to candidates running for this position.
                     </p>
                   </div>
@@ -1223,12 +1123,9 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                         require_attendance: e.target.checked,
                       }))
                     }
-                    className="h-4 w-4 text-red-600 rounded border-theme-input-border"
+                    className="border-theme-input-border h-4 w-4 rounded text-red-600"
                   />
-                  <label
-                    htmlFor="custom_require_attendance"
-                    className="text-sm text-theme-text-secondary"
-                  >
+                  <label htmlFor="custom_require_attendance" className="text-theme-text-secondary text-sm">
                     Require meeting attendance to vote
                   </label>
                 </div>
@@ -1237,7 +1134,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowCustomForm(false)}
-                    className="px-3 py-2 text-sm border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
+                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md border px-3 py-2 text-sm"
                   >
                     Cancel
                   </button>
@@ -1247,7 +1144,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       void handleAddCustom();
                     }}
                     disabled={saving || !customForm.title?.trim()}
-                    className="btn-primary rounded-md text-sm inline-flex items-center gap-2"
+                    className="btn-primary inline-flex items-center gap-2 rounded-md text-sm"
                   >
                     {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                     Add to Ballot
@@ -1261,7 +1158,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
 
       {/* Saving indicator */}
       {saving && (
-        <div className="flex items-center gap-2 mt-3 text-xs text-theme-text-muted" role="status" aria-live="polite">
+        <div className="text-theme-text-muted mt-3 flex items-center gap-2 text-xs" role="status" aria-live="polite">
           <Loader2 className="h-3 w-3 animate-spin" />
           Saving...
         </div>

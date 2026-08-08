@@ -27,11 +27,7 @@ interface BackButtonProps {
   label?: string;
 }
 
-export const BackButton: React.FC<BackButtonProps> = ({
-  to,
-  className = '',
-  label = 'Back'
-}) => {
+export const BackButton: React.FC<BackButtonProps> = ({ to, className = '', label = 'Back' }) => {
   const navigate = useNavigate();
 
   const handleClick = () => {
@@ -45,10 +41,10 @@ export const BackButton: React.FC<BackButtonProps> = ({
   return (
     <button
       onClick={handleClick}
-      className={`inline-flex items-center px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary bg-transparent border border-theme-input-border hover:border-theme-surface-border rounded-lg font-medium transition-all duration-300 ${className}`}
+      className={`text-theme-text-secondary hover:text-theme-text-primary border-theme-input-border hover:border-theme-surface-border inline-flex items-center rounded-lg border bg-transparent px-4 py-2 font-medium transition-all duration-300 ${className}`}
       aria-label={`Go back to previous step`}
     >
-      <ArrowLeft className="w-4 h-4 mr-2" />
+      <ArrowLeft className="mr-2 h-4 w-4" />
       {label}
     </button>
   );

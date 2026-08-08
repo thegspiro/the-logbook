@@ -57,46 +57,42 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-theme-text-primary text-lg font-semibold flex items-center gap-2">
-          <Eye className="w-5 h-5" />
+        <h3 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
+          <Eye className="h-5 w-5" />
           Preview
         </h3>
         <div className="flex items-center space-x-2">
           {/* Viewport toggle */}
-          <div className="flex bg-theme-surface-secondary rounded-lg p-0.5">
+          <div className="bg-theme-surface-secondary flex rounded-lg p-0.5">
             <button
               onClick={() => setViewport('desktop')}
-              className={`p-1.5 rounded-md transition-colors ${
+              className={`rounded-md p-1.5 transition-colors ${
                 viewport === 'desktop'
                   ? 'bg-orange-600 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
               title="Desktop preview"
             >
-              <Monitor className="w-4 h-4" />
+              <Monitor className="h-4 w-4" />
             </button>
             <button
               onClick={() => setViewport('mobile')}
-              className={`p-1.5 rounded-md transition-colors ${
+              className={`rounded-md p-1.5 transition-colors ${
                 viewport === 'mobile'
                   ? 'bg-orange-600 text-white'
                   : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
               title="Mobile preview"
             >
-              <Smartphone className="w-4 h-4" />
+              <Smartphone className="h-4 w-4" />
             </button>
           </div>
           <button
             onClick={() => onRefresh(selectedMemberId || undefined)}
             disabled={isPreviewing}
-            className="flex items-center space-x-1.5 px-3 py-1.5 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors disabled:opacity-50"
           >
-            {isPreviewing ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="w-3.5 h-3.5" />
-            )}
+            {isPreviewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             <span>Refresh</span>
           </button>
         </div>
@@ -104,20 +100,16 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
 
       {/* Member selector */}
       <div className="flex items-center gap-2">
-        <Users className="w-4 h-4 text-theme-text-muted shrink-0" />
+        <Users className="text-theme-text-muted h-4 w-4 shrink-0" />
         <select
           value={selectedMemberId}
           onChange={(e) => handleMemberChange(e.target.value)}
           disabled={isLoadingMembers}
-          className="flex-1 rounded-md border border-theme-surface-border bg-theme-surface px-2 py-1.5 text-xs text-theme-text-primary focus:border-theme-focus-ring focus:outline-hidden"
+          className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:border-theme-focus-ring flex-1 rounded-md border px-2 py-1.5 text-xs focus:outline-hidden"
         >
           <option value="">Sample data (default)</option>
           {members.map((m) => {
-            const name =
-              m.full_name ||
-              [m.first_name, m.last_name].filter(Boolean).join(' ') ||
-              m.email ||
-              m.id;
+            const name = m.full_name || [m.first_name, m.last_name].filter(Boolean).join(' ') || m.email || m.id;
             return (
               <option key={m.id} value={m.id}>
                 {name}
@@ -131,20 +123,20 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
       {preview && (
         <div className="card-secondary px-4 py-2">
           <span className="text-theme-text-muted text-xs font-medium uppercase">Subject:</span>
-          <p className="text-theme-text-primary text-sm mt-0.5">{preview.subject}</p>
+          <p className="text-theme-text-primary mt-0.5 text-sm">{preview.subject}</p>
         </div>
       )}
 
       {/* Email body preview */}
       <div
-        className={`bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden transition-all mx-auto ${
+        className={`bg-theme-surface border-theme-surface-border mx-auto overflow-hidden rounded-lg border transition-all ${
           viewport === 'mobile' ? 'max-w-[375px]' : 'w-full'
         }`}
       >
         {isPreviewing && !preview ? (
-          <div className="flex items-center justify-center h-[600px]">
+          <div className="flex h-[600px] items-center justify-center">
             <div className="text-center">
-              <Loader2 className="w-8 h-8 text-orange-500 animate-spin mx-auto mb-2" />
+              <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-orange-500" />
               <p className="text-theme-text-muted text-sm">Loading preview...</p>
             </div>
           </div>
@@ -157,12 +149,10 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
             sandbox="allow-same-origin"
           />
         ) : (
-          <div className="flex items-center justify-center h-[600px]">
+          <div className="flex h-[600px] items-center justify-center">
             <div className="text-center">
-              <Eye className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
-              <p className="text-theme-text-muted text-sm">
-                Click "Refresh" to generate a preview with sample data
-              </p>
+              <Eye className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+              <p className="text-theme-text-muted text-sm">Click "Refresh" to generate a preview with sample data</p>
             </div>
           </div>
         )}

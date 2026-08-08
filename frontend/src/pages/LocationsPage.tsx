@@ -11,9 +11,24 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  MapPin, Plus, Search, Building2, DoorOpen, Pencil, Trash2,
-  Loader2, X, Save, ChevronDown, ChevronUp, QrCode,
-  Building, HelpCircle, Monitor, Copy, Check,
+  MapPin,
+  Plus,
+  Search,
+  Building2,
+  DoorOpen,
+  Pencil,
+  Trash2,
+  Loader2,
+  X,
+  Save,
+  ChevronDown,
+  ChevronUp,
+  QrCode,
+  Building,
+  HelpCircle,
+  Monitor,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
@@ -95,8 +110,8 @@ interface WizardStation {
   city: string;
   state: string;
   zip: string;
-  saved?: boolean;        // true once the station is persisted
-  savedId?: string;       // id from the backend
+  saved?: boolean; // true once the station is persisted
+  savedId?: string; // id from the backend
 }
 
 interface WizardRoom {
@@ -125,7 +140,7 @@ function LocationSetupWizard({
   const [mode, setMode] = useState<'single_station' | 'multi_station' | null>(existingMode);
   const [stations, setStations] = useState<WizardStation[]>(
     existingStations.length > 0
-      ? existingStations.map(s => ({
+      ? existingStations.map((s) => ({
           name: s.name,
           address: s.address || '',
           city: s.city || '',
@@ -141,7 +156,8 @@ function LocationSetupWizard({
   const [isSaving, setIsSaving] = useState(false);
   const [roomForm, setRoomForm] = useState<WizardRoom>({ name: '', room_number: '', floor: '', capacity: '' });
 
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls =
+    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
   const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
   /* ── Step navigation ── */
@@ -157,13 +173,15 @@ function LocationSetupWizard({
         // Pre-fill from the organization's onboarding address
         try {
           const orgAddr = await organizationService.getAddress();
-          setStations([{
-            name: '',
-            address: orgAddr.address || '',
-            city: orgAddr.city || '',
-            state: orgAddr.state || '',
-            zip: orgAddr.zip || '',
-          }]);
+          setStations([
+            {
+              name: '',
+              address: orgAddr.address || '',
+              city: orgAddr.city || '',
+              state: orgAddr.state || '',
+              zip: orgAddr.zip || '',
+            },
+          ]);
         } catch {
           setStations([{ name: '', address: '', city: '', state: '', zip: '' }]);
         }
@@ -176,22 +194,25 @@ function LocationSetupWizard({
 
   /* ── Step 2: station form helpers ── */
   const updateStation = (idx: number, field: keyof WizardStation, value: string) => {
-    setStations(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
+    setStations((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: value } : s)));
   };
 
   const addAnotherStation = () => {
-    setStations(prev => [...prev, { name: '', address: '', city: '', state: '', zip: '' }]);
+    setStations((prev) => [...prev, { name: '', address: '', city: '', state: '', zip: '' }]);
   };
 
   const removeStation = (idx: number) => {
     if (stations.length <= 1) return;
-    setStations(prev => prev.filter((_, i) => i !== idx));
+    setStations((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleSaveStations = async () => {
-    const unsaved = stations.filter(s => !s.saved);
+    const unsaved = stations.filter((s) => !s.saved);
     for (const s of unsaved) {
-      if (!s.name.trim()) { toast.error('Every station needs a name'); return; }
+      if (!s.name.trim()) {
+        toast.error('Every station needs a name');
+        return;
+      }
     }
     setIsSaving(true);
     try {
@@ -224,7 +245,10 @@ function LocationSetupWizard({
   const currentRooms = roomsByStation.get(activeStationIdx) || [];
 
   const addRoom = () => {
-    if (!roomForm.name.trim()) { toast.error('Room name is required'); return; }
+    if (!roomForm.name.trim()) {
+      toast.error('Room name is required');
+      return;
+    }
     const updated = new Map(roomsByStation);
     const list = [...(updated.get(activeStationIdx) || []), { ...roomForm }];
     updated.set(activeStationIdx, list);
@@ -242,14 +266,14 @@ function LocationSetupWizard({
 
   const handleNextStation = () => {
     if (activeStationIdx < stations.length - 1) {
-      setActiveStationIdx(prev => prev + 1);
+      setActiveStationIdx((prev) => prev + 1);
       setRoomForm({ name: '', room_number: '', floor: '', capacity: '' });
     }
   };
 
   const handlePrevStation = () => {
     if (activeStationIdx > 0) {
-      setActiveStationIdx(prev => prev - 1);
+      setActiveStationIdx((prev) => prev - 1);
       setRoomForm({ name: '', room_number: '', floor: '', capacity: '' });
     }
   };
@@ -281,20 +305,32 @@ function LocationSetupWizard({
 
   /* ── Common quick-add room types ── */
   const quickRoomTypes = [
-    'Training Room', 'Meeting Room', 'Apparatus Bay', 'Bunk Room',
-    'Kitchen', 'Office', 'Common Area', 'Gym',
+    'Training Room',
+    'Meeting Room',
+    'Apparatus Bay',
+    'Bunk Room',
+    'Kitchen',
+    'Office',
+    'Common Area',
+    'Gym',
   ];
 
   /* ── Render ── */
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-2xl max-w-lg w-full max-h-[90dvh] flex flex-col overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="bg-theme-surface-modal border-theme-surface-border flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border">
         {/* Progress bar */}
         <div className="px-6 pt-5 pb-2">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-theme-text-muted">Step {stepIndex} of {totalSteps}</span>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-theme-text-muted text-xs font-medium">
+              Step {stepIndex} of {totalSteps}
+            </span>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-theme-text-muted">
+              <span className="text-theme-text-muted text-xs">
                 {step === 'mode' && 'Department Type'}
                 {step === 'stations' && 'Station Setup'}
                 {step === 'rooms' && 'Room Setup'}
@@ -303,17 +339,17 @@ function LocationSetupWizard({
               {onDismiss && (
                 <button
                   onClick={onDismiss}
-                  className="text-theme-text-muted hover:text-theme-text-primary transition-colors max-md:mobile-touch-target"
+                  className="text-theme-text-muted hover:text-theme-text-primary max-md:mobile-touch-target transition-colors"
                   aria-label="Close wizard"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="h-4 w-4" />
                 </button>
               )}
             </div>
           </div>
-          <div className="w-full bg-theme-surface-hover rounded-full h-1.5">
+          <div className="bg-theme-surface-hover h-1.5 w-full rounded-full">
             <div
-              className="bg-red-500 h-1.5 rounded-full transition-all duration-500"
+              className="h-1.5 rounded-full bg-red-500 transition-all duration-500"
               style={{ width: `${(stepIndex / totalSteps) * 100}%` }}
             />
           </div>
@@ -325,39 +361,43 @@ function LocationSetupWizard({
           {step === 'mode' && (
             <div className="space-y-5">
               <div className="text-center">
-                <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center mx-auto mb-3">
-                  <HelpCircle className="w-7 h-7 text-blue-700 dark:text-blue-400" />
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-500/10">
+                  <HelpCircle className="h-7 w-7 text-blue-700 dark:text-blue-400" />
                 </div>
-                <h2 className="text-xl font-bold text-theme-text-primary">How is your department organized?</h2>
-                <p className="text-sm text-theme-text-secondary mt-2">
+                <h2 className="text-theme-text-primary text-xl font-bold">How is your department organized?</h2>
+                <p className="text-theme-text-secondary mt-2 text-sm">
                   This helps us tailor the experience. You can always change this later.
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-3">
                 <button
-                  onClick={() => { void handleModeSelect('single_station'); }}
-                  className="flex items-center gap-4 p-4 bg-theme-surface-hover border-2 border-theme-surface-border rounded-xl hover:border-red-500/50 transition-all text-left group"
+                  onClick={() => {
+                    void handleModeSelect('single_station');
+                  }}
+                  className="bg-theme-surface-hover border-theme-surface-border group flex items-center gap-4 rounded-xl border-2 p-4 text-left transition-all hover:border-red-500/50"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-theme-surface flex items-center justify-center shrink-0 group-hover:bg-red-500/10 transition-colors">
-                    <Building className="w-6 h-6 text-theme-text-muted group-hover:text-red-500 transition-colors" />
+                  <div className="bg-theme-surface flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors group-hover:bg-red-500/10">
+                    <Building className="text-theme-text-muted h-6 w-6 transition-colors group-hover:text-red-500" />
                   </div>
                   <div>
-                    <span className="text-sm font-semibold text-theme-text-primary block">Single Station</span>
-                    <span className="text-xs text-theme-text-muted">
+                    <span className="text-theme-text-primary block text-sm font-semibold">Single Station</span>
+                    <span className="text-theme-text-muted text-xs">
                       We operate from one location — no need to choose a station when scheduling events.
                     </span>
                   </div>
                 </button>
                 <button
-                  onClick={() => { void handleModeSelect('multi_station'); }}
-                  className="flex items-center gap-4 p-4 bg-theme-surface-hover border-2 border-theme-surface-border rounded-xl hover:border-red-500/50 transition-all text-left group"
+                  onClick={() => {
+                    void handleModeSelect('multi_station');
+                  }}
+                  className="bg-theme-surface-hover border-theme-surface-border group flex items-center gap-4 rounded-xl border-2 p-4 text-left transition-all hover:border-red-500/50"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-theme-surface flex items-center justify-center shrink-0 group-hover:bg-red-500/10 transition-colors">
-                    <Building2 className="w-6 h-6 text-theme-text-muted group-hover:text-red-500 transition-colors" />
+                  <div className="bg-theme-surface flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors group-hover:bg-red-500/10">
+                    <Building2 className="text-theme-text-muted h-6 w-6 transition-colors group-hover:text-red-500" />
                   </div>
                   <div>
-                    <span className="text-sm font-semibold text-theme-text-primary block">Multiple Stations</span>
-                    <span className="text-xs text-theme-text-muted">
+                    <span className="text-theme-text-primary block text-sm font-semibold">Multiple Stations</span>
+                    <span className="text-theme-text-muted text-xs">
                       We have more than one station. Members and events are assigned to specific stations.
                     </span>
                   </div>
@@ -370,10 +410,10 @@ function LocationSetupWizard({
           {step === 'stations' && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-xl font-bold text-theme-text-primary">
+                <h2 className="text-theme-text-primary text-xl font-bold">
                   {mode === 'single_station' ? 'Tell us about your station' : 'Add your stations'}
                 </h2>
-                <p className="text-sm text-theme-text-secondary mt-1">
+                <p className="text-theme-text-secondary mt-1 text-sm">
                   {mode === 'single_station'
                     ? 'Enter your station name and address. This will be used across the application.'
                     : 'Add each station with its name and address. You can add more stations later.'}
@@ -384,21 +424,25 @@ function LocationSetupWizard({
                 {stations.map((station, idx) => (
                   <div
                     key={idx}
-                    className={`p-4 rounded-xl border ${
+                    className={`rounded-xl border p-4 ${
                       station.saved
                         ? 'border-green-500/30 bg-green-500/5'
                         : 'border-theme-surface-border bg-theme-surface-hover/30'
                     }`}
                   >
                     {stations.length > 1 && (
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
+                      <div className="mb-3 flex items-center justify-between">
+                        <span className="text-theme-text-muted text-xs font-semibold tracking-wider uppercase">
                           Station {idx + 1}
-                          {station.saved && <span className="text-green-500 ml-2">Saved</span>}
+                          {station.saved && <span className="ml-2 text-green-500">Saved</span>}
                         </span>
                         {!station.saved && stations.length > 1 && (
-                          <button onClick={() => removeStation(idx)} aria-label="Remove station" className="text-theme-text-muted hover:text-red-500 transition-colors">
-                            <X className="w-4 h-4" aria-hidden="true" />
+                          <button
+                            onClick={() => removeStation(idx)}
+                            aria-label="Remove station"
+                            className="text-theme-text-muted transition-colors hover:text-red-500"
+                          >
+                            <X className="h-4 w-4" aria-hidden="true" />
                           </button>
                         )}
                       </div>
@@ -409,7 +453,7 @@ function LocationSetupWizard({
                         <input
                           type="text"
                           value={station.name}
-                          onChange={e => updateStation(idx, 'name', e.target.value)}
+                          onChange={(e) => updateStation(idx, 'name', e.target.value)}
                           placeholder="e.g., Station 1, Headquarters"
                           className={inputCls}
                           disabled={station.saved}
@@ -420,24 +464,44 @@ function LocationSetupWizard({
                         <input
                           type="text"
                           value={station.address}
-                          onChange={e => updateStation(idx, 'address', e.target.value)}
+                          onChange={(e) => updateStation(idx, 'address', e.target.value)}
                           placeholder="e.g., 123 Main Street"
                           className={inputCls}
                           disabled={station.saved}
                         />
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <div>
                           <label className={labelCls}>City</label>
-                          <input type="text" value={station.city} onChange={e => updateStation(idx, 'city', e.target.value)} className={inputCls} disabled={station.saved} />
+                          <input
+                            type="text"
+                            value={station.city}
+                            onChange={(e) => updateStation(idx, 'city', e.target.value)}
+                            className={inputCls}
+                            disabled={station.saved}
+                          />
                         </div>
                         <div>
                           <label className={labelCls}>State</label>
-                          <input type="text" value={station.state} onChange={e => updateStation(idx, 'state', e.target.value)} className={inputCls} disabled={station.saved} />
+                          <input
+                            type="text"
+                            value={station.state}
+                            onChange={(e) => updateStation(idx, 'state', e.target.value)}
+                            className={inputCls}
+                            disabled={station.saved}
+                          />
                         </div>
                         <div>
                           <label className={labelCls}>Zip</label>
-                          <input type="text" inputMode="numeric" autoComplete="postal-code" value={station.zip} onChange={e => updateStation(idx, 'zip', e.target.value)} className={inputCls} disabled={station.saved} />
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="postal-code"
+                            value={station.zip}
+                            onChange={(e) => updateStation(idx, 'zip', e.target.value)}
+                            className={inputCls}
+                            disabled={station.saved}
+                          />
                         </div>
                       </div>
                     </div>
@@ -447,9 +511,9 @@ function LocationSetupWizard({
                 {mode === 'multi_station' && (
                   <button
                     onClick={addAnotherStation}
-                    className="flex items-center gap-2 w-full p-3 text-sm text-theme-text-secondary border-2 border-dashed border-theme-surface-border rounded-xl hover:border-red-500/50 hover:text-red-500 transition-all justify-center"
+                    className="text-theme-text-secondary border-theme-surface-border flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed p-3 text-sm transition-all hover:border-red-500/50 hover:text-red-500"
                   >
-                    <Plus className="w-4 h-4" /> Add Another Station
+                    <Plus className="h-4 w-4" /> Add Another Station
                   </button>
                 )}
               </div>
@@ -460,13 +524,13 @@ function LocationSetupWizard({
           {step === 'rooms' && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-xl font-bold text-theme-text-primary">
+                <h2 className="text-theme-text-primary text-xl font-bold">
                   Add rooms to {stations[activeStationIdx]?.name || 'your station'}
                 </h2>
-                <p className="text-sm text-theme-text-secondary mt-1">
+                <p className="text-theme-text-secondary mt-1 text-sm">
                   Rooms are used for meeting scheduling, training sessions, and QR check-in.
                   {stations.length > 1 && (
-                    <span className="font-medium text-theme-text-primary ml-1">
+                    <span className="text-theme-text-primary ml-1 font-medium">
                       (Station {activeStationIdx + 1} of {stations.length})
                     </span>
                   )}
@@ -475,27 +539,31 @@ function LocationSetupWizard({
 
               {/* Quick-add buttons */}
               <div>
-                <label className="block text-xs font-medium text-theme-text-muted mb-2">Quick add common rooms</label>
+                <label className="text-theme-text-muted mb-2 block text-xs font-medium">Quick add common rooms</label>
                 <div className="flex flex-wrap gap-2">
-                  {quickRoomTypes.map(type => {
-                    const alreadyAdded = currentRooms.some(r => r.name === type);
+                  {quickRoomTypes.map((type) => {
+                    const alreadyAdded = currentRooms.some((r) => r.name === type);
                     return (
                       <button
                         key={type}
                         disabled={alreadyAdded}
                         onClick={() => {
                           const updated = new Map(roomsByStation);
-                          const list = [...(updated.get(activeStationIdx) || []), { name: type, room_number: '', floor: '', capacity: '' }];
+                          const list = [
+                            ...(updated.get(activeStationIdx) || []),
+                            { name: type, room_number: '', floor: '', capacity: '' },
+                          ];
                           updated.set(activeStationIdx, list);
                           setRoomsByStation(updated);
                         }}
-                        className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                        className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${
                           alreadyAdded
-                            ? 'border-green-500/30 bg-green-500/10 text-green-500 cursor-not-allowed'
+                            ? 'cursor-not-allowed border-green-500/30 bg-green-500/10 text-green-500'
                             : 'border-theme-surface-border bg-theme-surface-hover text-theme-text-secondary hover:border-red-500/50 hover:text-red-500'
                         }`}
                       >
-                        {alreadyAdded ? '+ ' : '+ '}{type}
+                        {alreadyAdded ? '+ ' : '+ '}
+                        {type}
                       </button>
                     );
                   })}
@@ -505,28 +573,37 @@ function LocationSetupWizard({
               {/* Added rooms list */}
               {currentRooms.length > 0 && (
                 <div className="space-y-2">
-                  <label className="block text-xs font-medium text-theme-text-muted">
+                  <label className="text-theme-text-muted block text-xs font-medium">
                     Rooms added ({currentRooms.length})
                   </label>
                   {currentRooms.map((room, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-theme-surface-hover/50 border border-theme-surface-border rounded-lg">
+                    <div
+                      key={idx}
+                      className="bg-theme-surface-hover/50 border-theme-surface-border flex items-center justify-between rounded-lg border p-3"
+                    >
                       <div className="flex items-center gap-3">
-                        <DoorOpen className="w-4 h-4 text-theme-text-muted" />
+                        <DoorOpen className="text-theme-text-muted h-4 w-4" />
                         <div>
-                          <span className="text-sm font-medium text-theme-text-primary">{room.name}</span>
+                          <span className="text-theme-text-primary text-sm font-medium">{room.name}</span>
                           {(room.room_number || room.floor || room.capacity) && (
-                            <span className="text-xs text-theme-text-muted ml-2">
+                            <span className="text-theme-text-muted ml-2 text-xs">
                               {[
                                 room.room_number && `#${room.room_number}`,
                                 room.floor && `Floor ${room.floor}`,
                                 room.capacity && `Cap: ${room.capacity}`,
-                              ].filter(Boolean).join(' · ')}
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
                             </span>
                           )}
                         </div>
                       </div>
-                      <button onClick={() => removeRoom(idx)} aria-label="Remove room" className="p-1 text-theme-text-muted hover:text-red-500 transition-colors">
-                        <X className="w-4 h-4" aria-hidden="true" />
+                      <button
+                        onClick={() => removeRoom(idx)}
+                        aria-label="Remove room"
+                        className="text-theme-text-muted p-1 transition-colors hover:text-red-500"
+                      >
+                        <X className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </div>
                   ))}
@@ -534,8 +611,8 @@ function LocationSetupWizard({
               )}
 
               {/* Custom room form */}
-              <div className="p-4 bg-theme-surface-hover/30 border border-theme-surface-border rounded-xl space-y-3">
-                <label className="block text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
+              <div className="bg-theme-surface-hover/30 border-theme-surface-border space-y-3 rounded-xl border p-4">
+                <label className="text-theme-text-muted block text-xs font-semibold tracking-wider uppercase">
                   Add a custom room
                 </label>
                 <div>
@@ -543,32 +620,55 @@ function LocationSetupWizard({
                   <input
                     type="text"
                     value={roomForm.name}
-                    onChange={e => setRoomForm(p => ({ ...p, name: e.target.value }))}
+                    onChange={(e) => setRoomForm((p) => ({ ...p, name: e.target.value }))}
                     placeholder="e.g., Chief's Office, Supply Closet"
                     className={inputCls}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRoom(); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addRoom();
+                      }
+                    }}
                   />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div>
                     <label className={labelCls}>Room #</label>
-                    <input type="text" value={roomForm.room_number} onChange={e => setRoomForm(p => ({ ...p, room_number: e.target.value }))} placeholder="101" className={inputCls} />
+                    <input
+                      type="text"
+                      value={roomForm.room_number}
+                      onChange={(e) => setRoomForm((p) => ({ ...p, room_number: e.target.value }))}
+                      placeholder="101"
+                      className={inputCls}
+                    />
                   </div>
                   <div>
                     <label className={labelCls}>Floor</label>
-                    <input type="text" value={roomForm.floor} onChange={e => setRoomForm(p => ({ ...p, floor: e.target.value }))} placeholder="1" className={inputCls} />
+                    <input
+                      type="text"
+                      value={roomForm.floor}
+                      onChange={(e) => setRoomForm((p) => ({ ...p, floor: e.target.value }))}
+                      placeholder="1"
+                      className={inputCls}
+                    />
                   </div>
                   <div>
                     <label className={labelCls}>Capacity</label>
-                    <input type="number" value={roomForm.capacity} onChange={e => setRoomForm(p => ({ ...p, capacity: e.target.value }))} placeholder="25" className={inputCls} />
+                    <input
+                      type="number"
+                      value={roomForm.capacity}
+                      onChange={(e) => setRoomForm((p) => ({ ...p, capacity: e.target.value }))}
+                      placeholder="25"
+                      className={inputCls}
+                    />
                   </div>
                 </div>
                 <button
                   onClick={addRoom}
                   disabled={!roomForm.name.trim()}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400"
                 >
-                  <Plus className="w-4 h-4" /> Add Room
+                  <Plus className="h-4 w-4" /> Add Room
                 </button>
               </div>
 
@@ -578,17 +678,15 @@ function LocationSetupWizard({
                   <button
                     onClick={handlePrevStation}
                     disabled={activeStationIdx === 0}
-                    className="text-sm text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="text-theme-text-secondary hover:text-theme-text-primary text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     ← Previous Station
                   </button>
-                  <span className="text-xs text-theme-text-muted">
-                    {stations[activeStationIdx]?.name}
-                  </span>
+                  <span className="text-theme-text-muted text-xs">{stations[activeStationIdx]?.name}</span>
                   {activeStationIdx < stations.length - 1 ? (
                     <button
                       onClick={handleNextStation}
-                      className="text-sm text-red-500 hover:text-red-800 dark:hover:text-red-400 font-medium transition-colors"
+                      className="text-sm font-medium text-red-500 transition-colors hover:text-red-800 dark:hover:text-red-400"
                     >
                       Next Station →
                     </button>
@@ -603,32 +701,37 @@ function LocationSetupWizard({
           {/* ── STEP 4: Done ── */}
           {step === 'done' && (
             <div className="space-y-5 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-green-500/10 flex items-center justify-center mx-auto">
-                <Building2 className="w-8 h-8 text-green-500" />
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-green-500/10">
+                <Building2 className="h-8 w-8 text-green-500" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-theme-text-primary">You're all set!</h2>
-                <p className="text-sm text-theme-text-secondary mt-2">
+                <h2 className="text-theme-text-primary text-xl font-bold">You're all set!</h2>
+                <p className="text-theme-text-secondary mt-2 text-sm">
                   Your locations are configured and ready for use in meetings, training, events, and QR check-in.
                 </p>
               </div>
-              <div className="bg-theme-surface-hover/50 rounded-xl p-4 text-left space-y-3">
+              <div className="bg-theme-surface-hover/50 space-y-3 rounded-xl p-4 text-left">
                 {stations.map((station, idx) => {
                   const stationRooms = roomsByStation.get(idx) || [];
                   return (
                     <div key={idx}>
                       <div className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-red-500" />
-                        <span className="text-sm font-semibold text-theme-text-primary">{station.name}</span>
+                        <Building2 className="h-4 w-4 text-red-500" />
+                        <span className="text-theme-text-primary text-sm font-semibold">{station.name}</span>
                       </div>
                       {station.address && (
-                        <p className="text-xs text-theme-text-muted ml-6">{[station.address, station.city, station.state, station.zip].filter(Boolean).join(', ')}</p>
+                        <p className="text-theme-text-muted ml-6 text-xs">
+                          {[station.address, station.city, station.state, station.zip].filter(Boolean).join(', ')}
+                        </p>
                       )}
                       {stationRooms.length > 0 && (
-                        <div className="ml-6 mt-1 flex flex-wrap gap-1.5">
+                        <div className="mt-1 ml-6 flex flex-wrap gap-1.5">
                           {stationRooms.map((room, rIdx) => (
-                            <span key={rIdx} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-theme-surface border border-theme-surface-border rounded-md text-theme-text-secondary">
-                              <DoorOpen className="w-3 h-3" /> {room.name}
+                            <span
+                              key={rIdx}
+                              className="bg-theme-surface border-theme-surface-border text-theme-text-secondary inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs"
+                            >
+                              <DoorOpen className="h-3 w-3" /> {room.name}
                             </span>
                           ))}
                         </div>
@@ -642,11 +745,11 @@ function LocationSetupWizard({
         </div>
 
         {/* Footer buttons */}
-        <div className="flex items-center justify-between p-6 border-t border-theme-surface-border">
+        <div className="border-theme-surface-border flex items-center justify-between border-t p-6">
           {step === 'mode' && (
             <>
               <span />
-              <span className="text-xs text-theme-text-muted">Select an option above</span>
+              <span className="text-theme-text-muted text-xs">Select an option above</span>
             </>
           )}
 
@@ -654,16 +757,18 @@ function LocationSetupWizard({
             <>
               <button
                 onClick={() => setStep('mode')}
-                className="text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                className="text-theme-text-secondary hover:text-theme-text-primary text-sm transition-colors"
               >
                 ← Back
               </button>
               <button
-                onClick={() => { void handleSaveStations(); }}
-                disabled={isSaving || stations.every(s => !s.name.trim())}
-                className="btn-primary flex gap-2 items-center px-5 py-2.5"
+                onClick={() => {
+                  void handleSaveStations();
+                }}
+                disabled={isSaving || stations.every((s) => !s.name.trim())}
+                className="btn-primary flex items-center gap-2 px-5 py-2.5"
               >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Continue to Rooms →
               </button>
             </>
@@ -673,24 +778,31 @@ function LocationSetupWizard({
             <>
               <button
                 onClick={() => setStep('stations')}
-                className="text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                className="text-theme-text-secondary hover:text-theme-text-primary text-sm transition-colors"
               >
                 ← Back
               </button>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => { setStep('done'); onComplete(); }}
-                  className="text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                  onClick={() => {
+                    setStep('done');
+                    onComplete();
+                  }}
+                  className="text-theme-text-secondary hover:text-theme-text-primary text-sm transition-colors"
                 >
                   Skip for now
                 </button>
                 <button
-                  onClick={() => { void handleFinishRooms(); }}
+                  onClick={() => {
+                    void handleFinishRooms();
+                  }}
                   disabled={isSaving}
-                  className="btn-primary flex gap-2 items-center px-5 py-2.5"
+                  className="btn-primary flex items-center gap-2 px-5 py-2.5"
                 >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {[...roomsByStation.values()].some(r => r.length > 0) ? 'Save Rooms & Finish' : 'Finish Without Rooms'}
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {[...roomsByStation.values()].some((r) => r.length > 0)
+                    ? 'Save Rooms & Finish'
+                    : 'Finish Without Rooms'}
                 </button>
               </div>
             </>
@@ -699,10 +811,7 @@ function LocationSetupWizard({
           {step === 'done' && (
             <>
               <span />
-              <button
-                onClick={onComplete}
-                className="btn-primary flex gap-2 items-center px-5 py-2.5"
-              >
+              <button onClick={onComplete} className="btn-primary flex items-center gap-2 px-5 py-2.5">
                 Go to Locations →
               </button>
             </>
@@ -716,7 +825,15 @@ function LocationSetupWizard({
 /**
  * Room card with kiosk display URL
  */
-function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Location) => void; onDelete: (r: Location) => void }) {
+function RoomCard({
+  room,
+  onEdit,
+  onDelete,
+}: {
+  room: Location;
+  onEdit: (r: Location) => void;
+  onDelete: (r: Location) => void;
+}) {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
 
@@ -735,48 +852,68 @@ function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Loca
   };
 
   return (
-    <div className="flex flex-col p-3 bg-theme-surface border border-theme-surface-border rounded-lg group">
+    <div className="bg-theme-surface border-theme-surface-border group flex flex-col rounded-lg border p-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 min-w-0">
-          <DoorOpen className="w-4 h-4 text-theme-text-muted shrink-0" />
+        <div className="flex min-w-0 items-center gap-3">
+          <DoorOpen className="text-theme-text-muted h-4 w-4 shrink-0" />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-theme-text-primary truncate">
-              {room.name}{room.room_number ? ` #${room.room_number}` : ''}
+            <p className="text-theme-text-primary truncate text-sm font-medium">
+              {room.name}
+              {room.room_number ? ` #${room.room_number}` : ''}
             </p>
-            <p className="text-xs text-theme-text-muted">
-              {[room.floor ? `Floor ${room.floor}` : null, room.capacity ? `Cap: ${room.capacity}` : null].filter(Boolean).join(' · ') || 'No details'}
+            <p className="text-theme-text-muted text-xs">
+              {[room.floor ? `Floor ${room.floor}` : null, room.capacity ? `Cap: ${room.capacity}` : null]
+                .filter(Boolean)
+                .join(' · ') || 'No details'}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-0.5 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
           {kioskUrl && (
-            <button onClick={() => setShowQR(prev => !prev)} aria-label="Toggle QR code" className="p-1 text-theme-text-muted hover:text-blue-500 rounded-sm transition-colors" title="Show QR code">
-              <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
+            <button
+              onClick={() => setShowQR((prev) => !prev)}
+              aria-label="Toggle QR code"
+              className="text-theme-text-muted rounded-sm p-1 transition-colors hover:text-blue-500"
+              title="Show QR code"
+            >
+              <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           )}
-          <button onClick={() => onEdit(room)} aria-label="Edit room" className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded-sm transition-colors">
-            <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+          <button
+            onClick={() => onEdit(room)}
+            aria-label="Edit room"
+            className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1 transition-colors"
+          >
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
-          <button onClick={() => onDelete(room)} aria-label="Delete room" className="p-1 text-theme-text-muted hover:text-red-500 rounded-sm transition-colors">
-            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+          <button
+            onClick={() => onDelete(room)}
+            aria-label="Delete room"
+            className="text-theme-text-muted rounded-sm p-1 transition-colors hover:text-red-500"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
       </div>
       {kioskUrl && (
         <button
-          onClick={() => { void handleCopyKioskUrl(); }}
-          className="mt-2 flex items-center gap-1.5 text-xs text-theme-text-muted hover:text-blue-500 transition-colors"
+          onClick={() => {
+            void handleCopyKioskUrl();
+          }}
+          className="text-theme-text-muted mt-2 flex items-center gap-1.5 text-xs transition-colors hover:text-blue-500"
           title="Copy kiosk display URL for this room"
         >
-          {copied ? <Check className="w-3 h-3 text-green-500" /> : <Monitor className="w-3 h-3" />}
-          <span className="font-mono truncate">/display/{room.display_code}</span>
-          {!copied && <Copy className="w-3 h-3 sm:opacity-0 sm:group-hover:opacity-100" />}
+          {copied ? <Check className="h-3 w-3 text-green-500" /> : <Monitor className="h-3 w-3" />}
+          <span className="truncate font-mono">/display/{room.display_code}</span>
+          {!copied && <Copy className="h-3 w-3 sm:opacity-0 sm:group-hover:opacity-100" />}
         </button>
       )}
       {showQR && kioskUrl && (
-        <div className="mt-3 flex flex-col items-center gap-2 p-3 bg-white rounded-lg border border-theme-surface-border"> {/* bg-white intentional for QR code readability */}
+        <div className="border-theme-surface-border mt-3 flex flex-col items-center gap-2 rounded-lg border bg-white p-3">
+          {' '}
+          {/* bg-white intentional for QR code readability */}
           <QRCodeSVG value={kioskUrl} size={140} level="H" includeMargin />
-          <p className="text-[10px] text-theme-text-muted font-mono break-all text-center">{kioskUrl}</p>
+          <p className="text-theme-text-muted text-center font-mono text-[10px] break-all">{kioskUrl}</p>
         </div>
       )}
     </div>
@@ -796,7 +933,14 @@ export default function LocationsPage() {
   // Station modal state
   const [showStationModal, setShowStationModal] = useState(false);
   const [editingStation, setEditingStation] = useState<Location | null>(null);
-  const [stationForm, setStationForm] = useState({ name: '', address: '', city: '', state: '', zip: '', description: '' });
+  const [stationForm, setStationForm] = useState({
+    name: '',
+    address: '',
+    city: '',
+    state: '',
+    zip: '',
+    description: '',
+  });
   const [isSavingStation, setIsSavingStation] = useState(false);
 
   // Room modal state
@@ -848,7 +992,9 @@ export default function LocationsPage() {
     }
   }, []);
 
-  useEffect(() => { void loadLocations(); }, [loadLocations]);
+  useEffect(() => {
+    void loadLocations();
+  }, [loadLocations]);
 
   // Auto-show wizard only when the user has zero locations and hasn't dismissed it
   useEffect(() => {
@@ -863,16 +1009,17 @@ export default function LocationsPage() {
   }, [stationModeLoading, isLoading, locations]);
 
   const { stations, rooms } = groupLocations(
-    locations.filter(l =>
-      l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.building?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.room_number?.toLowerCase().includes(searchQuery.toLowerCase())
+    locations.filter(
+      (l) =>
+        l.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        l.address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        l.building?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        l.room_number?.toLowerCase().includes(searchQuery.toLowerCase())
     )
   );
 
   const toggleStation = (stationName: string) => {
-    setExpandedStations(prev => {
+    setExpandedStations((prev) => {
       const next = new Set(prev);
       if (next.has(stationName)) next.delete(stationName);
       else next.add(stationName);
@@ -901,7 +1048,10 @@ export default function LocationsPage() {
   };
 
   const handleSaveStation = async () => {
-    if (!stationForm.name.trim()) { toast.error('Station name is required'); return; }
+    if (!stationForm.name.trim()) {
+      toast.error('Station name is required');
+      return;
+    }
     setIsSavingStation(true);
     try {
       const payload: LocationCreate = {
@@ -976,7 +1126,10 @@ export default function LocationsPage() {
   };
 
   const handleSaveRoom = async () => {
-    if (!roomForm.name.trim()) { toast.error('Room name is required'); return; }
+    if (!roomForm.name.trim()) {
+      toast.error('Room name is required');
+      return;
+    }
     setIsSavingRoom(true);
     try {
       const payload: LocationCreate = {
@@ -1015,7 +1168,8 @@ export default function LocationsPage() {
     }
   };
 
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
+  const inputCls =
+    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
   const labelCls = 'block text-sm font-medium text-theme-text-secondary mb-1';
 
   const isSingleStation = stationMode === 'single_station';
@@ -1037,34 +1191,44 @@ export default function LocationsPage() {
             setShowWizard(false);
             void loadLocations();
             // Reload station mode from settings in case it changed
-            organizationService.getSettings().then(settings => {
-              const mode = (settings as Record<string, unknown>).station_mode as StationMode;
-              setStationMode(mode || null);
-            }).catch(() => { /* non-critical settings reload */ });
+            organizationService
+              .getSettings()
+              .then((settings) => {
+                const mode = (settings as Record<string, unknown>).station_mode as StationMode;
+                setStationMode(mode || null);
+              })
+              .catch(() => {
+                /* non-critical settings reload */
+              });
           }}
         />
       )}
 
       {/* Station Mode Badge (shown when configured, allows changing) */}
       {!stationModeLoading && stationMode !== null && (
-        <div className="flex items-center gap-2 text-xs text-theme-text-muted">
+        <div className="text-theme-text-muted flex items-center gap-2 text-xs">
           {isSingleStation ? (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-400 rounded-full">
-              <Building className="w-3.5 h-3.5" /> Single-Station Department
+            <span className="flex items-center gap-1.5 rounded-full bg-blue-500/10 px-2.5 py-1 text-blue-700 dark:text-blue-400">
+              <Building className="h-3.5 w-3.5" /> Single-Station Department
             </span>
           ) : (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-700 dark:text-blue-400 rounded-full">
-              <Building2 className="w-3.5 h-3.5" /> Multi-Station Agency
+            <span className="flex items-center gap-1.5 rounded-full bg-blue-500/10 px-2.5 py-1 text-blue-700 dark:text-blue-400">
+              <Building2 className="h-3.5 w-3.5" /> Multi-Station Agency
             </span>
           )}
           <button
-            onClick={() => { void handleSetStationMode(isSingleStation ? 'multi_station' : 'single_station'); }}
+            onClick={() => {
+              void handleSetStationMode(isSingleStation ? 'multi_station' : 'single_station');
+            }}
             className="text-theme-text-muted hover:text-theme-text-secondary underline"
           >
             Change
           </button>
           <button
-            onClick={() => { wizardDismissedRef.current = false; setShowWizard(true); }}
+            onClick={() => {
+              wizardDismissedRef.current = false;
+              setShowWizard(true);
+            }}
             className="text-theme-text-muted hover:text-theme-text-secondary underline"
           >
             Run Setup Wizard
@@ -1074,24 +1238,31 @@ export default function LocationsPage() {
 
       {/* Station mode not set but locations exist — let user set mode or launch wizard */}
       {!stationModeLoading && stationMode === null && locations.length > 0 && (
-        <div className="flex items-center gap-2 text-xs text-theme-text-muted">
-          <span className="flex items-center gap-1.5 px-2.5 py-1 bg-yellow-500/10 text-yellow-500 rounded-full">
-            <HelpCircle className="w-3.5 h-3.5" /> Station mode not configured
+        <div className="text-theme-text-muted flex items-center gap-2 text-xs">
+          <span className="flex items-center gap-1.5 rounded-full bg-yellow-500/10 px-2.5 py-1 text-yellow-500">
+            <HelpCircle className="h-3.5 w-3.5" /> Station mode not configured
           </span>
           <button
-            onClick={() => { void handleSetStationMode('single_station'); }}
+            onClick={() => {
+              void handleSetStationMode('single_station');
+            }}
             className="text-theme-text-muted hover:text-theme-text-secondary underline"
           >
             Set Single-Station
           </button>
           <button
-            onClick={() => { void handleSetStationMode('multi_station'); }}
+            onClick={() => {
+              void handleSetStationMode('multi_station');
+            }}
             className="text-theme-text-muted hover:text-theme-text-secondary underline"
           >
             Set Multi-Station
           </button>
           <button
-            onClick={() => { wizardDismissedRef.current = false; setShowWizard(true); }}
+            onClick={() => {
+              wizardDismissedRef.current = false;
+              setShowWizard(true);
+            }}
             className="text-theme-text-muted hover:text-theme-text-secondary underline"
           >
             Run Setup Wizard
@@ -1102,7 +1273,7 @@ export default function LocationsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-theme-text-primary">
+          <h1 className="text-theme-text-primary text-3xl font-bold">
             {isSingleStation ? 'Location & Rooms' : 'Locations & Rooms'}
           </h1>
           <p className="text-theme-text-secondary mt-1">
@@ -1112,114 +1283,145 @@ export default function LocationsPage() {
           </p>
         </div>
         {(!isSingleStation || stations.length === 0) && (
-          <button onClick={openCreateStation}
-            className="btn-primary flex gap-2 items-center py-2.5"
-          >
-            <Plus className="w-4 h-4" /> {isSingleStation ? 'Set Up Location' : 'Add Station'}
+          <button onClick={openCreateStation} className="btn-primary flex items-center gap-2 py-2.5">
+            <Plus className="h-4 w-4" /> {isSingleStation ? 'Set Up Location' : 'Add Station'}
           </button>
         )}
       </div>
 
       {/* Info Banner */}
-      <div className="flex items-start gap-3 p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
-        <QrCode className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-        <div className="text-sm text-theme-text-secondary">
+      <div className="flex items-start gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+        <QrCode className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+        <div className="text-theme-text-secondary text-sm">
           {isSingleStation ? (
-            <p>Set up your station address and rooms. These are used for event scheduling, meeting rooms, training sessions, and QR code check-in. Since you operate from a single location, members will be automatically associated with this station.</p>
+            <p>
+              Set up your station address and rooms. These are used for event scheduling, meeting rooms, training
+              sessions, and QR code check-in. Since you operate from a single location, members will be automatically
+              associated with this station.
+            </p>
           ) : (
-            <p>Locations added here are available for event scheduling, meeting room selection, training sessions, and QR code check-in. Add your stations with their addresses and list each room for use across the platform.</p>
+            <p>
+              Locations added here are available for event scheduling, meeting room selection, training sessions, and QR
+              code check-in. Add your stations with their addresses and list each room for use across the platform.
+            </p>
           )}
         </div>
       </div>
 
       {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
-        <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-          aria-label="Search stations or rooms..." placeholder="Search stations or rooms..."
-          className="form-input pl-10 placeholder-theme-text-muted pr-4 py-2.5"
+        <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          aria-label="Search stations or rooms..."
+          placeholder="Search stations or rooms..."
+          className="form-input placeholder-theme-text-muted py-2.5 pr-4 pl-10"
         />
       </div>
 
       {/* Station List */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20" role="status" aria-live="polite"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
+          <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
+        </div>
       ) : stations.length === 0 && !rooms.has('__other__') ? (
-        <div className="text-center py-20">
-          <Building2 className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-theme-text-primary mb-1">No locations yet</h3>
+        <div className="py-20 text-center">
+          <Building2 className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+          <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No locations yet</h3>
           <p className="text-theme-text-muted mb-4">
             Add your first station to get started. You can then add rooms within it.
           </p>
-          <button onClick={openCreateStation}
-            className="btn-primary gap-2 inline-flex items-center py-2.5"
-          >
-            <Plus className="w-4 h-4" /> Add Station
+          <button onClick={openCreateStation} className="btn-primary inline-flex items-center gap-2 py-2.5">
+            <Plus className="h-4 w-4" /> Add Station
           </button>
         </div>
       ) : (
         <div className="space-y-4">
-          {stations.map(station => {
+          {stations.map((station) => {
             const stationRooms = rooms.get(station.name) || [];
             const isExpanded = expandedStations.has(station.name);
             const address = [station.address, station.city, station.state, station.zip].filter(Boolean).join(', ');
 
             return (
-              <div key={station.id} className="bg-theme-surface border border-theme-surface-border rounded-xl overflow-hidden">
+              <div
+                key={station.id}
+                className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border"
+              >
                 {/* Station Header */}
                 <div className="flex items-center gap-4 p-5">
-                  <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
-                    <Building2 className="w-5 h-5 text-red-500" />
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
+                    <Building2 className="h-5 w-5 text-red-500" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-theme-text-primary">{station.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-theme-text-primary text-lg font-semibold">{station.name}</h3>
                     {address && (
-                      <p className="flex items-center gap-1.5 text-sm text-theme-text-secondary mt-0.5">
-                        <MapPin className="w-3.5 h-3.5 shrink-0" /> {address}
+                      <p className="text-theme-text-secondary mt-0.5 flex items-center gap-1.5 text-sm">
+                        <MapPin className="h-3.5 w-3.5 shrink-0" /> {address}
                       </p>
                     )}
-                    {station.description && (
-                      <p className="text-sm text-theme-text-muted mt-1">{station.description}</p>
-                    )}
+                    {station.description && <p className="text-theme-text-muted mt-1 text-sm">{station.description}</p>}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => openEditStation(station)} title="Edit station" aria-label="Edit station"
-                      className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
+                    <button
+                      onClick={() => openEditStation(station)}
+                      title="Edit station"
+                      aria-label="Edit station"
+                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
                     >
-                      <Pencil className="w-4 h-4" aria-hidden="true" />
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
                     </button>
-                    <button onClick={() => { void handleDeleteStation(station); }} title="Delete station" aria-label="Delete station"
-                      className="p-2 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                    <button
+                      onClick={() => {
+                        void handleDeleteStation(station);
+                      }}
+                      title="Delete station"
+                      aria-label="Delete station"
+                      className="text-theme-text-muted rounded-lg p-2 transition-colors hover:bg-red-500/10 hover:text-red-500"
                     >
-                      <Trash2 className="w-4 h-4" aria-hidden="true" />
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </button>
-                    <button onClick={() => toggleStation(station.name)}
-                      className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+                    <button
+                      onClick={() => toggleStation(station.name)}
+                      className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
                     >
-                      <DoorOpen className="w-4 h-4" />
-                      <span>{stationRooms.length} room{stationRooms.length !== 1 ? 's' : ''}</span>
-                      {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      <DoorOpen className="h-4 w-4" />
+                      <span>
+                        {stationRooms.length} room{stationRooms.length !== 1 ? 's' : ''}
+                      </span>
+                      {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                     </button>
                   </div>
                 </div>
 
                 {/* Rooms Panel */}
                 {isExpanded && (
-                  <div className="border-t border-theme-surface-border bg-theme-surface-hover/30 p-4 space-y-2">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-semibold text-theme-text-primary">Rooms</h4>
-                      <button onClick={() => openAddRoom(station.name)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                  <div className="border-theme-surface-border bg-theme-surface-hover/30 space-y-2 border-t p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h4 className="text-theme-text-primary text-sm font-semibold">Rooms</h4>
+                      <button
+                        onClick={() => openAddRoom(station.name)}
+                        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
                       >
-                        <Plus className="w-3 h-3" /> Add Room
+                        <Plus className="h-3 w-3" /> Add Room
                       </button>
                     </div>
                     {stationRooms.length === 0 ? (
-                      <p className="text-sm text-theme-text-muted py-2">No rooms added yet. Add rooms for QR check-in and event scheduling.</p>
+                      <p className="text-theme-text-muted py-2 text-sm">
+                        No rooms added yet. Add rooms for QR check-in and event scheduling.
+                      </p>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {stationRooms.map(room => (
-                          <RoomCard key={room.id} room={room} onEdit={openEditRoom} onDelete={(r) => { void handleDeleteRoom(r); }} />
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {stationRooms.map((room) => (
+                          <RoomCard
+                            key={room.id}
+                            room={room}
+                            onEdit={openEditRoom}
+                            onDelete={(r) => {
+                              void handleDeleteRoom(r);
+                            }}
+                          />
                         ))}
                       </div>
                     )}
@@ -1231,11 +1433,18 @@ export default function LocationsPage() {
 
           {/* Orphan rooms (rooms without a station) */}
           {rooms.has('__other__') && (
-            <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
-              <h3 className="text-lg font-semibold text-theme-text-primary mb-3">Other Locations</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {(rooms.get('__other__') || []).map(room => (
-                  <RoomCard key={room.id} room={room} onEdit={openEditRoom} onDelete={(r) => { void handleDeleteRoom(r); }} />
+            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
+              <h3 className="text-theme-text-primary mb-3 text-lg font-semibold">Other Locations</h3>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {(rooms.get('__other__') || []).map((room) => (
+                  <RoomCard
+                    key={room.id}
+                    room={room}
+                    onEdit={openEditRoom}
+                    onDelete={(r) => {
+                      void handleDeleteRoom(r);
+                    }}
+                  />
                 ))}
               </div>
             </div>
@@ -1245,58 +1454,105 @@ export default function LocationsPage() {
 
       {/* Station Modal */}
       {showStationModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true"
-          onKeyDown={e => { if (e.key === 'Escape') setShowStationModal(false); }}
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setShowStationModal(false);
+          }}
         >
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
-              <h2 className="text-lg font-bold text-theme-text-primary">
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+              <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingStation ? 'Edit Station' : 'Add Station'}
               </h2>
-              <button onClick={() => setShowStationModal(false)} aria-label="Close dialog" className="text-theme-text-muted hover:text-theme-text-primary">
-                <X className="w-5 h-5" aria-hidden="true" />
+              <button
+                onClick={() => setShowStationModal(false)}
+                aria-label="Close dialog"
+                className="text-theme-text-muted hover:text-theme-text-primary"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="space-y-4 p-6">
               <div>
                 <label className={labelCls}>Station Name / Number *</label>
-                <input type="text" value={stationForm.name} onChange={e => setStationForm(p => ({...p, name: e.target.value}))}
-                  placeholder="e.g., Station 1, Headquarters" className={inputCls}
+                <input
+                  type="text"
+                  value={stationForm.name}
+                  onChange={(e) => setStationForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g., Station 1, Headquarters"
+                  className={inputCls}
                 />
               </div>
               <div>
                 <label className={labelCls}>Street Address</label>
-                <input type="text" value={stationForm.address} onChange={e => setStationForm(p => ({...p, address: e.target.value}))}
-                  placeholder="123 Main Street" className={inputCls}
+                <input
+                  type="text"
+                  value={stationForm.address}
+                  onChange={(e) => setStationForm((p) => ({ ...p, address: e.target.value }))}
+                  placeholder="123 Main Street"
+                  className={inputCls}
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label className={labelCls}>City</label>
-                  <input type="text" value={stationForm.city} onChange={e => setStationForm(p => ({...p, city: e.target.value}))} className={inputCls} />
+                  <input
+                    type="text"
+                    value={stationForm.city}
+                    onChange={(e) => setStationForm((p) => ({ ...p, city: e.target.value }))}
+                    className={inputCls}
+                  />
                 </div>
                 <div>
                   <label className={labelCls}>State</label>
-                  <input type="text" value={stationForm.state} onChange={e => setStationForm(p => ({...p, state: e.target.value}))} className={inputCls} />
+                  <input
+                    type="text"
+                    value={stationForm.state}
+                    onChange={(e) => setStationForm((p) => ({ ...p, state: e.target.value }))}
+                    className={inputCls}
+                  />
                 </div>
                 <div>
                   <label className={labelCls}>Zip</label>
-                  <input type="text" inputMode="numeric" autoComplete="postal-code" value={stationForm.zip} onChange={e => setStationForm(p => ({...p, zip: e.target.value}))} className={inputCls} />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="postal-code"
+                    value={stationForm.zip}
+                    onChange={(e) => setStationForm((p) => ({ ...p, zip: e.target.value }))}
+                    className={inputCls}
+                  />
                 </div>
               </div>
               <div>
                 <label className={labelCls}>Description</label>
-                <textarea value={stationForm.description} onChange={e => setStationForm(p => ({...p, description: e.target.value}))}
-                  rows={2} placeholder="Optional notes about this station..." className={inputCls + ' resize-none'}
+                <textarea
+                  value={stationForm.description}
+                  onChange={(e) => setStationForm((p) => ({ ...p, description: e.target.value }))}
+                  rows={2}
+                  placeholder="Optional notes about this station..."
+                  className={inputCls + ' resize-none'}
                 />
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
-              <button onClick={() => setShowStationModal(false)} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors">Cancel</button>
-              <button onClick={() => { void handleSaveStation(); }} disabled={isSavingStation || !stationForm.name.trim()}
-                className="btn-primary flex gap-2 items-center px-5"
+            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+              <button
+                onClick={() => setShowStationModal(false)}
+                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
               >
-                {isSavingStation ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  void handleSaveStation();
+                }}
+                disabled={isSavingStation || !stationForm.name.trim()}
+                className="btn-primary flex items-center gap-2 px-5"
+              >
+                {isSavingStation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {editingStation ? 'Update' : 'Add Station'}
               </button>
             </div>
@@ -1306,58 +1562,96 @@ export default function LocationsPage() {
 
       {/* Room Modal */}
       {showRoomModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true"
-          onKeyDown={e => { if (e.key === 'Escape') setShowRoomModal(false); }}
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setShowRoomModal(false);
+          }}
         >
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
-              <h2 className="text-lg font-bold text-theme-text-primary">
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+              <h2 className="text-theme-text-primary text-lg font-bold">
                 {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}
               </h2>
-              <button onClick={() => setShowRoomModal(false)} aria-label="Close dialog" className="text-theme-text-muted hover:text-theme-text-primary">
-                <X className="w-5 h-5" aria-hidden="true" />
+              <button
+                onClick={() => setShowRoomModal(false)}
+                aria-label="Close dialog"
+                className="text-theme-text-muted hover:text-theme-text-primary"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="space-y-4 p-6">
               <div>
                 <label className={labelCls}>Room Name *</label>
-                <input type="text" value={roomForm.name} onChange={e => setRoomForm(p => ({...p, name: e.target.value}))}
-                  placeholder="e.g., Main Hall, Bunk Room A, Training Room" className={inputCls}
+                <input
+                  type="text"
+                  value={roomForm.name}
+                  onChange={(e) => setRoomForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g., Main Hall, Bunk Room A, Training Room"
+                  className={inputCls}
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className={labelCls}>Room Number</label>
-                  <input type="text" value={roomForm.room_number} onChange={e => setRoomForm(p => ({...p, room_number: e.target.value}))}
-                    placeholder="e.g., 101" className={inputCls}
+                  <input
+                    type="text"
+                    value={roomForm.room_number}
+                    onChange={(e) => setRoomForm((p) => ({ ...p, room_number: e.target.value }))}
+                    placeholder="e.g., 101"
+                    className={inputCls}
                   />
                 </div>
                 <div>
                   <label className={labelCls}>Floor</label>
-                  <input type="text" value={roomForm.floor} onChange={e => setRoomForm(p => ({...p, floor: e.target.value}))}
-                    placeholder="e.g., 1, 2, Basement" className={inputCls}
+                  <input
+                    type="text"
+                    value={roomForm.floor}
+                    onChange={(e) => setRoomForm((p) => ({ ...p, floor: e.target.value }))}
+                    placeholder="e.g., 1, 2, Basement"
+                    className={inputCls}
                   />
                 </div>
               </div>
               <div>
                 <label className={labelCls}>Capacity</label>
-                <input type="number" value={roomForm.capacity} onChange={e => setRoomForm(p => ({...p, capacity: e.target.value}))}
-                  placeholder="Maximum occupancy" className={inputCls}
+                <input
+                  type="number"
+                  value={roomForm.capacity}
+                  onChange={(e) => setRoomForm((p) => ({ ...p, capacity: e.target.value }))}
+                  placeholder="Maximum occupancy"
+                  className={inputCls}
                 />
               </div>
               <div>
                 <label className={labelCls}>Description</label>
-                <textarea value={roomForm.description} onChange={e => setRoomForm(p => ({...p, description: e.target.value}))}
-                  rows={2} placeholder="Equipment, amenities, or notes about this room..." className={inputCls + ' resize-none'}
+                <textarea
+                  value={roomForm.description}
+                  onChange={(e) => setRoomForm((p) => ({ ...p, description: e.target.value }))}
+                  rows={2}
+                  placeholder="Equipment, amenities, or notes about this room..."
+                  className={inputCls + ' resize-none'}
                 />
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
-              <button onClick={() => setShowRoomModal(false)} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors">Cancel</button>
-              <button onClick={() => { void handleSaveRoom(); }} disabled={isSavingRoom || !roomForm.name.trim()}
-                className="btn-primary flex gap-2 items-center px-5"
+            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+              <button
+                onClick={() => setShowRoomModal(false)}
+                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
               >
-                {isSavingRoom ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  void handleSaveRoom();
+                }}
+                disabled={isSavingRoom || !roomForm.name.trim()}
+                className="btn-primary flex items-center gap-2 px-5"
+              >
+                {isSavingRoom ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 {editingRoom ? 'Update' : 'Add Room'}
               </button>
             </div>

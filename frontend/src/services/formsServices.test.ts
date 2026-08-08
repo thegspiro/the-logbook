@@ -345,10 +345,7 @@ describe('publicFormsService', () => {
 
       const result = await publicFormsService.submitForm('my-form-slug', data);
 
-      expect(mockAxiosPost).toHaveBeenCalledWith(
-        '/api/public/v1/forms/my-form-slug/submit',
-        { data },
-      );
+      expect(mockAxiosPost).toHaveBeenCalledWith('/api/public/v1/forms/my-form-slug/submit', { data });
       expect(result).toEqual(response);
     });
 
@@ -359,7 +356,7 @@ describe('publicFormsService', () => {
 
       expect(mockAxiosPost).toHaveBeenCalledWith(
         '/api/public/v1/forms/slug/submit',
-        expect.objectContaining({ website: 'bot-value' }),
+        expect.objectContaining({ website: 'bot-value' })
       );
     });
 

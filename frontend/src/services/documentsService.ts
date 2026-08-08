@@ -13,12 +13,21 @@ export const documentsService = {
     return response.data;
   },
 
-  async createFolder(data: { name: string; description?: string | undefined; color?: string | undefined; icon?: string | undefined; parent_id?: string | undefined }): Promise<DocumentFolder> {
+  async createFolder(data: {
+    name: string;
+    description?: string | undefined;
+    color?: string | undefined;
+    icon?: string | undefined;
+    parent_id?: string | undefined;
+  }): Promise<DocumentFolder> {
     const response = await api.post<DocumentFolder>('/documents/folders', data);
     return response.data;
   },
 
-  async updateFolder(folderId: string, data: Partial<{ name: string; description: string; color: string }>): Promise<DocumentFolder> {
+  async updateFolder(
+    folderId: string,
+    data: Partial<{ name: string; description: string; color: string }>
+  ): Promise<DocumentFolder> {
     const response = await api.patch<DocumentFolder>(`/documents/folders/${folderId}`, data);
     return response.data;
   },
@@ -27,8 +36,16 @@ export const documentsService = {
     await api.delete(`/documents/folders/${folderId}`);
   },
 
-  async getDocuments(params?: { folder_id?: string; search?: string; skip?: number; limit?: number }): Promise<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }>('/documents', { params });
+  async getDocuments(params?: {
+    folder_id?: string;
+    search?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get<{ documents: DocumentRecord[]; total: number; skip: number; limit: number }>(
+      '/documents',
+      { params }
+    );
     return response.data;
   },
 
@@ -44,7 +61,10 @@ export const documentsService = {
     return response.data;
   },
 
-  async updateDocument(documentId: string, data: Partial<{ name: string; description: string; folder_id: string; tags: string; status: string }>): Promise<DocumentRecord> {
+  async updateDocument(
+    documentId: string,
+    data: Partial<{ name: string; description: string; folder_id: string; tags: string; status: string }>
+  ): Promise<DocumentRecord> {
     const response = await api.patch<DocumentRecord>(`/documents/${documentId}`, data);
     return response.data;
   },

@@ -6,14 +6,7 @@
  */
 
 import React from 'react';
-import {
-  Pencil,
-  Copy,
-  Send,
-  FileX,
-  Archive,
-  ChevronRight,
-} from 'lucide-react';
+import { Pencil, Copy, Send, FileX, Archive, ChevronRight } from 'lucide-react';
 
 interface MobileItemCardProps {
   /** Primary display name */
@@ -100,7 +93,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
 }) => {
   return (
     <div
-      className="bg-theme-surface rounded-lg border border-theme-surface-border p-4 shadow-sm active:bg-theme-surface-hover active:scale-[0.99] hover:shadow-md transition-all duration-200"
+      className="bg-theme-surface border-theme-surface-border active:bg-theme-surface-hover rounded-lg border p-4 shadow-sm transition-all duration-200 hover:shadow-md active:scale-[0.99]"
       role="button"
       tabIndex={0}
       onClick={onTap}
@@ -119,51 +112,53 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
               type="checkbox"
               checked={selected}
               onChange={onSelect}
-              className="h-5 w-5 rounded-sm border-theme-input-border text-emerald-600 focus:ring-emerald-500"
+              className="border-theme-input-border h-5 w-5 rounded-sm text-emerald-600 focus:ring-emerald-500"
               aria-label={`Select ${name}`}
             />
           </div>
         )}
 
         {/* Content */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           {/* Top row: name + status */}
-          <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="mb-2 flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <h3 className="text-theme-text-primary font-medium text-sm truncate">{name}</h3>
-              {manufacturer && (
-                <p className="text-theme-text-muted text-xs truncate">{manufacturer}</p>
-              )}
+              <h3 className="text-theme-text-primary truncate text-sm font-medium">{name}</h3>
+              {manufacturer && <p className="text-theme-text-muted truncate text-xs">{manufacturer}</p>}
             </div>
-            <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-sm border whitespace-nowrap shrink-0 ${statusStyle}`}>
+            <span
+              className={`shrink-0 rounded-sm border px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${statusStyle}`}
+            >
               {status.replace('_', ' ').toUpperCase()}
             </span>
           </div>
 
           {/* Metadata tags */}
-          <div className="flex flex-wrap gap-1.5 mb-2">
+          <div className="mb-2 flex flex-wrap gap-1.5">
             {category && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs bg-theme-surface-secondary text-theme-text-muted">
+              <span className="bg-theme-surface-secondary text-theme-text-muted inline-flex items-center rounded-sm px-2 py-0.5 text-xs">
                 {category}
               </span>
             )}
             {size && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+              <span className="inline-flex items-center rounded-sm bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
                 {size}
               </span>
             )}
             {color && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">
+              <span className="inline-flex items-center rounded-sm bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">
                 {color}
               </span>
             )}
             {condition && (
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs capitalize ${conditionColor ?? 'text-theme-text-muted'}`}>
+              <span
+                className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs capitalize ${conditionColor ?? 'text-theme-text-muted'}`}
+              >
                 {condition.replace('_', ' ')}
               </span>
             )}
             {quantity != null && quantity > 1 && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs bg-theme-surface-secondary text-theme-text-primary font-medium">
+              <span className="bg-theme-surface-secondary text-theme-text-primary inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium">
                 Qty: {quantity}
               </span>
             )}
@@ -171,14 +166,14 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
 
           {/* Detail row */}
           <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-theme-text-muted min-w-0">
-              {barcode && <span className="font-mono truncate">BC: {barcode}</span>}
-              {serialNumber && <span className="font-mono truncate">SN: {serialNumber}</span>}
-              {assetTag && <span className="font-mono truncate">Tag: {assetTag}</span>}
+            <div className="text-theme-text-muted flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-xs">
+              {barcode && <span className="truncate font-mono">BC: {barcode}</span>}
+              {serialNumber && <span className="truncate font-mono">SN: {serialNumber}</span>}
+              {assetTag && <span className="truncate font-mono">Tag: {assetTag}</span>}
               {location && <span className="truncate">{location}</span>}
-              {cost && <span className="font-medium text-theme-text-secondary">{cost}</span>}
+              {cost && <span className="text-theme-text-secondary font-medium">{cost}</span>}
             </div>
-            <ChevronRight className="w-4 h-4 text-theme-text-muted shrink-0" aria-hidden="true" />
+            <ChevronRight className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
           </div>
         </div>
       </div>
@@ -186,56 +181,56 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
       {/* Action buttons */}
       {showActions && (
         <div
-          className="flex items-center gap-1 mt-3 pt-3 border-t border-theme-surface-border"
+          className="border-theme-surface-border mt-3 flex items-center gap-1 border-t pt-3"
           onClick={(e) => e.stopPropagation()}
         >
           {onEdit && (
             <button
               onClick={onEdit}
-              className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs text-theme-text-secondary hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors"
+              className="text-theme-text-secondary flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs transition-colors hover:bg-emerald-500/10 hover:text-emerald-500"
               title="Edit"
             >
-              <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
               Edit
             </button>
           )}
           {onDuplicate && (
             <button
               onClick={onDuplicate}
-              className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs text-theme-text-secondary hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+              className="text-theme-text-secondary flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs transition-colors hover:bg-blue-500/10 hover:text-blue-500"
               title="Duplicate"
             >
-              <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
               Copy
             </button>
           )}
           {canIssue && onIssue && (
             <button
               onClick={onIssue}
-              className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs text-theme-text-secondary hover:text-purple-500 hover:bg-purple-500/10 rounded-lg transition-colors"
+              className="text-theme-text-secondary flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs transition-colors hover:bg-purple-500/10 hover:text-purple-500"
               title="Issue from pool"
             >
-              <Send className="w-3.5 h-3.5" aria-hidden="true" />
+              <Send className="h-3.5 w-3.5" aria-hidden="true" />
               Issue
             </button>
           )}
           {canRetire && onWriteOff && (
             <button
               onClick={onWriteOff}
-              className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs text-theme-text-secondary hover:text-orange-500 hover:bg-orange-500/10 rounded-lg transition-colors"
+              className="text-theme-text-secondary flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs transition-colors hover:bg-orange-500/10 hover:text-orange-500"
               title="Write off"
             >
-              <FileX className="w-3.5 h-3.5" aria-hidden="true" />
+              <FileX className="h-3.5 w-3.5" aria-hidden="true" />
               Write Off
             </button>
           )}
           {canRetire && onRetire && (
             <button
               onClick={onRetire}
-              className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs text-theme-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+              className="text-theme-text-secondary flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 py-2.5 text-xs transition-colors hover:bg-red-500/10 hover:text-red-500"
               title="Retire"
             >
-              <Archive className="w-3.5 h-3.5" aria-hidden="true" />
+              <Archive className="h-3.5 w-3.5" aria-hidden="true" />
               Retire
             </button>
           )}

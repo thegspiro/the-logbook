@@ -2,10 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
-import type {
-  MemberInventorySummary,
-  UserInventoryResponse,
-} from '../../../services/eventServices';
+import type { MemberInventorySummary, UserInventoryResponse } from '../../../services/eventServices';
 
 const mockGetMembersSummary = vi.fn();
 const mockGetUserInventory = vi.fn();

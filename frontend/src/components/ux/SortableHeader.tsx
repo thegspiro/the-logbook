@@ -41,7 +41,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   return (
     <button
       onClick={handleClick}
-      className={`inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider hover:text-theme-text-primary transition-colors group ${
+      className={`hover:text-theme-text-primary group inline-flex items-center gap-1 text-xs font-medium tracking-wider uppercase transition-colors ${
         isActive ? 'text-theme-text-primary' : 'text-theme-text-secondary'
       } ${className}`}
       aria-sort={isActive ? (currentDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
@@ -49,11 +49,11 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
       {label}
       <span className="shrink-0">
         {isActive && currentDirection === 'asc' ? (
-          <ArrowUp className="w-3.5 h-3.5" />
+          <ArrowUp className="h-3.5 w-3.5" />
         ) : isActive && currentDirection === 'desc' ? (
-          <ArrowDown className="w-3.5 h-3.5" />
+          <ArrowDown className="h-3.5 w-3.5" />
         ) : (
-          <ArrowUpDown className="w-3.5 h-3.5 opacity-50 sm:opacity-0 sm:group-hover:opacity-50 transition-opacity" />
+          <ArrowUpDown className="h-3.5 w-3.5 opacity-50 transition-opacity sm:opacity-0 sm:group-hover:opacity-50" />
         )}
       </span>
     </button>

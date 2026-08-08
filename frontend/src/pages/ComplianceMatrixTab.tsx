@@ -13,11 +13,11 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime } from '../utils/dateFormatting';
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
-  completed: <CheckCircle2 className="w-3.5 h-3.5 text-green-700 dark:text-green-400" />,
-  verified: <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />,
-  in_progress: <Clock className="w-3.5 h-3.5 text-blue-700 dark:text-blue-400" />,
-  expired: <XCircle className="w-3.5 h-3.5 text-red-700 dark:text-red-400" />,
-  not_started: <XCircle className="w-3.5 h-3.5 text-theme-text-muted" />,
+  completed: <CheckCircle2 className="h-3.5 w-3.5 text-green-700 dark:text-green-400" />,
+  verified: <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />,
+  in_progress: <Clock className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />,
+  expired: <XCircle className="h-3.5 w-3.5 text-red-700 dark:text-red-400" />,
+  not_started: <XCircle className="text-theme-text-muted h-3.5 w-3.5" />,
 };
 
 const ComplianceMatrixTab: React.FC = () => {
@@ -44,16 +44,16 @@ const ComplianceMatrixTab: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
-        <Loader2 className="h-8 w-8 text-theme-text-muted animate-spin" />
+      <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
+        <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   if (error || !matrix) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-700 dark:text-red-400">
+      <div className="mx-auto max-w-7xl px-4 py-8">
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-red-700 dark:text-red-400">
           {error || 'No data available'}
         </div>
       </div>
@@ -64,27 +64,27 @@ const ComplianceMatrixTab: React.FC = () => {
 
   if (requirements.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8 text-center text-theme-text-muted">
-        <AlertTriangle className="h-12 w-12 mx-auto mb-3 opacity-50" />
+      <div className="text-theme-text-muted mx-auto max-w-7xl px-4 py-8 text-center">
+        <AlertTriangle className="mx-auto mb-3 h-12 w-12 opacity-50" />
         <p>No active training requirements found. Create requirements first.</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="mx-auto max-w-full px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-theme-text-primary">Compliance Matrix</h2>
-          <p className="text-sm text-theme-text-muted">
+          <h2 className="text-theme-text-primary text-lg font-semibold">Compliance Matrix</h2>
+          <p className="text-theme-text-muted text-sm">
             {members.length} members × {requirements.length} requirements
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <p className="text-xs text-theme-text-muted">Generated {formatShortDateTime(matrix.generated_at, tz)}</p>
+          <p className="text-theme-text-muted text-xs">Generated {formatShortDateTime(matrix.generated_at, tz)}</p>
           <button
             onClick={() => window.open('/training/print/compliance', '_blank')}
-            className="text-xs text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1 px-2 py-1 border border-theme-surface-border rounded hover:bg-theme-surface-hover transition-colors print:hidden"
+            className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-1 rounded border px-2 py-1 text-xs transition-colors print:hidden"
           >
             Print Report
           </button>
@@ -94,46 +94,55 @@ const ComplianceMatrixTab: React.FC = () => {
       <div className="card-secondary overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b border-theme-surface-border">
-              <th scope="col" className="sticky left-0 z-10 bg-theme-surface-modal px-4 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+            <tr className="border-theme-surface-border border-b">
+              <th
+                scope="col"
+                className="bg-theme-surface-modal text-theme-text-secondary sticky left-0 z-10 px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+              >
                 Member
               </th>
-              {requirements.map(req => (
+              {requirements.map((req) => (
                 <th
                   key={req.id}
-                  className="px-3 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider whitespace-nowrap"
+                  className="text-theme-text-secondary px-3 py-3 text-center text-xs font-medium tracking-wider whitespace-nowrap uppercase"
                   title={req.name}
                 >
                   {req.name.length > 15 ? req.name.slice(0, 15) + '...' : req.name}
                 </th>
               ))}
-              <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
+              <th
+                scope="col"
+                className="text-theme-text-secondary px-4 py-3 text-center text-xs font-medium tracking-wider uppercase"
+              >
                 Overall
               </th>
             </tr>
           </thead>
           <tbody>
             {members.map((member: ComplianceMatrixMember) => (
-              <tr key={member.user_id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
-                <td className="sticky left-0 z-10 bg-theme-surface-modal px-4 py-2.5 whitespace-nowrap text-theme-text-primary font-medium">
+              <tr key={member.user_id} className="border-theme-surface-border hover:bg-theme-surface-hover border-b">
+                <td className="bg-theme-surface-modal text-theme-text-primary sticky left-0 z-10 px-4 py-2.5 font-medium whitespace-nowrap">
                   {member.member_name}
                 </td>
-                {member.requirements.map(req => (
+                {member.requirements.map((req) => (
                   <td key={req.requirement_id} className="px-3 py-2.5 text-center">
-                    <div className="flex items-center justify-center" title={`${req.status}${req.expiry_date ? ` (expires ${req.expiry_date})` : ''}`}>
+                    <div
+                      className="flex items-center justify-center"
+                      title={`${req.status}${req.expiry_date ? ` (expires ${req.expiry_date})` : ''}`}
+                    >
                       {STATUS_ICONS[req.status] || STATUS_ICONS.not_started}
                     </div>
                   </td>
                 ))}
                 <td className="px-4 py-2.5 text-center">
                   <div className="flex items-center justify-center gap-2">
-                    <div className="w-16 h-2 bg-theme-surface-secondary rounded-full overflow-hidden">
+                    <div className="bg-theme-surface-secondary h-2 w-16 overflow-hidden rounded-full">
                       <div
                         className={`h-full rounded-full ${member.completion_pct >= 80 ? 'bg-green-500' : member.completion_pct >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
                         style={{ width: `${member.completion_pct}%` }}
                       />
                     </div>
-                    <span className="text-xs text-theme-text-muted">{Math.round(member.completion_pct)}%</span>
+                    <span className="text-theme-text-muted text-xs">{Math.round(member.completion_pct)}%</span>
                   </div>
                 </td>
               </tr>
@@ -143,7 +152,7 @@ const ComplianceMatrixTab: React.FC = () => {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 mt-4 text-xs text-theme-text-muted">
+      <div className="text-theme-text-muted mt-4 flex items-center gap-4 text-xs">
         <span className="flex items-center gap-1">{STATUS_ICONS.completed} Completed</span>
         <span className="flex items-center gap-1">{STATUS_ICONS.in_progress} In Progress</span>
         <span className="flex items-center gap-1">{STATUS_ICONS.expired} Expired</span>

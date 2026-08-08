@@ -124,7 +124,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
-        <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
+        <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
       </div>
     );
   }
@@ -132,23 +132,20 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold text-theme-text-primary">
-          Event Hour Tracking
-        </h3>
-        <p className="text-sm text-theme-text-muted mt-1">
-          Map event types and custom categories to admin hours categories.
-          When members attend events, their hours are automatically credited
-          to the mapped admin hours categories.
+        <h3 className="text-theme-text-primary text-lg font-semibold">Event Hour Tracking</h3>
+        <p className="text-theme-text-muted mt-1 text-sm">
+          Map event types and custom categories to admin hours categories. When members attend events, their hours are
+          automatically credited to the mapped admin hours categories.
         </p>
       </div>
 
       {categories.length === 0 && (
-        <div className="bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/30 rounded-lg p-4">
+        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
             <p className="text-sm text-yellow-800 dark:text-yellow-300">
-              No admin hours categories exist yet. Create categories in the
-              Admin Hours settings before configuring event hour mappings.
+              No admin hours categories exist yet. Create categories in the Admin Hours settings before configuring
+              event hour mappings.
             </p>
           </div>
         </div>
@@ -156,63 +153,60 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
 
       {/* Current mappings grouped by source */}
       <div className="space-y-4">
-        {sourceGroups.filter((g) => g.mappings.length > 0).map((group) => (
-          <div
-            key={group.sourceKey}
-            className="border border-theme-surface-border rounded-lg p-4"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-theme-text-muted" />
-                <span className="font-medium text-theme-text-primary">
-                  {group.sourceLabel}
+        {sourceGroups
+          .filter((g) => g.mappings.length > 0)
+          .map((group) => (
+            <div key={group.sourceKey} className="border-theme-surface-border rounded-lg border p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="text-theme-text-muted h-4 w-4" />
+                  <span className="text-theme-text-primary font-medium">{group.sourceLabel}</span>
+                </div>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    group.totalPercentage > 100
+                      ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
+                      : group.totalPercentage === 100
+                        ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
+                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
+                  }`}
+                >
+                  {group.totalPercentage}% allocated
                 </span>
               </div>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                group.totalPercentage > 100
-                  ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
-                  : group.totalPercentage === 100
-                    ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                    : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400'
-              }`}>
-                {group.totalPercentage}% allocated
-              </span>
-            </div>
-            <div className="space-y-2">
-              {group.mappings.map((mapping) => (
-                <div
-                  key={mapping.id}
-                  className="flex items-center justify-between bg-theme-surface-hover rounded-md px-3 py-2"
-                >
-                  <div className="flex items-center gap-2">
-                    {mapping.adminHoursCategoryColor && (
-                      <span
-                        className="w-3 h-3 rounded-full shrink-0"
-                        style={{ backgroundColor: mapping.adminHoursCategoryColor }}
-                      />
-                    )}
-                    <span className="text-sm text-theme-text-primary">
-                      {mapping.adminHoursCategoryName ?? 'Unknown Category'}
-                    </span>
-                    <span className="text-xs text-theme-text-muted">
-                      ({mapping.percentage}%)
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => void handleDeleteMapping(mapping.id)}
-                    className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1"
-                    title="Remove mapping"
+              <div className="space-y-2">
+                {group.mappings.map((mapping) => (
+                  <div
+                    key={mapping.id}
+                    className="bg-theme-surface-hover flex items-center justify-between rounded-md px-3 py-2"
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-2">
+                      {mapping.adminHoursCategoryColor && (
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: mapping.adminHoursCategoryColor }}
+                        />
+                      )}
+                      <span className="text-theme-text-primary text-sm">
+                        {mapping.adminHoursCategoryName ?? 'Unknown Category'}
+                      </span>
+                      <span className="text-theme-text-muted text-xs">({mapping.percentage}%)</span>
+                    </div>
+                    <button
+                      onClick={() => void handleDeleteMapping(mapping.id)}
+                      className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                      title="Remove mapping"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
 
         {sourceGroups.every((g) => g.mappings.length === 0) && (
-          <p className="text-sm text-theme-text-muted italic text-center py-4">
+          <p className="text-theme-text-muted py-4 text-center text-sm italic">
             No event hour mappings configured yet.
           </p>
         )}
@@ -220,11 +214,9 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
 
       {/* Add new mapping */}
       {categories.length > 0 && (
-        <div className="border-t border-theme-surface-border pt-4">
-          <h4 className="text-sm font-medium text-theme-text-primary mb-3">
-            Add Mapping
-          </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="border-theme-surface-border border-t pt-4">
+          <h4 className="text-theme-text-primary mb-3 text-sm font-medium">Add Mapping</h4>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {/* Source selector */}
             <select
               value={newSourceValue ? `${newSourceType}:${newSourceValue}` : ''}
@@ -239,23 +231,27 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
                 setNewSourceType(type === 'custom' ? 'custom' : 'event_type');
                 setNewSourceValue(source);
               }}
-              className="block w-full rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-theme-accent-blue focus:outline-none focus:ring-1 focus:ring-theme-accent-blue"
+              className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:border-theme-accent-blue focus:ring-theme-accent-blue block w-full rounded-md border px-3 py-2 text-sm focus:ring-1 focus:outline-none"
             >
               <option value="">Select event source...</option>
               <optgroup label="Built-in Event Types">
-                {allSources.filter((s) => s.type === 'event_type').map((s) => (
-                  <option key={s.value} value={`event_type:${s.value}`}>
-                    {s.label}
-                  </option>
-                ))}
-              </optgroup>
-              {allSources.some((s) => s.type === 'custom') && (
-                <optgroup label="Custom Categories">
-                  {allSources.filter((s) => s.type === 'custom').map((s) => (
-                    <option key={s.value} value={`custom:${s.value}`}>
+                {allSources
+                  .filter((s) => s.type === 'event_type')
+                  .map((s) => (
+                    <option key={s.value} value={`event_type:${s.value}`}>
                       {s.label}
                     </option>
                   ))}
+              </optgroup>
+              {allSources.some((s) => s.type === 'custom') && (
+                <optgroup label="Custom Categories">
+                  {allSources
+                    .filter((s) => s.type === 'custom')
+                    .map((s) => (
+                      <option key={s.value} value={`custom:${s.value}`}>
+                        {s.label}
+                      </option>
+                    ))}
                 </optgroup>
               )}
             </select>
@@ -264,7 +260,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
             <select
               value={newCategoryId}
               onChange={(e) => setNewCategoryId(e.target.value)}
-              className="block w-full rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-theme-accent-blue focus:outline-none focus:ring-1 focus:ring-theme-accent-blue"
+              className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:border-theme-accent-blue focus:ring-theme-accent-blue block w-full rounded-md border px-3 py-2 text-sm focus:ring-1 focus:outline-none"
             >
               <option value="">Select admin hours category...</option>
               {categories.map((cat) => (
@@ -282,28 +278,23 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
                 max={100}
                 value={newPercentage}
                 onChange={(e) => setNewPercentage(Number(e.target.value))}
-                className="block w-20 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary focus:border-theme-accent-blue focus:outline-none focus:ring-1 focus:ring-theme-accent-blue"
+                className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:border-theme-accent-blue focus:ring-theme-accent-blue block w-20 rounded-md border px-3 py-2 text-sm focus:ring-1 focus:outline-none"
               />
-              <span className="text-sm text-theme-text-muted">%</span>
+              <span className="text-theme-text-muted text-sm">%</span>
             </div>
 
             {/* Add button */}
             <button
               onClick={() => void handleAddMapping()}
               disabled={saving || !newSourceValue || !newCategoryId}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-theme-accent-blue px-4 py-2 text-sm font-medium text-white hover:bg-theme-accent-blue/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="bg-theme-accent-blue hover:bg-theme-accent-blue/90 inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Plus className="w-4 h-4" />
-              )}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Add
             </button>
           </div>
-          <p className="text-xs text-theme-text-muted mt-2">
-            Total percentage per event source can be up to 100%.
-            Unmapped percentage means those hours are not tracked.
+          <p className="text-theme-text-muted mt-2 text-xs">
+            Total percentage per event source can be up to 100%. Unmapped percentage means those hours are not tracked.
           </p>
         </div>
       )}

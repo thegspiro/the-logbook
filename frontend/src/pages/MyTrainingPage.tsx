@@ -617,7 +617,7 @@ const MyTrainingPage: React.FC = () => {
         <div className="mb-6 flex space-x-2">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`rounded-lg px-4 py-2 max-md:min-h-[44px] text-sm font-medium transition-colors ${
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
               activeTab === 'overview'
                 ? 'bg-red-600 text-white'
                 : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -627,7 +627,7 @@ const MyTrainingPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center space-x-2 rounded-lg px-4 py-2 max-md:min-h-[44px] text-sm font-medium transition-colors ${
+            className={`flex items-center space-x-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors max-md:min-h-[44px] ${
               activeTab === 'settings'
                 ? 'bg-red-600 text-white'
                 : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'

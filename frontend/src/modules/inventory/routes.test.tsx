@@ -74,7 +74,7 @@ function renderRoute(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>{getInventoryRoutes()}</Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 }
 

@@ -40,8 +40,8 @@ interface PipelineTableProps {
   onToggleAll?: (() => void) | undefined;
 }
 
-
-type SortField = 'name' | 'email' | 'current_stage_name' | 'status' | 'days_in_stage' | 'target_membership_type' | 'created_at';
+type SortField =
+  'name' | 'email' | 'current_stage_name' | 'status' | 'days_in_stage' | 'target_membership_type' | 'created_at';
 
 export const PipelineTable: React.FC<PipelineTableProps> = ({
   applicants,
@@ -121,27 +121,30 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     setActionMenuId(null);
   }, [currentPage, setSelected]);
 
-  const allSelected =
-    applicants.length > 0 && selected.size === applicants.length;
+  const allSelected = applicants.length > 0 && selected.size === applicants.length;
   const someSelected = selected.size > 0 && !allSelected;
 
-  const toggleAll = externalToggleAll ?? (() => {
-    if (allSelected) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(applicants.map((a) => a.id)));
-    }
-  });
+  const toggleAll =
+    externalToggleAll ??
+    (() => {
+      if (allSelected) {
+        setSelected(new Set());
+      } else {
+        setSelected(new Set(applicants.map((a) => a.id)));
+      }
+    });
 
-  const toggleOne = externalToggle ?? ((id: string) => {
-    const next = new Set(selected);
-    if (next.has(id)) {
-      next.delete(id);
-    } else {
-      next.add(id);
-    }
-    setSelected(next);
-  });
+  const toggleOne =
+    externalToggle ??
+    ((id: string) => {
+      const next = new Set(selected);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      setSelected(next);
+    });
 
   const handleBulkAction = async (action: 'advance' | 'hold' | 'reject') => {
     const ids = Array.from(selected);
@@ -149,8 +152,8 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       action === 'advance'
         ? advanceApplicant
         : action === 'hold'
-        ? (id: string) => holdApplicant(id)
-        : (id: string) => rejectApplicant(id);
+          ? (id: string) => holdApplicant(id)
+          : (id: string) => rejectApplicant(id);
 
     let successCount = 0;
     for (const id of ids) {
@@ -162,9 +165,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       }
     }
 
-    toast.success(
-      `${action.charAt(0).toUpperCase() + action.slice(1)}d ${successCount} of ${ids.length} applicants`
-    );
+    toast.success(`${action.charAt(0).toUpperCase() + action.slice(1)}d ${successCount} of ${ids.length} applicants`);
     setSelected(new Set());
   };
 
@@ -185,33 +186,35 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     <div>
       {/* Bulk Actions Bar */}
       {selected.size > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-3 p-3 bg-theme-surface border border-theme-surface-border rounded-lg">
-          <span className="text-sm text-theme-text-secondary">
-            {selected.size} selected
-          </span>
-          <div className="flex items-center gap-2 ml-auto flex-wrap">
+        <div className="bg-theme-surface border-theme-surface-border mb-3 flex flex-wrap items-center gap-3 rounded-lg border p-3">
+          <span className="text-theme-text-secondary text-sm">{selected.size} selected</span>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             <button
-              onClick={() => { void handleBulkAction('advance'); }}
+              onClick={() => {
+                void handleBulkAction('advance');
+              }}
               aria-label={`Advance ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-700"
             >
-              <Forward className="w-3.5 h-3.5" />
+              <Forward className="h-3.5 w-3.5" />
               Advance
             </button>
             <button
-              onClick={() => { void handleBulkAction('hold'); }}
+              onClick={() => {
+                void handleBulkAction('hold');
+              }}
               aria-label={`Hold ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
+              className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-amber-700"
             >
-              <Pause className="w-3.5 h-3.5" />
+              <Pause className="h-3.5 w-3.5" />
               Hold
             </button>
             <button
               onClick={() => setShowBulkRejectConfirm(true)}
               aria-label={`Reject ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
-              className="btn-primary flex gap-1.5 items-center px-3 py-1.5 text-sm"
+              className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm"
             >
-              <XCircle className="w-3.5 h-3.5" />
+              <XCircle className="h-3.5 w-3.5" />
               Reject
             </button>
           </div>
@@ -220,14 +223,15 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
 
       {/* Bulk Reject Confirmation */}
       {showBulkRejectConfirm && (
-        <div className="mb-3 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-          <p className="text-sm text-red-700 dark:text-red-300 mb-3">
-            Are you sure you want to reject <strong className="text-theme-text-primary">{selected.size}</strong> applicant(s)? This action cannot be easily undone.
+        <div className="mb-3 rounded-lg border border-red-500/20 bg-red-500/10 p-4">
+          <p className="mb-3 text-sm text-red-700 dark:text-red-300">
+            Are you sure you want to reject <strong className="text-theme-text-primary">{selected.size}</strong>{' '}
+            applicant(s)? This action cannot be easily undone.
           </p>
-          <div className="flex items-center gap-2 justify-end">
+          <div className="flex items-center justify-end gap-2">
             <button
               onClick={() => setShowBulkRejectConfirm(false)}
-              className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+              className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm transition-colors"
             >
               Cancel
             </button>
@@ -236,7 +240,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                 void handleBulkAction('reject');
                 setShowBulkRejectConfirm(false);
               }}
-              className="btn-primary flex gap-1 items-center py-1.5 text-sm"
+              className="btn-primary flex items-center gap-1 py-1.5 text-sm"
             >
               Confirm Reject All
             </button>
@@ -245,36 +249,95 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
       )}
 
       {/* Table */}
-      <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden">
+      <div className="bg-theme-input-bg border-theme-surface-border overflow-hidden rounded-lg border">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-theme-surface-border">
+              <tr className="border-theme-surface-border border-b">
                 <th scope="col" className="w-14 p-3">
-                  <button onClick={toggleAll} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary">
+                  <button
+                    onClick={toggleAll}
+                    className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-[44px] min-w-[44px] items-center justify-center"
+                  >
                     {allSelected ? (
-                      <CheckSquare className="w-5 h-5 text-red-700 dark:text-red-400" />
+                      <CheckSquare className="h-5 w-5 text-red-700 dark:text-red-400" />
                     ) : someSelected ? (
-                      <CheckSquare className="w-5 h-5 text-red-700 dark:text-red-400/50" />
+                      <CheckSquare className="h-5 w-5 text-red-700 dark:text-red-400/50" />
                     ) : (
-                      <Square className="w-5 h-5" />
+                      <Square className="h-5 w-5" />
                     )}
                   </button>
                 </th>
-                <th className="text-left p-3"><SortableHeader label="Name" field="name" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
-                <th className="text-left p-3 table-col-secondary"><SortableHeader label="Email" field="email" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
-                <th className="text-left p-3"><SortableHeader label="Current Stage" field="current_stage_name" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
-                <th className="text-left p-3"><SortableHeader label="Status" field="status" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
-                <th className="text-left p-3 table-col-secondary"><SortableHeader label="Days in Stage" field="days_in_stage" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
-                <th className="text-left p-3 table-col-tertiary"><SortableHeader label="Target Type" field="target_membership_type" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
-                <th className="text-left p-3 table-col-tertiary"><SortableHeader label="Applied" field="created_at" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
+                <th className="p-3 text-left">
+                  <SortableHeader
+                    label="Name"
+                    field="name"
+                    currentSort={sortField}
+                    currentDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="table-col-secondary p-3 text-left">
+                  <SortableHeader
+                    label="Email"
+                    field="email"
+                    currentSort={sortField}
+                    currentDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="p-3 text-left">
+                  <SortableHeader
+                    label="Current Stage"
+                    field="current_stage_name"
+                    currentSort={sortField}
+                    currentDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="p-3 text-left">
+                  <SortableHeader
+                    label="Status"
+                    field="status"
+                    currentSort={sortField}
+                    currentDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="table-col-secondary p-3 text-left">
+                  <SortableHeader
+                    label="Days in Stage"
+                    field="days_in_stage"
+                    currentSort={sortField}
+                    currentDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="table-col-tertiary p-3 text-left">
+                  <SortableHeader
+                    label="Target Type"
+                    field="target_membership_type"
+                    currentSort={sortField}
+                    currentDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                </th>
+                <th className="table-col-tertiary p-3 text-left">
+                  <SortableHeader
+                    label="Applied"
+                    field="created_at"
+                    currentSort={sortField}
+                    currentDirection={sortDirection}
+                    onSort={handleSort}
+                  />
+                </th>
                 <th scope="col" className="w-12 p-3"></th>
               </tr>
             </thead>
             <tbody>
               {sortedApplicants.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-theme-text-muted">
+                  <td colSpan={9} className="text-theme-text-muted py-12 text-center">
                     No applicants found
                   </td>
                 </tr>
@@ -287,100 +350,93 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                   return (
                     <tr
                       key={applicant.id}
-                      className={`border-b border-theme-surface-border hover:bg-theme-surface-secondary transition-colors cursor-pointer ${
+                      className={`border-theme-surface-border hover:bg-theme-surface-secondary cursor-pointer border-b transition-colors ${
                         isSelected ? 'bg-red-500/5' : ''
                       }`}
                     >
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => toggleOne(applicant.id)}
-                          className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary"
+                          className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-[44px] min-w-[44px] items-center justify-center"
                         >
                           {isSelected ? (
-                            <CheckSquare className="w-5 h-5 text-red-700 dark:text-red-400" />
+                            <CheckSquare className="h-5 w-5 text-red-700 dark:text-red-400" />
                           ) : (
-                            <Square className="w-5 h-5" />
+                            <Square className="h-5 w-5" />
                           )}
                         </button>
                       </td>
-                      <td
-                        className="p-3"
-                        onClick={() => onApplicantClick(applicant)}
-                      >
+                      <td className="p-3" onClick={() => onApplicantClick(applicant)}>
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-linear-to-br from-red-500 to-red-700 flex items-center justify-center text-xs font-bold text-white shrink-0">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-red-500 to-red-700 text-xs font-bold text-white">
                             {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
-                          <span className="text-sm font-medium text-theme-text-primary">
+                          <span className="text-theme-text-primary text-sm font-medium">
                             {applicant.first_name} {applicant.last_name}
                           </span>
                         </div>
                       </td>
                       <td
-                        className="p-3 text-sm text-theme-text-muted table-col-secondary"
+                        className="text-theme-text-muted table-col-secondary p-3 text-sm"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {applicant.email}
                       </td>
-                      <td
-                        className="p-3 text-sm text-theme-text-secondary"
-                        onClick={() => onApplicantClick(applicant)}
-                      >
+                      <td className="text-theme-text-secondary p-3 text-sm" onClick={() => onApplicantClick(applicant)}>
                         {applicant.current_stage_name ?? '—'}
                       </td>
-                      <td
-                        className="p-3"
-                        onClick={() => onApplicantClick(applicant)}
-                      >
-                        <span className={`inline-block text-xs px-2 py-0.5 rounded-sm ${statusColor}`}>
+                      <td className="p-3" onClick={() => onApplicantClick(applicant)}>
+                        <span className={`inline-block rounded-sm px-2 py-0.5 text-xs ${statusColor}`}>
                           {statusLabel}
                         </span>
                       </td>
                       <td
-                        className="p-3 text-sm text-theme-text-muted table-col-secondary"
+                        className="text-theme-text-muted table-col-secondary p-3 text-sm"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         <span className="flex items-center gap-1">
                           {applicant.days_in_stage}d
                           {applicant.inactivity_alert_level === 'critical' && (
-                            <AlertTriangle className="w-3 h-3 text-red-700 dark:text-red-400" aria-label="Approaching timeout" />
+                            <AlertTriangle
+                              className="h-3 w-3 text-red-700 dark:text-red-400"
+                              aria-label="Approaching timeout"
+                            />
                           )}
                           {applicant.inactivity_alert_level === 'warning' && (
-                            <AlertTriangle className="w-3 h-3 text-amber-700 dark:text-amber-400" aria-label="Activity slowing" />
+                            <AlertTriangle
+                              className="h-3 w-3 text-amber-700 dark:text-amber-400"
+                              aria-label="Activity slowing"
+                            />
                           )}
                         </span>
                       </td>
                       <td
-                        className="p-3 text-sm text-theme-text-muted capitalize table-col-tertiary"
+                        className="text-theme-text-muted table-col-tertiary p-3 text-sm capitalize"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {applicant.target_membership_type}
                       </td>
                       <td
-                        className="p-3 text-sm text-theme-text-muted table-col-tertiary"
+                        className="text-theme-text-muted table-col-tertiary p-3 text-sm"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {formatDate(applicant.created_at, tz)}
                       </td>
-                      <td className="p-3 relative" onClick={(e) => e.stopPropagation()}>
+                      <td className="relative p-3" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() =>
-                            setActionMenuId(
-                              actionMenuId === applicant.id ? null : applicant.id
-                            )
-                          }
-                          className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                          onClick={() => setActionMenuId(actionMenuId === applicant.id ? null : applicant.id)}
+                          className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-[44px] min-w-[44px] items-center justify-center transition-colors"
                         >
-                          <MoreHorizontal className="w-4 h-4" />
+                          <MoreHorizontal className="h-4 w-4" />
                         </button>
                         {actionMenuId === applicant.id && (
-                          <div className="absolute right-0 top-full mt-1 w-40 bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-xl z-10 py-1">
+                          <div className="bg-theme-surface-modal border-theme-surface-border absolute top-full right-0 z-10 mt-1 w-40 rounded-lg border py-1 shadow-xl">
                             <button
                               onClick={() => {
                                 onApplicantClick(applicant);
                                 setActionMenuId(null);
                               }}
-                              className="w-full text-left px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-surface-secondary hover:text-theme-text-primary"
+                              className="text-theme-text-secondary hover:bg-theme-surface-secondary hover:text-theme-text-primary w-full px-4 py-2 text-left text-sm"
                             >
                               View Details
                             </button>
@@ -391,7 +447,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                     void advanceApplicant(applicant.id);
                                     setActionMenuId(null);
                                   }}
-                                  className="w-full text-left px-4 py-2 text-sm text-emerald-700 dark:text-emerald-400 hover:bg-theme-surface-secondary"
+                                  className="hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm text-emerald-700 dark:text-emerald-400"
                                 >
                                   Advance Stage
                                 </button>
@@ -400,17 +456,17 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                     void holdApplicant(applicant.id);
                                     setActionMenuId(null);
                                   }}
-                                  className="w-full text-left px-4 py-2 text-sm text-amber-700 dark:text-amber-400 hover:bg-theme-surface-secondary"
+                                  className="hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm text-amber-700 dark:text-amber-400"
                                 >
                                   Put on Hold
                                 </button>
                                 {withdrawConfirmId === applicant.id ? (
-                                  <div className="px-4 py-2 space-y-2">
-                                    <p className="text-xs text-theme-text-secondary">Confirm withdraw?</p>
+                                  <div className="space-y-2 px-4 py-2">
+                                    <p className="text-theme-text-secondary text-xs">Confirm withdraw?</p>
                                     <div className="flex items-center gap-2">
                                       <button
                                         onClick={() => setWithdrawConfirmId(null)}
-                                        className="text-xs text-theme-text-muted hover:text-theme-text-primary"
+                                        className="text-theme-text-muted hover:text-theme-text-primary text-xs"
                                       >
                                         Cancel
                                       </button>
@@ -421,9 +477,9 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                           setActionMenuId(null);
                                         }}
                                         disabled={isWithdrawing}
-                                        className="flex items-center gap-1 text-xs text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-50"
+                                        className="text-theme-text-secondary hover:text-theme-text-primary flex items-center gap-1 text-xs disabled:opacity-50"
                                       >
-                                        {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
+                                        {isWithdrawing && <Loader2 className="h-3 w-3 animate-spin" />}
                                         Confirm
                                       </button>
                                     </div>
@@ -431,18 +487,18 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                 ) : (
                                   <button
                                     onClick={() => setWithdrawConfirmId(applicant.id)}
-                                    className="w-full text-left px-4 py-2 text-sm text-theme-text-muted hover:bg-theme-surface-secondary"
+                                    className="text-theme-text-muted hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm"
                                   >
                                     Withdraw
                                   </button>
                                 )}
                                 {rejectConfirmId === applicant.id ? (
-                                  <div className="px-4 py-2 space-y-2">
+                                  <div className="space-y-2 px-4 py-2">
                                     <p className="text-xs text-red-700 dark:text-red-300">Confirm reject?</p>
                                     <div className="flex items-center gap-2">
                                       <button
                                         onClick={() => setRejectConfirmId(null)}
-                                        className="text-xs text-theme-text-muted hover:text-theme-text-primary"
+                                        className="text-theme-text-muted hover:text-theme-text-primary text-xs"
                                       >
                                         Cancel
                                       </button>
@@ -453,9 +509,9 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                           setActionMenuId(null);
                                         }}
                                         disabled={isRejecting}
-                                        className="flex items-center gap-1 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 disabled:opacity-50"
+                                        className="flex items-center gap-1 text-xs text-red-700 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
                                       >
-                                        {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
+                                        {isRejecting && <Loader2 className="h-3 w-3 animate-spin" />}
                                         Confirm
                                       </button>
                                     </div>
@@ -463,7 +519,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                                 ) : (
                                   <button
                                     onClick={() => setRejectConfirmId(applicant.id)}
-                                    className="w-full text-left px-4 py-2 text-sm text-red-700 dark:text-red-400 hover:bg-theme-surface-secondary"
+                                    className="hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm text-red-700 dark:text-red-400"
                                   >
                                     Reject
                                   </button>
@@ -483,23 +539,23 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-t border-theme-surface-border">
-            <p className="text-sm text-theme-text-muted">
+          <div className="border-theme-surface-border flex flex-wrap items-center justify-between gap-2 border-t p-3">
+            <p className="text-theme-text-muted text-sm">
               Page {currentPage} of {totalPages} ({totalApplicants} total)
             </p>
             <div className="flex items-center gap-0.5">
               <button
                 onClick={() => onPageChange(currentPage - 1)}
                 disabled={currentPage <= 1}
-                className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-[44px] min-w-[44px] items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="h-4 w-4" />
               </button>
               {getPageNumbers().map((p) => (
                 <button
                   key={p}
                   onClick={() => onPageChange(p)}
-                  className={`min-w-[36px] h-9 sm:min-w-[40px] sm:h-10 text-sm rounded ${
+                  className={`h-9 min-w-[36px] rounded text-sm sm:h-10 sm:min-w-[40px] ${
                     p === currentPage
                       ? 'bg-red-600 text-white'
                       : 'text-theme-text-muted hover:bg-theme-surface-hover hover:text-theme-text-primary'
@@ -511,9 +567,9 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
               <button
                 onClick={() => onPageChange(currentPage + 1)}
                 disabled={currentPage >= totalPages}
-                className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-[44px] min-w-[44px] items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           </div>

@@ -32,26 +32,91 @@ const PASSWORD_MAX_LENGTH = 128;
 
 // Common passwords to reject (subset - backend has full list)
 const COMMON_PASSWORDS = [
-  'password', '12345678', '123456789', '1234567890', 'qwerty', 'admin',
-  'letmein', 'welcome', 'monkey', 'dragon', 'master', 'password123',
-  'password1', 'password!', 'iloveyou', 'sunshine', 'princess', 'admin123',
-  'qwerty123', 'login', 'passw0rd', 'baseball', 'football', 'shadow',
-  'firefighter', 'firehouse', 'firedepart', 'rescue', 'engine', 'ladder',
-  'station', 'department', 'emergency', 'medic', 'ems', 'ambulance'
+  'password',
+  '12345678',
+  '123456789',
+  '1234567890',
+  'qwerty',
+  'admin',
+  'letmein',
+  'welcome',
+  'monkey',
+  'dragon',
+  'master',
+  'password123',
+  'password1',
+  'password!',
+  'iloveyou',
+  'sunshine',
+  'princess',
+  'admin123',
+  'qwerty123',
+  'login',
+  'passw0rd',
+  'baseball',
+  'football',
+  'shadow',
+  'firefighter',
+  'firehouse',
+  'firedepart',
+  'rescue',
+  'engine',
+  'ladder',
+  'station',
+  'department',
+  'emergency',
+  'medic',
+  'ems',
+  'ambulance',
 ];
 
 // Sequential patterns to reject
 const SEQUENTIAL_PATTERNS = [
-  '012', '123', '234', '345', '456', '567', '678', '789',
-  'abc', 'bcd', 'cde', 'def', 'efg', 'fgh', 'ghi', 'hij',
-  'ijk', 'jkl', 'klm', 'lmn', 'mno', 'nop', 'opq', 'pqr',
-  'qrs', 'rst', 'stu', 'tuv', 'uvw', 'vwx', 'wxy', 'xyz'
+  '012',
+  '123',
+  '234',
+  '345',
+  '456',
+  '567',
+  '678',
+  '789',
+  'abc',
+  'bcd',
+  'cde',
+  'def',
+  'efg',
+  'fgh',
+  'ghi',
+  'hij',
+  'ijk',
+  'jkl',
+  'klm',
+  'lmn',
+  'mno',
+  'nop',
+  'opq',
+  'pqr',
+  'qrs',
+  'rst',
+  'stu',
+  'tuv',
+  'uvw',
+  'vwx',
+  'wxy',
+  'xyz',
 ];
 
 // Keyboard patterns to reject
 const KEYBOARD_PATTERNS = [
-  'qwerty', 'asdfgh', 'zxcvbn', 'qazwsx', 'qweasd', '!@#$%^',
-  '1qaz2wsx', '1234qwer', 'asdf1234'
+  'qwerty',
+  'asdfgh',
+  'zxcvbn',
+  'qazwsx',
+  'qweasd',
+  '!@#$%^',
+  '1qaz2wsx',
+  '1234qwer',
+  'asdf1234',
 ];
 
 /**
@@ -161,9 +226,7 @@ export function validatePassword(
 /**
  * Get password requirements as human-readable text
  */
-export function getPasswordRequirementsText(
-  requirements: PasswordRequirements = DEFAULT_REQUIREMENTS
-): string[] {
+export function getPasswordRequirementsText(requirements: PasswordRequirements = DEFAULT_REQUIREMENTS): string[] {
   const reqs: string[] = [];
 
   reqs.push(`At least ${requirements.minLength} characters`);

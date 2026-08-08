@@ -181,7 +181,7 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
 const OTHER_CATEGORY_ID = 'other';
 
 const CATEGORY_BY_TYPE: Record<string, string> = Object.fromEntries(
-  TEMPLATE_CATEGORIES.flatMap((c) => c.types.map((t) => [t, c.id])),
+  TEMPLATE_CATEGORIES.flatMap((c) => c.types.map((t) => [t, c.id]))
 );
 
 function categoryIdFor(templateType: string): string {
@@ -282,9 +282,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
                 <ChevronRight className="h-3.5 w-3.5 shrink-0" />
               )}
               <span className="flex-1 truncate">{group.label}</span>
-              <span className="text-theme-text-muted shrink-0 font-normal normal-case">
-                {group.templates.length}
-              </span>
+              <span className="text-theme-text-muted shrink-0 font-normal normal-case">{group.templates.length}</span>
             </button>
 
             {isOpen &&
@@ -306,9 +304,7 @@ export const TemplateList: React.FC<TemplateListProps> = ({ templates, selectedI
                     <div className="min-w-0 flex-1">
                       <p
                         className={`truncate text-sm font-medium ${
-                          isSelected
-                            ? 'text-orange-600 dark:text-orange-400'
-                            : 'text-theme-text-primary'
+                          isSelected ? 'text-orange-600 dark:text-orange-400' : 'text-theme-text-primary'
                         }`}
                       >
                         {template.name}

@@ -83,7 +83,8 @@ export const AVAILABLE_MODULES: Module[] = [
     enabled: true,
     canDisable: false,
     icon: 'Calendar',
-    route: '/scheduling',    features: [
+    route: '/scheduling',
+    features: [
       'Shift scheduling and rosters',
       'Availability tracking',
       'Coverage requirements',
@@ -185,7 +186,8 @@ export const AVAILABLE_MODULES: Module[] = [
     enabled: true,
     canDisable: true,
     icon: 'Truck',
-    route: '/apparatus',    features: [
+    route: '/apparatus',
+    features: [
       'Vehicle inventory and tracking',
       'Maintenance schedules',
       'Equipment per vehicle',
@@ -205,7 +207,8 @@ export const AVAILABLE_MODULES: Module[] = [
     enabled: true,
     canDisable: true,
     icon: 'Package',
-    route: '/inventory',    features: [
+    route: '/inventory',
+    features: [
       'Equipment and supply tracking',
       'Low stock alerts',
       'Maintenance records',
@@ -224,7 +227,8 @@ export const AVAILABLE_MODULES: Module[] = [
     enabled: true,
     canDisable: true,
     icon: 'GraduationCap',
-    route: '/training',    features: [
+    route: '/training',
+    features: [
       'Course scheduling and management',
       'Certification tracking and expiration alerts',
       'Training attendance records',
@@ -253,7 +257,8 @@ export const AVAILABLE_MODULES: Module[] = [
       'Capital project tracking',
     ],
     requiresSetup: false,
-    setupDescription: 'When disabled, a simplified Locations page provides basic station, address, and room data for events, forms, and QR check-in.',
+    setupDescription:
+      'When disabled, a simplified Locations page provides basic station, address, and room data for events, forms, and QR check-in.',
   },
   {
     id: 'prospective-members',
@@ -292,7 +297,8 @@ export const AVAILABLE_MODULES: Module[] = [
       'Data whitelist controls',
       'Access logs and usage stats',
       'Rate limiting',
-    ],  },
+    ],
+  },
 
   // ============================================
   // ADDITIONAL MODULES (Disabled by Default)
@@ -315,7 +321,8 @@ export const AVAILABLE_MODULES: Module[] = [
       'Attendance tracking',
       'Public event requests',
       'Recurring events',
-    ],  },
+    ],
+  },
   {
     id: 'admin-hours',
     name: 'Admin Hours',
@@ -333,7 +340,8 @@ export const AVAILABLE_MODULES: Module[] = [
       'Pending entry review',
       'Session monitoring',
       'Summary reports and CSV export',
-    ],  },
+    ],
+  },
   {
     id: 'communications',
     name: 'Communications',
@@ -356,7 +364,8 @@ export const AVAILABLE_MODULES: Module[] = [
       'Emergency notifications',
       'Email integration',
       'In-app notifications',
-    ],  },
+    ],
+  },
   {
     id: 'elections',
     name: 'Elections & Voting',
@@ -374,7 +383,8 @@ export const AVAILABLE_MODULES: Module[] = [
       'Result tallying and reporting',
       'Election scheduling',
       'Public ballot voting via token',
-    ],  },
+    ],
+  },
   {
     id: 'minutes',
     name: 'Meeting Minutes',
@@ -386,12 +396,8 @@ export const AVAILABLE_MODULES: Module[] = [
     canDisable: true,
     icon: 'ScrollText',
     route: '/minutes',
-    features: [
-      'Minutes creation and editing',
-      'Approval workflows',
-      'Historical archive',
-      'Action item tracking',
-    ],  },
+    features: ['Minutes creation and editing', 'Approval workflows', 'Historical archive', 'Action item tracking'],
+  },
   {
     id: 'incidents',
     name: 'Incidents & Reports',
@@ -458,7 +464,8 @@ export const AVAILABLE_MODULES: Module[] = [
       'Pledge management',
       'Financial and compliance reporting',
       'Grant deadline reminders',
-    ],  },
+    ],
+  },
   {
     id: 'mobile',
     name: 'Mobile App Access',
@@ -470,11 +477,7 @@ export const AVAILABLE_MODULES: Module[] = [
     canDisable: true,
     icon: 'Smartphone',
     route: '/mobile',
-    features: [
-      'Mobile-optimized interface',
-      'Pull-to-refresh on key pages',
-      'Installable PWA (add to home screen)',
-    ],
+    features: ['Mobile-optimized interface', 'Pull-to-refresh on key pages', 'Installable PWA (add to home screen)'],
     comingSoon: true,
   },
 ];

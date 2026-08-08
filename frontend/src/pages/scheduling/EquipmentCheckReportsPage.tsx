@@ -67,39 +67,37 @@ const EquipmentCheckReportsPage: React.FC = () => {
   const [endDate, setEndDate] = useState(defaults.end);
 
   return (
-    <div className="min-h-screen bg-theme-bg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+    <div className="bg-theme-bg min-h-screen">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="mb-6 flex items-center gap-3">
           <button
             onClick={() => void navigate('/scheduling')}
-            className="p-1.5 rounded-lg hover:bg-theme-surface-hover text-theme-text-muted"
+            className="hover:bg-theme-surface-hover text-theme-text-muted rounded-lg p-1.5"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-violet-500" />
-            <h1 className="text-xl font-bold text-theme-text-primary">
-              Equipment Check Reports
-            </h1>
+            <BarChart3 className="h-5 w-5 text-violet-500" />
+            <h1 className="text-theme-text-primary text-xl font-bold">Equipment Check Reports</h1>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-5 bg-theme-surface border border-theme-surface-border rounded-xl p-1">
+        <div className="bg-theme-surface border-theme-surface-border mb-5 flex gap-1 rounded-xl border p-1">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors flex-1 justify-center ${
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'bg-violet-600 text-white'
                     : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="h-4 w-4" />
                 <span className="hidden sm:inline">{tab.label}</span>
               </button>
             );
@@ -119,15 +117,9 @@ const EquipmentCheckReportsPage: React.FC = () => {
         </div>
 
         {/* Tab content */}
-        {activeTab === 'compliance' && (
-          <ComplianceTab startDate={startDate} endDate={endDate} tz={tz} />
-        )}
-        {activeTab === 'failures' && (
-          <FailuresTab startDate={startDate} endDate={endDate} tz={tz} />
-        )}
-        {activeTab === 'trends' && (
-          <TrendsTab startDate={startDate} endDate={endDate} tz={tz} />
-        )}
+        {activeTab === 'compliance' && <ComplianceTab startDate={startDate} endDate={endDate} tz={tz} />}
+        {activeTab === 'failures' && <FailuresTab startDate={startDate} endDate={endDate} tz={tz} />}
+        {activeTab === 'trends' && <TrendsTab startDate={startDate} endDate={endDate} tz={tz} />}
       </div>
     </div>
   );
@@ -135,11 +127,7 @@ const EquipmentCheckReportsPage: React.FC = () => {
 
 // ─── Compliance Tab ─────────────────────────────────────────────────────────
 
-const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }> = ({
-  startDate,
-  endDate,
-  tz,
-}) => {
+const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }> = ({ startDate, endDate, tz }) => {
   const [data, setData] = useState<ComplianceReport | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -181,8 +169,8 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-theme-text-muted" role="status" aria-live="polite">
-        <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading compliance data...
+      <div className="text-theme-text-muted flex items-center justify-center py-12" role="status" aria-live="polite">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading compliance data...
       </div>
     );
   }
@@ -192,7 +180,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
   return (
     <div className="space-y-5">
       {/* Summary stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Total Checks" value={String(data.totalChecks)} />
         <StatCard
           label="Pass Rate"
@@ -207,34 +195,31 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
       <div className="flex justify-end gap-2">
         <button
           onClick={handleExportCsv}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-theme-surface border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover text-theme-text-secondary"
+          className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-secondary flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
         >
-          <Download className="w-3.5 h-3.5" /> CSV
+          <Download className="h-3.5 w-3.5" /> CSV
         </button>
         <button
           onClick={handleExportPdf}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-theme-surface border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover text-theme-text-secondary"
+          className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-secondary flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
         >
-          <FileText className="w-3.5 h-3.5" /> PDF
+          <FileText className="h-3.5 w-3.5" /> PDF
         </button>
       </div>
 
       {/* Apparatus compliance cards */}
       <div>
-        <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Apparatus Compliance</h3>
+        <h3 className="text-theme-text-primary mb-3 text-sm font-semibold">Apparatus Compliance</h3>
         {data.apparatus.length === 0 ? (
-          <p className="text-sm text-theme-text-muted py-4">No apparatus data available.</p>
+          <p className="text-theme-text-muted py-4 text-sm">No apparatus data available.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {data.apparatus.map((a) => (
-              <div
-                key={a.apparatusId}
-                className="bg-theme-surface border border-theme-surface-border rounded-xl p-4"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-theme-text-primary">{a.apparatusName}</span>
+              <div key={a.apparatusId} className="bg-theme-surface border-theme-surface-border rounded-xl border p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-theme-text-primary text-sm font-semibold">{a.apparatusName}</span>
                   {a.hasDeficiency && (
-                    <span className="px-1.5 py-0.5 text-xs bg-red-500/10 text-red-700 dark:text-red-400 rounded-full">
+                    <span className="rounded-full bg-red-500/10 px-1.5 py-0.5 text-xs text-red-700 dark:text-red-400">
                       Deficiency
                     </span>
                   )}
@@ -258,17 +243,13 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
                 {a.lastStatus && (
                   <div className="mt-2">
                     <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full ${
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
                         a.lastStatus === 'pass'
                           ? 'bg-green-500/10 text-green-700 dark:text-green-400'
                           : 'bg-red-500/10 text-red-700 dark:text-red-400'
                       }`}
                     >
-                      {a.lastStatus === 'pass' ? (
-                        <CheckCircle className="w-3 h-3" />
-                      ) : (
-                        <XCircle className="w-3 h-3" />
-                      )}
+                      {a.lastStatus === 'pass' ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
                       {a.lastStatus === 'pass' ? 'Pass' : 'Fail'}
                     </span>
                   </div>
@@ -281,33 +262,41 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
 
       {/* Member completion table */}
       <div>
-        <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Member Completion</h3>
+        <h3 className="text-theme-text-primary mb-3 text-sm font-semibold">Member Completion</h3>
         {data.members.length === 0 ? (
-          <p className="text-sm text-theme-text-muted py-4">No member data available.</p>
+          <p className="text-theme-text-muted py-4 text-sm">No member data available.</p>
         ) : (
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl overflow-hidden">
+          <div className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-xl border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-theme-surface-border bg-theme-surface-hover/50">
-                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Member</th>
-                  <th scope="col" className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Checks</th>
-                  <th scope="col" className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Pass</th>
-                  <th scope="col" className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Fail</th>
-                  <th scope="col" className="text-right px-4 py-2 text-xs font-medium text-theme-text-muted">Rate</th>
+                <tr className="border-theme-surface-border bg-theme-surface-hover/50 border-b">
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">
+                    Member
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-right text-xs font-medium">
+                    Checks
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-right text-xs font-medium">
+                    Pass
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-right text-xs font-medium">
+                    Fail
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-right text-xs font-medium">
+                    Rate
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {data.members.map((m) => {
-                  const rate = m.checksCompleted > 0
-                    ? Math.round((m.passCount / m.checksCompleted) * 100)
-                    : 0;
+                  const rate = m.checksCompleted > 0 ? Math.round((m.passCount / m.checksCompleted) * 100) : 0;
                   return (
-                    <tr key={m.userId} className="border-b border-theme-surface-border last:border-0">
-                      <td className="px-4 py-2 text-theme-text-primary">{m.userName}</td>
-                      <td className="px-4 py-2 text-right text-theme-text-secondary">{m.checksCompleted}</td>
+                    <tr key={m.userId} className="border-theme-surface-border border-b last:border-0">
+                      <td className="text-theme-text-primary px-4 py-2">{m.userName}</td>
+                      <td className="text-theme-text-secondary px-4 py-2 text-right">{m.checksCompleted}</td>
                       <td className="px-4 py-2 text-right text-green-600">{m.passCount}</td>
                       <td className="px-4 py-2 text-right text-red-600">{m.failCount}</td>
-                      <td className="px-4 py-2 text-right text-theme-text-secondary">{rate}%</td>
+                      <td className="text-theme-text-secondary px-4 py-2 text-right">{rate}%</td>
                     </tr>
                   );
                 })}
@@ -322,11 +311,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
 
 // ─── Failures Tab ───────────────────────────────────────────────────────────
 
-const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> = ({
-  startDate,
-  endDate,
-  tz,
-}) => {
+const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> = ({ startDate, endDate, tz }) => {
   const [data, setData] = useState<FailureLogResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -388,72 +373,83 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+          <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             type="text"
-            aria-label="Search by item name..." placeholder="Search by item name..."
+            aria-label="Search by item name..."
+            placeholder="Search by item name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
+            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary w-full rounded-lg border py-2 pr-3 pl-9 text-sm focus:ring-1 focus:ring-violet-500 focus:outline-hidden"
           />
         </div>
         <button
           onClick={handleExportCsv}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-theme-surface border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover text-theme-text-secondary"
+          className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-secondary flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium"
         >
-          <Download className="w-3.5 h-3.5" /> CSV
+          <Download className="h-3.5 w-3.5" /> CSV
         </button>
         <button
           onClick={handleExportPdf}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-theme-surface border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover text-theme-text-secondary"
+          className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-secondary flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium"
         >
-          <FileText className="w-3.5 h-3.5" /> PDF
+          <FileText className="h-3.5 w-3.5" /> PDF
         </button>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-12 text-theme-text-muted" role="status" aria-live="polite">
-          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading failures...
+        <div className="text-theme-text-muted flex items-center justify-center py-12" role="status" aria-live="polite">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading failures...
         </div>
       ) : !data || data.items.length === 0 ? (
-        <div className="text-center py-12 text-theme-text-muted">
-          <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-50" />
+        <div className="text-theme-text-muted py-12 text-center">
+          <AlertTriangle className="mx-auto mb-2 h-8 w-8 opacity-50" />
           <p className="text-sm">No failed items found for this period.</p>
         </div>
       ) : (
         <>
-          <p className="text-xs text-theme-text-muted">{data.total} total failures</p>
+          <p className="text-theme-text-muted text-xs">{data.total} total failures</p>
 
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl overflow-x-auto">
+          <div className="bg-theme-surface border-theme-surface-border overflow-x-auto rounded-xl border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-theme-surface-border bg-theme-surface-hover/50">
-                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Date</th>
-                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Apparatus</th>
-                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Compartment</th>
-                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Item</th>
-                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Checked By</th>
-                  <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Notes</th>
+                <tr className="border-theme-surface-border bg-theme-surface-hover/50 border-b">
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">
+                    Date
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">
+                    Apparatus
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">
+                    Compartment
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">
+                    Item
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">
+                    Checked By
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">
+                    Notes
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {data.items.map((f: FailureLogRecord) => (
-                  <tr key={f.id} className="border-b border-theme-surface-border last:border-0">
-                    <td className="px-4 py-2 text-theme-text-secondary whitespace-nowrap">
+                  <tr key={f.id} className="border-theme-surface-border border-b last:border-0">
+                    <td className="text-theme-text-secondary px-4 py-2 whitespace-nowrap">
                       {f.checkedAt ? formatDateTime(f.checkedAt, tz) : '-'}
                     </td>
-                    <td className="px-4 py-2 text-theme-text-primary">{f.apparatusName ?? '-'}</td>
-                    <td className="px-4 py-2 text-theme-text-secondary">{f.compartmentName}</td>
-                    <td className="px-4 py-2 text-theme-text-primary font-medium">{f.itemName}</td>
-                    <td className="px-4 py-2 text-theme-text-secondary">{f.checkedByName ?? '-'}</td>
-                    <td className="px-4 py-2 text-theme-text-muted text-xs max-w-[200px] truncate">
-                      {f.notes ?? '-'}
-                    </td>
+                    <td className="text-theme-text-primary px-4 py-2">{f.apparatusName ?? '-'}</td>
+                    <td className="text-theme-text-secondary px-4 py-2">{f.compartmentName}</td>
+                    <td className="text-theme-text-primary px-4 py-2 font-medium">{f.itemName}</td>
+                    <td className="text-theme-text-secondary px-4 py-2">{f.checkedByName ?? '-'}</td>
+                    <td className="text-theme-text-muted max-w-[200px] truncate px-4 py-2 text-xs">{f.notes ?? '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -461,12 +457,7 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
           </div>
 
           {data.total > PAGE_SIZE && (
-            <Pagination
-              currentPage={page}
-              totalItems={data.total}
-              pageSize={PAGE_SIZE}
-              onPageChange={setPage}
-            />
+            <Pagination currentPage={page} totalItems={data.total} pageSize={PAGE_SIZE} onPageChange={setPage} />
           )}
         </>
       )}
@@ -476,11 +467,7 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
 
 // ─── Trends Tab ─────────────────────────────────────────────────────────────
 
-const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = ({
-  startDate,
-  endDate,
-  tz,
-}) => {
+const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = ({ startDate, endDate, tz }) => {
   const [templates, setTemplates] = useState<EquipmentCheckTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [selectedItemId, setSelectedItemId] = useState('');
@@ -553,7 +540,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
   return (
     <div className="space-y-5">
       {/* Template + Item selectors */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <select
           value={selectedTemplateId}
           onChange={(e) => setSelectedTemplateId(e.target.value)}
@@ -585,33 +572,31 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
         {trendData && (
           <button
             onClick={handleExport}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-theme-surface border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover text-theme-text-secondary"
+            className="bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover text-theme-text-secondary flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium"
           >
-            <Download className="w-3.5 h-3.5" /> Export CSV
+            <Download className="h-3.5 w-3.5" /> Export CSV
           </button>
         )}
       </div>
 
       {/* Content */}
       {!selectedItemId ? (
-        <div className="text-center py-12 text-theme-text-muted">
-          <TrendingUp className="w-8 h-8 mx-auto mb-2 opacity-50" />
+        <div className="text-theme-text-muted py-12 text-center">
+          <TrendingUp className="mx-auto mb-2 h-8 w-8 opacity-50" />
           <p className="text-sm">Select a template and item to view trend data.</p>
         </div>
       ) : loading ? (
-        <div className="flex items-center justify-center py-12 text-theme-text-muted" role="status" aria-live="polite">
-          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading trend data...
+        <div className="text-theme-text-muted flex items-center justify-center py-12" role="status" aria-live="polite">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading trend data...
         </div>
       ) : trendData ? (
         <>
-          <h3 className="text-sm font-semibold text-theme-text-primary">
-            Trend: {trendData.itemName}
-          </h3>
+          <h3 className="text-theme-text-primary text-sm font-semibold">Trend: {trendData.itemName}</h3>
 
           {/* Bar chart visualization */}
           {trendData.trends.length > 0 ? (
-            <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4">
-              <div className="flex items-end gap-1 h-40">
+            <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4">
+              <div className="flex h-40 items-end gap-1">
                 {trendData.trends.map((entry) => {
                   const total = entry.passCount + entry.failCount + entry.notCheckedCount;
                   const maxHeight = 128;
@@ -619,76 +604,82 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                   const failH = total > 0 ? (entry.failCount / total) * maxHeight : 0;
                   const notCheckedH = total > 0 ? (entry.notCheckedCount / total) * maxHeight : 0;
                   return (
-                    <div key={entry.period} className="flex-1 flex flex-col items-center gap-0.5">
-                      <div className="flex flex-col-reverse w-full max-w-[32px]" style={{ height: maxHeight }}>
+                    <div key={entry.period} className="flex flex-1 flex-col items-center gap-0.5">
+                      <div className="flex w-full max-w-[32px] flex-col-reverse" style={{ height: maxHeight }}>
                         {passH > 0 && (
                           <div
-                            className="bg-green-500 rounded-t-sm w-full"
+                            className="w-full rounded-t-sm bg-green-500"
                             style={{ height: passH }}
                             title={`Pass: ${entry.passCount}`}
                           />
                         )}
                         {failH > 0 && (
                           <div
-                            className="bg-red-500 rounded-t-sm w-full"
+                            className="w-full rounded-t-sm bg-red-500"
                             style={{ height: failH }}
                             title={`Fail: ${entry.failCount}`}
                           />
                         )}
                         {notCheckedH > 0 && (
                           <div
-                            className="bg-theme-text-muted/40 rounded-t-sm w-full"
+                            className="bg-theme-text-muted/40 w-full rounded-t-sm"
                             style={{ height: notCheckedH }}
                             title={`Not checked: ${entry.notCheckedCount}`}
                           />
                         )}
                       </div>
-                      <span className="text-[10px] text-theme-text-muted truncate max-w-[40px]">
-                        {entry.period}
-                      </span>
+                      <span className="text-theme-text-muted max-w-[40px] truncate text-[10px]">{entry.period}</span>
                     </div>
                   );
                 })}
               </div>
-              <div className="flex items-center gap-4 mt-3 text-xs text-theme-text-muted">
+              <div className="text-theme-text-muted mt-3 flex items-center gap-4 text-xs">
                 <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-green-500" /> Pass
+                  <span className="h-2.5 w-2.5 rounded-sm bg-green-500" /> Pass
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-red-500" /> Fail
+                  <span className="h-2.5 w-2.5 rounded-sm bg-red-500" /> Fail
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-theme-text-muted/40" /> Not checked
+                  <span className="bg-theme-text-muted/40 h-2.5 w-2.5 rounded-sm" /> Not checked
                 </span>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-theme-text-muted">No trend data for this period.</p>
+            <p className="text-theme-text-muted text-sm">No trend data for this period.</p>
           )}
 
           {/* History table */}
           {trendData.history.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold text-theme-text-secondary mb-2">Check History</h4>
-              <div className="bg-theme-surface border border-theme-surface-border rounded-xl overflow-x-auto">
+              <h4 className="text-theme-text-secondary mb-2 text-xs font-semibold">Check History</h4>
+              <div className="bg-theme-surface border-theme-surface-border overflow-x-auto rounded-xl border">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-theme-surface-border bg-theme-surface-hover/50">
-                      <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Date</th>
-                      <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Status</th>
-                      <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Checked By</th>
-                      <th scope="col" className="text-left px-4 py-2 text-xs font-medium text-theme-text-muted">Notes</th>
+                    <tr className="border-theme-surface-border bg-theme-surface-hover/50 border-b">
+                      <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">
+                        Date
+                      </th>
+                      <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">
+                        Status
+                      </th>
+                      <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">
+                        Checked By
+                      </th>
+                      <th scope="col" className="text-theme-text-muted px-4 py-2 text-left text-xs font-medium">
+                        Notes
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {trendData.history.map((h) => (
-                      <tr key={h.checkId} className="border-b border-theme-surface-border last:border-0">
-                        <td className="px-4 py-2 text-theme-text-secondary whitespace-nowrap">
+                      <tr key={h.checkId} className="border-theme-surface-border border-b last:border-0">
+                        <td className="text-theme-text-secondary px-4 py-2 whitespace-nowrap">
                           {h.checkedAt ? formatDateTime(h.checkedAt, tz) : '-'}
                         </td>
                         <td className="px-4 py-2">
                           <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full ${
+                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
                               h.status === 'pass'
                                 ? 'bg-green-500/10 text-green-700 dark:text-green-400'
                                 : h.status === 'fail'
@@ -696,13 +687,13 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                                   : 'bg-theme-surface-hover text-theme-text-muted'
                             }`}
                           >
-                            {h.status === 'pass' ? <CheckCircle className="w-3 h-3" /> : null}
-                            {h.status === 'fail' ? <XCircle className="w-3 h-3" /> : null}
+                            {h.status === 'pass' ? <CheckCircle className="h-3 w-3" /> : null}
+                            {h.status === 'fail' ? <XCircle className="h-3 w-3" /> : null}
                             {h.status}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-theme-text-secondary">{h.checkedByName ?? '-'}</td>
-                        <td className="px-4 py-2 text-theme-text-muted text-xs max-w-[200px] truncate">
+                        <td className="text-theme-text-secondary px-4 py-2">{h.checkedByName ?? '-'}</td>
+                        <td className="text-theme-text-muted max-w-[200px] truncate px-4 py-2 text-xs">
                           {h.notes ?? '-'}
                         </td>
                       </tr>
@@ -732,11 +723,11 @@ const StatCard: React.FC<{ label: string; value: string; color?: 'green' | 'ambe
   };
 
   return (
-    <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 text-center">
-      <p className="text-2xl font-bold mb-0.5">
+    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 text-center">
+      <p className="mb-0.5 text-2xl font-bold">
         <span className={color ? colorClasses[color] : 'text-theme-text-primary'}>{value}</span>
       </p>
-      <p className="text-xs text-theme-text-muted">{label}</p>
+      <p className="text-theme-text-muted text-xs">{label}</p>
     </div>
   );
 };

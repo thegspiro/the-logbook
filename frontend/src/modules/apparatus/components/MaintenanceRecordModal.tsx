@@ -8,15 +8,8 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import {
-  apparatusMaintenanceService,
-  apparatusMaintenanceTypeService,
-} from '../services/api';
-import type {
-  ApparatusMaintenance,
-  ApparatusMaintenanceCreate,
-  ApparatusMaintenanceType,
-} from '../types';
+import { apparatusMaintenanceService, apparatusMaintenanceTypeService } from '../services/api';
+import type { ApparatusMaintenance, ApparatusMaintenanceCreate, ApparatusMaintenanceType } from '../types';
 
 interface MaintenanceRecordModalProps {
   isOpen: boolean;
@@ -177,7 +170,7 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
     >
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         {/* Type & Status */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Maintenance Type *</label>
             <select
@@ -188,62 +181,101 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
             >
               <option value="">Select type...</option>
               {maintenanceTypes.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
               ))}
             </select>
           </div>
           <div className="flex items-end pb-2">
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-2">
               <input
                 type="checkbox"
                 checked={f.isCompleted}
                 onChange={(e) => up('isCompleted', e.target.checked)}
-                className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+                className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
               />
-              <span className="text-sm text-theme-text-secondary">Mark as completed</span>
+              <span className="text-theme-text-secondary text-sm">Mark as completed</span>
             </label>
           </div>
         </div>
 
         {/* Dates */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className={labelClass}>Scheduled Date</label>
-            <input type="date" className={inputClass} value={f.scheduledDate} onChange={(e) => up('scheduledDate', e.target.value)} />
+            <input
+              type="date"
+              className={inputClass}
+              value={f.scheduledDate}
+              onChange={(e) => up('scheduledDate', e.target.value)}
+            />
           </div>
           <div>
             <label className={labelClass}>Due Date</label>
-            <input type="date" className={inputClass} value={f.dueDate} onChange={(e) => up('dueDate', e.target.value)} />
+            <input
+              type="date"
+              className={inputClass}
+              value={f.dueDate}
+              onChange={(e) => up('dueDate', e.target.value)}
+            />
           </div>
           <div>
             <label className={labelClass}>Completed Date</label>
-            <input type="date" className={inputClass} value={f.completedDate} onChange={(e) => up('completedDate', e.target.value)} />
+            <input
+              type="date"
+              className={inputClass}
+              value={f.completedDate}
+              onChange={(e) => up('completedDate', e.target.value)}
+            />
           </div>
         </div>
 
         {/* Description */}
         <div>
           <label className={labelClass}>Description</label>
-          <textarea className={inputClass} rows={2} value={f.description} onChange={(e) => up('description', e.target.value)} placeholder="Brief description of work needed or performed" />
+          <textarea
+            className={inputClass}
+            rows={2}
+            value={f.description}
+            onChange={(e) => up('description', e.target.value)}
+            placeholder="Brief description of work needed or performed"
+          />
         </div>
 
         {/* Work & Findings */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Work Performed</label>
-            <textarea className={inputClass} rows={2} value={f.workPerformed} onChange={(e) => up('workPerformed', e.target.value)} />
+            <textarea
+              className={inputClass}
+              rows={2}
+              value={f.workPerformed}
+              onChange={(e) => up('workPerformed', e.target.value)}
+            />
           </div>
           <div>
             <label className={labelClass}>Findings</label>
-            <textarea className={inputClass} rows={2} value={f.findings} onChange={(e) => up('findings', e.target.value)} />
+            <textarea
+              className={inputClass}
+              rows={2}
+              value={f.findings}
+              onChange={(e) => up('findings', e.target.value)}
+            />
           </div>
         </div>
 
         {/* Performed By & Vendor */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Performed By</label>
-            <input type="text" className={inputClass} value={f.performedBy} onChange={(e) => up('performedBy', e.target.value)} placeholder="Name of person or vendor" />
+            <input
+              type="text"
+              className={inputClass}
+              value={f.performedBy}
+              onChange={(e) => up('performedBy', e.target.value)}
+              placeholder="Name of person or vendor"
+            />
           </div>
           <div>
             <label className={labelClass}>Vendor</label>
@@ -252,42 +284,85 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
         </div>
 
         {/* Cost & Invoice */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className={labelClass}>Cost ($)</label>
-            <input type="number" step="0.01" min="0" className={inputClass} value={f.cost} onChange={(e) => up('cost', e.target.value)} />
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              className={inputClass}
+              value={f.cost}
+              onChange={(e) => up('cost', e.target.value)}
+            />
           </div>
           <div>
             <label className={labelClass}>Invoice Number</label>
-            <input type="text" className={inputClass} value={f.invoiceNumber} onChange={(e) => up('invoiceNumber', e.target.value)} />
+            <input
+              type="text"
+              className={inputClass}
+              value={f.invoiceNumber}
+              onChange={(e) => up('invoiceNumber', e.target.value)}
+            />
           </div>
         </div>
 
         {/* Mileage & Hours at Service */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Mileage at Service</label>
-            <input type="number" min="0" className={inputClass} value={f.mileageAtService} onChange={(e) => up('mileageAtService', e.target.value)} />
+            <input
+              type="number"
+              min="0"
+              className={inputClass}
+              value={f.mileageAtService}
+              onChange={(e) => up('mileageAtService', e.target.value)}
+            />
           </div>
           <div>
             <label className={labelClass}>Engine Hours at Service</label>
-            <input type="number" min="0" step="0.1" className={inputClass} value={f.hoursAtService} onChange={(e) => up('hoursAtService', e.target.value)} />
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              className={inputClass}
+              value={f.hoursAtService}
+              onChange={(e) => up('hoursAtService', e.target.value)}
+            />
           </div>
         </div>
 
         {/* Next Due */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className={labelClass}>Next Due Date</label>
-            <input type="date" className={inputClass} value={f.nextDueDate} onChange={(e) => up('nextDueDate', e.target.value)} />
+            <input
+              type="date"
+              className={inputClass}
+              value={f.nextDueDate}
+              onChange={(e) => up('nextDueDate', e.target.value)}
+            />
           </div>
           <div>
             <label className={labelClass}>Next Due Mileage</label>
-            <input type="number" min="0" className={inputClass} value={f.nextDueMileage} onChange={(e) => up('nextDueMileage', e.target.value)} />
+            <input
+              type="number"
+              min="0"
+              className={inputClass}
+              value={f.nextDueMileage}
+              onChange={(e) => up('nextDueMileage', e.target.value)}
+            />
           </div>
           <div>
             <label className={labelClass}>Next Due Hours</label>
-            <input type="number" min="0" step="0.1" className={inputClass} value={f.nextDueHours} onChange={(e) => up('nextDueHours', e.target.value)} />
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              className={inputClass}
+              value={f.nextDueHours}
+              onChange={(e) => up('nextDueHours', e.target.value)}
+            />
           </div>
         </div>
 
@@ -298,8 +373,12 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-theme-surface-border">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors">
+        <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+          >
             Cancel
           </button>
           <button type="submit" disabled={saving} className="btn-primary px-6 py-2">

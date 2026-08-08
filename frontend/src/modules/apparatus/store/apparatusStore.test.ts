@@ -259,10 +259,7 @@ describe('apparatusStore', () => {
 
   describe('fetchApparatusList', () => {
     it('should set isLoading and populate apparatus list on success', async () => {
-      const items = [
-        makeApparatusListItem(),
-        makeApparatusListItem({ id: 'app2', unitNumber: 'L-1' }),
-      ];
+      const items = [makeApparatusListItem(), makeApparatusListItem({ id: 'app2', unitNumber: 'L-1' })];
       mockGetApparatusList.mockResolvedValue({
         items,
         total: 2,
@@ -396,10 +393,7 @@ describe('apparatusStore', () => {
 
   describe('fetchTypes', () => {
     it('should set isLoadingTypes and populate types on success', async () => {
-      const types = [
-        makeApparatusType(),
-        makeApparatusType({ id: 'type2', name: 'Ladder', code: 'ladder' }),
-      ];
+      const types = [makeApparatusType(), makeApparatusType({ id: 'type2', name: 'Ladder', code: 'ladder' })];
       mockGetTypes.mockResolvedValue(types);
 
       const promise = getState().fetchTypes();

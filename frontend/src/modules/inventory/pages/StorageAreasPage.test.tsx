@@ -28,8 +28,12 @@ const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
   default: {
-    success: (...a: unknown[]): void => { mockToastSuccess(...a); },
-    error: (...a: unknown[]): void => { mockToastError(...a); },
+    success: (...a: unknown[]): void => {
+      mockToastSuccess(...a);
+    },
+    error: (...a: unknown[]): void => {
+      mockToastError(...a);
+    },
   },
 }));
 
@@ -59,9 +63,7 @@ describe('StorageAreasPage', () => {
 
   it('prompts to pick a facility and room once locations load', async () => {
     renderWithRouter(<StorageAreasPage />);
-    expect(
-      await screen.findByText(/Select a facility and room above/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Select a facility and room above/)).toBeInTheDocument();
     expect(mockGetLocations).toHaveBeenCalledTimes(1);
   });
 
@@ -91,10 +93,7 @@ describe('StorageAreasPage', () => {
     renderWithRouter(<StorageAreasPage />);
     await screen.findByText(/Select a facility and room above/);
 
-    await user.type(
-      screen.getByPlaceholderText(/Search storage areas by name/),
-      'Rack',
-    );
+    await user.type(screen.getByPlaceholderText(/Search storage areas by name/), 'Rack');
 
     expect(await screen.findByText('Rack A')).toBeInTheDocument();
     expect(mockGetStorageAreas).toHaveBeenCalledWith({ flat: true });

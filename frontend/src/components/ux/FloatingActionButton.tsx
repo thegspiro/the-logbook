@@ -28,10 +28,7 @@ interface FloatingActionButtonProps {
   color?: string | undefined;
 }
 
-export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
-  actions,
-  color = 'bg-emerald-600',
-}) => {
+export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({ actions, color = 'bg-emerald-600' }) => {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -62,16 +59,16 @@ export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
   return (
     <div
       ref={containerRef}
-      className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-40 md:hidden"
+      className="fixed right-[calc(1.5rem+env(safe-area-inset-right))] bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-40 md:hidden"
     >
       {/* Backdrop */}
       {open && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-[2px] -z-10 animate-fade-in" aria-hidden="true" />
+        <div className="animate-fade-in fixed inset-0 -z-10 bg-black/30 backdrop-blur-[2px]" aria-hidden="true" />
       )}
 
       {/* Action items */}
       {open && (
-        <div className="absolute bottom-16 right-0 flex flex-col-reverse items-end gap-3 mb-2">
+        <div className="absolute right-0 bottom-16 mb-2 flex flex-col-reverse items-end gap-3">
           {actions.map((action, index) => (
             <button
               key={action.id}
@@ -79,14 +76,19 @@ export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
                 action.onClick();
                 setOpen(false);
               }}
-              className="flex items-center gap-3 group animate-stagger-fade"
+              className="group animate-stagger-fade flex items-center gap-3"
               style={{ animationDelay: `${index * 50}ms` }}
               aria-label={action.label}
             >
-              <span className="px-3 py-1.5 text-sm font-medium text-theme-text-primary bg-theme-surface-modal rounded-lg shadow-lg border border-theme-surface-border whitespace-nowrap" aria-hidden="true">
+              <span
+                className="text-theme-text-primary bg-theme-surface-modal border-theme-surface-border rounded-lg border px-3 py-1.5 text-sm font-medium whitespace-nowrap shadow-lg"
+                aria-hidden="true"
+              >
                 {action.label}
               </span>
-              <span className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center text-white transition-all duration-150 hover:shadow-xl hover:scale-105 active:scale-95 ${action.color ?? 'bg-theme-surface-hover text-theme-text-primary'}`}>
+              <span
+                className={`flex h-12 w-12 items-center justify-center rounded-full text-white shadow-lg transition-all duration-150 hover:scale-105 hover:shadow-xl active:scale-95 ${action.color ?? 'bg-theme-surface-hover text-theme-text-primary'}`}
+              >
                 {action.icon}
               </span>
             </button>
@@ -97,13 +99,13 @@ export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
       {/* Main FAB button */}
       <button
         onClick={() => setOpen(!open)}
-        className={`w-14 h-14 rounded-full shadow-lg hover:shadow-xl flex items-center justify-center text-white transition-all duration-200 active:scale-90 ${color} ${
+        className={`flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all duration-200 hover:shadow-xl active:scale-90 ${color} ${
           open ? 'rotate-45 shadow-xl' : ''
         }`}
         aria-label={open ? 'Close quick actions' : 'Open quick actions'}
         aria-expanded={open}
       >
-        {open ? <X className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
+        {open ? <X className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
       </button>
     </div>
   );

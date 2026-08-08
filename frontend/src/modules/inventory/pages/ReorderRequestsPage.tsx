@@ -6,8 +6,17 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft, RefreshCw, Search, Plus, Package, Truck,
-  CheckCircle, Clock, XCircle, AlertTriangle, DollarSign,
+  ArrowLeft,
+  RefreshCw,
+  Search,
+  Plus,
+  Package,
+  Truck,
+  CheckCircle,
+  Clock,
+  XCircle,
+  AlertTriangle,
+  DollarSign,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -16,8 +25,11 @@ import { formatDate as formatDateUtil } from '../../../utils/dateFormatting';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Modal } from '../../../components/Modal';
 import type {
-  ReorderRequest, ReorderRequestCreate, ReorderRequestUpdate,
-  InventoryCategory, LowStockAlert,
+  ReorderRequest,
+  ReorderRequestCreate,
+  ReorderRequestUpdate,
+  InventoryCategory,
+  LowStockAlert,
 } from '../../../services/eventServices';
 
 const STATUS_OPTIONS = ['pending', 'approved', 'ordered', 'received', 'cancelled'] as const;
@@ -39,11 +51,11 @@ const URGENCY_COLORS: Record<string, string> = {
 };
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
-  pending: <Clock className="w-3.5 h-3.5" />,
-  approved: <CheckCircle className="w-3.5 h-3.5" />,
-  ordered: <Truck className="w-3.5 h-3.5" />,
-  received: <Package className="w-3.5 h-3.5" />,
-  cancelled: <XCircle className="w-3.5 h-3.5" />,
+  pending: <Clock className="h-3.5 w-3.5" />,
+  approved: <CheckCircle className="h-3.5 w-3.5" />,
+  ordered: <Truck className="h-3.5 w-3.5" />,
+  received: <Package className="h-3.5 w-3.5" />,
+  cancelled: <XCircle className="h-3.5 w-3.5" />,
 };
 
 const lbl = 'form-label';
@@ -63,9 +75,16 @@ interface CreateFD {
 }
 
 const EMPTY_CREATE: CreateFD = {
-  item_name: '', item_id: '', category_id: '', quantity_requested: '1',
-  vendor: '', vendor_contact: '', estimated_unit_cost: '',
-  expected_delivery_date: '', urgency: 'normal', notes: '',
+  item_name: '',
+  item_id: '',
+  category_id: '',
+  quantity_requested: '1',
+  vendor: '',
+  vendor_contact: '',
+  estimated_unit_cost: '',
+  expected_delivery_date: '',
+  urgency: 'normal',
+  notes: '',
 };
 
 // -- Create/Edit Modal Component --
@@ -104,8 +123,14 @@ const ReorderFormModal: React.FC<{
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!f.item_name.trim()) { toast.error('Item name is required'); return; }
-    if (!f.quantity_requested || Number(f.quantity_requested) < 1) { toast.error('Quantity must be at least 1'); return; }
+    if (!f.item_name.trim()) {
+      toast.error('Item name is required');
+      return;
+    }
+    if (!f.quantity_requested || Number(f.quantity_requested) < 1) {
+      toast.error('Quantity must be at least 1');
+      return;
+    }
     setSaving(true);
     try {
       if (editRequest) {
@@ -137,25 +162,40 @@ const ReorderFormModal: React.FC<{
         await inventoryService.createReorderRequest(createData);
         toast.success('Reorder request created');
       }
-      onSaved(); onClose();
+      onSaved();
+      onClose();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save reorder request'));
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={editRequest ? 'Edit Reorder Request' : 'New Reorder Request'} size="lg">
-      <form onSubmit={(e) => { void submit(e); }} className="space-y-4 p-4">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editRequest ? 'Edit Reorder Request' : 'New Reorder Request'}
+      size="lg"
+    >
+      <form
+        onSubmit={(e) => {
+          void submit(e);
+        }}
+        className="space-y-4 p-4"
+      >
         {/* Quick-fill from low stock alerts */}
         {!editRequest && lowStockAlerts.length > 0 && (
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-            <p className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 mb-2">Quick fill from low stock:</p>
+          <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
+            <p className="mb-2 text-xs font-semibold text-yellow-700 dark:text-yellow-300">
+              Quick fill from low stock:
+            </p>
             <div className="flex flex-wrap gap-1">
               {lowStockAlerts.slice(0, 8).map((alert) => (
                 <button
                   key={alert.category_id}
                   type="button"
-                  className="px-2 py-1 text-xs rounded bg-yellow-500/20 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-500/30"
+                  className="rounded bg-yellow-500/20 px-2 py-1 text-xs text-yellow-700 hover:bg-yellow-500/30 dark:text-yellow-300"
                   onClick={() => {
                     const firstItem = alert.items?.[0];
                     setF((p) => ({
@@ -173,50 +213,113 @@ const ReorderFormModal: React.FC<{
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className={lbl}>Item Name *</label>
-            <input className={inp} value={f.item_name} onChange={(e) => up('item_name', e.target.value)} placeholder="e.g. SCBA Air Cylinders" required />
+            <input
+              className={inp}
+              value={f.item_name}
+              onChange={(e) => up('item_name', e.target.value)}
+              placeholder="e.g. SCBA Air Cylinders"
+              required
+            />
           </div>
           <div>
             <label className={lbl}>Category</label>
             <select className={inp} value={f.category_id} onChange={(e) => up('category_id', e.target.value)}>
               <option value="">— Select —</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
             </select>
           </div>
           <div>
             <label className={lbl}>Quantity *</label>
-            <input type="number" min="1" className={inp} value={f.quantity_requested} onChange={(e) => up('quantity_requested', e.target.value)} required />
+            <input
+              type="number"
+              min="1"
+              className={inp}
+              value={f.quantity_requested}
+              onChange={(e) => up('quantity_requested', e.target.value)}
+              required
+            />
           </div>
         </div>
 
         <fieldset>
-          <legend className="text-sm font-semibold text-theme-text-primary mb-2">Vendor &amp; Cost</legend>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div><label className={lbl}>Vendor</label><input className={inp} value={f.vendor} onChange={(e) => up('vendor', e.target.value)} placeholder="Vendor name" /></div>
-            <div><label className={lbl}>Vendor Contact</label><input className={inp} value={f.vendor_contact} onChange={(e) => up('vendor_contact', e.target.value)} placeholder="Email or phone" /></div>
-            <div><label className={lbl}>Est. Unit Cost ($)</label><input type="number" min="0" step="0.01" className={inp} value={f.estimated_unit_cost} onChange={(e) => up('estimated_unit_cost', e.target.value)} /></div>
-            <div><label className={lbl}>Expected Delivery</label><input type="date" className={inp} value={f.expected_delivery_date} onChange={(e) => up('expected_delivery_date', e.target.value)} /></div>
+          <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Vendor &amp; Cost</legend>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className={lbl}>Vendor</label>
+              <input
+                className={inp}
+                value={f.vendor}
+                onChange={(e) => up('vendor', e.target.value)}
+                placeholder="Vendor name"
+              />
+            </div>
+            <div>
+              <label className={lbl}>Vendor Contact</label>
+              <input
+                className={inp}
+                value={f.vendor_contact}
+                onChange={(e) => up('vendor_contact', e.target.value)}
+                placeholder="Email or phone"
+              />
+            </div>
+            <div>
+              <label className={lbl}>Est. Unit Cost ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className={inp}
+                value={f.estimated_unit_cost}
+                onChange={(e) => up('estimated_unit_cost', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className={lbl}>Expected Delivery</label>
+              <input
+                type="date"
+                className={inp}
+                value={f.expected_delivery_date}
+                onChange={(e) => up('expected_delivery_date', e.target.value)}
+              />
+            </div>
           </div>
         </fieldset>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={lbl}>Urgency</label>
             <select className={inp} value={f.urgency} onChange={(e) => up('urgency', e.target.value)}>
-              {URGENCY_OPTIONS.map((u) => <option key={u} value={u}>{u.charAt(0).toUpperCase() + u.slice(1)}</option>)}
+              {URGENCY_OPTIONS.map((u) => (
+                <option key={u} value={u}>
+                  {u.charAt(0).toUpperCase() + u.slice(1)}
+                </option>
+              ))}
             </select>
           </div>
           <div className="sm:col-span-1">
             <label className={lbl}>Notes</label>
-            <textarea className={inp} rows={2} value={f.notes} onChange={(e) => up('notes', e.target.value)} placeholder="Additional details..." />
+            <textarea
+              className={inp}
+              rows={2}
+              value={f.notes}
+              onChange={(e) => up('notes', e.target.value)}
+              placeholder="Additional details..."
+            />
           </div>
         </div>
 
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-theme-surface-border">
-          <button type="button" onClick={onClose} className="btn-secondary btn-md">Cancel</button>
-          <button type="submit" disabled={saving} className="btn-info btn-md disabled:opacity-50 text-center">
+        <div className="border-theme-surface-border flex flex-col-reverse items-stretch justify-end gap-2 border-t pt-2 sm:flex-row sm:items-center">
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} className="btn-info btn-md text-center disabled:opacity-50">
             {saving ? 'Saving...' : editRequest ? 'Update' : 'Create Request'}
           </button>
         </div>
@@ -262,36 +365,66 @@ const StatusUpdateModal: React.FC<{
       };
       await inventoryService.updateReorderRequest(request.id, data);
       toast.success('Status updated');
-      onSaved(); onClose();
+      onSaved();
+      onClose();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update status'));
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Update Reorder Status" size="md">
-      <form onSubmit={(e) => { void submit(e); }} className="space-y-4 p-4">
+      <form
+        onSubmit={(e) => {
+          void submit(e);
+        }}
+        className="space-y-4 p-4"
+      >
         <div>
           <label className={lbl}>Status</label>
           <select className={inp} value={status} onChange={(e) => setStatus(e.target.value)}>
-            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </option>
+            ))}
           </select>
         </div>
         {(status === 'ordered' || status === 'received') && (
           <div>
             <label className={lbl}>PO Number</label>
-            <input className={inp} value={poNumber} onChange={(e) => setPONumber(e.target.value)} placeholder="Purchase order #" />
+            <input
+              className={inp}
+              value={poNumber}
+              onChange={(e) => setPONumber(e.target.value)}
+              placeholder="Purchase order #"
+            />
           </div>
         )}
         {status === 'received' && (
           <>
             <div>
               <label className={lbl}>Quantity Received</label>
-              <input type="number" min="0" className={inp} value={qtyReceived} onChange={(e) => setQtyReceived(e.target.value)} />
+              <input
+                type="number"
+                min="0"
+                className={inp}
+                value={qtyReceived}
+                onChange={(e) => setQtyReceived(e.target.value)}
+              />
             </div>
             <div>
               <label className={lbl}>Actual Unit Cost ($)</label>
-              <input type="number" min="0" step="0.01" className={inp} value={actualCost} onChange={(e) => setActualCost(e.target.value)} />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className={inp}
+                value={actualCost}
+                onChange={(e) => setActualCost(e.target.value)}
+              />
             </div>
           </>
         )}
@@ -299,9 +432,11 @@ const StatusUpdateModal: React.FC<{
           <label className={lbl}>Notes</label>
           <textarea className={inp} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2 border-t border-theme-surface-border">
-          <button type="button" onClick={onClose} className="btn-secondary btn-md">Cancel</button>
-          <button type="submit" disabled={saving} className="btn-info btn-md disabled:opacity-50 text-center">
+        <div className="border-theme-surface-border flex flex-col-reverse items-stretch justify-end gap-2 border-t pt-2 sm:flex-row sm:items-center">
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} className="btn-info btn-md text-center disabled:opacity-50">
             {saving ? 'Updating...' : 'Update Status'}
           </button>
         </div>
@@ -342,10 +477,14 @@ export const ReorderRequestsPage: React.FC = () => {
       setLowStockAlerts(lowStock);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load reorder requests'));
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }, [search, statusFilter, urgencyFilter]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const stats = useMemo(() => {
     const pending = requests.filter((r) => r.status === 'pending').length;
@@ -363,61 +502,66 @@ export const ReorderRequestsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
-        <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 mb-6">
+        <Link
+          to="/inventory/admin"
+          className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
+        >
           <ArrowLeft className="h-4 w-4" /> Back to Admin
         </Link>
-        <div className="flex items-center gap-3 mb-6">
+        <div className="mb-6 flex items-center gap-3">
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-theme-text-primary">Reorder Requests</h1>
-            <p className="text-sm text-theme-text-muted">Track supply orders from request to receipt</p>
+            <h1 className="text-theme-text-primary text-2xl font-bold">Reorder Requests</h1>
+            <p className="text-theme-text-muted text-sm">Track supply orders from request to receipt</p>
           </div>
-          <button onClick={() => { void load(); }} className="btn-secondary btn-md">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
           <button
-            onClick={() => setShowCreate(true)}
-            className="btn-info btn-md flex items-center gap-2"
+            onClick={() => {
+              void load();
+            }}
+            className="btn-secondary btn-md"
           >
-            <Plus className="w-4 h-4" />
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button onClick={() => setShowCreate(true)} className="btn-info btn-md flex items-center gap-2">
+            <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New Request</span>
           </button>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="card-secondary p-3 text-center">
-            <p className="text-2xl font-bold text-theme-text-primary">{requests.length}</p>
-            <p className="text-xs text-theme-text-muted">Total Requests</p>
+            <p className="text-theme-text-primary text-2xl font-bold">{requests.length}</p>
+            <p className="text-theme-text-muted text-xs">Total Requests</p>
           </div>
           <div className="card-secondary p-3 text-center">
             <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.pending}</p>
-            <p className="text-xs text-theme-text-muted">Pending</p>
+            <p className="text-theme-text-muted text-xs">Pending</p>
           </div>
           <div className="card-secondary p-3 text-center">
             <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.ordered}</p>
-            <p className="text-xs text-theme-text-muted">On Order</p>
+            <p className="text-theme-text-muted text-xs">On Order</p>
           </div>
           <div className="card-secondary p-3 text-center">
-            <p className="text-2xl font-bold text-theme-text-primary">
-              <DollarSign className="w-4 h-4 inline -mt-0.5" />
+            <p className="text-theme-text-primary text-2xl font-bold">
+              <DollarSign className="-mt-0.5 inline h-4 w-4" />
               {stats.totalEstCost > 0 ? formatCurrency(stats.totalEstCost) : '—'}
             </p>
-            <p className="text-xs text-theme-text-muted">Est. Outstanding</p>
+            <p className="text-theme-text-muted text-xs">Est. Outstanding</p>
           </div>
         </div>
 
         {/* Low stock banner */}
         {lowStockAlerts.length > 0 && (
-          <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-2 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 shrink-0" />
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-yellow-600 dark:text-yellow-400" />
             <p className="text-xs text-yellow-700 dark:text-yellow-300">
               {lowStockAlerts.length} categor{lowStockAlerts.length === 1 ? 'y' : 'ies'} below stock threshold
             </p>
             <button
               onClick={() => setShowCreate(true)}
-              className="ml-auto text-xs font-medium text-yellow-700 dark:text-yellow-300 hover:underline"
+              className="ml-auto text-xs font-medium text-yellow-700 hover:underline dark:text-yellow-300"
             >
               Create reorder &rarr;
             </button>
@@ -425,95 +569,128 @@ export const ReorderRequestsPage: React.FC = () => {
         )}
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-3 mb-4">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+        <div className="mb-4 flex flex-wrap gap-3">
+          <div className="relative min-w-[200px] flex-1">
+            <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
             <input
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
               className={`${inp} pl-9`}
-              aria-label="Search by item name..." placeholder="Search by item name..."
+              aria-label="Search by item name..."
+              placeholder="Search by item name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <select className={inp + ' w-auto'} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All Statuses</option>
-            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </option>
+            ))}
           </select>
           <select className={inp + ' w-auto'} value={urgencyFilter} onChange={(e) => setUrgencyFilter(e.target.value)}>
             <option value="">All Urgencies</option>
-            {URGENCY_OPTIONS.map((u) => <option key={u} value={u}>{u.charAt(0).toUpperCase() + u.slice(1)}</option>)}
+            {URGENCY_OPTIONS.map((u) => (
+              <option key={u} value={u}>
+                {u.charAt(0).toUpperCase() + u.slice(1)}
+              </option>
+            ))}
           </select>
         </div>
 
         {/* Table */}
         {loading && requests.length === 0 ? (
-          <div className="text-center py-12 text-theme-text-muted">Loading...</div>
+          <div className="text-theme-text-muted py-12 text-center">Loading...</div>
         ) : requests.length === 0 ? (
-          <div className="text-center py-12 card-secondary rounded-lg">
-            <Package className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
+          <div className="card-secondary rounded-lg py-12 text-center">
+            <Package className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
             <p className="text-theme-text-muted">No reorder requests found</p>
             <button onClick={() => setShowCreate(true)} className="btn-info btn-md mt-3">
               Create First Request
             </button>
           </div>
         ) : (
-          <div className="card-secondary rounded-lg overflow-hidden md:overflow-x-auto">
+          <div className="card-secondary overflow-hidden rounded-lg md:overflow-x-auto">
             {/* Single responsive table: a table on >=md, stacked cards below. */}
-            <table className="w-full text-sm rwd-table">
+            <table className="rwd-table w-full text-sm">
               <thead>
-                <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Item</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Qty</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Vendor</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Est. Cost</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Status</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Urgency</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Requested</th>
-                  <th scope="col" className="text-right px-4 py-3 font-medium text-theme-text-muted">Actions</th>
+                <tr className="border-theme-surface-border bg-theme-surface-secondary border-b">
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left font-medium">
+                    Item
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left font-medium">
+                    Qty
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left font-medium">
+                    Vendor
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left font-medium">
+                    Est. Cost
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left font-medium">
+                    Status
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left font-medium">
+                    Urgency
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-left font-medium">
+                    Requested
+                  </th>
+                  <th scope="col" className="text-theme-text-muted px-4 py-3 text-right font-medium">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {requests.map((req) => (
-                  <tr key={req.id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
+                  <tr key={req.id} className="border-theme-surface-border hover:bg-theme-surface-hover border-b">
                     <td data-label="Item" className="px-4 py-3">
-                      <p className="font-medium text-theme-text-primary">{req.item_name}</p>
-                      {req.requester_name && <p className="text-xs text-theme-text-muted">by {req.requester_name}</p>}
+                      <p className="text-theme-text-primary font-medium">{req.item_name}</p>
+                      {req.requester_name && <p className="text-theme-text-muted text-xs">by {req.requester_name}</p>}
                     </td>
-                    <td data-label="Qty" className="px-4 py-3 text-theme-text-primary">
+                    <td data-label="Qty" className="text-theme-text-primary px-4 py-3">
                       {req.quantity_requested}
                       {req.quantity_received != null && (
-                        <span className="text-xs text-green-600 dark:text-green-400 ml-1">
+                        <span className="ml-1 text-xs text-green-600 dark:text-green-400">
                           ({req.quantity_received} received)
                         </span>
                       )}
                     </td>
-                    <td data-label="Vendor" className="px-4 py-3 text-theme-text-muted">{req.vendor ?? '—'}</td>
-                    <td data-label="Est. Cost" className="px-4 py-3 text-theme-text-primary">
-                      {req.estimated_unit_cost != null ? formatCurrency(Number(req.estimated_unit_cost) * req.quantity_requested) : '—'}
+                    <td data-label="Vendor" className="text-theme-text-muted px-4 py-3">
+                      {req.vendor ?? '—'}
+                    </td>
+                    <td data-label="Est. Cost" className="text-theme-text-primary px-4 py-3">
+                      {req.estimated_unit_cost != null
+                        ? formatCurrency(Number(req.estimated_unit_cost) * req.quantity_requested)
+                        : '—'}
                       {req.actual_unit_cost != null && (
-                        <span className="text-xs text-theme-text-muted block">
+                        <span className="text-theme-text-muted block text-xs">
                           Actual: {formatCurrency(Number(req.actual_unit_cost) * req.quantity_requested)}
                         </span>
                       )}
                     </td>
                     <td data-label="Status" className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[req.status] ?? ''}`}>
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[req.status] ?? ''}`}
+                      >
                         {STATUS_ICONS[req.status]}
                         {req.status}
                       </span>
                     </td>
                     <td data-label="Urgency" className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${URGENCY_COLORS[req.urgency] ?? ''}`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${URGENCY_COLORS[req.urgency] ?? ''}`}
+                      >
                         {req.urgency}
                       </span>
                     </td>
-                    <td data-label="Requested" className="px-4 py-3 text-xs text-theme-text-muted">
+                    <td data-label="Requested" className="text-theme-text-muted px-4 py-3 text-xs">
                       {fmtDate(req.created_at)}
                       {req.purchase_order_number && (
-                        <span className="block text-theme-text-primary">PO: {req.purchase_order_number}</span>
+                        <span className="text-theme-text-primary block">PO: {req.purchase_order_number}</span>
                       )}
                     </td>
                     <td data-label="" className="px-4 py-3 text-right">
@@ -521,15 +698,18 @@ export const ReorderRequestsPage: React.FC = () => {
                         {req.status !== 'received' && req.status !== 'cancelled' && (
                           <button
                             onClick={() => setStatusRequest(req)}
-                            className="px-2 py-1 text-xs rounded bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary"
+                            className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary rounded px-2 py-1 text-xs"
                           >
                             Update Status
                           </button>
                         )}
                         {req.status === 'pending' && (
                           <button
-                            onClick={() => { setEditRequest(req); setShowCreate(true); }}
-                            className="px-2 py-1 text-xs rounded bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary"
+                            onClick={() => {
+                              setEditRequest(req);
+                              setShowCreate(true);
+                            }}
+                            className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary rounded px-2 py-1 text-xs"
                           >
                             Edit
                           </button>
@@ -546,8 +726,13 @@ export const ReorderRequestsPage: React.FC = () => {
         {/* Modals */}
         <ReorderFormModal
           isOpen={showCreate}
-          onClose={() => { setShowCreate(false); setEditRequest(null); }}
-          onSaved={() => { void load(); }}
+          onClose={() => {
+            setShowCreate(false);
+            setEditRequest(null);
+          }}
+          onSaved={() => {
+            void load();
+          }}
           categories={categories}
           lowStockAlerts={lowStockAlerts}
           editRequest={editRequest}
@@ -555,7 +740,9 @@ export const ReorderRequestsPage: React.FC = () => {
         <StatusUpdateModal
           isOpen={statusRequest !== null}
           onClose={() => setStatusRequest(null)}
-          onSaved={() => { void load(); }}
+          onSaved={() => {
+            void load();
+          }}
           request={statusRequest}
         />
       </div>
