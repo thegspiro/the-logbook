@@ -238,7 +238,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo and Department Name */}
-          <a href="/dashboard" className="flex items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 rounded-lg">
+          <a href="/dashboard" className="flex min-h-[44px] items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 rounded-lg">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
               <img
                 src={logoPreview || '/logo-128.png'}

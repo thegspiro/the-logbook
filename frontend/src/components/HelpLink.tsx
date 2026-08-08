@@ -89,7 +89,7 @@ export const HelpLink: React.FC<HelpLinkProps> = ({
       >
         <button
           onClick={handleClick}
-          className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-1 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+          className="text-theme-text-muted hover:text-theme-text-primary transition-colors p-1 max-md:mobile-touch-target rounded-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           aria-label={`Help: ${topic}`}
           aria-expanded={tooltip ? showTooltip : undefined}
           type="button"
