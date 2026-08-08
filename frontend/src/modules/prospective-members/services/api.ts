@@ -26,8 +26,10 @@ import type {
   ApplicantUpdate,
   ApplicantListItem,
   ApplicantListFilters,
+  ApplicantStatus,
   PaginatedApplicantList,
   AdvanceStageRequest,
+  BulkActionResult,
   ConvertApplicantRequest,
   ConvertApplicantResponse,
   ApplicantDocument,
@@ -120,18 +122,30 @@ function mapStepTypeToFrontend(
 ): StageType {
   // Direct step type mapping (new format)
   switch (stepType) {
-    case 'form_submission': return StageTypeConst.FORM_SUBMISSION;
-    case 'document_upload': return StageTypeConst.DOCUMENT_UPLOAD;
-    case 'election_vote': return StageTypeConst.ELECTION_VOTE;
-    case 'meeting': return StageTypeConst.MEETING;
-    case 'status_page_toggle': return StageTypeConst.STATUS_PAGE_TOGGLE;
-    case 'automated_email': return StageTypeConst.AUTOMATED_EMAIL;
-    case 'manual_approval': return StageTypeConst.MANUAL_APPROVAL;
-    case 'reference_check': return StageTypeConst.REFERENCE_CHECK;
-    case 'checklist': return StageTypeConst.CHECKLIST;
-    case 'interview_requirement': return StageTypeConst.INTERVIEW_REQUIREMENT;
-    case 'multi_approval': return StageTypeConst.MULTI_APPROVAL;
-    case 'medical_screening': return StageTypeConst.MEDICAL_SCREENING;
+    case 'form_submission':
+      return StageTypeConst.FORM_SUBMISSION;
+    case 'document_upload':
+      return StageTypeConst.DOCUMENT_UPLOAD;
+    case 'election_vote':
+      return StageTypeConst.ELECTION_VOTE;
+    case 'meeting':
+      return StageTypeConst.MEETING;
+    case 'status_page_toggle':
+      return StageTypeConst.STATUS_PAGE_TOGGLE;
+    case 'automated_email':
+      return StageTypeConst.AUTOMATED_EMAIL;
+    case 'manual_approval':
+      return StageTypeConst.MANUAL_APPROVAL;
+    case 'reference_check':
+      return StageTypeConst.REFERENCE_CHECK;
+    case 'checklist':
+      return StageTypeConst.CHECKLIST;
+    case 'interview_requirement':
+      return StageTypeConst.INTERVIEW_REQUIREMENT;
+    case 'multi_approval':
+      return StageTypeConst.MULTI_APPROVAL;
+    case 'medical_screening':
+      return StageTypeConst.MEDICAL_SCREENING;
   }
   // Legacy format: step_type='action' with action_type disambiguation
   if (stepType === 'action') {
@@ -272,8 +286,7 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): BackendStepUpdateP
   }
   if (stage.sort_order !== undefined) payload.sort_order = stage.sort_order;
   if (stage.is_required !== undefined) payload.required = stage.is_required;
-  if (stage.config !== undefined)
-    payload.config = stage.config as unknown as Record<string, unknown>;
+  if (stage.config !== undefined) payload.config = stage.config as unknown as Record<string, unknown>;
   if (stage.notify_prospect_on_completion !== undefined)
     payload.notify_prospect_on_completion = stage.notify_prospect_on_completion;
   if (stage.public_visible !== undefined) payload.public_visible = stage.public_visible;
@@ -292,10 +305,7 @@ const FRONTEND_STATUS_TO_BACKEND: Record<string, string> = { converted: 'transfe
 
 /** Extract a plain string status from a backend status value that may be a string or object. */
 function extractStatus(status: string | { value: string }): string {
-  const raw =
-    typeof status === 'object' && status !== null
-      ? (status.value ?? JSON.stringify(status))
-      : status;
+  const raw = typeof status === 'object' && status !== null ? (status.value ?? JSON.stringify(status)) : status;
   return BACKEND_STATUS_TO_FRONTEND[raw] ?? raw;
 }
 
@@ -308,39 +318,39 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
   const stageHistory: StageHistoryEntry[] = (data.step_progress || [])
     .filter((sp: BackendStepProgressResponse) => sp.status !== StepProgressStatus.PENDING)
     .map((sp: BackendStepProgressResponse) => {
-    const stageType = sp.step?.step_type
-      ? mapStepTypeToFrontend(sp.step.step_type, sp.step.action_type)
-      : (StageTypeConst.MANUAL_APPROVAL as StageType);
+      const stageType = sp.step?.step_type
+        ? mapStepTypeToFrontend(sp.step.step_type, sp.step.action_type)
+        : (StageTypeConst.MANUAL_APPROVAL as StageType);
 
-    // Build artifacts from action_result when available
-    const artifacts: StageHistoryEntry['artifacts'] = [];
-    const actionResult = sp.action_result;
-    if (actionResult && typeof actionResult === 'object') {
-      const mappedData = actionResult['mapped_data'] as Record<string, unknown> | undefined;
-      if (mappedData && stageType === StageTypeConst.FORM_SUBMISSION) {
-        artifacts.push({
-          id: `${sp.id}-form`,
-          type: StageTypeConst.FORM_SUBMISSION,
-          name: 'Membership Interest Form',
-          data: mappedData,
-          created_at: sp.completed_at ?? sp.created_at,
-        });
+      // Build artifacts from action_result when available
+      const artifacts: StageHistoryEntry['artifacts'] = [];
+      const actionResult = sp.action_result;
+      if (actionResult && typeof actionResult === 'object') {
+        const mappedData = actionResult['mapped_data'] as Record<string, unknown> | undefined;
+        if (mappedData && stageType === StageTypeConst.FORM_SUBMISSION) {
+          artifacts.push({
+            id: `${sp.id}-form`,
+            type: StageTypeConst.FORM_SUBMISSION,
+            name: 'Membership Interest Form',
+            data: mappedData,
+            created_at: sp.completed_at ?? sp.created_at,
+          });
+        }
       }
-    }
 
-    return {
-      id: sp.id,
-      stage_id: sp.step_id,
-      stage_name: sp.step?.name ?? '',
-      stage_type: stageType,
-      entered_at: sp.created_at,
-      completed_at: sp.completed_at || undefined,
-      completed_by: sp.completed_by || undefined,
-      notes: sp.notes || undefined,
-      artifacts,
-      action_result: actionResult ?? undefined,
-    };
-  });
+      return {
+        id: sp.id,
+        stage_id: sp.step_id,
+        stage_name: sp.step?.name ?? '',
+        stage_type: stageType,
+        entered_at: sp.created_at,
+        completed_at: sp.completed_at || undefined,
+        completed_by: sp.completed_by || undefined,
+        notes: sp.notes || undefined,
+        artifacts,
+        action_result: actionResult ?? undefined,
+      };
+    });
 
   return {
     id: data.id,
@@ -366,9 +376,9 @@ export function mapProspectToApplicant(data: BackendProspectResponse): Applicant
       : undefined,
     stage_history: stageHistory,
     total_stages: (data.step_progress || []).length,
-    stage_entered_at: (data.step_progress || []).find(
-      (sp: BackendStepProgressResponse) => sp.step_id === data.current_step_id
-    )?.created_at ?? data.created_at,
+    stage_entered_at:
+      (data.step_progress || []).find((sp: BackendStepProgressResponse) => sp.step_id === data.current_step_id)
+        ?.created_at ?? data.created_at,
     target_membership_type: mapDesiredMembershipType(data.desired_membership_type),
     form_submission_id: data.form_submission_id || undefined,
     status_token: data.status_token || undefined,
@@ -599,13 +609,10 @@ export const pipelineService = {
     return mapPipelineResponse(response.data);
   },
 
-  async updateReportSettings(
-    pipelineId: string,
-    reportStageGroups: ReportStageGroup[],
-  ): Promise<Pipeline> {
+  async updateReportSettings(pipelineId: string, reportStageGroups: ReportStageGroup[]): Promise<Pipeline> {
     const response = await api.patch<BackendPipelineResponse>(
       `/prospective-members/pipelines/${pipelineId}/report-settings`,
-      { report_stage_groups: reportStageGroups },
+      { report_stage_groups: reportStageGroups }
     );
     return mapPipelineResponse(response.data);
   },
@@ -640,8 +647,7 @@ export const applicantService = {
         params: {
           pipeline_id: params?.filters?.pipeline_id,
           status: params?.filters?.status
-            ? (FRONTEND_STATUS_TO_BACKEND[params.filters.status] ??
-              params.filters.status)
+            ? (FRONTEND_STATUS_TO_BACKEND[params.filters.status] ?? params.filters.status)
             : params?.filters?.status,
           search: params?.filters?.search,
           limit: pageSize,
@@ -792,6 +798,39 @@ export const applicantService = {
     return mapProspectToApplicant(response.data);
   },
 
+  /**
+   * Advance several applicants in one request.
+   *
+   * Replaces a client-side loop that fired one request per applicant and
+   * discarded each error, so a partial failure reported only a count. The
+   * per-applicant results let the caller name who did not move.
+   */
+  async bulkAdvance(applicantIds: string[], notes?: string): Promise<BulkActionResult> {
+    const response = await api.post<BulkActionResult>(
+      '/prospective-members/prospects/bulk-advance',
+      // Trim before coercing: `||` drops '' but a whitespace-only note is
+      // truthy and would be persisted as blank text.
+      { prospect_ids: applicantIds, notes: notes?.trim() || undefined }
+    );
+    return response.data;
+  },
+
+  /**
+   * Set the status of several applicants in one request.
+   *
+   * The reason is recorded in each applicant's activity log; it does not
+   * overwrite the coordinator notes field, which the previous client-side
+   * bulk path did on every selected record.
+   */
+  async bulkSetStatus(applicantIds: string[], status: ApplicantStatus, reason?: string): Promise<BulkActionResult> {
+    const response = await api.post<BulkActionResult>('/prospective-members/prospects/bulk-status', {
+      prospect_ids: applicantIds,
+      status,
+      reason: reason?.trim() || undefined,
+    });
+    return response.data;
+  },
+
   async regressStage(applicantId: string, data?: AdvanceStageRequest): Promise<Applicant> {
     const response = await api.post<BackendProspectResponse>(
       `/prospective-members/prospects/${applicantId}/regress`,
@@ -892,7 +931,8 @@ export const applicantService = {
   async convertToMember(applicantId: string, data: ConvertApplicantRequest): Promise<ConvertApplicantResponse> {
     // Backend uses /transfer endpoint with different payload shape.
     // Map 'regular' → 'probationary' since all regular members start as probationary.
-    const backendMembershipType = data.target_membership_type === 'regular' ? 'probationary' : data.target_membership_type;
+    const backendMembershipType =
+      data.target_membership_type === 'regular' ? 'probationary' : data.target_membership_type;
     const payload: Record<string, unknown> = {
       send_welcome_email: data.send_welcome_email,
       membership_type: backendMembershipType,
@@ -1056,25 +1096,17 @@ export const publicStatusService = {
 
 export const interviewService = {
   async getInterviews(applicantId: string): Promise<Interview[]> {
-    const response = await api.get<Interview[]>(
-      `/prospective-members/prospects/${applicantId}/interviews`
-    );
+    const response = await api.get<Interview[]>(`/prospective-members/prospects/${applicantId}/interviews`);
     return asArray(response.data);
   },
 
   async createInterview(applicantId: string, data: InterviewCreate): Promise<Interview> {
-    const response = await api.post<Interview>(
-      `/prospective-members/prospects/${applicantId}/interviews`,
-      data
-    );
+    const response = await api.post<Interview>(`/prospective-members/prospects/${applicantId}/interviews`, data);
     return response.data;
   },
 
   async updateInterview(interviewId: string, data: InterviewUpdate): Promise<Interview> {
-    const response = await api.put<Interview>(
-      `/prospective-members/interviews/${interviewId}`,
-      data
-    );
+    const response = await api.put<Interview>(`/prospective-members/interviews/${interviewId}`, data);
     return response.data;
   },
 
@@ -1089,17 +1121,14 @@ export const interviewService = {
 
 export const eventLinkService = {
   async getLinkedEvents(applicantId: string): Promise<ProspectEventLink[]> {
-    const response = await api.get<ProspectEventLink[]>(
-      `/prospective-members/prospects/${applicantId}/events`
-    );
+    const response = await api.get<ProspectEventLink[]>(`/prospective-members/prospects/${applicantId}/events`);
     return asArray(response.data);
   },
 
   async linkEvent(applicantId: string, eventId: string): Promise<ProspectEventLink> {
-    const response = await api.post<ProspectEventLink>(
-      `/prospective-members/prospects/${applicantId}/events`,
-      { event_id: eventId }
-    );
+    const response = await api.post<ProspectEventLink>(`/prospective-members/prospects/${applicantId}/events`, {
+      event_id: eventId,
+    });
     return response.data;
   },
 

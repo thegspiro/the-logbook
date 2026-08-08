@@ -34,11 +34,16 @@ from app.api.prospect_privacy import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.membership_pipeline import (
     ActivityLogResponse,
     AdvanceProspectRequest,
     AssignPackageToElectionRequest,
+    BulkActionItemResult,
+    BulkActionResponse,
+    BulkAdvanceRequest,
+    BulkStatusRequest,
     CompleteStepRequest,
     ElectionPackageCreate,
     ElectionPackageResponse,
@@ -466,8 +471,6 @@ async def reorder_steps(
 
     **Requires permission: members.manage**
     """
-    from app.core.utils import safe_error_detail
-
     service = MembershipPipelineService(db)
     try:
         steps = await service.reorder_steps(
@@ -957,12 +960,20 @@ async def advance_prospect(
     **Requires permission: members.manage**
     """
     service = MembershipPipelineService(db)
-    prospect = await service.advance_prospect(
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        advanced_by=current_user.id,
-        notes=data.notes if data else None,
-    )
+    try:
+        prospect = await service.advance_prospect(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            advanced_by=current_user.id,
+            notes=data.notes if data else None,
+        )
+    except ValueError as e:
+        # 409, not 400: the request is well-formed, the prospect just has
+        # nowhere to advance to. Answering 200 here previously let the UI
+        # report a movement that never happened.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=safe_error_detail(e)
+        )
     if not prospect:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
@@ -977,6 +988,112 @@ async def advance_prospect(
         username=current_user.username,
     )
     return prospect
+
+
+def _bulk_response(results: list[dict]) -> BulkActionResponse:
+    items = [BulkActionItemResult(**r) for r in results]
+    succeeded = sum(1 for r in items if r.succeeded)
+    return BulkActionResponse(
+        succeeded_count=succeeded,
+        failed_count=len(items) - succeeded,
+        results=items,
+    )
+
+
+@router.post("/prospects/bulk-advance", response_model=BulkActionResponse)
+async def bulk_advance_prospects(
+    data: BulkAdvanceRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
+):
+    """
+    Advance several prospects to their next step in one request.
+
+    Returns a per-prospect result rather than a single status, so the caller
+    can name which applicants did not move and why — a prospect already at
+    the final stage is reported as a failure, not silently counted as
+    advanced.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    results = await service.bulk_advance_prospects(
+        prospect_ids=[str(pid) for pid in data.prospect_ids],
+        organization_id=current_user.organization_id,
+        advanced_by=current_user.id,
+        notes=data.notes,
+        exclude_prospect_ids=hidden_prospect_ids,
+    )
+    response = _bulk_response(results)
+    if response.succeeded_count:
+        await log_audit_event(
+            db=db,
+            event_type="membership_pipeline.prospects_bulk_advanced",
+            event_category="membership",
+            severity="info",
+            event_data={
+                "advanced_count": response.succeeded_count,
+                "failed_count": response.failed_count,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return response
+
+
+@router.post("/prospects/bulk-status", response_model=BulkActionResponse)
+async def bulk_set_prospect_status(
+    data: BulkStatusRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
+    hidden_prospect_ids: set[str] = Depends(get_hidden_prospect_ids),
+):
+    """
+    Set the status of several prospects in one request (reject, reactivate,
+    withdraw, place on hold).
+
+    ``reason`` is recorded in each prospect's activity log. It deliberately
+    does not touch the coordinator notes field — the previous client-side
+    bulk path sent the reason through the update endpoint as ``notes``,
+    overwriting whatever had been written about each applicant.
+
+    **Requires permission: members.manage**
+    """
+    service = MembershipPipelineService(db)
+    try:
+        results = await service.bulk_set_prospect_status(
+            prospect_ids=[str(pid) for pid in data.prospect_ids],
+            organization_id=current_user.organization_id,
+            status=data.status,
+            changed_by=current_user.id,
+            reason=data.reason,
+            exclude_prospect_ids=hidden_prospect_ids,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    response = _bulk_response(results)
+    if response.succeeded_count:
+        await log_audit_event(
+            db=db,
+            event_type="membership_pipeline.prospects_bulk_status_changed",
+            event_category="membership",
+            severity="info",
+            event_data={
+                "status": data.status,
+                "changed_count": response.succeeded_count,
+                "failed_count": response.failed_count,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    return response
 
 
 @router.post("/prospects/{prospect_id}/regress", response_model=ProspectResponse)

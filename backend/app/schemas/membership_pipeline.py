@@ -384,6 +384,61 @@ class AdvanceProspectRequest(BaseModel):
     notes: Optional[str] = Field(None, description="Optional notes for the advancement")
 
 
+# --- Bulk Action Schemas ---
+
+# A coordinator selecting 30 applicants should cost one request, not 30. The
+# cap is a guardrail against an unbounded request body, not a UI page size.
+_MAX_BULK_PROSPECTS = 200
+
+
+class BulkAdvanceRequest(BaseModel):
+    """Schema for advancing several prospects in one request"""
+
+    prospect_ids: List[UUID] = Field(..., min_length=1, max_length=_MAX_BULK_PROSPECTS)
+    notes: Optional[str] = Field(None, description="Optional notes for the advancement")
+
+
+class BulkStatusRequest(BaseModel):
+    """Schema for changing the status of several prospects in one request"""
+
+    prospect_ids: List[UUID] = Field(..., min_length=1, max_length=_MAX_BULK_PROSPECTS)
+    status: str = Field(
+        ...,
+        description="Target status: active, on_hold, approved, rejected, withdrawn",
+    )
+    reason: Optional[str] = Field(
+        None,
+        max_length=1000,
+        description=(
+            "Why the status changed. Recorded in the prospect's activity log — "
+            "it deliberately does not overwrite the coordinator notes field."
+        ),
+    )
+
+
+class BulkActionItemResult(BaseModel):
+    """Per-prospect outcome of a bulk action"""
+
+    model_config = _response_config
+
+    prospect_id: str
+    name: Optional[str] = None
+    succeeded: bool
+    error: Optional[str] = Field(
+        None, description="Why this prospect was skipped, when succeeded is false"
+    )
+
+
+class BulkActionResponse(BaseModel):
+    """Outcome of a bulk action, itemized so the caller can name the failures"""
+
+    model_config = _response_config
+
+    succeeded_count: int
+    failed_count: int
+    results: List[BulkActionItemResult]
+
+
 # --- Transfer Schema ---
 
 

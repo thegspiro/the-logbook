@@ -36,7 +36,7 @@ import { PipelineTable } from '../components/PipelineTable';
 import { ApplicantDetailDrawer } from '../components/ApplicantDetailDrawer';
 import { ConversionModal } from '../components/ConversionModal';
 import { applicantService } from '../services/api';
-import type { ApplicantListItem, Applicant, ApplicantStatus } from '../types';
+import type { ApplicantListItem, Applicant, ApplicantStatus, BulkActionResult } from '../types';
 import { isValidEmail, getInitials } from '../utils';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -101,6 +101,10 @@ export const ProspectiveMembersPage: React.FC = () => {
   const [isBulkAdvancing, setIsBulkAdvancing] = useState(false);
   const [isBulkRejecting, setIsBulkRejecting] = useState(false);
   const [showBulkRejectConfirm, setShowBulkRejectConfirm] = useState(false);
+  // A rejection reason belongs to the applicants it is written about. The old
+  // path hardcoded the literal string "Bulk rejection" into every record.
+  const [bulkRejectReason, setBulkRejectReason] = useState('');
+  const [isBulkReactivating, setIsBulkReactivating] = useState(false);
 
   // New applicant form state
   const [newApplicant, setNewApplicant] = useState({
@@ -179,68 +183,99 @@ export const ProspectiveMembersPage: React.FC = () => {
     }
   };
 
+  /**
+   * Report a bulk outcome truthfully.
+   *
+   * The previous handlers counted only successes and announced failures as a
+   * bare number ("Failed to advance 4 applicant(s)"), which gave the
+   * coordinator no way to tell who was skipped or retry deliberately. The
+   * backend itemizes, so name the first few and say why.
+   */
+  const reportBulkResult = (result: BulkActionResult, verb: string) => {
+    const { succeeded_count: ok, failed_count: failed, results } = result;
+    if (ok > 0) {
+      toast.success(`${verb} ${ok} applicant${ok === 1 ? '' : 's'}`);
+    }
+    if (failed > 0) {
+      const skipped = results.filter((r) => !r.succeeded);
+      const named = skipped
+        .slice(0, 3)
+        .map((r) => `${r.name ?? 'Unknown'} (${r.error ?? 'failed'})`)
+        .join('; ');
+      const more = skipped.length > 3 ? ` and ${skipped.length - 3} more` : '';
+      toast.error(`Skipped ${failed}: ${named}${more}`, { duration: 8000 });
+    }
+  };
+
   const handleBulkAdvance = async () => {
     if (!currentPipeline) return;
     const ids = Array.from(selectedApplicants);
     setIsBulkAdvancing(true);
-    let successCount = 0;
-    for (const id of ids) {
-      try {
-        await applicantService.advanceStage(id);
-        successCount++;
-      } catch {
-        // continue with remaining
+    try {
+      const result = await applicantService.bulkAdvance(ids);
+      reportBulkResult(result, 'Advanced');
+      if (result.succeeded_count > 0) {
+        void fetchApplicants();
+        if (currentPipeline) void fetchPipelineStats(currentPipeline.id);
       }
+      setSelectedApplicants(new Set());
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to advance applicants'));
+    } finally {
+      setIsBulkAdvancing(false);
     }
-    setIsBulkAdvancing(false);
-    setSelectedApplicants(new Set());
-    if (successCount > 0) {
-      toast.success(`Advanced ${successCount} applicant${successCount === 1 ? '' : 's'}`);
-      void fetchApplicants();
-    }
-    if (successCount < ids.length) {
-      toast.error(`Failed to advance ${ids.length - successCount} applicant(s)`);
+  };
+
+  const handleBulkReactivate = async () => {
+    const ids = Array.from(selectedInactive);
+    setIsBulkReactivating(true);
+    try {
+      const result = await applicantService.bulkSetStatus(ids, 'active');
+      // Previously a partial failure was announced through toast.success, so
+      // "Reactivated 3 of 10" arrived in green.
+      reportBulkResult(result, 'Reactivated');
+      if (result.succeeded_count > 0) {
+        void fetchInactiveApplicants();
+        void fetchApplicants();
+      }
+      setSelectedInactive(new Set());
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reactivate applications'));
+    } finally {
+      setIsBulkReactivating(false);
     }
   };
 
   const handleBulkReject = async () => {
     const ids = Array.from(selectedApplicants);
     setIsBulkRejecting(true);
-    let successCount = 0;
-    for (const id of ids) {
-      try {
-        await applicantService.rejectApplicant(id, 'Bulk rejection');
-        successCount++;
-      } catch {
-        // continue with remaining
+    try {
+      const result = await applicantService.bulkSetStatus(ids, 'rejected', bulkRejectReason.trim() || undefined);
+      reportBulkResult(result, 'Rejected');
+      if (result.succeeded_count > 0) {
+        void fetchApplicants();
+        if (currentPipeline) void fetchPipelineStats(currentPipeline.id);
       }
-    }
-    setIsBulkRejecting(false);
-    setSelectedApplicants(new Set());
-    setShowBulkRejectConfirm(false);
-    if (successCount > 0) {
-      toast.success(`Rejected ${successCount} applicant${successCount === 1 ? '' : 's'}`);
-      void fetchApplicants();
-    }
-    if (successCount < ids.length) {
-      toast.error(`Failed to reject ${ids.length - successCount} applicant(s)`);
+      setSelectedApplicants(new Set());
+      setShowBulkRejectConfirm(false);
+      setBulkRejectReason('');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reject applicants'));
+    } finally {
+      setIsBulkRejecting(false);
     }
   };
 
   const isLastStage = useMemo(() => {
     if (!currentPipeline || !currentApplicant) return false;
-    const sortedStages = [...currentPipeline.stages].sort(
-      (a, b) => a.sort_order - b.sort_order
-    );
+    const sortedStages = [...currentPipeline.stages].sort((a, b) => a.sort_order - b.sort_order);
     const lastStage = sortedStages[sortedStages.length - 1];
     return lastStage?.id === currentApplicant.current_stage_id;
   }, [currentPipeline, currentApplicant]);
 
   const isFirstStage = useMemo(() => {
     if (!currentPipeline || !currentApplicant) return true;
-    const sortedStages = [...currentPipeline.stages].sort(
-      (a, b) => a.sort_order - b.sort_order
-    );
+    const sortedStages = [...currentPipeline.stages].sort((a, b) => a.sort_order - b.sort_order);
     const firstStage = sortedStages[0];
     return firstStage?.id === currentApplicant.current_stage_id;
   }, [currentPipeline, currentApplicant]);
@@ -301,40 +336,35 @@ export const ProspectiveMembersPage: React.FC = () => {
   };
 
   const sortedStages = useMemo(
-    () =>
-      currentPipeline
-        ? [...currentPipeline.stages].sort((a, b) => a.sort_order - b.sort_order)
-        : [],
+    () => (currentPipeline ? [...currentPipeline.stages].sort((a, b) => a.sort_order - b.sort_order) : []),
     [currentPipeline]
   );
 
   return (
-    <div className="px-4 sm:px-6 py-6 max-w-[1600px] mx-auto">
+    <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-theme-text-primary flex items-center gap-3">
-            <Users className="w-6 sm:w-7 h-6 sm:h-7 text-red-700 dark:text-red-500" />
+          <h1 className="text-theme-text-primary flex items-center gap-3 text-xl font-bold sm:text-2xl">
+            <Users className="h-6 w-6 text-red-700 sm:h-7 sm:w-7 dark:text-red-500" />
             Prospective Members
           </h1>
-          <p className="text-theme-text-muted mt-1 text-sm">
-            Manage your organization's applicant pipeline
-          </p>
+          <p className="text-theme-text-muted mt-1 text-sm">Manage your organization's applicant pipeline</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => void navigate('/prospective-members/settings')}
-            className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary transition-colors"
+            className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors sm:px-4"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">Pipeline Settings</span>
             <span className="sm:hidden">Settings</span>
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="btn-primary flex gap-2 items-center px-3 sm:px-4 text-sm"
+            className="btn-primary flex items-center gap-2 px-3 text-sm sm:px-4"
           >
-            <UserPlus className="w-4 h-4" />
+            <UserPlus className="h-4 w-4" />
             <span className="hidden sm:inline">Add Applicant</span>
             <span className="sm:hidden">Add</span>
           </button>
@@ -344,85 +374,72 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Stats Bar */}
       {pipelineStats && !isLoadingStats && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-2">
-            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
-              <div className="flex items-center gap-2 text-theme-text-muted text-xs mb-1">
-                <Users className="w-3.5 h-3.5" />
+          <div className="mb-2 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
+            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+              <div className="text-theme-text-muted mb-1 flex items-center gap-2 text-xs">
+                <Users className="h-3.5 w-3.5" />
                 Total Active
               </div>
-              <p className="text-2xl font-bold text-theme-text-primary">
-                {pipelineStats.active_applicants}
-              </p>
+              <p className="text-theme-text-primary text-2xl font-bold">{pipelineStats.active_applicants}</p>
             </div>
-            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
-              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-xs mb-1">
-                <CheckCircle2 className="w-3.5 h-3.5" />
+            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+              <div className="mb-1 flex items-center gap-2 text-xs text-blue-700 dark:text-blue-400">
+                <CheckCircle2 className="h-3.5 w-3.5" />
                 Converted
               </div>
-              <p className="text-2xl font-bold text-theme-text-primary">
-                {pipelineStats.converted_count}
-              </p>
+              <p className="text-theme-text-primary text-2xl font-bold">{pipelineStats.converted_count}</p>
             </div>
-            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
-              <div className="flex items-center gap-2 text-theme-text-muted text-xs mb-1">
-                <Clock className="w-3.5 h-3.5" />
+            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+              <div className="text-theme-text-muted mb-1 flex items-center gap-2 text-xs">
+                <Clock className="h-3.5 w-3.5" />
                 Avg. Days to Convert
               </div>
-              <p className="text-2xl font-bold text-theme-text-primary">
-                {pipelineStats.avg_days_to_convert > 0
-                  ? pipelineStats.avg_days_to_convert
-                  : '—'}
+              <p className="text-theme-text-primary text-2xl font-bold">
+                {pipelineStats.avg_days_to_convert > 0 ? pipelineStats.avg_days_to_convert : '—'}
               </p>
             </div>
-            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
-              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs mb-1">
-                <TrendingUp className="w-3.5 h-3.5" />
+            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+              <div className="mb-1 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                <TrendingUp className="h-3.5 w-3.5" />
                 Conversion Rate
               </div>
-              <p className="text-2xl font-bold text-theme-text-primary">
-                {pipelineStats.conversion_rate > 0
-                  ? `${pipelineStats.conversion_rate.toFixed(1)}%`
-                  : '—'}
+              <p className="text-theme-text-primary text-2xl font-bold">
+                {pipelineStats.conversion_rate > 0 ? `${pipelineStats.conversion_rate.toFixed(1)}%` : '—'}
               </p>
             </div>
-            {(pipelineStats.warning_count > 0) && (
-              <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 text-xs mb-1">
-                  <AlertTriangle className="w-3.5 h-3.5" />
+            {pipelineStats.warning_count > 0 && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                <div className="mb-1 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="h-3.5 w-3.5" />
                   Approaching Timeout
                 </div>
-                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
-                  {pipelineStats.warning_count}
-                </p>
+                <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{pipelineStats.warning_count}</p>
               </div>
             )}
-            {(pipelineStats.inactive_count > 0) && (
-              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
-                <div className="flex items-center gap-2 text-theme-text-muted text-xs mb-1">
-                  <XCircle className="w-3.5 h-3.5" />
+            {pipelineStats.inactive_count > 0 && (
+              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+                <div className="text-theme-text-muted mb-1 flex items-center gap-2 text-xs">
+                  <XCircle className="h-3.5 w-3.5" />
                   Inactive
                 </div>
-                <p className="text-2xl font-bold text-theme-text-muted">
-                  {pipelineStats.inactive_count}
-                </p>
+                <p className="text-theme-text-muted text-2xl font-bold">{pipelineStats.inactive_count}</p>
               </div>
             )}
-            {(pipelineStats.withdrawn_count > 0) && (
-              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
-                <div className="flex items-center gap-2 text-theme-text-muted text-xs mb-1">
-                  <Archive className="w-3.5 h-3.5" />
+            {pipelineStats.withdrawn_count > 0 && (
+              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+                <div className="text-theme-text-muted mb-1 flex items-center gap-2 text-xs">
+                  <Archive className="h-3.5 w-3.5" />
                   Withdrawn
                 </div>
-                <p className="text-2xl font-bold text-theme-text-muted">
-                  {pipelineStats.withdrawn_count}
-                </p>
+                <p className="text-theme-text-muted text-2xl font-bold">{pipelineStats.withdrawn_count}</p>
               </div>
             )}
           </div>
-          <div className="flex items-center gap-1.5 mb-6 px-1">
-            <Info className="w-3 h-3 text-theme-text-muted shrink-0" />
-            <p className="text-xs text-theme-text-muted">
-              Statistics include active applicants only. Inactive, rejected, and withdrawn (archived) applicants are excluded from conversion rate and averages.
+          <div className="mb-6 flex items-center gap-1.5 px-1">
+            <Info className="text-theme-text-muted h-3 w-3 shrink-0" />
+            <p className="text-theme-text-muted text-xs">
+              Statistics include active applicants only. Inactive, rejected, and withdrawn (archived) applicants are
+              excluded from conversion rate and averages.
             </p>
           </div>
         </>
@@ -432,40 +449,40 @@ export const ProspectiveMembersPage: React.FC = () => {
       <div className="tab-scroll mb-4">
         <button
           onClick={() => setActiveTab('active')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+          className={`border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'active'
-              ? 'border-red-500 text-theme-text-primary'
-              : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary'
+              ? 'text-theme-text-primary border-red-500'
+              : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
           }`}
         >
           Active Pipeline
         </button>
         <button
           onClick={() => setActiveTab('inactive')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'inactive'
-              ? 'border-red-500 text-theme-text-primary'
-              : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary'
+              ? 'text-theme-text-primary border-red-500'
+              : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
           }`}
         >
           Inactive Applications
           {pipelineStats && pipelineStats.inactive_count > 0 && (
-            <span className="px-1.5 py-0.5 text-xs rounded-full bg-theme-surface-hover text-theme-text-secondary">
+            <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
               {pipelineStats.inactive_count}
             </span>
           )}
         </button>
         <button
           onClick={() => setActiveTab('withdrawn')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
             activeTab === 'withdrawn'
-              ? 'border-red-500 text-theme-text-primary'
-              : 'border-transparent text-theme-text-muted hover:text-theme-text-secondary'
+              ? 'text-theme-text-primary border-red-500'
+              : 'text-theme-text-muted hover:text-theme-text-secondary border-transparent'
           }`}
         >
           Withdrawn
           {pipelineStats && pipelineStats.withdrawn_count > 0 && (
-            <span className="px-1.5 py-0.5 text-xs rounded-full bg-theme-surface-hover text-theme-text-secondary">
+            <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-1.5 py-0.5 text-xs">
               {pipelineStats.withdrawn_count}
             </span>
           )}
@@ -474,140 +491,135 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Controls Bar (Active tab) */}
       {activeTab === 'active' && (
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        {/* Pipeline Selector */}
-        {pipelines.length > 1 && (
-          <select
-            value={currentPipeline?.id ?? ''}
-            onChange={(e) => {
-              const pipeline = pipelines.find((p) => p.id === e.target.value);
-              if (pipeline) void fetchPipeline(pipeline.id);
-            }}
-            className="bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-          >
-            {pipelines.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        )}
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          {/* Pipeline Selector */}
+          {pipelines.length > 1 && (
+            <select
+              value={currentPipeline?.id ?? ''}
+              onChange={(e) => {
+                const pipeline = pipelines.find((p) => p.id === e.target.value);
+                if (pipeline) void fetchPipeline(pipeline.id);
+              }}
+              className="bg-theme-surface border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
+            >
+              {pipelines.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
 
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search applicants..." placeholder="Search applicants..."
-            className="w-full bg-theme-surface border border-theme-surface-border rounded-lg pl-10 pr-4 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-          />
-        </div>
+          {/* Search */}
+          <div className="relative max-w-md flex-1">
+            <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search applicants..."
+              placeholder="Search applicants..."
+              className="bg-theme-surface border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border py-2 pr-4 pl-10 text-sm focus:ring-2 focus:outline-hidden"
+            />
+          </div>
 
-        {/* Status Filter */}
-        <div className="relative">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-lg transition-colors ${
-              statusFilter
-                ? 'border-red-500 text-red-700 dark:text-red-400 bg-red-500/10'
-                : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'
-            }`}
-          >
-            <Filter className="w-4 h-4" />
-            Filter
-            {statusFilter && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setStatusFilter('');
-                }}
-                className="ml-1"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </button>
-          {showFilters && (
-            <div className="absolute top-full mt-2 left-0 w-48 bg-theme-surface-modal border border-theme-surface-border rounded-lg shadow-xl z-10 py-1">
-              {(['active', 'on_hold', 'withdrawn', 'converted', 'rejected'] as ApplicantStatus[]).map(
-                (status) => (
+          {/* Status Filter */}
+          <div className="relative">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                statusFilter
+                  ? 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-400'
+                  : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'
+              }`}
+            >
+              <Filter className="h-4 w-4" />
+              Filter
+              {statusFilter && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setStatusFilter('');
+                  }}
+                  className="ml-1"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </button>
+            {showFilters && (
+              <div className="bg-theme-surface-modal border-theme-surface-border absolute top-full left-0 z-10 mt-2 w-48 rounded-lg border py-1 shadow-xl">
+                {(['active', 'on_hold', 'withdrawn', 'converted', 'rejected'] as ApplicantStatus[]).map((status) => (
                   <button
                     key={status}
                     onClick={() => {
                       setStatusFilter(status);
                       setShowFilters(false);
                     }}
-                    className={`w-full text-left px-4 py-2 text-sm capitalize hover:bg-theme-surface-secondary ${
-                      statusFilter === status
-                        ? 'text-red-700 dark:text-red-400'
-                        : 'text-theme-text-secondary'
+                    className={`hover:bg-theme-surface-secondary w-full px-4 py-2 text-left text-sm capitalize ${
+                      statusFilter === status ? 'text-red-700 dark:text-red-400' : 'text-theme-text-secondary'
                     }`}
                   >
                     {status.replace('_', ' ')}
                   </button>
-                )
-              )}
-              {statusFilter && (
-                <button
-                  onClick={() => {
-                    setStatusFilter('');
-                    setShowFilters(false);
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-theme-text-muted hover:bg-theme-surface-secondary border-t border-theme-surface-border"
-                >
-                  Clear filter
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+                ))}
+                {statusFilter && (
+                  <button
+                    onClick={() => {
+                      setStatusFilter('');
+                      setShowFilters(false);
+                    }}
+                    className="text-theme-text-muted hover:bg-theme-surface-secondary border-theme-surface-border w-full border-t px-4 py-2 text-left text-sm"
+                  >
+                    Clear filter
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
-        <div className="flex-1" />
+          <div className="flex-1" />
 
-        {/* Refresh */}
-        <button
-          onClick={() => { void fetchApplicants(); }}
-          disabled={isLoading}
-          className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors disabled:opacity-50"
-          title="Refresh"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
-
-        {/* View Toggle */}
-        <div className="flex items-center bg-theme-surface border border-theme-surface-border rounded-lg">
+          {/* Refresh */}
           <button
-            onClick={() => setViewMode('kanban')}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-l-lg transition-colors ${
-              viewMode === 'kanban'
-                ? 'bg-red-600 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary'
-            }`}
+            onClick={() => {
+              void fetchApplicants();
+            }}
+            disabled={isLoading}
+            className="text-theme-text-muted hover:text-theme-text-primary p-2 transition-colors disabled:opacity-50"
+            title="Refresh"
           >
-            <LayoutGrid className="w-4 h-4" />
-            Kanban
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
-          <button
-            onClick={() => setViewMode('table')}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-r-lg transition-colors ${
-              viewMode === 'table'
-                ? 'bg-red-600 text-white'
-                : 'text-theme-text-muted hover:text-theme-text-primary'
-            }`}
-          >
-            <List className="w-4 h-4" />
-            Table
-          </button>
+
+          {/* View Toggle */}
+          <div className="bg-theme-surface border-theme-surface-border flex items-center rounded-lg border">
+            <button
+              onClick={() => setViewMode('kanban')}
+              className={`flex items-center gap-1.5 rounded-l-lg px-3 py-2 text-sm transition-colors ${
+                viewMode === 'kanban' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Kanban
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-1.5 rounded-r-lg px-3 py-2 text-sm transition-colors ${
+                viewMode === 'table' ? 'bg-red-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              }`}
+            >
+              <List className="h-4 w-4" />
+              Table
+            </button>
+          </div>
         </div>
-      </div>
       )}
 
       {/* Error State */}
       {error && (
-        <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg p-4 flex items-center gap-2">
-          <XCircle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0" />
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-4">
+          <XCircle className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
           <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
         </div>
       )}
@@ -617,21 +629,14 @@ export const ProspectiveMembersPage: React.FC = () => {
         <>
           {(isLoading || isLoadingPipeline || isLoadingPipelines) && !applicants.length ? (
             <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-              <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" />
+              <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
             </div>
           ) : !currentPipeline ? (
-            <div className="text-center py-20">
-              <Users className="w-12 h-12 text-theme-text-muted mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-theme-text-primary mb-2">
-                No pipeline configured
-              </h3>
-              <p className="text-theme-text-muted mb-4">
-                Create a pipeline to start managing prospective members.
-              </p>
-              <button
-                onClick={() => void navigate('/prospective-members/settings')}
-                className="btn-primary px-6"
-              >
+            <div className="py-20 text-center">
+              <Users className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
+              <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No pipeline configured</h3>
+              <p className="text-theme-text-muted mb-4">Create a pipeline to start managing prospective members.</p>
+              <button onClick={() => void navigate('/prospective-members/settings')} className="btn-primary px-6">
                 Configure Pipeline
               </button>
             </div>
@@ -639,53 +644,71 @@ export const ProspectiveMembersPage: React.FC = () => {
             <>
               {/* Bulk Actions Bar */}
               {selectedApplicants.size > 0 && (
-                <div className="mb-3 flex items-center gap-3 p-3 bg-theme-surface border border-theme-surface-border rounded-lg">
-                  <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                <div className="bg-theme-surface border-theme-surface-border mb-3 flex items-center gap-3 rounded-lg border p-3">
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={selectedApplicants.size === applicants.length}
                       onChange={toggleAllApplicants}
-                      className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                      className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                     />
                     {selectedApplicants.size} selected
                   </label>
-                  <div className="flex items-center gap-2 ml-auto">
+                  <div className="ml-auto flex items-center gap-2">
                     <button
-                      onClick={() => void navigate(`/prospective-members/print-labels?ids=${[...selectedApplicants].join(',')}`)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg transition-colors"
+                      onClick={() =>
+                        void navigate(`/prospective-members/print-labels?ids=${[...selectedApplicants].join(',')}`)
+                      }
+                      className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors"
                     >
-                      <Printer className="w-3.5 h-3.5" />
+                      <Printer className="h-3.5 w-3.5" />
                       Print Badges
                     </button>
                     <button
-                      onClick={() => { void handleBulkAdvance(); }}
+                      onClick={() => {
+                        void handleBulkAdvance();
+                      }}
                       disabled={isBulkAdvancing}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
                     >
                       {isBulkAdvancing ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <CheckCircle2 className="h-3.5 w-3.5" />
                       )}
                       Advance All
                     </button>
                     {showBulkRejectConfirm ? (
                       <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={bulkRejectReason}
+                          onChange={(e) => setBulkRejectReason(e.target.value)}
+                          placeholder="Reason (optional)"
+                          aria-label="Reason for rejecting the selected applicants"
+                          maxLength={1000}
+                          className="form-input w-56 py-1.5 text-sm"
+                        />
                         <button
-                          onClick={() => setShowBulkRejectConfirm(false)}
-                          className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                          onClick={() => {
+                            setShowBulkRejectConfirm(false);
+                            setBulkRejectReason('');
+                          }}
+                          className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-xs transition-colors"
                         >
                           Cancel
                         </button>
                         <button
-                          onClick={() => { void handleBulkReject(); }}
+                          onClick={() => {
+                            void handleBulkReject();
+                          }}
                           disabled={isBulkRejecting}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                          className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-red-700 disabled:opacity-50"
                         >
                           {isBulkRejecting ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
-                            <XCircle className="w-3.5 h-3.5" />
+                            <XCircle className="h-3.5 w-3.5" />
                           )}
                           Confirm Reject
                         </button>
@@ -693,18 +716,18 @@ export const ProspectiveMembersPage: React.FC = () => {
                     ) : (
                       <button
                         onClick={() => setShowBulkRejectConfirm(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-700 dark:text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
+                        className="flex items-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-1.5 text-sm text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
                       >
-                        <XCircle className="w-3.5 h-3.5" />
+                        <XCircle className="h-3.5 w-3.5" />
                         Reject All
                       </button>
                     )}
                     <button
                       onClick={() => setSelectedApplicants(new Set())}
-                      className="p-1.5 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                      className="text-theme-text-muted hover:text-theme-text-primary p-1.5 transition-colors"
                       title="Clear selection"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -724,7 +747,9 @@ export const ProspectiveMembersPage: React.FC = () => {
                   totalApplicants={totalApplicants}
                   currentPage={currentPage}
                   totalPages={totalPages}
-                  onPageChange={(page) => { void fetchApplicants(page); }}
+                  onPageChange={(page) => {
+                    void fetchApplicants(page);
+                  }}
                   onApplicantClick={handleApplicantClick}
                   selectedApplicants={selectedApplicants}
                   onToggleSelect={toggleApplicantSelection}
@@ -741,44 +766,29 @@ export const ProspectiveMembersPage: React.FC = () => {
         <div>
           {/* Inactive Bulk Actions */}
           {selectedInactive.size > 0 && (
-            <div className="mb-3 flex items-center gap-3 p-3 bg-theme-surface border border-theme-surface-border rounded-lg">
-              <span className="text-sm text-theme-text-secondary">
-                {selectedInactive.size} selected
-              </span>
-              <div className="flex items-center gap-2 ml-auto">
+            <div className="bg-theme-surface border-theme-surface-border mb-3 flex items-center gap-3 rounded-lg border p-3">
+              <span className="text-theme-text-secondary text-sm">{selectedInactive.size} selected</span>
+              <div className="ml-auto flex items-center gap-2">
                 <button
                   onClick={() => {
-                    void (async () => {
-                      const ids = Array.from(selectedInactive);
-                      let successCount = 0;
-                      for (const id of ids) {
-                        try {
-                          await reactivateApplicant(id);
-                          successCount++;
-                        } catch {
-                          // continue
-                        }
-                      }
-                      if (successCount === ids.length) {
-                        toast.success(`Reactivated ${successCount} application(s)`);
-                      } else {
-                        toast.success(`Reactivated ${successCount} of ${ids.length} application(s)`);
-                      }
-                      setSelectedInactive(new Set());
-                    })();
+                    void handleBulkReactivate();
                   }}
-                  disabled={isReactivating}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  disabled={isBulkReactivating}
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
+                  {isBulkReactivating ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  )}
                   Reactivate
                 </button>
                 <button
                   onClick={() => setShowPurgeConfirm(true)}
                   disabled={isPurging}
-                  className="btn-primary flex gap-1.5 items-center px-3 py-1.5 text-sm"
+                  className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="h-3.5 w-3.5" />
                   Purge Selected
                 </button>
               </div>
@@ -787,23 +797,21 @@ export const ProspectiveMembersPage: React.FC = () => {
 
           {isLoadingInactive ? (
             <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-              <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" />
+              <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
             </div>
           ) : inactiveApplicants.length === 0 ? (
-            <div className="text-center py-20 bg-theme-input-bg rounded-lg border border-dashed border-theme-surface-border">
-              <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-theme-text-primary mb-2">
-                No inactive applications
-              </h3>
-              <p className="text-sm text-theme-text-muted">
+            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border border-dashed py-20 text-center">
+              <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" />
+              <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No inactive applications</h3>
+              <p className="text-theme-text-muted text-sm">
                 All applications are currently active or have been resolved.
               </p>
             </div>
           ) : (
-            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden overflow-x-auto">
+            <div className="bg-theme-input-bg border-theme-surface-border overflow-hidden overflow-x-auto rounded-lg border">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-theme-surface-border">
+                  <tr className="border-theme-surface-border border-b">
                     <th scope="col" className="w-10 p-3">
                       <input
                         type="checkbox"
@@ -815,14 +823,39 @@ export const ProspectiveMembersPage: React.FC = () => {
                             setSelectedInactive(new Set());
                           }
                         }}
-                        className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                        className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                       />
                     </th>
-                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
-                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Email</th>
-                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Last Stage</th>
-                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Inactive Since</th>
-                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Days Idle</th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Name
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Email
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Last Stage
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Inactive Since
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Days Idle
+                    </th>
                     <th scope="col" className="w-28 p-3"></th>
                   </tr>
                 </thead>
@@ -830,7 +863,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                   {inactiveApplicants.map((applicant) => (
                     <tr
                       key={applicant.id}
-                      className="border-b border-theme-surface-border hover:bg-theme-surface-secondary transition-colors"
+                      className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
                     >
                       <td className="p-3">
                         <input
@@ -845,29 +878,27 @@ export const ProspectiveMembersPage: React.FC = () => {
                             }
                             setSelectedInactive(next);
                           }}
-                          className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                          className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                         />
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-xs font-bold text-theme-text-secondary shrink-0">
+                          <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
                             {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
-                          <span className="text-sm font-medium text-theme-text-secondary">
+                          <span className="text-theme-text-secondary text-sm font-medium">
                             {applicant.first_name} {applicant.last_name}
                           </span>
                         </div>
                       </td>
-                      <td className="p-3 text-sm text-theme-text-muted table-col-secondary">{applicant.email}</td>
-                      <td className="p-3 text-sm text-theme-text-muted table-col-secondary">{applicant.current_stage_name ?? '—'}</td>
-                      <td className="p-3 text-sm text-theme-text-muted table-col-tertiary">
-                        {applicant.deactivated_at
-                          ? formatDate(applicant.deactivated_at, tz)
-                          : '—'}
+                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
+                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        {applicant.current_stage_name ?? '—'}
                       </td>
-                      <td className="p-3 text-sm text-theme-text-muted">
-                        {applicant.days_since_activity}d
+                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        {applicant.deactivated_at ? formatDate(applicant.deactivated_at, tz) : '—'}
                       </td>
+                      <td className="text-theme-text-muted p-3 text-sm">{applicant.days_since_activity}d</td>
                       <td className="p-3">
                         <button
                           onClick={() => {
@@ -881,9 +912,9 @@ export const ProspectiveMembersPage: React.FC = () => {
                             })();
                           }}
                           disabled={isReactivating}
-                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                          className="flex items-center gap-1 rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-400"
                         >
-                          <RotateCcw className="w-3 h-3" />
+                          <RotateCcw className="h-3 w-3" />
                           Reactivate
                         </button>
                       </td>
@@ -892,22 +923,26 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </tbody>
               </table>
               {inactiveTotalPages > 1 && (
-                <div className="flex items-center justify-between p-3 border-t border-theme-surface-border">
-                  <p className="text-sm text-theme-text-muted">
+                <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
+                  <p className="text-theme-text-muted text-sm">
                     Page {inactiveCurrentPage} of {inactiveTotalPages} ({inactiveTotalApplicants} total)
                   </p>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => { void fetchInactiveApplicants(inactiveCurrentPage - 1); }}
+                      onClick={() => {
+                        void fetchInactiveApplicants(inactiveCurrentPage - 1);
+                      }}
                       disabled={inactiveCurrentPage <= 1}
-                      className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
+                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
                     >
                       Previous
                     </button>
                     <button
-                      onClick={() => { void fetchInactiveApplicants(inactiveCurrentPage + 1); }}
+                      onClick={() => {
+                        void fetchInactiveApplicants(inactiveCurrentPage + 1);
+                      }}
                       disabled={inactiveCurrentPage >= inactiveTotalPages}
-                      className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
+                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
                     >
                       Next
                     </button>
@@ -919,12 +954,11 @@ export const ProspectiveMembersPage: React.FC = () => {
 
           {/* Purge Note */}
           {inactiveApplicants.length > 0 && (
-            <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-theme-surface-border rounded-lg">
-              <Info className="w-3.5 h-3.5 text-theme-text-muted shrink-0 mt-0.5" />
-              <p className="text-xs text-theme-text-muted">
-                Inactive applications are excluded from pipeline statistics.
-                Purging permanently deletes applicant data and cannot be undone.
-                Consider reactivating applications before purging if you are unsure.
+            <div className="bg-theme-input-bg border-theme-surface-border mt-4 flex items-start gap-2 rounded-lg border p-3">
+              <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <p className="text-theme-text-muted text-xs">
+                Inactive applications are excluded from pipeline statistics. Purging permanently deletes applicant data
+                and cannot be undone. Consider reactivating applications before purging if you are unsure.
               </p>
             </div>
           )}
@@ -936,28 +970,51 @@ export const ProspectiveMembersPage: React.FC = () => {
         <div>
           {isLoadingWithdrawn ? (
             <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-              <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" />
+              <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" />
             </div>
           ) : withdrawnApplicants.length === 0 ? (
-            <div className="text-center py-20 bg-theme-input-bg rounded-lg border border-dashed border-theme-surface-border">
-              <Archive className="w-12 h-12 text-theme-text-muted mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-theme-text-primary mb-2">
-                No withdrawn applications
-              </h3>
-              <p className="text-sm text-theme-text-muted">
+            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border border-dashed py-20 text-center">
+              <Archive className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
+              <h3 className="text-theme-text-primary mb-2 text-lg font-medium">No withdrawn applications</h3>
+              <p className="text-theme-text-muted text-sm">
                 Applicants who voluntarily withdraw from the pipeline will appear here.
               </p>
             </div>
           ) : (
-            <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg overflow-hidden overflow-x-auto">
+            <div className="bg-theme-input-bg border-theme-surface-border overflow-hidden overflow-x-auto rounded-lg border">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-theme-surface-border">
-                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider">Name</th>
-                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Email</th>
-                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-secondary">Last Stage</th>
-                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Withdrawn Date</th>
-                    <th scope="col" className="text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider table-col-tertiary">Reason</th>
+                  <tr className="border-theme-surface-border border-b">
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Name
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Email
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-secondary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Last Stage
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Withdrawn Date
+                    </th>
+                    <th
+                      scope="col"
+                      className="text-theme-text-muted table-col-tertiary p-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
+                      Reason
+                    </th>
                     <th scope="col" className="w-32 p-3"></th>
                   </tr>
                 </thead>
@@ -965,36 +1022,40 @@ export const ProspectiveMembersPage: React.FC = () => {
                   {withdrawnApplicants.map((applicant) => (
                     <tr
                       key={applicant.id}
-                      className="border-b border-theme-surface-border hover:bg-theme-surface-secondary transition-colors"
+                      className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
                     >
                       <td className="p-3">
                         <div
-                          className="flex items-center gap-2.5 cursor-pointer"
-                          onClick={() => { void fetchApplicant(applicant.id); }}
+                          className="flex cursor-pointer items-center gap-2.5"
+                          onClick={() => {
+                            void fetchApplicant(applicant.id);
+                          }}
                         >
-                          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-xs font-bold text-theme-text-secondary shrink-0">
+                          <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
                             {getInitials(applicant.first_name, applicant.last_name)}
                           </div>
-                          <span className="text-sm font-medium text-theme-text-secondary">
+                          <span className="text-theme-text-secondary text-sm font-medium">
                             {applicant.first_name} {applicant.last_name}
                           </span>
                         </div>
                       </td>
-                      <td className="p-3 text-sm text-theme-text-muted table-col-secondary">{applicant.email}</td>
-                      <td className="p-3 text-sm text-theme-text-muted table-col-secondary">{applicant.current_stage_name ?? '—'}</td>
-                      <td className="p-3 text-sm text-theme-text-muted table-col-tertiary">
-                        {applicant.withdrawn_at
-                          ? formatDate(applicant.withdrawn_at, tz)
-                          : '—'}
+                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
+                      <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        {applicant.current_stage_name ?? '—'}
                       </td>
-                      <td className="p-3 text-sm text-theme-text-muted max-w-[200px] truncate table-col-tertiary">
+                      <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        {applicant.withdrawn_at ? formatDate(applicant.withdrawn_at, tz) : '—'}
+                      </td>
+                      <td className="text-theme-text-muted table-col-tertiary max-w-[200px] truncate p-3 text-sm">
                         {applicant.withdrawal_reason ?? '—'}
                       </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => { void fetchApplicant(applicant.id); }}
-                            className="text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                            onClick={() => {
+                              void fetchApplicant(applicant.id);
+                            }}
+                            className="text-theme-text-muted hover:text-theme-text-primary text-xs transition-colors"
                           >
                             View
                           </button>
@@ -1010,9 +1071,9 @@ export const ProspectiveMembersPage: React.FC = () => {
                               })();
                             }}
                             disabled={isReactivating}
-                            className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1 rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-400"
                           >
-                            <RotateCcw className="w-3 h-3" />
+                            <RotateCcw className="h-3 w-3" />
                             Reactivate
                           </button>
                         </div>
@@ -1022,22 +1083,26 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </tbody>
               </table>
               {withdrawnTotalPages > 1 && (
-                <div className="flex items-center justify-between p-3 border-t border-theme-surface-border">
-                  <p className="text-sm text-theme-text-muted">
+                <div className="border-theme-surface-border flex items-center justify-between border-t p-3">
+                  <p className="text-theme-text-muted text-sm">
                     Page {withdrawnCurrentPage} of {withdrawnTotalPages} ({withdrawnTotalApplicants} total)
                   </p>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => { void fetchWithdrawnApplicants(withdrawnCurrentPage - 1); }}
+                      onClick={() => {
+                        void fetchWithdrawnApplicants(withdrawnCurrentPage - 1);
+                      }}
                       disabled={withdrawnCurrentPage <= 1}
-                      className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
+                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
                     >
                       Previous
                     </button>
                     <button
-                      onClick={() => { void fetchWithdrawnApplicants(withdrawnCurrentPage + 1); }}
+                      onClick={() => {
+                        void fetchWithdrawnApplicants(withdrawnCurrentPage + 1);
+                      }}
                       disabled={withdrawnCurrentPage >= withdrawnTotalPages}
-                      className="px-3 py-1 text-sm text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 transition-colors"
+                      className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1 text-sm transition-colors disabled:opacity-30"
                     >
                       Next
                     </button>
@@ -1049,11 +1114,11 @@ export const ProspectiveMembersPage: React.FC = () => {
 
           {/* Info Note */}
           {withdrawnApplicants.length > 0 && (
-            <div className="flex items-start gap-2 mt-4 p-3 bg-theme-input-bg border border-theme-surface-border rounded-lg">
-              <Info className="w-3.5 h-3.5 text-theme-text-muted shrink-0 mt-0.5" />
-              <p className="text-xs text-theme-text-muted">
-                Withdrawn applications are from prospective members who voluntarily left the pipeline process.
-                You can reactivate them to place them back into the active pipeline at their previous stage.
+            <div className="bg-theme-input-bg border-theme-surface-border mt-4 flex items-start gap-2 rounded-lg border p-3">
+              <Info className="text-theme-text-muted mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <p className="text-theme-text-muted text-xs">
+                Withdrawn applications are from prospective members who voluntarily left the pipeline process. You can
+                reactivate them to place them back into the active pipeline at their previous stage.
               </p>
             </div>
           )}
@@ -1062,28 +1127,29 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Purge Confirmation Modal */}
       {showPurgeConfirm && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
             <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400" />
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
+                  <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-theme-text-primary">Confirm Purge</h2>
-                  <p className="text-sm text-theme-text-muted">This action cannot be undone</p>
+                  <h2 className="text-theme-text-primary text-lg font-bold">Confirm Purge</h2>
+                  <p className="text-theme-text-muted text-sm">This action cannot be undone</p>
                 </div>
               </div>
-              <p className="text-sm text-theme-text-secondary mb-4">
-                You are about to permanently delete <strong className="text-theme-text-primary">{selectedInactive.size}</strong> inactive
-                application(s) and all associated personal data. This protects your organization from holding
-                unnecessary private information.
+              <p className="text-theme-text-secondary mb-4 text-sm">
+                You are about to permanently delete{' '}
+                <strong className="text-theme-text-primary">{selectedInactive.size}</strong> inactive application(s) and
+                all associated personal data. This protects your organization from holding unnecessary private
+                information.
               </p>
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
+            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
               <button
                 onClick={() => setShowPurgeConfirm(false)}
-                className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
               >
                 Cancel
               </button>
@@ -1101,9 +1167,9 @@ export const ProspectiveMembersPage: React.FC = () => {
                   })();
                 }}
                 disabled={isPurging}
-                className="btn-primary flex gap-2 items-center px-6"
+                className="btn-primary flex items-center gap-2 px-6"
               >
-                {isPurging && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isPurging && <Loader2 className="h-4 w-4 animate-spin" />}
                 Permanently Delete
               </button>
             </div>
@@ -1130,66 +1196,58 @@ export const ProspectiveMembersPage: React.FC = () => {
 
       {/* Add Applicant Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
-              <h2 className="text-lg font-bold text-theme-text-primary">Add Applicant</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+              <h2 className="text-theme-text-primary text-lg font-bold">Add Applicant</h2>
               <button
                 onClick={() => setShowAddModal(false)}
                 className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="space-y-4 p-6">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-theme-text-muted mb-1">First Name *</label>
+                  <label className="text-theme-text-muted mb-1 block text-sm">First Name *</label>
                   <input
                     type="text"
                     value={newApplicant.first_name}
-                    onChange={(e) =>
-                      setNewApplicant({ ...newApplicant, first_name: e.target.value })
-                    }
-                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    onChange={(e) => setNewApplicant({ ...newApplicant, first_name: e.target.value })}
+                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-theme-text-muted mb-1">Last Name *</label>
+                  <label className="text-theme-text-muted mb-1 block text-sm">Last Name *</label>
                   <input
                     type="text"
                     value={newApplicant.last_name}
-                    onChange={(e) =>
-                      setNewApplicant({ ...newApplicant, last_name: e.target.value })
-                    }
-                    className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                    onChange={(e) => setNewApplicant({ ...newApplicant, last_name: e.target.value })}
+                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm text-theme-text-muted mb-1">Email *</label>
+                <label className="text-theme-text-muted mb-1 block text-sm">Email *</label>
                 <input
                   type="email"
                   value={newApplicant.email}
-                  onChange={(e) =>
-                    setNewApplicant({ ...newApplicant, email: e.target.value })
-                  }
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  onChange={(e) => setNewApplicant({ ...newApplicant, email: e.target.value })}
+                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 />
               </div>
               <div>
-                <label className="block text-sm text-theme-text-muted mb-1">Phone</label>
+                <label className="text-theme-text-muted mb-1 block text-sm">Phone</label>
                 <input
                   type="tel"
                   value={newApplicant.phone}
-                  onChange={(e) =>
-                    setNewApplicant({ ...newApplicant, phone: e.target.value })
-                  }
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  onChange={(e) => setNewApplicant({ ...newApplicant, phone: e.target.value })}
+                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 />
               </div>
               <div>
-                <label className="block text-sm text-theme-text-muted mb-1">Membership Type</label>
+                <label className="text-theme-text-muted mb-1 block text-sm">Membership Type</label>
                 <select
                   value={newApplicant.target_membership_type}
                   onChange={(e) =>
@@ -1198,26 +1256,28 @@ export const ProspectiveMembersPage: React.FC = () => {
                       target_membership_type: e.target.value as 'regular' | 'administrative',
                     })
                   }
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 >
                   <option value="regular">Regular Member</option>
                   <option value="administrative">Administrative</option>
                 </select>
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
+            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
               <button
                 onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => { void handleCreateApplicant(); }}
+                onClick={() => {
+                  void handleCreateApplicant();
+                }}
                 disabled={isCreating}
-                className="btn-primary flex gap-2 items-center px-6"
+                className="btn-primary flex items-center gap-2 px-6"
               >
-                {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
                 Add to Pipeline
               </button>
             </div>

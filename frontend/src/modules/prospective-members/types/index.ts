@@ -513,6 +513,26 @@ export interface ApplicantUpdate {
 // Stage Actions
 // =============================================================================
 
+/**
+ * Outcome of a bulk action for a single applicant.
+ *
+ * The backend itemizes rather than returning one status, so a partial
+ * failure can name who did not move and why instead of reporting a bare
+ * count the coordinator cannot act on.
+ */
+export interface BulkActionItemResult {
+  prospect_id: string;
+  name?: string | null;
+  succeeded: boolean;
+  error?: string | null;
+}
+
+export interface BulkActionResult {
+  succeeded_count: number;
+  failed_count: number;
+  results: BulkActionItemResult[];
+}
+
 export interface AdvanceStageRequest {
   notes?: string | undefined;
   artifacts?:
@@ -1010,8 +1030,7 @@ export const InterviewRecommendation = {
   DO_NOT_RECOMMEND: 'do_not_recommend',
   UNDECIDED: 'undecided',
 } as const;
-export type InterviewRecommendation =
-  (typeof InterviewRecommendation)[keyof typeof InterviewRecommendation];
+export type InterviewRecommendation = (typeof InterviewRecommendation)[keyof typeof InterviewRecommendation];
 
 export const INTERVIEW_RECOMMENDATION_LABELS: Record<InterviewRecommendation, string> = {
   recommend: 'Recommend',
@@ -1022,8 +1041,7 @@ export const INTERVIEW_RECOMMENDATION_LABELS: Record<InterviewRecommendation, st
 
 export const INTERVIEW_RECOMMENDATION_COLORS: Record<InterviewRecommendation, string> = {
   recommend: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  recommend_with_reservations:
-    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+  recommend_with_reservations: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
   do_not_recommend: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   undecided: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
 };

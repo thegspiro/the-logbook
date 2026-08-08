@@ -24,6 +24,7 @@ from app.api.prospect_privacy import (
     normalize_prospect_id,
 )
 from app.api.v1.endpoints import membership_pipeline as pipeline_endpoints
+from app.models.membership_pipeline import ProspectStatus
 from app.models.user import User
 from app.services.membership_pipeline_service import MembershipPipelineService
 
@@ -406,6 +407,48 @@ class TestGuardOverHttp:
             ):
                 res = await client.get(f"/prospective-members/prospects/{spelling}")
                 assert res.status_code == 404, spelling
+
+    async def test_bulk_endpoints_refuse_the_callers_own_record(
+        self, db_session: AsyncSession, org_and_viewer
+    ):
+        """Bulk ids arrive in the request body, where the router's
+        path-parameter guard cannot see them — so the exclusion has to be
+        applied explicitly, and this is what proves it is."""
+        org_id, viewer = org_and_viewer
+        await self._grant_manage(db_session, org_id, viewer)
+        svc = MembershipPipelineService(db_session)
+        pipeline = await svc.create_pipeline(organization_id=org_id, name="P")
+        await svc.add_step(pipeline.id, org_id, {"name": "One"})
+        await svc.add_step(pipeline.id, org_id, {"name": "Two"})
+        mine = await _make_prospect(
+            svc, org_id, email=viewer.email, pipeline_id=pipeline.id
+        )
+        theirs = await _make_prospect(svc, org_id, pipeline_id=pipeline.id)
+
+        async with await self._client(db_session, viewer) as client:
+            advanced = await client.post(
+                "/prospective-members/prospects/bulk-advance",
+                json={"prospect_ids": [mine.id, theirs.id]},
+            )
+            statused = await client.post(
+                "/prospective-members/prospects/bulk-status",
+                json={"prospect_ids": [mine.id], "status": "rejected"},
+            )
+
+        assert advanced.status_code == 200
+        outcomes = {r["prospect_id"]: r for r in advanced.json()["results"]}
+        assert outcomes[mine.id]["succeeded"] is False
+        # Indistinguishable from an id that does not exist — the refusal
+        # must not confirm the record is there.
+        assert outcomes[mine.id]["error"] == "Prospect not found"
+        assert outcomes[theirs.id]["succeeded"] is True
+
+        assert statused.status_code == 200
+        assert statused.json()["succeeded_count"] == 0
+
+        # And the record really was left alone.
+        untouched = await svc.get_prospect(mine.id, org_id)
+        assert untouched.status == ProspectStatus.ACTIVE
 
     async def test_mutations_on_own_record_are_refused(
         self, db_session: AsyncSession, org_and_viewer
