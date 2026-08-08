@@ -210,6 +210,7 @@ async function main() {
         anchor: shot.anchor,
         alt: shot.alt,
         ...(emptyState ? { emptyState } : {}),
+        ...(shot.holdBack ? { holdBack: shot.holdBack } : {}),
       });
       console.log(
         `  ${emptyState ? "~" : "+"} ${shot.id}${emptyState ? ` (empty: "${emptyState}")` : ""}`,

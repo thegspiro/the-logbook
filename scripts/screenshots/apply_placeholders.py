@@ -100,11 +100,17 @@ def main() -> int:
     shots = [s for s in json.loads(REPORT.read_text()) if s.get("status") == "ok"]
     by_doc: dict[str, list[dict]] = {}
     held_back = 0
+    withheld: list[str] = []
     for shot in shots:
         if not (shot.get("doc") and shot.get("line")):
             continue
         if shot.get("emptyState") and not args.include_empty:
             held_back += 1
+            continue
+        # An explicit hold-back is a judgement the manifest recorded about the
+        # picture itself, not something --include-empty should override.
+        if shot.get("holdBack"):
+            withheld.append(f"{shot['id']}: {shot['holdBack']}")
             continue
         by_doc.setdefault(shot["doc"], []).append(shot)
 
@@ -141,6 +147,8 @@ def main() -> int:
             path.write_text("\n".join(lines) + "\n")
 
     print(f"{applied} placeholder(s) replaced across {len(by_doc)} guide(s).")
+    for note in withheld:
+        print(f"  - withheld {note}")
     if held_back:
         print(
             f"  - held back {held_back} shot(s) showing an empty state (use --include-empty to override)"

@@ -4253,11 +4253,14 @@ class ShiftEquipmentCheck(Base):
         ForeignKey("equipment_check_templates.id", ondelete="SET NULL"),
         nullable=True,
     )
-    apparatus_id = Column(
-        String(36),
-        ForeignKey("apparatus.id", ondelete="SET NULL"),
-        nullable=True,
-    )
+    # Deliberately unconstrained, matching Shift.apparatus_id, which this is
+    # copied from in create_shift_check. That column is a bare String(36)
+    # holding a scheduling BasicApparatus id, so a foreign key to apparatus.id
+    # here failed on every check submitted for a shift with an apparatus
+    # assigned. The two apparatus tables are the underlying problem; until they
+    # are reconciled, the reference is untyped on both sides rather than
+    # enforced against the wrong one.
+    apparatus_id = Column(String(36), nullable=True)
     checked_by = Column(
         String(36),
         ForeignKey("users.id", ondelete="SET NULL"),

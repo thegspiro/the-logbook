@@ -20,6 +20,9 @@
  *   selector optional CSS/locator to clip to instead of the full viewport
  *   fullPage capture the whole scroll height rather than the viewport
  *   viewport 'mobile' to shoot at phone width instead of desktop
+ *   holdBack why the shot must not be applied yet, even though it captures
+ *            cleanly — for a page that renders a misleading picture rather than
+ *            an empty one, which the empty-state check cannot see
  *
  * Entries are grouped by guide and ordered by the placeholder's position in it.
  * This file covers the placeholders a plain route visit satisfies; the ones
@@ -343,6 +346,14 @@ export const SHOTS = [
       "Screenshot of the Equipment Check Reports page showing the Compliance Dashboard tab",
     alt: "Equipment Check Reports page with the compliance dashboard",
     route: "/scheduling/equipment-check-reports",
+    // Captures cleanly and is a true picture of the app, but every apparatus
+    // card reads "Checks: 0 / Last Check: Never" beside a total of 3 checks:
+    // the checks carry a scheduling BasicApparatus id while the rollup groups
+    // by apparatus-module ids, so the join matches nothing. Publishing it would
+    // read as a broken feature. Unblocks when the two apparatus tables are
+    // reconciled.
+    holdBack:
+      "per-apparatus rollup reads zero — checks are keyed by BasicApparatus id, the report groups by apparatus id",
   },
 
   // ── 04 Events & Meetings ────────────────────────────────────────────
