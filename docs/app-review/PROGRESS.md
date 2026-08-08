@@ -18,7 +18,7 @@ been through a review pass.
 
 | # | Feature | Code | Prefix | Status |
 |---|---------|------|--------|--------|
-| A1 | Storefront & payments | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF | 🔄 |
+| A1 | Storefront & payments | `endpoints/storefront.py` (1597 L), `services/storefront_service.py` (2965 L), `storefront_notification_service.py` (987 L), `email_templates_storefront.py` (512 L), `utils/storefront_payments.py`, `public/paypal_webhook.py`; `modules/storefront` (29 files, 7965 L) | SF | ✅ (p1, p2) |
 | A2 | Auth & session lifecycle | `endpoints/auth.py` (1405 L), `services/auth_service.py` (970 L), `mfa_service.py`, `oauth_service.py`, `consent_service.py` | AUTH | ✅ |
 | A3 | Scheduled tasks & cron | `endpoints/scheduled.py` (60 L), `services/scheduled_tasks.py` (4570 L), `cert_alert_service.py`, `property_return_reminder_service.py` | CRON | ✅ |
 | A4 | Email templates & delivery | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L) | MAIL | ✅ |
@@ -1216,7 +1216,7 @@ re-run unless directed).
 
 ---
 
-## 🏁 Pass 2 complete (2026-08-08)
+## 🏁 Tier B pass 2 complete (2026-08-08)
 
 **All 27 Tier B modules (B1–B27) reviewed in pass 2.** Each iteration re-verified
 the pass-1 landed fixes, applied the six pass-2 lenses (update-bypass, projection
@@ -1228,4 +1228,22 @@ sandbox limit). Headline finds: **ORU-7d (CRITICAL** rank privilege-escalation),
 **FE-2 (HIGH** HIPAA cache leak), **AH-6 (HIGH** bulk-approve SoD bypass), plus a
 class of latent-500s (EV-9 end-event, SCH-8, GF-10/11) and cross-org read-leaks
 (TR-7/8, EV-8, EV-10) the finding-focused pass 1 didn't reach.
+
+## Tier A pass 2 (opened 2026-08-08)
+
+The rotation wraps from B27 back to A1. Same discipline as Tier B pass 2.
+
+- **A1 storefront & payments ✅ (pass 2).** Re-verified pass-1 (Decimal money,
+  SafeCsvWriter, 47/47 gated, self-scoped member orders, server-side re-pricing,
+  guarded refunds, fail-closed PayPal webhook, SF-1/2). Reviewed the out-of-band
+  **reconciliation** surface B12 deferred here (`apply_payment_event`, AMBIGUOUS
+  handling, batch settlement) — all org-scoped, XC-3 clean. **1 fix — SF-4** (MED
+  money-integrity: `record_external_payment` auto-applied a capture when
+  `amount == balance` but **never compared currency** to the store currency, so a
+  `50 CAD` capture could auto-settle a `$50` USD order — wrong amount collected,
+  `StoreOrder` has no currency column to catch it. Added a currency-mismatch →
+  AMBIGUOUS guard; matching-currency exact amounts still auto-apply). Payments SoD
+  stays flagged; 2 LOW webhook-robustness items noted. **2 regression tests**
+  (DB-backed + DB-free). flake8/black clean. User-visible fix in CHANGELOG. See
+  storefront.md → Pass 2. Next: A2 auth & session lifecycle.
 </content>

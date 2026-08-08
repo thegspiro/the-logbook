@@ -243,6 +243,28 @@ class TestRecordExternalPayment:
         )
         assert event.status == StorePaymentEventStatus.AMBIGUOUS
 
+    async def test_foreign_currency_is_ambiguous_not_applied(self, db_session):
+        org = await _make_org(db_session)
+        service = StorefrontService(db_session)
+        order = await _placed_order(db_session, org, service)
+
+        # The amount equals the USD balance numerically, but the capture is in
+        # CAD — worth materially more or less. It must never auto-settle; a
+        # human has to reconcile the currency.
+        event = await service.record_external_payment(
+            org.id,
+            "paypal",
+            _capture(order.order_number, Decimal("45.00"), currency="CAD"),
+        )
+
+        assert event.status == StorePaymentEventStatus.AMBIGUOUS
+        assert event.matched_order_id == order.id
+        assert "currency" in (event.note or "").lower()
+        settled = await service.get_order(order.id, org.id)
+        assert settled is not None
+        assert settled.amount_paid == Decimal("0.00")
+        assert settled.payment_status == StorePaymentStatus.UNPAID
+
     async def test_payment_against_a_settled_order_is_ambiguous(self, db_session):
         org = await _make_org(db_session)
         service = StorefrontService(db_session)

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Storefront: a payment in the wrong currency is no longer auto-applied (2026-08-08)
+
+**Fixed**
+
+- **A PayPal payment made in a different currency could be automatically matched to
+  an order** when its number happened to equal the order's balance — for example a
+  50 CAD payment settling a $50 order, recording the wrong amount collected. Such
+  payments are now held for a person to review instead of being applied
+  automatically; same-currency payments are unaffected.
+
 ### Security: sensitive list data is no longer briefly cached in the browser (2026-08-08)
 
 **Security**

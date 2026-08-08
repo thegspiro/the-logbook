@@ -1,6 +1,45 @@
 # Application Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** A1 · **Reviewed:** 2026-08-05
+**Prefix:** `SF` · **Iteration:** A1 · **Reviewed:** 2026-08-05 (pass 1),
+2026-08-08 (pass 2)
+
+## Pass 2 (2026-08-08) — six-lens sweep + the reconciliation surface
+
+Re-verified pass-1 (money is `Decimal` end-to-end; `SafeCsvWriter`; 47/47
+endpoints gated; `/orders/mine/*` self-scoped; `_price_lines` re-prices + org-scopes
+every FK; refund guarded against exceeding paid; PayPal webhook fails closed; SF-1/2
+hold). This pass added the **out-of-band payment reconciliation** the B12 integrations
+pass deferred here (`apply_payment_event`, AMBIGUOUS handling, batch settlement) —
+all confirmed org-scoped (XC-3 clean). **1 fix.**
+
+### SF-4 — MEDIUM (money integrity) — Currency-blind auto-settle — ✅ FIXED
+
+`record_external_payment` auto-applies a capture when `amount == balance` and
+`auto_apply_payments` is on (it defaults on). The match chain checked cancelled →
+`balance <= 0` → `amount != balance` → apply, but **never compared the capture
+currency to the store currency**, even though both are stored (`StorePaymentEvent.
+currency`, `StoreSettings.currency`) and `extract_capture` carries whatever currency
+the payer selected. A PayPal.me payer can pick a non-USD currency, so a capture of
+`50.00 CAD` against a `$50.00` USD balance satisfies `amount == balance` and
+auto-settles the order — recording $50 collected for a payment worth materially
+more or less. `StoreOrder` has no currency column, so nothing downstream catches it.
+(`KNOWN_LIMITATIONS` flags `auto_apply_payments` generally but reasons only about the
+*amount*.) **Fix:** a currency guard as the second match branch — a capture whose
+currency differs from `get_settings().currency` is routed to **AMBIGUOUS** for human
+reconciliation, exactly like a short/over payment; a matching-currency exact amount
+still auto-applies unchanged. 1 DB-backed regression test (`test_storefront_
+reconciliation.py`) + 1 DB-free unit test (`test_storefront_currency_guard.py`).
+
+**Flagged (unchanged):** the payments SoD — one `storefront.manage` holder can
+record/mark-paid/waive/refund (KNOWN_LIMITATIONS, same shape as FIN-4/AH-4) — stands.
+Two LOW robustness items noted (not fixed): concurrent duplicate webhook deliveries
+degrade to a 500 → provider retry (the `UniqueConstraint` is the real guard, no
+double-apply), and an order cancelled in the match→apply race yields a 400 to PayPal
+while the event stays correctly MATCHED for a human (self-healing on retry). Lenses
+1–4 otherwise clean (no blind-FK update bypass; no cross-org projection; all
+reconciliation/settlement org-scoped; `*_name` populated).
+
+---
 
 **Backend:** `app/api/v1/endpoints/storefront.py` (1597 L, 47 endpoints),
 `app/services/storefront_service.py` (2965 L),
