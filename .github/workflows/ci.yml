@@ -673,8 +673,14 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       # playwright.config.ts starts `npm run dev` itself via webServer.
+      #
+      # @screenshots is excluded: that spec is a capture utility, not a test.
+      # It asserts nothing, and exists to regenerate the manifest screenshots
+      # committed under public/screenshots (`npm run generate:screenshots`).
+      # In CI it just writes PNGs into the runner's workspace for nothing to
+      # read, so skipping it saves the run without losing any coverage.
       - name: Run E2E tests
-        run: npx playwright test --project=chromium
+        run: npx playwright test --project=chromium --grep-invert @screenshots
 
       - name: Upload Playwright report
         if: failure()
