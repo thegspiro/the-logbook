@@ -10,7 +10,7 @@ Complete guide for installing The Logbook on Unraid using Community Applications
 4. [Configuration](#configuration)
 5. [Security Hardening](#security-hardening)
 6. [Port Conflicts](#port-conflicts)
-7. [Database Setup](#database-setup)
+7. [Database Setup](#database-setup-mysql)
 8. [Troubleshooting](#troubleshooting)
 9. [Backup Configuration](#backup-configuration)
 10. [Updates](#updates)
@@ -55,16 +55,16 @@ If not already installed:
 
 **IMPORTANT - Set these before clicking Apply:**
 
-| Setting | Value | Notes |
-|---------|-------|-------|
-| **WebUI Port** | 7880 | Or any available port |
-| **API Port** | 7881 | Or any available port |
-| **Database Host** | Your Unraid IP or MySQL container name | |
-| **Database Name** | the_logbook | Create this database first |
-| **Database User** | logbook_user | Create this user first |
-| **Database Password** | *strong password* | **REQUIRED** |
-| **Secret Key** | Generate with: `openssl rand -hex 32` | **REQUIRED** |
-| **Encryption Key** | Generate with: `openssl rand -hex 32` | **REQUIRED** |
+| Setting               | Value                                  | Notes                      |
+| --------------------- | -------------------------------------- | -------------------------- |
+| **WebUI Port**        | 7880                                   | Or any available port      |
+| **API Port**          | 7881                                   | Or any available port      |
+| **Database Host**     | Your Unraid IP or MySQL container name |                            |
+| **Database Name**     | the_logbook                            | Create this database first |
+| **Database User**     | logbook_user                           | Create this user first     |
+| **Database Password** | _strong password_                      | **REQUIRED**               |
+| **Secret Key**        | Generate with: `openssl rand -hex 32`  | **REQUIRED**               |
+| **Encryption Key**    | Generate with: `openssl rand -hex 32`  | **REQUIRED**               |
 
 ### Step 4: Generate Security Keys
 
@@ -103,11 +103,13 @@ If you don't have MySQL installed or need to create a new database:
 #### Option 1: Use Existing MySQL Container
 
 1. **Open MySQL Terminal**
+
    ```bash
    docker exec -it logbook-db mysql -u root -p
    ```
 
 2. **Create Database**
+
    ```sql
    CREATE DATABASE the_logbook CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
    ```
@@ -136,7 +138,7 @@ If you want a dedicated database for The Logbook:
 1. Create `/mnt/user/appdata/the-logbook/docker-compose.yml`:
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   db:
@@ -151,7 +153,7 @@ services:
     volumes:
       - /mnt/user/appdata/the-logbook/mysql:/var/lib/mysql
     ports:
-      - "3307:3306"  # Use non-standard port to avoid conflicts
+      - "3307:3306" # Use non-standard port to avoid conflicts
     networks:
       - logbook
 
@@ -163,7 +165,7 @@ services:
     volumes:
       - /mnt/user/appdata/the-logbook/redis:/data
     ports:
-      - "6380:6379"  # Use non-standard port
+      - "6380:6379" # Use non-standard port
     networks:
       - logbook
 
@@ -173,6 +175,7 @@ networks:
 ```
 
 2. Start the stack:
+
    ```bash
    cd /mnt/user/appdata/the-logbook
    docker-compose up -d
@@ -191,22 +194,26 @@ networks:
 ### Port Configuration
 
 **Default Ports** (conflict-free):
+
 - **Frontend:** 7880 (WebUI)
 - **Backend API:** 7881
 
 **If Ports Are In Use:**
 
 Check what's using a port:
+
 ```bash
 netstat -tuln | grep 7880
 ```
 
 Alternative ports you can use:
+
 - 8880, 8881 (common alternatives)
 - 9880, 9881
 - Any high port (10000-65535)
 
 **Update Template:**
+
 1. Stop The Logbook container
 2. Edit container
 3. Change port mappings
@@ -217,16 +224,17 @@ Alternative ports you can use:
 
 **Recommended Unraid Paths:**
 
-| Container Path | Host Path | Purpose |
-|---------------|-----------|---------|
-| /app/data | /mnt/user/appdata/the-logbook | Application data |
-| /app/uploads | /mnt/user/appdata/the-logbook/uploads | User uploads |
-| /backups | /mnt/user/backups/the-logbook | Backups |
-| /app/logs | /mnt/user/appdata/the-logbook/logs | Application logs |
+| Container Path | Host Path                             | Purpose          |
+| -------------- | ------------------------------------- | ---------------- |
+| /app/data      | /mnt/user/appdata/the-logbook         | Application data |
+| /app/uploads   | /mnt/user/appdata/the-logbook/uploads | User uploads     |
+| /backups       | /mnt/user/backups/the-logbook         | Backups          |
+| /app/logs      | /mnt/user/appdata/the-logbook/logs    | Application logs |
 
 **Use Cache Drive:**
 
 For best performance:
+
 1. Set share to **Use cache: Yes**
 2. Mover will move data to array during scheduled times
 3. Uploads stay on cache for fast access
@@ -234,6 +242,7 @@ For best performance:
 **Use Array Only:**
 
 For maximum reliability:
+
 1. Set share to **Use cache: No**
 2. All data written directly to array
 3. Slower but more redundant
@@ -374,25 +383,27 @@ These hardening changes are on by default and require no configuration:
 
 These ports are commonly used by Unraid and should be avoided:
 
-| Port | Typical Use | Conflict |
-|------|-------------|----------|
-| 80 | HTTP | Unraid WebUI, nginx |
-| 443 | HTTPS | Unraid WebUI, nginx |
-| 3000 | Various | Grafana, many apps |
-| 3306 | MySQL | MySQL |
-| 5432 | PostgreSQL | PostgreSQL |
-| 6379 | Redis | Redis |
-| 8080 | HTTP Alt | Many apps |
-| 8443 | HTTPS Alt | Many apps |
-| 9000 | Various | Portainer |
+| Port | Typical Use | Conflict            |
+| ---- | ----------- | ------------------- |
+| 80   | HTTP        | Unraid WebUI, nginx |
+| 443  | HTTPS       | Unraid WebUI, nginx |
+| 3000 | Various     | Grafana, many apps  |
+| 3306 | MySQL       | MySQL               |
+| 5432 | PostgreSQL  | PostgreSQL          |
+| 6379 | Redis       | Redis               |
+| 8080 | HTTP Alt    | Many apps           |
+| 8443 | HTTPS Alt   | Many apps           |
+| 9000 | Various     | Portainer           |
 
 ### Recommended Safe Ports
 
 **The Logbook Defaults (Safe):**
+
 - 7880 - Frontend WebUI
 - 7881 - Backend API
 
 **If These Conflict:**
+
 - 10880, 10881
 - 11880, 11881
 - Any 5-digit port above 10000
@@ -500,6 +511,7 @@ docker exec -it TheLogbook alembic upgrade head
 ### Container Won't Start
 
 **Check Logs:**
+
 ```bash
 docker logs TheLogbook
 ```
@@ -507,6 +519,7 @@ docker logs TheLogbook
 **Common Issues:**
 
 1. **Port Already in Use**
+
    ```bash
    # Find what's using the port
    netstat -tuln | grep :7880
@@ -515,6 +528,7 @@ docker logs TheLogbook
    ```
 
 2. **Database Connection Failed**
+
    ```bash
    # Verify database is running
    docker ps | grep logbook-db
@@ -526,6 +540,7 @@ docker logs TheLogbook
    ```
 
 3. **Missing Environment Variables**
+
    ```bash
    # Check container environment
    docker inspect TheLogbook | grep -A 20 "Env"
@@ -536,16 +551,19 @@ docker logs TheLogbook
 ### WebUI Not Accessible
 
 1. **Check Container Status:**
+
    ```bash
    docker ps | grep TheLogbook
    ```
 
 2. **Verify Port Mapping:**
+
    ```bash
    docker port TheLogbook
    ```
 
 3. **Check Firewall:**
+
    ```bash
    # Unraid should allow by default, but verify:
    iptables -L -n | grep 7880
@@ -565,6 +583,7 @@ docker logs TheLogbook
    - Add REDIS_HOST and REDIS_PORT to template
 
 2. **Check Resource Usage:**
+
    ```bash
    docker stats TheLogbook
    ```
@@ -597,6 +616,7 @@ ORDER BY (data_length + index_length) DESC;
    - Ensure network bridge is properly configured
 
 2. **Update ALLOWED_ORIGINS:**
+
    ```bash
    # In container template, set:
    ALLOWED_ORIGINS=http://192.168.1.10:7880,http://unraid.local:7880
@@ -668,14 +688,16 @@ automated **restore drill** — it loads the fresh dump into a throwaway schema,
 confirms the tables restored, and drops it. Check `docker compose logs backup`;
 a failed drill repeats loudly every night until resolved. Sync the backup share
 off the array, and store `ENCRYPTION_KEY`/`ENCRYPTION_SALT` separately — a
-backup without its era's keys cannot decrypt encrypted fields. *(2026-07-31)*
+backup without its era's keys cannot decrypt encrypted fields. _(2026-07-31)_
 
 **Backup Location:**
+
 ```
 /mnt/user/backups/the-logbook/
 ```
 
 **Backup Contents:**
+
 - Database dump (compressed)
 - Uploaded files
 - Configuration (sanitized)
@@ -771,6 +793,7 @@ docker restart TheLogbook
 ### Update Best Practices
 
 1. **Backup First:**
+
    ```bash
    docker exec TheLogbook /app/scripts/backup.sh
    ```
@@ -785,6 +808,7 @@ docker restart TheLogbook
    - Schedule during off-hours
 
 4. **Verify After Update:**
+
    ```bash
    # Check container is running
    docker ps | grep TheLogbook
@@ -855,6 +879,7 @@ docker inspect TheLogbook --format='{{range .State.Health.Log}}{{.Output}}{{end}
 ### Getting Help
 
 1. **Check Logs:**
+
    ```bash
    docker logs TheLogbook --tail 100
    ```

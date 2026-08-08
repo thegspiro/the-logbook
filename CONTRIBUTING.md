@@ -149,6 +149,39 @@ cd backend && flake8
 cd backend && mypy .
 ```
 
+### Documentation Checks
+
+Two checks run in CI and are worth running locally before opening a PR that
+touches Markdown or an API endpoint. Both are pure standard library — no
+dependencies to install, and neither imports the application.
+
+```bash
+# Every internal Markdown link resolves: in-page anchors, relative file links,
+# cross-file anchors, and the extensionless page links used in wiki/
+python3 scripts/check_docs_links.py
+
+# Endpoint docstrings agree with the permissions their routes actually enforce
+python3 scripts/check_endpoint_permissions.py
+```
+
+**Why link checking is a CI gate.** Renaming a heading silently breaks every
+link to it — Markdown renders a dead anchor as ordinary text, with no error
+anywhere. Nothing else in CI opens a Markdown file.
+
+**Why permissions are checked against docstrings.** An endpoint docstring is
+rendered into the interactive API docs at `/docs`, and the wiki's API reference
+and the module guides are written from it. A docstring that disagrees with its
+own `require_permission(...)` dependency propagates that error into every
+document downstream, and it surfaces months later during a documentation pass
+rather than at the commit that caused it.
+
+The permission check fails on a docstring that names **different** permissions
+than the code enforces, or that claims a permission the route does not require
+at all. Routes that merely under-document — code enforces a permission, the
+docstring says only "Authentication required" — are reported as warnings; run
+with `--list-understated` to see them. If you touch such a route, fixing its
+docstring is a welcome drive-by.
+
 ### Python (Backend)
 
 - Use Python 3.11+ features where appropriate
@@ -284,21 +317,21 @@ cd backend && pytest --cov=app --cov-report=term-missing
 ### Test Structure
 
 ```typescript
-describe('UserService', () => {
-  describe('createUser', () => {
-    it('should create a new user with valid data', async () => {
+describe("UserService", () => {
+  describe("createUser", () => {
+    it("should create a new user with valid data", async () => {
       // Arrange
-      const userData = { username: 'test', email: 'test@example.com' };
-      
+      const userData = { username: "test", email: "test@example.com" };
+
       // Act
       const result = await userService.createUser(userData);
-      
+
       // Assert
       expect(result).toBeDefined();
-      expect(result.username).toBe('test');
+      expect(result.username).toBe("test");
     });
-    
-    it('should throw error with duplicate email', async () => {
+
+    it("should throw error with duplicate email", async () => {
       // Test error case
     });
   });
@@ -317,7 +350,7 @@ describe('UserService', () => {
 ```typescript
 /**
  * Verifies the integrity of audit log chain
- * 
+ *
  * @param startId - First log entry ID to verify
  * @param endId - Last log entry ID to verify
  * @returns Verification results with any errors found
@@ -325,7 +358,7 @@ describe('UserService', () => {
  */
 async function verifyLogIntegrity(
   startId: number,
-  endId: number
+  endId: number,
 ): Promise<VerificationResult> {
   // Implementation
 }
@@ -366,6 +399,7 @@ By contributing, you agree that your contributions will be licensed under the MI
 ## Recognition
 
 Contributors will be recognized in:
+
 - README.md contributors section
 - Release notes
 - Annual contributor highlights

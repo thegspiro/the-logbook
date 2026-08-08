@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**232 tables · 3989 columns · 730 foreign keys**
+**238 tables · 4106 columns · 773 foreign keys**
 
 ---
 
@@ -376,6 +376,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`department_messages`](#department_messages) | `DepartmentMessage` | 19 | Department Message model |
 | [`notification_logs`](#notification_logs) | `NotificationLog` | 19 | Notification Log model |
 | [`notification_rules`](#notification_rules) | `NotificationRule` | 12 | Notification Rule model |
+| [`push_subscriptions`](#push_subscriptions) | `PushSubscription` | 10 | A single browser/device Web Push endpoint belonging to a user. |
 
 ### Onboarding
 
@@ -383,7 +384,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`onboarding_checklist`](#onboarding_checklist) | `OnboardingChecklistItem` | 13 | Individual checklist items for post-onboarding setup |
 | [`onboarding_sessions`](#onboarding_sessions) | `OnboardingSessionModel` | 8 | Server-side onboarding session storage |
 | [`onboarding_status`](#onboarding_status) | `OnboardingStatus` | 20 | System-wide onboarding status |
 
@@ -394,6 +394,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`operational_ranks`](#operational_ranks) | `OperationalRank` | 10 | Configurable operational rank for a department. |
+
+### Organization_Officer
+
+<sub>`app/models/organization_officer.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`organization_officers`](#organization_officers) | `OrganizationOfficer` | 11 | One department office and the member who currently holds it. |
 
 ### Public Portal
 
@@ -420,8 +428,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`skill_templates`](#skill_templates) | `SkillTemplate` | 17 | Skill Template model |
-| [`skill_tests`](#skill_tests) | `SkillTest` | 17 | Skill Test model |
+| [`skill_templates`](#skill_templates) | `SkillTemplate` | 20 | Skill Template model |
+| [`skill_test_viewers`](#skill_test_viewers) | `SkillTestViewer` | 5 | A person granted sight of one specific test's result. |
+| [`skill_tests`](#skill_tests) | `SkillTest` | 29 | Skill Test model |
 
 ### Storefront
 
@@ -448,6 +457,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`basic_apparatus`](#basic_apparatus) | `BasicApparatus` | 10 | Lightweight apparatus/vehicle definition for shift scheduling. |
 | [`competency_matrices`](#competency_matrices) | `CompetencyMatrix` | 11 | Competency Matrix model |
+| [`course_classes`](#course_classes) | `CourseClass` | 25 | Course Class model — one row of a multi-class course's syllabus. |
+| [`course_cohort_classes`](#course_cohort_classes) | `CourseCohortClass` | 25 | Course Cohort Class model — a syllabus row materialized onto real dates. |
+| [`course_cohort_members`](#course_cohort_members) | `CourseCohortMember` | 10 | Course Cohort Member model — the roster of one cohort. |
+| [`course_cohorts`](#course_cohorts) | `CourseCohort` | 24 | Course Cohort model — one scheduled run of a multi-class course. |
 | [`external_category_mappings`](#external_category_mappings) | `ExternalCategoryMapping` | 12 | External Category Mapping model |
 | [`external_training_imports`](#external_training_imports) | `ExternalTrainingImport` | 25 | External Training Import model |
 | [`external_training_providers`](#external_training_providers) | `ExternalTrainingProvider` | 24 | External Training Provider model |
@@ -456,7 +469,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`instructor_qualifications`](#instructor_qualifications) | `InstructorQualification` | 19 | Instructor Qualification model |
 | [`member_competencies`](#member_competencies) | `MemberCompetency` | 16 | Member Competency model |
 | [`multi_agency_trainings`](#multi_agency_trainings) | `MultiAgencyTraining` | 19 | Multi-Agency Training model |
-| [`program_enrollments`](#program_enrollments) | `ProgramEnrollment` | 21 | Program Enrollment model |
+| [`program_enrollments`](#program_enrollments) | `ProgramEnrollment` | 22 | Program Enrollment model |
 | [`program_milestones`](#program_milestones) | `ProgramMilestone` | 10 | Program Milestone model |
 | [`program_phases`](#program_phases) | `ProgramPhase` | 10 | Program Phase model |
 | [`program_requirements`](#program_requirements) | `ProgramRequirement` | 11 | Program Requirement model |
@@ -480,12 +493,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`skill_evaluations`](#skill_evaluations) | `SkillEvaluation` | 13 | Skill Evaluation model |
 | [`training_approvals`](#training_approvals) | `TrainingApproval` | 15 | Training Approval model |
 | [`training_categories`](#training_categories) | `TrainingCategory` | 14 | Training Category model |
-| [`training_courses`](#training_courses) | `TrainingCourse` | 18 | Training Course model |
+| [`training_courses`](#training_courses) | `TrainingCourse` | 19 | Training Course model |
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
-| [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 43 | Training Module Configuration model |
+| [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 45 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 37 | Training Record model |
-| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 41 | Training Requirement model |
+| [`training_requirements`](#training_requirements) | `TrainingRequirement` | 42 | Training Requirement model |
 | [`training_sessions`](#training_sessions) | `TrainingSession` | 30 | Training Session model |
 | [`training_submissions`](#training_submissions) | `TrainingSubmission` | 24 | Training Submission model |
 | [`training_waivers`](#training_waivers) | `TrainingWaiver` | 13 | Training Waiver / Leave of Absence |
@@ -5684,29 +5697,36 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_notif_rules_org_enabled` (`organization_id`, `enabled`)
 - `idx_notif_rules_org_trigger` (`organization_id`, `trigger`)
 
-## Onboarding
+### `push_subscriptions`
 
-### `onboarding_checklist`
+**PushSubscription** · `app/models/notification.py`
 
-**OnboardingChecklistItem** · `app/models/onboarding.py`
-
-> Individual checklist items for post-onboarding setup These are recommendations/tasks for after initial onboarding
+> A single browser/device Web Push endpoint belonging to a user. One row per device, not per user: a member may install the PWA on a phone and a station tablet and expects both to ring. Endpoints are issued by the browser's push service and are opaque; `p256dh` and `auth` are the client's public key and shared secret, required to encrypt the payload so the push service (Apple/Google/Mozilla) cannot read it. Rows are removed when the push service reports the endpoint is gone (HTTP 404/410), which happens when the user uninstalls the PWA or clears site data — there is no unsubscribe callback to rely on.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `title` | VARCHAR(255) | no |  |  |  |
-| `description` | TEXT | yes |  |  |  |
-| `category` | VARCHAR(50) | yes |  |  |  |
-| `priority` | VARCHAR(20) | yes |  |  |  |
-| `is_completed` | BOOL | yes |  | `False` |  |
-| `completed_at` | DATETIME | yes |  |  |  |
-| `completed_by` | VARCHAR(36) | yes |  |  |  |
-| `documentation_link` | TEXT | yes |  |  |  |
-| `estimated_time_minutes` | INTEGER | yes |  |  |  |
-| `sort_order` | INTEGER | yes |  | `0` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `endpoint` | TEXT | no |  |  |  |
+| `endpoint_hash` | VARCHAR(64) | no |  |  |  |
+| `p256dh` | VARCHAR(255) | no |  |  |  |
+| `auth` | VARCHAR(255) | no |  |  |  |
+| `user_agent` | VARCHAR(500) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
-| `updated_at` | DATETIME | yes |  | `now()` |  |
+| `last_used_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `idx_push_sub_org_user` (`organization_id`, `user_id`)
+- `ix_push_subscriptions_organization_id` (`organization_id`)
+- `ix_push_subscriptions_user_id` (`user_id`)
+
+**Constraints**
+
+- UNIQUE `uq_push_sub_endpoint` (`endpoint_hash`)
+
+## Onboarding
 
 ### `onboarding_sessions`
 
@@ -5783,6 +5803,32 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_ranks_org_code` (`organization_id`, `rank_code`)
+
+## Organization_Officer
+
+### `organization_officers`
+
+**OrganizationOfficer** · `app/models/organization_officer.py`
+
+> One department office and the member who currently holds it. ``user_id`` is the normal case: the name/email/phone are read from that member's record so they stay correct when the member updates their profile. The override columns exist for the cases a member record cannot express — an office held by someone without a login, a signature title that differs from the office label ("Fire Chief" vs. "Chief"), or a published office address that is not the holder's personal one.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `office_key` | VARCHAR(50) | no |  |  |  |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `display_name` | VARCHAR(200) | yes |  |  |  |
+| `title` | VARCHAR(150) | yes |  |  |  |
+| `email` | VARCHAR(320) | yes |  |  |  |
+| `phone` | VARCHAR(50) | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Constraints**
+
+- UNIQUE `uq_org_officer_org_office` (`organization_id`, `office_key`)
 
 ## Public Portal
 
@@ -5950,6 +5996,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `passing_percentage` | FLOAT | yes |  |  |  |
 | `require_all_critical` | BOOL | yes |  | `True` |  |
 | `requirement_id` | VARCHAR(36) | yes | FK, IDX |  | → `training_requirements.id` ON DELETE SET NULL |
+| `result_disclosure` | VARCHAR(20) | yes |  |  |  |
+| `result_release` | VARCHAR(20) | yes |  |  |  |
+| `result_viewer_positions` | JSON | yes |  |  |  |
 | `tags` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -5960,6 +6009,29 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_skill_template_category` (`organization_id`, `category`)
 - `idx_skill_template_org_status` (`organization_id`, `status`)
 - `ix_skill_templates_requirement_id` (`requirement_id`)
+
+### `skill_test_viewers`
+
+**SkillTestViewer** · `app/models/skills_testing.py`
+
+> A person granted sight of one specific test's result. Covers the case the position and candidate rules cannot: "my preceptor should see how I did on this one." Named per test rather than per template because the relationship is to the *person tested*, not to the skill — a trainee's FTO changes, and a standing template-wide grant would quietly follow the skill onto every other candidate's results. A viewer sees the result at the same disclosure level the candidate does. They are being shown someone else's evaluation; there is no reading of "share this result" that means the observer should see more of it than its subject.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `test_id` | VARCHAR(36) | no | FK, IDX |  | → `skill_tests.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `granted_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_skill_test_viewers_test_id` (`test_id`)
+- `ix_skill_test_viewers_user_id` (`user_id`)
+
+**Constraints**
+
+- UNIQUE `uq_skill_test_viewer` (`test_id`, `user_id`)
 
 ### `skill_tests`
 
@@ -5977,11 +6049,23 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `requirement_id` | VARCHAR(36) | yes | FK, IDX |  | → `training_requirements.id` ON DELETE SET NULL |
 | `status` | VARCHAR(20) | yes |  | `'draft'` |  |
 | `result` | VARCHAR(20) | yes |  | `'incomplete'` |  |
-| `is_practice` | BOOL | yes |  | `False` |  |
+| `is_practice` | BOOL | yes | IDX | `False` |  |
+| `version` | INTEGER | no |  | `1` |  |
+| `template_snapshot` | JSON | yes |  |  |  |
 | `section_results` | JSON | yes |  |  |  |
 | `overall_score` | FLOAT | yes |  |  |  |
 | `elapsed_seconds` | INTEGER | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
+| `result_disclosure` | VARCHAR(20) | yes |  |  |  |
+| `result_release` | VARCHAR(20) | yes |  |  |  |
+| `result_viewer_positions` | JSON | yes |  |  |  |
+| `validated_at` | DATETIME | yes |  |  |  |
+| `validated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `released_at` | DATETIME | yes |  |  |  |
+| `released_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `voided_at` | DATETIME | yes |  |  |  |
+| `voided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `void_reason` | TEXT | yes |  |  |  |
 | `started_at` | DATETIME | yes |  |  |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -5990,6 +6074,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `idx_skill_test_org_status` (`organization_id`, `status`)
+- `idx_skill_test_org_validation` (`organization_id`, `is_practice`, `validated_at`)
+- `idx_skill_test_practice_created` (`is_practice`, `created_at`)
 - `idx_skill_test_template_candidate` (`template_id`, `candidate_id`)
 - `ix_skill_tests_candidate_id` (`candidate_id`)
 - `ix_skill_tests_requirement_id` (`requirement_id`)
@@ -6409,6 +6495,167 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_competency_matrices_position` (`position`)
 - `ix_competency_matrices_role_id` (`role_id`)
 
+### `course_classes`
+
+**CourseClass** · `app/models/training.py`
+
+> Course Class model — one row of a multi-class course's syllabus. A recruit school is a single TrainingCourse whose syllabus is fifteen of these. A class is described *relative* to the course start (``day_offset`` + local ``start_time``); it becomes a real dated event only when a cohort is generated from the course.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `course_id` | VARCHAR(36) | no | FK, IDX |  | → `training_courses.id` ON DELETE CASCADE |
+| `class_course_id` | VARCHAR(36) | no | FK, IDX |  | → `training_courses.id` ON DELETE CASCADE |
+| `sequence` | INTEGER | no |  |  |  |
+| `section_name` | VARCHAR(255) | yes |  |  |  |
+| `title` | VARCHAR(255) | yes |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `day_offset` | INTEGER | no |  | `0` |  |
+| `start_time` | VARCHAR(5) | yes |  |  |  |
+| `duration_minutes` | INTEGER | no |  | `60` |  |
+| `credit_hours` | FLOAT | yes |  |  |  |
+| `instructor_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `instructor` | VARCHAR(255) | yes |  |  |  |
+| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `location` | VARCHAR(300) | yes |  |  |  |
+| `category_id` | VARCHAR(36) | yes | FK |  | → `training_categories.id` ON DELETE SET NULL |
+| `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
+| `phase_id` | VARCHAR(36) | yes | FK |  | → `program_phases.id` ON DELETE SET NULL |
+| `is_required` | BOOL | no |  | `True` |  |
+| `counts_toward_certification` | BOOL | no |  | `True` |  |
+| `active` | BOOL | no |  | `True` |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `idx_course_class_org_course` (`organization_id`, `course_id`)
+- `ix_course_classes_class_course_id` (`class_course_id`)
+- `ix_course_classes_course_id` (`course_id`)
+- `ix_course_classes_organization_id` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_course_class_sequence` (`course_id`, `sequence`)
+
+### `course_cohort_classes`
+
+**CourseCohortClass** · `app/models/training.py`
+
+> Course Cohort Class model — a syllabus row materialized onto real dates. This row is the stable identity of "class 7 of the fall recruit school"; the Event and TrainingSession are its current realization. Keeping them separate is what makes rescheduling, cancelling, and idempotent regeneration possible.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `cohort_id` | VARCHAR(36) | no | FK, IDX |  | → `course_cohorts.id` ON DELETE CASCADE |
+| `course_class_id` | VARCHAR(36) | yes | FK |  | → `course_classes.id` ON DELETE SET NULL |
+| `sequence` | INTEGER | no |  |  |  |
+| `title` | VARCHAR(255) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `scheduled_start` | DATETIME | no |  |  |  |
+| `scheduled_end` | DATETIME | no |  |  |  |
+| `event_id` | VARCHAR(36) | yes | FK, UQ |  | → `events.id` ON DELETE SET NULL |
+| `training_session_id` | VARCHAR(36) | yes | FK |  | → `training_sessions.id` ON DELETE SET NULL |
+| `status` | ENUM(`scheduled`, `completed`, `cancelled`) | no | IDX | `'scheduled'` |  |
+| `class_course_id` | VARCHAR(36) | yes | FK |  | → `training_courses.id` ON DELETE SET NULL |
+| `credit_hours` | FLOAT | yes |  |  |  |
+| `instructor_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `instructor` | VARCHAR(255) | yes |  |  |  |
+| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `location` | VARCHAR(300) | yes |  |  |  |
+| `category_id` | VARCHAR(36) | yes | FK |  | → `training_categories.id` ON DELETE SET NULL |
+| `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
+| `phase_id` | VARCHAR(36) | yes | FK |  | → `program_phases.id` ON DELETE SET NULL |
+| `counts_toward_certification` | BOOL | no |  | `True` |  |
+| `cancellation_reason` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_cohort_class_start` (`organization_id`, `scheduled_start`)
+- `ix_course_cohort_classes_cohort_id` (`cohort_id`)
+- `ix_course_cohort_classes_organization_id` (`organization_id`)
+- `ix_course_cohort_classes_status` (`status`)
+
+**Constraints**
+
+- UNIQUE `uq_cohort_class_sequence` (`cohort_id`, `sequence`)
+- UNIQUE `uq_cohort_class_source` (`cohort_id`, `course_class_id`)
+- UNIQUE `uq_course_cohort_classes_event_id` (`event_id`)
+
+### `course_cohort_members`
+
+**CourseCohortMember** · `app/models/training.py`
+
+> Course Cohort Member model — the roster of one cohort. Links a member to the cohort and to the ProgramEnrollment that tracks their pipeline progress, so a student's classes and their credit are one record.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `cohort_id` | VARCHAR(36) | no | FK, IDX |  | → `course_cohorts.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
+| `enrollment_id` | VARCHAR(36) | yes | FK |  | → `program_enrollments.id` ON DELETE SET NULL |
+| `status` | ENUM(`active`, `withdrawn`, `completed`) | no |  | `'active'` |  |
+| `notes` | TEXT | yes |  |  |  |
+| `withdrawn_at` | DATETIME | yes |  |  |  |
+| `added_at` | DATETIME | yes |  | `now()` |  |
+| `added_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `ix_course_cohort_members_cohort_id` (`cohort_id`)
+- `ix_course_cohort_members_organization_id` (`organization_id`)
+- `ix_course_cohort_members_user_id` (`user_id`)
+
+**Constraints**
+
+- UNIQUE `uq_cohort_member_user` (`cohort_id`, `user_id`)
+
+### `course_cohorts`
+
+**CourseCohort** · `app/models/training.py`
+
+> Course Cohort model — one scheduled run of a multi-class course. "Recruit School — Fall 2026" starting 2026-09-08. Generating a cohort turns each syllabus row into a real Event + TrainingSession, enrolls the roster in the linked training program, and RSVPs them to every class.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `course_id` | VARCHAR(36) | no | FK, IDX |  | → `training_courses.id` ON DELETE CASCADE |
+| `name` | VARCHAR(255) | no |  |  |  |
+| `code` | VARCHAR(50) | yes |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `start_date` | DATE | no |  |  |  |
+| `status` | ENUM(`draft`, `scheduled`, `in_progress`, `completed`, `cancelled`) | no | IDX | `'draft'` |  |
+| `program_id` | VARCHAR(36) | yes | FK |  | → `training_programs.id` ON DELETE SET NULL |
+| `meeting_days` | JSON | yes |  |  |  |
+| `default_start_time` | VARCHAR(5) | yes |  |  |  |
+| `default_duration_minutes` | INTEGER | yes |  |  |  |
+| `date_roll_policy` | ENUM(`none`, `next_business_day`, `next_meeting_day`) | no |  | `'none'` |  |
+| `blackout_dates` | JSON | yes |  |  |  |
+| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `location` | VARCHAR(300) | yes |  |  |  |
+| `requires_rsvp` | BOOL | no |  | `True` |  |
+| `auto_create_records` | BOOL | no |  | `True` |  |
+| `generated_at` | DATETIME | yes |  |  |  |
+| `generated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `notes` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+
+**Indexes**
+
+- `idx_course_cohort_org_course` (`organization_id`, `course_id`)
+- `ix_course_cohorts_course_id` (`course_id`)
+- `ix_course_cohorts_organization_id` (`organization_id`)
+- `ix_course_cohorts_status` (`status`)
+
 ### `external_category_mappings`
 
 **ExternalCategoryMapping** · `app/models/training.py`
@@ -6703,6 +6950,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `completed_at` | DATETIME | yes |  |  |  |
 | `withdrawn_at` | DATETIME | yes |  |  |  |
 | `withdrawal_reason` | TEXT | yes |  |  |  |
+| `notes` | TEXT | yes |  |  |  |
 | `deadline_warning_sent` | BOOL | yes |  | `False` |  |
 | `deadline_warning_sent_at` | DATETIME | yes |  |  |  |
 | `struggling_alert_sent_at` | DATETIME | yes |  |  |  |
@@ -7446,6 +7694,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `max_participants` | INTEGER | yes |  |  |  |
 | `materials_required` | JSON | yes |  |  |  |
 | `category_ids` | JSON | yes |  |  |  |
+| `program_id` | VARCHAR(36) | yes | FK |  | → `training_programs.id` ON DELETE SET NULL |
 | `active` | BOOL | yes | IDX | `True` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -7514,6 +7763,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `show_areas_of_strength` | BOOL | yes |  | `1` |  |
 | `show_areas_for_improvement` | BOOL | yes |  | `1` |  |
 | `show_skills_observed` | BOOL | yes |  | `1` |  |
+| `skills_result_disclosure` | VARCHAR(20) | yes |  | `full` |  |
+| `skills_result_release` | VARCHAR(20) | yes |  | `on_completion` |  |
 | `show_submission_history` | BOOL | yes |  | `1` |  |
 | `allow_member_report_export` | BOOL | yes |  | `0` |  |
 | `report_review_required` | BOOL | yes |  | `0` |  |
@@ -7682,6 +7933,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `period_end_month` | INTEGER | yes |  |  |  |
 | `period_end_day` | INTEGER | yes |  |  |  |
 | `include_current_month` | BOOL | yes |  |  |  |
+| `recency_days` | INTEGER | yes |  |  |  |
 | `category_ids` | JSON | yes |  |  |  |
 | `applies_to_all` | BOOL | yes |  | `True` |  |
 | `required_roles` | JSON | yes |  |  |  |
@@ -8148,7 +8400,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (273 references)
+### → `users` (288 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8197,6 +8449,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `compliance_reports` | `generated_by` | SET NULL | yes |
 | `country_block_rules` | `created_by` | NO ACTION | no |
 | `country_block_rules` | `updated_by` | NO ACTION | yes |
+| `course_classes` | `created_by` | SET NULL | yes |
+| `course_classes` | `instructor_id` | SET NULL | yes |
+| `course_cohort_classes` | `instructor_id` | SET NULL | yes |
+| `course_cohort_members` | `added_by` | SET NULL | yes |
+| `course_cohort_members` | `user_id` | CASCADE | no |
+| `course_cohorts` | `created_by` | SET NULL | yes |
+| `course_cohorts` | `generated_by` | SET NULL | yes |
 | `department_message_reads` | `user_id` | CASCADE | no |
 | `department_messages` | `posted_by` | SET NULL | yes |
 | `departure_clearance_items` | `resolved_by` | NO ACTION | yes |
@@ -8332,6 +8591,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `nfpa_item_compliance` | `created_by` | NO ACTION | yes |
 | `notification_logs` | `recipient_id` | SET NULL | yes |
 | `notification_rules` | `created_by` | NO ACTION | yes |
+| `organization_officers` | `updated_by` | SET NULL | yes |
+| `organization_officers` | `user_id` | SET NULL | yes |
 | `password_history` | `user_id` | CASCADE | no |
 | `pledges` | `created_by` | NO ACTION | yes |
 | `program_enrollments` | `enrolled_by` | SET NULL | yes |
@@ -8347,6 +8608,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `public_portal_api_keys` | `created_by` | SET NULL | yes |
 | `purchase_requests` | `approved_by` | SET NULL | yes |
 | `purchase_requests` | `requested_by` | NO ACTION | no |
+| `push_subscriptions` | `user_id` | CASCADE | no |
 | `recertification_pathways` | `created_by` | SET NULL | yes |
 | `renewal_tasks` | `user_id` | CASCADE | no |
 | `reorder_requests` | `approved_by` | SET NULL | yes |
@@ -8386,8 +8648,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `skill_checkoffs` | `user_id` | CASCADE | no |
 | `skill_evaluations` | `created_by` | SET NULL | yes |
 | `skill_templates` | `created_by` | NO ACTION | yes |
+| `skill_test_viewers` | `granted_by` | SET NULL | yes |
+| `skill_test_viewers` | `user_id` | CASCADE | no |
 | `skill_tests` | `candidate_id` | CASCADE | no |
 | `skill_tests` | `examiner_id` | CASCADE | no |
+| `skill_tests` | `released_by` | SET NULL | yes |
+| `skill_tests` | `validated_by` | SET NULL | yes |
+| `skill_tests` | `voided_by` | SET NULL | yes |
 | `storage_areas` | `created_by` | NO ACTION | yes |
 | `store_order_events` | `created_by` | SET NULL | yes |
 | `store_order_windows` | `closed_by` | SET NULL | yes |
@@ -8426,7 +8693,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (181 references)
+### → `organizations` (187 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -8459,6 +8726,10 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `competency_matrices` | `organization_id` | CASCADE | no |
 | `compliance_configs` | `organization_id` | CASCADE | no |
 | `compliance_reports` | `organization_id` | CASCADE | no |
+| `course_classes` | `organization_id` | CASCADE | no |
+| `course_cohort_classes` | `organization_id` | CASCADE | no |
+| `course_cohort_members` | `organization_id` | CASCADE | no |
+| `course_cohorts` | `organization_id` | CASCADE | no |
 | `department_messages` | `organization_id` | CASCADE | no |
 | `departure_clearance_items` | `organization_id` | CASCADE | no |
 | `departure_clearances` | `organization_id` | CASCADE | no |
@@ -8551,6 +8822,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `notification_logs` | `organization_id` | CASCADE | no |
 | `notification_rules` | `organization_id` | CASCADE | no |
 | `operational_ranks` | `organization_id` | CASCADE | no |
+| `organization_officers` | `organization_id` | CASCADE | no |
 | `pledges` | `organization_id` | CASCADE | no |
 | `positions` | `organization_id` | CASCADE | no |
 | `program_enrollments` | `organization_id` | CASCADE | no |
@@ -8562,6 +8834,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `public_portal_config` | `organization_id` | CASCADE | no |
 | `public_portal_data_whitelist` | `organization_id` | CASCADE | no |
 | `purchase_requests` | `organization_id` | CASCADE | no |
+| `push_subscriptions` | `organization_id` | CASCADE | no |
 | `recertification_pathways` | `organization_id` | CASCADE | no |
 | `renewal_tasks` | `organization_id` | CASCADE | no |
 | `reorder_requests` | `organization_id` | CASCADE | no |
@@ -8677,11 +8950,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `return_requests` | `item_id` | CASCADE | no |
 | `store_products` | `inventory_item_id` | SET NULL | yes |
 
-### → `events` (13 references)
+### → `events` (14 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `admin_hours_entries` | `source_event_id` | SET NULL | yes |
+| `course_cohort_classes` | `event_id` | SET NULL | yes |
 | `elections` | `event_id` | SET NULL | yes |
 | `event_external_attendees` | `event_id` | CASCADE | no |
 | `event_requests` | `event_id` | SET NULL | yes |
@@ -8695,13 +8969,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_approvals` | `event_id` | CASCADE | no |
 | `training_sessions` | `event_id` | CASCADE | no |
 
-### → `locations` (10 references)
+### → `locations` (13 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `apparatus` | `current_location_id` | NO ACTION | yes |
 | `apparatus` | `primary_station_id` | NO ACTION | yes |
 | `apparatus_location_history` | `location_id` | NO ACTION | no |
+| `course_classes` | `location_id` | SET NULL | yes |
+| `course_cohort_classes` | `location_id` | SET NULL | yes |
+| `course_cohorts` | `location_id` | SET NULL | yes |
 | `event_requests` | `event_location_id` | SET NULL | yes |
 | `event_templates` | `default_location_id` | NO ACTION | yes |
 | `events` | `location_id` | NO ACTION | yes |
@@ -8709,6 +8986,61 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `meetings` | `location_id` | SET NULL | yes |
 | `storage_areas` | `location_id` | SET NULL | yes |
 | `training_records` | `location_id` | SET NULL | yes |
+
+### → `training_categories` (9 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `category_id` | SET NULL | yes |
+| `course_cohort_classes` | `category_id` | SET NULL | yes |
+| `external_category_mappings` | `internal_category_id` | SET NULL | yes |
+| `external_training_providers` | `default_category_id` | SET NULL | yes |
+| `instructor_qualifications` | `category_id` | CASCADE | yes |
+| `training_categories` | `parent_category_id` | SET NULL | yes |
+| `training_records` | `category_id` | SET NULL | yes |
+| `training_sessions` | `category_id` | SET NULL | yes |
+| `training_submissions` | `category_id` | SET NULL | yes |
+
+### → `training_courses` (9 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `class_course_id` | CASCADE | no |
+| `course_classes` | `course_id` | CASCADE | no |
+| `course_cohort_classes` | `class_course_id` | SET NULL | yes |
+| `course_cohorts` | `course_id` | CASCADE | no |
+| `instructor_qualifications` | `course_id` | CASCADE | yes |
+| `recertification_pathways` | `assessment_course_id` | SET NULL | yes |
+| `training_effectiveness_evaluations` | `course_id` | SET NULL | yes |
+| `training_records` | `course_id` | SET NULL | yes |
+| `training_sessions` | `course_id` | SET NULL | yes |
+
+### → `training_programs` (9 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohorts` | `program_id` | SET NULL | yes |
+| `evoc_levels` | `training_program_id` | SET NULL | yes |
+| `program_enrollments` | `program_id` | CASCADE | no |
+| `program_milestones` | `program_id` | CASCADE | no |
+| `program_phases` | `program_id` | CASCADE | no |
+| `program_requirements` | `program_id` | CASCADE | no |
+| `shift_assignments` | `training_program_id` | SET NULL | yes |
+| `training_courses` | `program_id` | SET NULL | yes |
+| `training_sessions` | `program_id` | SET NULL | yes |
+
+### → `training_requirements` (8 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `requirement_id` | SET NULL | yes |
+| `course_cohort_classes` | `requirement_id` | SET NULL | yes |
+| `program_requirements` | `requirement_id` | CASCADE | no |
+| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
+| `requirement_progress` | `requirement_id` | CASCADE | no |
+| `skill_templates` | `requirement_id` | SET NULL | yes |
+| `skill_tests` | `requirement_id` | SET NULL | yes |
+| `training_sessions` | `requirement_id` | SET NULL | yes |
 
 ### → `inventory_categories` (7 references)
 
@@ -8746,30 +9078,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_swap_requests` | `offering_shift_id` | CASCADE | no |
 | `shift_swap_requests` | `requesting_shift_id` | SET NULL | yes |
 
-### → `training_categories` (7 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `external_category_mappings` | `internal_category_id` | SET NULL | yes |
-| `external_training_providers` | `default_category_id` | SET NULL | yes |
-| `instructor_qualifications` | `category_id` | CASCADE | yes |
-| `training_categories` | `parent_category_id` | SET NULL | yes |
-| `training_records` | `category_id` | SET NULL | yes |
-| `training_sessions` | `category_id` | SET NULL | yes |
-| `training_submissions` | `category_id` | SET NULL | yes |
-
-### → `training_programs` (7 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `evoc_levels` | `training_program_id` | SET NULL | yes |
-| `program_enrollments` | `program_id` | CASCADE | no |
-| `program_milestones` | `program_id` | CASCADE | no |
-| `program_phases` | `program_id` | CASCADE | no |
-| `program_requirements` | `program_id` | CASCADE | no |
-| `shift_assignments` | `training_program_id` | SET NULL | yes |
-| `training_sessions` | `program_id` | SET NULL | yes |
-
 ### → `training_records` (7 references)
 
 | From table | Column | On delete | Nullable |
@@ -8804,16 +9112,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_records` | `external_provider_id` | SET NULL | yes |
 | `xapi_statements` | `source_provider_id` | SET NULL | yes |
 
-### → `training_requirements` (6 references)
+### → `program_phases` (6 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `program_requirements` | `requirement_id` | CASCADE | no |
-| `recertification_pathways` | `source_requirement_id` | CASCADE | yes |
-| `requirement_progress` | `requirement_id` | CASCADE | no |
-| `skill_templates` | `requirement_id` | SET NULL | yes |
-| `skill_tests` | `requirement_id` | SET NULL | yes |
-| `training_sessions` | `requirement_id` | SET NULL | yes |
+| `course_classes` | `phase_id` | SET NULL | yes |
+| `course_cohort_classes` | `phase_id` | SET NULL | yes |
+| `program_enrollments` | `current_phase_id` | SET NULL | yes |
+| `program_milestones` | `phase_id` | CASCADE | yes |
+| `program_requirements` | `phase_id` | CASCADE | yes |
+| `training_sessions` | `phase_id` | SET NULL | yes |
 
 ### → `fiscal_years` (5 references)
 
@@ -8835,15 +9143,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_step_progress` | `step_id` | CASCADE | no |
 | `prospective_members` | `current_step_id` | SET NULL | yes |
 
-### → `training_courses` (5 references)
+### → `training_sessions` (5 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `instructor_qualifications` | `course_id` | CASCADE | yes |
-| `recertification_pathways` | `assessment_course_id` | SET NULL | yes |
-| `training_effectiveness_evaluations` | `course_id` | SET NULL | yes |
-| `training_records` | `course_id` | SET NULL | yes |
-| `training_sessions` | `course_id` | SET NULL | yes |
+| `course_cohort_classes` | `training_session_id` | SET NULL | yes |
+| `multi_agency_trainings` | `training_session_id` | CASCADE | yes |
+| `skill_checkoffs` | `session_id` | SET NULL | yes |
+| `training_approvals` | `training_session_id` | CASCADE | no |
+| `training_effectiveness_evaluations` | `training_session_id` | SET NULL | yes |
 
 ### → `email_templates` (4 references)
 
@@ -8890,15 +9198,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_interviews` | `pipeline_id` | SET NULL | yes |
 | `prospective_members` | `pipeline_id` | SET NULL | yes |
 
-### → `program_phases` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `program_enrollments` | `current_phase_id` | SET NULL | yes |
-| `program_milestones` | `phase_id` | CASCADE | yes |
-| `program_requirements` | `phase_id` | CASCADE | yes |
-| `training_sessions` | `phase_id` | SET NULL | yes |
-
 ### → `store_products` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -8907,15 +9206,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_product_images` | `product_id` | CASCADE | no |
 | `store_product_variants` | `product_id` | CASCADE | no |
 | `store_window_products` | `product_id` | CASCADE | no |
-
-### → `training_sessions` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `multi_agency_trainings` | `training_session_id` | CASCADE | yes |
-| `skill_checkoffs` | `session_id` | SET NULL | yes |
-| `training_approvals` | `training_session_id` | CASCADE | no |
-| `training_effectiveness_evaluations` | `training_session_id` | SET NULL | yes |
 
 ### → `budget_categories` (3 references)
 
@@ -8948,6 +9238,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `form_fields` | `form_id` | CASCADE | no |
 | `form_integrations` | `form_id` | CASCADE | no |
 | `form_submissions` | `form_id` | CASCADE | no |
+
+### → `program_enrollments` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_members` | `enrollment_id` | SET NULL | yes |
+| `requirement_progress` | `enrollment_id` | CASCADE | no |
+| `shift_completion_reports` | `enrollment_id` | SET NULL | yes |
 
 ### → `public_portal_config` (3 references)
 
@@ -9015,6 +9313,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_template_compartments` | `parent_compartment_id` | SET NULL | yes |
 | `check_template_items` | `compartment_id` | CASCADE | no |
 
+### → `course_cohorts` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_classes` | `cohort_id` | CASCADE | no |
+| `course_cohort_members` | `cohort_id` | CASCADE | no |
+
 ### → `departure_clearances` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -9070,13 +9375,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `issuance_allowances` | `role_id` | CASCADE | yes |
 | `user_positions` | `position_id` | CASCADE | no |
-
-### → `program_enrollments` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `requirement_progress` | `enrollment_id` | CASCADE | no |
-| `shift_completion_reports` | `enrollment_id` | SET NULL | yes |
 
 ### → `storage_areas` (2 references)
 
@@ -9139,6 +9437,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `compliance_profiles` | `config_id` | CASCADE | no |
+
+### → `course_classes` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_classes` | `course_class_id` | SET NULL | yes |
 
 ### → `department_messages` (1 references)
 
@@ -9332,6 +9636,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `skill_tests` | `template_id` | CASCADE | no |
 
+### → `skill_tests` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `skill_test_viewers` | `test_id` | CASCADE | no |
+
 ### → `store_product_variants` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -9370,7 +9680,6 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `meeting_motions` | `meeting_minutes` |
 | `membership_pipeline_steps` | `email_templates`, `membership_pipelines` |
 | `minutes_action_items` | `meeting_minutes`, `users` |
-| `onboarding_checklist` | — _(root table)_ |
 | `onboarding_sessions` | — _(root table)_ |
 | `onboarding_status` | — _(root table)_ |
 | `organizations` | — _(root table)_ |
@@ -9390,6 +9699,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `sessions` | `users` |
 | `shift_attendance` | `shifts`, `users` |
 | `shift_equipment_check_items` | `check_template_items`, `shift_equipment_checks` |
+| `skill_test_viewers` | `skill_tests`, `users` |
 | `user_positions` | `positions`, `users` |
 | `votes` | `candidates`, `elections`, `users` |
 

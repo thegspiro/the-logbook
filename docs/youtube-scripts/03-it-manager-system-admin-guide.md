@@ -521,6 +521,23 @@ thresholds]**
 > notifications to a member's lock screen with the app closed. Set
 > `PUSH_ENABLED=true`, generate a VAPID keypair, set a contact address, restart."
 
+**[SCREEN: Terminal — `cd backend && python scripts/generate_vapid_keys.py`,
+printing the two `.env` lines.]**
+
+> "Generate the keypair with the script that ships in the backend. **Use the
+> script.** Don't improvise a one-liner, and if you have older notes with a
+> `py_vapid` one-liner in them, throw those away — that command didn't actually
+> run, and we replaced all three copies of it with this on 2026-08-08."
+
+**[CALLOUT: "backend/scripts/generate_vapid_keys.py — use it"]**
+
+> "The reason this matters more than it looks: those two keys are both base64url,
+> but they encode **different things**, and neither consumer tolerates the wrong
+> one. Get it wrong and the browser cheerfully accepts the subscription — it
+> looks like it worked — and then the push service silently rejects every
+> delivery with a 401 you never see. You find out weeks later when somebody
+> mentions they've never had a notification."
+
 **[CALLOUT: "Generate VAPID keys ONCE. Rotating them kills every subscription."]**
 
 > "Generate the keypair once per deployment and then leave it alone — rotating it

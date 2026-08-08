@@ -393,7 +393,7 @@ See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.c
 - [Backup & Disaster Recovery](docs/BACKUP.md) — Backups, restore drills, RTO/RPO
 - [Key Rotation](docs/KEY_ROTATION.md) — Rotating encryption keys safely
 - [Troubleshooting Guide](docs/TROUBLESHOOTING.md) — All modules including locations, kiosk, and training
-- [Deployment Troubleshooting](docs/TROUBLESHOOTING.md#docker-issues) — Docker and deployment issues (same guide, Docker section)
+- [Deployment Troubleshooting](docs/TROUBLESHOOTING.md#container--docker-diagnostics) — Docker and deployment issues (same guide, Docker section)
 
 ## Technology Stack
 

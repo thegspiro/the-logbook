@@ -132,6 +132,25 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### August 2026 — Skills Testing: Anyone Can Examine, an Officer Signs It Off
+
+- **Any member can now run an official skills test.** Every skills-testing
+  screen used to require officer permission, which does not describe how
+  departments actually work — the person holding the clipboard is very often a
+  senior member rather than an officer.
+- **The officer's authority moved to a second step: validation.** Until a
+  training officer validates it, a member-run result is a **submission, not a
+  record** — it credits no training requirement, spends none of the candidate's
+  attempts, stays out of the department's pass rate and average score, and the
+  candidate sees it as _awaiting validation_ with the outcome withheld. An
+  officer's own completion validates in the same step, so nothing changes about
+  the existing officer workflow. Rejection is the existing **void** path, which
+  keeps the evaluation and the reason it was refused.
+- **Separation of duties holds at both ends.** A member cannot examine
+  themselves, and an officer cannot validate a test they are the candidate in.
+- **Templates can now carry their own disclosure rule**, and a single test can
+  name one person — a preceptor, an FTO — who may read its result.
+
 ### August 2026 — Skills Testing: Results the Member Can See, Scorecards That Can't Drift
 
 - **A member can finally see their own skills-test results.** They used to live

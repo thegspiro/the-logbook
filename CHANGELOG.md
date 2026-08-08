@@ -165,6 +165,380 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restriction. The publish action now returns an error for executive-session
   minutes. (Regular business/other minutes publish exactly as before.)
 
+### Wiki: 28 pages existed but were never published (2026-08-08)
+
+**Fixed**
+
+- **The wiki published 11 pages out of 41, and its own sidebar linked to 28 of
+  the missing ones.** `setup-wiki.sh` copied a hand-maintained array of
+  filenames. Nobody updated it when a page was added, so Module-Training,
+  API-Reference, Database-Schema, every `Security-*` and `Integration-*` page
+  and twenty-three others sat in the repository, were linked from the published
+  `_Sidebar.md`, and **404'd for anyone who clicked them**. Editing one of those
+  pages changed nothing a reader could see.
+
+  This is the same failure the generated Troubleshooting page was introduced to
+  stop, one level up: a second place that has to be updated by hand will
+  eventually disagree with the first. The publish list is now a **glob over
+  `wiki/*.md`**, which cannot fall behind. `README.md` (maintainer instructions
+  for the directory, not a page) and `Troubleshooting.md` (generated at publish
+  time) are excluded, and a hand-created `wiki/Troubleshooting.md` now fails the
+  script rather than being silently overwritten.
+
+**Added**
+
+- **`scripts/check_docs_links.py`**, run in CI as **Docs Link Check**. It
+  verifies in-page anchors, relative file links, cross-file anchors, and the
+  extensionless page links GitHub Wikis use. Renaming a heading silently breaks
+  every link to it — Markdown renders a dead anchor as ordinary text with no
+  error — and nothing else in CI opens a Markdown file.
+
+  It found the 28 dead sidebar links above plus **six** broken links across the
+  tree, including a table-of-contents entry that broke when its heading gained a
+  date suffix. External URLs are deliberately out of scope, so a third-party
+  outage cannot fail the build.
+
+- **`scripts/check_endpoint_permissions.py`**, run in CI as part of **Backend
+  Lint**. It compares every documented route handler's docstring against the
+  `require_permission(...)` dependency it actually carries.
+
+  An endpoint docstring is rendered into `/docs` and is what the wiki's API
+  reference and the module guides are written from, so a docstring that
+  disagrees with its own dependency seeds the error into every document
+  downstream — and that is discovered months later in a documentation pass
+  rather than at the commit that caused it.
+
+  It fails on a docstring naming **different** permissions than the code
+  enforces, or claiming one the route does not require at all. Across 1,312
+  handlers there were **no** routes of the second, dangerous kind. Routes that
+  merely under-document (code enforces a permission, the docstring says only
+  "Authentication required") are reported as warnings — there are 189 — and
+  `--strict` promotes them to errors once that backlog is cleared.
+
+**Changed**
+
+- **38 prospective-members endpoints advertised one of the two permissions they
+  accept.** Every one of them takes `members.manage` **or**
+  `prospective_members.manage` (respectively `prospective_members.view` or
+  `.manage`), while the docstring named only the first — so `/docs` understated
+  who could call them, and a coordinator holding only the pipeline permission
+  would read the API reference and conclude they could not.
+
+---
+
+### Skills testing: any member can examine, and an officer decides the result stands (2026-08-08)
+
+**Added**
+
+- **Examining is open to every member.** Every skills-testing route was gated on
+  `training.manage`, so a member could neither drill alone nor examine a
+  colleague. That does not match how departments run these — a senior member is
+  often the one holding the clipboard. Starting, scoring and completing a test
+  no longer needs the permission; **template authoring still does**.
+- **`POST /training/skills-testing/tests/{id}/validate`** is where the
+  officer's authority moved to. Until a test is validated it is a
+  **submission, not a record**: it credits no pipeline requirement, spends no
+  attempt against the requirement's `max_attempts` cap, and stays out of the
+  department's pass rate and average score. The candidate sees it listed as
+  **awaiting validation** with the outcome withheld, because nobody has yet
+  decided that it stands.
+
+  Requires `training.manage`, and is **idempotent** — validating an
+  already-validated result returns it unchanged. Rejection is the existing
+  `/void` path, which keeps the submission and the reason it was refused
+  rather than deleting an evaluation someone sat for.
+
+- **An officer completing a test validates it in the same step**, so the
+  existing officer workflow is unchanged and no queue of self-approvals
+  appears. `validated_at` is `NULL` only while a peer-run test awaits review.
+- **`GET /training/skills-testing/tests?pending_validation=true`** is the
+  officer review queue, and `GET /summary` gained a `pending_validation` count
+  to badge it. The count is `0` for readers who cannot validate — it is an
+  org-wide tally of other people's evaluations.
+- **`GET /training/skills-testing/candidates?q=`** — a name lookup for the
+  start-test picker, returning **id and display name only**. It exists because
+  examining is open to every member while `GET /users` requires `users.view`,
+  which the baseline member position does not carry; widening that permission
+  would have exposed the whole member admin payload, contact details included.
+
+  It is deliberately a **lookup, not a listing**: `q` is required (minimum 2
+  characters), so no request returns the roster. `LIKE` wildcards are escaped —
+  a bare `%` would otherwise match every row and turn the search-only rule
+  straight back into a listing — whitespace-only queries are refused before the
+  query runs, and results are capped at 15 so a broad two-character fragment
+  cannot be widened into a bulk export. Gated on `training.view` **or**
+  `training.manage`: a member whose position carries no training access has no
+  business looking up test candidates.
+
+- **A per-template result-disclosure editor.** The template builder now exposes
+  the override the API has accepted since the disclosure work landed — what the
+  person tested sees, when they see it, and which corporate positions may see
+  it besides them. Every field defaults to **Inherit**, and the inherit option
+  names what it resolves to ("Inherit — Scores only (pass/fail and points, no
+  written notes)") read from the department's training configuration, so an
+  officer can tell what leaving a template alone actually does without opening
+  another page. The release question disappears when disclosure is set to
+  **Nothing**, since there is then nothing to time.
+- **A named-viewer panel on the test screen.** Granting one person sight of a
+  single test's result — a preceptor, an FTO, a mentor — is the relationship
+  the candidate and position rules cannot express. Named **per test** rather
+  than per template, because the relationship is to the person tested, not to
+  the skill: a trainee's FTO changes, and a standing template-wide grant would
+  quietly follow the skill onto every other candidate's results. A grantee sees
+  the result at the same disclosure level the candidate does, never more, and
+  the panel says so.
+
+**Changed**
+
+- **Separation of duties holds at both ends.** A member cannot examine
+  themselves officially, and **an officer cannot validate a test they are the
+  candidate in** — which would otherwise launder a peer-run self-pass into a
+  certification. Both refusals are `400`.
+- **Practice runs default to the member's own name**, built from the signed-in
+  user rather than a roster lookup, so drilling alone is one tap and costs no
+  request.
+- **Tapping a test on the Skills Testing page carries it through** to the Start
+  Skill Test page instead of landing on an empty picker.
+- **The picker searches server-side with a debounce** instead of filtering a
+  cached roster, and holds the selected candidate separately so the choice
+  survives the results being replaced.
+- **Existing completed official results backfill as validated by their
+  examiner.** Under the old rules only officers could run them, so every one
+  already carries the sign-off the new column records — without the backfill
+  the whole history would re-appear in the review queue.
+
+**Fixed**
+
+- **A completed practice test could become permanently un-finishable.** The
+  pre-submit save on the review screen sends `elapsed_seconds`, which
+  `update_test` refuses on a completed test — so if a completion landed
+  server-side but its response never reached the phone, every retry failed
+  forever on a test that had in fact gone through. Both finalize paths now show
+  the existing results instead, and report the server's own message rather than
+  a fixed string that hid what went wrong.
+- **The two "Change" buttons on the start-test screen now carry distinct
+  `aria-label`s.** They were indistinguishable to a screen reader.
+
+**Data model**
+
+- `skill_tests` gains `validated_at` (`DATETIME`, nullable) and `validated_by`
+  (`VARCHAR(36)` → `users.id` **`ON DELETE SET NULL`**, nullable — a validated
+  result must not revert to pending because the officer who signed it later
+  left), plus index `idx_skill_test_org_validation`
+  (`organization_id`, `is_practice`, `validated_at`) for the review-queue scan.
+  Migration `20260808_0001`, which no-ops on deployments where `create_all()`
+  already materialized the columns.
+
+---
+
+### Prospective members: the board shows everyone, bulk actions are one request, and a leak is closed (2026-08-08)
+
+**Fixed**
+
+- **The kanban board silently showed only part of the pipeline.** It grouped
+  applicants into stage columns client-side from the same paginated list the
+  table uses, at `DEFAULT_PAGE_SIZE` (25) — so a department with more than 25
+  active applicants saw a board assembled from a fraction of them, with cards
+  simply missing from columns, column counts to match, and nothing on screen
+  saying so. Switching from the table also carried whatever page the table had
+  been left on. The board now requests the whole set (`KANBAN_PAGE_SIZE` = 200,
+  the ceiling the list endpoint accepts), switching views refetches rather than
+  inheriting the other view's page, and past that ceiling it **says plainly how
+  many applicants it is not showing**.
+- **The kanban endpoint leaked prospect fields.** It returned a bare `dict`, so
+  FastAPI serialized every column of `ProspectiveMember` — putting
+  **`status_token`**, the credential behind the public application-status page,
+  along with coordinator notes, date of birth and home address into a board
+  view held by anyone with `prospective_members.view`. It now declares a
+  `KanbanBoardResponse` whose cards carry the same projection as the prospect
+  list and nothing more. The list and kanban endpoints share one mapper, so the
+  two cannot diverge and neither can fall back to serializing the raw model.
+- **`referred_by` was stored straight from the request** on both prospect
+  create and update — the one client-supplied foreign key these paths accept.
+  It matters more than a dangling reference, because conversion copies the
+  value onto the new member as `User.referred_by_user_id`: an id from another
+  organization did not stay on the application, it landed in the `users` table
+  and outlived it. Both paths now validate through the shared `assert_in_org`,
+  which fails closed and returns a deliberately generic message so the endpoint
+  is not a cross-tenant existence oracle — a real id from another org and an
+  invented one are indistinguishable. Conversion additionally **drops** an
+  out-of-org referrer rather than copying it, for records written before this
+  validation existed: legacy data must not block a member being elected.
+- **"Advance" reported success when nothing moved.** `advance_prospect`
+  returned the untouched prospect when there was nowhere to advance to —
+  already at the final stage, or no current stage at all — so the endpoint
+  answered `200`, the drawer said "Advanced" with nothing changed, and a
+  `membership_pipeline.prospect_advanced` **audit entry was written for a
+  movement that never occurred**. The audit log exists to reconstruct who moved
+  whom through membership, so a fabricated entry in it was the worst part. Both
+  no-op cases now raise, the endpoint answers **`409`**, and the audit event is
+  written only after a real advance.
+- **A bulk rejection silently overwrote coordinator notes.** The client-side
+  bulk path sent the reason through the update endpoint as `notes`. Bulk status
+  changes now record their reason in the **activity log** and never touch the
+  notes column.
+- **Prospect create and update translate `ValueError` into `400`.** They
+  previously let it reach the catch-all as a `500`, which also mistranslated
+  the existing "Invalid pipeline" rejection.
+
+**Added**
+
+- **`POST /membership-pipeline/prospects/bulk-advance`** and
+  **`POST /membership-pipeline/prospects/bulk-status`**. Bulk actions had no
+  endpoint at all: the UI looped client-side, one request per applicant,
+  sequentially, discarding every error. Thirty selected applicants meant thirty
+  round trips, each committing, sending stage email and auto-linking events,
+  and a partial failure surfaced as a bare count naming nobody.
+
+  Both **itemize the outcome per applicant** (`succeeded_count`,
+  `failed_count`, and a `results` array carrying each prospect's id, name,
+  success flag and error), so the caller can name who was skipped and why. One
+  failure never aborts the rest. Capped at **200 ids** per request — a
+  guardrail against an unbounded request body, not a UI page size.
+
+  Bulk ids arrive in the request body, where the router's path-parameter
+  privacy guard cannot see them, so both endpoints **filter the caller's own
+  prospect record explicitly** and report it as "not found" — indistinguishable
+  from an id that does not exist.
+
+**Changed (performance)**
+
+- **Inactivity processing is batched**, and the kanban query is bounded. The
+  kanban query also now eager-loads the pipeline and step-progress
+  relationships the shared mapper reads — a lazy load from the async response
+  path raises `MissingGreenlet` rather than merely being slow.
+
+---
+
+### Interface: phone-sized controls, readable text, and public pages that respect dark mode (2026-08-08)
+
+**Fixed**
+
+- **Public pages rendered unusable in dark mode.** The dark-mode surface tokens
+  are translucent white by design, meant to composite over `AppLayout`'s
+  gradient — which only protected routes render. The public form page
+  (`/f/:slug`), ballot voting and the application-status page sit outside
+  `AppLayout`, so those tokens composited over the browser's bare white canvas:
+  a white page with white-on-white labels and slate-800 inputs. `body` now
+  carries the themed gradient so no route can render over the browser's default
+  canvas, and the three public pages use the same gradient utility as the login
+  page. Print styles already force a white body background, so printed output
+  is unaffected.
+- **Undersized tap targets are gone — every route now measures zero.** The
+  backlog went 212 → 78 → 0, and almost all of it came from five shared
+  utilities rather than a page-by-page sweep: `form-input` / `form-input-sm`
+  (which rendered ~41px for an input and ~37px for a select), `form-checkbox`,
+  the `btn-*` family, `btn-icon-sm`, and the header logo and skip-to-main
+  links. Every rule sits inside a `max-width: 767px` query, so **desktop
+  density is unchanged** — a mouse pointer does not need the target a fingertip
+  does. The checkbox keeps its 16px box so layouts do not move, growing the hit
+  area with outline padding and a matching negative margin.
+- **No ordinary UI text renders below 12px on a phone.** Nearly every instance
+  came from four sources repeated on every page — the bottom navigation labels,
+  the footer tagline, the notification count badge, and relative timestamps.
+  One was a genuine mistake: dashboard timestamps read `text-[11px] sm:text-xs`,
+  making the text _smaller_ on the smaller screen. The floor is applied
+  centrally by overriding `text-[10px]` and `text-[11px]` below `md`, rather
+  than editing 186 call sites.
+
+  **`text-[9px]` and below are deliberately exempt**: chart axis labels, day
+  cells in the pattern builder's month grid, and the simulated barcode on the
+  label-print preview are dense fixed-size layouts where 12px would break the
+  grid rather than help anyone read it. The exemption is documented at both the
+  CSS rule and the spec.
+
+  This is a readability change aimed at the actual audience — volunteer members
+  across a wide age range, the same reason the theme ships a high-contrast mode.
+
+- Both budgets in `mobile-presentation.spec.ts` are now **0 everywhere**, so
+  they are hard rules rather than budgets: no new control below the touch
+  minimum, and no ordinary UI text below 12px.
+
+---
+
+### Notifications: the documented VAPID keygen command did not run (2026-08-08)
+
+**Fixed**
+
+- **The VAPID keypair command in the docs was not executable.** All three
+  copies called `Vapid01.public_key_urlsafe_base64()` /
+  `private_key_urlsafe_base64()`, which do not exist. They are replaced with
+  **`backend/scripts/generate_vapid_keys.py`**, so the command runs and cannot
+  drift again.
+
+  The two encodings are **not interchangeable** and neither consumer tolerates
+  the wrong one: `pywebpush` reads any private key whose decoded length is not
+  32 bytes as DER, and `pushManager.subscribe()` rejects any
+  `applicationServerKey` that is not the 65-octet uncompressed point. Both
+  failures surface as a **silent 401 from the push service**, long after the
+  browser accepted the subscription. The script prints both lines ready to
+  paste, in the exact encoding each consumer requires.
+
+- **A push-service outage logged a full traceback per device per
+  notification.** `pywebpush` does not wrap transport errors in
+  `WebPushException`, so a raw `requests` exception fell to the catch-all. It
+  is now a single WARNING line: the condition is transient and, for a
+  best-effort delivery path, non-fatal by design.
+
+**Testing**
+
+- The push path is now exercised against a real MariaDB and a real HTTP push
+  service rather than mocks — `pywebpush` really encrypts to a generated P-256
+  client key, the local service returns `410` for one endpoint so the pruning
+  path runs for real, and the assertions read the wire: `aes128gcm` encoding, a
+  verifying ES256 signature, `k=` equal to the configured public key, `aud`
+  equal to the push origin, and a body that does not contain the plaintext.
+
+---
+
+### Tooling: finding and repairing training requirements that point at typed-in course names (2026-08-08)
+
+**Added**
+
+- **`backend/scripts/find_unlinked_course_requirements.py`** (read-only)
+  reports `training_requirements.required_courses` entries that do not resolve
+  to a course in the organization's library. That column holds **course ids**,
+  and every compliance evaluator asks the same question — "is this member's
+  record for one of these ids?" — so an entry that is not an id can never
+  match, and the requirement can never be completed. Requirements created
+  before the course picker landed still carry typed-in **names**.
+
+  Each unresolved entry is classified as `name` (not a UUID at all — typed-in
+  text, reported with the closest library match) or `dangling` (a well-formed
+  UUID absent from this org's library). Severity depends on requirement type:
+  a `courses` requirement needs _every_ linked course, so any unresolved entry
+  caps it below 100%; a `certification` requirement falls back to matching by
+  name, training type and registry code, so it may still work. Archived
+  courses are soft-deleted rather than dropped, so a resolvable-but-archived
+  course is reported as OK-with-a-note.
+
+- **`backend/scripts/apply_course_link_suggestions.py`** writes the repairs,
+  and holds a stricter bar than the report because nothing here is judged by a
+  human. An entry is relinked only when **exactly one** library course matches
+  at the `exact` or `contains-name` tier — not "the best match", _the only
+  match_. The `fragment` and `fuzzy` tiers are reported and never applied: a
+  verbose stored value naming a short course is evidence, but a short stored
+  value sitting inside a long course name is a coincidence waiting to happen,
+  and similarity scoring is fine for a human-reviewed suggestion and not for an
+  unattended write. Dangling UUIDs are never touched — there is no name to
+  match on, and the right answer may be to delete rather than remap.
+
+  **Dry run by default** (nothing is written without `--apply`), matching is
+  per-organization so a course from another tenant can never be selected,
+  `--apply` writes a rollback file that `--restore FILE` puts back, every
+  change lands in the normal tamper-evident audit chain, and partial fixes are
+  kept — a requirement with three resolvable names and one ambiguous one gets
+  the three and is reported as still needing attention.
+
+**Changed**
+
+- `format:backend` now formats `alembic/`, matching what `lint:backend` already
+  checked.
+- The screenshot-capture spec is skipped in E2E runs — it is a documentation
+  tool, not a test.
+
+---
+
 ### Equipment checks: submitting one works again, and shifts accept either apparatus inventory (2026-08-08)
 
 **Fixed**
