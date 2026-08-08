@@ -427,7 +427,7 @@ docker-compose logs -f
 ### Documentation
 
 - [Full Unraid Guide](/mnt/user/appdata/the-logbook/docs/deployment/unraid.md)
-- [Troubleshooting Guide](/mnt/user/appdata/the-logbook/docs/troubleshooting/README.md)
+- [Troubleshooting Guide](/mnt/user/appdata/the-logbook/docs/TROUBLESHOOTING.md)
 - [Main README](/mnt/user/appdata/the-logbook/README.md)
 
 ### Support
@@ -500,6 +500,6 @@ After installation, verify:
 
 ---
 
-**Questions?** Check the [Troubleshooting Guide](../docs/troubleshooting/README.md) or open a GitHub issue!
+**Questions?** Check the [Troubleshooting Guide](../docs/TROUBLESHOOTING.md) or open a GitHub issue!
 
 🚒 **Happy logging!**

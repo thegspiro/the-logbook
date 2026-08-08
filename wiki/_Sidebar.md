@@ -5,27 +5,32 @@
 ---
 
 ### 🎯 Getting Started
+
 - [Installation](Installation)
 - [Unraid Quick Start](Unraid-Quick-Start)
 - [Onboarding](Onboarding)
 - [Quick Reference](Quick-Reference)
 
 ### 🚢 Deployment
+
 - [Unraid](Deployment-Unraid)
 - [Docker](Deployment-Docker)
 - [Production](Deployment-Production)
 
 ### 🔧 Configuration
+
 - [Environment](Configuration-Environment)
 - [Modules](Configuration-Modules)
 - [Security](Configuration-Security)
 
 ### 💻 Development
+
 - [Backend](Development-Backend)
 - [Frontend](Development-Frontend)
 - [Contributing](Contributing)
 
 ### 📦 Modules
+
 - [Training](Module-Training)
 - [Skills Testing](../docs/training/09-skills-testing.md)
 - [Training Compliance](../docs/training-compliance-calculations.md)
@@ -50,6 +55,7 @@
 - [Cal.com Integration](Integration-Calcom)
 
 ### 🔐 Security
+
 - [Overview](Security-Overview)
 - [Authentication](Security-Authentication)
 - [Encryption](Security-Encryption)
@@ -61,13 +67,15 @@
 - [Key Rotation](../docs/KEY_ROTATION.md)
 
 ### 🛠️ Troubleshooting
+
 - [Common Issues](Troubleshooting)
-- [Containers](Troubleshooting-Containers)
-- [Frontend](Troubleshooting-Frontend)
-- [Backend](Troubleshooting-Backend)
-- [Database](Troubleshooting-Database)
+- [Containers](Troubleshooting#container--docker-diagnostics)
+- [Frontend](Troubleshooting#frontend--browser-diagnostics)
+- [Backend](Troubleshooting#backend-service-diagnostics)
+- [Database](Troubleshooting#database-diagnostics)
 
 ### 📖 Reference
+
 - [API Docs](API-Reference)
 - [Database Schema](Database-Schema)
 - [Role System](Role-System)

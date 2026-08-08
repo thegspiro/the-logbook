@@ -6,19 +6,19 @@ Deploy The Logbook on a Synology NAS using Docker (Container Manager) or Docker 
 
 Synology NAS devices with Docker support can run The Logbook as a self-hosted intranet platform for your fire department. DSM 7.2+ with Container Manager (formerly Docker package) is required.
 
-| Method | Difficulty | Best For |
-|--------|-----------|----------|
-| **Container Manager UI** (DSM 7.2+) | Easy | Users who prefer the GUI |
-| **Docker Compose via SSH** | Moderate | Advanced users, full control |
+| Method                              | Difficulty | Best For                     |
+| ----------------------------------- | ---------- | ---------------------------- |
+| **Container Manager UI** (DSM 7.2+) | Easy       | Users who prefer the GUI     |
+| **Docker Compose via SSH**          | Moderate   | Advanced users, full control |
 
 ### Hardware Requirements
 
-| NAS Model Series | CPU | RAM | Profile | Status |
-|-----------------|-----|-----|---------|--------|
-| **DS224+, DS423+** | Intel Celeron J4125 | 2 GB | minimal | Works (add RAM recommended) |
-| **DS723+, DS923+** | AMD Ryzen R1600 | 2-4 GB | minimal / standard | Works well |
-| **DS1522+, DS1621+** | AMD Ryzen R1600 | 8 GB | standard / full | Recommended |
-| **DS1823xs+, DS3622xs+** | Intel Xeon | 16+ GB | full | Excellent |
+| NAS Model Series         | CPU                 | RAM    | Profile            | Status                      |
+| ------------------------ | ------------------- | ------ | ------------------ | --------------------------- |
+| **DS224+, DS423+**       | Intel Celeron J4125 | 2 GB   | minimal            | Works (add RAM recommended) |
+| **DS723+, DS923+**       | AMD Ryzen R1600     | 2-4 GB | minimal / standard | Works well                  |
+| **DS1522+, DS1621+**     | AMD Ryzen R1600     | 8 GB   | standard / full    | Recommended                 |
+| **DS1823xs+, DS3622xs+** | Intel Xeon          | 16+ GB | full               | Excellent                   |
 
 > **Minimum**: 4 GB RAM recommended. NAS models with only 2 GB should use the minimal profile and consider a RAM upgrade.
 
@@ -153,20 +153,22 @@ sudo cp .env.example .env
 3. Click **Create**
 4. Configure:
 
-| Setting | Value |
-|---------|-------|
-| **Project name** | `the-logbook` |
-| **Path** | `/volume1/docker/the-logbook` |
-| **Source** | Use existing `docker-compose.yml` |
+| Setting          | Value                             |
+| ---------------- | --------------------------------- |
+| **Project name** | `the-logbook`                     |
+| **Path**         | `/volume1/docker/the-logbook`     |
+| **Source**       | Use existing `docker-compose.yml` |
 
 5. Container Manager will detect the `docker-compose.yml` automatically
 6. Click **Next**, review the settings, and click **Done**
 
 > **For minimal profile**: Before creating the project, combine compose files:
+>
 > ```bash
 > # Create a merged compose for Container Manager
 > sudo docker compose -f docker-compose.yml -f docker-compose.minimal.yml config > docker-compose.synology.yml
 > ```
+>
 > Then point Container Manager to `docker-compose.synology.yml` instead.
 
 ### Step 3: Start the Project
@@ -183,10 +185,10 @@ sudo cp .env.example .env
 
 Synology DSM uses several ports by default. Check for conflicts:
 
-| Port | Default DSM Use | The Logbook Use | Solution |
-|------|----------------|-----------------|----------|
-| 80 | DSM HTTP redirect | Nginx (optional) | Change `NGINX_HTTP_PORT` in `.env` |
-| 443 | DSM HTTPS | Nginx (optional) | Change `NGINX_HTTPS_PORT` in `.env` |
+| Port | Default DSM Use           | The Logbook Use      | Solution                                        |
+| ---- | ------------------------- | -------------------- | ----------------------------------------------- |
+| 80   | DSM HTTP redirect         | Nginx (optional)     | Change `NGINX_HTTP_PORT` in `.env`              |
+| 443  | DSM HTTPS                 | Nginx (optional)     | Change `NGINX_HTTPS_PORT` in `.env`             |
 | 3306 | MariaDB 10 (if installed) | MySQL 8.0 (internal) | No conflict — DB port is not exposed by default |
 
 The default ports (3000 for frontend, 3001 for backend) typically don't conflict with DSM services.
@@ -239,12 +241,14 @@ Or configure at your router level via DHCP reservation.
 Synology Container Manager allows setting resource limits per container. For a NAS with limited RAM:
 
 **Via SSH:**
+
 ```bash
 # Use the minimal profile which sets conservative resource limits
 sudo docker compose -f docker-compose.yml -f docker-compose.minimal.yml up -d
 ```
 
 **Via Container Manager UI:**
+
 1. Go to **Container** tab
 2. Select a container > **Edit**
 3. Under **Resources**, set:
@@ -267,28 +271,28 @@ Synology DSM has a built-in reverse proxy that's the easiest way to add HTTPS an
 
 **Rule 1 — Frontend:**
 
-| Setting | Value |
-|---------|-------|
-| **Description** | The Logbook Frontend |
-| **Source Protocol** | HTTPS |
-| **Source Hostname** | `logbook.yourdomain.com` (or `*`) |
-| **Source Port** | 443 |
-| **Destination Protocol** | HTTP |
-| **Destination Hostname** | `localhost` |
-| **Destination Port** | 3000 |
+| Setting                  | Value                             |
+| ------------------------ | --------------------------------- |
+| **Description**          | The Logbook Frontend              |
+| **Source Protocol**      | HTTPS                             |
+| **Source Hostname**      | `logbook.yourdomain.com` (or `*`) |
+| **Source Port**          | 443                               |
+| **Destination Protocol** | HTTP                              |
+| **Destination Hostname** | `localhost`                       |
+| **Destination Port**     | 3000                              |
 
 **Rule 2 — Backend API:**
 
-| Setting | Value |
-|---------|-------|
-| **Description** | The Logbook API |
-| **Source Protocol** | HTTPS |
-| **Source Hostname** | `logbook.yourdomain.com` |
-| **Source Port** | 443 |
-| **Source Path** | `/api/*` |
-| **Destination Protocol** | HTTP |
-| **Destination Hostname** | `localhost` |
-| **Destination Port** | 3001 |
+| Setting                  | Value                    |
+| ------------------------ | ------------------------ |
+| **Description**          | The Logbook API          |
+| **Source Protocol**      | HTTPS                    |
+| **Source Hostname**      | `logbook.yourdomain.com` |
+| **Source Port**          | 443                      |
+| **Source Path**          | `/api/*`                 |
+| **Destination Protocol** | HTTP                     |
+| **Destination Hostname** | `localhost`              |
+| **Destination Port**     | 3001                     |
 
 > **Note**: Create the `/api/*` rule first (more specific), then the catch-all frontend rule.
 
@@ -385,6 +389,7 @@ Or via Container Manager: **Project** > `the-logbook` > **Action** > **Build and
 **Error**: `docker: command not found`
 
 Ensure Container Manager is installed:
+
 1. Open **Package Center** in DSM
 2. Search for **Container Manager** (DSM 7.2+) or **Docker** (older DSM)
 3. Install it
@@ -458,16 +463,16 @@ sudo docker compose down && sudo docker compose up -d
 
 ## Summary
 
-| Step | Action |
-|------|--------|
-| 1 | Install Container Manager from Package Center |
-| 2 | Enable SSH, connect to NAS |
-| 3 | Clone repo to `/volume1/docker/the-logbook` |
-| 4 | Configure `.env` with secure credentials |
-| 5 | Run `sudo docker compose up -d` |
-| 6 | Access at `http://YOUR-NAS-IP:3000` |
-| 7 | Complete onboarding wizard |
-| 8 | (Optional) Set up DSM reverse proxy with SSL |
-| 9 | Configure Hyper Backup for automated backups |
+| Step | Action                                        |
+| ---- | --------------------------------------------- |
+| 1    | Install Container Manager from Package Center |
+| 2    | Enable SSH, connect to NAS                    |
+| 3    | Clone repo to `/volume1/docker/the-logbook`   |
+| 4    | Configure `.env` with secure credentials      |
+| 5    | Run `sudo docker compose up -d`               |
+| 6    | Access at `http://YOUR-NAS-IP:3000`           |
+| 7    | Complete onboarding wizard                    |
+| 8    | (Optional) Set up DSM reverse proxy with SSL  |
+| 9    | Configure Hyper Backup for automated backups  |
 
-**Need help?** See the [Troubleshooting Guide](../troubleshooting/README.md) or open a [GitHub Issue](https://github.com/thegspiro/the-logbook/issues).
+**Need help?** See the [Troubleshooting Guide](../TROUBLESHOOTING.md) or open a [GitHub Issue](https://github.com/thegspiro/the-logbook/issues).
