@@ -2148,4 +2148,18 @@ export const SHOTS = [
     },
     fullPage: true,
   },
+
+  // ── Eighth batch: personal data rights ─────────────────────────────
+  {
+    id: "17-02-download-my-data",
+    doc: "17-privacy-data-rights.md",
+    line: 78,
+    anchor:
+      'Screenshot of the "Your Data" section showing the "Download my data" button',
+    alt: "The Your Data section of account security with its export button",
+    route: "/account?tab=security",
+    // The section sits at the foot of a long tab; clip to it rather than
+    // shooting the whole page for one button.
+    selector: 'div:has(> h2:text-is("Your Data"))',
+  },
 ];

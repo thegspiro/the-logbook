@@ -123,7 +123,7 @@ Not all modules are enabled by default. Your department administrator controls w
 > **Note (2026-07-31):** New lesson — **[Privacy & Your Data](./17-privacy-data-rights.md)**.
 > Members can now manage **privacy choices** (photo use, public roster listing,
 > SMS notifications — an unanswered choice counts as "no") and **download a
-> complete personal-data export** from Settings → Security. Administrators gain
+> complete personal-data export** from My Account → Security. Administrators gain
 > **configurable records-retention schedules** with safety floors (documents and
 > minutes are deliberately never auto-deleted) and an **anonymization workflow**
 > that scrubs a departed member's PII while keeping training, attendance, and

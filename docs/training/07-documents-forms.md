@@ -410,7 +410,7 @@ Members manage how they're reached under **Settings → Notifications**:
   because that email is the official record that the member was notified.
 - **Urgent Text Messages** — receive an SMS for urgent messages. Requires a mobile
   number on file, the department to have SMS (Twilio) enabled, **and** the
-  member's express **SMS consent** under **Settings → Security → Privacy Choices**
+  member's express **SMS consent** under **My Account → Security → Privacy Choices**
   (a member who has never granted consent will not receive texts, per US TCPA
   rules). Turning this off — or never granting SMS consent — never stops the email.
 

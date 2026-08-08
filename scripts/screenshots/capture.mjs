@@ -18,7 +18,7 @@
 import { chromium } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -129,8 +129,18 @@ async function detectCrash(page) {
   return CRASHED.test(text);
 }
 
-async function detectEmptyState(page) {
-  const text = await pageText(page);
+async function detectEmptyState(page, selector) {
+  // Scan what the image will actually contain. A clipped shot pictures one
+  // section, and scanning the whole page around it flags copy that is nowhere
+  // in the screenshot — the account security tab says "nothing here is
+  // required for membership", which is prose, not an empty state.
+  const text = selector
+    ? await page
+        .locator(selector)
+        .first()
+        .innerText()
+        .catch(() => "")
+    : await pageText(page);
   const match = text.match(EMPTY_STATE);
   return match ? match[0].trim() : null;
 }
@@ -154,6 +164,30 @@ async function login(page) {
     timeout: 30_000,
   });
   await settle(page);
+}
+
+/**
+ * Write the report, merging a `--only` run into what is already there.
+ *
+ * The applier reads this file to decide which placeholders to fill, so a
+ * narrow re-capture that replaced it would silently drop every other shot from
+ * the next apply — the images stay on disk and the placeholders stay open,
+ * which looks like the applier failing rather than the report being partial.
+ */
+async function writeReport(results) {
+  const path = resolve(HERE, "capture-report.json");
+  let merged = results;
+  if (only) {
+    let previous = [];
+    try {
+      previous = JSON.parse(await readFile(path, "utf8"));
+    } catch {
+      previous = [];
+    }
+    const fresh = new Set(results.map((r) => r.id));
+    merged = [...previous.filter((r) => !fresh.has(r.id)), ...results];
+  }
+  await writeFile(path, `${JSON.stringify(merged, null, 2)}\n`);
 }
 
 function resolveChromium() {
@@ -227,7 +261,7 @@ async function main() {
       await optimize(target);
       const emptyState = shot.allowEmptyState
         ? null
-        : await detectEmptyState(page);
+        : await detectEmptyState(page, shot.selector);
       if (await detectCrash(page)) {
         throw new Error("page hit the ErrorBoundary — the app crashed here");
       }
@@ -259,10 +293,7 @@ async function main() {
     }
   }
 
-  await writeFile(
-    resolve(HERE, "capture-report.json"),
-    `${JSON.stringify(results, null, 2)}\n`,
-  );
+  await writeReport(results);
   await browser.close();
 
   const failed = results.filter((r) => r.status === "failed");
