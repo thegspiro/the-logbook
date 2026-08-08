@@ -40,7 +40,7 @@ from its open list.
 | # | Feature | Prefix | Status |
 |---|---------|--------|--------|
 | B1 | medical-screening | MS2 | ✅ (p1, p2) |
-| B2 | apparatus | AP2 | ⬜ |
+| B2 | apparatus | AP2 | ✅ (p1, p2) |
 | B3 | inventory | INV2 | ⬜ |
 | B4 | facilities | FAC2 | ⬜ |
 | B5 | elections | ELEC2 | ⬜ |
@@ -770,4 +770,25 @@ re-run unless directed).
   tests pass. Gate: flake8/black clean; no frontend change (the types already
   declare the fields and the UI already reads them — the backend now honors the
   existing contract). See medical-screening.md → Pass 2. Next: B2 apparatus.
+- **B2 apparatus ✅ (pass 2).** Re-verified pass-1 (AP-1 create-path FK validation
+  and AP-2 `.is_(True)` intact), then applied the B1 lesson across every
+  FK-accepting update method. **1 fix applied:** AP2-1 (MED cross-tenant read
+  leak): the create/change paths validate their client FKs in-org, but the
+  matching **update** methods blindly `setattr`'d them — and each FK is
+  eager-loaded into a response relationship, so a foreign id set via update is
+  projected back, leaking the other org's row. Closed on `update_apparatus`
+  (`apparatus_type_id`/`status_id`/`primary_station_id` — the last also
+  unvalidated on create, so `create_apparatus` gained a `Location` check too;
+  `status_id` was additionally being copied into the status-history audit trail
+  unvalidated), `update_operator` (`evoc_level_id`), and `update_maintenance_record`
+  (`maintenance_type_id`), each reusing the create path's own validator. **1
+  flagged:** AP2-2 (LOW: the non-projected dangling FKs — `required_evoc_level_id`,
+  maintenance `component_id`/`service_provider_id`, component-note
+  `service_provider_id` — unvalidated on both paths but not read back
+  cross-tenant; recommend a DiD sweep). MS2-4 class checked and absent here
+  (responses project via eager-loaded relationships, not blank scalar fields).
+  **6 tests added** (`test_apparatus_service.py`, the module's first service test
+  file); 13 pass with `test_org_scoping.py`. Gate: flake8/black clean (black
+  rewrapped the new guards); no frontend change. See apparatus.md → Pass 2. Next:
+  B3 inventory.
 </content>
