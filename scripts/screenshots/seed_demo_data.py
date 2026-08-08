@@ -23,6 +23,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+import uuid
 from datetime import date, datetime, time, timedelta, timezone
 from http.cookiejar import CookieJar
 from time import sleep
@@ -87,11 +88,23 @@ class Api:
                 return cookie.value
         return None
 
-    def call(self, method: str, path: str, payload: Any = None) -> Any:
+    def call(
+        self,
+        method: str,
+        path: str,
+        payload: Any = None,
+        *,
+        body: bytes | None = None,
+        content_type: str = "application/json",
+    ) -> Any:
         url = f"{self.api}{path}"
-        data = json.dumps(payload).encode() if payload is not None else None
+        data = (
+            body
+            if body is not None
+            else json.dumps(payload).encode() if payload is not None else None
+        )
         req = urllib.request.Request(url, data=data, method=method)
-        req.add_header("Content-Type", "application/json")
+        req.add_header("Content-Type", content_type)
         # Double-submit CSRF: state-changing calls echo the cookie as a header.
         if method != "GET":
             token = self._csrf()
@@ -132,6 +145,44 @@ class Api:
     def delete(self, path: str) -> Any:
         return self.call("DELETE", path)
 
+    def post_file(
+        self,
+        path: str,
+        fields: dict[str, str],
+        filename: str,
+        file_bytes: bytes,
+        mime_type: str,
+        field_name: str = "file",
+    ) -> Any:
+        """POST multipart/form-data — the shape file uploads require.
+
+        Hand-built rather than pulled from a library: the seeder is otherwise
+        stdlib-only so it runs against any checkout, and `urllib` has no
+        multipart encoder.
+        """
+        boundary = "----logbookseed" + uuid.uuid4().hex
+        parts: list[bytes] = []
+        for name, value in fields.items():
+            parts.append(
+                f"--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+                f"{value}\r\n".encode()
+            )
+        parts.append(
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{field_name}"; '
+            f'filename="{filename}"\r\n'
+            f"Content-Type: {mime_type}\r\n\r\n".encode()
+        )
+        parts.append(file_bytes)
+        parts.append(f"\r\n--{boundary}--\r\n".encode())
+        return self.call(
+            "POST",
+            path,
+            body=b"".join(parts),
+            content_type=f"multipart/form-data; boundary={boundary}",
+        )
+
     def login(self) -> None:
         self.login_as(DEMO_ADMIN_USERNAME, DEMO_ADMIN_PASSWORD)
 
@@ -156,6 +207,38 @@ def pick(record: dict, *names: str) -> Any:
         if name in record:
             return record[name]
     return None
+
+
+def _demo_pdf(title: str, subtitle: str) -> bytes:
+    """A one-page PDF standing in for a real department document.
+
+    The upload route sniffs the MIME type from the file's magic bytes rather
+    than trusting the declared Content-Type, so this has to be a genuine PDF,
+    not text with a .pdf name. reportlab is already a backend dependency; where
+    it is missing the caller still gets a valid file, just a plain-text one —
+    text/plain is on the allow-list too.
+    """
+    try:
+        from io import BytesIO
+
+        from reportlab.lib.pagesizes import LETTER
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        return f"{title}\n\n{subtitle}\n".encode()
+
+    buffer = BytesIO()
+    page = canvas.Canvas(buffer, pagesize=LETTER)
+    width, height = LETTER
+    page.setFont("Helvetica-Bold", 18)
+    page.drawString(72, height - 96, title)
+    page.setFont("Helvetica", 11)
+    page.drawString(72, height - 120, subtitle)
+    page.drawString(72, height - 152, "Oakville Fire Department")
+    page.setFont("Helvetica-Oblique", 9)
+    page.drawString(72, 72, "Demonstration document generated for the training guides.")
+    page.showPage()
+    page.save()
+    return buffer.getvalue()
 
 
 # ── Seed steps ────────────────────────────────────────────────────────
@@ -1619,6 +1702,170 @@ class Seeder:
                         raise
         return {"templates": templates, "checks": checks}
 
+    # -- notification rules ------------------------------------------
+
+    def seed_notification_rules(self) -> list[dict]:
+        """Automations for the notification rules list.
+
+        Rules are opt-in — a fresh department has none — so the rules tab shows
+        its empty state until some exist. Channel and category follow the
+        trigger, matching what the create dialog fills in for itself.
+        """
+        rules = items(self.api.get("/notifications/rules"), "rules")
+        names = {r.get("name") for r in rules}
+        blueprint = [
+            (
+                "Drill reminder — 24 hours out",
+                "event_reminder",
+                "events",
+                "email",
+                "Reminds everyone RSVP'd to a drill the day before.",
+                True,
+            ),
+            (
+                "Certification expiring in 60 days",
+                "training_expiry",
+                "training",
+                "email",
+                "Warns the member and the training officer well before a "
+                "certification lapses.",
+                True,
+            ),
+            (
+                "Shift roster changed",
+                "schedule_change",
+                "scheduling",
+                "in_app",
+                "Tells the affected crew when a shift is edited or reassigned.",
+                True,
+            ),
+            (
+                "Apparatus maintenance due",
+                "maintenance_due",
+                "maintenance",
+                "in_app",
+                "Flags the apparatus officer when a unit reaches its service "
+                "interval.",
+                True,
+            ),
+            (
+                "New member welcome",
+                "new_member",
+                "members",
+                "email",
+                "Sends onboarding instructions the day an account is created.",
+                False,
+            ),
+        ]
+        for name, trigger, category, channel, description, enabled in blueprint:
+            if name in names:
+                continue
+            rules.append(
+                self.api.post(
+                    "/notifications/rules",
+                    {
+                        "name": name,
+                        "description": description,
+                        "trigger": trigger,
+                        "category": category,
+                        "channel": channel,
+                        "enabled": enabled,
+                    },
+                )
+            )
+        return rules
+
+    # -- department messages -----------------------------------------
+
+    def seed_messages(self, base_url: str, members: list[dict]) -> list[dict]:
+        """Post department announcements and have some members acknowledge.
+
+        The acknowledgment report is a "who has and has not read this" list, so
+        it only says anything if the department is split — every member
+        acknowledging is as blank a picture as none of them doing so. Two
+        thirds acknowledge here; the rest stay outstanding.
+        """
+        existing = items(self.api.get("/messages?include_inactive=true"), "messages")
+        titles = {m.get("title") for m in existing}
+        blueprint = [
+            (
+                "SCBA Flow Test — Mandatory Read",
+                "Annual SCBA flow testing runs the first two weeks of next "
+                "month. Every interior-qualified member must sign up for a "
+                "slot and bring their assigned mask. Acknowledge below so the "
+                "safety officer can track coverage.",
+                "important",
+                True,
+                True,
+            ),
+            (
+                "Station 2 Bay Doors Out of Service",
+                "The centre bay door at Station 2 is awaiting a part. Use the "
+                "north bay for apparatus movements until further notice.",
+                "urgent",
+                False,
+                True,
+            ),
+            (
+                "Uniform Order Window Closes Friday",
+                "The quartermaster submits the bulk uniform order Friday at "
+                "17:00. Anything not in the storefront cart by then waits for "
+                "the next cycle.",
+                "normal",
+                False,
+                False,
+            ),
+        ]
+
+        created = list(existing)
+        for title, body, priority, requires_ack, pinned in blueprint:
+            if title in titles:
+                continue
+            created.append(
+                self.api.post(
+                    "/messages",
+                    {
+                        "title": title,
+                        "body": body,
+                        "priority": priority,
+                        "target_type": "all",
+                        "is_pinned": pinned,
+                        "requires_acknowledgment": requires_ack,
+                    },
+                )
+            )
+
+        ack_ids = [
+            pick(m, "id")
+            for m in created
+            if pick(m, "requires_acknowledgment", "requiresAcknowledgment")
+            and pick(m, "id")
+        ]
+        if not ack_ids:
+            return created
+
+        # Acknowledging is a first-person action — there is no "acknowledge on
+        # behalf of" route — so each member signs in, exactly as they do for
+        # RSVPs. Two thirds of the roster, leaving the rest outstanding.
+        signers = [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME]
+        for member in signers[: (len(signers) * 2) // 3]:
+            username = member.get("username")
+            if not username:
+                continue
+            member_api = Api(base_url)
+            try:
+                member_api.login_as(username, DEMO_MEMBER_PASSWORD)
+            except ApiError:
+                continue
+            for message_id in ack_ids:
+                try:
+                    member_api.post(f"/messages/{message_id}/acknowledge")
+                except ApiError as exc:
+                    # Already acknowledged on an earlier run.
+                    if exc.code not in (400, 409):
+                        raise
+        return created
+
     # -- documents ---------------------------------------------------
 
     def seed_documents(self) -> list[dict]:
@@ -1664,7 +1911,70 @@ class Seeder:
                     },
                 )
             )
+        self._seed_document_files(folders)
         return folders
+
+    #: (folder name, document name, description) for the library contents. The
+    #: documents page and every folder card count what is in them, so a library
+    #: of empty folders is what the guides would otherwise picture.
+    DOCUMENT_FILES = [
+        (
+            "Standard Operating Guidelines",
+            "SOG 101 — Structure Fire Response",
+            "First-due assignments and initial tactics.",
+        ),
+        (
+            "Standard Operating Guidelines",
+            "SOG 204 — Vehicle Extrication",
+            "Stabilisation, tool assignments and patient packaging.",
+        ),
+        (
+            "Policies & Bylaws",
+            "Department Bylaws (Revised 2026)",
+            "Adopted at the March business meeting.",
+        ),
+        (
+            "Policies & Bylaws",
+            "Member Conduct Policy",
+            "Expectations, reporting and the disciplinary process.",
+        ),
+        (
+            "Training Materials",
+            "Ladder Company Operations — Lesson Plan",
+            "Four-hour block with skills sheet.",
+        ),
+        (
+            "Meeting Minutes",
+            "Business Meeting Minutes — July 2026",
+            "Approved as read.",
+        ),
+        (
+            "Forms & Templates",
+            "Turnout Gear Sizing Sheet",
+            "Blank sizing sheet for new members.",
+        ),
+    ]
+
+    def _seed_document_files(self, folders: list[dict]) -> None:
+        existing = {
+            d.get("name") for d in items(self.api.get("/documents"), "documents")
+        }
+        by_name = {f.get("name"): pick(f, "id") for f in folders}
+        for folder_name, name, description in self.DOCUMENT_FILES:
+            if name in existing:
+                continue
+            folder_id = by_name.get(folder_name)
+            if not folder_id:
+                continue
+            fields = {"name": name, "description": description}
+            fields["folder_id"] = str(folder_id)
+            self.api.post_file(
+                "/documents/upload",
+                fields,
+                f"{name}.pdf",
+                _demo_pdf(name, description),
+                "application/pdf",
+            )
 
     # -- finance -----------------------------------------------------
 
@@ -2247,6 +2557,138 @@ class Seeder:
                 )
             )
         return forms
+
+    # -- forms: responses --------------------------------------------
+
+    #: Sample answers per field type. Each form is submitted several times and
+    #: the index rotates through these, so the submissions table shows varied
+    #: rows rather than the same answer repeated.
+    FORM_ANSWERS: dict[str, list[Any]] = {
+        "text": ["Engine 1", "Ladder 4", "Rescue 2", "Medic 3"],
+        "textarea": [
+            "Crew reported the issue at shift change; no injuries.",
+            "Noticed during the weekly check, corrected on the spot.",
+            "Escalated to the safety officer for review.",
+            "Documented for the next company officer meeting.",
+        ],
+        "number": [12, 32, 8, 45],
+        "email": [
+            "outreach@oakvillecivic.example.org",
+            "pto@oakvilleschools.example.org",
+            "events@oakvillelibrary.example.org",
+            "info@oakvillechamber.example.org",
+        ],
+    }
+
+    #: Answers keyed on a word in the field's label, checked before the
+    #: type-based pool above. A generic text answer is a unit designation, which
+    #: reads as nonsense under "Organization name" on the community event form —
+    #: the expanded submission row shows the label beside the value, so a
+    #: mismatch is plainly visible in the guides.
+    FORM_ANSWERS_BY_LABEL: list[tuple[tuple[str, ...], list[Any]]] = [
+        (
+            ("organization", "company", "agency"),
+            [
+                "Oakville Civic Association",
+                "Oakville Elementary PTO",
+                "Oakville Public Library",
+                "Oakville Chamber of Commerce",
+            ],
+        ),
+        (
+            ("full name", "contact name", "your name"),
+            ["Priya Raman", "Henrik Vance", "Amara Osei", "Delia Okonkwo"],
+        ),
+        (
+            ("apparatus", "unit", "vehicle"),
+            ["Engine 1", "Ladder 4", "Rescue 2", "Medic 3"],
+        ),
+        (
+            ("boot",),
+            ["10 W", "11 M", "9 W", "12 M"],
+        ),
+    ]
+
+    def seed_form_submissions(
+        self, base_url: str, forms: list[dict], members: list[dict]
+    ) -> list[dict]:
+        """Answer each form a few times, as different members.
+
+        The submissions table and the results view are both empty until a form
+        has responses, and a form only accepts them once it is published — the
+        create call leaves it in draft.
+
+        A submission records the *calling* user, so four rows submitted by the
+        admin would all name the same person. Each round signs in as a
+        different member, the same way the RSVP seeder does.
+        """
+        rounds = 4
+        submitters: list[Api] = []
+        for member in [m for m in members if m.get("username") != DEMO_ADMIN_USERNAME][
+            :rounds
+        ]:
+            member_api = Api(base_url)
+            try:
+                member_api.login_as(member["username"], DEMO_MEMBER_PASSWORD)
+            except ApiError:
+                continue
+            submitters.append(member_api)
+        if not submitters:
+            submitters = [self.api]
+
+        submissions: list[dict] = []
+        for form in forms:
+            form_id = pick(form, "id")
+            if not form_id:
+                continue
+            detail = self.api.get(f"/forms/{form_id}")
+            if str(pick(detail, "status") or "").lower() != "published":
+                detail = self.api.post(f"/forms/{form_id}/publish")
+            if items(self.api.get(f"/forms/{form_id}/submissions"), "submissions"):
+                continue
+            fields = items(detail, "fields")
+            for round_index in range(rounds):
+                data = {}
+                for field in fields:
+                    field_id = pick(field, "id")
+                    if not field_id:
+                        continue
+                    value = self._form_answer(field, round_index)
+                    if value is not None:
+                        data[str(field_id)] = value
+                if data:
+                    submitter = submitters[round_index % len(submitters)]
+                    submissions.append(
+                        submitter.post(f"/forms/{form_id}/submit", {"data": data})
+                    )
+        return submissions
+
+    def _form_answer(self, field: dict, round_index: int) -> Any:
+        field_type = str(pick(field, "field_type", "fieldType") or "text").lower()
+        if field_type == "date":
+            return (NOW - timedelta(days=3 + round_index * 5)).strftime("%Y-%m-%d")
+        if field_type in ("select", "radio", "dropdown"):
+            options = items(field, "options")
+            if not options:
+                return None
+            option = options[round_index % len(options)]
+            # An option is either {value,label} or a bare string depending on
+            # how the field was defined; submissions store the value.
+            return pick(option, "value") if isinstance(option, dict) else str(option)
+        if field_type in ("checkbox", "multiselect"):
+            options = items(field, "options")
+            if not options:
+                return None
+            option = options[round_index % len(options)]
+            return [pick(option, "value") if isinstance(option, dict) else str(option)]
+        label = str(pick(field, "label") or "").lower()
+        for keywords, labelled_pool in self.FORM_ANSWERS_BY_LABEL:
+            if any(keyword in label for keyword in keywords):
+                return labelled_pool[round_index % len(labelled_pool)]
+        pool = self.FORM_ANSWERS.get(field_type)
+        if pool is None:
+            pool = self.FORM_ANSWERS["text"]
+        return pool[round_index % len(pool)]
 
     # -- elections ---------------------------------------------------
 
@@ -2967,7 +3409,13 @@ class Seeder:
         )
         self.step("event check-ins", lambda: self.seed_event_check_ins(events, members))
         self.step("documents", self.seed_documents)
-        self.step("forms", self.seed_forms)
+        self.step("notification rules", self.seed_notification_rules)
+        self.step("messages", lambda: self.seed_messages(self.base_url, members))
+        forms = self.step("forms", self.seed_forms) or []
+        self.step(
+            "form submissions",
+            lambda: self.seed_form_submissions(self.base_url, forms, members),
+        )
         self.step("event templates", self.seed_event_templates)
         self.step("elections", self.seed_elections)
         self.step("prospective members", self.seed_prospective_members)

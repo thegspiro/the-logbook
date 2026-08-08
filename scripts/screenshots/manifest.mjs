@@ -1906,4 +1906,138 @@ export const SHOTS = [
     },
     fullPage: true,
   },
+
+  // ── Sixth batch: documents, forms and department messaging ─────────
+  {
+    id: "07-03-upload-documents",
+    doc: "07-documents-forms.md",
+    line: 85,
+    anchor:
+      "Screenshot showing the upload interface with a drag-and-drop zone, and a",
+    alt: "Document upload dialog with its drag-and-drop zone",
+    route: "/documents",
+    prepare: clickByName(/^upload/i),
+    fullPage: false,
+  },
+  {
+    id: "07-05-form-sharing",
+    doc: "07-documents-forms.md",
+    line: 193,
+    anchor:
+      "Screenshot showing the form sharing options with the internal link, the public",
+    alt: "Form sharing dialog with the public URL and its QR code",
+    route: "/forms",
+    prepare: async (page) => {
+      // Every form has a Share button, but the public URL and QR code this
+      // placeholder is about only render for a form with public access on.
+      // Open them in turn until the URL field appears. ("Share link", on the
+      // card itself, copies to the clipboard and opens nothing — hence the
+      // anchored pattern.)
+      const shares = page.getByRole("button", { name: /^Share$/ });
+      const count = await shares.count();
+      for (let index = 0; index < count; index += 1) {
+        await shares.nth(index).click({ timeout: 10_000 });
+        const url = page.locator("#share-public-url");
+        const shown = await url
+          .waitFor({ state: "visible", timeout: 2_000 })
+          .then(() => true)
+          .catch(() => false);
+        if (shown) return;
+        await page
+          .getByRole("button", { name: /^Done$/ })
+          .click({ timeout: 10_000 });
+      }
+      throw new Error("no form has public access enabled");
+    },
+    fullPage: false,
+  },
+  {
+    id: "07-07-form-submissions",
+    doc: "07-documents-forms.md",
+    line: 208,
+    anchor:
+      "Screenshot of the form submissions table showing rows of responses with",
+    alt: "Form submissions table listing responses with their timestamps",
+    route: "/forms",
+    prepare: async (page) => {
+      await clickByName(/^submissions$/i)(page);
+      const select = page.locator("#submission-form-select");
+      await select.waitFor({ timeout: 10_000 });
+      // Every form is listed, answered or not, and the table for an unanswered
+      // one is empty. The option label carries the count, so pick from that.
+      const value = await select.evaluate(
+        (el) =>
+          Array.from(el.options).find(
+            (option) => option.value && !/\(0 submissions\)/.test(option.text),
+          )?.value ?? "",
+      );
+      if (!value) throw new Error("no form has any submissions");
+      await select.selectOption(value);
+      // Rows collapse to submitter and timestamp; the answers this placeholder
+      // is about are behind the disclosure.
+      await page
+        .getByRole("button", { name: /^Submission by / })
+        .first()
+        .click({ timeout: 10_000 });
+    },
+    fullPage: true,
+  },
+  {
+    id: "07-10-create-rule-modal",
+    doc: "07-documents-forms.md",
+    line: 270,
+    anchor:
+      "Screenshot of the Create Rule modal showing the name field, trigger dropdown",
+    alt: "Create notification rule modal with its trigger and channel fields",
+    route: "/notifications",
+    prepare: clickByName(/add rule/i),
+    fullPage: false,
+  },
+  {
+    id: "07-11-new-message-form",
+    doc: "07-documents-forms.md",
+    line: 333,
+    anchor:
+      "Screenshot of the New message form showing title/body, priority, audience",
+    alt: "New department message form with audience and scheduling fields",
+    route: "/communications/messages",
+    prepare: async (page) => {
+      await clickByName(/new message/i)(page);
+      // The audience selector is a plain dropdown until a targeted option is
+      // chosen; "By role" is what reveals the checklist the guide describes.
+      await page.locator("#msg-target").selectOption("roles");
+    },
+    fullPage: true,
+  },
+  {
+    id: "07-12-acknowledgment-report",
+    doc: "07-documents-forms.md",
+    line: 374,
+    anchor:
+      'Screenshot of the acknowledgment report panel showing the "Acknowledged 12/20"',
+    alt: "Acknowledgment report showing who has and has not acknowledged a message",
+    route: "/communications/messages",
+    prepare: async (page) => {
+      // Every message row carries the report button, but only a message that
+      // requires acknowledgment renders the "Acknowledged n/m" line this
+      // placeholder is about. Open them in turn until one does.
+      const buttons = page.getByRole("button", {
+        name: "View acknowledgments",
+      });
+      const count = await buttons.count();
+      for (let index = 0; index < count; index += 1) {
+        await buttons.nth(index).click({ timeout: 10_000 });
+        const acknowledged = page.getByText(/Acknowledged:/).first();
+        const shown = await acknowledged
+          .waitFor({ state: "visible", timeout: 3_000 })
+          .then(() => true)
+          .catch(() => false);
+        if (shown) return;
+        // Clicking the same button again collapses the panel.
+        await buttons.nth(index).click({ timeout: 10_000 });
+      }
+      throw new Error("no message requires acknowledgment");
+    },
+    fullPage: true,
+  },
 ];
