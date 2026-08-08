@@ -862,7 +862,8 @@ async def list_user_mappings(
         if mapping.internal_user_id:
             user_result = await db.execute(
                 select(User.full_name, User.email).where(
-                    User.id == mapping.internal_user_id
+                    User.id == mapping.internal_user_id,
+                    User.organization_id == str(current_user.organization_id),
                 )
             )
             user_data = user_result.one_or_none()

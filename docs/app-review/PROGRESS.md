@@ -56,7 +56,7 @@ from its open list.
 | B15 | admin-hours | AH2 | ✅ (p1, p2) |
 | B16 | reports & analytics | RPT2 | ✅ (p1, p2) |
 | B17 | events | EV2 | ✅ (p1, p2) |
-| B18 | training | TR2 | ⬜ |
+| B18 | training | TR2 | ✅ (p1, p2) |
 | B19 | scheduling | SCH2 | ⬜ |
 | B20 | finance | FIN2 | ⬜ |
 | B21 | orgs, roles & users | ORU2 | ⬜ |
@@ -1066,4 +1066,26 @@ re-run unless directed).
   fixes are endpoint-query changes mirroring tested patterns (no-MySQL sandbox).
   flake8/black clean. User-visible fixes in CHANGELOG (end-event 500, public drafts,
   recurring location). See events.md → Pass 2. Next: B18 training.
+- **B18 training ✅ (pass 2).** The largest module (154 endpoints, ~13 services).
+  Re-verified pass-1 TR-6 (external category/user mapping validation + org-scoped
+  enrichment) and TR-5 (still flagged). Sweeping the projection-read-leak lens
+  module-wide found **2 more live cross-org read-leaks** the pass-1 external-training
+  focus didn't reach, plus 2 consistency gaps — **4 fixes:** **TR-7** (MED: the
+  category-hours breakdown looked up `TrainingCategory.in_(cat_ids)` with no org
+  filter and projected name/code/registry_code, while a record's `category_id` was
+  never validated in-org on create/update — an org-A officer could set a record's
+  category to an org-B UUID and read that category back; fixed the leak *and* the
+  root cause — org-scoped the lookup + validate `category_id` in-org on
+  create_record/update_record), **TR-8** (MED-LOW: `generate_individual_pdf` fetched
+  the member with no org filter and rendered their name into the PDF title while the
+  records were org-scoped; org-scoped the User lookup), **TR-9** (LOW:
+  `list_user_mappings` name/email enrichment not org-scoped — the lone TR-3-shape
+  read whose siblings already scope; tightened), **TR-10** (LOW: bulk record-create
+  expiration course lookup not org-scoped like the single-create; influence-only,
+  fixed for consistency). Lens 6 (latent-500) clean. TR-4/5 + LOW non-projected
+  dangling-FK stores flagged for a future FK-hardening batch. **2 endpoint-level
+  regression tests** (create + update reject a foreign category); 58 training tests
+  pass. flake8/black clean. Cross-org leak fixes in CHANGELOG (Security). See
+  training.md → Pass 2. **Next: B19 scheduling.** B14–B18 complete — 18 of 27 Tier B
+  modules through pass 2.
 </content>

@@ -17,10 +17,13 @@ from app.api.v1.endpoints.external_training import (
     create_provider,
     update_category_mapping,
 )
+from app.api.v1.endpoints.training import create_record, update_record
 from app.schemas.training import (
     ExternalCategoryMappingUpdate,
     ExternalProviderType,
     ExternalTrainingProviderCreate,
+    TrainingRecordCreate,
+    TrainingRecordUpdate,
 )
 
 
@@ -70,4 +73,47 @@ class TestExternalTrainingCategoryScoping:
         assert "Internal category" in exc.value.detail
         # The foreign id must not have been persisted.
         assert mapping.internal_category_id is None
+        db.commit.assert_not_awaited()
+
+
+class TestTrainingRecordCategoryScoping:
+    """A training record's client-supplied category_id must belong to the
+    caller's org on both create and update — otherwise the foreign category is
+    stored and its name/code leaks back through the category-hours breakdown
+    endpoint (the TR-3 read-leak shape)."""
+
+    @staticmethod
+    def _member():
+        return SimpleNamespace(rank="FF", station="1")
+
+    async def test_create_rejects_foreign_category(self):
+        db = MagicMock()
+        # 1) member lookup (in-org, found), 2) category lookup -> not found.
+        db.execute = AsyncMock(side_effect=[_one(self._member()), _one(None)])
+        db.add = MagicMock()
+        record = TrainingRecordCreate(
+            user_id=uuid4(),
+            course_name="Pump Ops",
+            training_type="certification",
+            hours_completed=4,
+            category_id=uuid4(),
+        )
+        with pytest.raises(HTTPException) as exc:
+            await create_record(record, MagicMock(), db, _user())
+        assert exc.value.status_code == 404
+        assert "category" in exc.value.detail.lower()
+        db.add.assert_not_called()
+
+    async def test_update_rejects_foreign_category(self):
+        record = SimpleNamespace(id="r1", organization_id="org-1")
+        db = MagicMock()
+        # 1) record fetch (in-org), 2) category lookup -> not found.
+        db.execute = AsyncMock(side_effect=[_one(record), _one(None)])
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        upd = TrainingRecordUpdate(category_id=uuid4())
+        with pytest.raises(HTTPException) as exc:
+            await update_record(uuid4(), upd, db, _user())
+        assert exc.value.status_code == 404
+        assert "category" in exc.value.detail.lower()
         db.commit.assert_not_awaited()

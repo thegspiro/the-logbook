@@ -327,6 +327,19 @@ async def create_record(
     if not record_data.get("station_at_completion"):
         record_data["station_at_completion"] = member.station
 
+    # XC-1: a client-supplied category_id must belong to the caller's org.
+    # Without this a foreign category is stored on the record and its
+    # name/code leaks back through the category-hours breakdown endpoint.
+    if record_data.get("category_id"):
+        cat_ok = await db.execute(
+            select(TrainingCategory.id).where(
+                TrainingCategory.id == str(record_data["category_id"]),
+                TrainingCategory.organization_id == str(current_user.organization_id),
+            )
+        )
+        if not cat_ok.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Training category not found")
+
     # Check for potential duplicates and include warning in response
     dupes = await _check_duplicate_records(
         db,
@@ -517,7 +530,8 @@ async def create_records_bulk(
         ):
             course_result = await db.execute(
                 select(TrainingCourse).where(
-                    TrainingCourse.id == str(record_data["course_id"])
+                    TrainingCourse.id == str(record_data["course_id"]),
+                    TrainingCourse.organization_id == str(current_user.organization_id),
                 )
             )
             course_obj = course_result.scalar_one_or_none()
@@ -607,6 +621,20 @@ async def update_record(
 
     # Update fields
     update_fields = record_update.model_dump(exclude_unset=True)
+
+    # XC-1: a client-supplied category_id must belong to the caller's org
+    # before it is stored (the update schema can reassign it via the blind
+    # setattr loop below), or a foreign category leaks via the breakdown read.
+    if update_fields.get("category_id"):
+        cat_ok = await db.execute(
+            select(TrainingCategory.id).where(
+                TrainingCategory.id == str(update_fields["category_id"]),
+                TrainingCategory.organization_id == current_user.organization_id,
+            )
+        )
+        if not cat_ok.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Training category not found")
+
     for field, value in update_fields.items():
         setattr(record, field, value)
 
@@ -2139,7 +2167,10 @@ async def get_category_hour_breakdown(
     categories: dict[str, dict] = {}
     if cat_ids:
         cat_result = await db.execute(
-            select(TrainingCategory).where(TrainingCategory.id.in_(cat_ids))
+            select(TrainingCategory).where(
+                TrainingCategory.id.in_(cat_ids),
+                TrainingCategory.organization_id == org_id,
+            )
         )
         for cat in cat_result.scalars().all():
             categories[cat.id] = {

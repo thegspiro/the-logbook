@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training: closed cross-department leaks in category reports and exports (2026-08-08)
+
+**Security**
+
+- **A training category from another department could show up in a member's
+  category-hours report.** The report now only resolves categories belonging to
+  your own department, and a training record can no longer be saved with a category
+  that isn't yours.
+- **An individual training PDF export could show another department's member name
+  in its title.** The export now scopes the member lookup to your department.
+
 ### Events: ending an event now works, and drafts stay off public calendars (2026-08-08)
 
 **Fixed**
