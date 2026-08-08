@@ -328,7 +328,7 @@ export const ElectionsPage: React.FC = () => {
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`px-4 py-2 rounded-md text-sm font-medium inline-flex items-center gap-2 ${
+              className={`px-4 py-2 max-md:min-h-[44px] rounded-md text-sm font-medium inline-flex items-center gap-2 ${
                 statusFilter === status
                   ? 'bg-blue-600 text-white'
                   : 'bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'

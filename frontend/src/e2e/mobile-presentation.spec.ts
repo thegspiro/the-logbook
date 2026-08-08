@@ -9,11 +9,13 @@ import { signIn } from './helpers';
  *   Hard failures — a crash or a horizontally scrolling page is always a bug,
  *   so these assert against zero.
  *
- *   Ratcheted budgets — undersized tap targets and sub-12px text are a known
- *   backlog, not something to fix in one go. Each route carries the count
- *   measured when this was written; the assertion is `<=`, so the numbers can
- *   never grow but any improvement passes. Lower the number when you fix some.
- *   This mirrors how `vitest.config.ts` treats coverage thresholds.
+ *   Ratcheted budgets — the assertion is `<=` a per-route count, so numbers can
+ *   never grow but any improvement passes. These started as a backlog (212 tap
+ *   targets under 44px across the app) and were ratcheted down as it was
+ *   cleared. maxSmallTargets is now 0 everywhere, which makes it a hard rule
+ *   rather than a budget: no new control may ship below the touch minimum.
+ *   Sub-12px text still carries a real budget. This mirrors how
+ *   `vitest.config.ts` treats coverage thresholds.
  *
  * Why this catches real defects rather than tautologies: the mock in helpers.ts
  * answers unmatched endpoints with a permissive catch-all, so every page here
@@ -30,7 +32,12 @@ import { signIn } from './helpers';
 
 interface RouteCheck {
   path: string;
-  /** Interactive elements rendering under 44x44. Ratchet down, never up. */
+  /**
+   * Interactive elements rendering under 44x44. Now 0 for every route — treat
+   * a failure here as "this control needs a mobile size", not "raise the
+   * number". Checkbox and radio inputs are measured by their wrapping <label>,
+   * since a native checkbox is 16px by design and cannot be padded.
+   */
   maxSmallTargets: number;
   /** Text nodes rendering below 12px. Ratchet down, never up. */
   maxTinyText: number;
@@ -43,35 +50,35 @@ interface RouteCheck {
 }
 
 const ROUTES: RouteCheck[] = [
-  { path: '/dashboard', maxSmallTargets: 9, maxTinyText: 9 },
-  { path: '/events', maxSmallTargets: 7, maxTinyText: 7 },
-  { path: '/members', maxSmallTargets: 2, maxTinyText: 7 },
+  { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 9 },
+  { path: '/events', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/members', maxSmallTargets: 0, maxTinyText: 7 },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
-  { path: '/documents', maxSmallTargets: 2, maxTinyText: 7 },
-  { path: '/training/my-training', maxSmallTargets: 2, maxTinyText: 7 },
-  { path: '/training/submit', maxSmallTargets: 7, maxTinyText: 7 },
-  { path: '/training/courses', maxSmallTargets: 1, maxTinyText: 7 },
-  { path: '/training/programs', maxSmallTargets: 1, maxTinyText: 7 },
-  { path: '/scheduling', maxSmallTargets: 3, maxTinyText: 7 },
+  { path: '/documents', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/training/programs', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 7 },
   { path: '/scheduling/reports', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
-  { path: '/admin-hours', maxSmallTargets: 3, maxTinyText: 7 },
-  { path: '/notifications?tab=inbox', maxSmallTargets: 7, maxTinyText: 6 },
-  { path: '/inventory', maxSmallTargets: 1, maxTinyText: 7 },
-  { path: '/inventory/my-equipment', maxSmallTargets: 1, maxTinyText: 7 },
-  { path: '/apparatus', maxSmallTargets: 2, maxTinyText: 7 },
+  { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 6 },
+  { path: '/inventory', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/inventory/my-equipment', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 7 },
   { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/locations', maxSmallTargets: 1, maxTinyText: 7 },
-  { path: '/facilities', maxSmallTargets: 3, maxTinyText: 7 },
-  { path: '/elections', maxSmallTargets: 4, maxTinyText: 7 },
-  { path: '/minutes', maxSmallTargets: 1, maxTinyText: 7 },
-  { path: '/action-items', maxSmallTargets: 2, maxTinyText: 7 },
+  { path: '/locations', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/facilities', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/elections', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/minutes', maxSmallTargets: 0, maxTinyText: 7 },
+  { path: '/action-items', maxSmallTargets: 0, maxTinyText: 7 },
   { path: '/forms', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
   { path: '/store', maxSmallTargets: 0, maxTinyText: 7 },
   { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
-  { path: '/analytics', maxSmallTargets: 9, maxTinyText: 9 },
-  { path: '/messages', maxSmallTargets: 1, maxTinyText: 7, chromeOnly: true },
+  { path: '/analytics', maxSmallTargets: 0, maxTinyText: 9 },
+  { path: '/messages', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
   { path: '/settings', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
-  { path: '/profile', maxSmallTargets: 9, maxTinyText: 9 },
+  { path: '/profile', maxSmallTargets: 0, maxTinyText: 9 },
 ];
 
 /** iPhone 14/15 class — the narrow end of what members actually carry. */
@@ -126,7 +133,15 @@ test.describe('mobile presentation', () => {
           ].filter(isVisible);
 
           const small = targets.filter((el) => {
-            const b = el.getBoundingClientRect();
+            // A checkbox or radio is 16px by design and cannot be padded — the
+            // <label> wrapping it is what the finger actually lands on, so
+            // measure that instead of flagging every checkbox forever.
+            const box =
+              (el instanceof HTMLInputElement &&
+                (el.type === 'checkbox' || el.type === 'radio') &&
+                el.closest('label')) ||
+              el;
+            const b = box.getBoundingClientRect();
             // The "skip to main content" link is deliberately 1x1 until
             // focused; counting it would flag every page forever.
             if (b.width <= 2 && b.height <= 2) return false;

@@ -266,7 +266,7 @@ const AdminHoursPage: React.FC = () => {
       <div className="flex gap-3 mb-6">
         <button
           onClick={() => setShowManualForm(!showManualForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover transition"
+          className="flex items-center gap-2 px-4 py-2 max-md:min-h-[44px] bg-theme-surface text-theme-text-primary rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover transition"
         >
           <Plus className="w-4 h-4" />
           Log Hours Manually
@@ -356,7 +356,7 @@ const AdminHoursPage: React.FC = () => {
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
-          className="px-3 py-1.5 bg-theme-surface border border-theme-surface-border rounded-lg text-sm text-theme-text-primary"
+          className="px-3 py-1.5 max-md:min-h-[44px] bg-theme-surface border border-theme-surface-border rounded-lg text-sm text-theme-text-primary"
         >
           <option value="">All Statuses</option>
           <option value="approved">Approved</option>
@@ -367,7 +367,7 @@ const AdminHoursPage: React.FC = () => {
         <select
           value={categoryFilter}
           onChange={(e) => { setCategoryFilter(e.target.value); setPage(0); }}
-          className="px-3 py-1.5 bg-theme-surface border border-theme-surface-border rounded-lg text-sm text-theme-text-primary"
+          className="px-3 py-1.5 max-md:min-h-[44px] bg-theme-surface border border-theme-surface-border rounded-lg text-sm text-theme-text-primary"
         >
           <option value="">All Categories</option>
           {categories.map((cat) => (

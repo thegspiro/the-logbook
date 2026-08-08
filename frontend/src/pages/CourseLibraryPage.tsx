@@ -526,7 +526,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg border text-sm ${
+              className={`flex items-center space-x-2 px-4 py-2 max-md:min-h-[44px] rounded-lg border text-sm ${
                 showFilters || filterType || filterCategory
                   ? 'bg-red-600/20 border-red-500 text-red-700 dark:text-red-400'
                   : 'bg-theme-surface-secondary border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
