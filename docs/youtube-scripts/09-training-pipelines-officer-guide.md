@@ -8,7 +8,7 @@
 **Prerequisite viewing:** Script 5 (Training Officer — Managing Certifications & Programs)
 
 > **Companion videos:** Script 11 is a focused, click-by-click walkthrough of
-> *building* a pipeline; Script 10 shows the same feature from the member's side.
+> _building_ a pipeline; Script 10 shows the same feature from the member's side.
 > This guide is the officer's operating manual — how a pipeline runs once it's
 > built.
 
@@ -21,8 +21,8 @@
 **[SCREEN: A program detail page showing a phased "Firefighter Recruit School"
 with a phase timeline, an enrolled-members list, and progress bars.]**
 
-> "Certifications tell you *what* a member has. A pipeline tells you *where they
-> are on the way there*. If you run a recruit school, a driver-operator program,
+> "Certifications tell you _what_ a member has. A pipeline tells you _where they
+> are on the way there_. If you run a recruit school, a driver-operator program,
 > or any multi-step path where people earn their way forward, this is the tool
 > that tracks every one of them — automatically — from day one to certified."
 
@@ -40,7 +40,7 @@ with a phase timeline, an enrolled-members list, and progress bars.]**
 ### WHY IT BEATS A SPREADSHEET (1:30 – 2:30)
 
 > "Here's what makes it worth the setup. Once a member is enrolled, their
-> progress updates *on its own* — from the shifts they work, the sessions you
+> progress updates _on its own_ — from the shifts they work, the sessions you
 > approve, the skills they pass, the courses they import. You're not
 > transcribing anything. Your job shifts from data entry to actually watching who
 > needs help. And the system tells you who that is."
@@ -72,8 +72,8 @@ Eligible / Enrolled / Prerequisite / In another program.]**
 
 **[CALLOUT: "Hard gates: already enrolled · unmet prerequisite"]**
 
-> "Two things are hard blocks — being already enrolled in *this* program, and
-> missing a prerequisite program you set. Being active in *another* program is
+> "Two things are hard blocks — being already enrolled in _this_ program, and
+> missing a prerequisite program you set. Being active in _another_ program is
 > only an advisory. A new recruit can absolutely be in several onboarding paths
 > at once, so those members stay selectable — they're just flagged so you know."
 
@@ -150,7 +150,7 @@ to the Roster step.]**
 officer-verified.]**
 
 > "Two things protect the integrity of all this. First — **only officers can
-> complete or credit a requirement.** A member can mark something *in progress*,
+> complete or credit a requirement.** A member can mark something _in progress_,
 > but setting hours, recording a score, or marking a requirement done is on you.
 > Members earn credit by submitting for review, not by editing their own bar to
 > a hundred percent."
@@ -175,7 +175,7 @@ officer-verified.]**
 → Fire Attack & Live-Fire → Certification — with a member marked on phase 2.]**
 
 > "Most real programs are phased. A recruit finishes Orientation before touching
-> live fire. When every *required* requirement in a member's current phase is
+> live fire. When every _required_ requirement in a member's current phase is
 > done, the system **auto-advances** them to the next phase — and rolls their
 > overall percentage forward."
 
@@ -187,7 +187,7 @@ toggle on the Certification phase.]**
 > "But some phases you don't want to hand off automatically — the safety phase,
 > the certification phase. Flag those with **require officer approval to
 > advance**, and auto-advance stops there. The member waits on the doorstep until
-> *you* move them forward — a deliberate checkpoint for the moments that matter."
+> _you_ move them forward — a deliberate checkpoint for the moments that matter."
 
 ### ADVANCING A MEMBER (12:00 – 12:45)
 
@@ -256,7 +256,7 @@ self-approval", "No accidental resurrection"]**
 
 > "A few protections run quietly in the background so the numbers stay honest.
 > Members can't complete their own requirements. An officer can't approve their
-> *own* self-reported training — a second officer has to sign it off, so nobody
+> _own_ self-reported training — a second officer has to sign it off, so nobody
 > grants themselves hours. And a member who's been withdrawn or failed isn't
 > silently flipped back to 'completed' if some late credit pushes them to a
 > hundred percent."
@@ -358,13 +358,13 @@ in error.]**
 
 ## Clip Extraction Guide
 
-| Clip | Timecode | Standalone Title |
-|------|----------|-----------------|
-| What a Pipeline Is | 0:00–2:30 | "Training Pipelines Explained in 3 Minutes" |
-| Enrolling Members | 2:30–6:15 | "Enrolling Members in a Training Pipeline" |
-| Enrolling via a Cohort | 5:30–6:15 | "Enroll a Whole Recruit Class by Scheduling It" |
-| The Six Progress Feeds | 6:15–10:15 | "How Pipeline Progress Updates Automatically" |
-| Phases & Advancement | 10:15–12:45 | "Phases, Auto-Advance, and Officer Gates" |
-| Recertification Cycles | 12:45–15:15 | "Setting Up Automatic Recert Cycles" |
-| Fixing Mistakes | 16:15–18:15 | "Void a Record & Reverse an Approval" |
-| Falling-Behind Alerts | 18:45–20:45 | "Automatic Alerts for Members Behind Schedule" |
+| Clip                   | Timecode    | Standalone Title                                |
+| ---------------------- | ----------- | ----------------------------------------------- |
+| What a Pipeline Is     | 0:00–2:30   | "Training Pipelines Explained in 3 Minutes"     |
+| Enrolling Members      | 2:30–6:15   | "Enrolling Members in a Training Pipeline"      |
+| Enrolling via a Cohort | 5:30–6:15   | "Enroll a Whole Recruit Class by Scheduling It" |
+| The Six Progress Feeds | 6:15–10:15  | "How Pipeline Progress Updates Automatically"   |
+| Phases & Advancement   | 10:15–12:45 | "Phases, Auto-Advance, and Officer Gates"       |
+| Recertification Cycles | 12:45–15:15 | "Setting Up Automatic Recert Cycles"            |
+| Fixing Mistakes        | 16:15–18:15 | "Void a Record & Reverse an Approval"           |
+| Falling-Behind Alerts  | 18:45–20:45 | "Automatic Alerts for Members Behind Schedule"  |

@@ -471,7 +471,7 @@ use_ssl: true # Wrong! Port 587 needs TLS, not SSL
 - ✅ At least 1 uppercase letter (A-Z)
 - ✅ At least 1 lowercase letter (a-z)
 - ✅ At least 1 number (0-9)
-- ✅ At least 1 special character (!@#$%^&*)
+- ✅ At least 1 special character (!@#$%^&\*)
 
 **Good Password Examples**:
 
@@ -5412,15 +5412,15 @@ npm run build
 
 **Versions bumped (2026-02-24)**:
 
-| Package              | From    | To      | Reason                               |
-| -------------------- | ------- | ------- | ------------------------------------ |
-| @typescript-eslint/* | 8.21.0  | 8.56.1  | TypeScript 5.9 compatibility         |
-| @vitest/coverage-v8  | 3.0.0   | 3.2.4   | Match vitest 3.2.4                   |
-| @vitest/ui           | 3.0.0   | 3.2.4   | Match vitest 3.2.4                   |
-| esbuild (override)   | 0.25.0  | 0.27.0  | Vite 7.3.1 peer dep                  |
-| postcss              | 8.5.0   | 8.5.6   | Vite 7.3.1 peer dep                  |
-| react-hook-form      | 7.54.2  | 7.71.1  | Deduplicate with @hookform/resolvers |
-| jsdom (root)         | ^24.1.3 | ^26.0.0 | Align with frontend                  |
+| Package               | From    | To      | Reason                               |
+| --------------------- | ------- | ------- | ------------------------------------ |
+| @typescript-eslint/\* | 8.21.0  | 8.56.1  | TypeScript 5.9 compatibility         |
+| @vitest/coverage-v8   | 3.0.0   | 3.2.4   | Match vitest 3.2.4                   |
+| @vitest/ui            | 3.0.0   | 3.2.4   | Match vitest 3.2.4                   |
+| esbuild (override)    | 0.25.0  | 0.27.0  | Vite 7.3.1 peer dep                  |
+| postcss               | 8.5.0   | 8.5.6   | Vite 7.3.1 peer dep                  |
+| react-hook-form       | 7.54.2  | 7.71.1  | Deduplicate with @hookform/resolvers |
+| jsdom (root)          | ^24.1.3 | ^26.0.0 | Align with frontend                  |
 
 ---
 
