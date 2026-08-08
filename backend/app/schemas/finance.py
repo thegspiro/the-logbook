@@ -12,6 +12,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+from app.models.finance import ExpenseType
 from app.schemas.base import UTCResponseBase
 
 _RESPONSE_CONFIG = ConfigDict(
@@ -382,7 +383,11 @@ class ExpenseLineItemCreate(BaseModel):
     description: str = Field(..., min_length=1, max_length=500)
     amount: float = Field(..., gt=0)
     date_incurred: datetime
-    expense_type: str = "general"
+    # Typed as the enum so an unknown value is rejected with a 422 here rather
+    # than reaching MySQL, where the column is an ENUM and the insert fails with
+    # "Data truncated for column 'expense_type'" — surfaced to the client as a
+    # bare 500 with nothing pointing at the offending field.
+    expense_type: ExpenseType = ExpenseType.GENERAL
     receipt_url: Optional[str] = None
     merchant: Optional[str] = None
 

@@ -1389,7 +1389,11 @@ class FinanceService:
 
         er.total_amount = total
         await self.db.flush()
-        await self.db.refresh(er, ["created_at", "updated_at"])
+        # `line_items` too, not just the timestamps: the response model includes
+        # the collection, and serializing an unloaded relationship outside the
+        # async context raises MissingGreenlet — the report is written and the
+        # caller still gets a 500.
+        await self.db.refresh(er, ["created_at", "updated_at", "line_items"])
         return er
 
     async def update_expense_report(

@@ -19,6 +19,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
+from app.models.finance import ApprovalEntityType
 from app.models.user import User
 from app.schemas.finance import (
     ApprovalActionRequest,
@@ -693,6 +694,29 @@ async def create_purchase_request(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
+async def _with_approval_steps(service, payload, entity_type, entity_id):
+    """Attach the approval records for a finance document.
+
+    `ApprovalStepRecord` is polymorphic — it keys on (entity_type, entity_id)
+    and there is no ORM relationship from the document to it — so the schema's
+    `approval_steps` field has nothing to read from and every detail response
+    served an empty list. The records were being written correctly; the pages
+    just said "No approval steps configured for this request".
+    """
+    steps = []
+    for record in await service.get_approval_records(entity_type, entity_id):
+        step = ApprovalStepRecordResponse.model_validate(record)
+        # `step_name` and `step_order` describe the chain step, not the record,
+        # so they have to be copied across from the eager-loaded relationship —
+        # otherwise every entry renders as the fallback "Step 1".
+        if record.step is not None:
+            step.step_name = record.step.name
+            step.step_order = record.step.step_order
+        steps.append(step)
+    payload.approval_steps = steps
+    return payload
+
+
 @router.get("/purchase-requests/{pr_id}", response_model=PurchaseRequestResponse)
 async def get_purchase_request(
     pr_id: str,
@@ -703,7 +727,12 @@ async def get_purchase_request(
     pr = await service.get_purchase_request(pr_id, str(current_user.organization_id))
     if not pr:
         raise HTTPException(status_code=404, detail="Purchase request not found")
-    return pr
+    return await _with_approval_steps(
+        service,
+        PurchaseRequestResponse.model_validate(pr),
+        ApprovalEntityType.PURCHASE_REQUEST,
+        pr.id,
+    )
 
 
 @router.put("/purchase-requests/{pr_id}", response_model=PurchaseRequestResponse)
@@ -891,7 +920,12 @@ async def get_expense_report(
     er = await service.get_expense_report(er_id, str(current_user.organization_id))
     if not er:
         raise HTTPException(status_code=404, detail="Expense report not found")
-    return er
+    return await _with_approval_steps(
+        service,
+        ExpenseReportResponse.model_validate(er),
+        ApprovalEntityType.EXPENSE_REPORT,
+        er.id,
+    )
 
 
 @router.put("/expense-reports/{er_id}", response_model=ExpenseReportResponse)
@@ -1031,7 +1065,12 @@ async def get_check_request(
     cr = await service.get_check_request(cr_id, str(current_user.organization_id))
     if not cr:
         raise HTTPException(status_code=404, detail="Check request not found")
-    return cr
+    return await _with_approval_steps(
+        service,
+        CheckRequestResponse.model_validate(cr),
+        ApprovalEntityType.CHECK_REQUEST,
+        cr.id,
+    )
 
 
 @router.put("/check-requests/{cr_id}", response_model=CheckRequestResponse)

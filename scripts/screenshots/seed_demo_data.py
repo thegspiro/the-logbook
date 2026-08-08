@@ -1595,6 +1595,175 @@ class Seeder:
                         raise
         return requests
 
+    #: (entity, chain name, [(order, step name, approver position)]). Two steps
+    #: on the money-spending documents so the approval timeline shows a chain
+    #: rather than a single box.
+    APPROVAL_CHAINS = [
+        (
+            "purchase_request",
+            "Purchase Request Approval",
+            [
+                (1, "Company officer review", "Captain"),
+                (2, "Chief approval", "Fire Chief"),
+            ],
+        ),
+        (
+            "expense_report",
+            "Expense Reimbursement Approval",
+            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Fire Chief")],
+        ),
+        (
+            "check_request",
+            "Check Request Approval",
+            [(1, "Treasurer review", "Treasurer"), (2, "Chief approval", "Fire Chief")],
+        ),
+    ]
+
+    def seed_approval_chains(self) -> list[dict]:
+        """Approval routing, without which nothing has a chain to picture.
+
+        A submitted request whose amount matches no chain shows "No approval
+        steps configured", which is what the detail pages rendered before this.
+        """
+        chains = items(self.api.get("/finance/approval-chains"), "approval_chains")
+        names = {c.get("name") for c in chains}
+        for applies_to, name, steps in self.APPROVAL_CHAINS:
+            if name in names:
+                continue
+            chains.append(
+                self.api.post(
+                    "/finance/approval-chains",
+                    {
+                        "name": name,
+                        "description": f"Default routing for every {applies_to.replace('_', ' ')}.",
+                        "applies_to": applies_to,
+                        "is_default": True,
+                        "steps": [
+                            {
+                                "step_order": order,
+                                "name": step_name,
+                                "step_type": "approval",
+                                "approver_type": "position",
+                                "approver_value": position,
+                                "required": True,
+                            }
+                            for order, step_name, position in steps
+                        ],
+                    },
+                )
+            )
+        return chains
+
+    def seed_expense_reports(self, finance: dict) -> list[dict]:
+        """Reimbursement claims, which the expense report detail pictures."""
+        fiscal_year_id = pick(finance.get("fiscal_year") or {}, "id")
+        budgets = finance.get("budgets") or []
+        if not fiscal_year_id:
+            return []
+        reports = items(self.api.get("/finance/expense-reports"), "expense_reports")
+        if reports:
+            return reports
+
+        planned = [
+            (
+                "FDIC Conference Expenses",
+                "Travel and registration for the annual conference.",
+                [
+                    ("Conference registration", 425.00, "conference", "FDIC"),
+                    ("Hotel — 3 nights", 402.00, "travel", "Marriott Indianapolis"),
+                    ("Mileage reimbursement", 152.00, "mileage", None),
+                ],
+            ),
+            (
+                "Station 2 supply run",
+                "Consumables purchased ahead of the open house.",
+                [
+                    ("Cleaning supplies", 86.40, "equipment_purchase", "Costco"),
+                    ("Coffee and refreshments", 54.20, "meals", "Sam's Club"),
+                ],
+            ),
+        ]
+        for index, (title, description, lines) in enumerate(planned):
+            budget_id = pick(budgets[index % len(budgets)], "id") if budgets else None
+            report = self.api.post(
+                "/finance/expense-reports",
+                {
+                    "fiscal_year_id": fiscal_year_id,
+                    "title": title,
+                    "description": description,
+                    "line_items": [
+                        {
+                            "budget_id": budget_id,
+                            "description": line_description,
+                            "amount": amount,
+                            "date_incurred": iso(NOW - timedelta(days=20 - offset)),
+                            "expense_type": expense_type,
+                            **({"merchant": merchant} if merchant else {}),
+                        }
+                        for offset, (
+                            line_description,
+                            amount,
+                            expense_type,
+                            merchant,
+                        ) in enumerate(lines)
+                    ],
+                },
+            )
+            reports.append(report)
+            # Submit the first so the detail page shows an approval chain
+            # rather than a draft with nothing to approve.
+            if index == 0:
+                try:
+                    self.api.post(
+                        f"/finance/expense-reports/{pick(report, 'id')}/submit"
+                    )
+                except ApiError as exc:
+                    if exc.code != 400:
+                        raise
+                    self.blocked.append(f"expense report submit: {exc}")
+        return reports
+
+    def seed_check_requests(self, finance: dict) -> list[dict]:
+        """Direct-payment requests, which the check request detail pictures."""
+        fiscal_year_id = pick(finance.get("fiscal_year") or {}, "id")
+        budgets = finance.get("budgets") or []
+        if not fiscal_year_id:
+            return []
+        requests = items(self.api.get("/finance/check-requests"), "check_requests")
+        if requests:
+            return requests
+
+        planned = [
+            ("ABC Fire Equipment", 2_340.00, "Nozzle and hose replacement"),
+            ("Oakville Utilities", 1_186.45, "Station 1 quarterly electricity"),
+            ("Tidewater Door Service", 1_840.00, "Station 2 bay door repair"),
+        ]
+        for index, (payee, amount, purpose) in enumerate(planned):
+            budget_id = pick(budgets[index % len(budgets)], "id") if budgets else None
+            request = self.api.post(
+                "/finance/check-requests",
+                {
+                    "fiscal_year_id": fiscal_year_id,
+                    **({"budget_id": budget_id} if budget_id else {}),
+                    "payee_name": payee,
+                    "payee_address": "1200 Commerce Way, Oakville, VA 22046",
+                    "amount": amount,
+                    "memo": purpose,
+                    "purpose": purpose,
+                },
+            )
+            requests.append(request)
+            if index == 0:
+                try:
+                    self.api.post(
+                        f"/finance/check-requests/{pick(request, 'id')}/submit"
+                    )
+                except ApiError as exc:
+                    if exc.code != 400:
+                        raise
+                    self.blocked.append(f"check request submit: {exc}")
+        return requests
+
     # -- scheduling: equipment check templates and completed checks --
 
     def seed_equipment_checks(self) -> dict[str, Any]:
@@ -3583,7 +3752,10 @@ class Seeder:
         self.step("storefront", self.seed_storefront)
         finance = self.step("finance", self.seed_finance) or {}
         self.step("dues", lambda: self.seed_dues(finance.get("fiscal_year")))
+        self.step("approval chains", self.seed_approval_chains)
         self.step("purchase requests", lambda: self.seed_purchase_requests(finance))
+        self.step("expense reports", lambda: self.seed_expense_reports(finance))
+        self.step("check requests", lambda: self.seed_check_requests(finance))
         self.step("equipment checks", self.seed_equipment_checks)
 
         print(f"\nMembers on file: {len(members)}")
