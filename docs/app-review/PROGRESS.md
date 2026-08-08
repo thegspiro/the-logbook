@@ -48,7 +48,7 @@ from its open list.
 | B7 | equipment-check | EC2 | ✅ (p1, p2) |
 | B8 | documents | DOC2 | ✅ (p1, p2) |
 | B9 | membership pipeline | MP2 | ✅ (p1, p2) |
-| B10 | messaging & communications | MSG2 | ⬜ |
+| B10 | messaging & communications | MSG2 | ✅ (p1, p2) |
 | B11 | notifications | NOTIF2 | ⬜ |
 | B12 | integrations | INT2 | ⬜ |
 | B13 | forms | FORM2 | ⬜ |
@@ -944,4 +944,15 @@ re-run unless directed).
   membership/org-scoping. CHANGELOG updated (pipeline_name now shows). Gate:
   flake8/black/tsc clean. See membership-pipeline.md → Pass 2. Next: B10 messaging
   & communications.
+- **B10 messaging & communications ✅ (pass 2) — clean-module verification, no code
+  change.** BXC pre-scanned it clean on both patterns; this pass confirmed and
+  swept the surfaces BXC didn't scope. Update-bypass clean (`update_message` uses
+  an allow-list, targeting FKs re-validated by MSG-2's `_validate_targeting`);
+  projection clean (`_targeted_users` org-scopes candidates so foreign ids match
+  nobody); MS2-4 not a live defect (`MessageResponse.author_name` unpopulated but
+  **not rendered** — only the inbox path renders it, from the populated
+  `InboxMessage`; `MessageHistoryResponse` has no `*_name` field); AUTH-2 consent
+  gate intact (email unconditional record-of-notice, SMS consent-gated fail-closed);
+  `message_history` clean (2 endpoints, both `settings.manage`-gated). No code
+  changed. See messaging.md → Pass 2. Next: B11 notifications.
 </content>

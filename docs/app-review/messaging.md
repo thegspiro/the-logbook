@@ -1,4 +1,46 @@
-# Application Review — Messaging / Communications (Tier B, 2nd pass)
+# Application Review — Messaging / Communications (Tier B)
+
+**Prefix:** `MSG2` · **Iteration:** B10 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-06 (pass 2)
+
+---
+
+## Pass 2 (2026-08-06) — clean-module verification, no code change
+
+Messaging was pre-scanned in the BXC cross-cutting sweep and came back clean on
+both root-cause patterns; this pass confirmed that and swept the surfaces BXC
+didn't scope. Everything holds.
+
+- **Update-bypass — clean.** `update_message` uses an explicit `allowed_fields`
+  allow-list (no blind `setattr`), and the only client FKs (`target_member_ids`,
+  `target_roles`) are re-validated in-org by MSG-2's `_validate_targeting`.
+- **Projection read-leak — clean.** Audience targeting can't cross org
+  boundaries: the single `_targeted_users` choke point loads candidates
+  `WHERE organization_id == message.org`, so a foreign member id/role matches
+  nobody (re-confirmed against `_is_targeted` / `_visible_message_or_none`).
+- **MS2-4 — not a live defect.** `MessageResponse.author_name` is declared but the
+  single-message endpoints' `_serialize_message` never fills it — however it is
+  **not rendered**: only `MessagesInboxPage.tsx:152` renders `author_name`, fed by
+  the inbox path whose `InboxMessage` schema **is** populated
+  (`messaging_service.py:365/404`). The admin manage page (`getMessages`) doesn't
+  render it. Cosmetic dead field, not a UI defect — flagged, not fixed.
+  `MessageHistoryResponse` (the outbound log) exposes only `to_email`/`subject`/
+  `sent_by` (a raw id), no `*_name` enrichment — nothing to populate.
+- **Consent / delivery boundary (AUTH-2) — intact.** Department-message **email
+  is the unconditional record-of-notice channel** (deliberately not filtered by
+  `email_notifications` or consent, `message_delivery_service.py:170-171`); **SMS
+  is consent-gated** via `ConsentService.granted_user_ids(SMS_NOTIFICATIONS)`
+  (fails closed) + the `sms_notifications` preference (`:234-249`). Re-verified.
+- **`message_history` (out of BXC scope) — clean.** Two endpoints, both
+  `settings.manage`-gated; no update loops; MSG-3's test-email destination is the
+  one client-supplied address, by design (unchanged).
+
+**No code changed.** The verifications are the deliverable, same disposition as the
+B5 elections / B26 public-portal clean passes.
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `MSG2` · **Iteration:** B10 · **Reviewed:** 2026-08-06
 
