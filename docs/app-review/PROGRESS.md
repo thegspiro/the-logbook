@@ -43,7 +43,7 @@ from its open list.
 | B2 | apparatus | AP2 | ✅ (p1, p2) |
 | B3 | inventory | INV2 | ✅ (p1, p2) |
 | B4 | facilities | FAC2 | ✅ (p1, p2) |
-| B5 | elections | ELEC2 | ⬜ |
+| B5 | elections | ELEC2 | ✅ (p1, p2) |
 | B6 | meetings & minutes | MM2 | ⬜ |
 | B7 | equipment-check | EC2 | ⬜ |
 | B8 | documents | DOC2 | ⬜ |
@@ -831,4 +831,19 @@ re-run unless directed).
   9 + org-scoping 7 pass (onboarding DB tests are the no-MySQL sandbox limit).
   Gate: flake8/black/tsc clean; no frontend change. See facilities.md → Pass 2.
   Next: B5 elections.
+- **B5 elections ✅ (pass 2) — clean-module verification, no code change.** Ran the
+  most-audited module's FK surface through the four productive pass-2 lenses; all
+  clean. **Update-bypass not present:** `CandidateUpdate` exposes no FK fields, so
+  the blind setattr in `update_candidate` can't reassign `user_id`/`election_id`
+  (create validates `user_id`). **Projection read-leak not present:**
+  `CandidateResponse` is scalar-only, no `User` eager-load. **MS2-4 not present:**
+  the manual-ballot batch listing correctly batch-resolves recorder/attestor/
+  candidate names (service 3298/3318-3326) — the pattern done right. **Newer
+  FK-input paths validate:** `create_nomination` requires the nominee be an active
+  in-org member (2800-2808); `merge_write_in_candidates` resolves ids under an
+  org-scoped election so foreign ids fall out as missing (3546-3554). One noted
+  nit (not fixed, per INV2-2): ~31 E712 suppressions in `election_service.py` — a
+  pure-style sweep on the hash-chain/forensics file isn't worth the churn here. No
+  code changed; verifications are the deliverable (same shape as B20/B26). See
+  elections.md → Pass 2. Next: B6 meetings & minutes.
 </content>

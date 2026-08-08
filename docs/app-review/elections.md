@@ -1,4 +1,51 @@
-# Application Review — Elections (Tier B, 2nd pass)
+# Application Review — Elections (Tier B)
+
+**Prefix:** `ELEC2` · **Iteration:** B5 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-06 (pass 2)
+
+---
+
+## Pass 2 (2026-08-06) — clean-module verification, no code change
+
+Ran the elections FK surface through the four lenses that have been productive
+across B1–B4 (update-bypass, projection read-leak, MS2-4 unpopulated names, and
+newer FK-input paths beyond the create cluster). **Every one comes back clean** —
+a real result for the most-audited module in the codebase, not a rubber stamp.
+
+- **Candidate update-bypass — not present.** `create_candidate` validates
+  `user_id` via `assert_in_org` (pass 1), and `CandidateUpdate` exposes **no FK
+  fields at all** (only name/position/statement/photo/accepted/display_order), so
+  the blind `setattr` loop in `update_candidate` has nothing org-sensitive to
+  reassign — `user_id`/`election_id` cannot be changed post-create. This is the
+  B2 operator pattern (update omits the FK), verified here.
+- **Projection read-leak — not present.** `CandidateResponse` is scalar-only
+  (`user_id`, `nominated_by` as bare ids; `name` is the candidate's own stored
+  column). No `User` relationship is eager-loaded into a candidate response, so
+  there is no AP2-1/INV2-1 member-name leak vector.
+- **MS2-4 — not present.** The one place that could exhibit it — the manual-ballot
+  batch listing, whose schema declares `recorded_by_name` / attestation `name` /
+  `candidate_name` — **populates them correctly**: `list_manual_ballot_batches`
+  batch-resolves the recorder/attestor names (service 3318-3326) and joins the
+  candidate name (3298), rather than returning a bare ORM row. The MS2-4 pattern
+  done right.
+- **The newer FK-input paths validate in-org.** `create_nomination` requires the
+  `nominee_user_id` to be an **active member of the caller's org** (service
+  2800-2808); `merge_write_in_candidates` resolves every source/target id under an
+  org-scoped election via `election_id == X AND id IN (…)`, so a foreign candidate
+  id falls out as "missing" (3546-3554). Both fail closed.
+
+One minor observation (not fixed, consistent with INV2-2): `election_service.py`
+carries ~31 `== True/False # noqa: E712` suppressions. They are suppressed
+(flake8 is clean) and this is the codebase's most security-critical file
+(hash-chained audit, ballot forensics) — a pure-style sweep with no other change
+here is not worth the churn/risk; recorded as a standalone cleanup.
+
+**No code changed.** The verifications above are the deliverable, same disposition
+as pass 1 (and the same shape as the B20 finance / B26 public-portal clean passes).
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `ELEC2` · **Iteration:** B5 · **Reviewed:** 2026-08-06
 
