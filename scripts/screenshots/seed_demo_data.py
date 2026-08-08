@@ -3443,7 +3443,81 @@ class Seeder:
                     },
                 )
             )
-        return {"products": products, "windows": windows}
+
+        self._seed_store_settings()
+        orders = self._seed_store_orders(products)
+        return {"products": products, "windows": windows, "orders": orders}
+
+    def _seed_store_settings(self) -> None:
+        """Configure how members pay.
+
+        My Orders shows the payment buttons and handles only when the store has
+        methods enabled and the corresponding handle set — with none configured
+        an unpaid order shows a balance and no way to settle it.
+        """
+        settings = self.api.get("/store/settings") or {}
+        if pick(settings, "venmo_handle", "venmoHandle"):
+            return
+        self.api.put(
+            "/store/settings",
+            {
+                "isEnabled": True,
+                "storeName": "Oakville Fire Department Store",
+                "tagline": "Department apparel and accessories",
+                "acceptedPaymentMethods": ["venmo", "cash_app", "zelle", "check"],
+                "venmoHandle": "@OakvilleFD",
+                "cashAppCashtag": "$OakvilleFD",
+                "zelleHandle": "treasurer@oakvillefd.example.org",
+                "zelleInstructions": (
+                    "Put your order number in the Zelle memo so the treasurer "
+                    "can match the payment."
+                ),
+                "checkPayableTo": "Oakville Fire Department",
+                "allowPickup": True,
+                "pickupLocation": "Station 1 - Headquarters",
+            },
+        )
+
+    def _seed_store_orders(self, products: list[dict]) -> list[dict]:
+        """Place an unpaid order for the demo administrator.
+
+        The My Orders guide pictures an order awaiting payment, and orders are
+        first-person — `POST /store/orders` records the *calling* user, so this
+        has to be the account the screenshots are captured as.
+        """
+        existing = items(self.api.get("/store/orders/mine"), "orders")
+        if existing:
+            return existing
+        wanted = ("Department Job Shirt", "Ball Cap")
+        lines = []
+        for product in products:
+            if product.get("name") not in wanted:
+                continue
+            variants = items(product, "variants")
+            line = {"productId": pick(product, "id"), "quantity": 1}
+            if variants:
+                line["variantId"] = pick(variants[len(variants) // 2], "id")
+                line["personalizationText"] = "D. RUIZ"
+            lines.append(line)
+        if not lines:
+            return existing
+        try:
+            self.api.post(
+                "/store/orders",
+                {
+                    "items": lines,
+                    "paymentMethod": "venmo",
+                    "fulfillmentMethod": "pickup",
+                    "memberNotes": "Pick up on a weeknight duty shift.",
+                },
+            )
+        except ApiError as exc:
+            # No open window, or the window does not offer these products —
+            # a store configuration fact, not a seeding failure.
+            if exc.code != 400:
+                raise
+            self.blocked.append(f"store order: {exc}")
+        return items(self.api.get("/store/orders/mine"), "orders")
 
     # -- run ---------------------------------------------------------
 

@@ -2204,4 +2204,13 @@ export const SHOTS = [
     },
     fullPage: true,
   },
+  {
+    id: "18-04-my-orders-unpaid",
+    doc: "18-storefront.md",
+    line: 467,
+    anchor: "Screenshot of My Orders showing an unpaid order",
+    alt: "My Orders showing an unpaid order with its balance and payment options",
+    route: "/store/orders",
+    fullPage: true,
+  },
 ];

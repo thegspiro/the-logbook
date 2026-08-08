@@ -464,9 +464,7 @@ transaction, check number, etc.). That marks your order as *pending
 verification* — it tells the quartermaster to look, it does not mark you paid.
 Somebody confirms the money actually arrived.
 
-> **[SCREENSHOT NEEDED]:** _Screenshot of My Orders showing an unpaid order
-> with the balance due and a row of payment buttons (Venmo, Cash App) plus the
-> Zelle handle and the order reference._
+![My Orders showing an unpaid order with its balance and payment options](./images/18-04-my-orders-unpaid.png)
 
 ---
 
