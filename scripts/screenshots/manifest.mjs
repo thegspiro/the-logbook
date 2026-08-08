@@ -1511,4 +1511,50 @@ export const SHOTS = [
     // capture trails the taller page underneath it below the fold.
     fullPage: false,
   },
+
+  // ── Fifth batch: modals from admin list pages ──────────────────────
+  {
+    id: "05-05-item-form-modal",
+    doc: "05-inventory.md",
+    line: 71,
+    anchor:
+      "Screenshot of the item edit modal showing form fields for name, description,",
+    alt: "Inventory item form with category, serial, condition and tracking fields",
+    route: "/inventory/admin/items",
+    prepare: clickByName(/add item/i),
+    fullPage: false,
+  },
+  {
+    id: "05-12-new-allowance-modal",
+    doc: "05-inventory.md",
+    line: 288,
+    anchor:
+      "Screenshot of the New Allowance modal showing the Category dropdown, the 'Applies",
+    alt: "New allowance modal with category, role and quantity fields",
+    route: "/inventory/admin/allowances",
+    prepare: clickByName(/new allowance/i),
+    fullPage: false,
+  },
+  {
+    id: "05-27-equipment-kit-modal",
+    doc: "05-inventory.md",
+    line: 812,
+    anchor:
+      "Screenshot of the Equipment Kit create/edit modal showing a kit named 'New",
+    alt: "Equipment kit editor with its line items and quantities",
+    route: "/inventory/admin/kits",
+    prepare: clickByName(/edit new recruit ppe kit/i),
+    fullPage: false,
+  },
+  {
+    id: "02-11-pipeline-wizard",
+    doc: "02-training.md",
+    line: 269,
+    anchor:
+      "The pipeline wizard showing the program info fields (including the program code)",
+    alt: "Training pipeline wizard with program details and phase list",
+    route: "/training/programs",
+    prepare: clickByName(/new pipeline/i),
+    fullPage: true,
+  },
 ];

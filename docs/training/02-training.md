@@ -266,7 +266,7 @@ Navigate to **Training > Programs** and click **Create Program** to open the pip
 4. **Add milestones** — Add **milestone** checkpoints that mark key achievements within the program.
 5. Click **Save**. The program, all its phases, their requirements, and the milestones are created together in a single step.
 
-> **[SCREENSHOT NEEDED]:** _The pipeline wizard showing the program info fields (including the program code) at the top, a list of phases with the "Require officer approval to advance" checkbox, requirements nested under a phase with a type selector, and a milestones section, above a single "Save" button._
+![Training pipeline wizard with program details and phase list](./images/02-11-pipeline-wizard.png)
 
 > **Hint:** The **program code** must be unique within your department. Use a short, memorable code — it appears on printed program pages and travels with the program when it is exported and shared with other departments.
 
