@@ -18,13 +18,18 @@ import {
   Sparkles,
   Layers,
   Loader2,
+  Edit,
 } from 'lucide-react';
-import { trainingProgramService } from '../services/api';
+import { trainingProgramService, trainingService } from '../services/api';
 import RegistryImportModal from './RegistryImportModal';
+import { RequirementModal } from '../components/training/RequirementModal';
 import { getErrorMessage } from '@/utils/errorHandling';
 import type {
   TrainingProgram,
   TrainingRequirementEnhanced,
+  TrainingRequirementCreate,
+  TrainingRequirementUpdate,
+  TrainingCategory,
   RegistryInfo,
   SampleTemplateSummary,
 } from '../types/training';
@@ -42,6 +47,9 @@ const TrainingProgramsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [registryModal, setRegistryModal] = useState<{ key: string; name: string } | null>(null);
+  const [categories, setCategories] = useState<TrainingCategory[]>([]);
+  const [showRequirementModal, setShowRequirementModal] = useState(false);
+  const [editingRequirement, setEditingRequirement] = useState<TrainingRequirementEnhanced | null>(null);
   const importFileRef = React.useRef<HTMLInputElement>(null);
 
   const handleExportProgram = async (e: React.MouseEvent, programId: string, programName: string) => {
@@ -94,12 +102,16 @@ const TrainingProgramsPage: React.FC = () => {
           }
         }
       } else if (activeTab === 'requirements') {
-        const [reqs, regs] = await Promise.all([
+        const [reqs, regs, cats] = await Promise.all([
           trainingProgramService.getRequirementsEnhanced(),
           trainingProgramService.getRegistries(),
+          // Categories feed the edit form's category picker; a failure there
+          // must not blank the requirements list, so it degrades to empty.
+          trainingService.getCategories(false).catch(() => [] as TrainingCategory[]),
         ]);
         setRequirements(reqs);
         setRegistries(regs);
+        setCategories(cats);
       }
     } catch (_error) {
       // Error silently handled - empty state shown
@@ -111,6 +123,28 @@ const TrainingProgramsPage: React.FC = () => {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const handleSaveRequirement = async (
+    data: TrainingRequirementCreate | TrainingRequirementUpdate,
+    isEdit: boolean,
+    id?: string
+  ) => {
+    try {
+      if (isEdit && id) {
+        const updated = await trainingService.updateRequirement(id, data);
+        setRequirements((prev) => prev.map((r) => (r.id === id ? updated : r)));
+        toast.success('Requirement updated');
+      } else {
+        const created = await trainingService.createRequirement(data as TrainingRequirementCreate);
+        setRequirements((prev) => [...prev, created]);
+        toast.success('Requirement created');
+      }
+      setShowRequirementModal(false);
+      setEditingRequirement(null);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save requirement'));
+    }
+  };
 
   const handleAddSampleTemplate = async (template: SampleTemplateSummary) => {
     setInstantiatingKey(template.key);
@@ -177,6 +211,19 @@ const TrainingProgramsPage: React.FC = () => {
                 <span>New Pipeline</span>
               </button>
             </div>
+          )}
+
+          {activeTab === 'requirements' && (
+            <button
+              onClick={() => {
+                setEditingRequirement(null);
+                setShowRequirementModal(true);
+              }}
+              className="btn-primary flex items-center space-x-2"
+            >
+              <Plus className="h-5 w-5" aria-hidden="true" />
+              <span>New Requirement</span>
+            </button>
           )}
         </div>
 
@@ -499,13 +546,29 @@ const TrainingProgramsPage: React.FC = () => {
                               <span>{req.frequency}</span>
                             </div>
                           </div>
-                          {!req.is_editable && (
+                          {/* Registry-imported requirements are locked upstream
+                              (the backend refuses to update them), so the edit
+                              affordance is replaced by the read-only marker
+                              rather than shown and failing on save. */}
+                          {req.is_editable === false ? (
                             <div aria-label="Registry requirement (read-only)">
                               <AlertCircle
                                 className="h-5 w-5 text-yellow-700 dark:text-yellow-500"
                                 aria-hidden="true"
                               />
                             </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setEditingRequirement(req);
+                                setShowRequirementModal(true);
+                              }}
+                              className="ml-4 rounded-lg bg-blue-600/20 p-2 text-blue-700 transition-colors hover:bg-blue-600/30 dark:text-blue-400"
+                              title="Edit"
+                              aria-label={`Edit ${req.name}`}
+                            >
+                              <Edit className="h-5 w-5" aria-hidden="true" />
+                            </button>
                           )}
                         </div>
                       </div>
@@ -525,6 +588,20 @@ const TrainingProgramsPage: React.FC = () => {
           onClose={() => setRegistryModal(null)}
           onImported={() => {
             void loadData();
+          }}
+        />
+      )}
+
+      {showRequirementModal && (
+        <RequirementModal
+          requirement={editingRequirement}
+          categories={categories}
+          onClose={() => {
+            setShowRequirementModal(false);
+            setEditingRequirement(null);
+          }}
+          onSave={(...args) => {
+            void handleSaveRequirement(...args);
           }}
         />
       )}
