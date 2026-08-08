@@ -49,7 +49,7 @@ from its open list.
 | B8 | documents | DOC2 | ✅ (p1, p2) |
 | B9 | membership pipeline | MP2 | ✅ (p1, p2) |
 | B10 | messaging & communications | MSG2 | ✅ (p1, p2) |
-| B11 | notifications | NOTIF2 | ⬜ |
+| B11 | notifications | NOTIF2 | ✅ (p1, p2) |
 | B12 | integrations | INT2 | ⬜ |
 | B13 | forms | FORM2 | ⬜ |
 | B14 | grants & fundraising | GF2 | ⬜ |
@@ -955,4 +955,20 @@ re-run unless directed).
   gate intact (email unconditional record-of-notice, SMS consent-gated fail-closed);
   `message_history` clean (2 endpoints, both `settings.manage`-gated). No code
   changed. See messaging.md → Pass 2. Next: B11 notifications.
+- **B11 notifications ✅ (pass 2, against freshly-merged main).** After the 144-commit
+  merge, re-verified the standing fixes hold (BXC `rule_name` `lazy="joined"` — no
+  MissingGreenlet; NOTIF-2 `safe_error_detail` — also done in parallel on main,
+  converged; `update_rule` no-FK). Then reviewed the **new Web Push feature** main
+  merged in (`push_service.py`, `PushSubscription`, `/push/*`). **1 fix applied:**
+  NOTIF2-3 (MED blind SSRF): `POST /push/subscribe` (any member) stored a bare-string
+  `endpoint` URL with no validation, and `webpush` later POSTs to it — so a member
+  could register an internal URL (metadata/localhost/intranet) and turn each push to
+  themselves into a server-side request to an internal target. Fixed with
+  `validate_push_endpoint` (HTTPS + reject IP-literal/localhost/internal hosts) at
+  the API boundary — placed there, not in `service.subscribe`, so the delivery
+  integration tests (which subscribe to a 127.0.0.1 test server) still work. Residual
+  (DNS rebinding) flagged. Verified good: send is org+user-scoped, unsubscribe
+  org-scoped, delivery fail-safe, VAPID private key never exposed. **17 unit tests
+  added** (`test_push_endpoint_validation.py`); 32 notification tests pass.
+  flake8/black/tsc clean. See notifications.md → Pass 2. Next: B12 integrations.
 </content>
