@@ -40,6 +40,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
 )
 from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.prospect_fields import FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP
 from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
 from app.utils.prospect_fields import (
@@ -772,6 +773,19 @@ class MembershipPipelineService:
             if await self.get_pipeline(pipeline_id, organization_id) is None:
                 raise ValueError("Invalid pipeline")
 
+        # Same reasoning for the referring member. It is copied onto the User
+        # record at transfer (see _do_transfer), so an unvalidated id does not
+        # just dangle on the prospect — it lands in the members table as a
+        # cross-tenant reference that outlives the application.
+        await assert_in_org(
+            self.db,
+            User,
+            data.get("referred_by"),
+            organization_id,
+            allow_none=True,
+            label="referring member",
+        )
+
         # Use org default pipeline if none specified
         if not pipeline_id:
             default_pipeline = await self._get_default_pipeline(organization_id)
@@ -882,6 +896,18 @@ class MembershipPipelineService:
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             return None
+
+        # referred_by is the one client-supplied foreign key this update
+        # accepts; every other FK is in _PROSPECT_PROTECTED_FIELDS.
+        if "referred_by" in data:
+            await assert_in_org(
+                self.db,
+                User,
+                data.get("referred_by"),
+                organization_id,
+                allow_none=True,
+                label="referring member",
+            )
 
         changes = {}
         for key, value in data.items():
@@ -1687,6 +1713,20 @@ class MembershipPipelineService:
         primary_email = department_email or prospect.email
         personal_email = prospect.email if department_email else None
 
+        # Records created before referred_by was validated on write may carry a
+        # referrer from another org. Drop it rather than fail the transfer —
+        # legacy data must not block a member being elected — but do not let it
+        # cross into the users table, where it would outlive the application.
+        referred_by = prospect.referred_by
+        if referred_by and not await is_in_org(
+            self.db, User, referred_by, prospect.organization_id
+        ):
+            logger.warning(
+                f"Dropping out-of-org referred_by {referred_by} while "
+                f"transferring prospect {prospect.id}"
+            )
+            referred_by = None
+
         user_id = generate_uuid()
         new_user = User(
             id=user_id,
@@ -1717,7 +1757,7 @@ class MembershipPipelineService:
             # Preserve referral data from prospect
             referral_source=prospect.referral_source,
             interest_reason=prospect.interest_reason,
-            referred_by_user_id=prospect.referred_by,
+            referred_by_user_id=referred_by,
         )
         self.db.add(new_user)
 

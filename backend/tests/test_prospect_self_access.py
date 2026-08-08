@@ -473,3 +473,100 @@ class TestGuardOverHttp:
         assert advance.status_code == 404
         assert interview.status_code == 404
         assert activity.status_code == 404
+
+
+# =========================================================================
+# 4. Client-supplied foreign keys
+# =========================================================================
+
+
+class TestReferringMemberIsOrgScoped:
+    """``referred_by`` is the one client-supplied FK the prospect
+    create/update paths accept, and it is copied onto the User record at
+    transfer — so an unvalidated id does not merely dangle on the prospect,
+    it lands in the members table as a cross-tenant reference."""
+
+    async def _other_org_user(self, db_session: AsyncSession) -> str:
+        other_org = _uid()
+        outsider = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO organizations (id, name, organization_type, slug,"
+                " timezone) VALUES (:id, 'Other', 'fire_department', :slug, 'UTC')"
+            ),
+            {"id": other_org, "slug": f"o-{other_org[:8]}"},
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO users (id, organization_id, username, first_name,"
+                " last_name, email, password_hash, status) VALUES (:id, :org,"
+                " :un, 'Out', 'Sider', :em, 'hashed', 'active')"
+            ),
+            {
+                "id": outsider,
+                "org": other_org,
+                "un": f"out-{outsider[:8]}",
+                "em": f"out-{outsider[:8]}@other.example",
+            },
+        )
+        await db_session.flush()
+        return outsider
+
+    async def test_create_rejects_a_referrer_from_another_org(
+        self, db_session: AsyncSession, org_and_viewer
+    ):
+        org_id, _ = org_and_viewer
+        outsider = await self._other_org_user(db_session)
+        svc = MembershipPipelineService(db_session)
+
+        with pytest.raises(ValueError, match="Invalid referring member"):
+            await _make_prospect(svc, org_id, referred_by=outsider)
+
+    async def test_update_rejects_a_referrer_from_another_org(
+        self, db_session: AsyncSession, org_and_viewer
+    ):
+        org_id, _ = org_and_viewer
+        outsider = await self._other_org_user(db_session)
+        svc = MembershipPipelineService(db_session)
+        prospect = await _make_prospect(svc, org_id)
+
+        with pytest.raises(ValueError, match="Invalid referring member"):
+            await svc.update_prospect(prospect.id, org_id, {"referred_by": outsider})
+
+    async def test_an_in_org_referrer_is_accepted(
+        self, db_session: AsyncSession, org_and_viewer
+    ):
+        org_id, viewer = org_and_viewer
+        svc = MembershipPipelineService(db_session)
+
+        prospect = await _make_prospect(svc, org_id, referred_by=viewer.id)
+
+        assert str(prospect.referred_by) == str(viewer.id)
+
+    async def test_no_referrer_is_still_allowed(
+        self, db_session: AsyncSession, org_and_viewer
+    ):
+        """The FK is optional — absence must not be turned into an error."""
+        org_id, _ = org_and_viewer
+        svc = MembershipPipelineService(db_session)
+
+        prospect = await _make_prospect(svc, org_id, referred_by=None)
+
+        assert prospect.referred_by is None
+
+    async def test_the_error_does_not_confirm_the_id_exists_elsewhere(
+        self, db_session: AsyncSession, org_and_viewer
+    ):
+        """A real id from another org and a wholly made-up one must be
+        indistinguishable, or the endpoint is a cross-tenant existence oracle."""
+        org_id, _ = org_and_viewer
+        outsider = await self._other_org_user(db_session)
+        svc = MembershipPipelineService(db_session)
+
+        errors = []
+        for candidate in (outsider, _uid()):
+            with pytest.raises(ValueError, match="Invalid referring member") as excinfo:
+                await _make_prospect(svc, org_id, referred_by=candidate)
+            errors.append(str(excinfo.value))
+
+        assert errors[0] == errors[1]
