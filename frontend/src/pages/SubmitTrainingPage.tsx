@@ -535,7 +535,7 @@ const SubmitTrainingPage: React.FC = () => {
         <div className="flex items-center space-x-4 mb-8">
           <button
             onClick={() => void navigate('/training')}
-            className="p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-secondary"
+            className="p-2 max-md:mobile-touch-target text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-secondary"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>

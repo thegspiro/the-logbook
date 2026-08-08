@@ -90,7 +90,7 @@ const MessagesInboxPage: React.FC = () => {
           <Megaphone className="h-6 w-6" aria-hidden="true" />
           Messages
         </h1>
-        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+        <label className="text-theme-text-secondary flex items-center gap-2 max-md:min-h-[44px] text-sm">
           <input
             type="checkbox"
             checked={includeRead}

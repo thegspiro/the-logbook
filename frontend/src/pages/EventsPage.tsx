@@ -644,7 +644,7 @@ export const EventsPage: React.FC = () => {
         <div className="inline-flex rounded-lg border border-theme-surface-border bg-theme-surface p-1">
           <button
             onClick={() => setShowPastEvents(false)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+            className={`px-4 py-1.5 max-md:min-h-[44px] text-sm font-medium rounded-md transition-colors ${
               !showPastEvents
                 ? 'bg-red-600 text-white shadow-sm'
                 : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -654,7 +654,7 @@ export const EventsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setShowPastEvents(true)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+            className={`px-4 py-1.5 max-md:min-h-[44px] text-sm font-medium rounded-md transition-colors ${
               showPastEvents
                 ? 'bg-red-600 text-white shadow-sm'
                 : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -691,7 +691,7 @@ export const EventsPage: React.FC = () => {
         </div>
         <button
           onClick={() => setShowMyEventsOnly((prev) => !prev)}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] text-sm font-medium rounded-lg border transition-colors ${
             showMyEventsOnly
               ? 'bg-red-600 text-white border-red-600 shadow-sm'
               : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:text-theme-text-primary'
@@ -710,7 +710,7 @@ export const EventsPage: React.FC = () => {
             aria-label="Search events..." placeholder="Search events..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+            className="w-full pl-10 pr-4 py-2 max-md:min-h-[44px] bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
           />
         </div>
         <div className="relative">
@@ -718,7 +718,7 @@ export const EventsPage: React.FC = () => {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'date' | 'title' | 'rsvp_count')}
-            className="pl-9 pr-8 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring appearance-none"
+            className="pl-9 pr-8 py-2 max-md:min-h-[44px] bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring appearance-none"
           >
             <option value="date">Sort by Date</option>
             <option value="title">Sort by Title</option>
@@ -730,7 +730,7 @@ export const EventsPage: React.FC = () => {
         <div className="relative" ref={presetMenuRef}>
           <button
             onClick={() => { setShowPresetMenu((prev) => !prev); setShowSavePresetInput(false); setPresetName(''); }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 max-md:min-h-[44px] max-md:min-w-[44px] text-sm font-medium rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:text-theme-text-primary transition-colors"
             title="Filter presets"
           >
             <Bookmark className="h-4 w-4" aria-hidden="true" />
@@ -814,7 +814,7 @@ export const EventsPage: React.FC = () => {
                 typeFilter === filter
                   ? 'border-red-500 text-red-700 dark:text-red-400'
                   : 'border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border'
-              } whitespace-nowrap py-3 sm:py-4 px-1 border-b-2 font-medium text-sm shrink-0`}
+              } whitespace-nowrap py-3 sm:py-4 px-1 max-md:min-w-[44px] border-b-2 font-medium text-sm shrink-0`}
             >
               {filter === 'all'
                 ? 'All Events'
@@ -1047,7 +1047,7 @@ export const EventsPage: React.FC = () => {
           <div className="h-5 w-px bg-theme-surface-border" />
           <button
             onClick={handleExportSelectedCSV}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-hover/80 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] text-sm font-medium rounded-md bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-hover/80 transition-colors"
           >
             <Download className="h-4 w-4" aria-hidden="true" />
             Export CSV
@@ -1056,7 +1056,7 @@ export const EventsPage: React.FC = () => {
             <button
               onClick={() => setShowCancelConfirm(true)}
               disabled={bulkActionLoading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] text-sm font-medium rounded-md bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30 transition-colors disabled:opacity-50"
             >
               <XCircle className="h-4 w-4" aria-hidden="true" />
               Cancel Selected

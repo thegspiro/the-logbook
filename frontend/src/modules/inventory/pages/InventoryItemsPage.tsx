@@ -408,7 +408,7 @@ const InventoryItemsPage: React.FC = () => {
   /* ================================================================ */
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-      <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 mb-6">
+      <Link to="/inventory/admin" className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center max-md:min-h-[44px] gap-1 mb-6">
         <ArrowLeft className="h-4 w-4" />
         Back to Admin
       </Link>

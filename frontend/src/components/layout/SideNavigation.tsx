@@ -577,7 +577,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         <div className="flex items-center justify-between h-16 px-4">
           <Link
             to="/dashboard"
-            className="flex items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+            className="flex min-h-[44px] items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
           >
             <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
               <img
@@ -639,7 +639,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 <div className="flex items-center justify-center">
                   <Link
                     to="/dashboard"
-                    className="flex items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+                    className="flex min-h-[44px] items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                   >
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
                       <img
@@ -665,7 +665,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               <div className="flex items-center justify-between">
                 <Link
                   to="/dashboard"
-                  className="flex items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
+                  className="flex min-h-[44px] items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                 >
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
                     <img

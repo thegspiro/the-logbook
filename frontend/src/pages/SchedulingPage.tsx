@@ -660,7 +660,7 @@ const SchedulingPage: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => setCurrentDate(new Date())}
-                    className="px-3 py-1.5 text-sm text-violet-700 dark:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors"
+                    className="px-3 py-1.5 max-md:min-h-[44px] text-sm text-violet-700 dark:text-violet-400 hover:bg-violet-500/10 rounded-lg transition-colors"
                   >
                     Today
                   </button>
@@ -673,7 +673,7 @@ const SchedulingPage: React.FC = () => {
                       onClick={() => setViewMode("week")}
                       role="tab"
                       aria-selected={viewMode === "week"}
-                      className={`px-3 py-1 rounded-sm text-sm ${viewMode === "week" ? "bg-violet-600 text-white" : "text-theme-text-muted hover:text-white"}`}
+                      className={`px-3 py-1 max-md:min-h-[44px] rounded-sm text-sm ${viewMode === "week" ? "bg-violet-600 text-white" : "text-theme-text-muted hover:text-white"}`}
                     >
                       Week
                     </button>
@@ -681,7 +681,7 @@ const SchedulingPage: React.FC = () => {
                       onClick={() => setViewMode("month")}
                       role="tab"
                       aria-selected={viewMode === "month"}
-                      className={`px-3 py-1 rounded-sm text-sm ${viewMode === "month" ? "bg-violet-600 text-white" : "text-theme-text-muted hover:text-white"}`}
+                      className={`px-3 py-1 max-md:min-h-[44px] rounded-sm text-sm ${viewMode === "month" ? "bg-violet-600 text-white" : "text-theme-text-muted hover:text-white"}`}
                     >
                       Month
                     </button>
