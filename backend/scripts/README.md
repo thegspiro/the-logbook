@@ -269,6 +269,49 @@ a partial fix is still a fix, and the leftover is reported.
 
 ---
 
+## Deployment Setup
+
+### `generate_vapid_keys.py`
+
+Generates the VAPID keypair that identifies this server to the browser push
+services (Apple, Google, Mozilla), enabling Web Push for the installed PWA.
+
+**Purpose**: The two keys are base64url but encode different things, and neither
+consumer tolerates the wrong form — `pywebpush` reads any private key whose
+decoded length is not 32 bytes as DER, and `pushManager.subscribe()` rejects any
+`applicationServerKey` that is not the 65-octet uncompressed point. Getting
+either wrong fails at the worst moment: the browser accepts the subscription and
+the push service silently answers 401.
+
+**Usage:**
+
+```bash
+cd backend
+python scripts/generate_vapid_keys.py
+```
+
+**Expected Output** (key values are shown as placeholders — real ones are
+indistinguishable from live secrets, so they are deliberately not printed in
+documentation):
+
+```
+# Add to your .env — the private key must never leave the server.
+VAPID_PUBLIC_KEY=<87 base64url chars, always starting with B>
+VAPID_PRIVATE_KEY=<43 base64url chars>
+VAPID_SUBJECT=mailto:admin@yourdepartment.org
+```
+
+Paste the lines into `.env` and set `PUSH_ENABLED=true`. **Run this once per
+deployment and keep the pair stable** — rotating it invalidates every existing
+device subscription, and browsers offer no way to notify members, so each of
+them has to re-enable push by hand.
+
+**Requirements:**
+
+- No database or running services; `cryptography` only
+
+---
+
 ## Adding New Scripts
 
 When adding new utility scripts to this directory:

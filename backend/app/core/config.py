@@ -690,8 +690,10 @@ class Settings(BaseSettings):
     # ============================================
     # VAPID keypair identifying this server to the browser push services.
     # Generate with:
-    #   python3 -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); \
-    #     print(v.private_key_urlsafe_base64(), v.public_key_urlsafe_base64())"
+    #   cd backend && python scripts/generate_vapid_keys.py
+    # Both are base64url, unpadded: the private key is the raw 32-octet scalar
+    # (pywebpush reads any other length as DER), and the public key is the
+    # uncompressed P-256 point the browser requires as applicationServerKey.
     # The public key is served to clients; the private key signs push requests
     # and must never leave the server. Rotating the pair invalidates every
     # existing subscription, so clients have to re-subscribe.

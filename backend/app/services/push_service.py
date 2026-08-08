@@ -13,6 +13,7 @@ import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+import requests
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -197,6 +198,17 @@ class PushService:
                         status,
                         sub.id,
                     )
+            except requests.exceptions.RequestException as e:
+                # pywebpush does not wrap transport errors in
+                # WebPushException, so a push service outage arrives as a raw
+                # requests error. It affects every device at once, so logging a
+                # traceback per subscription per notification would flood ERROR
+                # for a condition that is transient and non-fatal by design.
+                logger.warning(
+                    "Web push transport error for subscription %s: %s",
+                    sub.id,
+                    type(e).__name__,
+                )
             except Exception:
                 logger.exception("Unexpected error sending web push")
 
