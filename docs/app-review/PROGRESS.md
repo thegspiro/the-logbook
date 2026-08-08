@@ -57,11 +57,11 @@ from its open list.
 | B16 | reports & analytics | RPT2 | ✅ (p1, p2) |
 | B17 | events | EV2 | ✅ (p1, p2) |
 | B18 | training | TR2 | ✅ (p1, p2) |
-| B19 | scheduling | SCH2 | ⬜ |
-| B20 | finance | FIN2 | ⬜ |
-| B21 | orgs, roles & users | ORU2 | ⬜ |
-| B22 | compliance & skills | CS2 | ⬜ |
-| B23 | security, audit & IP | SEC2 | ⬜ |
+| B19 | scheduling | SCH2 | 🔄 |
+| B20 | finance | FIN2 | 🔄 |
+| B21 | orgs, roles & users | ORU2 | 🔄 |
+| B22 | compliance & skills | CS2 | 🔄 |
+| B23 | security, audit & IP | SEC2 | 🔄 |
 | B24 | core infra | CI2 | ⬜ |
 | B25 | onboarding | ONB2 | ⬜ |
 | B26 | public-portal | PP2 | ⬜ |
