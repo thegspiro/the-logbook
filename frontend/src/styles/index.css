@@ -1200,6 +1200,29 @@ option {
   color: #111;
 }
 
+/* Minimum readable text size on phones.
+ *
+ * The app is used by volunteer members across a wide age range — the same
+ * reason the theme ships a high-contrast mode — and 10-11px captions, badge
+ * counts and tab labels are genuinely hard to read at arm's length on a phone.
+ * This lifts the two arbitrary sizes that appear in ordinary UI to the 12px
+ * floor (`text-xs`) below md, leaving desktop untouched.
+ *
+ * Deliberately scoped to 10px and 11px. The handful of smaller values —
+ * text-[9px] and below — are chart axis labels, day cells in the pattern
+ * builder's month grid, and a simulated barcode on the label-print preview.
+ * Those are dense fixed-size layouts, not prose, and forcing them to 12px
+ * would break the grid rather than help anyone read it.
+ *
+ * Unlayered like the dvh rules above, so it overrides `@layer utilities`
+ * without !important. */
+@media (max-width: 767px) {
+  .text-\[10px\],
+  .text-\[11px\] {
+    font-size: 12px;
+  }
+}
+
 /* Dynamic viewport height for the screen-height utilities.
  *
  * On mobile Safari `100vh` is the LARGEST viewport — the height with the URL

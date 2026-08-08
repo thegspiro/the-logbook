@@ -10,11 +10,11 @@ import { signIn } from './helpers';
  *   so these assert against zero.
  *
  *   Ratcheted budgets — the assertion is `<=` a per-route count, so numbers can
- *   never grow but any improvement passes. These started as a backlog (212 tap
- *   targets under 44px across the app) and were ratcheted down as it was
- *   cleared. maxSmallTargets is now 0 everywhere, which makes it a hard rule
- *   rather than a budget: no new control may ship below the touch minimum.
- *   Sub-12px text still carries a real budget. This mirrors how
+ *   never grow but any improvement passes. These started as a real backlog —
+ *   212 tap targets under 44px and ~200 sub-12px text nodes — and were
+ *   ratcheted down as it was cleared. Both are now 0 on every route, which
+ *   makes them hard rules rather than budgets: no new control may ship below
+ *   the touch minimum, and no ordinary UI text below 12px. This mirrors how
  *   `vitest.config.ts` treats coverage thresholds.
  *
  * Why this catches real defects rather than tautologies: the mock in helpers.ts
@@ -39,7 +39,13 @@ interface RouteCheck {
    * since a native checkbox is 16px by design and cannot be padded.
    */
   maxSmallTargets: number;
-  /** Text nodes rendering below 12px. Ratchet down, never up. */
+  /**
+   * Text nodes rendering below 12px. Now 0 everywhere — a failure means new
+   * copy needs a mobile size, not a raised number. The 12px floor is applied
+   * centrally in index.css for text-[10px]/text-[11px]; genuinely dense
+   * fixed-size labels (chart axes, the pattern-builder grid) use smaller
+   * arbitrary values and are deliberately exempt there.
+   */
   maxTinyText: number;
   /**
    * Renders only layout chrome under the E2E mock — the permission gate hides
@@ -50,35 +56,35 @@ interface RouteCheck {
 }
 
 const ROUTES: RouteCheck[] = [
-  { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 9 },
-  { path: '/events', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/members', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
-  { path: '/documents', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/training/programs', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/scheduling/reports', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
-  { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 6 },
-  { path: '/inventory', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/inventory/my-equipment', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/locations', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/facilities', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/elections', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/minutes', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/action-items', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/forms', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
-  { path: '/store', maxSmallTargets: 0, maxTinyText: 7 },
-  { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
-  { path: '/analytics', maxSmallTargets: 0, maxTinyText: 9 },
-  { path: '/messages', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
-  { path: '/settings', maxSmallTargets: 0, maxTinyText: 7, chromeOnly: true },
-  { path: '/profile', maxSmallTargets: 0, maxTinyText: 9 },
+  { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/training/programs', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/scheduling/reports', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/admin-hours', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/inventory/my-equipment', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/facilities', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/elections', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/minutes', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/forms', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/store', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/analytics', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/messages', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/settings', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/profile', maxSmallTargets: 0, maxTinyText: 0 },
 ];
 
 /** iPhone 14/15 class — the narrow end of what members actually carry. */
