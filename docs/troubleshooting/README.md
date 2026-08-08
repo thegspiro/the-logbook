@@ -75,6 +75,21 @@ This guide covers common issues and their solutions for The Logbook deployment.
 69. [Minutes Module Table Name](#minutes-module-table-name-2026-03-12)
 70. [Auth Cookies LAN HTTP](#auth-cookies-lan-http-2026-03-12)
 71. [TypeScript 94 Error Batch Fix](#typescript-94-error-batch-fix-2026-03-12)
+72. [Member CSV Import](#member-csv-import-2026-08-04--2026-08-07)
+73. [Dues Payments & Waivers](#dues-payments--waivers-2026-08-04)
+74. [Member PII Visibility](#member-pii-visibility-2026-08-04)
+75. [Member Delete & Role Save Failures](#member-delete--role-save-failures-2026-08-07)
+76. [422 Errors Reading "Invalid value"](#422-errors-reading-invalid-value-2026-08-07)
+77. [Web Push Notifications](#web-push-notifications-2026-08-07)
+78. [Pages Crashing to the Error Boundary](#pages-crashing-to-the-error-boundary-2026-08-07)
+79. [Frontend Container Unhealthy](#frontend-container-unhealthy-2026-08-07)
+80. [Frontend Build Pulls Unpinned Dependencies](#frontend-build-pulls-unpinned-dependencies-2026-08-07)
+81. [Frontend Build Context Mismatch](#frontend-build-context-mismatch-2026-08-08)
+82. [Alembic Duplicate Revision IDs](#alembic-duplicate-revision-ids-2026-08-07)
+83. [Push Subscriptions Table Collation](#push-subscriptions-table-collation-2026-08-07)
+84. [Skills Testing: Attempts, Conflicts & Result Visibility](#skills-testing-attempts-conflicts--result-visibility-2026-08-08)
+85. [Equipment Check Submission Fails](#equipment-check-submission-fails-2026-08-08)
+86. [Development Environment: Tests, Hooks & Node Version](#development-environment-tests-hooks--node-version-2026-08-08)
 
 ---
 
@@ -3829,6 +3844,290 @@ Ensure `:root` and `.dark` selectors define all `--theme-*` CSS variables. Missi
 **Status (Fixed):** Lazy-loaded relationship in async context. Fixed with `selectinload()`.
 
 **Edge Case:** Any new lazy-loaded relationship in async SQLAlchemy needs `selectinload()`/`joinedload()` in the query.
+
+---
+
+## QR Check-In Timezone Display (2026-03-12)
+
+### Problem: QR check-in window shows "N/A" for start/end times
+
+**Status (Fixed):** The backend returned bare date and time strings separately instead of combined ISO 8601 datetimes. Fixed to construct `{date}T{time}`, and `organizationTimezone` is included in the QR payload so local times render correctly.
+
+**Edge Case:** Organizations with no configured timezone default to UTC; the self check-in page falls back to the browser's timezone if the org's is missing.
+
+---
+
+## Recurring Event Edge Cases (2026-03-12)
+
+### Problem: Monthly-by-weekday events land on unexpected dates
+
+**Status (Expected Behavior):** "5th week" falls back to the last occurrence in months with fewer than five, and annual events on Feb 29 shift to Feb 28 in non-leap years. Both are intentional.
+
+### Problem: Deleting one occurrence appears to delete the series
+
+**Status (Not a Bug):** Deleting a single occurrence does not affect the others. Use **Delete Series** to remove all of them; **Edit All Future** only touches events after the current date.
+
+---
+
+## Events Settings JSON Persistence (2026-03-12)
+
+### Problem: Event settings changes do not persist after save
+
+**Status (Fixed):** A `dict()` shallow copy shares nested references with SQLAlchemy's committed state, so the comparison saw no change and the UPDATE was never issued. Changed to `copy.deepcopy()`.
+
+**Edge Case:** Applies to any JSON column. `MutableDict.as_mutable(JSON)` catches top-level key changes, but nested mutation needs `deepcopy()` or `flag_modified()`. See CLAUDE.md Pitfall #12.
+
+---
+
+## Custom Categories Schema Mismatch (2026-03-12)
+
+### Problem: Saving custom event categories returns 422
+
+**Status (Fixed):** The backend schema expected plain strings while the frontend sends `{id, label, color}` objects. The Pydantic schema now accepts the object form.
+
+**Edge Case:** Categories already stored as plain strings are migrated to the object form on next save.
+
+---
+
+## Form Value Empty String 422s (2026-03-12)
+
+### Problem: Optional fields across several modules return 422
+
+**Status (Fixed):** React form fields initialize as `""`, and `??` does not filter an empty string (`"" ?? undefined === ""`), so empty strings reached validators that reject them. Changed to `||` across 14+ files in events, scheduling, inventory, onboarding, prospective members, training and member profile.
+
+**Edge Case:** The most common bug pattern in this project. New form code must use `||`, never `??`, when converting optional values for submission. See CLAUDE.md Pitfall #1.
+
+---
+
+## Minutes Module Table Name (2026-03-12)
+
+### Problem: Backend startup fails with "Table 'meeting_action_items' doesn't exist"
+
+**Status (Fixed):** Migration `20260312_0200` renames the table to match the model. Run `alembic upgrade head`.
+
+**Edge Case:** Deployments with partially applied migrations should run the full chain — the migration handles both the rename and the index recreation.
+
+---
+
+## Auth Cookies LAN HTTP (2026-03-12)
+
+### Problem: Auth cookies are not set on a LAN HTTP deployment
+
+**Status (Fixed):** The `Secure` flag was hardcoded `True`, and a `Secure` cookie is only sent over HTTPS. It is now derived from the `ALLOWED_ORIGINS` scheme — HTTP origins set `Secure=False`.
+
+**Edge Case:** Mixed-scheme `ALLOWED_ORIGINS` defaults to `Secure=False` with a warning. Behind a TLS-terminating proxy, set `ALLOWED_ORIGINS` to the HTTPS URL.
+
+---
+
+## TypeScript 94 Error Batch Fix (2026-03-12)
+
+### Problem: Frontend build fails with 94+ TypeScript errors after pulling
+
+**Status (Fixed):** A batch fix resolved wrong import paths in the admin-hours module, duplicate properties, unused variables and `noUncheckedIndexedAccess` violations across 18 files.
+
+**Edge Case:** With local modifications in those files you may need to resolve conflicts. Verify with `npx tsc --noEmit` after merging.
+
+---
+
+## Member CSV Import (2026-08-04 → 2026-08-07)
+
+### Problem: "Missing required columns: departmentid" on the downloaded template
+
+**Status (Fixed 2026-08-04):** The generator emitted `membershipNumber` while the uploader still required `departmentId`, so the template it produced was rejected on upload. Both now derive from one column list, and `departmentId` is still accepted as the legacy spelling.
+
+### Problem: A complete-looking row fails with "Missing required fields"
+
+**Status (Fixed 2026-08-04):** Parsing split on every comma, so a quoted address (`"123 Main St, Apt 4"`) shifted every later column. Since 2026-08-07 a row whose value count does not match the header is rejected outright, naming both counts — an _unquoted_ comma used to shift columns in silence, landing a phone number in the email field.
+
+### Problem: Only some rows import, or row 21's problem appears after rows 1–20 were created
+
+**Status (Fixed 2026-08-07):** Every row is now validated before anything is created. Rows that pass import, rows that fail are reported and skipped, and each row reports all of its problems at once with the column and offending value. A **rejected-rows CSV** downloads the failures unchanged with an `errorReason` column, so the corrected file cannot collide with the members that did import.
+
+### Problem: A staging import mailed password-setup links to the whole roster
+
+**Status (Fixed 2026-08-07):** Creating a member queues the setup link immediately, and the importer used to send unconditionally. Welcome emails are now a checkbox on the review step, **off by default** for imports. Issue credentials afterwards from Member Management. **Add Member** is unchanged.
+
+### Problem: Imported members have no position
+
+**Status (Fixed 2026-08-04):** The `role` column was parsed and never sent. Role names resolve (case-insensitively) against configured roles; since 2026-08-06 an unmatched name is reported when the file is selected, so a roster whose role column holds job assignments rather than role names is known to import no roles before **Import** is pressed.
+
+### Problem: A "John Doe" appears after importing
+
+**Status (Fixed 2026-08-07):** The template ships a filled-in example row to explain its columns; leaving it in created that member with a live setup link. First name, last name and email must all match for the row to be dropped, so a real John Doe is unaffected.
+
+### Required columns
+
+Only `firstName`, `lastName`, `email`. A blank `membershipNumber` is auto-assigned. Emergency contacts need name + relationship + phone together or all blank. There is no `status` column — every imported member is created Active. A `username` column (in the template since 2026-08-04) resolves collisions between members sharing an email local part across domains.
+
+---
+
+## Dues Payments & Waivers (2026-08-04)
+
+### Problem: "These dues are marked waived and are not owing" when recording a payment
+
+**Status (Intentional):** Payments against Waived or Exempt dues are refused. They used to go through, cancelling the waiver as a side effect and moving the waived amount into collections with nothing recording it had ever been waived.
+
+**Fix:** Reverse the waiver first (**Reverse Waiver**, reason required, `finance.manage`), then record the payment. The original reason is written to the audit log as `finance.dues_waiver_reversed`.
+
+### Problem: A resubmitted payment did not increase the amount paid
+
+**Status (Intentional):** Payments are idempotent on the transaction reference — a reference already on the record returns it untouched rather than crediting twice, which is what makes a double-clicked Save safe. Unreferenced cash is never deduplicated. Give a genuine second payment its own reference and check `GET /finance/dues/{id}/payments`.
+
+**Edge Case:** `amount_paid` is derived from the `dues_payments` ledger, not accumulated. Migration `20260802_0001` backfills one row per already-paid record; without it a paid record would recompute to zero. Never write `member_dues.amount_paid` directly.
+
+---
+
+## Member PII Visibility (2026-08-04)
+
+### Problem: A member's date of birth and emergency contacts are missing from their profile
+
+**Status (Intentional):** Both are restricted to `members.manage` holders and to the member themselves. The profile hides the emergency-contacts section entirely rather than rendering it empty, because an empty section reads as "none on file".
+
+**Edge Case:** No organization setting can publish them — the contact-visibility toggles cover email, phone and mobile only. Leadership viewing another member's record writes `restricted_pii_disclosed` on the `user_viewed` audit event.
+
+---
+
+## Member Delete & Role Save Failures (2026-08-07)
+
+### Problem: Saving a member's roles silently removes their positions
+
+**Status (Fixed):** The endpoint ran a hand-written `DELETE` over every assignment and then reassigned the collection, so the ORM diffed against a stale collection and never re-inserted positions present in both sets. The raw deletes are gone.
+
+### Problem: Permanently deleting a member returns a server error, or is refused with a 409
+
+**Status (Fixed / Intentional):** The 500 was the same stale-collection pattern in the continuity guard. The `409` is deliberate: 12 NOT NULL attribution columns (budgets, purchase requests, expense reports, IP exceptions) cannot be cleared without falsifying who filed the record. The response names them and points at deactivate + anonymize, which strips personal information while leaving those records owned. The admin page used to discard that explanation and show a generic failure.
+
+**Edge Case:** The 62 nullable attribution columns are cleared automatically. Both lists are derived from the schema at delete time, so tables added later are covered.
+
+---
+
+## 422 Errors Reading "Invalid value" (2026-08-07)
+
+### Problem: A failed save reports "Invalid value" for every field, naming none of them
+
+**Status (Fixed):** The server rewrites Pydantic's `{loc, msg, type}` entries into `{field, message}`, but the shared error handler read only the Pydantic spelling and fell back to a literal string. A member import reported 50 rows of "Invalid value. Invalid value". Both spellings are now accepted.
+
+**Edge Case:** This affected **every** 422 in the application, not just imports. The onboarding module carried its own copy of the assumption and was fixed alongside it.
+
+---
+
+## Web Push Notifications (2026-08-07)
+
+### Problem: No push notifications arrive with the app closed
+
+**Status (Configuration):** Push is **off by default**. Set `PUSH_ENABLED=true` plus `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, and install `pywebpush` — it is imported behind a guard so deployments that do not want push need not install it. Unconfigured, the service reports itself so and the UI hides the toggle.
+
+**Edge Case:** On iOS the push API exists only once the PWA is installed to the home screen (16.4+), so Safari browsing correctly shows no toggle. Subscriptions are per device, and rows are pruned only when the push service answers 404/410 — the sole signal that an app was uninstalled or its site data cleared.
+
+---
+
+## Pages Crashing to the Error Boundary (2026-08-07)
+
+### Problem: A page shows the error screen instead of rendering empty
+
+**Status (Fixed):** `api.get<T[]>` asserts the wire format without checking it, and ~190 service methods handed that straight to callers that spread or `.map` it — so one unexpected body took the whole page down. 166 methods across 20 files now verify the array they promise, with envelope reads guarded at the four consumers the service-level guard cannot reach.
+
+**Edge Case:** The usual cause of an unexpected body is a captive portal or carrier interception page answering 200 with HTML — which is why this shows up on station Wi-Fi and on phones more than on desktops. `src/e2e/mobile-resilience.spec.ts` walks all 29 authenticated routes at 390px and fails if any reaches the error boundary.
+
+---
+
+## Frontend Container Unhealthy (2026-08-07)
+
+### Problem: The frontend reports unhealthy while nginx is serving fine
+
+**Status (Fixed):** nginx binds IPv4 only (`listen 80;`), the container resolves `localhost` to both families, and musl returns the IPv6 address first — so the healthcheck was refused. The image's `HEALTHCHECK` and the container test now name `127.0.0.1` literally.
+
+**Edge Case:** This affected production, not just CI. Pull the latest code and rebuild the frontend image.
+
+---
+
+## Frontend Build Pulls Unpinned Dependencies (2026-08-07)
+
+### Problem: Production ships dependency versions no test ever ran against
+
+**Status (Fixed):** The image copied only `frontend/package.json` and re-resolved 604 packages from the registry on every build. The build context is now the **repository root** (`docker build -f frontend/Dockerfile .`) so the single root `package-lock.json` is in reach, and the install is `npm ci`.
+
+**Edge Case:** Update any script or compose override that still names `./frontend` as the build context — see the next entry.
+
+---
+
+## Frontend Build Context Mismatch (2026-08-08)
+
+### Problem: The build fails on `"/frontend/nginx.conf": not found`
+
+**Status (Guarded):** The compose file being built still names `./frontend` as the frontend context while every path the Dockerfile copies is now root-relative. `docker compose config` validates YAML and interpolation only — it never opens the Dockerfile — so this passes validation and fails minutes into the build.
+
+**Fix:** Point the frontend at the repository root with `dockerfile: frontend/Dockerfile`, or run the checker:
+
+```bash
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml   # drop --fix to report only
+```
+
+**Edge Case:** A `git pull` does not repair a compose file the deployment maintains itself — that file is not the one git updated. `unraid/update.sh` runs the checker between the pull and the rebuild; `scripts/verify-docker-build.sh` checks every shipped compose file.
+
+---
+
+## Alembic Duplicate Revision IDs (2026-08-07)
+
+### Problem: The backend crashes on startup and migrations cannot resolve
+
+**Status (Fixed):** Two same-day pull requests merged without being rebased onto each other produced duplicate revision ids (`20260807_0001`, `20260807_0002`). A revision id is what Alembic writes to the version table, so a duplicate leaves the graph unresolvable rather than merely forked — the revision map cannot be built at all, which breaks deploys from `main`, not just tests.
+
+**Edge Case:** The migration-chain guard now asserts a single head. It already caught duplicate ids, dangling parents and multiple roots, but a fork passes all three while still leaving `upgrade head` ambiguous.
+
+---
+
+## Push Subscriptions Table Collation (2026-08-07)
+
+### Problem: A fresh install fails creating the push-subscriptions table
+
+**Status (Fixed):** The migration named a character set without a collation, so the table took the server's default collation rather than the database's — and a foreign key requires both sides to agree on collation as well as type.
+
+**Edge Case:** Only affects fresh installs; existing databases already had the table.
+
+---
+
+## Skills Testing: Attempts, Conflicts & Result Visibility (2026-08-08)
+
+### Problem: An examiner is refused when creating or completing a test
+
+**Status (Intentional):** `max_attempts` on the linked pipeline requirement is now enforced, both at creation (so an examiner is refused before running an evaluation that could not count) and at completion (several can be started before any is submitted). An attempt is a completed, official, non-voided test. Voided results and practice attempts do not consume a chance, and a requirement already completed, verified or waived is exempt so recertification stays possible.
+
+### Problem: A save is refused with 409, or autosave stops
+
+**Status (Intentional):** Tests carry a version counter and an update sent against a stale version is refused, rather than one of two examiners silently losing their work and getting a success response. The test screen suspends autosave and says so instead of retrying a doomed write.
+
+### Problem: A member cannot see their own result
+
+**Status (Configuration):** The department sets what (`full` / `scores` / `none`), when (`on_completion` / `on_release`) and who, under **Skills-Test Results** in the training configuration editor, overridable per template or per test. Defaults are `full` / `on_completion`. Under `on_release` an officer must use the **Release** action beside **Void**.
+
+**Edge Case:** A withheld result reads as absent rather than forbidden — refusals are `404` and the test is dropped from the list. Emailed results obey the same policy, resolved for the recipient rather than the sender.
+
+---
+
+## Equipment Check Submission Fails (2026-08-08)
+
+### Problem: Submitting a shift equipment check fails for any shift with an apparatus assigned
+
+**Status (Known Issue — open):** `shifts.apparatus_id` is an unconstrained string carrying a scheduling apparatus id, while the equipment-check table's column is a real foreign key to the apparatus table, and the create path copies one into the other. Every route to a fix means picking a side in a two-apparatus-tables inconsistency, so it is reported rather than guessed at. See `docs/KNOWN_LIMITATIONS.md`.
+
+**Workaround:** Submit checks against shifts with no apparatus assigned.
+
+---
+
+## Development Environment: Tests, Hooks & Node Version (2026-08-08)
+
+### Problem: Backend tests fail on a clean checkout with unexplained data
+
+**Status (Fixed):** The suite ran against the developer's own working database, since that is what `.env` points at. The per-test transaction is rolled back so nothing is written, but tests still _read_ it and several assert on an empty slate — 37 of 46 apparent "pre-existing failures" were this. `pytest` now points at `intranet_test` and creates it if absent; CI can still name the database by exporting `DB_NAME`.
+
+### Problem: The pre-commit hook never runs
+
+**Status (Fixed):** There was no `prepare` script, so the hooks path was never set — which is how a lint violation reached `main`. Run `npm install` to install the hook. It delegates to the declared lint-staged config and runs ESLint from `frontend/`, where the flat config lives.
+
+### Problem: `npm ci` fails with "Missing: vite@... from lock file"
+
+**Status (Fixed):** Lockfile drift on `main`; regenerated. **Node >= 22** is the real floor — the root install builds the frontend workspace, so the frontend's floor governs.
 
 ---
 
