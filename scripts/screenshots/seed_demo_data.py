@@ -3115,9 +3115,22 @@ class Seeder:
         app_id = pick(applications[0], "id")
         if not app_id:
             return
-        if items(self.api.get(f"/grants/applications/{app_id}/notes"), "notes"):
+        # The application already carries one auto-generated "created with
+        # status" note, so a bare truthiness check on the list never lets the
+        # timeline seed. Only a run that has already added these does.
+        if (
+            len(items(self.api.get(f"/grants/applications/{app_id}/notes"), "notes"))
+            > 1
+        ):
             return
-        for note_type, content, days_ago in self.GRANT_NOTES:
+        for index, (note_type, content, days_ago) in enumerate(self.GRANT_NOTES):
+            # `created_at` is server-stamped at second granularity and the log
+            # orders by it, so notes written inside the same second come back in
+            # arbitrary order and the timeline reads as nonsense. One second
+            # apart is enough to fix the ordering; the API has no way to
+            # backdate a note, so they all still carry today's date.
+            if index:
+                sleep(1)
             self.api.post(
                 f"/grants/applications/{app_id}/notes",
                 {

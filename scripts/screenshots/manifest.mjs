@@ -2170,11 +2170,36 @@ export const SHOTS = [
     alt: "Grant application activity log with its timeline of status changes and notes",
     route: "/grants/applications",
     prepare: async (page) => {
-      await openFirstFromApi(
-        "/grants/applications?limit=20",
-        (id) => `/grants/applications/${id}`,
-        "applications",
-      )(page);
+      // Every application has the auto-generated "created with status" entry;
+      // only the seeded one has a timeline. The list response carries no note
+      // count, so ask each application's notes endpoint.
+      const id = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/grants/applications?limit=20", {
+          credentials: "include",
+        });
+        if (!response.ok) return null;
+        const body = await response.json();
+        const applications = Array.isArray(body)
+          ? body
+          : body.applications || body.items || [];
+        for (const application of applications) {
+          const notes = await fetch(
+            `/api/v1/grants/applications/${application.id}/notes`,
+            { credentials: "include" },
+          );
+          if (!notes.ok) continue;
+          const list = await notes.json();
+          if ((Array.isArray(list) ? list : list.notes || []).length > 2) {
+            return application.id;
+          }
+        }
+        return null;
+      });
+      if (!id) throw new Error("no application has an activity timeline");
+      await page.goto(
+        new URL(`/grants/applications/${id}`, page.url()).toString(),
+        { waitUntil: "domcontentloaded" },
+      );
       await clickByName(/activity log/i)(page);
     },
     fullPage: true,

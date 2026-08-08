@@ -20,8 +20,7 @@ export const ApplicationStatus = {
   REPORTING: 'reporting',
   CLOSED: 'closed',
 } as const;
-export type ApplicationStatus =
-  (typeof ApplicationStatus)[keyof typeof ApplicationStatus];
+export type ApplicationStatus = (typeof ApplicationStatus)[keyof typeof ApplicationStatus];
 
 export const GrantCategory = {
   EQUIPMENT: 'equipment',
@@ -34,8 +33,7 @@ export const GrantCategory = {
   COMMUNITY: 'community',
   OTHER: 'other',
 } as const;
-export type GrantCategory =
-  (typeof GrantCategory)[keyof typeof GrantCategory];
+export type GrantCategory = (typeof GrantCategory)[keyof typeof GrantCategory];
 
 export const GrantPriority = {
   LOW: 'low',
@@ -43,8 +41,7 @@ export const GrantPriority = {
   HIGH: 'high',
   CRITICAL: 'critical',
 } as const;
-export type GrantPriority =
-  (typeof GrantPriority)[keyof typeof GrantPriority];
+export type GrantPriority = (typeof GrantPriority)[keyof typeof GrantPriority];
 
 export const ComplianceTaskStatus = {
   PENDING: 'pending',
@@ -53,8 +50,7 @@ export const ComplianceTaskStatus = {
   OVERDUE: 'overdue',
   WAIVED: 'waived',
 } as const;
-export type ComplianceTaskStatus =
-  (typeof ComplianceTaskStatus)[keyof typeof ComplianceTaskStatus];
+export type ComplianceTaskStatus = (typeof ComplianceTaskStatus)[keyof typeof ComplianceTaskStatus];
 
 export const ComplianceTaskType = {
   PERFORMANCE_REPORT: 'performance_report',
@@ -67,8 +63,7 @@ export const ComplianceTaskType = {
   CLOSEOUT_REPORT: 'closeout_report',
   OTHER: 'other',
 } as const;
-export type ComplianceTaskType =
-  (typeof ComplianceTaskType)[keyof typeof ComplianceTaskType];
+export type ComplianceTaskType = (typeof ComplianceTaskType)[keyof typeof ComplianceTaskType];
 
 export const CampaignStatus = {
   DRAFT: 'draft',
@@ -77,8 +72,7 @@ export const CampaignStatus = {
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
 } as const;
-export type CampaignStatus =
-  (typeof CampaignStatus)[keyof typeof CampaignStatus];
+export type CampaignStatus = (typeof CampaignStatus)[keyof typeof CampaignStatus];
 
 export const CampaignType = {
   GENERAL: 'general',
@@ -89,8 +83,7 @@ export const CampaignType = {
   EVENT: 'event',
   OTHER: 'other',
 } as const;
-export type CampaignType =
-  (typeof CampaignType)[keyof typeof CampaignType];
+export type CampaignType = (typeof CampaignType)[keyof typeof CampaignType];
 
 export const DonorType = {
   INDIVIDUAL: 'individual',
@@ -110,8 +103,7 @@ export const PaymentMethod = {
   VENMO: 'venmo',
   OTHER: 'other',
 } as const;
-export type PaymentMethod =
-  (typeof PaymentMethod)[keyof typeof PaymentMethod];
+export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
 
 export const PledgeStatus = {
   PENDING: 'pending',
@@ -120,8 +112,7 @@ export const PledgeStatus = {
   CANCELLED: 'cancelled',
   OVERDUE: 'overdue',
 } as const;
-export type PledgeStatus =
-  (typeof PledgeStatus)[keyof typeof PledgeStatus];
+export type PledgeStatus = (typeof PledgeStatus)[keyof typeof PledgeStatus];
 
 // =============================================================================
 // Status Badge Color Mappings (Tailwind classes)
@@ -318,6 +309,8 @@ export interface GrantNote {
   content: string;
   metadata: Record<string, unknown> | null;
   createdBy: string | null;
+  /** Author's display name, resolved server-side; `createdBy` is only an id. */
+  createdByName: string | null;
   createdAt: string;
 }
 

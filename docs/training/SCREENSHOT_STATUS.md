@@ -4,7 +4,7 @@ Which training-guide screenshot placeholders have been captured. Generated
 by `scripts/screenshots/status_report.py`; see that directory's README for
 how to capture more.
 
-**152 of 467 placeholders filled** (315 remaining).
+**153 of 467 placeholders filled** (314 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
@@ -20,12 +20,12 @@ how to capture more.
 | [09-skills-testing.md](./09-skills-testing.md) | 3 | 10 |
 | [10-mobile-pwa.md](./10-mobile-pwa.md) | 3 | 10 |
 | [11-finance.md](./11-finance.md) | 8 | 9 |
-| [12-grants-fundraising.md](./12-grants-fundraising.md) | 9 | 5 |
+| [12-grants-fundraising.md](./12-grants-fundraising.md) | 10 | 4 |
 | [13-medical-screening.md](./13-medical-screening.md) | 5 | 5 |
 | [14-elections.md](./14-elections.md) | 3 | 12 |
 | [15-prospective-members.md](./15-prospective-members.md) | 3 | 10 |
 | [16-integrations.md](./16-integrations.md) | 1 | 11 |
 | [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 2 | 0 |
 | [18-storefront.md](./18-storefront.md) | 3 | 2 |
-| **Total** | **152** | **315** |
+| **Total** | **153** | **314** |
 
