@@ -12,6 +12,10 @@ const mockGetSampleTemplates = vi.fn();
 const mockInstantiateSampleTemplate = vi.fn();
 const mockImportRegistry = vi.fn();
 const mockPreviewRegistry = vi.fn();
+const mockGetCategories = vi.fn();
+const mockGetCourses = vi.fn();
+const mockUpdateRequirement = vi.fn();
+const mockCreateRequirement = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -22,6 +26,12 @@ vi.mock('../services/api', () => ({
     instantiateSampleTemplate: (...args: unknown[]) => mockInstantiateSampleTemplate(...args) as unknown,
     importRegistry: (...args: unknown[]) => mockImportRegistry(...args) as unknown,
     previewRegistry: (...args: unknown[]) => mockPreviewRegistry(...args) as unknown,
+  },
+  trainingService: {
+    getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
+    getCourses: (...args: unknown[]) => mockGetCourses(...args) as unknown,
+    updateRequirement: (...args: unknown[]) => mockUpdateRequirement(...args) as unknown,
+    createRequirement: (...args: unknown[]) => mockCreateRequirement(...args) as unknown,
   },
 }));
 
@@ -77,6 +87,8 @@ describe('TrainingProgramsPage', () => {
     ]);
     mockGetRequirementsEnhanced.mockResolvedValue([]);
     mockGetRegistries.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetCourses.mockResolvedValue([]);
     mockGetSampleTemplates.mockResolvedValue([
       {
         key: 'firefighter-recruit-school',
@@ -194,6 +206,80 @@ describe('TrainingProgramsPage', () => {
 
     await waitFor(() => expect(mockImportRegistry).toHaveBeenCalledWith('emt', { registryCodes: ['NREMT'] }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Imported 1 requirement/i)));
+  });
+
+  it('edits a department requirement from the Requirements tab', async () => {
+    mockGetRequirementsEnhanced.mockResolvedValue([
+      {
+        id: 'req-1',
+        name: 'FCVFD Hours',
+        requirement_type: 'shifts',
+        source: 'department',
+        required_shifts: 20,
+        frequency: 'one_time',
+        applies_to_all: true,
+        active: true,
+        due_date_type: 'calendar_period',
+        is_editable: true,
+      },
+    ]);
+    mockUpdateRequirement.mockResolvedValue({
+      id: 'req-1',
+      name: 'FCVFD Duty Shifts',
+      requirement_type: 'shifts',
+      source: 'department',
+      required_shifts: 24,
+      frequency: 'one_time',
+      applies_to_all: true,
+      active: true,
+      due_date_type: 'calendar_period',
+      is_editable: true,
+    });
+    renderWithRouter(<TrainingProgramsPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Edit FCVFD Hours/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /Edit Requirement/i });
+    const nameInput = within(dialog).getByLabelText(/^Name/i);
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, 'FCVFD Duty Shifts');
+    await userEvent.click(within(dialog).getByRole('button', { name: /Update Requirement/i }));
+
+    await waitFor(() =>
+      expect(mockUpdateRequirement).toHaveBeenCalledWith(
+        'req-1',
+        expect.objectContaining({ name: 'FCVFD Duty Shifts' })
+      )
+    );
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Requirement updated'));
+    // The list reflects the saved record without a refetch.
+    expect(await screen.findByText('FCVFD Duty Shifts')).toBeInTheDocument();
+  });
+
+  it('offers no edit control for a locked registry requirement', async () => {
+    mockGetRequirementsEnhanced.mockResolvedValue([
+      {
+        id: 'req-2',
+        name: 'EMT National Component',
+        requirement_type: 'hours',
+        source: 'national',
+        registry_name: 'NREMT',
+        required_hours: 50,
+        frequency: 'biannual',
+        applies_to_all: true,
+        active: true,
+        due_date_type: 'rolling',
+        is_editable: false,
+      },
+    ]);
+    renderWithRouter(<TrainingProgramsPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
+
+    expect(await screen.findByText('EMT National Component')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Edit EMT National Component/i })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Registry requirement \(read-only\)/i)).toBeInTheDocument();
   });
 
   it('surfaces the error when a registry import reports one', async () => {
