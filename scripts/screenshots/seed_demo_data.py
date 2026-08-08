@@ -2584,19 +2584,40 @@ class Seeder:
             username = member.get("username")
             if not user_id or username == DEMO_ADMIN_USERNAME:
                 continue
+
+            def clear_forced_change() -> Api:
+                # The admin reset route is heavily rate limited, so this path is
+                # slow by design and runs at most once per member.
+                self.api.post(
+                    f"/users/{user_id}/reset-password",
+                    {"new_password": DEMO_MEMBER_PASSWORD, "force_change": False},
+                )
+                fresh = Api(base_url)
+                fresh.login_as(username, DEMO_MEMBER_PASSWORD)
+                return fresh
+
             member_api = Api(base_url)
             try:
                 member_api.login_as(username, DEMO_MEMBER_PASSWORD)
             except ApiError:
                 # Members seeded before the demo password was set at creation
-                # need one; the admin reset route is heavily rate limited, so
-                # this path is slow by design and only runs once per member.
-                self.api.post(
-                    f"/users/{user_id}/reset-password",
-                    {"new_password": DEMO_MEMBER_PASSWORD, "force_change": False},
-                )
-                member_api = Api(base_url)
-                member_api.login_as(username, DEMO_MEMBER_PASSWORD)
+                # need one.
+                member_api = clear_forced_change()
+
+            # Signing in is not enough. An account created by an administrator
+            # carries a must-change-password flag, and while the login itself
+            # succeeds, every authenticated call afterwards is refused with a
+            # 403 until the flag clears — so the failure surfaces on the first
+            # RSVP rather than on the sign-in that appeared to work.
+            #
+            # The flag is read from /auth/me rather than probed for with a 403,
+            # because /auth/me is one of the handful of paths deliberately
+            # exempt from the gate (see _MUST_CHANGE_PW_ALLOWED_SUFFIXES in
+            # app/api/dependencies.py) — precisely so a blocked user can still
+            # discover their own state. Probing it would always come back clean.
+            me = member_api.get("/auth/me") or {}
+            if pick(me, "must_change_password", "mustChangePassword"):
+                member_api = clear_forced_change()
             for event_index, event_id in enumerate(event_ids):
                 try:
                     member_api.post(
@@ -2624,7 +2645,26 @@ class Seeder:
         tests = items(self.api.get("/training/skills-testing/tests"), "tests")
         if tests or not templates or not members:
             return tests
-        for index, member in enumerate(members[:6]):
+
+        # The seeder posts as the demo administrator, so that account is the
+        # examiner on every test it creates. Skills testing refuses a test where
+        # the examiner is also the candidate — separation of duties, since a
+        # passing test credits a training requirement — and the administrator is
+        # in the member list like anyone else. Without this filter the step
+        # raised on whichever iteration reached them and no skills tests were
+        # seeded at all, leaving the skills-testing guide's screenshots to be
+        # captured against an empty module.
+        examiner_id = next(
+            (
+                pick(m, "id")
+                for m in members
+                if pick(m, "username") == DEMO_ADMIN_USERNAME
+            ),
+            None,
+        )
+        candidates = [m for m in members if pick(m, "id") != examiner_id]
+
+        for index, member in enumerate(candidates[:6]):
             candidate_id = pick(member, "id")
             template_id = pick(templates[index % len(templates)], "id")
             if not candidate_id or not template_id:

@@ -218,9 +218,7 @@ The search deliberately carries **only a name and an internal id** — no phone
 number, no email, no address. That is why every member can use it without
 opening up the member directory.
 
-> **[SCREENSHOT NEEDED]:** _The Start Skill Test page candidate field mid-search
-> — "smi" typed into the box with three matching members listed beneath it, and
-> the "Change" button visible next to an already-selected template above._
+![Candidate name search on the Start Skill Test page with matching members listed](./images/09-07-candidate-search.png)
 
 The system creates a new test session with:
 
@@ -875,10 +873,7 @@ page.
 Setting a field back to **Inherit** genuinely clears the override — it does not
 leave the last value quietly in place.
 
-> **[SCREENSHOT NEEDED]:** _The template builder's "Result Disclosure" group,
-> with "What the member sees" open and the first option reading "Inherit —
-> Scores only (pass/fail and points, no written notes)", the release control
-> visible below it, and a positions picker showing two selected positions._
+![Per-template Result Disclosure controls showing the inherited default](./images/09-08-template-result-disclosure.png)
 
 ### Releasing a withheld result
 

@@ -809,7 +809,12 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Skill Sheet Templates list page showing a table of",
     alt: "Skill sheet templates list with category and publication status",
-    route: "/training/skills-testing",
+    // Not /training/skills-testing. That route became the *member's* entry
+    // point when skills testing opened to non-officers — Available Tests and My
+    // Results — so it stopped showing the template library this placeholder is
+    // about, and kept capturing cleanly while picturing the wrong page. The
+    // officer-facing library lives under the Training Admin hub.
+    route: "/training/admin?tab=templates",
   },
   {
     id: "09-02-create-template",
@@ -830,6 +835,46 @@ export const SHOTS = [
     alt: "New skills test form with template and candidate selection",
     route: "/training/skills-testing/test/new",
     fullPage: true,
+  },
+  {
+    id: "09-07-candidate-search",
+    doc: "09-skills-testing.md",
+    line: 221,
+    anchor: "The Start Skill Test page candidate field mid-search",
+    alt: "Candidate name search on the Start Skill Test page with matching members listed",
+    route: "/training/skills-testing/test/new",
+    fullPage: true,
+    // The candidate field is a server-side search, not a dropdown, so the
+    // populated state only exists mid-typing. Two characters is the documented
+    // minimum the endpoint accepts; anything shorter returns nothing and the
+    // shot would picture an empty list. The search is debounced, so the results
+    // are waited for rather than assumed.
+    prepare: async (page) => {
+      const search = page.getByPlaceholder("Type a name to search...");
+      await search.waitFor({ state: "visible", timeout: 10_000 });
+      await search.fill("a");
+      await search.fill("an");
+      await page.waitForTimeout(1200);
+    },
+  },
+  {
+    id: "09-08-template-result-disclosure",
+    doc: "09-skills-testing.md",
+    line: 863,
+    anchor: 'The template builder\'s "Result Disclosure" group',
+    alt: "Per-template Result Disclosure controls showing the inherited default",
+    route: "/training/skills-testing/templates/new",
+    // Clipped to the group rather than shot full-page: the placeholder is about
+    // three controls near the bottom of a long builder form, and a full-page
+    // capture renders them too small to read the inherit labels, which are the
+    // whole point of the picture.
+    selector: "div:has(> p:text-is('Result Disclosure'))",
+    prepare: async (page) => {
+      const group = page.getByText("Result Disclosure", { exact: true });
+      await group.waitFor({ state: "visible", timeout: 10_000 });
+      await group.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    },
   },
 
   // ── 10 Mobile & PWA ─────────────────────────────────────────────────
