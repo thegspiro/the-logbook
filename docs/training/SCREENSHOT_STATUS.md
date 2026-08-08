@@ -4,7 +4,7 @@ Which training-guide screenshot placeholders have been captured. Generated
 by `scripts/screenshots/status_report.py`; see that directory's README for
 how to capture more.
 
-**147 of 467 placeholders filled** (320 remaining).
+**152 of 467 placeholders filled** (315 remaining).
 
 | Guide | Captured | Remaining |
 |-------|---------:|----------:|
@@ -14,7 +14,7 @@ how to capture more.
 | [03-scheduling.md](./03-scheduling.md) | 17 | 51 |
 | [04-events-meetings.md](./04-events-meetings.md) | 10 | 28 |
 | [05-inventory.md](./05-inventory.md) | 18 | 35 |
-| [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 9 | 11 |
+| [06-apparatus-facilities.md](./06-apparatus-facilities.md) | 13 | 7 |
 | [07-documents-forms.md](./07-documents-forms.md) | 13 | 0 |
 | [08-admin-reports.md](./08-admin-reports.md) | 11 | 31 |
 | [09-skills-testing.md](./09-skills-testing.md) | 3 | 10 |
@@ -25,7 +25,7 @@ how to capture more.
 | [14-elections.md](./14-elections.md) | 3 | 12 |
 | [15-prospective-members.md](./15-prospective-members.md) | 3 | 10 |
 | [16-integrations.md](./16-integrations.md) | 1 | 11 |
-| [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 1 | 1 |
+| [17-privacy-data-rights.md](./17-privacy-data-rights.md) | 2 | 0 |
 | [18-storefront.md](./18-storefront.md) | 3 | 2 |
-| **Total** | **147** | **320** |
+| **Total** | **152** | **315** |
 
