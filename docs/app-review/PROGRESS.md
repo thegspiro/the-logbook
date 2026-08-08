@@ -901,4 +901,14 @@ re-run unless directed).
   DOC-4/DOC-5 remain flagged product decisions (unchanged). Gate: flake8/black/tsc
   clean. See documents.md → Pass 2. **Next: B9 membership pipeline** — over halfway
   through Tier B pass 2.
+- **BXC cross-cutting sweep (2026-08-06, at the owner's direction, in place of B9).**
+  After B1–B8 kept surfacing the same two root causes, ran a targeted
+  cross-cutting sweep across the *remaining* modules for both at once (like the
+  AXC-1 IP sweep): **BXC-1** — blind `setattr`-over-`model_dump` update loops that
+  reassign a client FK without re-validating it in-org (classified read-leak /
+  cross-org-write / dangling); **BXC-2** — response schemas declaring `*_name`
+  enrichment fields the service never populates (classified rendered / not
+  rendered). Discovery fanned out over 5 parallel readers; findings verified and
+  the high-severity ones fixed inline. See `CROSS-CUTTING.md` → BXC. (B9 membership
+  pipeline remains the next module iteration.)
 </content>
