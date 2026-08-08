@@ -285,6 +285,29 @@ class Seeder:
             created.append(record)
         return created
 
+    # -- membership: recorded changes --------------------------------
+
+    def seed_member_changes(self, members: list[dict]) -> None:
+        """Promote a couple of members so the audit history has real entries.
+
+        The history page is a timeline of *changes*. Without any it fills with
+        "Member profile viewed" rows — which the screenshot tooling itself
+        generates on every capture run — and the guide's example of "Rank changed
+        from X to Y" has nothing behind it.
+        """
+        promotions = [
+            ("vbrennan", "Firefighter"),
+            ("snolan", "Firefighter/EMT"),
+            ("cfrazier", "Lieutenant"),
+        ]
+        by_username = {m.get("username"): m for m in members}
+        for username, new_rank in promotions:
+            member = by_username.get(username)
+            user_id = pick(member or {}, "id")
+            if not user_id or (member or {}).get("rank") == new_rank:
+                continue
+            self.api.patch(f"/users/{user_id}/profile", {"rank": new_rank})
+
     # -- facilities & apparatus --------------------------------------
 
     def seed_facilities(self) -> list[dict]:
@@ -2803,6 +2826,7 @@ class Seeder:
         print("Seeding demo data...")
         self.step("enable all modules", self.enable_all_modules)
         members = self.step("members", self.seed_members) or []
+        self.step("member changes", lambda: self.seed_member_changes(members))
         facilities = self.step("facilities", self.seed_facilities) or []
         stations = self.step("stations", lambda: self.seed_locations(facilities)) or []
         apparatus = self.step("apparatus", lambda: self.seed_apparatus(stations)) or []
