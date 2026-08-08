@@ -183,6 +183,90 @@ so a resolvable-but-archived course is reported as a note rather than a fault.
 - Database must be running
 - SQLAlchemy models must be importable
 
+### `apply_course_link_suggestions.py`
+
+Relinks the requirements the script above finds, where the intended course is
+unambiguous. **Writes to compliance data** — dry run by default.
+
+**Purpose**: clear the mechanical majority of the typed-in-name backlog so the
+only entries left for a human are the ones that genuinely need a decision.
+
+**"High confidence" means the _only_ match, not the best one.** The reporting
+script returns its top-ranked candidate, which hides ambiguity — a stored `CPR`
+ranks `CPR / BLS` first even when `CPR Instructor` and `CPR Renewal` are equally
+plausible. An entry is relinked only when exactly one library course matches at:
+
+| Tier            | Meaning                                                                                                | Auto-applied |
+| --------------- | ------------------------------------------------------------------------------------------------------ | ------------ |
+| `exact`         | stored text equals a course name or code                                                               | yes          |
+| `contains-name` | a course's full name appears inside the stored text (`"ICS-100: Introduction to…"` carrying `ICS-100`) | yes          |
+| `fragment`      | stored text is a piece of a longer course name (`CPR` inside `CPR Instructor`)                         | **no**       |
+| `fuzzy`         | similarity scoring                                                                                     | **no**       |
+
+The direction matters: a verbose stored value naming a short course is evidence;
+a short stored value sitting inside a long course name is a coincidence waiting
+to happen. Dangling UUIDs are never touched — there is no name to match on, and
+the right answer may be to delete rather than remap.
+
+**Usage:**
+
+```bash
+# Dry run — writes nothing:
+docker exec -it intranet-backend python scripts/apply_course_link_suggestions.py
+
+# Apply, recording a rollback file:
+docker exec -it intranet-backend python scripts/apply_course_link_suggestions.py \
+    --apply --rollback-file /tmp/relink-rollback.json
+
+# One organization at a time:
+docker exec -it intranet-backend python scripts/apply_course_link_suggestions.py \
+    --org "Falls Church" --apply
+
+# Undo:
+docker exec -it intranet-backend python scripts/apply_course_link_suggestions.py \
+    --restore /tmp/relink-rollback.json
+```
+
+**Example Output:**
+
+```
+RELINK TYPED-IN COURSE NAMES  (DRY RUN — no changes written)
+
+Falls Church / NIMS/ICS Initial Certification
+  id=4b2a…
+  RELINK  'ICS-100: Introduction to the Incident Command System'
+          -> ICS-100 [ICS100]  id=c-ics100  (contains-name)
+  SKIP    'IS-800: National Response Framework, An Introduction'
+          no match in the library
+
+Falls Church / CPR Certification
+  id=7e11…
+  SKIP    'CPR'
+          ambiguous — 2 candidates (CPR Instructor, CPR Renewal)
+
+1 entr(ies) relinked, 2 left for a human.
+```
+
+**Safety:** dry run by default; matching is per-organization so a cross-tenant
+course can never be selected; `--apply` records before/after state for
+`--restore`; every change goes through the normal audit logger, so it lands in
+the same tamper-evident chain as an officer's edit. `--restore` refuses to
+overwrite a requirement that has been edited since the relink.
+
+A requirement with three resolvable names and one ambiguous one gets the three —
+a partial fix is still a fix, and the leftover is reported.
+
+**Exit Codes:**
+
+- `0`: Nothing left ambiguous (nothing to do, or everything relinked)
+- `1`: Entries remain that need a human decision
+- `2`: Connection error or exception
+
+**Requirements:**
+
+- Database must be running
+- SQLAlchemy models must be importable
+
 ---
 
 ## Adding New Scripts
