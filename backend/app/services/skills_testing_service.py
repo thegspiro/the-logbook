@@ -478,3 +478,171 @@ async def revert_test_pass_from_pipeline(
                 )
     except Exception as e:  # pragma: no cover - defensive
         logger.error(f"Failed to revert skills-test pipeline progress: {e}")
+
+
+# ===========================================================================
+# Result disclosure — who may see a scorecard, and how much of it
+# ===========================================================================
+
+
+def resolve_disclosure_policy(
+    test: SkillTest,
+    template: SkillTemplate | None,
+    org_config: Any | None,
+) -> tuple[str, str]:
+    """The disclosure tier and release mode in force for one test.
+
+    Three levels, most specific first: the test's own override, then its
+    template's, then the department default on ``TrainingModuleConfig``. Each
+    field falls back independently — a template that only sets a release mode
+    still inherits the department's disclosure tier.
+
+    Falls back to full/on_completion, which is the behavior members already
+    have. A department that wants results withheld or redacted opts in; nobody
+    silently loses sight of results they can see today.
+    """
+    from app.models.skills_testing import ResultDisclosure, ResultRelease
+
+    def _first(*values: str | None) -> str | None:
+        for value in values:
+            if value:
+                return value
+        return None
+
+    disclosure = (
+        _first(
+            getattr(test, "result_disclosure", None),
+            getattr(template, "result_disclosure", None),
+            getattr(org_config, "skills_result_disclosure", None),
+        )
+        or ResultDisclosure.FULL.value
+    )
+    release = (
+        _first(
+            getattr(test, "result_release", None),
+            getattr(template, "result_release", None),
+            getattr(org_config, "skills_result_release", None),
+        )
+        or ResultRelease.ON_COMPLETION.value
+    )
+    return disclosure, release
+
+
+def viewer_positions_for(test: SkillTest, template: SkillTemplate | None) -> set[str]:
+    """Position slugs granted sight of this test's result.
+
+    The test's slugs are added to the template's rather than replacing them:
+    these are grants, and a per-test list is naturally read as "these people
+    as well", not "these people instead of the standing ones".
+    """
+    slugs: set[str] = set()
+    for source in (template, test):
+        values = getattr(source, "result_viewer_positions", None) or []
+        if isinstance(values, list):
+            slugs.update(str(v) for v in values if v)
+    return slugs
+
+
+def resolve_result_view(
+    test: SkillTest,
+    template: SkillTemplate | None,
+    org_config: Any | None,
+    *,
+    is_officer: bool,
+    user_id: str,
+    named_viewer_ids: set[str] | None = None,
+    user_position_slugs: set[str] | None = None,
+) -> str:
+    """How much of ``test`` this user may see: "none", "scores" or "full".
+
+    Officers and the examiner who ran the test always get the full scorecard —
+    the policy exists to govern what the person *being evaluated* sees, not to
+    hide an officer's own record-keeping from them.
+
+    Everyone else (the candidate, named viewers, position holders) is bound by
+    the resolved policy, and by release: under ``on_release`` a completed
+    result stays invisible until an officer releases it. A viewer never sees
+    more than the candidate does.
+    """
+    from app.models.skills_testing import ResultDisclosure, ResultRelease
+
+    if is_officer:
+        return ResultDisclosure.FULL.value
+
+    uid = str(user_id)
+
+    # The examiner sees what they themselves recorded, including a practice
+    # test they ran as a peer with no officer involved.
+    if str(test.examiner_id) == uid:
+        return ResultDisclosure.FULL.value
+
+    is_candidate = str(test.candidate_id) == uid
+    is_named = uid in (named_viewer_ids or set())
+    is_position_viewer = bool(
+        viewer_positions_for(test, template) & (user_position_slugs or set())
+    )
+
+    if not (is_candidate or is_named or is_position_viewer):
+        return ResultDisclosure.NONE.value
+
+    disclosure, release = resolve_disclosure_policy(test, template, org_config)
+
+    if disclosure == ResultDisclosure.NONE.value:
+        return ResultDisclosure.NONE.value
+
+    # Practice attempts are the candidate's own drill notes, never recorded and
+    # never credited. They are not the department's evaluation record, so the
+    # release gate does not apply to them.
+    if release == ResultRelease.ON_RELEASE.value and not test.is_practice:
+        if not getattr(test, "released_at", None):
+            return ResultDisclosure.NONE.value
+
+    return disclosure
+
+
+def redact_test_for_view(payload: dict[str, Any], view: str) -> dict[str, Any]:
+    """Strip from a test response whatever ``view`` does not permit.
+
+    Only ``scores`` redacts: it removes every piece of written commentary while
+    leaving the marks and points intact. That covers the test's own notes, each
+    criterion's note, and the synthetic per-section review-notes entries the
+    examiner writes on the review screen — which live inside criteria_results
+    rather than in a field of their own, so dropping the obvious `notes` keys
+    alone would leak them.
+
+    Mutates nothing the caller passed in: section results are rebuilt rather
+    than edited, so the ORM's loaded JSON is never touched (Pitfall #12).
+    """
+    from app.models.skills_testing import ResultDisclosure
+
+    if view != ResultDisclosure.SCORES.value:
+        return payload
+
+    redacted = dict(payload)
+    redacted["notes"] = None
+
+    sections = redacted.get("section_results") or []
+    clean_sections = []
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        criteria = []
+        for criterion in section.get("criteria_results") or []:
+            if not isinstance(criterion, dict):
+                continue
+            criterion_id = str(criterion.get("criterion_id") or "")
+            # The section review note is a pseudo-criterion carrying nothing
+            # but prose — redacting its text would leave an empty row, so drop
+            # the entry entirely.
+            if criterion_id.endswith("-review-notes"):
+                continue
+            scrubbed = dict(criterion)
+            scrubbed["notes"] = None
+            criteria.append(scrubbed)
+        clean_section = dict(section)
+        clean_section["criteria_results"] = criteria
+        clean_section["notes"] = None
+        clean_sections.append(clean_section)
+
+    redacted["section_results"] = clean_sections
+    return redacted
