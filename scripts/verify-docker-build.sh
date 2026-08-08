@@ -194,6 +194,38 @@ if [[ -f "unraid/docker-compose-unraid.yml" ]]; then
     fi
 fi
 
+# `config --quiet` above validates YAML and interpolation only — it never opens
+# the Dockerfile, so a compose file naming a build context that no longer holds
+# what the Dockerfile copies passes it and fails minutes into the build. Check
+# the contexts themselves. The unraid templates resolve against the repository
+# root because they are copied there before use, not run from ./unraid.
+CONTEXT_CHECK="$SCRIPT_DIR/sync-compose-build-context.sh"
+if [[ -x "$CONTEXT_CHECK" ]]; then
+    ROOT_COMPOSES=(-f docker-compose.yml)
+    [[ -f "docker-compose.arm.yml" ]] && ROOT_COMPOSES+=(-f docker-compose.arm.yml)
+    if "$CONTEXT_CHECK" "${ROOT_COMPOSES[@]}" >/dev/null 2>&1; then
+        pass "Build contexts contain what the Dockerfiles copy"
+    else
+        fail "A build context is missing files its Dockerfile copies"
+        "$CONTEXT_CHECK" "${ROOT_COMPOSES[@]}" || true
+    fi
+
+    UNRAID_COMPOSES=()
+    for f in unraid/docker-compose-build-from-source.yml unraid/docker-compose-unraid.yml; do
+        [[ -f "$f" ]] && UNRAID_COMPOSES+=(-f "$f")
+    done
+    if [[ ${#UNRAID_COMPOSES[@]} -gt 0 ]]; then
+        if "$CONTEXT_CHECK" "${UNRAID_COMPOSES[@]}" --project-directory . >/dev/null 2>&1; then
+            pass "Unraid template build contexts contain what the Dockerfiles copy"
+        else
+            fail "An Unraid template build context is missing files its Dockerfile copies"
+            "$CONTEXT_CHECK" "${UNRAID_COMPOSES[@]}" --project-directory . || true
+        fi
+    fi
+else
+    warn "scripts/sync-compose-build-context.sh not found (build contexts unchecked)"
+fi
+
 # ============================================
 # 4. Validate Database Configuration Consistency
 # ============================================
