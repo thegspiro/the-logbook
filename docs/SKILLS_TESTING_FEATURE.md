@@ -666,9 +666,12 @@ later voided returns to incomplete, with the same downstream recalculation.
 ### 15.1 Practice Attempts Are the Member's Own Notes
 
 - **Any member may run a practice test on a peer** — no `training.manage`.
-  Official tests still require it. Practice creation follows the same visibility
-  rule as reading a template, since the test response carries the full template
-  body and would otherwise leak an `officers_only` sheet.
+  Since 2026-08-08 the same is true of **official** tests (§6, §19); what
+  distinguishes them is that an official result needs an officer's validation
+  before it counts, whereas a practice attempt never counts at all. Practice
+  creation follows the same visibility rule as reading a template, since the
+  test response carries the full template body and would otherwise leak an
+  `officers_only` sheet.
 - **Discardable by the candidate, the examiner, or an officer.** Previously only
   the examiner could, which is why a member could never clear their own record.
 - **Retained one year**, via a `practice_skill_tests` retention class registered

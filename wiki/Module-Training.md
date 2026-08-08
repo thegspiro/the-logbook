@@ -337,9 +337,11 @@ GET    /api/v1/training/skills-testing/summary                # Department-wide 
 > is refused with **`409`**; clients that omit it keep the previous behaviour.
 > **A refusal to read a withheld or out-of-scope test is always `404`, never
 > `403`** — a 403 would announce that a result exists and is being withheld.
-> **Creating a _practice_ test needs no `training.manage`**; creating or
-> completing an _official_ one does, and both ends check the requirement's
-> `max_attempts`.
+> **Creating a test needs no `training.manage`** — practice or official
+> _(revised 2026-08-08)_. What an official test needs is an officer's
+> **validation** before it counts, and that is where the requirement's
+> `max_attempts` is spent; creation still checks the cap so an examiner is
+> refused before running an evaluation that could not count.
 
 ### Recertification Tracking
 

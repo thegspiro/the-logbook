@@ -504,18 +504,37 @@ template used to rewrite the structure that _completed_ tests read from — so:
 
 ## Skills Testing Summary Dashboard
 
-**Required Permission:** `training.manage`
+**Required Permission:** Authenticated _(revised 2026-08-08 — the Skills Testing
+page is no longer officer-only, so the Summary tab is reachable by any member.
+The figures below are department-wide aggregates and carry no individual's
+name.)_
 
 Navigate to **Training Admin > Skills Testing > Summary** for a department-wide overview:
 
-| Metric                  | Description                                           |
-| ----------------------- | ----------------------------------------------------- |
-| **Total Templates**     | Number of skill sheet templates                       |
-| **Published Templates** | Templates available for testing                       |
-| **Total Tests**         | All-time test sessions                                |
-| **Tests This Month**    | Test sessions conducted in the current month          |
-| **Pass Rate**           | Percentage of completed tests that resulted in a pass |
-| **Average Score**       | Mean percentage score across all completed tests      |
+| Metric                  | Description                                                                                         |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
+| **Total Templates**     | Number of skill sheet templates (archived excluded)                                                 |
+| **Published Templates** | Templates available for testing                                                                     |
+| **Total Tests**         | All-time official test sessions. Practice attempts and **voided** results are excluded              |
+| **Tests This Month**    | Official test sessions created in the current month, on the same exclusions                         |
+| **Pass Rate**           | Percentage of **validated** completed tests that resulted in a pass                                 |
+| **Average Score**       | Mean percentage score across **validated** completed tests                                          |
+| **Pending Validation**  | Official results awaiting an officer's sign-off. **Officers only** — it reads `0` for everyone else |
+
+> **Pass rate and average score count only validated results** _(2026-08-08)_.
+> A member-run result nobody has signed off is a submission, not yet the
+> department's finding — folding it in would let the headline number move on
+> evaluations an officer may still reject. Expect these two figures to lag the
+> raw test count while a review queue is outstanding.
+
+> **Pending Validation is deliberately officer-only.** It is an org-wide count of
+> _other people's_ outstanding evaluations, which is not a member's to see, and
+> it is only actionable by someone who can validate. Members receive `0` rather
+> than a hidden card.
+
+> **[SCREENSHOT NEEDED]:** _The Summary dashboard viewed by a training officer
+> with a non-zero **Pending Validation** card visible, so the review-queue badge
+> that drives officers to the queue can be seen alongside the other stats._
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Skills Testing Summary dashboard showing six stat cards in a 3x2 grid: Total Templates (12), Published Templates (8), Total Tests (156), Tests This Month (14), Pass Rate (82%), Average Score (76.4%). Each card has an icon and is color-coded]_
@@ -726,12 +745,12 @@ Tests can be administered in **practice mode** for training purposes without aff
 Practice used to be a dead end for the person taking it — the results lived on
 the examiner's device. Four things changed:
 
-|                            | Before                 | Now                                                                                               |
-| -------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------- |
-| **Who can run one**        | `training.manage` only | **Any member** can run a practice test on a peer. Official tests still require `training.manage`. |
-| **Who can see the result** | Examiner only          | The candidate, on **My Training → Skills Tests**                                                  |
-| **Who can discard it**     | Examiner only          | The candidate, the examiner, **or** an officer                                                    |
-| **How long it is kept**    | Forever                | **One year**, then purged automatically                                                           |
+|                            | Before                 | Now                                                                                                                                                                                                                                    |
+| -------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Who can run one**        | `training.manage` only | **Any member** can run a practice test on a peer — and, since 2026-08-08, an official one too. The difference is that an official result needs an officer's validation before it counts, while a practice attempt never counts at all. |
+| **Who can see the result** | Examiner only          | The candidate, on **My Training → Skills Tests**                                                                                                                                                                                       |
+| **Who can discard it**     | Examiner only          | The candidate, the examiner, **or** an officer                                                                                                                                                                                         |
+| **How long it is kept**    | Forever                | **One year**, then purged automatically                                                                                                                                                                                                |
 
 Practice attempts never consume an attempt against a requirement's
 `max_attempts` limit, and they are exempt from the release gate described below —
