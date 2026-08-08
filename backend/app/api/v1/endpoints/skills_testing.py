@@ -1238,6 +1238,19 @@ async def update_test(
 
     update_data = test_update.model_dump(exclude_unset=True)
 
+    # Optimistic concurrency. Refuse rather than silently overwrite when the
+    # client's copy is stale — two examiners on one test, or an officer editing
+    # the scorecard while a phone still holds unsaved criteria, previously lost
+    # one side's work and returned success to the loser. Clients that send no
+    # expected_version keep the old last-write-wins behavior.
+    #
+    # Popped before the completed-test field check below: this is the version the
+    # client is writing against, not a column it is asking to change. Counting it
+    # as one told every caller — the test screen sends it on every save — that it
+    # "cannot update expected_version on a completed test", which named the wrong
+    # problem entirely.
+    expected_version = update_data.pop("expected_version", None)
+
     # Completed tests only allow notes updates (section_results for criterion notes, top-level notes)
     if test.status == "completed":
         allowed_fields = {"section_results", "notes"}
@@ -1248,12 +1261,6 @@ async def update_test(
                 detail=f"Cannot update {', '.join(sorted(disallowed))} on a completed test",
             )
 
-    # Optimistic concurrency. Refuse rather than silently overwrite when the
-    # client's copy is stale — two examiners on one test, or an officer editing
-    # the scorecard while a phone still holds unsaved criteria, previously lost
-    # one side's work and returned success to the loser. Clients that send no
-    # expected_version keep the old last-write-wins behavior.
-    expected_version = update_data.pop("expected_version", None)
     if expected_version is not None and expected_version != test.version:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
