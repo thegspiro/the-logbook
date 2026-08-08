@@ -50,6 +50,12 @@ from app.utils.prospect_fields import (
 class MembershipPipelineService:
     """Service for membership pipeline management"""
 
+    # Ceiling on cards returned by the kanban board. Well above any real
+    # department's active pipeline, so it is a guard against an unbounded
+    # response rather than a paging size — per-column counts stay exact even
+    # when it bites.
+    MAX_KANBAN_CARDS = 500
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -2438,23 +2444,44 @@ class MembershipPipelineService:
         organization_id: str,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Get the kanban board view for a pipeline"""
+        """Get the kanban board view for a pipeline.
+
+        Card loading is capped at :data:`MAX_KANBAN_CARDS`; the per-column
+        ``count`` values come from a separate aggregate, so a truncated board
+        still reports the true size of every column rather than quietly
+        under-reporting it. ``truncated`` says whether any card was withheld.
+        """
         pipeline = await self.get_pipeline(pipeline_id, organization_id)
         if not pipeline:
             return None
 
-        # Get all active prospects for this pipeline
+        scope = and_(
+            ProspectiveMember.organization_id == organization_id,
+            ProspectiveMember.pipeline_id == pipeline_id,
+            ProspectiveMember.status == ProspectStatus.ACTIVE,
+        )
+
+        # True per-column totals, independent of how many cards are loaded.
+        count_query = self._apply_prospect_exclusions(
+            select(
+                ProspectiveMember.current_step_id,
+                func.count(ProspectiveMember.id),
+            ).where(scope),
+            exclude_prospect_ids,
+        ).group_by(ProspectiveMember.current_step_id)
+        count_rows = (await self.db.execute(count_query)).all()
+        counts = {
+            (str(step_id) if step_id else None): (count or 0)
+            for step_id, count in count_rows
+        }
+        total_prospects = sum(counts.values())
+
         query = (
             select(ProspectiveMember)
-            .where(
-                and_(
-                    ProspectiveMember.organization_id == organization_id,
-                    ProspectiveMember.pipeline_id == pipeline_id,
-                    ProspectiveMember.status == ProspectStatus.ACTIVE,
-                )
-            )
+            .where(scope)
             .options(selectinload(ProspectiveMember.current_step))
             .order_by(ProspectiveMember.created_at)
+            .limit(self.MAX_KANBAN_CARDS)
         )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         result = await self.db.execute(query)
@@ -2470,26 +2497,29 @@ class MembershipPipelineService:
                 {
                     "step": step,
                     "prospects": step_prospects,
-                    "count": len(step_prospects),
+                    "count": counts.get(str(step.id), 0),
                 }
             )
 
         # Add column for prospects with no current step
         unassigned = [p for p in prospects if not p.current_step_id]
-        if unassigned:
+        unassigned_count = counts.get(None, 0)
+        if unassigned or unassigned_count:
             columns.insert(
                 0,
                 {
                     "step": None,
                     "prospects": unassigned,
-                    "count": len(unassigned),
+                    "count": unassigned_count,
                 },
             )
 
         return {
             "pipeline": pipeline,
             "columns": columns,
-            "total_prospects": len(prospects),
+            "total_prospects": total_prospects,
+            "returned_prospects": len(prospects),
+            "truncated": total_prospects > len(prospects),
         }
 
     # =========================================================================
@@ -4004,85 +4034,66 @@ class MembershipPipelineService:
         Process inactivity warnings: mark critical prospects as inactive,
         send coordinator emails for warnings.
         Returns count of warnings and actions taken.
+
+        Prior-activity lookups are batched rather than run per prospect: this
+        runs over every stale prospect in the organization, so a department
+        with a long-neglected pipeline paid one SELECT per prospect plus one
+        UPDATE each just to decide it had nothing new to do.
         """
         warnings = await self.check_inactivity(organization_id)
+        if not warnings:
+            return {"warnings_sent": 0, "marked_inactive": 0, "total_checked": 0}
+
+        critical = [w for w in warnings if w["alert_level"] == "critical"]
+        warned = [w for w in warnings if w["alert_level"] != "critical"]
+
+        already_marked = await self._prospects_with_action(
+            [w["prospect_id"] for w in critical], "marked_inactive_by_system"
+        )
+        last_warned_at = await self._latest_action_times(
+            [w["prospect_id"] for w in warned], "inactivity_warning_sent"
+        )
+
+        now = datetime.now(timezone.utc)
         warning_count = 0
         inactive_count = 0
 
-        for w in warnings:
-            prospect_id = w["prospect_id"]
+        to_mark = [w for w in critical if w["prospect_id"] not in already_marked]
+        if to_mark:
+            # One UPDATE for the whole batch instead of one per prospect.
+            await self.db.execute(
+                update(ProspectiveMember)
+                .where(ProspectiveMember.id.in_([w["prospect_id"] for w in to_mark]))
+                .values(status=ProspectStatus.INACTIVE)
+            )
+            for w in to_mark:
+                await self._log_activity(
+                    prospect_id=w["prospect_id"],
+                    action="marked_inactive_by_system",
+                    details={
+                        "days_inactive": w["days_inactive"],
+                        "timeout_days": w["timeout_days"],
+                    },
+                    performed_by=processed_by,
+                )
+            inactive_count = len(to_mark)
 
-            if w["alert_level"] == "critical":
-                # Check if we already logged an inactivity warning recently
-                recent_log = await self.db.execute(
-                    select(ProspectActivityLog)
-                    .where(
-                        and_(
-                            ProspectActivityLog.prospect_id == prospect_id,
-                            ProspectActivityLog.action == "marked_inactive_by_system",
-                        )
-                    )
-                    .limit(1)
-                )
-                if not recent_log.scalars().first():
-                    # Mark as inactive
-                    await self.db.execute(
-                        update(ProspectiveMember)
-                        .where(ProspectiveMember.id == prospect_id)
-                        .values(status=ProspectStatus.INACTIVE)
-                    )
-                    await self._log_activity(
-                        prospect_id=prospect_id,
-                        action="marked_inactive_by_system",
-                        details={
-                            "days_inactive": w["days_inactive"],
-                            "timeout_days": w["timeout_days"],
-                        },
-                        performed_by=processed_by,
-                    )
-                    inactive_count += 1
-            else:
-                # Warning level — log it (email would be sent here)
-                recent_warning = await self.db.execute(
-                    select(ProspectActivityLog)
-                    .where(
-                        and_(
-                            ProspectActivityLog.prospect_id == prospect_id,
-                            ProspectActivityLog.action == "inactivity_warning_sent",
-                        )
-                    )
-                    .order_by(ProspectActivityLog.created_at.desc())
-                    .limit(1)
-                )
-                existing_warning = recent_warning.scalars().first()
-                # Only warn once per 7-day period
-                warning_created = (
-                    existing_warning.created_at.replace(tzinfo=timezone.utc)
-                    if existing_warning
-                    and existing_warning.created_at
-                    and existing_warning.created_at.tzinfo is None
-                    else (
-                        existing_warning.created_at
-                        if existing_warning and existing_warning.created_at
-                        else None
-                    )
-                )
-                if (
-                    not existing_warning
-                    or not warning_created
-                    or (datetime.now(timezone.utc) - warning_created).days >= 7
-                ):
-                    await self._log_activity(
-                        prospect_id=prospect_id,
-                        action="inactivity_warning_sent",
-                        details={
-                            "days_inactive": w["days_inactive"],
-                            "timeout_days": w["timeout_days"],
-                            "alert_level": w["alert_level"],
-                        },
-                        performed_by=processed_by,
-                    )
-                    warning_count += 1
+        for w in warned:
+            previous = last_warned_at.get(w["prospect_id"])
+            # Warn at most once per 7-day period.
+            if previous is not None and (now - previous).days < 7:
+                continue
+            await self._log_activity(
+                prospect_id=w["prospect_id"],
+                action="inactivity_warning_sent",
+                details={
+                    "days_inactive": w["days_inactive"],
+                    "timeout_days": w["timeout_days"],
+                    "alert_level": w["alert_level"],
+                },
+                performed_by=processed_by,
+            )
+            warning_count += 1
 
         if warning_count > 0 or inactive_count > 0:
             await self.db.commit()
@@ -4092,6 +4103,48 @@ class MembershipPipelineService:
             "marked_inactive": inactive_count,
             "total_checked": len(warnings),
         }
+
+    async def _prospects_with_action(self, prospect_ids: List[str], action: str) -> set:
+        """Which of ``prospect_ids`` already have an activity entry for ``action``."""
+        if not prospect_ids:
+            return set()
+        result = await self.db.execute(
+            select(ProspectActivityLog.prospect_id)
+            .where(
+                ProspectActivityLog.prospect_id.in_(prospect_ids),
+                ProspectActivityLog.action == action,
+            )
+            .distinct()
+        )
+        return {str(pid) for pid in result.scalars().all()}
+
+    async def _latest_action_times(
+        self, prospect_ids: List[str], action: str
+    ) -> Dict[str, datetime]:
+        """Most recent ``action`` timestamp per prospect, as aware UTC."""
+        if not prospect_ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                ProspectActivityLog.prospect_id,
+                func.max(ProspectActivityLog.created_at),
+            )
+            .where(
+                ProspectActivityLog.prospect_id.in_(prospect_ids),
+                ProspectActivityLog.action == action,
+            )
+            .group_by(ProspectActivityLog.prospect_id)
+        )
+        times: Dict[str, datetime] = {}
+        for prospect_id, created_at in result.all():
+            if created_at is None:
+                continue
+            # func.max() can come back naive depending on the driver, and the
+            # comparison below is against an aware "now".
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            times[str(prospect_id)] = created_at
+        return times
 
     # =========================================================================
     # Interview Management
