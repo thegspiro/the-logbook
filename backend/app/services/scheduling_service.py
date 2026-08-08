@@ -1701,6 +1701,15 @@ class SchedulingService:
         self, organization_id: UUID, template_data: Dict[str, Any], created_by: UUID
     ) -> Tuple[Optional[ShiftTemplate], Optional[str]]:
         """Create a new shift template"""
+        # Validate the client-supplied apparatus in-org, mirroring create_shift:
+        # a template's apparatus_id is stamped onto every generated shift, so an
+        # unvalidated foreign id would persist a dangling FK and silently drop
+        # the min-staffing/checklist wiring on the generated shifts.
+        apparatus_id = template_data.get("apparatus_id")
+        if apparatus_id and not await apparatus_ref_exists(
+            self.db, apparatus_id, organization_id
+        ):
+            return None, "Apparatus not found"
         return await self._crud_create(
             ShiftTemplate, template_data, organization_id, created_by
         )
@@ -1713,7 +1722,7 @@ class SchedulingService:
             ShiftTemplate.organization_id == str(organization_id)
         )
         if active_only:
-            query = query.where(ShiftTemplate.is_active == True)  # noqa: E712
+            query = query.where(ShiftTemplate.is_active.is_(True))
 
         query = query.order_by(ShiftTemplate.name.asc())
         result = await self.db.execute(query)
@@ -1737,6 +1746,11 @@ class SchedulingService:
         template = await self.get_template_by_id(template_id, organization_id)
         if not template:
             return None, "Shift template not found"
+        apparatus_id = update_data.get("apparatus_id")
+        if apparatus_id and not await apparatus_ref_exists(
+            self.db, apparatus_id, organization_id
+        ):
+            return None, "Apparatus not found"
         return await self._crud_update(template, update_data)
 
     async def delete_template(

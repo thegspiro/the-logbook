@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Scheduling: looking up an apparatus's active shift no longer errors (2026-08-08)
+
+**Fixed**
+
+- **Checking the active/next shift for an apparatus returned a server error**
+  whenever that apparatus actually had a shift. The lookup now returns the shift
+  details as intended.
+
 ### Members: setting a rank can no longer grant permissions beyond your own (2026-08-08)
 
 **Security**

@@ -57,7 +57,7 @@ from its open list.
 | B16 | reports & analytics | RPT2 | ✅ (p1, p2) |
 | B17 | events | EV2 | ✅ (p1, p2) |
 | B18 | training | TR2 | ✅ (p1, p2) |
-| B19 | scheduling | SCH2 | 🔄 |
+| B19 | scheduling | SCH2 | ✅ (p1, p2) |
 | B20 | finance | FIN2 | 🔄 |
 | B21 | orgs, roles & users | ORU2 | ✅ (p1, p2) |
 | B22 | compliance & skills | CS2 | 🔄 |
@@ -1107,4 +1107,15 @@ re-run unless directed).
   **4 DB-free regression tests** (`test_rank_grant_ceiling.py`). flake8/black clean.
   Security fix in CHANGELOG. See orgs-roles-users.md → Pass 2. Next: B22 compliance
   & skills.
+- **B19 scheduling ✅ (pass 2).** Re-verified SCH-1–4/6 (SCH-5 still flagged). **2
+  fixes:** SCH-8 (MED latent-500: `GET /apparatus/{id}/active-shift` called
+  `_get_apparatus_map(org_id)` but the signature requires `(org_id, apparatus_ids)`
+  — so the endpoint 500'd the moment an apparatus actually had a shift; passed the
+  apparatus id list), SCH-7 (LOW XC-1: `create_template`/`update_template` stored a
+  client `apparatus_id` unvalidated while `create_shift` validates it — the id is
+  stamped onto every generated shift, so a foreign one dangled + dropped
+  min-staffing wiring; added `apparatus_ref_exists` guard to both, swept an E712).
+  Lenses 2–5 clean (update endpoints use exclude_unset; name maps fed by org-scoped
+  ids). **2 regression tests** (template rejects foreign apparatus). flake8/black
+  clean. 500 fix in CHANGELOG. See scheduling.md → Pass 2. Next: B20 finance.
 </content>
