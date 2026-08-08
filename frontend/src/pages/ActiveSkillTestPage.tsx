@@ -44,6 +44,7 @@ import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { FormStatus } from '../constants/enums';
 import { hydrateTemplateSections } from '../utils/skillTemplateSections';
+import { TestViewersPanel } from '../components/training/TestViewersPanel';
 import { toAppError } from '../utils/errorHandling';
 import type {
   SkillCriterion,
@@ -1308,6 +1309,21 @@ export const ActiveSkillTestPage: React.FC = () => {
                 Test Notes
               </p>
               <p className="text-theme-text-primary text-sm whitespace-pre-wrap">{currentTest.notes}</p>
+            </div>
+          )}
+
+          {/* Named viewers. Official results only: a practice attempt is the
+              candidate's own drill note, discardable by them at will and purged
+              after a year, so a durable grant on one would outlive the thing it
+              points at. The route is already gated on training.manage, so
+              anyone reading this screen may manage the grants. */}
+          {!currentTest.is_practice && (
+            <div className="mt-4">
+              <TestViewersPanel
+                testId={currentTest.id}
+                candidateId={currentTest.candidate_id}
+                examinerId={currentTest.examiner_id}
+              />
             </div>
           )}
         </div>
