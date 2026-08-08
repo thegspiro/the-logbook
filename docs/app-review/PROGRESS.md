@@ -42,7 +42,7 @@ from its open list.
 | B1 | medical-screening | MS2 | ✅ (p1, p2) |
 | B2 | apparatus | AP2 | ✅ (p1, p2) |
 | B3 | inventory | INV2 | ✅ (p1, p2) |
-| B4 | facilities | FAC2 | ⬜ |
+| B4 | facilities | FAC2 | ✅ (p1, p2) |
 | B5 | elections | ELEC2 | ⬜ |
 | B6 | meetings & minutes | MM2 | ⬜ |
 | B7 | equipment-check | EC2 | ⬜ |
@@ -810,4 +810,25 @@ re-run unless directed).
   mock so the added lookup returns truthy and they're unaffected). Gate:
   flake8/black/tsc clean; no frontend change. See inventory.md → Pass 2. Next: B4
   facilities.
+- **B4 facilities ✅ (pass 2).** Re-verified pass-1 (FAC-3/FAC-2b/FAC-4), then
+  applied the B2 update-bypass lens to **every** FK-bearing update method — and
+  corrected a pass-1 overclaim. **1 fix applied:** FAC2-1 (LOW→MED): pass 1 said
+  FAC-3 was "closed in full," but its scope was the create-FK cluster + 3 updates;
+  the other ~10 sub-entity update methods (utility-account, access-key, room,
+  emergency-contact, shutoff, occupant, capital-project, insurance-policy,
+  compliance-checklist on `facility_id`; compliance-item on `checklist_id`)
+  reassign their parent FK through the blind `_apply_updates` setattr with no
+  in-org check, though every create path validates it. `update_room` even silently
+  dropped its linked-Location sync on a foreign facility (INV-3-style). Integrity
+  only — **verified not a disclosure** (no sub-entity response projects the
+  parent's name; `.facility` is never eager-loaded). Fixed with a shared
+  `_assert_facility_in_org` helper (pass 1's recommended DRY) mirroring each
+  create, wired into all 10 paths; endpoints already convert `ValueError → 400`.
+  **A wrong guard on `update_utility_reading` (references a `utility_account_id`
+  the Update schema doesn't expose → would `AttributeError`) was caught by the new
+  test and removed** — the case for testing against the real schema. **9 tests
+  added** (`test_facilities_service.py`, the module's first service test file);
+  9 + org-scoping 7 pass (onboarding DB tests are the no-MySQL sandbox limit).
+  Gate: flake8/black/tsc clean; no frontend change. See facilities.md → Pass 2.
+  Next: B5 elections.
 </content>

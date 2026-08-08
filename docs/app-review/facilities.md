@@ -1,4 +1,65 @@
-# Application Review — Facilities (Tier B, 2nd pass)
+# Application Review — Facilities (Tier B)
+
+**Prefix:** `FAC2` · **Iteration:** B4 · **Reviewed:** 2026-08-06 (pass 1),
+2026-08-06 (pass 2)
+
+---
+
+## Pass 2 (2026-08-06)
+
+Re-verified pass 1 (FAC-3 create-path + the three update methods it did touch,
+FAC-2b `.is_(True)`, FAC-4 flag — all intact). Then applied the B2 update-bypass
+lens to **every** FK-bearing update method, not just the three in FAC-3's list —
+and it corrects a pass-1 overclaim.
+
+### FAC2-1 — LOW→MED — Sub-entity updates re-parent to a foreign FK with no validation — ✅ FIXED (10 methods)
+
+**What:** pass 1 said FAC-3 was "closed in full," but its enumerated scope was the
+create-path FK cluster plus three specific updates (`update_facility`,
+`update_maintenance_record`, `update_access_key`'s member id). The **other ~10
+sub-entity update methods** — utility-account, access-key (`facility_id`), room,
+emergency-contact, shutoff-location, occupant, capital-project, insurance-policy,
+compliance-checklist (`facility_id`), and compliance-item (`checklist_id`) — reassign
+their **parent FK** through the shared blind-`setattr` helper `_apply_updates`
+(or a hand-rolled setattr loop) with **no in-org check**, even though every one of
+their **create** paths validates that parent via an org-scoped getter. The B2
+asymmetry, systemic across the module.
+
+`update_room` was the sharpest: on a foreign `facility_id` its post-setattr
+`get_facility(room.facility_id, org)` returns `None`, so it **silently skipped the
+linked-Location sync** while still storing the bad id — an INV-3-style silent
+inconsistency, not just a dangling FK.
+
+**Impact:** integrity / mis-parenting only — **verified not a disclosure**: no
+sub-entity response projects the parent's name (the `_name` fields on these
+schemas are caller-supplied stored columns, and the service never eager-loads
+`.facility` for a sub-entity), so a foreign parent id dangles but never reads back
+cross-tenant. That is why it is LOW→MED rather than the MED read-leaks of AP2-1 /
+INV2-1.
+
+**Fix:** added the shared `_assert_facility_in_org(facility_id, org)` helper (the
+`_validate_facility_lookups` DRY that pass 1 recorded as future-dev #2) — mirroring
+each create's `get_facility` check, only when the field is supplied — and wired it
+into all 9 `facility_id` update paths; `update_compliance_item` validates its
+`checklist_id` via `get_compliance_checklist` inline (mirroring
+`create_compliance_item`). All 11 endpoints already convert `ValueError → 400`
+(verified each call site). 9 unit tests added (`test_facilities_service.py`, the
+module's first service test file).
+
+**One over-reach caught by the tests:** an initial guard on `update_utility_reading`
+referenced `utility_account_id`, but `FacilityUtilityReadingUpdate` exposes no such
+field (a reading can't be re-parented), so the guard would have raised
+`AttributeError` at runtime — the test failed, and the guard was removed. Good
+argument for writing the test against the real schema, not the grep.
+
+### FAC-4 — still flagged (unchanged)
+
+`list_facilities` search remains wired-but-unexposed; an unrequested API-surface
+addition, still the owner's call.
+
+---
+
+## Pass 1 (2026-08-06)
 
 **Prefix:** `FAC2` · **Iteration:** B4 · **Reviewed:** 2026-08-06
 
