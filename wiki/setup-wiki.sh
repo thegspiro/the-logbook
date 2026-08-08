@@ -71,7 +71,6 @@ WIKI_FILES=(
     "Installation.md"
     "Unraid-Quick-Start.md"
     "Quick-Reference.md"
-    "Troubleshooting.md"
     "Development-Backend.md"
     "Deployment-Unraid.md"
     "Contributing.md"
@@ -89,6 +88,29 @@ for file in "${WIKI_FILES[@]}"; do
         echo -e "${YELLOW}⚠${NC} Skipped $file (not found)"
     fi
 done
+
+# Troubleshooting is GENERATED, not maintained here.
+#
+# There used to be three troubleshooting documents — docs/TROUBLESHOOTING.md,
+# docs/troubleshooting/README.md and a hand-edited wiki/Troubleshooting.md.
+# wiki/README.md told maintainers to refresh the wiki copy with `cp`, nobody
+# did, and all three drifted apart for five months. Generating the wiki page
+# from the single source at publish time is what stops that recurring: there is
+# no second file anyone can edit.
+TROUBLESHOOTING_SRC="../docs/TROUBLESHOOTING.md"
+if [ -f "$TROUBLESHOOTING_SRC" ]; then
+    {
+        echo "<!-- GENERATED FILE — DO NOT EDIT."
+        echo "     Source: docs/TROUBLESHOOTING.md in the main repository."
+        echo "     Regenerate by running wiki/setup-wiki.sh. -->"
+        echo ""
+        cat "$TROUBLESHOOTING_SRC"
+    } > "$WIKI_DIR/Troubleshooting.md"
+    echo -e "${GREEN}✓${NC} Generated Troubleshooting.md from docs/TROUBLESHOOTING.md"
+else
+    echo -e "${RED}✗${NC} $TROUBLESHOOTING_SRC not found — wiki Troubleshooting page not generated"
+    exit 1
+fi
 
 echo -e "${GREEN}✓ All wiki pages copied${NC}"
 echo ""

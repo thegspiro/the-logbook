@@ -57,6 +57,6 @@ docker compose down --remove-orphans && docker compose up -d
 
 - **[Unraid Setup Guide](docs/deployment/unraid.md)** - complete installation, configuration, HTTPS, backups, and troubleshooting
 - **[Unraid Installation Details](unraid/UNRAID-INSTALLATION.md)** - Community Apps template and advanced configuration
-- **[Troubleshooting](docs/troubleshooting/README.md)** - general troubleshooting
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - every module, plus deployment, build and CI issues
 
 **Need help?** Open a [GitHub issue](https://github.com/thegspiro/the-logbook/issues).

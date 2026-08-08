@@ -2,9 +2,13 @@
 
 ## Overview
 
-This comprehensive troubleshooting guide helps you resolve common issues when using The Logbook application, with special focus on the onboarding process.
+This is **the** troubleshooting guide for The Logbook — every module, plus deployment, build, migration and CI issues. It is the single source: there is nowhere else to add a troubleshooting entry, and nothing else to keep in sync with it.
 
-**Last Updated**: 2026-03-12 (added finance module; recurring events with monthly-by-weekday and annual patterns; prospective members event linking; minutes module refactoring; QR check-in timezone fixes; timezone standardization across 34 files; ballot email notifications with org logo; auth cookie LAN HTTP fix; events settings refactor and JSON persistence fix; custom categories schema fix; form value `??` to `||` migration; 94 TypeScript error fixes; ESLint zero errors; slug internalization; plus all previous updates)
+> **If you are looking for `docs/troubleshooting/README.md` or a hand-edited `wiki/Troubleshooting.md`, they were consolidated into this file (2026-08-08).** Three documents covering the same ground drifted apart for five months — the deployment digest and the wiki copy both froze at 2026-03-12 while this file kept moving, and each had entries the others lacked. The wiki page is now **generated** from this file by `wiki/setup-wiki.sh` at publish time, so it cannot drift again. Add new entries here.
+
+**Last Updated**: 2026-08-08 (consolidated the three troubleshooting documents into this one; added the 2026-04 → 2026-08 entries that had only ever been written into the deployment digest — deployment posture and compose overrides, host-header and reverse-proxy trust, DB/Redis TLS verification, OAuth sign-in failure codes, the forced-password-change trap, audit retention and shipping, privacy rights, the offline-queue and skills-testing entries, and the rest)
+
+**Previously**: 2026-03-12 (finance module; recurring events with monthly-by-weekday and annual patterns; prospective members event linking; minutes module refactoring; QR check-in timezone fixes; timezone standardization across 34 files; ballot email notifications with org logo; auth cookie LAN HTTP fix; events settings refactor and JSON persistence fix; custom categories schema fix; form value `??` to `||` migration; 94 TypeScript error fixes; ESLint zero errors; slug internalization; plus all previous updates)
 
 ---
 
@@ -18,108 +22,174 @@ This comprehensive troubleshooting guide helps you resolve common issues when us
 6. [Network & Connection Problems](#network--connection-problems)
 7. [Image Upload Issues](#image-upload-issues)
 8. [Database & Migration Issues](#database--migration-issues)
-9. [Startup Sequence Issues](#startup-sequence-issues)
-10. [Prospective Members Module Issues](#prospective-members-module-issues)
-11. [Elections Module Issues](#elections-module-issues)
-12. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
-13. [Documents Module Issues](#documents-module-issues)
-14. [Events Module Issues](#events-module-issues)
-15. [Facilities Module](#facilities-module)
-16. [Locations & Kiosk Display](#locations--kiosk-display)
-17. [Theme & Display Issues](#theme--display-issues)
-18. [Dashboard Issues](#dashboard-issues)
-19. [TypeScript Build Issues](#typescript-build-issues)
-20. [Error Message Reference](#error-message-reference)
-21. [Error Handling Patterns](#error-handling-patterns)
-22. [Centralized Constants & Enum Usage Issues](#centralized-constants--enum-usage-issues)
-23. [CSS Variable & Theming Issues](#css-variable--theming-issues)
-24. [Dependency Version Management](#dependency-version-management)
-25. [Skills Testing Module Issues](#skills-testing-module-issues)
-26. [Public Outreach Request Pipeline Issues](#public-outreach-request-pipeline-issues)
-27. [Admin Hours Module Issues](#admin-hours-module-issues)
-28. [Scheduling Shift Pattern Issues](#scheduling-shift-pattern-issues)
-29. [Elections Module — Voting & Detail Page Issues](#elections-module--voting--detail-page-issues)
-30. [Backend Logging & Observability](#backend-logging--observability)
-31. [Organization Settings Issues](#organization-settings-issues)
-32. [Member ID Card Issues](#member-id-card-issues)
-33. [Dynamic Import / Chunk Load Issues](#dynamic-import--chunk-load-issues)
-34. [Platform Analytics Issues](#platform-analytics-issues)
-35. [Brute-Force & Rate Limiting Issues](#brute-force--rate-limiting-issues)
-36. [Navigation & Module Enablement Issues](#navigation--module-enablement-issues)
-37. [Frontend Cache Refresh Issues](#frontend-cache-refresh-issues)
-38. [Scheduling Module Refactor Issues](#scheduling-module-refactor-issues)
-39. [Security Alert & Audit Issues](#security-alert--audit-issues)
-40. [Accessibility & Theme Issues](#accessibility--theme-issues)
-41. [Email Notification Templates Issues](#email-notification-templates-issues)
-42. [Session & Login Resilience Issues](#session--login-resilience-issues)
-43. [Admin Hours Edit & Sessions Issues](#admin-hours-edit--sessions-issues)
-44. [Shift Editing & Position Change Issues](#shift-editing--position-change-issues)
-45. [Training Registry & Import Issues](#training-registry--import-issues)
-46. [CSS Migration & Inline Style Issues](#css-migration--inline-style-issues)
-47. [MySQL Connection Resilience](#mysql-connection-resilience)
-48. [Mobile Member ID Scanner Issues](#mobile-member-id-scanner-issues)
-49. [API Service Split & Import Issues](#api-service-split--import-issues)
-50. [exactOptionalPropertyTypes Issues](#exactoptionalpropertytypes-issues)
-51. [Route Module Extraction Issues](#route-module-extraction-issues)
-52. [Python Typing Modernization Issues](#python-typing-modernization-issues)
-53. [IP Spoofing & Security Middleware](#ip-spoofing--security-middleware)
-54. [Module Component Decomposition Issues](#module-component-decomposition-issues)
-55. [Tailwind CSS v4 Migration Issues](#tailwind-css-v4-migration-issues)
-56. [React 19 Upgrade Issues](#react-19-upgrade-issues)
-57. [ESLint v9 Flat Config Issues](#eslint-v9-flat-config-issues)
-58. [Vitest 4 & Zod 4 Upgrade Issues](#vitest-4--zod-4-upgrade-issues)
-59. [Forms Module — Integration & Builder Issues](#forms-module--integration--builder-issues)
-60. [Pipeline Stage Reorder & New Stage Types](#pipeline-stage-reorder--new-stage-types)
-61. [Member CSV Import Issues](#member-csv-import-issues)
-62. [Inventory CSV Import Issues](#inventory-csv-import-issues)
-63. [Events Settings 422 Errors](#events-settings-422-errors)
-64. [Onboarding Auth Cookie Issues](#onboarding-auth-cookie-issues)
-65. [Docker Frontend Build Issues](#docker-frontend-build-issues)
-66. [Alembic Migration Graph Walk Failures](#alembic-migration-graph-walk-failures)
-67. [WebSocket CSRF Dependency Errors](#websocket-csrf-dependency-errors)
-68. [Form-to-Pipeline Integration Issues](#form-to-pipeline-integration-issues)
-69. [Facility Address Display Issues](#facility-address-display-issues)
-70. [Admin Hours camelCase Mismatch](#admin-hours-camelcase-mismatch)
-71. [Custom Event Categories Issues](#custom-event-categories-issues)
-72. [ProspectResponse Metadata Serialization](#prospectresponse-metadata-serialization)
-73. [Modal Click-Through Issues](#modal-click-through-issues)
-74. [Theme Variable Compliance Issues](#theme-variable-compliance-issues)
-75. [Email Template Enum Drift](#email-template-enum-drift)
-76. [Inventory Empty String Clearing Issues](#inventory-empty-string-clearing-issues)
-77. [Inventory WebSocket 403 & 422 Errors](#inventory-websocket-403--422-errors)
-78. [Inventory Charges & Return Request Issues](#inventory-charges--return-request-issues)
-79. [Barcode Label Printing Issues](#barcode-label-printing-issues)
-80. [Training Recertification & xAPI Issues](#training-recertification--xapi-issues)
-81. [Compliance Officer Dashboard Issues](#compliance-officer-dashboard-issues)
-82. [Grants Module Serialization Issues](#grants-module-serialization-issues)
-83. [GrantNote Metadata Attribute Conflict](#grantnote-metadata-attribute-conflict)
-84. [Reports Rank Display Issues](#reports-rank-display-issues)
-85. [Prospective Member Stage History Issues](#prospective-member-stage-history-issues)
-86. [Clipboard Copy Fallback Issues](#clipboard-copy-fallback-issues)
-87. [Onboarding Auth State Reset Issues](#onboarding-auth-state-reset-issues)
-88. [Unraid App Removal Cleanup](#unraid-app-removal-cleanup)
-89. [Facilities MissingGreenlet Error](#facilities-missinggreenlet-error)
-90. [Login Cookie Delivery & Auth Flow Issues](#login-cookie-delivery--auth-flow-issues)
-91. [Security Middleware ASGI & Memory Issues](#security-middleware-asgi--memory-issues)
-92. [Elections Ballot Position Matching Issues](#elections-ballot-position-matching-issues)
-93. [Events Attendance Finalization Issues](#events-attendance-finalization-issues)
-94. [Facilities Container Startup Crash Chain](#facilities-container-startup-crash-chain)
-95. [Facilities Route Ordering & Seed Data Issues](#facilities-route-ordering--seed-data-issues)
-96. [Facilities Room-Location Integration Issues](#facilities-room-location-integration-issues)
-97. [Facilities NFPA Compliance Fields](#facilities-nfpa-compliance-fields)
-98. [Onboarding Empty String 422 Errors](#onboarding-empty-string-422-errors)
-99. [Pydantic 422 Error Display Issues](#pydantic-422-error-display-issues)
-100. [QR Check-In Timezone & ISO String Issues](#qr-check-in-timezone--iso-string-issues)
-101. [Recurring Event Pattern Issues](#recurring-event-pattern-issues)
-102. [Events Settings JSON Persistence Issues](#events-settings-json-persistence-issues)
-103. [Custom Event Categories Schema Issues](#custom-event-categories-schema-issues)
-104. [Form Value Empty String 422 Errors](#form-value-empty-string-422-errors)
-105. [Minutes Module Table Name Issues](#minutes-module-table-name-issues)
-106. [Auth Cookie LAN HTTP Issues](#auth-cookie-lan-http-issues)
-107. [TypeScript Build Error Batch Fix](#typescript-build-error-batch-fix)
-108. [Prospective Members Event Linking](#prospective-members-event-linking)
-109. [Dues Payment & Waiver Issues](#dues-payment--waiver-issues)
-110. [Getting Help](#getting-help)
+9. [Error Message Reference](#error-message-reference)
+10. [Security & Session Management](#security--session-management)
+11. [Documents Module](#documents-module)
+12. [Meetings & Minutes Module](#meetings--minutes-module)
+13. [Scheduling Module](#scheduling-module)
+14. [Facilities Module](#facilities-module)
+15. [Reports Module](#reports-module)
+16. [Inventory Module & Property Return Reports](#inventory-module--property-return-reports)
+17. [Training Module](#training-module)
+18. [Notifications Module](#notifications-module)
+19. [Error Handling Patterns](#error-handling-patterns)
+20. [Skills Testing Module Issues](#skills-testing-module-issues)
+21. [Public Outreach Request Pipeline Issues](#public-outreach-request-pipeline-issues)
+22. [Admin Hours Module Issues](#admin-hours-module-issues)
+23. [Scheduling Shift Pattern Issues](#scheduling-shift-pattern-issues)
+24. [Elections Module — Voting & Detail Page Issues](#elections-module--voting--detail-page-issues)
+25. [Backend Logging & Observability](#backend-logging--observability)
+26. [Organization Settings Issues](#organization-settings-issues)
+27. [Member ID Card Issues](#member-id-card-issues)
+28. [Dynamic Import / Chunk Load Issues](#dynamic-import--chunk-load-issues)
+29. [Platform Analytics Issues](#platform-analytics-issues)
+30. [Brute-Force & Rate Limiting Issues](#brute-force--rate-limiting-issues)
+31. [Navigation & Module Enablement Issues](#navigation--module-enablement-issues)
+32. [Frontend Cache Refresh Issues](#frontend-cache-refresh-issues)
+33. [Scheduling Module Refactor Issues](#scheduling-module-refactor-issues)
+34. [Security Alert & Audit Issues](#security-alert--audit-issues)
+35. [Accessibility & Theme Issues](#accessibility--theme-issues)
+36. [Email Notification Templates Issues](#email-notification-templates-issues)
+37. [Session & Login Resilience Issues](#session--login-resilience-issues)
+38. [Admin Hours Edit & Sessions Issues](#admin-hours-edit--sessions-issues)
+39. [Shift Editing & Position Change Issues](#shift-editing--position-change-issues)
+40. [Training Registry & Import Issues](#training-registry--import-issues)
+41. [CSS Migration & Inline Style Issues](#css-migration--inline-style-issues)
+42. [MySQL Connection Resilience](#mysql-connection-resilience)
+43. [Getting Help](#getting-help)
+44. [Appendix: Common Scenarios](#appendix-common-scenarios)
+45. [Prospective Members Module Issues](#prospective-members-module-issues)
+46. [Elections Module Issues](#elections-module-issues)
+47. [Meeting Minutes Module Issues](#meeting-minutes-module-issues)
+48. [Documents Module Issues](#documents-module-issues)
+49. [Events Module Issues](#events-module-issues)
+50. [Locations & Kiosk Display](#locations--kiosk-display)
+51. [Theme & Display Issues](#theme--display-issues)
+52. [Dashboard Issues](#dashboard-issues)
+53. [TypeScript Build Issues](#typescript-build-issues)
+54. [Centralized Constants & Enum Usage Issues](#centralized-constants--enum-usage-issues)
+55. [CSS Variable & Theming Issues](#css-variable--theming-issues)
+56. [Dependency Version Management](#dependency-version-management)
+57. [Docker Compose Profile Issues](#docker-compose-profile-issues)
+58. [Frontend Dependency Issues](#frontend-dependency-issues)
+59. [Migration Issues on Unraid](#migration-issues-on-unraid)
+60. [Insider Threat Security Fixes](#insider-threat-security-fixes)
+61. [Version History](#version-history)
+62. [Backend Configuration Issues (Added 2026-02-08)](#backend-configuration-issues-added-2026-02-08)
+63. [Database Migration Best Practices](#database-migration-best-practices)
+64. [Startup Sequence Issues](#startup-sequence-issues)
+65. [Recent Fixes Summary](#recent-fixes-summary)
+66. [Mobile Member ID Scanner Issues](#mobile-member-id-scanner-issues)
+67. [API Service Split & Import Issues](#api-service-split--import-issues)
+68. [exactOptionalPropertyTypes Issues](#exactoptionalpropertytypes-issues)
+69. [Route Module Extraction Issues](#route-module-extraction-issues)
+70. [Python Typing Modernization Issues](#python-typing-modernization-issues)
+71. [IP Spoofing & Security Middleware](#ip-spoofing--security-middleware)
+72. [Module Component Decomposition Issues](#module-component-decomposition-issues)
+73. [Tailwind CSS v4 Migration Issues](#tailwind-css-v4-migration-issues)
+74. [React 19 Upgrade Issues](#react-19-upgrade-issues)
+75. [ESLint v9 Flat Config Issues](#eslint-v9-flat-config-issues)
+76. [Vitest 4 & Zod 4 Upgrade Issues](#vitest-4--zod-4-upgrade-issues)
+77. [Forms Module — Integration & Builder Issues](#forms-module--integration--builder-issues)
+78. [Pipeline Stage Reorder & New Stage Types](#pipeline-stage-reorder--new-stage-types)
+79. [Member CSV Import Issues](#member-csv-import-issues)
+80. [Inventory CSV Import Issues](#inventory-csv-import-issues)
+81. [Events Settings 422 Errors](#events-settings-422-errors)
+82. [Onboarding Auth Cookie Issues](#onboarding-auth-cookie-issues)
+83. [Docker Frontend Build Issues](#docker-frontend-build-issues)
+84. [Alembic Migration Graph Walk Failures](#alembic-migration-graph-walk-failures)
+85. [WebSocket CSRF Dependency Errors](#websocket-csrf-dependency-errors)
+86. [Form-to-Pipeline Integration Issues](#form-to-pipeline-integration-issues)
+87. [Facility Address Display Issues](#facility-address-display-issues)
+88. [Admin Hours camelCase Mismatch](#admin-hours-camelcase-mismatch)
+89. [Custom Event Categories Issues](#custom-event-categories-issues)
+90. [ProspectResponse Metadata Serialization](#prospectresponse-metadata-serialization)
+91. [Modal Click-Through Issues](#modal-click-through-issues)
+92. [Theme Variable Compliance Issues](#theme-variable-compliance-issues)
+93. [Email Template Enum Drift](#email-template-enum-drift)
+94. [Inventory Empty String Clearing Issues](#inventory-empty-string-clearing-issues)
+95. [Inventory WebSocket 403 & 422 Errors](#inventory-websocket-403--422-errors)
+96. [Inventory Charges & Return Request Issues](#inventory-charges--return-request-issues)
+97. [Barcode Label Printing Issues](#barcode-label-printing-issues)
+98. [Training Recertification & xAPI Issues](#training-recertification--xapi-issues)
+99. [Compliance Officer Dashboard Issues](#compliance-officer-dashboard-issues)
+100. [Grants Module Serialization Issues](#grants-module-serialization-issues)
+101. [GrantNote Metadata Attribute Conflict](#grantnote-metadata-attribute-conflict)
+102. [Reports Rank Display Issues](#reports-rank-display-issues)
+103. [Prospective Member Stage History Issues](#prospective-member-stage-history-issues)
+104. [Clipboard Copy Fallback Issues](#clipboard-copy-fallback-issues)
+105. [Onboarding Auth State Reset Issues](#onboarding-auth-state-reset-issues)
+106. [Unraid App Removal Cleanup](#unraid-app-removal-cleanup)
+107. [Facilities MissingGreenlet Error](#facilities-missinggreenlet-error)
+108. [Login Cookie Delivery & Auth Flow Issues](#login-cookie-delivery--auth-flow-issues)
+109. [Security Middleware ASGI & Memory Issues](#security-middleware-asgi--memory-issues)
+110. [Elections Ballot Position Matching Issues](#elections-ballot-position-matching-issues)
+111. [Events Attendance Finalization Issues](#events-attendance-finalization-issues)
+112. [Facilities Container Startup Crash Chain](#facilities-container-startup-crash-chain)
+113. [Facilities Route Ordering & Seed Data Issues](#facilities-route-ordering--seed-data-issues)
+114. [Facilities Room-Location Integration Issues](#facilities-room-location-integration-issues)
+115. [Facilities NFPA Compliance Fields](#facilities-nfpa-compliance-fields)
+116. [Onboarding Empty String 422 Errors](#onboarding-empty-string-422-errors)
+117. [Pydantic 422 Error Display Issues](#pydantic-422-error-display-issues)
+118. [QR Check-In Timezone & ISO String Issues](#qr-check-in-timezone--iso-string-issues)
+119. [Recurring Event Pattern Issues](#recurring-event-pattern-issues)
+120. [Events Settings JSON Persistence Issues](#events-settings-json-persistence-issues)
+121. [Custom Event Categories Schema Issues](#custom-event-categories-schema-issues)
+122. [Form Value Empty String 422 Errors](#form-value-empty-string-422-errors)
+123. [Minutes Module Table Name Issues](#minutes-module-table-name-issues)
+124. [Auth Cookie LAN HTTP Issues](#auth-cookie-lan-http-issues)
+125. [TypeScript Build Error Batch Fix](#typescript-build-error-batch-fix)
+126. [Prospective Members Event Linking](#prospective-members-event-linking)
+127. [Dues Payment & Waiver Issues](#dues-payment--waiver-issues)
+128. [Complete Fresh Rebuild (Nuclear Option)](#complete-fresh-rebuild-nuclear-option)
+129. [Expected Successful State](#expected-successful-state)
+130. [Quick Diagnostic Checklist](#quick-diagnostic-checklist)
+131. [Quick Commands Cheatsheet](#quick-commands-cheatsheet)
+132. [Equipment Checks & Shift Reports](#equipment-checks--shift-reports-2026-04-04--2026-04-09)
+133. [Training Program 500s](#training-program-500s-2026-04-04)
+134. [Salesforce Sync](#salesforce-sync-2026-04-10--2026-04-12)
+135. [Cloudflare Email Platform](#cloudflare-email-platform-2026-04-26)
+136. [Offline Queue & Pending Sync](#offline-queue--pending-sync-2026-05-01--2026-05-02)
+137. [Training Attachments & Exports](#training-attachments--exports-2026-05-24--2026-05-25)
+138. [Prospect Documents & the Coordinator Role Rename](#prospect-documents--the-coordinator-role-rename-2026-05-28)
+139. [OAuth Sign-In Failures](#oauth-sign-in-failures-2026-05-29)
+140. [Compliance Evaluation Period](#compliance-evaluation-period-2026-05-29)
+141. [Login Blocked Until Configured](#login-blocked-until-configured-2026-06-25)
+142. [Forced Password Change Rejected as "Changed Recently"](#forced-password-change-rejected-as-changed-recently-2026-06-25)
+143. [Inventory Impact Planner](#inventory-impact-planner-2026-06-22--2026-06-23)
+144. [Training Pipelines: Self-Service Limits & Alerts](#training-pipelines-self-service-limits--alerts-2026-07-14--2026-07-16)
+145. [Shift Finalize Gates](#shift-finalize-gates-2026-07-16)
+146. [Messaging Escalation & Acknowledgment](#messaging-escalation--acknowledgment-2026-07-17)
+147. [Field Encryption Upgrade](#field-encryption-upgrade-2026-07-21--2026-08-01)
+148. [Shared-Device Data Leaks](#shared-device-data-leaks-2026-07-21--2026-07-27)
+149. [Production Posture & Compose Overrides](#production-posture--compose-overrides-2026-07-27)
+150. [Host Header & Reverse-Proxy Trust](#host-header--reverse-proxy-trust-2026-07-27)
+151. [DB / Redis TLS Verification](#db--redis-tls-verification-2026-07-27--2026-08-01)
+152. [MODULE\_\*\_ENABLED Flags Do Nothing](#module__enabled-flags-do-nothing-2026-07-27)
+153. [Elections: Eligibility, Test Ballots & Runoffs](#elections-eligibility-test-ballots--runoffs-2026-07-28--2026-07-29)
+154. [FastAPI / Starlette Upgrade](#fastapi--starlette-upgrade-2026-07-30)
+155. [Audit Log Retention, Archival & Shipping](#audit-log-retention-archival--shipping-2026-07-30--2026-07-31)
+156. [Privacy Rights: Export, Consent & Anonymization](#privacy-rights-export-consent--anonymization-2026-07-31)
+157. [Assorted July Fixes](#assorted-july-fixes-2026-07-21--2026-07-31)
+158. [Offline Queues Across Tabs](#offline-queues-across-tabs-2026-08-01)
+159. [Approvals Require a Second Person](#approvals-require-a-second-person-2026-08-01)
+160. [Last Administrator Lockout](#last-administrator-lockout-2026-08-01)
+161. [Frontend Env Vars That Do Nothing](#frontend-env-vars-that-do-nothing-2026-08-01)
+162. [Room Kiosk Time & Check-In Window](#room-kiosk-time--check-in-window-2026-08-05)
+163. [Migration Chain Has Two Heads](#migration-chain-has-two-heads-2026-08-05)
+164. [Member PII Visibility](#member-pii-visibility-2026-08-04)
+165. [Member Delete & Role Save Failures](#member-delete--role-save-failures-2026-08-07)
+166. [422 Errors Reading "Invalid value"](#422-errors-reading-invalid-value-2026-08-07)
+167. [Web Push Notifications](#web-push-notifications-2026-08-07)
+168. [Pages Crashing to the Error Boundary](#pages-crashing-to-the-error-boundary-2026-08-07)
+169. [Frontend Container Unhealthy](#frontend-container-unhealthy-2026-08-07)
+170. [Frontend Build Pulls Unpinned Dependencies](#frontend-build-pulls-unpinned-dependencies-2026-08-07)
+171. [Alembic Duplicate Revision IDs](#alembic-duplicate-revision-ids-2026-08-07)
+172. [Push Subscriptions Table Collation](#push-subscriptions-table-collation-2026-08-07)
+173. [Skills Testing: Attempts, Conflicts & Result Visibility](#skills-testing-attempts-conflicts--result-visibility-2026-08-08)
+174. [Equipment Check Submission Fails](#equipment-check-submission-fails-2026-08-08)
+175. [Development Environment: Tests, Hooks & Node Version](#development-environment-tests-hooks--node-version-2026-08-08)
+176. [Still Stuck?](#still-stuck)
 
 ---
 
@@ -1244,6 +1314,18 @@ See [MFA.md](./MFA.md) for the full feature reference.
    fails verification
 2. Wait for a fresh code and enter it promptly
 3. If it persistently fails, disable and re-enroll MFA (re-scan a fresh QR)
+
+#### Symptom: Login succeeds but no session cookies are issued
+
+**Cause**: Expected behavior when the account has MFA enabled. `POST /auth/login`
+returns `{ mfa_required: true, mfa_token }` — a short-lived pending token — and
+issues no session cookies.
+
+**Solution**: Complete the second step at `POST /auth/mfa/login` with that
+`mfa_token` plus either a TOTP `code` or a `recovery_code`. Only then are full
+session cookies issued. A consumed recovery code is removed from the stored set.
+A client that treats the login response as a session (rather than checking
+`mfa_required`) will appear to log in and then fail every subsequent call.
 
 #### Symptom: Forced into MFA setup and can't reach the rest of the app
 
@@ -7585,16 +7667,841 @@ directly — it is overwritten on the next payment.
 
 ---
 
-## Getting Help
+## Complete Fresh Rebuild (Nuclear Option)
 
-If you're stuck:
+If all else fails, rebuild everything from scratch:
 
-1. **Search this guide** — Use Ctrl+F with keywords from your error
-2. **Check the wiki** — [Troubleshooting](../wiki/Troubleshooting.md) has deployment-specific guides
-3. **Review recent changes** — Check [CHANGELOG.md](../CHANGELOG.md) for recent fixes
+```bash
+cd /mnt/user/appdata/the-logbook
+
+# Stop and remove all containers
+docker-compose down
+
+# Remove containers and cleanup
+docker-compose rm -f
+docker system prune -f
+
+# Verify .env files are correct
+cat .env
+cat frontend/.env
+
+# Rebuild and start
+docker-compose build --no-cache
+docker-compose up -d
+
+# Watch logs for errors
+docker-compose logs -f
+```
+
+---
+
+---
+
+## Expected Successful State
+
+### Frontend Logs
+
+```
+/docker-entrypoint.sh: Configuration complete; ready for start up
+```
+
+### Backend Logs
+
+```
+INFO:     Started server process
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:3001
+```
+
+### Browser
+
+- Welcome page with animated logo loads
+- No errors in console (F12)
+- Click "Begin Setup" to start onboarding
+
+### API
+
+- `http://YOUR-IP:7881/docs` → FastAPI documentation
+- `http://YOUR-IP:7881/health` → Health status JSON
+
+---
+
+---
+
+## Quick Diagnostic Checklist
+
+### Security Configuration
+
+- [ ] `SECRET_KEY` is set (min 32 characters, does not contain `INSECURE_DEFAULT`)
+- [ ] `ENCRYPTION_KEY` is set (64 hex characters, does not contain `INSECURE_DEFAULT`)
+- [ ] `ENCRYPTION_SALT` is set (32 hex characters, unique per installation)
+- [ ] `DB_PASSWORD` is not `change_me_in_production`
+- [ ] `REDIS_PASSWORD` is set (required in production)
+
+> **Note**: The onboarding security check uses substring matching — any key containing `"INSECURE_DEFAULT"` is flagged as critical. The factory defaults (`INSECURE_DEFAULT_KEY_CHANGE_IN_PRODUCTION` for SECRET_KEY, `INSECURE_DEFAULT_KEY_CHANGE_ME` for ENCRYPTION_KEY) will both be caught. This matches the validation in `backend/app/core/config.py`.
+
+### Secret Handling
+
+- [ ] `.env` files are in `.gitignore` (never committed to version control)
+- [ ] No passwords logged in application output (temporary passwords are never logged)
+- [ ] Health endpoint does not expose raw error strings (shows only "error" status)
+- [ ] API error responses do not leak internal exception details
+- [ ] Frontend console logging restricted in production mode
+- [ ] Authentication failure logs do not reveal whether username exists or password was wrong
+
+### Application Configuration
+
+- [ ] Frontend `.env` exists with correct `VITE_API_URL`
+- [ ] Backend `.env` has `ALLOWED_ORIGINS` with frontend URL
+- [ ] Root `.env` has correct `FRONTEND_PORT` and `BACKEND_PORT`
+- [ ] Using correct docker-compose file (Unraid vs dev)
+- [ ] Frontend rebuilt after env changes
+- [ ] All containers running: `docker-compose ps`
+- [ ] Backend accessible: `curl http://YOUR-IP:7881/health`
+- [ ] Frontend accessible: `curl -I http://YOUR-IP:7880`
+- [ ] No JavaScript errors in browser console
+- [ ] Port mapping correct (`:80` not `:3000` for frontend)
+
+---
+
+---
+
+## Quick Commands Cheatsheet
+
+### Container Management
+
+```bash
+# View all containers
+docker-compose ps
+
+# Restart all services
+docker-compose restart
+
+# Restart specific service
+docker-compose restart backend
+
+# View logs (follow mode)
+docker-compose logs -f
+
+# View logs for specific service
+docker-compose logs -f backend --tail 100
+
+# Enter container shell
+docker exec -it intranet-backend /bin/bash
+docker exec -it intranet-mysql /bin/bash
+```
+
+### Database Commands
+
+```bash
+# Connect to MySQL
+docker exec -it intranet-mysql mysql -u root -p the_logbook
+
+# Run Alembic migrations
+docker exec intranet-backend alembic upgrade head
+
+# Check migration status
+docker exec intranet-backend alembic current
+
+# View migration history
+docker exec intranet-backend alembic history
+```
+
+### Health Checks
+
+```bash
+# Backend health
+curl http://localhost:7881/health
+
+# Frontend health
+curl -I http://localhost:7880
+
+# Redis health
+docker exec intranet-redis redis-cli -a PASSWORD --no-auth-warning ping
+
+# MySQL health
+docker exec intranet-mysql mysqladmin -u root -p ping
+```
+
+### Debugging
+
+```bash
+# Check container resource usage
+docker stats
+
+# View container details
+docker inspect intranet-backend
+
+# Check network connectivity
+docker network inspect logbook-internal
+
+# Test internal connectivity
+docker exec intranet-backend ping -c 3 mysql
+docker exec intranet-frontend wget -qO- http://backend:3001/health
+```
+
+### Cleanup Commands
+
+```bash
+# Remove stopped containers
+docker container prune
+
+# Remove unused images
+docker image prune
+
+# Remove unused volumes (CAUTION: may delete data)
+docker volume prune
+
+# Full cleanup (CAUTION)
+docker system prune -a
+```
+
+### Log Analysis
+
+```bash
+# Search for errors in backend logs
+docker logs intranet-backend 2>&1 | grep -i "error\|exception"
+
+# Search for specific user activity
+docker logs intranet-backend 2>&1 | grep "user@example.com"
+
+# Export logs to file
+docker logs intranet-backend > backend_logs_$(date +%Y%m%d).txt 2>&1
+
+# Monitor logs in real-time with filtering
+docker logs -f intranet-backend 2>&1 | grep --line-buffered "ERROR"
+```
+
+---
+
+---
+
+## Equipment Checks & Shift Reports (2026-04-04 → 2026-04-09)
+
+### Problem: A checklist opens with no items and no explanation
+
+**Status (Fixed):** Templates with no items produced an empty form with no user feedback. The form now says so instead of rendering blank.
+
+### Problem: Duplicate checks for the same shift and apparatus
+
+**Status (Fixed):** A composite unique constraint now prevents them. Pass/fail computation was also corrected for templates mixing check types.
+
+### Problem: Submitting a shift report fails for a trainee with an assignment but no attendance
+
+**Status (Fixed):** The report path assumed an attendance row existed for every assignment.
+
+**Edge Case:** A report linked to a shift validates that its `shift_date` matches the shift's. Checks not tied to a shift are supported — `shift_id` is nullable, which is what makes an ad-hoc checklist possible.
+
+---
+
+---
+
+## Training Program 500s (2026-04-04)
+
+### Problem: Enrollment lookups return 500
+
+**Status (Fixed):** An incorrect field name in the enrollment lookup, and a missing `started_at` column that the training program service already referenced.
+
+**Edge Case:** `NotificationLog` used `metadata` as a model attribute, which SQLAlchemy's declarative base reserves; it was renamed. Any new model hitting the same error needs a different attribute name.
+
+---
+
+---
+
+## Salesforce Sync (2026-04-10 → 2026-04-12)
+
+### Problem: Changes made in Salesforce do not appear in The Logbook (or the reverse)
+
+**Status (Configuration):** `sync_direction` on the integration governs it — `push` (the default: Logbook → Salesforce only), `pull`, or `both`. Inbound changes are written only when it is `pull` or `both`. Set it on the Integrations page before the first run.
+
+**Edge Case:** There is **no conflict-resolution setting**. The 2026-04-12 changelog entry described configurable "Salesforce wins / Logbook wins / newest wins" strategies; no such option exists in `salesforce_sync_service.py` or the Integrations page — the direction is the only control. A record edited on both sides between syncs is resolved by whichever side the direction lets write last.
+
+The webhook receiver validates the Salesforce organization id, so outbound messages from another org are rejected. The Integrations page carries connection status, last sync timestamp and sync history for per-run detail.
+
+---
+
+---
+
+## Cloudflare Email Platform (2026-04-26)
+
+### Problem: Cloudflare email sending is not available or fails to test
+
+**Status (Configuration):** Set `CLOUDFLARE_EMAIL_ENABLED`, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. The connection test validates the token against Cloudflare's `/user/tokens/verify`, so a failing test is usually a token scope problem rather than a sending problem.
+
+**Edge Case:** The account id is validated against `[a-f0-9]{32}` before being interpolated into the URL (SSRF guard) — a malformed id is rejected before any request is made. SPF, DKIM and DMARC are handled by Cloudflare when the domain is managed there.
+
+---
+
+---
+
+## Offline Queue & Pending Sync (2026-05-01 → 2026-05-02)
+
+### Problem: An RSVP or training submission made offline seems to vanish
+
+**Status (Expected Behavior):** Submissions made without connectivity are queued in IndexedDB and flushed when it returns. The top navigation shows an offline / pending-sync pill counting what is waiting.
+
+**Edge Case:** The dashboard "Upcoming Events" stat counts only the next 30 days, which is why a distant event does not appear in it.
+
+---
+
+---
+
+## Training Attachments & Exports (2026-05-24 → 2026-05-25)
+
+### Problem: A training attachment is rejected
+
+**Status (Configuration):** Maximum 25 MB, and the true MIME type is detected from the file's magic bytes rather than its extension. Allowed: PDF, JPEG, PNG, GIF, WEBP, DOC and DOCX (`ALLOWED_ATTACHMENT_MIME` in `endpoints/training_enhancements.py`). A renamed file is still rejected on its real type.
+
+### Problem: A training session cannot be finalized
+
+**Status (Configuration):** `require_completion_confirmation` gates finalize. It defaults to `false`; when a department turns it on, every attendee must confirm before the session can close.
+
+**Edge Case:** Finalizing used to create a second check-in record; it now promotes the existing one. Unknown CSV report types return an explicit 400 rather than an empty file.
+
+---
+
+---
+
+## Prospect Documents & the Coordinator Role Rename (2026-05-28)
+
+### Problem: A prospect document upload is rejected
+
+**Status (Configuration):** The limit is 50 MB and the MIME type is validated from magic bytes. Files are stored per organization at `/app/uploads/prospect-documents/{organization_id}/{prospect_id}/`.
+
+### Problem: The `membership_committee_chair` role cannot be found
+
+**Status (Renamed):** It is now `membership_coordinator`, with the same `prospective_members.manage` permission. References in permissions, seeds and the frontend were updated together.
+
+---
+
+---
+
+## OAuth Sign-In Failures (2026-05-29)
+
+### Problem: Sign in with Google or Microsoft returns to `/login?error=…`
+
+**Status (By Design — read the code):** Each failure mode has a distinct code. `invalid_state` is a CSRF state mismatch between cookie and query (usually a cookie blocked or a stale tab). `token_exchange_failed` is a network or non-200 from the IdP. `invalid_id_token` is a signature, audience or expiry failure. `invalid_tenant` is a Microsoft token from another tenant — the flow is single-tenant locked. `unverified_email` is a Google account with `email_verified=false`. `domain_not_allowed` means the email's domain is outside `GOOGLE_ALLOWED_DOMAINS` / `AZURE_AD_ALLOWED_DOMAINS`.
+
+**Edge Case:** Both flows are **link-existing only** — they never create an account. A member whose email matches no user cannot sign in this way, by design. Successful sign-ins log an `oauth_login` audit event with the provider.
+
+---
+
+---
+
+## Compliance Evaluation Period (2026-05-29)
+
+### Problem: Compliance percentages do not match a hand count
+
+**Status (Configuration):** `include_current_month` decides whether the in-progress month counts. It is set per organization on the Compliance Requirements thresholds tab and can be overridden per requirement (`NULL` inherits the org default). Excluding the current month evaluates as of the last day of the previous one.
+
+**Edge Case:** Certificate "expiring soon" lookahead deliberately always uses the real current date, not the resolved as-of date — an expiry warning must not be suppressed by an evaluation-period setting.
+
+---
+
+---
+
+## Login Blocked Until Configured (2026-06-25)
+
+### Problem: `/login` redirects to onboarding
+
+**Status (Expected Behavior):** The login page calls `GET /api/v1/onboarding/status` on mount and redirects to `/onboarding` when `needs_onboarding` is true — an unconfigured install has no accounts to sign into. A spinner shows while the check is in flight so the form never flashes first.
+
+**Edge Case:** If the status check itself fails, the page falls back to rendering the sign-in form rather than trapping the user.
+
+---
+
+---
+
+## Forced Password Change Rejected as "Changed Recently" (2026-06-25)
+
+### Problem: A new user cannot complete their required first password change
+
+**Status (Fixed):** A user created by an admin carries `must_change_password` together with a fresh `password_changed_at`, and the HIPAA minimum-password-age check (`HIPAA_MINIMUM_PASSWORD_AGE_DAYS`, default 1) rejected their _required_ change — trapping them until an admin reset. The minimum-age check is now skipped when `must_change_password` is set; voluntary changes still enforce it.
+
+---
+
+---
+
+## Inventory Impact Planner (2026-06-22 → 2026-06-23)
+
+### Problem: Members are missing from a planner analysis, or carry full demand
+
+**Status (Expected Behavior):** A member with no size on file cannot be matched to a size and carries their full demand into the shortfall. Use **Request sizes** to notify them; they set it from self-service preferences.
+
+### Problem: A bulk issue skips members
+
+**Status (Expected Behavior):** With `allowance_aware` on, members at or over their per-category `issuance_allowances` cap are flagged before the issue and reported as skips with reasons. A role-specific allowance beats the org-wide one.
+
+**Edge Case:** Sizes match on a normalized key (alpha aliases like `3XL`↔`XXXL` are canonicalized, boot-width and parenthetical notes dropped). Contact details in the planner honor the org's `contact_info_visibility` settings, so a plan may show fewer columns than the operator expects.
+
+---
+
+---
+
+## Training Pipelines: Self-Service Limits & Alerts (2026-07-14 → 2026-07-16)
+
+### Problem: A member cannot mark their own requirement complete
+
+**Status (Intentional):** Members may still self-_report_ training, but completing or verifying a requirement is an officer action, and a training officer can no longer approve their own self-reported training. Both are separation-of-duties guards, not bugs.
+
+### Problem: Struggling-member and deadline alerts never arrived
+
+**Status (Fixed):** They were generated and not delivered. Also fixed: withdrawn or failed enrollments were being auto-resurrected by the enrollment path, and future-dated submissions are now rejected.
+
+**Edge Case:** Concurrent enrollment is a soft advisory rather than a hard filter — a member already enrolled elsewhere can still be enrolled deliberately.
+
+---
+
+---
+
+## Shift Finalize Gates (2026-07-16)
+
+### Problem: A shift cannot be finalized
+
+**Status (Configuration):** A department can require end-of-shift equipment checks before finalizing. Understaffed shifts are flagged at finalize rather than blocked, so running short is recorded rather than hidden.
+
+### Problem: A finalized shift needs correcting
+
+**Fix:** Use **Reopen / unfinalize** — permissioned and audit-logged — rather than deleting. Shifts also have a lifecycle status, so cancelling is distinct from deleting.
+
+**Edge Case:** `restrict_checkin_to_assigned` limits check-in to assigned members. The officer named on a shift can manage it without department-wide scheduling permission. Members subscribe to their own shifts via a personal ICS calendar feed.
+
+---
+
+---
+
+## Messaging Escalation & Acknowledgment (2026-07-17)
+
+### Problem: A member did not receive the text for an urgent message
+
+**Status (Configuration):** Members opt out per channel via the **Urgent Text Messages** toggle, and escalation is throttled per department to protect the email/SMS budget. From 2026-08-05, SMS is additionally gated on recorded TCPA consent — never asked counts as refused.
+
+**Edge Case:** Email is the channel of record and is unconditional: every department message is emailed regardless of urgency or the `email_notifications` preference, which is what makes consent-gated SMS safe. An acknowledgment-required message stays pending until acknowledged; the per-recipient breakdown is on the admin message list.
+
+---
+
+---
+
+## Field Encryption Upgrade (2026-07-21 → 2026-08-01)
+
+### Problem: Which encryption format is my data in?
+
+**Status (Migrated in place):** Sensitive fields moved from Fernet to AES-256-GCM, then to PBKDF2 at 600,000 iterations. New values carry a `$gcm2$` marker; `$gcm1$` and legacy Fernet values stay readable, and the key-rotation tooling rewrites them onto the current factor.
+
+**Edge Case:** Keep `ENCRYPTION_KEY` and `ENCRYPTION_SALT` with your backups — a backup without its era's keys cannot decrypt encrypted fields. See `docs/AES256_GCM_BACKFILL_RUNBOOK.md` and `docs/KEY_ROTATION.md`.
+
+---
+
+---
+
+## Shared-Device Data Leaks (2026-07-21 → 2026-07-27)
+
+### Problem: A member sees another member's data on a station computer
+
+**Status (Fixed):** PII and roster responses are excluded from the in-memory client cache, so cached data no longer survives a user switch on a shared device. Separately, the inventory WebSocket now authenticates through the full session store — it previously kept streaming org events to a logged-out or password-changed session until the token expired.
+
+**Edge Case:** Offline drafts and queues are a different store with their own history — see **Offline Queues Across Tabs (2026-08-01)** below.
+
+---
+
+---
+
+## Production Posture & Compose Overrides (2026-07-27)
+
+### Problem: Production boots in development mode
+
+**Status (Fixed):** The base `docker-compose.yml` is a development configuration and it **hardcoded** `ENVIRONMENT: development`, silently overriding `.env` — so every documented `docker compose up -d` skipped the startup security gate (API docs public, HTTPS not enforced, auth-cookie `Secure` off, DB/Redis plaintext, `/health/detailed` exposed).
+
+**Fix:** The base file now honors `.env` (`${ENVIRONMENT:-development}`), and production layers the override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so bare `docker compose` management commands stay hardened. `install.sh` does this automatically.
+
+**Edge Case:** In production/staging the app **refuses to start** if secrets are missing or weak, if `DEBUG` or API docs are on, or if HTTPS is not enforced. That refusal is the gate working, not a failure to configure.
+
+---
+
+---
+
+## Host Header & Reverse-Proxy Trust (2026-07-27)
+
+### Problem: Requests are rejected with HTTP 400 after adding a proxy or hostname
+
+**Status (Expected Behavior):** `TrustedHostMiddleware` rejects a `Host` header outside `TRUSTED_HOSTS`. Add the hostname members actually use. Emailed ballot links are built from `settings.FRONTEND_URL` rather than the request host, because a spoofed `Host` could otherwise mail live voting tokens pointing at another domain.
+
+### Problem: Every client shows the same IP; geo-blocking does nothing
+
+**Status (Fixed):** With the empty `TRUSTED_PROXY_IPS` default, every request appeared to come from the proxy's container IP — geo-blocking silently no-opped and all clients shared one rate-limit bucket, which is a global login DoS. `TRUSTED_PROXY_IPS` accepts CIDR ranges and the production override defaults it to the private Docker ranges.
+
+**Edge Case:** Set it only when a proxy is actually in front of the app. If the backend port is published directly, the connecting peer _is_ the client, and trusting forwarded headers would let clients spoof `X-Forwarded-For`. A further 39 call sites still reading the raw peer address were corrected 2026-08-05; rows written before then still hold proxy addresses.
+
+---
+
+---
+
+## DB / Redis TLS Verification (2026-07-27 → 2026-08-01)
+
+### Problem: Startup is blocked complaining about unverified TLS
+
+**Status (Intentional):** `DB_SSL` / `REDIS_SSL` without a CA (`DB_SSL_CA` / `REDIS_SSL_CA`) encrypts but never authenticates the peer — worse than honest plaintext, because it is indistinguishable from a correct setup. It warned from 2026-07-27 and **blocks startup in production and staging** from 2026-08-01.
+
+**Fix:** Set the CA path. `SECURITY_ALLOW_UNVERIFIED_TLS=true` waives the block and logs the acceptance on every boot.
+
+---
+
+---
+
+## MODULE\_\*\_ENABLED Flags Do Nothing (2026-07-27)
+
+### Problem: Setting `MODULE_TRAINING_ENABLED` (or similar) has no effect
+
+**Status (Removed):** The backend never read them — all API routers register unconditionally — so they only misled operators. They are gone from the composes, installers, the Unraid template and the docs.
+
+**Fix:** Module availability is per organization, at runtime, under Organization Settings → Modules (`enabled_modules`).
+
+---
+
+---
+
+## Elections: Eligibility, Test Ballots & Runoffs (2026-07-28 → 2026-07-29)
+
+### Problem: A member cannot vote, or an election shows fewer eligible voters than expected
+
+**Status (Fixed):** Eligibility is now actually enforced at `cast_vote` rather than computed and ignored, so the eligible roster and who can vote finally agree. Candidate edits and deletes are org-scoped.
+
+**Edge Case:** Test ballots let you rehearse without polluting results; a runoff is created automatically when nobody wins outright; per-department feature toggles control the nomination phase and paper-ballot entry. The elections deep-dive (YouTube script 12 and its shorts pack) covers the debugging path in order.
+
+---
+
+---
+
+## FastAPI / Starlette Upgrade (2026-07-30)
+
+### Problem: A pinned dependency conflicts on install after pulling
+
+**Status (Expected):** The stack moved to fastapi 0.141.1 + starlette 1.3.1 (the security-fix line), with fastapi-mail, aiosmtplib, PyJWT, cryptography, pydantic-settings, pypdf, email-validator, schemathesis and pytest pinned to match. Install from `backend/requirements.txt` rather than upgrading individual packages.
+
+**Edge Case:** `pip-audit -r requirements.txt` runs **blocking** in CI with documented ignores; a new advisory fails the build rather than being noticed later.
+
+---
+
+---
+
+## Audit Log Retention, Archival & Shipping (2026-07-30 → 2026-07-31)
+
+### Problem: Audit rows are disappearing, or the table is growing without bound
+
+**Status (Configuration):** `HIPAA_AUDIT_RETENTION_DAYS` (7 years) was declared but never applied; a weekly job now exports expired rows to gzipped JSONL under `AUDIT_ARCHIVE_DIR` **before** purging them. Purges are checkpoint-aligned, refuse to run on a chain that fails verification, and record a keyed HMAC attestation of the boundary so the surviving chain still verifies.
+
+### Problem: Audit rows should survive loss of the host
+
+**Fix:** Set `AUDIT_SHIP_WEBHOOK_URL`. The `audit_log_ship` task POSTs new rows as HMAC-signed NDJSON every 30 minutes, advancing a durable watermark only on acknowledgment. It is a no-op unless configured.
+
+**Edge Case:** `audit_logs.organization_id` was added 2026-07-30 (migration `20260801_0009`, backfilled from `user_id`, hash-bound from version 3). Queries that previously filtered through the user relationship now filter the column directly.
+
+---
+
+---
+
+## Privacy Rights: Export, Consent & Anonymization (2026-07-31)
+
+### Problem: A member asks for everything the system holds about them
+
+**Fix:** Settings → Security → **Download my data** (`GET /users/me/data-export`). Self-scoped, audited, rate-limited to 3/hour. Credentials, MFA secrets and tokens are never exported; audit history is summarized rather than dumped.
+
+### Problem: A departed member asks to be erased
+
+**Fix:** `POST /users/{id}/anonymize` scrubs names, contacts, address, DOB, photo, emergency contacts, credentials and MFA material, and the applicant-era prospect record — while keeping operational history (training completions, attendance, dues) as the department's record. `users.anonymized_at` records the event.
+
+**Edge Case:** Audit logs and election records are deliberately untouched — rewriting them would be tampering. Documents and meeting minutes are excluded from automatic retention deletion for the same reason: destroying official records stays a human decision.
+
+---
+
+---
+
+## Assorted July Fixes (2026-07-21 → 2026-07-31)
+
+### Problem: SSO client secrets are blanked after saving organization settings
+
+**Status (Fixed):** A full-settings round trip persisted the redacted placeholder (`••••••••`) over the real secret, because the preservation loop omitted the `auth` section.
+
+### Problem: Inventory item history returns an error
+
+**Status (Fixed):** Items with pool issuances hit a null-handling bug in the history query.
+
+### Problem: Two members are issued the same membership number
+
+**Status (Fixed):** Generation is now collision-safe under concurrency — the org row is locked `FOR UPDATE` before the counter is read and incremented, and the retry loop is capped.
+
+### Problem: Deleting a document or folder leaves the file on disk
+
+**Status (Fixed):** Both paths now remove the backing files. A folder delete walks the subtree first.
+
+**Edge Case:** Also in this window — a facilities maintenance record without a type returns a clean validation error instead of a 500; leave-of-absence edits validate that the start precedes the end; and changing your own email resets `email_verified`, so the new address must be verified again.
+
+---
+
+---
+
+## Offline Queues Across Tabs (2026-08-01)
+
+### Problem: Equipment-check queueing stops working on one browser profile
+
+**Status (Fixed):** Two modules opened the same IndexedDB database (`logbook-offline`) at different versions — 1 and 2. IndexedDB rejects an open below the stored version, so the first queued shift report permanently broke equipment-check queueing on that profile. Name, version and upgrade path now live in one shared module.
+
+### Problem: Logout hangs on a station computer
+
+**Status (Fixed):** An IndexedDB open fires `blocked` — and neither `success` nor `error` — when another tab holds the database during an upgrade, so the promise never settled. Logout awaits the shared-device purge, so this could strand a member signed in. Opens now reject on `blocked` and on timeout, and set `onversionchange` so an open tab stops blocking others.
+
+**Edge Case:** Queued shift reports — the densest PII of any offline store — were never purged at logout, and now are.
+
+---
+
+---
+
+## Approvals Require a Second Person (2026-08-01)
+
+### Problem: An officer cannot approve their own request
+
+**Status (Intentional — ISO/IEC 27001 A.5.3):** A treasurer could raise a check request and approve it; an instructor could examine themselves and record a pass that satisfied a certification; an officer could approve their own administrative hours. All three now require a second person.
+
+**Edge Case:** Practice skills tests stay self-serve, and rejection is never blocked — withdrawing your own request is not a conflict of interest.
+
+---
+
+---
+
+## Last Administrator Lockout (2026-08-01)
+
+### Problem: A change to an administrator's role or status is refused
+
+**Status (Intentional):** Nothing counted how many administrators an organization had left, so a sole administrator could lock out a whole department in one request — set their own status to `inactive` and authentication rejects them on the next call, with recovery requiring direct database access. The guard covers role assignment and removal, member delete, status change, archive, and position edit or delete.
+
+---
+
+---
+
+## Frontend Env Vars That Do Nothing (2026-08-01)
+
+### Problem: `VITE_ENABLE_PWA=false` still ships the service worker
+
+**Status (Removed):** `VITE_WS_URL`, `VITE_ENV`, `VITE_ENABLE_PWA` and `VITE_ENABLE_ANALYTICS` were declared and documented but read by no code. Two were actively misleading — the inventory socket derives its URL from the page origin (which is what makes it work behind a reverse proxy), and the PWA plugin registers unconditionally, so the service worker whose `NetworkOnly` rule for `/api/` is part of the HIPAA caching posture shipped regardless.
+
+**Edge Case:** Reintroduce one only alongside code that reads it.
+
+---
+
+---
+
+## Room Kiosk Time & Check-In Window (2026-08-05)
+
+### Problem: A wall-mounted kiosk shows times hours off
+
+**Status (Fixed):** The kiosk page is deliberately public — a wall tablet holds no session — so the timezone hook had no user profile to read and fell through to the device's zone. A display left on its factory default (commonly UTC) showed event times shifted by hours. The display response now carries the organization's timezone, with the browser zone only as a fallback.
+
+**Edge Case:** `GET /locations/{id}/display` also reported a fixed "one hour before" check-in window when the real window is per-event configurable.
+
+---
+
+---
+
+## Migration Chain Has Two Heads (2026-08-05)
+
+### Problem: `npm run db:migrate` / `alembic upgrade head` fails on every deployment
+
+**Status (Fixed):** Two branches merged the same day each claimed revision `20260805_0010` off the same parent. Alembic cannot resolve a duplicate id, so the upgrade failed everywhere. The second was renumbered to `20260805_0011` and sequenced after the first.
+
+**Edge Case:** This is the same collision shape as the 2026-08-07 duplicate ids. The migration-chain guard now asserts a single head, which catches a fork that duplicate-id, dangling-parent and multiple-root checks all pass.
+
+---
+
+---
+
+## Member PII Visibility (2026-08-04)
+
+### Problem: A member's date of birth and emergency contacts are missing from their profile
+
+**Status (Intentional):** Both are restricted to `members.manage` holders and to the member themselves. The profile hides the emergency-contacts section entirely rather than rendering it empty, because an empty section reads as "none on file".
+
+**Edge Case:** No organization setting can publish them — the contact-visibility toggles cover email, phone and mobile only. Leadership viewing another member's record writes `restricted_pii_disclosed` on the `user_viewed` audit event.
+
+---
+
+---
+
+## Member Delete & Role Save Failures (2026-08-07)
+
+### Problem: Saving a member's roles silently removes their positions
+
+**Status (Fixed):** The endpoint ran a hand-written `DELETE` over every assignment and then reassigned the collection, so the ORM diffed against a stale collection and never re-inserted positions present in both sets. The raw deletes are gone.
+
+### Problem: Permanently deleting a member returns a server error, or is refused with a 409
+
+**Status (Fixed / Intentional):** The 500 was the same stale-collection pattern in the continuity guard. The `409` is deliberate: 12 NOT NULL attribution columns (budgets, purchase requests, expense reports, IP exceptions) cannot be cleared without falsifying who filed the record. The response names them and points at deactivate + anonymize, which strips personal information while leaving those records owned. The admin page used to discard that explanation and show a generic failure.
+
+**Edge Case:** The 62 nullable attribution columns are cleared automatically. Both lists are derived from the schema at delete time, so tables added later are covered.
+
+---
+
+---
+
+## 422 Errors Reading "Invalid value" (2026-08-07)
+
+### Problem: A failed save reports "Invalid value" for every field, naming none of them
+
+**Status (Fixed):** The server rewrites Pydantic's `{loc, msg, type}` entries into `{field, message}`, but the shared error handler read only the Pydantic spelling and fell back to a literal string. A member import reported 50 rows of "Invalid value. Invalid value". Both spellings are now accepted.
+
+**Edge Case:** This affected **every** 422 in the application, not just imports. The onboarding module carried its own copy of the assumption and was fixed alongside it.
+
+---
+
+---
+
+## Web Push Notifications (2026-08-07)
+
+### Problem: No push notifications arrive with the app closed
+
+**Status (Configuration):** Push is **off by default**. Set `PUSH_ENABLED=true` plus `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`, and install `pywebpush` — it is imported behind a guard so deployments that do not want push need not install it. Unconfigured, the service reports itself so and the UI hides the toggle.
+
+**Edge Case:** On iOS the push API exists only once the PWA is installed to the home screen (16.4+), so Safari browsing correctly shows no toggle. Subscriptions are per device, and rows are pruned only when the push service answers 404/410 — the sole signal that an app was uninstalled or its site data cleared.
+
+---
+
+---
+
+## Pages Crashing to the Error Boundary (2026-08-07)
+
+### Problem: A page shows the error screen instead of rendering empty
+
+**Status (Fixed):** `api.get<T[]>` asserts the wire format without checking it, and ~190 service methods handed that straight to callers that spread or `.map` it — so one unexpected body took the whole page down. 166 methods across 20 files now verify the array they promise, with envelope reads guarded at the four consumers the service-level guard cannot reach.
+
+**Edge Case:** The usual cause of an unexpected body is a captive portal or carrier interception page answering 200 with HTML — which is why this shows up on station Wi-Fi and on phones more than on desktops. `src/e2e/mobile-resilience.spec.ts` walks all 29 authenticated routes at 390px and fails if any reaches the error boundary.
+
+---
+
+---
+
+## Frontend Container Unhealthy (2026-08-07)
+
+### Problem: The frontend reports unhealthy while nginx is serving fine
+
+**Status (Fixed):** nginx binds IPv4 only (`listen 80;`), the container resolves `localhost` to both families, and musl returns the IPv6 address first — so the healthcheck was refused. The image's `HEALTHCHECK` and the container test now name `127.0.0.1` literally.
+
+**Edge Case:** This affected production, not just CI. Pull the latest code and rebuild the frontend image.
+
+---
+
+---
+
+## Frontend Build Pulls Unpinned Dependencies (2026-08-07)
+
+### Problem: Production ships dependency versions no test ever ran against
+
+**Status (Fixed):** The image copied only `frontend/package.json` and re-resolved 604 packages from the registry on every build. The build context is now the **repository root** (`docker build -f frontend/Dockerfile .`) so the single root `package-lock.json` is in reach, and the install is `npm ci`.
+
+**Edge Case:** Update any script or compose override that still names `./frontend` as the build context — see the next entry.
+
+---
+
+---
+
+## Alembic Duplicate Revision IDs (2026-08-07)
+
+### Problem: The backend crashes on startup and migrations cannot resolve
+
+**Status (Fixed):** Two same-day pull requests merged without being rebased onto each other produced duplicate revision ids (`20260807_0001`, `20260807_0002`). A revision id is what Alembic writes to the version table, so a duplicate leaves the graph unresolvable rather than merely forked — the revision map cannot be built at all, which breaks deploys from `main`, not just tests.
+
+**Edge Case:** The migration-chain guard now asserts a single head. It already caught duplicate ids, dangling parents and multiple roots, but a fork passes all three while still leaving `upgrade head` ambiguous.
+
+---
+
+---
+
+## Push Subscriptions Table Collation (2026-08-07)
+
+### Problem: A fresh install fails creating the push-subscriptions table
+
+**Status (Fixed):** The migration named a character set without a collation, so the table took the server's default collation rather than the database's — and a foreign key requires both sides to agree on collation as well as type.
+
+**Edge Case:** Only affects fresh installs; existing databases already had the table.
+
+---
+
+---
+
+## Skills Testing: Attempts, Conflicts & Result Visibility (2026-08-08)
+
+### Problem: An examiner is refused when creating or completing a test
+
+**Status (Intentional):** `max_attempts` on the linked pipeline requirement is now enforced, both at creation (so an examiner is refused before running an evaluation that could not count) and at completion (several can be started before any is submitted). An attempt is a completed, official, non-voided test. Voided results and practice attempts do not consume a chance, and a requirement already completed, verified or waived is exempt so recertification stays possible.
+
+### Problem: A save is refused with 409, or autosave stops
+
+**Status (Intentional):** Tests carry a version counter and an update sent against a stale version is refused, rather than one of two examiners silently losing their work and getting a success response. The test screen suspends autosave and says so instead of retrying a doomed write.
+
+### Problem: A member cannot see their own result
+
+**Status (Configuration):** The department sets what (`full` / `scores` / `none`), when (`on_completion` / `on_release`) and who, under **Skills-Test Results** in the training configuration editor, overridable per template or per test. Defaults are `full` / `on_completion`. Under `on_release` an officer must use the **Release** action beside **Void**.
+
+**Edge Case:** A withheld result reads as absent rather than forbidden — refusals are `404` and the test is dropped from the list. Emailed results obey the same policy, resolved for the recipient rather than the sender.
+
+---
+
+---
+
+## Equipment Check Submission Fails (2026-08-08)
+
+### Problem: Submitting a shift equipment check fails for any shift with an apparatus assigned
+
+**Status (Known Issue — open):** `shifts.apparatus_id` is an unconstrained string carrying a scheduling apparatus id, while the equipment-check table's column is a real foreign key to the apparatus table, and the create path copies one into the other. Every route to a fix means picking a side in a two-apparatus-tables inconsistency, so it is reported rather than guessed at. See `docs/KNOWN_LIMITATIONS.md`.
+
+**Workaround:** Submit checks against shifts with no apparatus assigned.
+
+---
+
+---
+
+## Development Environment: Tests, Hooks & Node Version (2026-08-08)
+
+### Problem: Backend tests fail on a clean checkout with unexplained data
+
+**Status (Fixed):** The suite ran against the developer's own working database, since that is what `.env` points at. The per-test transaction is rolled back so nothing is written, but tests still _read_ it and several assert on an empty slate — 37 of 46 apparent "pre-existing failures" were this. `pytest` now points at `intranet_test` and creates it if absent; CI can still name the database by exporting `DB_NAME`.
+
+### Problem: The pre-commit hook never runs
+
+**Status (Fixed):** There was no `prepare` script, so the hooks path was never set — which is how a lint violation reached `main`. Run `npm install` to install the hook. It delegates to the declared lint-staged config and runs ESLint from `frontend/`, where the flat config lives.
+
+### Problem: `npm ci` fails with "Missing: vite@... from lock file"
+
+**Status (Fixed):** Lockfile drift on `main`; regenerated. **Node >= 22** is the real floor — the root install builds the frontend workspace, so the frontend's floor governs.
+
+---
+
+**Most Common Fix:** 90% of issues are resolved by:
+
+1. Updating `frontend/.env` with correct `VITE_API_URL`
+2. Running `docker-compose build --no-cache frontend`
+3. Running `docker-compose up -d`
+
+---
+
+## Still Stuck?
+
+1. **Search this guide** — Ctrl+F with keywords from your error. It is one file
+   precisely so that one search covers everything.
+2. **Check the wiki's per-area pages** — [Containers](../wiki/Troubleshooting-Containers.md), [Backend](../wiki/Troubleshooting-Backend.md), [Frontend](../wiki/Troubleshooting-Frontend.md) and [Database](../wiki/Troubleshooting-Database.md). (The wiki's own **Troubleshooting** page is generated from this file, so it will not tell you anything new.)
+3. **Review recent changes** — [CHANGELOG.md](../CHANGELOG.md) records what shipped
+   and when; an entry dated near the day the behavior changed is usually the
+   explanation.
 4. **Open an issue** — [GitHub Issues](https://github.com/thegspiro/the-logbook/issues) with:
    - Error message (full text)
    - Steps to reproduce
    - Environment (Docker, Unraid, bare metal)
    - Browser and OS version
    - Backend logs (`docker logs logbook-backend --tail 100`)
+
+See [Getting Help](#getting-help) above for the full diagnostic bundle to
+gather before filing.
