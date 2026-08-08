@@ -226,6 +226,7 @@ docker-compose up -d
 1. Make sure you're in the correct directory: `backend/` for the backend image, the repository root for the frontend image (it builds with `-f frontend/Dockerfile .`)
 2. Check that all required files exist (main.py, app/, package.json, etc.)
 3. Pull latest code: `git pull origin main`
+4. If you build through a compose file rather than these `docker build` commands, check the contexts it declares against the Dockerfiles: `./scripts/sync-compose-build-context.sh -f docker-compose.yml` (add `--fix` to repair them in place). `docker compose config` validates YAML and interpolation only and never opens the Dockerfile, so a stale context passes validation and fails the build — the frontend's `"/frontend/nginx.conf": not found` is this.
 
 ### Images too large / build takes forever
 
@@ -285,6 +286,9 @@ When you make code changes and want to update the images:
 ```bash
 # Pull latest code
 git pull origin main
+
+# If you build via compose, reconcile its contexts with the pulled Dockerfiles
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
 
 # Rebuild and push backend
 docker build -f backend/Dockerfile --target production -t ghcr.io/thegspiro/the-logbook-backend:latest ./backend

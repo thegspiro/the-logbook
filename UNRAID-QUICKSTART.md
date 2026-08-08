@@ -42,8 +42,12 @@ docker compose logs -f
 # Restart
 docker compose restart
 
-# Update (backs up the DB, pulls, rebuilds, recreates — safely)
+# Update (backs up the DB, pulls, repairs build contexts, rebuilds — safely)
 ./unraid/update.sh
+
+# Updating by hand instead? Run this between the pull and the build —
+# a pulled Dockerfile can outgrow the context your compose file names.
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
 
 # Fix container conflicts
 docker compose down --remove-orphans && docker compose up -d

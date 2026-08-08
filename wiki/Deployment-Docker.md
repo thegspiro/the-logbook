@@ -81,6 +81,7 @@ BACKEND_PORT=3001
 ### Frontend Environment
 
 Create `frontend/.env`:
+
 ```bash
 VITE_API_URL=/api/v1
 ```
@@ -91,21 +92,21 @@ VITE_API_URL=/api/v1
 
 ## Services
 
-| Service | Container | Port | Description |
-|---------|-----------|------|-------------|
-| Frontend | logbook-frontend | 3000→80 | React app served by Nginx |
-| Backend | logbook-backend | 3001 | FastAPI application |
-| MySQL | logbook-db | 3306 (internal) | Database |
-| Redis | logbook-redis | 6379 (internal) | Cache & sessions |
+| Service  | Container        | Port            | Description               |
+| -------- | ---------------- | --------------- | ------------------------- |
+| Frontend | logbook-frontend | 3000→80         | React app served by Nginx |
+| Backend  | logbook-backend  | 3001            | FastAPI application       |
+| MySQL    | logbook-db       | 3306 (internal) | Database                  |
+| Redis    | logbook-redis    | 6379 (internal) | Cache & sessions          |
 
 ### Optional Services (Profiles)
 
-| Service | Profile | Description |
-|---------|---------|-------------|
-| Nginx | `production` | Reverse proxy with SSL |
-| Elasticsearch | `with-search` | Advanced search |
-| MinIO | `with-s3` | S3-compatible storage |
-| Mailhog | `development` | Email testing |
+| Service       | Profile       | Description            |
+| ------------- | ------------- | ---------------------- |
+| Nginx         | `production`  | Reverse proxy with SSL |
+| Elasticsearch | `with-search` | Advanced search        |
+| MinIO         | `with-s3`     | S3-compatible storage  |
+| Mailhog       | `development` | Email testing          |
 
 Enable a profile: `docker compose --profile with-search up -d`
 
@@ -155,7 +156,7 @@ For production, prefer the **backup sidecar** in `docker-compose.prod.yml` —
 nightly database + uploads + audit-archive snapshots with retention pruning and
 automated restore-verification drills. See
 [Production Deployment → Backup Strategy](Deployment-Production#backup-strategy)
-and [docs/BACKUP.md](../docs/BACKUP.md). *(2026-07-31)*
+and [docs/BACKUP.md](../docs/BACKUP.md). _(2026-07-31)_
 
 ---
 
@@ -165,22 +166,34 @@ and [docs/BACKUP.md](../docs/BACKUP.md). *(2026-07-31)*
 cd /path/to/the-logbook
 docker-compose down
 git pull
+
+# Reconcile the compose build contexts with the Dockerfiles just pulled.
+# `docker compose config` validates YAML and interpolation only — it never
+# opens the Dockerfile — so a context that no longer holds what the build
+# copies passes validation and then fails the build.
+./scripts/sync-compose-build-context.sh --fix -f docker-compose.yml
+
 docker-compose build --no-cache
 docker-compose up -d
 docker-compose exec backend alembic upgrade head
 ```
 
+> Run the context check on every update if you maintain your own compose file:
+> a `git pull` updates the file in the repository, not the one your deployment
+> actually runs. Drop `--fix` to report drift without rewriting anything.
+
 ---
 
 ## Memory Profiles
 
-| RAM | Profile | Notes |
-|-----|---------|-------|
-| 1-2GB | Minimal | Single worker, reduced cache |
-| 4GB | Standard | Default configuration |
-| 8GB+ | Full | Multiple workers, full cache |
+| RAM   | Profile  | Notes                        |
+| ----- | -------- | ---------------------------- |
+| 1-2GB | Minimal  | Single worker, reduced cache |
+| 4GB   | Standard | Default configuration        |
+| 8GB+  | Full     | Multiple workers, full cache |
 
 For low-memory systems:
+
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.minimal.yml up -d
 ```
