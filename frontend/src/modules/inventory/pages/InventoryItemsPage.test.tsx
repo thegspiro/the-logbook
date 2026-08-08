@@ -51,7 +51,9 @@ const mockToastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
   default: {
     success: vi.fn(),
-    error: (...a: unknown[]): void => { mockToastError(...a); },
+    error: (...a: unknown[]): void => {
+      mockToastError(...a);
+    },
   },
 }));
 
@@ -77,7 +79,10 @@ describe('InventoryItemsPage', () => {
     vi.clearAllMocks();
     mockGetItems.mockResolvedValue({ items: [], total: 0 });
     mockGetSummary.mockResolvedValue({
-      total_items: 42, overdue_checkouts: 1, maintenance_due_count: 2, total_value: 0,
+      total_items: 42,
+      overdue_checkouts: 1,
+      maintenance_due_count: 2,
+      total_value: 0,
     });
     mockGetSummaryByLocation.mockResolvedValue([]);
     mockGetCategories.mockResolvedValue([]);
@@ -122,11 +127,7 @@ describe('InventoryItemsPage', () => {
     await screen.findByText('No items found');
 
     await user.type(screen.getByPlaceholderText('Search items...'), 'drill');
-    await waitFor(() =>
-      expect(mockGetItems).toHaveBeenLastCalledWith(
-        expect.objectContaining({ search: 'drill' }),
-      ),
-    );
+    await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'drill' })));
   });
 
   it('refetches when the status filter changes', async () => {
@@ -136,11 +137,7 @@ describe('InventoryItemsPage', () => {
 
     const statusSelect = screen.getByLabelText('Filter by status');
     await user.selectOptions(statusSelect, 'assigned');
-    await waitFor(() =>
-      expect(mockGetItems).toHaveBeenLastCalledWith(
-        expect.objectContaining({ status: 'assigned' }),
-      ),
-    );
+    await waitFor(() => expect(mockGetItems).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'assigned' })));
   });
 
   it('hides the add-item action without the manage permission', async () => {

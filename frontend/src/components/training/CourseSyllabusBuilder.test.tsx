@@ -22,10 +22,8 @@ vi.mock('../../services/trainingServices', () => ({
     getClasses: (...args: unknown[]) => mockGetClasses(...args) as unknown,
     addClass: (...args: unknown[]) => mockAddClass(...args) as unknown,
     deleteClass: (...args: unknown[]) => mockDeleteClass(...args) as unknown,
-    reorderClasses: (...args: unknown[]) =>
-      mockReorderClasses(...args) as unknown,
-    autofillOffsets: (...args: unknown[]) =>
-      mockAutofillOffsets(...args) as unknown,
+    reorderClasses: (...args: unknown[]) => mockReorderClasses(...args) as unknown,
+    autofillOffsets: (...args: unknown[]) => mockAutofillOffsets(...args) as unknown,
     updateClass: vi.fn(),
   },
 }));
@@ -49,12 +47,7 @@ const course: TrainingCourse = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-const makeClass = (
-  id: string,
-  sequence: number,
-  dayOffset: number,
-  title: string,
-): CourseClass => ({
+const makeClass = (id: string, sequence: number, dayOffset: number, title: string): CourseClass => ({
   id,
   organization_id: 'org-1',
   course_id: 'course-1',
@@ -80,9 +73,7 @@ const syllabus = [
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetClasses.mockResolvedValue(syllabus);
-  mockGetCourses.mockResolvedValue([
-    { ...course, id: 'catalog-a', name: 'Orientation' },
-  ]);
+  mockGetCourses.mockResolvedValue([{ ...course, id: 'catalog-a', name: 'Orientation' }]);
 });
 
 describe('CourseSyllabusBuilder', () => {
@@ -127,16 +118,10 @@ describe('CourseSyllabusBuilder', () => {
       expect(screen.getByText('SCBA Operations')).toBeInTheDocument();
     });
 
-    await user.click(
-      screen.getByRole('button', { name: /Move SCBA Operations earlier/i }),
-    );
+    await user.click(screen.getByRole('button', { name: /Move SCBA Operations earlier/i }));
 
     await waitFor(() => {
-      expect(mockReorderClasses).toHaveBeenCalledWith('course-1', [
-        'b',
-        'a',
-        'c',
-      ]);
+      expect(mockReorderClasses).toHaveBeenCalledWith('course-1', ['b', 'a', 'c']);
     });
   });
 
@@ -147,12 +132,8 @@ describe('CourseSyllabusBuilder', () => {
       expect(screen.getByText('Orientation')).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByRole('button', { name: /Move Orientation earlier/i }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole('button', { name: /Move Ladders later/i }),
-    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Move Orientation earlier/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Move Ladders later/i })).toBeDisabled();
   });
 
   it('applies a meeting pattern to every class', async () => {
@@ -180,16 +161,12 @@ describe('CourseSyllabusBuilder', () => {
     render(<CourseSyllabusBuilder course={course} />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText('No classes on this syllabus'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('No classes on this syllabus')).toBeInTheDocument();
     });
   });
 
   it('flags a class whose catalog course has been archived', async () => {
-    mockGetClasses.mockResolvedValue([
-      { ...makeClass('a', 1, 0, 'Orientation'), class_course_active: false },
-    ]);
+    mockGetClasses.mockResolvedValue([{ ...makeClass('a', 1, 0, 'Orientation'), class_course_active: false }]);
     render(<CourseSyllabusBuilder course={course} />);
 
     await waitFor(() => {
@@ -200,28 +177,21 @@ describe('CourseSyllabusBuilder', () => {
   it('offers inline course creation so the builder is usable from empty', async () => {
     const onCreateCourse = vi.fn().mockResolvedValue(null);
     const user = userEvent.setup();
-    render(
-      <CourseSyllabusBuilder course={course} onCreateCourse={onCreateCourse} />,
-    );
+    render(<CourseSyllabusBuilder course={course} onCreateCourse={onCreateCourse} />);
 
     await waitFor(() => {
       expect(screen.getByText('Orientation')).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole('button', { name: /Add class/i }));
-    await user.click(
-      screen.getByRole('button', { name: /Create a new course/i }),
-    );
+    await user.click(screen.getByRole('button', { name: /Create a new course/i }));
 
     expect(onCreateCourse).toHaveBeenCalledTimes(1);
   });
 
   it('excludes the course itself from the class-course picker', async () => {
     // A recruit school must not be able to contain itself as one of its classes.
-    mockGetCourses.mockResolvedValue([
-      course,
-      { ...course, id: 'catalog-a', name: 'Orientation' },
-    ]);
+    mockGetCourses.mockResolvedValue([course, { ...course, id: 'catalog-a', name: 'Orientation' }]);
     const user = userEvent.setup();
     render(<CourseSyllabusBuilder course={course} />);
 

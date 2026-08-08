@@ -29,7 +29,11 @@ const ErrorMonitoringPage: React.FC = () => {
   const canClearErrors = checkPermission('audit.manage');
   const [errors, setErrors] = useState<ErrorLog[]>([]);
   const [filter, setFilter] = useState<string>('all');
-  const [stats, setStats] = useState<{ total: number; byType: Record<string, number>; recentErrors: ErrorLog[] } | null>(null);
+  const [stats, setStats] = useState<{
+    total: number;
+    byType: Record<string, number>;
+    recentErrors: ErrorLog[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadErrors = useCallback(async () => {
@@ -44,7 +48,9 @@ const ErrorMonitoringPage: React.FC = () => {
 
   useEffect(() => {
     void loadErrors();
-    const interval = setInterval(() => { void loadErrors(); }, 10000);
+    const interval = setInterval(() => {
+      void loadErrors();
+    }, 10000);
     return () => clearInterval(interval);
   }, [loadErrors]);
 
@@ -69,34 +75,34 @@ const ErrorMonitoringPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="mx-auto max-w-7xl p-6">
         <div className="text-theme-text-secondary">Loading error data...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen max-w-7xl mx-auto p-6">
+    <div className="mx-auto min-h-screen max-w-7xl p-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-theme-text-primary">Error Monitoring</h1>
+        <h1 className="text-theme-text-primary text-3xl font-bold">Error Monitoring</h1>
         <p className="text-theme-text-secondary mt-1">Track and analyze errors across the platform</p>
       </div>
 
       {/* Statistics Cards */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-            <div className="text-theme-text-muted text-sm font-medium mb-1">Total Errors</div>
-            <div className="text-3xl font-bold text-theme-text-primary">{stats.total}</div>
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+            <div className="text-theme-text-muted mb-1 text-sm font-medium">Total Errors</div>
+            <div className="text-theme-text-primary text-3xl font-bold">{stats.total}</div>
           </div>
 
           {Object.entries(stats.byType)
             .sort(([, a], [, b]) => b - a)
             .slice(0, 3)
             .map(([type, count]) => (
-              <div key={type} className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-                <div className="text-theme-text-muted text-sm font-medium mb-1 truncate">{type}</div>
+              <div key={type} className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
+                <div className="text-theme-text-muted mb-1 truncate text-sm font-medium">{type}</div>
                 <div className="text-3xl font-bold text-red-600">{count}</div>
               </div>
             ))}
@@ -104,13 +110,13 @@ const ErrorMonitoringPage: React.FC = () => {
       )}
 
       {/* Actions Bar */}
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-theme-surface mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg p-4 shadow-md backdrop-blur-xs">
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-theme-text-secondary">Filter:</label>
+          <label className="text-theme-text-secondary text-sm font-medium">Filter:</label>
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="border border-theme-input-border rounded-md px-3 py-2 text-sm text-theme-text-primary bg-theme-input-bg focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+            className="border-theme-input-border text-theme-text-primary bg-theme-input-bg focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
           >
             <option value="all">All Errors</option>
             {stats &&
@@ -124,15 +130,19 @@ const ErrorMonitoringPage: React.FC = () => {
 
         <div className="flex gap-2">
           <button
-            onClick={() => { void exportErrors(); }}
-            className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-blue-700 dark:text-blue-400 bg-theme-surface hover:bg-theme-surface-hover"
+            onClick={() => {
+              void exportErrors();
+            }}
+            className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-400"
           >
             Export Errors
           </button>
           {canClearErrors && (
             <button
-              onClick={() => { void clearAllErrors(); }}
-              className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-red-700 dark:text-red-400 bg-theme-surface hover:bg-theme-surface-hover"
+              onClick={() => {
+                void clearAllErrors();
+              }}
+              className="border-theme-surface-border bg-theme-surface hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm font-medium text-red-700 dark:text-red-400"
             >
               Clear All
             </button>
@@ -141,11 +151,11 @@ const ErrorMonitoringPage: React.FC = () => {
       </div>
 
       {/* Error List */}
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-md overflow-hidden">
+      <div className="bg-theme-surface overflow-hidden rounded-lg shadow-md backdrop-blur-xs">
         {errors.length === 0 ? (
-          <div className="p-8 text-center text-theme-text-muted">
+          <div className="text-theme-text-muted p-8 text-center">
             <svg
-              className="mx-auto h-12 w-12 text-theme-text-muted mb-4"
+              className="text-theme-text-muted mx-auto mb-4 h-12 w-12"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -158,76 +168,93 @@ const ErrorMonitoringPage: React.FC = () => {
               />
             </svg>
             <p className="text-lg font-medium">No errors found</p>
-            <p className="text-sm mt-1">
-              {filter === 'all'
-                ? 'The system is running smoothly!'
-                : `No errors of type "${filter}"`}
+            <p className="mt-1 text-sm">
+              {filter === 'all' ? 'The system is running smoothly!' : `No errors of type "${filter}"`}
             </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-theme-surface-border">
+            <table className="divide-theme-surface-border min-w-full divide-y">
               <thead className="bg-theme-surface-secondary">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Timestamp
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Error Type
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Source
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Message
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Context
                   </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                  <th
+                    scope="col"
+                    className="text-theme-text-muted px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                  >
                     Error ID
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-theme-surface-border">
+              <tbody className="divide-theme-surface-border divide-y">
                 {errors.map((error) => (
                   <tr key={error.id} className="hover:bg-theme-surface-hover">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-theme-text-primary">
+                    <td className="text-theme-text-primary px-6 py-4 text-sm whitespace-nowrap">
                       {formatDateTime(error.timestamp, tz)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        error.errorType?.startsWith('BACKEND_')
-                          ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
-                          : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
-                      }`}>
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-xs leading-5 font-semibold ${
+                          error.errorType?.startsWith('BACKEND_')
+                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400'
+                            : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400'
+                        }`}
+                      >
                         {error.errorType}
                       </span>
                       {/* A collapsed burst reports once with a count. Without
                           showing it, "one error" and "one error that happened
                           400 times in a minute" look identical. */}
-                      {typeof error.context.occurrences === 'number' &&
-                        error.context.occurrences > 1 && (
-                          <span className="ml-2 text-xs font-semibold text-theme-text-muted">
-                            ×{error.context.occurrences}
-                          </span>
-                        )}
+                      {typeof error.context.occurrences === 'number' && error.context.occurrences > 1 && (
+                        <span className="text-theme-text-muted ml-2 text-xs font-semibold">
+                          ×{error.context.occurrences}
+                        </span>
+                      )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-theme-text-secondary">
+                    <td className="text-theme-text-secondary px-6 py-4 text-xs whitespace-nowrap">
                       {sourceLabel(error)}
                     </td>
-                    <td className="px-6 py-4 text-sm text-theme-text-secondary max-w-md">
+                    <td className="text-theme-text-secondary max-w-md px-6 py-4 text-sm">
                       <div className="truncate">{error.userMessage}</div>
                       {/* The technical message is what an administrator
                           actually needs to act on; the user message above is
                           what the member was shown. */}
                       {error.errorMessage && error.errorMessage !== error.userMessage && (
-                        <div className="truncate font-mono text-xs text-theme-text-muted mt-1">
+                        <div className="text-theme-text-muted mt-1 truncate font-mono text-xs">
                           {error.errorMessage}
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm text-theme-text-secondary">
+                    <td className="text-theme-text-secondary px-6 py-4 text-sm">
                       {error.context.path ? (
                         <span className="font-mono text-xs">
                           {(error.context.method as string | undefined) ?? ''} {error.context.path as string}
@@ -238,7 +265,7 @@ const ErrorMonitoringPage: React.FC = () => {
                           {error.context.eventId && (
                             <Link
                               to={`/events/${error.context.eventId as string}`}
-                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                             >
                               Event
                             </Link>
@@ -247,12 +274,10 @@ const ErrorMonitoringPage: React.FC = () => {
                         </>
                       )}
                       {typeof error.context.page === 'string' && (
-                        <div className="text-xs text-theme-text-muted mt-1 truncate">
-                          on {error.context.page}
-                        </div>
+                        <div className="text-theme-text-muted mt-1 truncate text-xs">on {error.context.page}</div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs text-theme-text-muted font-mono">
+                    <td className="text-theme-text-muted px-6 py-4 font-mono text-xs whitespace-nowrap">
                       {error.id?.split('-')[0]}
                     </td>
                   </tr>
@@ -265,22 +290,17 @@ const ErrorMonitoringPage: React.FC = () => {
 
       {/* Recent Errors Preview */}
       {stats && stats.recentErrors.length > 0 && filter === 'all' && (
-        <div className="mt-6 bg-theme-surface backdrop-blur-xs rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-theme-text-primary mb-4">Recent Errors</h2>
+        <div className="bg-theme-surface mt-6 rounded-lg p-6 shadow-md backdrop-blur-xs">
+          <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Recent Errors</h2>
           <div className="space-y-4">
             {stats.recentErrors.map((error: ErrorLog) => (
-              <div
-                key={error.id}
-                className="border-l-4 border-red-500 bg-red-500/10 p-4 rounded-r"
-              >
-                <div className="flex justify-between items-start">
+              <div key={error.id} className="rounded-r border-l-4 border-red-500 bg-red-500/10 p-4">
+                <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-medium text-red-700 dark:text-red-300">{error.errorType}</p>
-                    <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error.userMessage}</p>
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error.userMessage}</p>
                   </div>
-                  <span className="text-xs text-red-600">
-                    {formatTime(error.timestamp, tz)}
-                  </span>
+                  <span className="text-xs text-red-600">{formatTime(error.timestamp, tz)}</span>
                 </div>
               </div>
             ))}

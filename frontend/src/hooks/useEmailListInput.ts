@@ -4,7 +4,10 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function validateEmailList(raw: string): string | null {
   if (!raw.trim()) return null;
-  const entries = raw.split(',').map((e) => e.trim()).filter(Boolean);
+  const entries = raw
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
   const invalid = entries.filter((e) => !EMAIL_REGEX.test(e));
   if (invalid.length > 0) {
     return `Invalid email${invalid.length > 1 ? 's' : ''}: ${invalid.join(', ')}`;
@@ -13,7 +16,10 @@ export function validateEmailList(raw: string): string | null {
 }
 
 export function parseEmailList(raw: string): string[] {
-  return raw.split(',').map((e) => e.trim()).filter(Boolean);
+  return raw
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
 }
 
 interface UseEmailListInputResult {
@@ -26,7 +32,7 @@ interface UseEmailListInputResult {
 
 export function useEmailListInput(
   currentList: string[],
-  onChange: (updated: string[]) => void,
+  onChange: (updated: string[]) => void
 ): UseEmailListInputResult {
   const [inputValue, setInputValue] = useState('');
 
@@ -41,7 +47,7 @@ export function useEmailListInput(
     (email: string) => {
       onChange(currentList.filter((e) => e !== email));
     },
-    [currentList, onChange],
+    [currentList, onChange]
   );
 
   const validationError = validateEmailList(inputValue);

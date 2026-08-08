@@ -11,23 +11,15 @@ import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const ProspectiveMembersPage = lazyWithRetry(
-  () => import('./pages/ProspectiveMembersPage'),
-);
-const PipelineSettingsPage = lazyWithRetry(
-  () => import('./pages/PipelineSettingsPage'),
-);
+const ProspectiveMembersPage = lazyWithRetry(() => import('./pages/ProspectiveMembersPage'));
+const PipelineSettingsPage = lazyWithRetry(() => import('./pages/PipelineSettingsPage'));
 const ApplicationStatusPage = lazyWithRetry(() =>
   import('./pages/ApplicationStatusPage').then((m) => ({
     default: m.ApplicationStatusPage,
-  })),
+  }))
 );
-const InterviewPage = lazyWithRetry(
-  () => import('./pages/InterviewPage'),
-);
-const ProspectLabelPrintPage = lazyWithRetry(
-  () => import('./pages/ProspectLabelPrintPage'),
-);
+const InterviewPage = lazyWithRetry(() => import('./pages/InterviewPage'));
+const ProspectLabelPrintPage = lazyWithRetry(() => import('./pages/ProspectLabelPrintPage'));
 
 export const getProspectiveMembersRoutes = () => {
   return (

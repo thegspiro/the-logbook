@@ -22,7 +22,10 @@ const WriteOffsPage: React.FC = () => {
   const [writeOffs, setWriteOffs] = useState<WriteOffRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('pending');
-  const [reviewModal, setReviewModal] = useState<{ open: boolean; item: WriteOffRequestItem | null }>({ open: false, item: null });
+  const [reviewModal, setReviewModal] = useState<{ open: boolean; item: WriteOffRequestItem | null }>({
+    open: false,
+    item: null,
+  });
   const [reviewNotes, setReviewNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -68,36 +71,40 @@ const WriteOffsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         <Link
           to="/inventory/admin"
-          className="text-sm text-theme-text-muted hover:text-theme-text-secondary flex items-center gap-1 mb-6"
+          className="text-theme-text-muted hover:text-theme-text-secondary mb-6 flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Admin
         </Link>
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-red-600 rounded-lg p-2">
-              <FileX className="w-5 h-5 text-white" />
+            <div className="rounded-lg bg-red-600 p-2">
+              <FileX className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-theme-text-primary">Write-Off Requests</h1>
-              <p className="text-sm text-theme-text-muted">Process loss and damage write-off requests</p>
+              <h1 className="text-theme-text-primary text-xl font-bold">Write-Off Requests</h1>
+              <p className="text-theme-text-muted text-sm">Process loss and damage write-off requests</p>
             </div>
           </div>
           <button
-            onClick={() => { void loadWriteOffs(); }}
+            onClick={() => {
+              void loadWriteOffs();
+            }}
             className="btn-secondary btn-md"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
 
         {/* Filter */}
         <div className="mb-6">
-          <label htmlFor="writeoff-status-filter" className="sr-only">Filter by status</label>
+          <label htmlFor="writeoff-status-filter" className="sr-only">
+            Filter by status
+          </label>
           <select
             id="writeoff-status-filter"
             value={statusFilter}
@@ -113,12 +120,12 @@ const WriteOffsPage: React.FC = () => {
 
         {loading ? (
           <div className="flex justify-center py-12" role="status" aria-live="polite">
-            <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
+            <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
           </div>
         ) : writeOffs.length === 0 ? (
           <div className="card-secondary p-8 text-center">
-            <FileX className="w-12 h-12 text-theme-text-muted mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-theme-text-primary mb-2">No Write-Offs</h3>
+            <FileX className="text-theme-text-muted mx-auto mb-4 h-12 w-12" />
+            <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">No Write-Offs</h3>
             <p className="text-theme-text-muted text-sm">No {statusFilter || 'write-off'} requests found.</p>
           </div>
         ) : (
@@ -127,32 +134,33 @@ const WriteOffsPage: React.FC = () => {
               <div key={wo.id} className="card-secondary p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-semibold text-theme-text-primary">{wo.item_name}</h3>
-                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${REQUEST_STATUS_BADGES[wo.status] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}>
+                    <div className="mb-1 flex items-center gap-2">
+                      <h3 className="text-theme-text-primary text-sm font-semibold">{wo.item_name}</h3>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_BADGES[wo.status] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}
+                      >
                         {wo.status}
                       </span>
                     </div>
-                    <p className="text-xs text-theme-text-muted">
-                      Reason: {wo.reason} &middot; Requested by {wo.requester_name ?? 'Unknown'} on {fmtDate(wo.created_at)}
+                    <p className="text-theme-text-muted text-xs">
+                      Reason: {wo.reason} &middot; Requested by {wo.requester_name ?? 'Unknown'} on{' '}
+                      {fmtDate(wo.created_at)}
                     </p>
-                    {wo.description && (
-                      <p className="text-xs text-theme-text-secondary mt-1">{wo.description}</p>
-                    )}
+                    {wo.description && <p className="text-theme-text-secondary mt-1 text-xs">{wo.description}</p>}
                     {(wo.item_serial_number || wo.item_asset_tag) && (
-                      <p className="text-xs text-theme-text-muted mt-1">
+                      <p className="text-theme-text-muted mt-1 text-xs">
                         {wo.item_serial_number && `S/N: ${wo.item_serial_number}`}
                         {wo.item_serial_number && wo.item_asset_tag && ' | '}
                         {wo.item_asset_tag && `AT: ${wo.item_asset_tag}`}
                       </p>
                     )}
                     {wo.item_value != null && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
                         Value: ${Number(wo.item_value).toFixed(2)}
                       </p>
                     )}
                     {wo.review_notes && (
-                      <p className="text-xs text-theme-text-muted mt-1 italic">Review: {wo.review_notes}</p>
+                      <p className="text-theme-text-muted mt-1 text-xs italic">Review: {wo.review_notes}</p>
                     )}
                   </div>
                   {wo.status === 'pending' && (
@@ -161,7 +169,7 @@ const WriteOffsPage: React.FC = () => {
                         setReviewModal({ open: true, item: wo });
                         setReviewNotes('');
                       }}
-                      className="btn-info px-3 py-1.5 text-xs shrink-0"
+                      className="btn-info shrink-0 px-3 py-1.5 text-xs"
                     >
                       Review
                     </button>
@@ -177,16 +185,28 @@ const WriteOffsPage: React.FC = () => {
           actions={[
             {
               id: 'filter',
-              label: statusFilter === 'pending' ? 'Show Approved' : statusFilter === 'approved' ? 'Show Denied' : statusFilter === 'denied' ? 'Show All' : 'Show Pending',
-              icon: <Filter className="w-5 h-5" />,
-              onClick: () => setStatusFilter((prev) => prev === 'pending' ? 'approved' : prev === 'approved' ? 'denied' : prev === 'denied' ? '' : 'pending'),
+              label:
+                statusFilter === 'pending'
+                  ? 'Show Approved'
+                  : statusFilter === 'approved'
+                    ? 'Show Denied'
+                    : statusFilter === 'denied'
+                      ? 'Show All'
+                      : 'Show Pending',
+              icon: <Filter className="h-5 w-5" />,
+              onClick: () =>
+                setStatusFilter((prev) =>
+                  prev === 'pending' ? 'approved' : prev === 'approved' ? 'denied' : prev === 'denied' ? '' : 'pending'
+                ),
               color: 'bg-red-600',
             },
             {
               id: 'refresh',
               label: 'Refresh',
-              icon: <RefreshCw className="w-5 h-5" />,
-              onClick: () => { void loadWriteOffs(); },
+              icon: <RefreshCw className="h-5 w-5" />,
+              onClick: () => {
+                void loadWriteOffs();
+              },
               color: 'bg-blue-600',
             },
           ]}
@@ -202,7 +222,7 @@ const WriteOffsPage: React.FC = () => {
         >
           {reviewModal.item && (
             <div className="space-y-4">
-              <div className="text-sm text-theme-text-secondary space-y-1">
+              <div className="text-theme-text-secondary space-y-1 text-sm">
                 <p>Reason: {reviewModal.item.reason}</p>
                 <p>Description: {reviewModal.item.description}</p>
                 {reviewModal.item.item_value != null && (
@@ -211,7 +231,10 @@ const WriteOffsPage: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="writeoff-review-notes" className="block text-sm font-medium text-theme-text-primary mb-1">
+                <label
+                  htmlFor="writeoff-review-notes"
+                  className="text-theme-text-primary mb-1 block text-sm font-medium"
+                >
                   Review Notes (optional)
                 </label>
                 <textarea
@@ -224,21 +247,25 @@ const WriteOffsPage: React.FC = () => {
                 />
               </div>
 
-              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
+              <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <button
-                  onClick={() => { void handleReview('denied'); }}
+                  onClick={() => {
+                    void handleReview('denied');
+                  }}
                   disabled={submitting}
                   className="btn-primary btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  <XCircle className="w-4 h-4" />
+                  <XCircle className="h-4 w-4" />
                   Deny
                 </button>
                 <button
-                  onClick={() => { void handleReview('approved'); }}
+                  onClick={() => {
+                    void handleReview('approved');
+                  }}
                   disabled={submitting}
                   className="btn-success btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  <Check className="w-4 h-4" />
+                  <Check className="h-4 w-4" />
                   Approve
                 </button>
               </div>

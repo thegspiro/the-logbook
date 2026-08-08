@@ -1,18 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
-import {
-  BookOpen,
-  Plus,
-  Search,
-  Edit2,
-  Trash2,
-  X,
-  Clock,
-  Award,
-  Filter,
-  ChevronDown,
-  ListOrdered,
-} from 'lucide-react';
+import { BookOpen, Plus, Search, Edit2, Trash2, X, Clock, Award, Filter, ChevronDown, ListOrdered } from 'lucide-react';
 import { trainingService } from '../services/api';
 import { CourseSyllabusBuilder } from '../components/training/CourseSyllabusBuilder';
 import { SkeletonCardGrid } from '../components/ux/Skeleton';
@@ -45,13 +33,7 @@ const TRAINING_TYPES: { value: TrainingType; label: string }[] = [
   { value: 'specialty', label: 'Specialty' },
 ];
 
-const CourseFormModal: React.FC<CourseFormModalProps> = ({
-  isOpen,
-  course,
-  categories,
-  onClose,
-  onSuccess,
-}) => {
+const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categories, onClose, onSuccess }) => {
   const isEdit = !!course;
   const [formData, setFormData] = useState({
     name: '',
@@ -160,31 +142,36 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-3xl w-full max-h-[90dvh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
-          <h2 className="text-xl font-bold text-theme-text-primary">
-            {isEdit ? 'Edit Course' : 'Add New Course'}
-          </h2>
+      <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-lg">
+        <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+          <h2 className="text-theme-text-primary text-xl font-bold">{isEdit ? 'Edit Course' : 'Add New Course'}</h2>
           <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary">
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
+        <form
+          onSubmit={(e) => {
+            void handleSubmit(e);
+          }}
+          className="space-y-4 p-6"
+        >
           {error && (
-            <div className="bg-red-500/10 border border-red-500 text-red-700 dark:text-red-400 px-4 py-3 rounded-sm text-sm">
+            <div className="rounded-sm border border-red-500 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-400">
               {error}
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
                 Course Name <span className="text-red-700 dark:text-red-400">*</span>
               </label>
               <input
@@ -197,7 +184,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Course Code</label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Course Code</label>
               <input
                 type="text"
                 value={formData.code}
@@ -210,7 +197,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -220,21 +207,23 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Training Type *</label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Training Type *</label>
               <select
                 value={formData.training_type}
                 onChange={(e) => setFormData({ ...formData, training_type: e.target.value as TrainingType })}
                 className="form-input text-sm"
               >
                 {TRAINING_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Duration (hours)</label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Duration (hours)</label>
               <input
                 type="number"
                 value={formData.duration_hours}
@@ -246,7 +235,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Credit Hours</label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Credit Hours</label>
               <input
                 type="number"
                 value={formData.credit_hours}
@@ -259,9 +248,9 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Instructor</label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Instructor</label>
               <input
                 type="text"
                 value={formData.instructor}
@@ -271,7 +260,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Max Participants</label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Max Participants</label>
               <input
                 type="number"
                 value={formData.max_participants}
@@ -282,7 +271,7 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Expires After (months)</label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Expires After (months)</label>
               <input
                 type="number"
                 value={formData.expiration_months}
@@ -296,14 +285,14 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
 
           {/* Categories */}
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-2">Training Categories</label>
+            <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Training Categories</label>
             <div className="flex flex-wrap gap-2">
               {parentCategories.map((cat) => (
                 <button
                   key={cat.id}
                   type="button"
                   onClick={() => toggleCategory(cat.id)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                     formData.category_ids.includes(cat.id)
                       ? 'bg-red-600 text-white'
                       : 'bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover'
@@ -316,7 +305,9 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Materials Required (one per line)</label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Materials Required (one per line)
+            </label>
             <textarea
               value={formData.materials_required}
               onChange={(e) => setFormData({ ...formData, materials_required: e.target.value })}
@@ -326,20 +317,16 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({
             />
           </div>
 
-          <div className="flex justify-end space-x-3 pt-4 border-t border-theme-surface-border">
+          <div className="border-theme-surface-border flex justify-end space-x-3 border-t pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm"
+              className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover rounded-lg px-4 py-2 text-sm"
               disabled={isSubmitting}
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              className="btn-primary text-sm"
-              disabled={isSubmitting}
-            >
+            <button type="submit" className="btn-primary text-sm" disabled={isSubmitting}>
               {isSubmitting ? 'Saving...' : isEdit ? 'Update Course' : 'Create Course'}
             </button>
           </div>
@@ -370,11 +357,7 @@ const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
     specialty: 'Specialty',
   };
 
-  return (
-    <span className={`px-2 py-0.5 text-xs rounded-sm ${colors[type]}`}>
-      {labels[type]}
-    </span>
-  );
+  return <span className={`rounded-sm px-2 py-0.5 text-xs ${colors[type]}`}>{labels[type]}</span>;
 };
 
 // ==================== Main Page ====================
@@ -382,9 +365,7 @@ const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
 // `embedded` renders the page as a tab inside TrainingAdminPage (which already
 // provides the outer page chrome + title), so we drop the standalone
 // min-h-screen wrapper and the big page header to avoid doubling them up.
-const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
-  embedded = false,
-}) => {
+const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -405,9 +386,9 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
   const [syllabusCourse, setSyllabusCourse] = useState<TrainingCourse | null>(null);
   // Resolver for the syllabus builder's inline "create a course" action, so
   // an officer can add a missing subject without leaving the builder.
-  const [pendingCourseResolver, setPendingCourseResolver] = useState<
-    ((course: TrainingCourse | null) => void) | null
-  >(null);
+  const [pendingCourseResolver, setPendingCourseResolver] = useState<((course: TrainingCourse | null) => void) | null>(
+    null
+  );
 
   const requestNewCourse = (): Promise<TrainingCourse | null> => {
     setEditCourse(null);
@@ -433,7 +414,9 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
     }
   };
 
-  useEffect(() => { void loadData(); }, []);
+  useEffect(() => {
+    void loadData();
+  }, []);
 
   const handleDelete = async (courseId: string, courseName: string) => {
     if (!confirm(`Are you sure you want to delete "${courseName}"? This cannot be undone.`)) return;
@@ -456,8 +439,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
 
       const matchesType = !filterType || c.training_type === filterType;
 
-      const matchesCategory =
-        !filterCategory || (c.category_ids || []).includes(filterCategory);
+      const matchesCategory = !filterCategory || (c.category_ids || []).includes(filterCategory);
 
       return matchesSearch && matchesType && matchesCategory;
     });
@@ -478,23 +460,25 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
   // Category lookup for display
   const catMap = useMemo(() => {
     const map: Record<string, TrainingCategory> = {};
-    categories.forEach((c) => { map[c.id] = c; });
+    categories.forEach((c) => {
+      map[c.id] = c;
+    });
     return map;
   }, [categories]);
 
   return (
     <div className={embedded ? '' : 'min-h-screen'}>
-      <main className={embedded ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
+      <main className={embedded ? '' : 'mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8'}>
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-8 flex items-center justify-between">
           {embedded ? (
             <p className="text-theme-text-muted text-sm">
               Organization-wide training course catalog ({courses.length} course{courses.length !== 1 ? 's' : ''})
             </p>
           ) : (
             <div>
-              <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-                <BookOpen className="w-8 h-8 text-red-700 dark:text-red-500" />
+              <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
+                <BookOpen className="h-8 w-8 text-red-700 dark:text-red-500" />
                 <span>Course Library</span>
               </h1>
               <p className="text-theme-text-muted mt-1">
@@ -503,10 +487,13 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
             </div>
           )}
           <button
-            onClick={() => { setEditCourse(null); setShowModal(true); }}
+            onClick={() => {
+              setEditCourse(null);
+              setShowModal(true);
+            }}
             className="btn-primary flex items-center space-x-2"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="h-5 w-5" />
             <span>Add Course</span>
           </button>
         </div>
@@ -515,33 +502,37 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
         <div className="mb-6 space-y-3">
           <div className="flex items-center space-x-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" aria-hidden="true" />
+              <Search
+                className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 transform"
+                aria-hidden="true"
+              />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                aria-label="Search courses by name, code, or description..." placeholder="Search courses by name, code, or description..."
-                className="form-input pl-10 pr-4"
+                aria-label="Search courses by name, code, or description..."
+                placeholder="Search courses by name, code, or description..."
+                className="form-input pr-4 pl-10"
               />
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center space-x-2 px-4 py-2 max-md:min-h-[44px] rounded-lg border text-sm ${
+              className={`flex items-center space-x-2 rounded-lg border px-4 py-2 text-sm max-md:min-h-[44px] ${
                 showFilters || filterType || filterCategory
-                  ? 'bg-red-600/20 border-red-500 text-red-700 dark:text-red-400'
+                  ? 'border-red-500 bg-red-600/20 text-red-700 dark:text-red-400'
                   : 'bg-theme-surface-secondary border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
-              <Filter className="w-4 h-4" />
+              <Filter className="h-4 w-4" />
               <span>Filters</span>
-              <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`h-4 w-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
             </button>
           </div>
 
           {showFilters && (
-            <div className="card-secondary gap-4 grid grid-cols-1 md:grid-cols-2 p-4">
+            <div className="card-secondary grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Training Type</label>
+                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Training Type</label>
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value)}
@@ -549,12 +540,14 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
                 >
                   <option value="">All Types</option>
                   {TRAINING_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Category</label>
+                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Category</label>
                 <select
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
@@ -562,7 +555,9 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
                 >
                   <option value="">All Categories</option>
                   {parentCategories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -574,14 +569,19 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
         {loading ? (
           <SkeletonCardGrid count={6} />
         ) : filteredCourses.length === 0 ? (
-          <div className="text-center py-16 bg-theme-surface-secondary rounded-lg">
-            <BookOpen className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" aria-hidden="true" />
-            <p className="text-theme-text-muted text-lg mb-2">
-              {searchTerm || filterType || filterCategory ? 'No courses match your filters' : 'No courses in your library yet'}
+          <div className="bg-theme-surface-secondary rounded-lg py-16 text-center">
+            <BookOpen className="text-theme-text-secondary mx-auto mb-4 h-16 w-16" aria-hidden="true" />
+            <p className="text-theme-text-muted mb-2 text-lg">
+              {searchTerm || filterType || filterCategory
+                ? 'No courses match your filters'
+                : 'No courses in your library yet'}
             </p>
             {!searchTerm && !filterType && !filterCategory && (
               <button
-                onClick={() => { setEditCourse(null); setShowModal(true); }}
+                onClick={() => {
+                  setEditCourse(null);
+                  setShowModal(true);
+                }}
                 className="btn-primary mt-4"
               >
                 Add Your First Course
@@ -590,107 +590,112 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
           </div>
         ) : (
           <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {paginatedCourses.map((course) => (
-              <div
-                key={course.id}
-                className="card-secondary hover:bg-theme-surface-hover p-5 transition-colors"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <h3 className="text-theme-text-primary font-semibold">{course.name}</h3>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {paginatedCourses.map((course) => (
+                <div key={course.id} className="card-secondary hover:bg-theme-surface-hover p-5 transition-colors">
+                  <div className="mb-3 flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="mb-1 flex items-center space-x-2">
+                        <h3 className="text-theme-text-primary font-semibold">{course.name}</h3>
+                      </div>
+                      {course.code && <span className="text-theme-text-muted font-mono text-xs">{course.code}</span>}
                     </div>
-                    {course.code && (
-                      <span className="text-xs text-theme-text-muted font-mono">{course.code}</span>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={() => setSyllabusCourse(course)}
+                        className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1.5"
+                        aria-label={`Manage classes for ${course.name}`}
+                        title="Manage classes"
+                      >
+                        <ListOrdered className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditCourse(course);
+                          setShowModal(true);
+                        }}
+                        className="text-theme-text-muted hover:text-theme-text-primary rounded-sm p-1.5"
+                        aria-label={`Edit ${course.name}`}
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          void handleDelete(course.id, course.name);
+                        }}
+                        className="text-theme-text-muted rounded-sm p-1.5 hover:text-red-700 dark:hover:text-red-400"
+                        aria-label={`Delete ${course.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {course.description && (
+                    <p className="text-theme-text-muted mb-3 line-clamp-2 text-sm">{course.description}</p>
+                  )}
+
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    <TypeBadge type={course.training_type} />
+                    {!course.active && (
+                      <span className="rounded-sm bg-red-500/20 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
+                        Inactive
+                      </span>
                     )}
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <button
-                      onClick={() => setSyllabusCourse(course)}
-                      className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded-sm"
-                      aria-label={`Manage classes for ${course.name}`}
-                      title="Manage classes"
-                    >
-                      <ListOrdered className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => { setEditCourse(course); setShowModal(true); }}
-                      className="p-1.5 text-theme-text-muted hover:text-theme-text-primary rounded-sm"
-                      aria-label={`Edit ${course.name}`}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => { void handleDelete(course.id, course.name); }}
-                      className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 rounded-sm"
-                      aria-label={`Delete ${course.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+
+                  <div className="text-theme-text-muted flex items-center space-x-4 text-xs">
+                    {course.duration_hours != null && (
+                      <div className="flex items-center space-x-1">
+                        <Clock className="h-3 w-3" />
+                        <span>{course.duration_hours}h</span>
+                      </div>
+                    )}
+                    {course.credit_hours != null && course.credit_hours !== course.duration_hours && (
+                      <span>{course.credit_hours} credits</span>
+                    )}
+                    {course.expiration_months && (
+                      <div className="flex items-center space-x-1">
+                        <Award className="h-3 w-3" />
+                        <span>Expires {course.expiration_months}mo</span>
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                {course.description && (
-                  <p className="text-theme-text-muted text-sm mb-3 line-clamp-2">{course.description}</p>
-                )}
-
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  <TypeBadge type={course.training_type} />
-                  {!course.active && (
-                    <span className="px-2 py-0.5 text-xs rounded-sm bg-red-500/20 text-red-700 dark:text-red-400">Inactive</span>
-                  )}
-                </div>
-
-                <div className="flex items-center space-x-4 text-xs text-theme-text-muted">
-                  {course.duration_hours != null && (
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-3 h-3" />
-                      <span>{course.duration_hours}h</span>
-                    </div>
-                  )}
-                  {course.credit_hours != null && course.credit_hours !== course.duration_hours && (
-                    <span>{course.credit_hours} credits</span>
-                  )}
-                  {course.expiration_months && (
-                    <div className="flex items-center space-x-1">
-                      <Award className="w-3 h-3" />
-                      <span>Expires {course.expiration_months}mo</span>
+                  {/* Category chips */}
+                  {course.category_ids && course.category_ids.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {course.category_ids.map((catId) => {
+                        const cat = catMap[catId];
+                        if (!cat) return null;
+                        return (
+                          <span
+                            key={catId}
+                            className="bg-theme-surface-secondary text-theme-text-secondary border-theme-surface-border rounded-full border px-2 py-0.5 text-xs"
+                          >
+                            {cat.name}
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-
-                {/* Category chips */}
-                {course.category_ids && course.category_ids.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-3">
-                    {course.category_ids.map((catId) => {
-                      const cat = catMap[catId];
-                      if (!cat) return null;
-                      return (
-                        <span
-                          key={catId}
-                          className="px-2 py-0.5 text-xs rounded-full bg-theme-surface-secondary text-theme-text-secondary border border-theme-surface-border"
-                        >
-                          {cat.name}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          {filteredCourses.length > pageSize && (
-            <Pagination
-              currentPage={currentPage}
-              totalItems={filteredCourses.length}
-              pageSize={pageSize}
-              onPageChange={setCurrentPage}
-              onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
-              pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
-              className="mt-6"
-            />
-          )}
+              ))}
+            </div>
+            {filteredCourses.length > pageSize && (
+              <Pagination
+                currentPage={currentPage}
+                totalItems={filteredCourses.length}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setCurrentPage(1);
+                }}
+                pageSizeOptions={[...PAGE_SIZE_OPTIONS]}
+                className="mt-6"
+              />
+            )}
           </>
         )}
       </main>
@@ -720,18 +725,17 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
           aria-modal="true"
           aria-label={`Classes for ${syllabusCourse.name}`}
         >
-          <div className="max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-lg bg-theme-surface-modal">
-            <div className="flex items-center justify-between border-b border-theme-surface-border p-6">
+          <div className="bg-theme-surface-modal max-h-[90dvh] w-full max-w-3xl overflow-y-auto rounded-lg">
+            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
               <div>
-                <h2 className="text-xl font-bold text-theme-text-primary">
-                  {syllabusCourse.name}
-                </h2>
-                <p className="text-sm text-theme-text-muted">
-                  Classes that make up this course
-                </p>
+                <h2 className="text-theme-text-primary text-xl font-bold">{syllabusCourse.name}</h2>
+                <p className="text-theme-text-muted text-sm">Classes that make up this course</p>
               </div>
               <button
-                onClick={() => { setSyllabusCourse(null); void loadData(); }}
+                onClick={() => {
+                  setSyllabusCourse(null);
+                  void loadData();
+                }}
                 className="text-theme-text-muted hover:text-theme-text-primary"
                 aria-label="Close"
               >
@@ -739,10 +743,7 @@ const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
               </button>
             </div>
             <div className="modal-body">
-              <CourseSyllabusBuilder
-                course={syllabusCourse}
-                onCreateCourse={requestNewCourse}
-              />
+              <CourseSyllabusBuilder course={syllabusCourse} onCreateCourse={requestNewCourse} />
             </div>
           </div>
         </div>

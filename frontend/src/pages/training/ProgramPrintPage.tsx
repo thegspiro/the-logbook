@@ -12,11 +12,7 @@ import { useSearchParams } from 'react-router';
 import { trainingProgramService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
-import type {
-  ProgramWithDetails,
-  ProgramEnrollment,
-  ProgramRequirement,
-} from '../../types/training';
+import type { ProgramWithDetails, ProgramEnrollment, ProgramRequirement } from '../../types/training';
 
 const ProgramPrintPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -53,25 +49,51 @@ const ProgramPrintPage: React.FC = () => {
   }, [loading, error]);
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-500">Loading program...</p></div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-gray-500">Loading program...</p>
+      </div>
+    );
   }
   if (error || !program) {
-    return <div className="min-h-screen flex items-center justify-center"><p className="text-red-600">{error || 'Program not found'}</p></div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-red-600">{error || 'Program not found'}</p>
+      </div>
+    );
   }
 
-  const fmtDate = (d?: string) => d ? formatDateCustom(d, { month: 'short', day: 'numeric', year: 'numeric' }, tz) : '—';
+  const fmtDate = (d?: string) =>
+    d ? formatDateCustom(d, { month: 'short', day: 'numeric', year: 'numeric' }, tz) : '—';
 
   const phases = program.phases || [];
   const requirements = programRequirements;
   const enrollments = program.enrollments || [];
 
   const sectionHeading: React.CSSProperties = {
-    fontSize: '11pt', fontWeight: 600, textTransform: 'uppercase',
-    letterSpacing: '0.05em', borderBottom: '1px solid #ddd',
-    paddingBottom: '3pt', marginBottom: '6pt', marginTop: '16pt',
+    fontSize: '11pt',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    borderBottom: '1px solid #ddd',
+    paddingBottom: '3pt',
+    marginBottom: '6pt',
+    marginTop: '16pt',
   };
-  const cellStyle: React.CSSProperties = { border: '1px solid #ccc', padding: '3pt 6pt', fontSize: '9pt', verticalAlign: 'top' };
-  const headerCell: React.CSSProperties = { ...cellStyle, fontWeight: 600, backgroundColor: '#f5f5f5', fontSize: '8pt', textTransform: 'uppercase', letterSpacing: '0.03em' };
+  const cellStyle: React.CSSProperties = {
+    border: '1px solid #ccc',
+    padding: '3pt 6pt',
+    fontSize: '9pt',
+    verticalAlign: 'top',
+  };
+  const headerCell: React.CSSProperties = {
+    ...cellStyle,
+    fontWeight: 600,
+    backgroundColor: '#f5f5f5',
+    fontSize: '8pt',
+    textTransform: 'uppercase',
+    letterSpacing: '0.03em',
+  };
 
   return (
     <>
@@ -81,9 +103,16 @@ const ProgramPrintPage: React.FC = () => {
         @media screen { body { background: #f3f4f6; } }
       `}</style>
 
-      <div className="max-w-[8.5in] mx-auto bg-white print:shadow-none shadow-lg my-8 print:my-0">
-        <div className="p-8 print:p-0" style={{ fontFamily: 'Georgia, "Times New Roman", serif', color: '#111', fontSize: '10pt', lineHeight: '1.5' }}>
-
+      <div className="mx-auto my-8 max-w-[8.5in] bg-white shadow-lg print:my-0 print:shadow-none">
+        <div
+          className="p-8 print:p-0"
+          style={{
+            fontFamily: 'Georgia, "Times New Roman", serif',
+            color: '#111',
+            fontSize: '10pt',
+            lineHeight: '1.5',
+          }}
+        >
           {/* Header */}
           <div style={{ borderBottom: '3px solid #111', paddingBottom: '10pt', marginBottom: '14pt' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -106,10 +135,18 @@ const ProgramPrintPage: React.FC = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '14pt' }}>
             <tbody>
               <tr>
-                <td style={cellStyle}><strong>Structure:</strong> {program.structure_type?.replace(/_/g, ' ') || '—'}</td>
-                <td style={cellStyle}><strong>Target Position:</strong> {program.target_position || 'All'}</td>
-                <td style={cellStyle}><strong>Time Limit:</strong> {program.time_limit_days ? `${program.time_limit_days} days` : 'None'}</td>
-                <td style={cellStyle}><strong>Enrolled:</strong> {enrollments.length}</td>
+                <td style={cellStyle}>
+                  <strong>Structure:</strong> {program.structure_type?.replace(/_/g, ' ') || '—'}
+                </td>
+                <td style={cellStyle}>
+                  <strong>Target Position:</strong> {program.target_position || 'All'}
+                </td>
+                <td style={cellStyle}>
+                  <strong>Time Limit:</strong> {program.time_limit_days ? `${program.time_limit_days} days` : 'None'}
+                </td>
+                <td style={cellStyle}>
+                  <strong>Enrolled:</strong> {enrollments.length}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -131,14 +168,16 @@ const ProgramPrintPage: React.FC = () => {
                 <tbody>
                   {phases
                     .sort((a, b) => a.phase_number - b.phase_number)
-                    .map(phase => {
-                      const phaseReqs = requirements.filter(r => r.phase_id === phase.id);
+                    .map((phase) => {
+                      const phaseReqs = requirements.filter((r) => r.phase_id === phase.id);
                       return (
                         <tr key={phase.id}>
                           <td style={{ ...cellStyle, textAlign: 'center' }}>{phase.phase_number}</td>
                           <td style={{ ...cellStyle, fontWeight: 600 }}>{phase.name}</td>
                           <td style={cellStyle}>{phase.description || '—'}</td>
-                          <td style={{ ...cellStyle, textAlign: 'center' }}>{phase.time_limit_days ? `${phase.time_limit_days}d` : '—'}</td>
+                          <td style={{ ...cellStyle, textAlign: 'center' }}>
+                            {phase.time_limit_days ? `${phase.time_limit_days}d` : '—'}
+                          </td>
                           <td style={{ ...cellStyle, textAlign: 'center' }}>{phaseReqs.length}</td>
                         </tr>
                       );
@@ -164,14 +203,16 @@ const ProgramPrintPage: React.FC = () => {
                 <tbody>
                   {requirements
                     .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-                    .map(req => {
-                      const phase = phases.find(p => p.id === req.phase_id);
+                    .map((req) => {
+                      const phase = phases.find((p) => p.id === req.phase_id);
                       return (
                         <tr key={req.id}>
                           <td style={cellStyle}>{req.requirement?.name || '—'}</td>
                           <td style={cellStyle}>{phase?.name || '—'}</td>
                           <td style={{ ...cellStyle, textAlign: 'center' }}>{req.is_required ? 'Yes' : 'Optional'}</td>
-                          <td style={cellStyle}>{req.program_specific_description || req.requirement?.description || '—'}</td>
+                          <td style={cellStyle}>
+                            {req.program_specific_description || req.requirement?.description || '—'}
+                          </td>
                         </tr>
                       );
                     })}
@@ -196,13 +237,11 @@ const ProgramPrintPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {enrollments.map(e => (
+                  {enrollments.map((e) => (
                     <tr key={e.id}>
                       <td style={cellStyle}>{(e as unknown as { user_name?: string }).user_name || e.user_id}</td>
                       <td style={{ ...cellStyle, textTransform: 'capitalize' }}>{e.status}</td>
-                      <td style={{ ...cellStyle, textAlign: 'center' }}>
-                        {Math.round(e.progress_percentage)}%
-                      </td>
+                      <td style={{ ...cellStyle, textAlign: 'center' }}>{Math.round(e.progress_percentage)}%</td>
                       <td style={cellStyle}>{fmtDate(e.enrolled_at)}</td>
                       <td style={cellStyle}>{fmtDate(e.target_completion_date)}</td>
                       <td style={cellStyle}>{e.current_phase?.name || '—'}</td>
@@ -214,7 +253,17 @@ const ProgramPrintPage: React.FC = () => {
           )}
 
           {/* Footer */}
-          <div style={{ marginTop: '24pt', borderTop: '1px solid #ddd', paddingTop: '6pt', display: 'flex', justifyContent: 'space-between', fontSize: '8pt', color: '#aaa' }}>
+          <div
+            style={{
+              marginTop: '24pt',
+              borderTop: '1px solid #ddd',
+              paddingTop: '6pt',
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '8pt',
+              color: '#aaa',
+            }}
+          >
             <span>The Logbook — Training Program Record</span>
             <span>Generated {formatDate(new Date(), tz)}</span>
           </div>

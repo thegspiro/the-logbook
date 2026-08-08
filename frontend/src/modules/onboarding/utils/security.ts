@@ -4,7 +4,6 @@
  * CRITICAL: This module handles sensitive data encryption and sanitization
  */
 
-
 /**
  * Sanitize input to prevent injection attacks
  */
@@ -16,7 +15,6 @@ export const sanitizeInput = (input: string): string => {
     .replace(/on\w+=/gi, '') // Remove event handlers
     .trim();
 };
-
 
 /**
  * Validate phone number format
@@ -32,7 +30,8 @@ export const isValidPhone = (phone: string): boolean => {
  */
 export const isValidEmailSecure = (email: string): boolean => {
   // More comprehensive email validation
-  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  const emailRegex =
+    /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 
   if (!emailRegex.test(email)) return false;
 
@@ -53,7 +52,8 @@ export const isValidEmailSecure = (email: string): boolean => {
 export const isValidHostSecure = (host: string): boolean => {
   // More strict hostname validation
   const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-  const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  const ipRegex =
+    /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 
   return hostnameRegex.test(host) || ipRegex.test(host);
 };
@@ -71,5 +71,3 @@ export const isValidUsernameSecure = (username: string): boolean => {
 // onboarding data is now POSTed straight to the server, never stored
 // client-side) and gave a false sense of protection, so it was removed. Do not
 // reintroduce client-side "encryption" of sensitive data — use the server.
-
-

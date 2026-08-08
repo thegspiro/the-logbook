@@ -47,9 +47,7 @@ export function handleStoreError(err: unknown, fallback: string): string {
  * ------------------------------------------------------------------ */
 
 /** Minimal Zustand `set` signature we depend on. */
-type ZustandSet<S> = (
-  partial: Partial<S> | ((state: S) => Partial<S>),
-) => void;
+type ZustandSet<S> = (partial: Partial<S> | ((state: S) => Partial<S>)) => void;
 
 /**
  * Creates an async store action that:
@@ -58,16 +56,12 @@ type ZustandSet<S> = (
  * 3. Writes the result to `stateKey`
  * 4. Clears the loading flag (or sets error on failure)
  */
-export function createFetchAction<
-  S extends object,
-  P extends unknown[],
-  R,
->(
+export function createFetchAction<S extends object, P extends unknown[], R>(
   set: ZustandSet<S>,
   serviceFn: (...args: P) => Promise<R>,
   stateKey: keyof S & string,
   errorMessage: string,
-  loadingKey: keyof S & string = 'isLoading' as keyof S & string,
+  loadingKey: keyof S & string = 'isLoading' as keyof S & string
 ): (...args: P) => Promise<void> {
   return async (...args: P) => {
     set({ [loadingKey]: true, error: null } as unknown as Partial<S>);
@@ -100,20 +94,19 @@ export function createFetchAction<
  * Creates an action that calls a service create method and appends
  * the result to an array in state.
  */
-export function createCreateAction<
-  S extends object,
-  TData,
-  TResult extends { id: string },
->(
+export function createCreateAction<S extends object, TData, TResult extends { id: string }>(
   set: ZustandSet<S>,
   serviceFn: (data: TData) => Promise<TResult>,
-  stateKey: keyof S & string,
+  stateKey: keyof S & string
 ): (data: TData) => Promise<TResult> {
   return async (data: TData) => {
     const result = await serviceFn(data);
-    set((state) => ({
-      [stateKey]: [...(state[stateKey as keyof S] as unknown as TResult[]), result],
-    }) as unknown as Partial<S>);
+    set(
+      (state) =>
+        ({
+          [stateKey]: [...(state[stateKey as keyof S] as unknown as TResult[]), result],
+        }) as unknown as Partial<S>
+    );
     return result;
   };
 }
@@ -122,22 +115,21 @@ export function createCreateAction<
  * Creates an action that calls a service update method and replaces
  * the matching item (by id) in an array in state.
  */
-export function createUpdateAction<
-  S extends object,
-  TData,
-  TResult extends { id: string },
->(
+export function createUpdateAction<S extends object, TData, TResult extends { id: string }>(
   set: ZustandSet<S>,
   serviceFn: (id: string, data: TData) => Promise<TResult>,
-  stateKey: keyof S & string,
+  stateKey: keyof S & string
 ): (id: string, data: TData) => Promise<TResult> {
   return async (id: string, data: TData) => {
     const result = await serviceFn(id, data);
-    set((state) => ({
-      [stateKey]: (state[stateKey as keyof S] as unknown as TResult[]).map((item) =>
-        item.id === id ? result : item,
-      ),
-    }) as unknown as Partial<S>);
+    set(
+      (state) =>
+        ({
+          [stateKey]: (state[stateKey as keyof S] as unknown as TResult[]).map((item) =>
+            item.id === id ? result : item
+          ),
+        }) as unknown as Partial<S>
+    );
     return result;
   };
 }
@@ -146,20 +138,18 @@ export function createUpdateAction<
  * Creates an action that calls a service delete method and removes
  * the matching item (by id) from an array in state.
  */
-export function createDeleteAction<
-  S extends object,
-  TResult extends { id: string },
->(
+export function createDeleteAction<S extends object, TResult extends { id: string }>(
   set: ZustandSet<S>,
   serviceFn: (id: string) => Promise<void>,
-  stateKey: keyof S & string,
+  stateKey: keyof S & string
 ): (id: string) => Promise<void> {
   return async (id: string) => {
     await serviceFn(id);
-    set((state) => ({
-      [stateKey]: (state[stateKey as keyof S] as unknown as TResult[]).filter(
-        (item) => item.id !== id,
-      ),
-    }) as unknown as Partial<S>);
+    set(
+      (state) =>
+        ({
+          [stateKey]: (state[stateKey as keyof S] as unknown as TResult[]).filter((item) => item.id !== id),
+        }) as unknown as Partial<S>
+    );
   };
 }

@@ -45,12 +45,7 @@ describe('ElectionWorkflowTabs', () => {
 
   it('redirects a non-manager away from the hidden ballot tab to the first visible tab', () => {
     render(
-      <ElectionWorkflowTabs
-        election={baseElection}
-        canManage={false}
-        activeTab="ballot"
-        onTabChange={onTabChange}
-      />
+      <ElectionWorkflowTabs election={baseElection} canManage={false} activeTab="ballot" onTabChange={onTabChange} />
     );
 
     // Non-managers viewing an OPEN election only see 'voting' (results are
@@ -60,12 +55,7 @@ describe('ElectionWorkflowTabs', () => {
 
   it('keeps a manager on the ballot tab', () => {
     render(
-      <ElectionWorkflowTabs
-        election={baseElection}
-        canManage={true}
-        activeTab="ballot"
-        onTabChange={onTabChange}
-      />
+      <ElectionWorkflowTabs election={baseElection} canManage={true} activeTab="ballot" onTabChange={onTabChange} />
     );
 
     expect(onTabChange).not.toHaveBeenCalled();

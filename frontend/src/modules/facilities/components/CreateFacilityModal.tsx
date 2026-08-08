@@ -16,12 +16,7 @@ interface Props {
   onCreated: (facility: Facility) => void;
 }
 
-export default function CreateFacilityModal({
-  facilityTypes,
-  facilityStatuses,
-  onClose,
-  onCreated,
-}: Props) {
+export default function CreateFacilityModal({ facilityTypes, facilityStatuses, onClose, onCreated }: Props) {
   const { createFacility } = useFacilitiesStore();
   const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState({
@@ -38,8 +33,7 @@ export default function CreateFacilityModal({
     notes: '',
   });
 
-  const setField = (field: string, value: string) =>
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  const setField = (field: string, value: string) => setFormData((prev) => ({ ...prev, [field]: value }));
 
   const handleCreate = async () => {
     if (!formData.name.trim()) {
@@ -78,7 +72,7 @@ export default function CreateFacilityModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-facility-title"
@@ -86,12 +80,9 @@ export default function CreateFacilityModal({
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full max-h-[90dvh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
-          <h2
-            id="create-facility-title"
-            className="text-lg font-bold text-theme-text-primary"
-          >
+      <div className="bg-theme-surface-modal border-theme-surface-border max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-xl border">
+        <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+          <h2 id="create-facility-title" className="text-theme-text-primary text-lg font-bold">
             Add Facility
           </h2>
           <button
@@ -99,15 +90,13 @@ export default function CreateFacilityModal({
             className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
             aria-label="Close dialog"
           >
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="space-y-4 p-6">
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              Name *
-            </label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Name *</label>
             <input
               type="text"
               value={formData.name}
@@ -119,9 +108,7 @@ export default function CreateFacilityModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              Facility Number
-            </label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Facility Number</label>
             <input
               type="text"
               value={formData.facility_number}
@@ -132,9 +119,7 @@ export default function CreateFacilityModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              Address
-            </label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Address</label>
             <input
               type="text"
               value={formData.address_line1}
@@ -144,11 +129,9 @@ export default function CreateFacilityModal({
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                City
-              </label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">City</label>
               <input
                 type="text"
                 value={formData.city}
@@ -157,9 +140,7 @@ export default function CreateFacilityModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                State
-              </label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">State</label>
               <input
                 type="text"
                 value={formData.state}
@@ -168,9 +149,7 @@ export default function CreateFacilityModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                Zip
-              </label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Zip</label>
               <input
                 type="text"
                 value={formData.zip_code}
@@ -182,9 +161,7 @@ export default function CreateFacilityModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                Phone
-              </label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Phone</label>
               <input
                 type="tel"
                 value={formData.phone}
@@ -194,9 +171,7 @@ export default function CreateFacilityModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                Email
-              </label>
+              <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Email</label>
               <input
                 type="email"
                 value={formData.email}
@@ -210,9 +185,7 @@ export default function CreateFacilityModal({
           <div className="grid grid-cols-2 gap-3">
             {facilityTypes.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                  Type
-                </label>
+                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Type</label>
                 <select
                   value={formData.facility_type_id}
                   onChange={(e) => setField('facility_type_id', e.target.value)}
@@ -229,9 +202,7 @@ export default function CreateFacilityModal({
             )}
             {facilityStatuses.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                  Status
-                </label>
+                <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Status</label>
                 <select
                   value={formData.status_id}
                   onChange={(e) => setField('status_id', e.target.value)}
@@ -249,9 +220,7 @@ export default function CreateFacilityModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              Notes
-            </label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Notes</label>
             <textarea
               value={formData.notes}
               onChange={(e) => setField('notes', e.target.value)}
@@ -262,10 +231,10 @@ export default function CreateFacilityModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
+        <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
           >
             Cancel
           </button>
@@ -274,9 +243,9 @@ export default function CreateFacilityModal({
               void handleCreate();
             }}
             disabled={isCreating || !formData.name.trim()}
-            className="btn-primary flex gap-2 items-center px-5"
+            className="btn-primary flex items-center gap-2 px-5"
           >
-            {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
+            {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
             Add Facility
           </button>
         </div>

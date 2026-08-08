@@ -75,42 +75,38 @@ export const WhatsNew: React.FC = () => {
     <>
       <button
         onClick={handleOpen}
-        className="relative p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors rounded-lg hover:bg-theme-surface-hover"
+        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover relative rounded-lg p-2 transition-colors"
         aria-label="What's new"
         title="What's new"
       >
-        <Sparkles className="w-5 h-5" />
-        {hasNew && (
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-        )}
+        <Sparkles className="h-5 w-5" />
+        {hasNew && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500" />}
       </button>
 
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="What's New" size="md">
-        <div className="space-y-6 max-h-96 overflow-y-auto">
+        <div className="max-h-96 space-y-6 overflow-y-auto">
           {CHANGELOG.map((entry) => (
             <div key={entry.version}>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm font-semibold text-theme-text-primary">
-                  v{entry.version}
-                </span>
-                <span className="text-xs text-theme-text-muted">{entry.date}</span>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-theme-text-primary text-sm font-semibold">v{entry.version}</span>
+                <span className="text-theme-text-muted text-xs">{entry.date}</span>
               </div>
               <ul className="space-y-2">
                 {entry.items.map((item, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <span
-                      className={`px-1.5 py-0.5 text-[10px] font-medium rounded-sm border shrink-0 mt-0.5 ${typeStyles[item.type]}`}
+                      className={`mt-0.5 shrink-0 rounded-sm border px-1.5 py-0.5 text-[10px] font-medium ${typeStyles[item.type]}`}
                     >
                       {typeLabels[item.type]}
                     </span>
-                    <span className="text-sm text-theme-text-secondary">{item.text}</span>
+                    <span className="text-theme-text-secondary text-sm">{item.text}</span>
                   </li>
                 ))}
               </ul>
             </div>
           ))}
         </div>
-        <div className="mt-4 pt-3 border-t border-theme-surface-border flex justify-end">
+        <div className="border-theme-surface-border mt-4 flex justify-end border-t pt-3">
           <button onClick={() => setIsOpen(false)} className="btn-primary text-sm">
             Got it
           </button>
@@ -134,7 +130,5 @@ export const WhatsNewButton: React.FC = () => {
 
   if (!hasNew) return null;
 
-  return (
-    <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full" />
-  );
+  return <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500" />;
 };

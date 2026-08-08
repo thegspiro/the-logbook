@@ -5,23 +5,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import {
-  GripVertical,
-  Plus,
-  Trash2,
-  Edit2,
-  ArrowUp,
-  ArrowDown,
-  Loader2,
-  Bell,
-  EyeOff,
-} from 'lucide-react';
+import { GripVertical, Plus, Trash2, Edit2, ArrowUp, ArrowDown, Loader2, Bell, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type {
-  Pipeline,
-  PipelineStage,
-  PipelineStageCreate,
-} from '../types';
+import type { Pipeline, PipelineStage, PipelineStageCreate } from '../types';
 import { STAGE_TYPE_ICONS, STAGE_TYPE_COLORS, STAGE_TYPE_LABELS } from '../constants';
 import { pipelineService } from '../services/api';
 import { StageConfigModal } from './StageConfigModal';
@@ -32,11 +18,7 @@ interface PipelineBuilderProps {
   onPipelineUpdated: (pipeline: Pipeline) => void;
 }
 
-
-export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
-  pipeline,
-  onPipelineUpdated,
-}) => {
+export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({ pipeline, onPipelineUpdated }) => {
   const [stages, setStages] = useState<PipelineStage[]>(pipeline.stages);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingStage, setEditingStage] = useState<PipelineStage | null>(null);
@@ -65,14 +47,8 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
   const handleUpdateStage = async (stageData: PipelineStageCreate) => {
     if (!editingStage) return;
     try {
-      const updatedStage = await pipelineService.updateStage(
-        pipeline.id,
-        editingStage.id,
-        stageData
-      );
-      const updated = stages.map((s) =>
-        s.id === editingStage.id ? updatedStage : s
-      );
+      const updatedStage = await pipelineService.updateStage(pipeline.id, editingStage.id, stageData);
+      const updated = stages.map((s) => (s.id === editingStage.id ? updatedStage : s));
       setStages(updated);
       onPipelineUpdated({ ...pipeline, stages: updated });
       setEditingStage(null);
@@ -158,11 +134,9 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
       {/* Stage List */}
       <div className="space-y-2">
         {stages.length === 0 ? (
-          <div className="text-center py-12 bg-theme-input-bg rounded-lg border border-dashed border-theme-surface-border">
+          <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border border-dashed py-12 text-center">
             <p className="text-theme-text-muted mb-2">No stages configured yet.</p>
-            <p className="text-sm text-theme-text-muted">
-              Add stages to define the prospective member journey.
-            </p>
+            <p className="text-theme-text-muted text-sm">Add stages to define the prospective member journey.</p>
           </div>
         ) : (
           stages.map((stage, index) => {
@@ -179,94 +153,102 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDrop={(e) => handleDrop(e, index)}
                 onDragEnd={handleDragEnd}
-                className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
+                className={`flex items-center gap-3 rounded-lg border p-4 transition-all ${
                   isDragging
-                    ? 'opacity-50 border-red-500/50 bg-theme-surface'
+                    ? 'bg-theme-surface border-red-500/50 opacity-50'
                     : isDragOver
-                    ? 'border-red-500 bg-theme-surface-hover'
-                    : 'border-theme-surface-border bg-theme-input-bg hover:border-theme-surface-border'
+                      ? 'bg-theme-surface-hover border-red-500'
+                      : 'border-theme-surface-border bg-theme-input-bg hover:border-theme-surface-border'
                 }`}
               >
                 {/* Drag Handle */}
-                <div className="cursor-grab active:cursor-grabbing text-theme-text-muted hover:text-theme-text-secondary">
-                  <GripVertical className="w-5 h-5" />
+                <div className="text-theme-text-muted hover:text-theme-text-secondary cursor-grab active:cursor-grabbing">
+                  <GripVertical className="h-5 w-5" />
                 </div>
 
                 {/* Stage Number */}
-                <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-bold text-theme-text-secondary shrink-0">
+                <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold">
                   {index + 1}
                 </div>
 
                 {/* Type Badge */}
-                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium shrink-0 ${colorClass}`}>
-                  <Icon className="w-3.5 h-3.5" />
+                <div
+                  className={`flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium ${colorClass}`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
                   {STAGE_TYPE_LABELS[stage.stage_type]}
                 </div>
 
                 {/* Name & Description */}
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-theme-text-primary font-medium truncate">
-                      {stage.name}
-                    </span>
+                    <span className="text-theme-text-primary truncate font-medium">{stage.name}</span>
                     {stage.is_required && (
-                      <span className="text-xs text-red-700 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded-sm">
+                      <span className="rounded-sm bg-red-500/10 px-1.5 py-0.5 text-xs text-red-700 dark:text-red-400">
                         Required
                       </span>
                     )}
                     {stage.notify_prospect_on_completion && (
-                      <span className="text-xs text-blue-700 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-sm flex items-center gap-0.5" title="Notifies prospect on completion">
-                        <Bell className="w-2.5 h-2.5" />
+                      <span
+                        className="flex items-center gap-0.5 rounded-sm bg-blue-500/10 px-1.5 py-0.5 text-xs text-blue-700 dark:text-blue-400"
+                        title="Notifies prospect on completion"
+                      >
+                        <Bell className="h-2.5 w-2.5" />
                         Notify
                       </span>
                     )}
                     {!stage.public_visible && (
-                      <span className="text-xs text-theme-text-muted bg-theme-surface-hover px-1.5 py-0.5 rounded-sm flex items-center gap-0.5" title="Hidden from public status page">
-                        <EyeOff className="w-2.5 h-2.5" />
+                      <span
+                        className="text-theme-text-muted bg-theme-surface-hover flex items-center gap-0.5 rounded-sm px-1.5 py-0.5 text-xs"
+                        title="Hidden from public status page"
+                      >
+                        <EyeOff className="h-2.5 w-2.5" />
                         Hidden
                       </span>
                     )}
                   </div>
                   {stage.description && (
-                    <p className="text-sm text-theme-text-muted truncate mt-0.5">
-                      {stage.description}
-                    </p>
+                    <p className="text-theme-text-muted mt-0.5 truncate text-sm">{stage.description}</p>
                   )}
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex shrink-0 items-center gap-1">
                   <button
-                    onClick={() => { void moveStage(index, index - 1); }}
+                    onClick={() => {
+                      void moveStage(index, index - 1);
+                    }}
                     disabled={index === 0 || isSaving}
-                    className="p-1.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                     title="Move up"
                   >
-                    <ArrowUp className="w-4 h-4" />
+                    <ArrowUp className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => { void moveStage(index, index + 1); }}
+                    onClick={() => {
+                      void moveStage(index, index + 1);
+                    }}
                     disabled={index === stages.length - 1 || isSaving}
-                    className="p-1.5 text-theme-text-muted hover:text-theme-text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="text-theme-text-muted hover:text-theme-text-primary p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                     title="Move down"
                   >
-                    <ArrowDown className="w-4 h-4" />
+                    <ArrowDown className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => {
                       setEditingStage(stage);
                       setModalOpen(true);
                     }}
-                    className="p-1.5 text-theme-text-muted hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
+                    className="text-theme-text-muted p-1.5 transition-colors hover:text-blue-700 dark:hover:text-blue-400"
                     title="Edit stage"
                   >
-                    <Edit2 className="w-4 h-4" />
+                    <Edit2 className="h-4 w-4" />
                   </button>
                   {deleteConfirmId === stage.id ? (
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => setDeleteConfirmId(null)}
-                        className="px-1.5 py-0.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary px-1.5 py-0.5 text-xs transition-colors"
                       >
                         Cancel
                       </button>
@@ -275,7 +257,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                           void handleDeleteStage(stage.id);
                           setDeleteConfirmId(null);
                         }}
-                        className="px-1.5 py-0.5 text-xs text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-colors"
+                        className="px-1.5 py-0.5 text-xs font-medium text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       >
                         Delete
                       </button>
@@ -283,10 +265,10 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
                   ) : (
                     <button
                       onClick={() => setDeleteConfirmId(stage.id)}
-                      className="p-1.5 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
+                      className="text-theme-text-muted p-1.5 transition-colors hover:text-red-700 dark:hover:text-red-400"
                       title="Remove stage"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   )}
                 </div>
@@ -302,16 +284,16 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
           setEditingStage(null);
           setModalOpen(true);
         }}
-        className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:border-red-500/50 transition-all"
+        className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-3 transition-all hover:border-red-500/50"
       >
-        <Plus className="w-4 h-4" />
+        <Plus className="h-4 w-4" />
         <span className="text-sm font-medium">Add Stage</span>
       </button>
 
       {/* Saving indicator */}
       {isSaving && (
-        <div className="flex items-center gap-2 mt-3 text-sm text-theme-text-muted" role="status" aria-live="polite">
-          <Loader2 className="w-4 h-4 animate-spin" />
+        <div className="text-theme-text-muted mt-3 flex items-center gap-2 text-sm" role="status" aria-live="polite">
+          <Loader2 className="h-4 w-4 animate-spin" />
           Saving order...
         </div>
       )}
@@ -323,7 +305,9 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
           setModalOpen(false);
           setEditingStage(null);
         }}
-        onSave={(data) => { void (editingStage ? handleUpdateStage(data) : handleAddStage(data)); }}
+        onSave={(data) => {
+          void (editingStage ? handleUpdateStage(data) : handleAddStage(data));
+        }}
         editingStage={editingStage}
         existingStageCount={stages.length}
       />

@@ -1,12 +1,5 @@
 import React, { useCallback, useRef, useMemo } from 'react';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -17,11 +10,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Plus, Trash2, GripVertical, Eye } from 'lucide-react';
-import type {
-  AutomatedEmailStageConfig,
-  AutomatedEmailSection,
-  StageConfig,
-} from '../../types';
+import type { AutomatedEmailStageConfig, AutomatedEmailSection, StageConfig } from '../../types';
 import { EMAIL_BUILTIN_SECTION_IDS, DEFAULT_EMAIL_SECTION_ORDER } from '../../types';
 import type { EventListItem } from '@/types/event';
 
@@ -31,14 +20,7 @@ interface SortableEmailSectionProps {
 }
 
 const SortableEmailSection: React.FC<SortableEmailSectionProps> = ({ id, children }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -51,16 +33,14 @@ const SortableEmailSection: React.FC<SortableEmailSectionProps> = ({ id, childre
     <div ref={setNodeRef} style={style} className="group/section relative">
       <button
         type="button"
-        className="text-theme-text-muted absolute top-4 -left-1 shrink-0 cursor-grab transition-opacity sm:opacity-0 sm:group-hover/section:opacity-100 active:cursor-grabbing touch-none"
+        className="text-theme-text-muted absolute top-4 -left-1 shrink-0 cursor-grab touch-none transition-opacity active:cursor-grabbing sm:opacity-0 sm:group-hover/section:opacity-100"
         aria-label="Drag to reorder section"
         {...attributes}
         {...listeners}
       >
         <GripVertical className="h-4 w-4" />
       </button>
-      <div className="pl-5">
-        {children}
-      </div>
+      <div className="pl-5">{children}</div>
     </div>
   );
 };
@@ -81,20 +61,23 @@ const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => 
   });
 
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white text-left text-sm shadow-sm" style={{ maxWidth: 480 }}>
+    <div
+      className="overflow-hidden rounded-lg border border-gray-200 bg-white text-left text-sm shadow-sm"
+      style={{ maxWidth: 480 }}
+    >
       <div className="bg-red-600 px-5 py-4 text-center">
         <span className="text-lg font-bold text-white">Organization Name</span>
       </div>
       <div className="space-y-4 bg-gray-50 p-5 text-gray-700" style={{ lineHeight: 1.6 }}>
         <p className="m-0">Hi Prospect,</p>
         {enabledSections.length === 0 && (
-          <p className="m-0 italic text-gray-400">Your membership application has been updated.</p>
+          <p className="m-0 text-gray-400 italic">Your membership application has been updated.</p>
         )}
         {enabledSections.map((sid) => {
           if (sid === EMAIL_BUILTIN_SECTION_IDS.WELCOME) {
             return (
               <p key={sid} className="m-0">
-                {config.welcome_message || <span className="italic text-gray-400">Welcome message...</span>}
+                {config.welcome_message || <span className="text-gray-400 italic">Welcome message...</span>}
               </p>
             );
           }
@@ -118,7 +101,7 @@ const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => 
                 ) : config.next_meeting_details ? (
                   <span>{config.next_meeting_details}</span>
                 ) : (
-                  <span className="italic text-gray-400">Meeting details...</span>
+                  <span className="text-gray-400 italic">Meeting details...</span>
                 )}
               </div>
             );
@@ -143,14 +126,12 @@ const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => 
                   <br />
                 </>
               )}
-              {custom.content || <span className="italic text-gray-400">Section content...</span>}
+              {custom.content || <span className="text-gray-400 italic">Section content...</span>}
             </div>
           );
         })}
       </div>
-      <div className="px-5 py-3 text-center text-xs text-gray-400">
-        This email was sent by Organization Name.
-      </div>
+      <div className="px-5 py-3 text-center text-xs text-gray-400">This email was sent by Organization Name.</div>
     </div>
   );
 };
@@ -192,7 +173,7 @@ const AutomatedEmailConfig: React.FC<AutomatedEmailConfigProps> = ({
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
         : `cs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`,
-    [],
+    []
   );
 
   const handleAddCustomSection = useCallback(() => {
@@ -215,21 +196,24 @@ const AutomatedEmailConfig: React.FC<AutomatedEmailConfigProps> = ({
     });
   }, [generateSectionId, setConfig]);
 
-  const handleRemoveCustomSection = useCallback((removeIdx: number) => {
-    setConfig((prev) => {
-      const email = prev as AutomatedEmailStageConfig;
-      const sections = email.custom_sections ?? [];
-      const removedSection = sections[removeIdx];
-      const removedId = removedSection?.id;
-      return {
-        ...email,
-        custom_sections: sections.filter((_, i) => i !== removeIdx),
-        section_order: removedId
-          ? (email.section_order ?? DEFAULT_EMAIL_SECTION_ORDER).filter((id) => id !== removedId)
-          : email.section_order,
-      };
-    });
-  }, [setConfig]);
+  const handleRemoveCustomSection = useCallback(
+    (removeIdx: number) => {
+      setConfig((prev) => {
+        const email = prev as AutomatedEmailStageConfig;
+        const sections = email.custom_sections ?? [];
+        const removedSection = sections[removeIdx];
+        const removedId = removedSection?.id;
+        return {
+          ...email,
+          custom_sections: sections.filter((_, i) => i !== removeIdx),
+          section_order: removedId
+            ? (email.section_order ?? DEFAULT_EMAIL_SECTION_ORDER).filter((id) => id !== removedId)
+            : email.section_order,
+        };
+      });
+    },
+    [setConfig]
+  );
 
   const handleUpdateCustomSection = useCallback(
     (idx: number, field: keyof AutomatedEmailSection, value: string | boolean) => {
@@ -243,12 +227,12 @@ const AutomatedEmailConfig: React.FC<AutomatedEmailConfigProps> = ({
         return { ...email, custom_sections: sections };
       });
     },
-    [setConfig],
+    [setConfig]
   );
 
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const sectionOrderStored = emailConfig.section_order;
@@ -282,7 +266,7 @@ const AutomatedEmailConfig: React.FC<AutomatedEmailConfigProps> = ({
         section_order: reordered,
       }));
     },
-    [effectiveSectionOrder, setConfig],
+    [effectiveSectionOrder, setConfig]
   );
 
   return (
@@ -299,21 +283,15 @@ const AutomatedEmailConfig: React.FC<AutomatedEmailConfigProps> = ({
           placeholder="e.g., Welcome to the Membership Process"
           className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
         />
-        {errors.email_subject && (
-          <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email_subject}</p>
-        )}
+        {errors.email_subject && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email_subject}</p>}
       </div>
 
       <p className="text-theme-text-muted text-xs">
-        Configure the sections to include in the email. Drag sections to reorder them. The prospect's name
-        will be used as the greeting automatically.
+        Configure the sections to include in the email. Drag sections to reorder them. The prospect's name will be used
+        as the greeting automatically.
       </p>
 
-      <DndContext
-        sensors={dndSensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleEmailSectionDragEnd}
-      >
+      <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleEmailSectionDragEnd}>
         <SortableContext items={effectiveSectionOrder} strategy={verticalListSortingStrategy}>
           {effectiveSectionOrder.map((sectionId) => {
             if (sectionId === EMAIL_BUILTIN_SECTION_IDS.WELCOME) {

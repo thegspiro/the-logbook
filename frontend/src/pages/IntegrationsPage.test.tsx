@@ -293,10 +293,7 @@ describe('IntegrationsPage', () => {
         const card = screen.getByTestId('integration-card-salesforce');
         await user.click(within(card).getByText('Connect'));
 
-        await user.type(
-          screen.getByLabelText('Salesforce Instance URL'),
-          'https://acme.my.salesforce.com'
-        );
+        await user.type(screen.getByLabelText('Salesforce Instance URL'), 'https://acme.my.salesforce.com');
         await user.click(screen.getByRole('button', { name: /Connect with Salesforce/i }));
 
         expect(mockUpdateIntegration).toHaveBeenCalledWith(

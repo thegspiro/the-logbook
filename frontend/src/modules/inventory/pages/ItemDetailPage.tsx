@@ -9,16 +9,35 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router';
 import {
-  ArrowLeft, Printer, Pencil, User, MapPin, Calendar, Package,
-  Clock, Wrench, Shield, AlertTriangle, ChevronRight, Loader2,
-  Radio, Shirt, HardHat, Cog,
+  ArrowLeft,
+  Printer,
+  Pencil,
+  User,
+  MapPin,
+  Calendar,
+  Package,
+  Clock,
+  Wrench,
+  Shield,
+  AlertTriangle,
+  ChevronRight,
+  Loader2,
+  Radio,
+  Shirt,
+  HardHat,
+  Cog,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { locationsService } from '../../../services/facilitiesServices';
 import type {
-  InventoryItem, InventoryCategory, ItemHistoryEvent,
-  MaintenanceRecord, NFPACompliance, NFPAExposureRecord,
-  StorageAreaResponse, Location,
+  InventoryItem,
+  InventoryCategory,
+  ItemHistoryEvent,
+  MaintenanceRecord,
+  NFPACompliance,
+  NFPAExposureRecord,
+  StorageAreaResponse,
+  Location,
 } from '../types';
 import { getStatusStyle, getConditionColor } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -41,21 +60,25 @@ import toast from 'react-hot-toast';
 type Tab = 'history' | 'nfpa' | 'inspections' | 'exposures' | 'stock';
 
 const HISTORY_ICONS: Record<string, React.ReactNode> = {
-  assignment: <User className="w-4 h-4 text-blue-500" />,
-  return: <Package className="w-4 h-4 text-green-500" />,
-  checkout: <ArrowLeft className="w-4 h-4 text-yellow-500" />,
-  checkin: <Package className="w-4 h-4 text-green-500" />,
-  issuance: <Shirt className="w-4 h-4 text-purple-500" />,
-  issuance_return: <Package className="w-4 h-4 text-teal-500" />,
-  maintenance: <Wrench className="w-4 h-4 text-orange-500" />,
+  assignment: <User className="h-4 w-4 text-blue-500" />,
+  return: <Package className="h-4 w-4 text-green-500" />,
+  checkout: <ArrowLeft className="h-4 w-4 text-yellow-500" />,
+  checkin: <Package className="h-4 w-4 text-green-500" />,
+  issuance: <Shirt className="h-4 w-4 text-purple-500" />,
+  issuance_return: <Package className="h-4 w-4 text-teal-500" />,
+  maintenance: <Wrench className="h-4 w-4 text-orange-500" />,
 };
 
 function typeIcon(itemType: string) {
   switch (itemType) {
-    case 'electronics': return <Radio className="w-5 h-5" />;
-    case 'uniform': return <Shirt className="w-5 h-5" />;
-    case 'ppe': return <HardHat className="w-5 h-5" />;
-    default: return <Cog className="w-5 h-5" />;
+    case 'electronics':
+      return <Radio className="h-5 w-5" />;
+    case 'uniform':
+      return <Shirt className="h-5 w-5" />;
+    case 'ppe':
+      return <HardHat className="h-5 w-5" />;
+    default:
+      return <Cog className="h-5 w-5" />;
   }
 }
 
@@ -65,28 +88,36 @@ function fmtCurrency(val: number | undefined | null): string {
 }
 
 function labelFor(condition: string): string {
-  return ITEM_CONDITION_OPTIONS.find(o => o.value === condition)?.label ?? condition;
+  return ITEM_CONDITION_OPTIONS.find((o) => o.value === condition)?.label ?? condition;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Card / Field components                                            */
 /* ------------------------------------------------------------------ */
 
-interface FieldProps { label: string; value: React.ReactNode }
+interface FieldProps {
+  label: string;
+  value: React.ReactNode;
+}
 const Field: React.FC<FieldProps> = ({ label, value }) => (
   <div>
-    <dt className="text-xs text-theme-text-muted">{label}</dt>
-    <dd className="mt-0.5 text-sm text-theme-text-primary">{value ?? '--'}</dd>
+    <dt className="text-theme-text-muted text-xs">{label}</dt>
+    <dd className="text-theme-text-primary mt-0.5 text-sm">{value ?? '--'}</dd>
   </div>
 );
 
-interface CardProps { title: string; icon?: React.ReactNode; children: React.ReactNode }
+interface CardProps {
+  title: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}
 const Card: React.FC<CardProps> = ({ title, icon, children }) => (
   <div className="card-secondary p-4">
-    <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2 mb-3">
-      {icon}{title}
+    <h3 className="text-theme-text-primary mb-3 flex items-center gap-2 text-sm font-semibold">
+      {icon}
+      {title}
     </h3>
-    <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">{children}</dl>
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">{children}</dl>
   </div>
 );
 
@@ -153,7 +184,7 @@ const ItemDetailPage: React.FC = () => {
       setCategories(cats);
       setLocations(locs);
       setStorageAreas(areas);
-      const cat = cats.find(c => c.id === fetched.category_id) ?? null;
+      const cat = cats.find((c) => c.id === fetched.category_id) ?? null;
       setCategory(cat);
       // Resolve location and storage area names
       if (fetched.location_id) {
@@ -175,34 +206,41 @@ const ItemDetailPage: React.FC = () => {
     }
   }, [id]);
 
-  useEffect(() => { void loadItem(); }, [loadItem]);
+  useEffect(() => {
+    void loadItem();
+  }, [loadItem]);
 
   /* ---------- load tab data --------------------------------------- */
-  const loadTabData = useCallback(async (tab: Tab) => {
-    if (!id) return;
-    setTabLoading(true);
-    try {
-      if (tab === 'history') {
-        const res = await inventoryService.getItemHistory(id);
-        setHistory(res.events);
-      } else if (tab === 'inspections') {
-        const records = await inventoryService.getItemMaintenanceHistory(id);
-        setMaintenance(records);
-      } else if (tab === 'nfpa') {
-        const data = await inventoryService.getNFPACompliance(id);
-        setNfpa(data);
-      } else if (tab === 'exposures') {
-        const data = await inventoryService.getExposureRecords(id);
-        setExposures(data);
+  const loadTabData = useCallback(
+    async (tab: Tab) => {
+      if (!id) return;
+      setTabLoading(true);
+      try {
+        if (tab === 'history') {
+          const res = await inventoryService.getItemHistory(id);
+          setHistory(res.events);
+        } else if (tab === 'inspections') {
+          const records = await inventoryService.getItemMaintenanceHistory(id);
+          setMaintenance(records);
+        } else if (tab === 'nfpa') {
+          const data = await inventoryService.getNFPACompliance(id);
+          setNfpa(data);
+        } else if (tab === 'exposures') {
+          const data = await inventoryService.getExposureRecords(id);
+          setExposures(data);
+        }
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, `Failed to load ${tab} data`));
+      } finally {
+        setTabLoading(false);
       }
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, `Failed to load ${tab} data`));
-    } finally {
-      setTabLoading(false);
-    }
-  }, [id]);
+    },
+    [id]
+  );
 
-  useEffect(() => { void loadTabData(activeTab); }, [activeTab, loadTabData]);
+  useEffect(() => {
+    void loadTabData(activeTab);
+  }, [activeTab, loadTabData]);
 
   /* ---------- assign / unassign ----------------------------------- */
   const handleAssign = async (userId: string) => {
@@ -232,15 +270,15 @@ const ItemDetailPage: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
-        <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
+        <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   if (error || !item) {
     return (
-      <div className="max-w-3xl mx-auto py-12 text-center">
-        <AlertTriangle className="w-10 h-10 mx-auto text-red-500 mb-3" />
+      <div className="mx-auto max-w-3xl py-12 text-center">
+        <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-red-500" />
         <p className="text-theme-text-primary font-medium">{error ?? 'Item not found'}</p>
         <Link to="/inventory/items" className="btn-info mt-4 inline-block text-sm">
           Back to Items
@@ -257,70 +295,68 @@ const ItemDetailPage: React.FC = () => {
     { key: 'inspections', label: 'Inspections', show: hasMaintenance },
     { key: 'exposures', label: 'Exposures', show: isNfpa },
   ];
-  const visibleTabs = tabs.filter(t => t.show);
+  const visibleTabs = tabs.filter((t) => t.show);
 
   /* ================================================================ */
   /*  Render                                                           */
   /* ================================================================ */
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
       {/* Breadcrumbs */}
-      <nav className="flex items-center text-sm text-theme-text-muted gap-1">
-        <Link to="/inventory" className="hover:text-theme-text-primary">Inventory</Link>
-        <ChevronRight className="w-3.5 h-3.5" />
-        <Link to="/inventory/items" className="hover:text-theme-text-primary">Items</Link>
-        <ChevronRight className="w-3.5 h-3.5" />
-        <span className="text-theme-text-primary font-medium truncate max-w-[200px]">{item.name}</span>
+      <nav className="text-theme-text-muted flex items-center gap-1 text-sm">
+        <Link to="/inventory" className="hover:text-theme-text-primary">
+          Inventory
+        </Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <Link to="/inventory/items" className="hover:text-theme-text-primary">
+          Items
+        </Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <span className="text-theme-text-primary max-w-[200px] truncate font-medium">{item.name}</span>
       </nav>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="mb-1 flex items-center gap-2">
             <span className="text-theme-text-muted shrink-0">{typeIcon(itemType)}</span>
-            <h1 className="text-2xl font-bold text-theme-text-primary truncate">{getDisplayName(item)}</h1>
+            <h1 className="text-theme-text-primary truncate text-2xl font-bold">{getDisplayName(item)}</h1>
             <VariantCapsules item={item} showLabels />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getStatusStyle(item.status)}`}>
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${getStatusStyle(item.status)}`}>
               {item.status.replace('_', ' ')}
             </span>
             <span className={`text-xs font-medium ${getConditionColor(item.condition)}`}>
               {labelFor(item.condition)}
             </span>
-            <span className="text-xs bg-theme-surface border border-theme-surface-border rounded px-1.5 py-0.5 text-theme-text-muted">
+            <span className="bg-theme-surface border-theme-surface-border text-theme-text-muted rounded border px-1.5 py-0.5 text-xs">
               {item.tracking_type === 'individual' ? 'Individual' : 'Pool'}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            to="/inventory/items"
-            className="btn-secondary btn-sm inline-flex items-center gap-1"
-          >
-            <ArrowLeft className="w-4 h-4" /> Back
+          <Link to="/inventory/items" className="btn-secondary btn-sm inline-flex items-center gap-1">
+            <ArrowLeft className="h-4 w-4" /> Back
           </Link>
           <Link
             to={`/inventory/print-labels?ids=${id ?? ''}`}
             className="btn-secondary btn-sm inline-flex items-center gap-1"
           >
-            <Printer className="w-4 h-4" /> Print Barcode
+            <Printer className="h-4 w-4" /> Print Barcode
           </Link>
           {canManage && (
-            <button
-              onClick={() => setShowEditModal(true)}
-              className="btn-info btn-sm inline-flex items-center gap-1"
-            >
-              <Pencil className="w-4 h-4" /> Edit
+            <button onClick={() => setShowEditModal(true)} className="btn-info btn-sm inline-flex items-center gap-1">
+              <Pencil className="h-4 w-4" /> Edit
             </button>
           )}
         </div>
       </div>
 
       {/* Detail cards grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Basic Info — always shown */}
-        <Card title="Basic Info" icon={<Package className="w-4 h-4" />}>
+        <Card title="Basic Info" icon={<Package className="h-4 w-4" />}>
           <Field label="Name" value={item.name} />
           <Field label="Category" value={category?.name ?? '--'} />
           <Field label="Tracking" value={item.tracking_type === 'individual' ? 'Individual' : 'Pool'} />
@@ -333,7 +369,7 @@ const ItemDetailPage: React.FC = () => {
         </Card>
 
         {/* Location — always shown */}
-        <Card title="Location" icon={<MapPin className="w-4 h-4" />}>
+        <Card title="Location" icon={<MapPin className="h-4 w-4" />}>
           <Field label="Station" value={item.station || '--'} />
           <Field label="Location" value={locationName || item.location_id || '--'} />
           <Field label="Storage Area" value={storageAreaName || item.storage_location || '--'} />
@@ -341,7 +377,7 @@ const ItemDetailPage: React.FC = () => {
 
         {/* Identity — electronics, ppe, equipment, tool, vehicle */}
         {['electronics', 'ppe', 'equipment', 'tool', 'vehicle'].includes(itemType) && (
-          <Card title="Identity" icon={<Shield className="w-4 h-4" />}>
+          <Card title="Identity" icon={<Shield className="h-4 w-4" />}>
             <Field label="Serial Number" value={item.serial_number || '--'} />
             <Field label="Model Number" value={item.model_number || '--'} />
             <Field label="Manufacturer" value={item.manufacturer || '--'} />
@@ -349,8 +385,11 @@ const ItemDetailPage: React.FC = () => {
         )}
 
         {/* Financial — shown when any cost data exists, or for typical asset types */}
-        {(item.purchase_price != null || item.current_value != null || item.replacement_cost != null || ['electronics', 'equipment', 'tool', 'vehicle'].includes(itemType)) && (
-          <Card title="Financial" icon={<Calendar className="w-4 h-4" />}>
+        {(item.purchase_price != null ||
+          item.current_value != null ||
+          item.replacement_cost != null ||
+          ['electronics', 'equipment', 'tool', 'vehicle'].includes(itemType)) && (
+          <Card title="Financial" icon={<Calendar className="h-4 w-4" />}>
             <Field label="Purchase Price" value={fmtCurrency(item.purchase_price)} />
             <Field label="Current Value" value={fmtCurrency(item.current_value)} />
             <Field label="Replacement Cost" value={fmtCurrency(item.replacement_cost)} />
@@ -362,7 +401,7 @@ const ItemDetailPage: React.FC = () => {
 
         {/* Physical — uniform, ppe */}
         {['uniform', 'ppe'].includes(itemType) && (
-          <Card title="Physical" icon={<Shirt className="w-4 h-4" />}>
+          <Card title="Physical" icon={<Shirt className="h-4 w-4" />}>
             <Field label="Standard Size" value={item.standard_size ? item.standard_size.toUpperCase() : '--'} />
             <Field label="Style" value={item.style ? item.style.replace(/_/g, ' ') : '--'} />
             <Field label="Size (legacy)" value={item.size || '--'} />
@@ -372,7 +411,7 @@ const ItemDetailPage: React.FC = () => {
 
         {/* Stock — uniform pool items */}
         {itemType === 'uniform' && item.tracking_type === 'pool' && (
-          <Card title="Stock" icon={<Package className="w-4 h-4" />}>
+          <Card title="Stock" icon={<Package className="h-4 w-4" />}>
             <Field label="Qty On Hand" value={item.quantity} />
             <Field label="Qty Issued" value={item.quantity_issued} />
             <Field label="Unit" value={item.unit_of_measure || '--'} />
@@ -381,7 +420,7 @@ const ItemDetailPage: React.FC = () => {
 
         {/* Inspection — ppe or items with requires_maintenance */}
         {(itemType === 'ppe' || hasMaintenance) && (
-          <Card title="Inspection" icon={<Wrench className="w-4 h-4" />}>
+          <Card title="Inspection" icon={<Wrench className="h-4 w-4" />}>
             <Field label="Last Inspection" value={formatDate(item.last_inspection_date, tz)} />
             <Field label="Next Due" value={formatDate(item.next_inspection_due, tz)} />
             <Field label="Interval (days)" value={item.inspection_interval_days ?? '--'} />
@@ -390,7 +429,7 @@ const ItemDetailPage: React.FC = () => {
 
         {/* Assignment — individual items */}
         {item.tracking_type === 'individual' && (
-          <Card title="Assignment" icon={<User className="w-4 h-4" />}>
+          <Card title="Assignment" icon={<User className="h-4 w-4" />}>
             {item.assigned_to_user_id ? (
               <>
                 <Field
@@ -398,7 +437,7 @@ const ItemDetailPage: React.FC = () => {
                   value={
                     <Link
                       to={`/members/${item.assigned_to_user_id}`}
-                      className="text-blue-600 dark:text-blue-400 hover:underline"
+                      className="text-blue-600 hover:underline dark:text-blue-400"
                     >
                       {item.assigned_to_user_id}
                     </Link>
@@ -407,10 +446,7 @@ const ItemDetailPage: React.FC = () => {
                 <Field label="Assigned Date" value={formatDate(item.assigned_date, tz)} />
                 {canManage && (
                   <div className="col-span-full mt-1">
-                    <button
-                      onClick={() => void handleUnassign()}
-                      className="btn-secondary btn-sm"
-                    >
+                    <button onClick={() => void handleUnassign()} className="btn-secondary btn-sm">
                       Unassign
                     </button>
                   </div>
@@ -418,12 +454,9 @@ const ItemDetailPage: React.FC = () => {
               </>
             ) : (
               <div className="col-span-full">
-                <p className="text-sm text-theme-text-muted mb-2">Not currently assigned</p>
+                <p className="text-theme-text-muted mb-2 text-sm">Not currently assigned</p>
                 {canManage && (
-                  <button
-                    onClick={() => setShowAssignModal(true)}
-                    className="btn-info btn-sm"
-                  >
+                  <button onClick={() => setShowAssignModal(true)} className="btn-info btn-sm">
                     Assign Item
                   </button>
                 )}
@@ -437,15 +470,15 @@ const ItemDetailPage: React.FC = () => {
       {/*  Tabs                                                         */}
       {/* ============================================================ */}
       <div>
-        <div className="flex border-b border-theme-surface-border gap-4 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-          {visibleTabs.map(t => (
+        <div className="border-theme-surface-border scrollbar-hide -mx-4 flex gap-4 overflow-x-auto border-b px-4 sm:mx-0 sm:px-0">
+          {visibleTabs.map((t) => (
             <button
               key={t.key}
               onClick={() => setActiveTab(t.key)}
-              className={`pb-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+              className={`shrink-0 border-b-2 pb-2 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === t.key
                   ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-theme-text-muted hover:text-theme-text-primary'
+                  : 'text-theme-text-muted hover:text-theme-text-primary border-transparent'
               }`}
             >
               {t.label}
@@ -456,7 +489,7 @@ const ItemDetailPage: React.FC = () => {
         <div className="mt-4 min-h-[120px]">
           {tabLoading ? (
             <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
-              <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
+              <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
             </div>
           ) : (
             <>
@@ -469,7 +502,12 @@ const ItemDetailPage: React.FC = () => {
                 <InspectionsTab records={maintenance} tz={tz} itemId={id ?? ''} canManage={canManage} />
               )}
               {activeTab === 'exposures' && isNfpa && (
-                <ExposuresTab records={exposures} tz={tz} canManage={canManage} onAdd={() => setShowExposureModal(true)} />
+                <ExposuresTab
+                  records={exposures}
+                  tz={tz}
+                  canManage={canManage}
+                  onAdd={() => setShowExposureModal(true)}
+                />
               )}
             </>
           )}
@@ -481,7 +519,9 @@ const ItemDetailPage: React.FC = () => {
         isOpen={showAssignModal}
         onClose={() => setShowAssignModal(false)}
         title="Assign Item — Select a Member"
-        onSelect={(member) => { void handleAssign(member.userId); }}
+        onSelect={(member) => {
+          void handleAssign(member.userId);
+        }}
       />
 
       {/* Edit Item Modal */}
@@ -529,24 +569,42 @@ const ItemDetailPage: React.FC = () => {
 
 /* ----- History Tab ------------------------------------------------ */
 
-interface HistoryTabProps { events: ItemHistoryEvent[]; tz: string }
+interface HistoryTabProps {
+  events: ItemHistoryEvent[];
+  tz: string;
+}
 const HistoryTab: React.FC<HistoryTabProps> = ({ events, tz }) => {
   if (events.length === 0) {
-    return <p className="text-sm text-theme-text-muted py-4">No history events recorded.</p>;
+    return <p className="text-theme-text-muted py-4 text-sm">No history events recorded.</p>;
   }
   return (
     <ul className="space-y-3">
-      {events.map(evt => (
-        <li key={evt.id} className="flex items-start gap-3 bg-theme-surface border border-theme-surface-border rounded-lg p-3">
-          <span className="mt-0.5">{HISTORY_ICONS[evt.type] ?? <Clock className="w-4 h-4 text-theme-text-muted" />}</span>
-          <div className="flex-1 min-w-0">
+      {events.map((evt) => (
+        <li
+          key={evt.id}
+          className="bg-theme-surface border-theme-surface-border flex items-start gap-3 rounded-lg border p-3"
+        >
+          <span className="mt-0.5">
+            {HISTORY_ICONS[evt.type] ?? <Clock className="text-theme-text-muted h-4 w-4" />}
+          </span>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-theme-text-primary">{evt.summary}</span>
-              <span className="text-xs text-theme-text-muted whitespace-nowrap">{formatDate(evt.date, tz)}</span>
+              <span className="text-theme-text-primary text-sm font-medium">{evt.summary}</span>
+              <span className="text-theme-text-muted text-xs whitespace-nowrap">{formatDate(evt.date, tz)}</span>
             </div>
             {evt.details && Object.keys(evt.details).length > 0 && (
-              <p className="text-xs text-theme-text-muted mt-1 truncate">
-                {Object.entries(evt.details).map(([k, v]) => { const s = (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') ? String(v) : (v != null ? JSON.stringify(v) : ''); return `${k}: ${s}`; }).join(' | ')}
+              <p className="text-theme-text-muted mt-1 truncate text-xs">
+                {Object.entries(evt.details)
+                  .map(([k, v]) => {
+                    const s =
+                      typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
+                        ? String(v)
+                        : v != null
+                          ? JSON.stringify(v)
+                          : '';
+                    return `${k}: ${s}`;
+                  })
+                  .join(' | ')}
               </p>
             )}
           </div>
@@ -558,49 +616,58 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ events, tz }) => {
 
 /* ----- NFPA Tab --------------------------------------------------- */
 
-interface NFPATabProps { data: NFPACompliance | null; tz: string; canManage: boolean; onEdit: () => void }
+interface NFPATabProps {
+  data: NFPACompliance | null;
+  tz: string;
+  canManage: boolean;
+  onEdit: () => void;
+}
 const NFPATab: React.FC<NFPATabProps> = ({ data, tz, canManage, onEdit }) => {
   if (!data) {
     return (
-      <div className="text-center py-8">
-        <Shield className="w-8 h-8 mx-auto text-theme-text-muted mb-2" />
-        <p className="text-sm text-theme-text-muted mb-3">No NFPA compliance data available.</p>
-        {canManage && <button onClick={onEdit} className="btn-info btn-sm">+ Add NFPA Compliance</button>}
+      <div className="py-8 text-center">
+        <Shield className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
+        <p className="text-theme-text-muted mb-3 text-sm">No NFPA compliance data available.</p>
+        {canManage && (
+          <button onClick={onEdit} className="btn-info btn-sm">
+            + Add NFPA Compliance
+          </button>
+        )}
       </div>
     );
   }
   return (
     <div>
       {canManage && (
-        <div className="flex justify-end mb-3">
+        <div className="mb-3 flex justify-end">
           <button onClick={onEdit} className="btn-secondary btn-sm inline-flex items-center gap-1">
-            <Pencil className="w-3.5 h-3.5" /> Edit
+            <Pencil className="h-3.5 w-3.5" /> Edit
           </button>
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <Card title="Lifecycle" icon={<Calendar className="w-4 h-4" />}>
-        <Field label="Manufacture Date" value={formatDate(data.manufacture_date, tz)} />
-        <Field label="First In Service" value={formatDate(data.first_in_service_date, tz)} />
-        <Field label="Expected Retirement" value={formatDate(data.expected_retirement_date, tz)} />
-        <Field label="Retired by Age" value={data.is_retired_by_age ? 'Yes' : 'No'} />
-        {data.retirement_reason && <Field label="Retirement Reason" value={data.retirement_reason} />}
-      </Card>
-      <Card title="Ensemble / SCBA" icon={<Shield className="w-4 h-4" />}>
-        <Field label="Ensemble ID" value={data.ensemble_id || '--'} />
-        <Field label="Ensemble Role" value={data.ensemble_role || '--'} />
-        <Field label="Cylinder Mfg Date" value={formatDate(data.cylinder_manufacture_date, tz)} />
-        <Field label="Cylinder Exp." value={formatDate(data.cylinder_expiration_date, tz)} />
-        <Field label="Hydrostatic Test" value={formatDate(data.hydrostatic_test_date, tz)} />
-        <Field label="Hydrostatic Due" value={formatDate(data.hydrostatic_test_due, tz)} />
-        <Field label="Flow Test" value={formatDate(data.flow_test_date, tz)} />
-        <Field label="Flow Test Due" value={formatDate(data.flow_test_due, tz)} />
-      </Card>
-      {data.contamination_level && (
-        <Card title="Contamination" icon={<AlertTriangle className="w-4 h-4" />}>
-          <Field label="Level" value={data.contamination_level} />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Card title="Lifecycle" icon={<Calendar className="h-4 w-4" />}>
+          <Field label="Manufacture Date" value={formatDate(data.manufacture_date, tz)} />
+          <Field label="First In Service" value={formatDate(data.first_in_service_date, tz)} />
+          <Field label="Expected Retirement" value={formatDate(data.expected_retirement_date, tz)} />
+          <Field label="Retired by Age" value={data.is_retired_by_age ? 'Yes' : 'No'} />
+          {data.retirement_reason && <Field label="Retirement Reason" value={data.retirement_reason} />}
         </Card>
-      )}
+        <Card title="Ensemble / SCBA" icon={<Shield className="h-4 w-4" />}>
+          <Field label="Ensemble ID" value={data.ensemble_id || '--'} />
+          <Field label="Ensemble Role" value={data.ensemble_role || '--'} />
+          <Field label="Cylinder Mfg Date" value={formatDate(data.cylinder_manufacture_date, tz)} />
+          <Field label="Cylinder Exp." value={formatDate(data.cylinder_expiration_date, tz)} />
+          <Field label="Hydrostatic Test" value={formatDate(data.hydrostatic_test_date, tz)} />
+          <Field label="Hydrostatic Due" value={formatDate(data.hydrostatic_test_due, tz)} />
+          <Field label="Flow Test" value={formatDate(data.flow_test_date, tz)} />
+          <Field label="Flow Test Due" value={formatDate(data.flow_test_due, tz)} />
+        </Card>
+        {data.contamination_level && (
+          <Card title="Contamination" icon={<AlertTriangle className="h-4 w-4" />}>
+            <Field label="Level" value={data.contamination_level} />
+          </Card>
+        )}
       </div>
     </div>
   );
@@ -616,8 +683,8 @@ interface InspectionsTabProps {
 }
 const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId, canManage }) => (
   <div>
-    <div className="flex items-center justify-between mb-3">
-      <h3 className="text-sm font-semibold text-theme-text-primary">Maintenance Records</h3>
+    <div className="mb-3 flex items-center justify-between">
+      <h3 className="text-theme-text-primary text-sm font-semibold">Maintenance Records</h3>
       {canManage && (
         <Link to={`/inventory/maintenance?item=${itemId}`} className="btn-info btn-sm">
           + Add Record
@@ -625,13 +692,13 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId, ca
       )}
     </div>
     {records.length === 0 ? (
-      <p className="text-sm text-theme-text-muted py-4">No maintenance records found.</p>
+      <p className="text-theme-text-muted py-4 text-sm">No maintenance records found.</p>
     ) : (
       <div className="space-y-2">
-        {records.map(rec => (
-          <div key={rec.id} className="card-secondary p-3 flex items-start justify-between gap-3">
+        {records.map((rec) => (
+          <div key={rec.id} className="card-secondary flex items-start justify-between gap-3 p-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-theme-text-primary">
+              <p className="text-theme-text-primary text-sm font-medium">
                 {rec.maintenance_type.replace('_', ' ')}{' '}
                 {rec.passed != null && (
                   <span className={rec.passed ? 'text-green-600' : 'text-red-600'}>
@@ -639,10 +706,10 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId, ca
                   </span>
                 )}
               </p>
-              {rec.description && <p className="text-xs text-theme-text-muted mt-0.5">{rec.description}</p>}
-              {rec.performed_by && <p className="text-xs text-theme-text-muted">By: {rec.performed_by}</p>}
+              {rec.description && <p className="text-theme-text-muted mt-0.5 text-xs">{rec.description}</p>}
+              {rec.performed_by && <p className="text-theme-text-muted text-xs">By: {rec.performed_by}</p>}
             </div>
-            <div className="text-right text-xs text-theme-text-muted whitespace-nowrap">
+            <div className="text-theme-text-muted text-right text-xs whitespace-nowrap">
               <p>{rec.completed_date ? formatDate(rec.completed_date, tz) : 'Pending'}</p>
               {rec.cost != null && <p>{fmtCurrency(rec.cost)}</p>}
             </div>
@@ -655,32 +722,37 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId, ca
 
 /* ----- Exposures Tab ---------------------------------------------- */
 
-interface ExposuresTabProps { records: NFPAExposureRecord[]; tz: string; canManage: boolean; onAdd: () => void }
+interface ExposuresTabProps {
+  records: NFPAExposureRecord[];
+  tz: string;
+  canManage: boolean;
+  onAdd: () => void;
+}
 const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz, canManage, onAdd }) => (
   <div>
-    <div className="flex items-center justify-between mb-3">
-      <h3 className="text-sm font-semibold text-theme-text-primary">Exposure Log</h3>
-      {canManage && <button onClick={onAdd} className="btn-info btn-sm">+ Add Exposure</button>}
+    <div className="mb-3 flex items-center justify-between">
+      <h3 className="text-theme-text-primary text-sm font-semibold">Exposure Log</h3>
+      {canManage && (
+        <button onClick={onAdd} className="btn-info btn-sm">
+          + Add Exposure
+        </button>
+      )}
     </div>
     {records.length === 0 ? (
-      <p className="text-sm text-theme-text-muted py-4">No exposure records found.</p>
+      <p className="text-theme-text-muted py-4 text-sm">No exposure records found.</p>
     ) : (
       <div className="space-y-2">
-        {records.map(rec => (
+        {records.map((rec) => (
           <div key={rec.id} className="card-secondary p-3">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-theme-text-primary">
-                {rec.exposure_type.replace('_', ' ')}
-              </span>
-              <span className="text-xs text-theme-text-muted">{formatDate(rec.exposure_date, tz)}</span>
+              <span className="text-theme-text-primary text-sm font-medium">{rec.exposure_type.replace('_', ' ')}</span>
+              <span className="text-theme-text-muted text-xs">{formatDate(rec.exposure_date, tz)}</span>
             </div>
             {rec.incident_number && (
-              <p className="text-xs text-theme-text-muted mt-0.5">Incident: {rec.incident_number}</p>
+              <p className="text-theme-text-muted mt-0.5 text-xs">Incident: {rec.incident_number}</p>
             )}
-            {rec.description && (
-              <p className="text-xs text-theme-text-muted mt-0.5">{rec.description}</p>
-            )}
-            <div className="flex gap-3 mt-1 text-xs">
+            {rec.description && <p className="text-theme-text-muted mt-0.5 text-xs">{rec.description}</p>}
+            <div className="mt-1 flex gap-3 text-xs">
               <span className={rec.decon_required ? 'text-orange-600' : 'text-theme-text-muted'}>
                 Decon: {rec.decon_required ? 'Required' : 'Not required'}
               </span>
@@ -704,8 +776,14 @@ const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz, canManage, onA
 const ENSEMBLE_ROLE_OPTIONS = ['coat', 'pants', 'helmet', 'gloves', 'boots', 'hood'];
 const CONTAMINATION_OPTIONS = ['none', 'light', 'moderate', 'heavy', 'gross'];
 const EXPOSURE_TYPE_OPTIONS = [
-  'structure_fire', 'vehicle_fire', 'wildland_fire', 'hazmat',
-  'bloodborne_pathogen', 'chemical', 'smoke', 'other',
+  'structure_fire',
+  'vehicle_fire',
+  'wildland_fire',
+  'hazmat',
+  'bloodborne_pathogen',
+  'chemical',
+  'smoke',
+  'other',
 ];
 
 const nfpaLabelClass = 'block text-xs font-medium text-theme-text-primary mb-1';
@@ -741,8 +819,7 @@ const NFPAComplianceModal: React.FC<NFPAComplianceModalProps> = ({ itemId, exist
   const [isRetiredByAge, setIsRetiredByAge] = useState(existing?.is_retired_by_age ?? false);
   const [saving, setSaving] = useState(false);
 
-  const set = (key: keyof typeof form, value: string) =>
-    setForm(prev => ({ ...prev, [key]: value }));
+  const set = (key: keyof typeof form, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = async () => {
     setSaving(true);
@@ -782,86 +859,170 @@ const NFPAComplianceModal: React.FC<NFPAComplianceModalProps> = ({ itemId, exist
   return (
     <Modal isOpen onClose={onClose} title={existing ? 'Edit NFPA Compliance' : 'Add NFPA Compliance'} size="lg">
       <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={nfpaLabelClass}>Manufacture Date</label>
-            <input type="date" value={form.manufacture_date} onChange={e => set('manufacture_date', e.target.value)} className={nfpaInputClass} />
+            <input
+              type="date"
+              value={form.manufacture_date}
+              onChange={(e) => set('manufacture_date', e.target.value)}
+              className={nfpaInputClass}
+            />
           </div>
           <div>
             <label className={nfpaLabelClass}>First In Service</label>
-            <input type="date" value={form.first_in_service_date} onChange={e => set('first_in_service_date', e.target.value)} className={nfpaInputClass} />
+            <input
+              type="date"
+              value={form.first_in_service_date}
+              onChange={(e) => set('first_in_service_date', e.target.value)}
+              className={nfpaInputClass}
+            />
           </div>
           <div>
             <label className={nfpaLabelClass}>Expected Retirement</label>
-            <input type="date" value={form.expected_retirement_date} onChange={e => set('expected_retirement_date', e.target.value)} className={nfpaInputClass} />
+            <input
+              type="date"
+              value={form.expected_retirement_date}
+              onChange={(e) => set('expected_retirement_date', e.target.value)}
+              className={nfpaInputClass}
+            />
           </div>
           <div>
             <label className={nfpaLabelClass}>Retirement Reason</label>
-            <input type="text" value={form.retirement_reason} onChange={e => set('retirement_reason', e.target.value)} className={nfpaInputClass} maxLength={255} />
+            <input
+              type="text"
+              value={form.retirement_reason}
+              onChange={(e) => set('retirement_reason', e.target.value)}
+              className={nfpaInputClass}
+              maxLength={255}
+            />
           </div>
           <div>
             <label className={nfpaLabelClass}>Ensemble ID</label>
-            <input type="text" value={form.ensemble_id} onChange={e => set('ensemble_id', e.target.value)} className={nfpaInputClass} maxLength={36} />
+            <input
+              type="text"
+              value={form.ensemble_id}
+              onChange={(e) => set('ensemble_id', e.target.value)}
+              className={nfpaInputClass}
+              maxLength={36}
+            />
           </div>
           <div>
             <label className={nfpaLabelClass}>Ensemble Role</label>
-            <select value={form.ensemble_role} onChange={e => set('ensemble_role', e.target.value)} className={nfpaInputClass}>
+            <select
+              value={form.ensemble_role}
+              onChange={(e) => set('ensemble_role', e.target.value)}
+              className={nfpaInputClass}
+            >
               <option value="">--</option>
-              {ENSEMBLE_ROLE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+              {ENSEMBLE_ROLE_OPTIONS.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
             </select>
           </div>
         </div>
 
-        <div className="border-t border-theme-surface-border pt-3">
-          <h4 className="text-xs font-semibold text-theme-text-muted mb-2 uppercase tracking-wide">SCBA / Cylinder</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="border-theme-surface-border border-t pt-3">
+          <h4 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wide uppercase">SCBA / Cylinder</h4>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={nfpaLabelClass}>Cylinder Mfg Date</label>
-              <input type="date" value={form.cylinder_manufacture_date} onChange={e => set('cylinder_manufacture_date', e.target.value)} className={nfpaInputClass} />
+              <input
+                type="date"
+                value={form.cylinder_manufacture_date}
+                onChange={(e) => set('cylinder_manufacture_date', e.target.value)}
+                className={nfpaInputClass}
+              />
             </div>
             <div>
               <label className={nfpaLabelClass}>Cylinder Expiration</label>
-              <input type="date" value={form.cylinder_expiration_date} onChange={e => set('cylinder_expiration_date', e.target.value)} className={nfpaInputClass} />
+              <input
+                type="date"
+                value={form.cylinder_expiration_date}
+                onChange={(e) => set('cylinder_expiration_date', e.target.value)}
+                className={nfpaInputClass}
+              />
             </div>
             <div>
               <label className={nfpaLabelClass}>Hydrostatic Test</label>
-              <input type="date" value={form.hydrostatic_test_date} onChange={e => set('hydrostatic_test_date', e.target.value)} className={nfpaInputClass} />
+              <input
+                type="date"
+                value={form.hydrostatic_test_date}
+                onChange={(e) => set('hydrostatic_test_date', e.target.value)}
+                className={nfpaInputClass}
+              />
             </div>
             <div>
               <label className={nfpaLabelClass}>Hydrostatic Due</label>
-              <input type="date" value={form.hydrostatic_test_due} onChange={e => set('hydrostatic_test_due', e.target.value)} className={nfpaInputClass} />
+              <input
+                type="date"
+                value={form.hydrostatic_test_due}
+                onChange={(e) => set('hydrostatic_test_due', e.target.value)}
+                className={nfpaInputClass}
+              />
             </div>
             <div>
               <label className={nfpaLabelClass}>Flow Test</label>
-              <input type="date" value={form.flow_test_date} onChange={e => set('flow_test_date', e.target.value)} className={nfpaInputClass} />
+              <input
+                type="date"
+                value={form.flow_test_date}
+                onChange={(e) => set('flow_test_date', e.target.value)}
+                className={nfpaInputClass}
+              />
             </div>
             <div>
               <label className={nfpaLabelClass}>Flow Test Due</label>
-              <input type="date" value={form.flow_test_due} onChange={e => set('flow_test_due', e.target.value)} className={nfpaInputClass} />
+              <input
+                type="date"
+                value={form.flow_test_due}
+                onChange={(e) => set('flow_test_due', e.target.value)}
+                className={nfpaInputClass}
+              />
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+        <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
           <div>
             <label className={nfpaLabelClass}>Contamination Level</label>
-            <select value={form.contamination_level} onChange={e => set('contamination_level', e.target.value)} className={nfpaInputClass}>
+            <select
+              value={form.contamination_level}
+              onChange={(e) => set('contamination_level', e.target.value)}
+              className={nfpaInputClass}
+            >
               <option value="">--</option>
-              {CONTAMINATION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+              {CONTAMINATION_OPTIONS.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
             </select>
           </div>
           {existing && (
-            <label className="inline-flex items-center gap-2 text-sm text-theme-text-primary pb-2">
-              <input type="checkbox" checked={isRetiredByAge} onChange={e => setIsRetiredByAge(e.target.checked)} className="form-checkbox" />
+            <label className="text-theme-text-primary inline-flex items-center gap-2 pb-2 text-sm">
+              <input
+                type="checkbox"
+                checked={isRetiredByAge}
+                onChange={(e) => setIsRetiredByAge(e.target.checked)}
+                className="form-checkbox"
+              />
               Retired by age
             </label>
           )}
         </div>
 
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
-          <button onClick={onClose} className="btn-secondary btn-md">Cancel</button>
-          <button onClick={() => void handleSave()} disabled={saving} className="btn-info btn-md inline-flex items-center justify-center gap-1">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+        <div className="flex flex-col-reverse items-stretch justify-end gap-2 pt-2 sm:flex-row sm:items-center">
+          <button onClick={onClose} className="btn-secondary btn-md">
+            Cancel
+          </button>
+          <button
+            onClick={() => void handleSave()}
+            disabled={saving}
+            className="btn-info btn-md inline-flex items-center justify-center gap-1"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             {existing ? 'Save Changes' : 'Add Compliance'}
           </button>
         </div>
@@ -889,8 +1050,7 @@ const ExposureModal: React.FC<ExposureModalProps> = ({ itemId, onClose, onSaved 
   const [deconCompleted, setDeconCompleted] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const set = (key: keyof typeof form, value: string) =>
-    setForm(prev => ({ ...prev, [key]: value }));
+  const set = (key: keyof typeof form, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = async () => {
     if (!form.exposure_date) {
@@ -921,54 +1081,106 @@ const ExposureModal: React.FC<ExposureModalProps> = ({ itemId, onClose, onSaved 
   return (
     <Modal isOpen onClose={onClose} title="Log Exposure" size="md">
       <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={nfpaLabelClass}>Exposure Type</label>
-            <select value={form.exposure_type} onChange={e => set('exposure_type', e.target.value)} className={nfpaInputClass}>
-              {EXPOSURE_TYPE_OPTIONS.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+            <select
+              value={form.exposure_type}
+              onChange={(e) => set('exposure_type', e.target.value)}
+              className={nfpaInputClass}
+            >
+              {EXPOSURE_TYPE_OPTIONS.map((o) => (
+                <option key={o} value={o}>
+                  {o.replace(/_/g, ' ')}
+                </option>
+              ))}
             </select>
           </div>
           <div>
             <label className={nfpaLabelClass}>Exposure Date</label>
-            <input type="date" value={form.exposure_date} onChange={e => set('exposure_date', e.target.value)} className={nfpaInputClass} required />
+            <input
+              type="date"
+              value={form.exposure_date}
+              onChange={(e) => set('exposure_date', e.target.value)}
+              className={nfpaInputClass}
+              required
+            />
           </div>
         </div>
         <div>
           <label className={nfpaLabelClass}>Incident Number</label>
-          <input type="text" value={form.incident_number} onChange={e => set('incident_number', e.target.value)} className={nfpaInputClass} maxLength={100} />
+          <input
+            type="text"
+            value={form.incident_number}
+            onChange={(e) => set('incident_number', e.target.value)}
+            className={nfpaInputClass}
+            maxLength={100}
+          />
         </div>
         <div>
           <label className={nfpaLabelClass}>Description</label>
-          <textarea value={form.description} onChange={e => set('description', e.target.value)} className={nfpaInputClass} rows={2} />
+          <textarea
+            value={form.description}
+            onChange={(e) => set('description', e.target.value)}
+            className={nfpaInputClass}
+            rows={2}
+          />
         </div>
         <div className="flex flex-wrap gap-4">
-          <label className="inline-flex items-center gap-2 text-sm text-theme-text-primary">
-            <input type="checkbox" checked={deconRequired} onChange={e => setDeconRequired(e.target.checked)} className="form-checkbox" />
+          <label className="text-theme-text-primary inline-flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={deconRequired}
+              onChange={(e) => setDeconRequired(e.target.checked)}
+              className="form-checkbox"
+            />
             Decon required
           </label>
           {deconRequired && (
-            <label className="inline-flex items-center gap-2 text-sm text-theme-text-primary">
-              <input type="checkbox" checked={deconCompleted} onChange={e => setDeconCompleted(e.target.checked)} className="form-checkbox" />
+            <label className="text-theme-text-primary inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={deconCompleted}
+                onChange={(e) => setDeconCompleted(e.target.checked)}
+                className="form-checkbox"
+              />
               Decon completed
             </label>
           )}
         </div>
         {deconRequired && deconCompleted && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={nfpaLabelClass}>Decon Completed Date</label>
-              <input type="date" value={form.decon_completed_date} onChange={e => set('decon_completed_date', e.target.value)} className={nfpaInputClass} />
+              <input
+                type="date"
+                value={form.decon_completed_date}
+                onChange={(e) => set('decon_completed_date', e.target.value)}
+                className={nfpaInputClass}
+              />
             </div>
             <div>
               <label className={nfpaLabelClass}>Decon Method</label>
-              <input type="text" value={form.decon_method} onChange={e => set('decon_method', e.target.value)} className={nfpaInputClass} maxLength={255} />
+              <input
+                type="text"
+                value={form.decon_method}
+                onChange={(e) => set('decon_method', e.target.value)}
+                className={nfpaInputClass}
+                maxLength={255}
+              />
             </div>
           </div>
         )}
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
-          <button onClick={onClose} className="btn-secondary btn-md">Cancel</button>
-          <button onClick={() => void handleSave()} disabled={saving} className="btn-info btn-md inline-flex items-center justify-center gap-1">
-            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+        <div className="flex flex-col-reverse items-stretch justify-end gap-2 pt-2 sm:flex-row sm:items-center">
+          <button onClick={onClose} className="btn-secondary btn-md">
+            Cancel
+          </button>
+          <button
+            onClick={() => void handleSave()}
+            disabled={saving}
+            className="btn-info btn-md inline-flex items-center justify-center gap-1"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             Log Exposure
           </button>
         </div>

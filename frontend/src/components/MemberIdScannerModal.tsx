@@ -15,16 +15,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import {
-  ScanLine,
-  Camera,
-  CameraOff,
-  AlertCircle,
-  Loader2,
-  X,
-  Flashlight,
-  FlashlightOff,
-} from 'lucide-react';
+import { ScanLine, Camera, CameraOff, AlertCircle, Loader2, X, Flashlight, FlashlightOff } from 'lucide-react';
 import { inventoryService, type MemberInventorySummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
@@ -48,11 +39,7 @@ interface MemberIdScannerModalProps {
 
 // ── Component ──────────────────────────────────────────────────────
 
-export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
-  isOpen,
-  onClose,
-  onMemberIdentified,
-}) => {
+export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({ isOpen, onClose, onMemberIdentified }) => {
   const [error, setError] = useState<string | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const handledRef = useRef(false);
@@ -102,8 +89,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
           membersRef.current = data.members;
         }
         const match = membersRef.current.find(
-          (m) =>
-            m.membership_number?.toLowerCase() === decoded.trim().toLowerCase(),
+          (m) => m.membership_number?.toLowerCase() === decoded.trim().toLowerCase()
         );
 
         if (match) {
@@ -122,24 +108,17 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
         setLookingUp(false);
       }
     },
-    [onMemberIdentified, signalScanSuccess],
+    [onMemberIdentified, signalScanSuccess]
   );
 
   const onScan = useCallback(
     (decodedText: string) => {
       void handleScanResult(decodedText);
     },
-    [handleScanResult],
+    [handleScanResult]
   );
 
-  const {
-    scanning,
-    startScanner,
-    stopScanner,
-    flashlightSupported,
-    flashlightOn,
-    toggleFlashlight,
-  } = useHtml5Scanner({
+  const { scanning, startScanner, stopScanner, flashlightSupported, flashlightOn, toggleFlashlight } = useHtml5Scanner({
     viewportId: 'member-scanner-viewport',
     scanConfig: QR_SCAN_CONFIG,
     onScan,
@@ -181,14 +160,17 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div
-        className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain bg-theme-surface rounded-xl border border-theme-surface-border shadow-xl"
+        className="bg-theme-surface border-theme-surface-border relative max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="scanner-modal-title"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-theme-surface-border">
-          <h2 id="scanner-modal-title" className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
+        <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
+          <h2
+            id="scanner-modal-title"
+            className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold"
+          >
             <ScanLine className="h-5 w-5" aria-hidden="true" />
             Scan Member ID
           </h2>
@@ -197,7 +179,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
               void stopScanner();
               onClose();
             }}
-            className="p-1.5 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg p-1.5 transition-colors"
             aria-label="Close scanner"
           >
             <X className="h-5 w-5" />
@@ -210,7 +192,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
           <div
             id="member-scanner-viewport"
             data-testid="member-scanner-viewport"
-            className="w-full aspect-square max-h-[55dvh]"
+            className="aspect-square max-h-[55dvh] w-full"
             role="img"
             aria-label="Camera scanner preview"
           />
@@ -218,14 +200,16 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
         </div>
 
         {/* Controls + status */}
-        <div className="px-4 py-3 space-y-3">
+        <div className="space-y-3 px-4 py-3">
           {/* Camera toggle */}
           <div className="flex justify-center">
             {!scanning ? (
               <button
-                onClick={() => { void tryStartScanner(); }}
+                onClick={() => {
+                  void tryStartScanner();
+                }}
                 disabled={lookingUp}
-                className="btn-info font-medium gap-2 inline-flex items-center px-5 py-2.5 text-sm transition"
+                className="btn-info inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium transition"
               >
                 <Camera className="h-4 w-4" />
                 Start Camera
@@ -233,18 +217,22 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
             ) : (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => { void stopScanner(); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-400 text-sm font-medium transition-colors"
+                  onClick={() => {
+                    void stopScanner();
+                  }}
+                  className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition-colors dark:border-red-700 dark:bg-red-900/20 dark:text-red-400"
                 >
                   <CameraOff className="h-4 w-4" />
                   Stop Camera
                 </button>
                 {flashlightSupported && (
                   <button
-                    onClick={() => { void toggleFlashlight(); }}
+                    onClick={() => {
+                      void toggleFlashlight();
+                    }}
                     aria-pressed={flashlightOn}
                     aria-label={flashlightOn ? 'Turn flashlight off' : 'Turn flashlight on'}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                       flashlightOn
                         ? 'border-amber-400 bg-amber-100 text-amber-900 dark:border-amber-500 dark:bg-amber-500/20 dark:text-amber-300'
                         : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary'
@@ -260,22 +248,22 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
 
           {/* Looking up */}
           {lookingUp && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 flex items-center justify-center gap-2">
+            <div className="flex items-center justify-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
               <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-              <p className="text-blue-600 dark:text-blue-400 text-sm">Looking up member...</p>
+              <p className="text-sm text-blue-600 dark:text-blue-400">Looking up member...</p>
             </div>
           )}
 
           {/* Error */}
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-              <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+            <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
             </div>
           )}
 
           {/* Instructions */}
-          <p className="text-xs text-theme-text-muted text-center">
+          <p className="text-theme-text-muted text-center text-xs">
             Point the camera at a member&apos;s QR code or barcode on their digital ID card.
           </p>
         </div>

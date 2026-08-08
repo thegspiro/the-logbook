@@ -30,10 +30,7 @@ export const getConfig = async (): Promise<PublicPortalConfig> => {
   return response.data;
 };
 
-
-export const updateConfig = async (
-  config: UpdateConfigRequest
-): Promise<PublicPortalConfig> => {
+export const updateConfig = async (config: UpdateConfigRequest): Promise<PublicPortalConfig> => {
   const response = await api.patch<PublicPortalConfig>('/config', config);
   return response.data;
 };
@@ -42,26 +39,19 @@ export const updateConfig = async (
 // API Key Management
 // ============================================================================
 
-export const listAPIKeys = async (
-  includeInactive = false
-): Promise<PublicPortalAPIKey[]> => {
+export const listAPIKeys = async (includeInactive = false): Promise<PublicPortalAPIKey[]> => {
   const response = await api.get<PublicPortalAPIKey[]>('/api-keys', {
     params: { include_inactive: includeInactive },
   });
   return asArray(response.data);
 };
 
-export const createAPIKey = async (
-  data: CreateAPIKeyRequest
-): Promise<PublicPortalAPIKeyCreated> => {
+export const createAPIKey = async (data: CreateAPIKeyRequest): Promise<PublicPortalAPIKeyCreated> => {
   const response = await api.post<PublicPortalAPIKeyCreated>('/api-keys', data);
   return response.data;
 };
 
-
-export const revokeAPIKey = async (
-  keyId: string
-): Promise<{ message: string; key_prefix: string }> => {
+export const revokeAPIKey = async (keyId: string): Promise<{ message: string; key_prefix: string }> => {
   const response = await api.delete<{ message: string; key_prefix: string }>(`/api-keys/${keyId}`);
   return response.data;
 };
@@ -70,9 +60,7 @@ export const revokeAPIKey = async (
 // Access Logs
 // ============================================================================
 
-export const getAccessLogs = async (
-  filters: AccessLogFilters = {}
-): Promise<PublicPortalAccessLog[]> => {
+export const getAccessLogs = async (filters: AccessLogFilters = {}): Promise<PublicPortalAccessLog[]> => {
   const response = await api.get<PublicPortalAccessLog[]>('/access-logs', {
     params: filters,
   });
@@ -88,20 +76,14 @@ export const getUsageStats = async (): Promise<PublicPortalUsageStats> => {
 // Data Whitelist
 // ============================================================================
 
-export const getWhitelist = async (
-  category?: string
-): Promise<PublicPortalDataWhitelist[]> => {
+export const getWhitelist = async (category?: string): Promise<PublicPortalDataWhitelist[]> => {
   const response = await api.get<PublicPortalDataWhitelist[]>('/whitelist', {
     params: category ? { category } : {},
   });
   return asArray(response.data);
 };
 
-
-export const updateWhitelistEntry = async (
-  entryId: string,
-  isEnabled: boolean
-): Promise<PublicPortalDataWhitelist> => {
+export const updateWhitelistEntry = async (entryId: string, isEnabled: boolean): Promise<PublicPortalDataWhitelist> => {
   const response = await api.patch<PublicPortalDataWhitelist>(`/whitelist/${entryId}`, {
     is_enabled: isEnabled,
   });

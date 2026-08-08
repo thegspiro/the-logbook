@@ -348,7 +348,6 @@ export const RETURN_CONDITION_OPTIONS = [
 // NFPA 1851/1852 Compliance
 // ============================================
 
-
 // ============================================
 // IP Exception Approval Status
 // ============================================
@@ -389,14 +388,12 @@ export const IP_EXCEPTION_USE_CASE_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
-
 export const COUNTRY_RISK_LEVEL_COLORS: Record<string, string> = {
   low: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
   medium: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
   high: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/20',
   critical: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
 };
-
 
 // ============================================
 // Multi-Class Courses (Syllabus & Cohorts)
@@ -434,8 +431,7 @@ export const CohortClassStatus = {
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
 } as const;
-export type CohortClassStatus =
-  (typeof CohortClassStatus)[keyof typeof CohortClassStatus];
+export type CohortClassStatus = (typeof CohortClassStatus)[keyof typeof CohortClassStatus];
 
 export const COHORT_CLASS_STATUS_COLORS: Record<string, string> = {
   scheduled: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
@@ -449,8 +445,7 @@ export const CohortMemberStatus = {
   WITHDRAWN: 'withdrawn',
   COMPLETED: 'completed',
 } as const;
-export type CohortMemberStatus =
-  (typeof CohortMemberStatus)[keyof typeof CohortMemberStatus];
+export type CohortMemberStatus = (typeof CohortMemberStatus)[keyof typeof CohortMemberStatus];
 
 export const COHORT_MEMBER_STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',

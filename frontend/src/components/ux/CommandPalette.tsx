@@ -40,27 +40,131 @@ interface CommandItem {
 const COMMANDS: CommandItem[] = [
   // Navigation
   { id: 'dashboard', label: 'Dashboard', path: '/dashboard', icon: Home, section: 'Navigation', keywords: ['home'] },
-  { id: 'members', label: 'Members', path: '/members', icon: Users, section: 'Navigation', keywords: ['people', 'roster'] },
-  { id: 'events', label: 'Events', path: '/events', icon: Calendar, section: 'Navigation', keywords: ['meetings', 'calendar'] },
-  { id: 'training', label: 'My Training', path: '/training/my-training', icon: GraduationCap, section: 'Navigation', keywords: ['courses', 'certifications'] },
-  { id: 'inventory', label: 'Inventory', path: '/inventory', icon: Package, section: 'Navigation', keywords: ['equipment', 'supplies'] },
-  { id: 'store', label: 'Department Store', path: '/store', icon: Package, section: 'Navigation', keywords: ['storefront', 'shop', 'merch', 'apparel', 'order'] },
-  { id: 'scheduling', label: 'Scheduling', path: '/scheduling', icon: Clock, section: 'Navigation', keywords: ['shifts', 'calendar'] },
-  { id: 'facilities', label: 'Facilities', path: '/facilities', icon: Building2, section: 'Navigation', keywords: ['buildings', 'stations'] },
-  { id: 'documents', label: 'Documents', path: '/documents', icon: FileText, section: 'Navigation', keywords: ['files', 'uploads'] },
-  { id: 'elections', label: 'Elections', path: '/elections', icon: Vote, section: 'Navigation', keywords: ['voting', 'ballot'] },
-  { id: 'minutes', label: 'Meeting Minutes', path: '/minutes', icon: ClipboardList, section: 'Navigation', keywords: ['notes', 'motions'] },
-  { id: 'notifications', label: 'Notifications', path: '/notifications', icon: Bell, section: 'Navigation', keywords: ['alerts'] },
+  {
+    id: 'members',
+    label: 'Members',
+    path: '/members',
+    icon: Users,
+    section: 'Navigation',
+    keywords: ['people', 'roster'],
+  },
+  {
+    id: 'events',
+    label: 'Events',
+    path: '/events',
+    icon: Calendar,
+    section: 'Navigation',
+    keywords: ['meetings', 'calendar'],
+  },
+  {
+    id: 'training',
+    label: 'My Training',
+    path: '/training/my-training',
+    icon: GraduationCap,
+    section: 'Navigation',
+    keywords: ['courses', 'certifications'],
+  },
+  {
+    id: 'inventory',
+    label: 'Inventory',
+    path: '/inventory',
+    icon: Package,
+    section: 'Navigation',
+    keywords: ['equipment', 'supplies'],
+  },
+  {
+    id: 'store',
+    label: 'Department Store',
+    path: '/store',
+    icon: Package,
+    section: 'Navigation',
+    keywords: ['storefront', 'shop', 'merch', 'apparel', 'order'],
+  },
+  {
+    id: 'scheduling',
+    label: 'Scheduling',
+    path: '/scheduling',
+    icon: Clock,
+    section: 'Navigation',
+    keywords: ['shifts', 'calendar'],
+  },
+  {
+    id: 'facilities',
+    label: 'Facilities',
+    path: '/facilities',
+    icon: Building2,
+    section: 'Navigation',
+    keywords: ['buildings', 'stations'],
+  },
+  {
+    id: 'documents',
+    label: 'Documents',
+    path: '/documents',
+    icon: FileText,
+    section: 'Navigation',
+    keywords: ['files', 'uploads'],
+  },
+  {
+    id: 'elections',
+    label: 'Elections',
+    path: '/elections',
+    icon: Vote,
+    section: 'Navigation',
+    keywords: ['voting', 'ballot'],
+  },
+  {
+    id: 'minutes',
+    label: 'Meeting Minutes',
+    path: '/minutes',
+    icon: ClipboardList,
+    section: 'Navigation',
+    keywords: ['notes', 'motions'],
+  },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    path: '/notifications',
+    icon: Bell,
+    section: 'Navigation',
+    keywords: ['alerts'],
+  },
 
   // Actions
-  { id: 'create-event', label: 'Create Event', path: '/events/admin?tab=create', icon: Calendar, section: 'Actions', permission: 'events.manage' },
-  { id: 'add-member', label: 'Add Member', path: '/members/add', icon: Users, section: 'Actions', permission: 'members.manage' },
-  { id: 'submit-training', label: 'Submit Training', path: '/training/submit', icon: GraduationCap, section: 'Actions' },
+  {
+    id: 'create-event',
+    label: 'Create Event',
+    path: '/events/admin?tab=create',
+    icon: Calendar,
+    section: 'Actions',
+    permission: 'events.manage',
+  },
+  {
+    id: 'add-member',
+    label: 'Add Member',
+    path: '/members/add',
+    icon: Users,
+    section: 'Actions',
+    permission: 'members.manage',
+  },
+  {
+    id: 'submit-training',
+    label: 'Submit Training',
+    path: '/training/submit',
+    icon: GraduationCap,
+    section: 'Actions',
+  },
   { id: 'my-equipment', label: 'My Equipment', path: '/inventory/my-equipment', icon: Package, section: 'Actions' },
   { id: 'my-store-orders', label: 'My Store Orders', path: '/store/orders', icon: Package, section: 'Actions' },
 
   // Admin
-  { id: 'settings', label: 'Organization Settings', path: '/settings', icon: Settings, section: 'Admin', permission: 'settings.manage' },
+  {
+    id: 'settings',
+    label: 'Organization Settings',
+    path: '/settings',
+    icon: Settings,
+    section: 'Admin',
+    permission: 'settings.manage',
+  },
   { id: 'reports', label: 'Reports', path: '/reports', icon: BarChart3, section: 'Admin' },
   { id: 'account', label: 'My Account', path: '/account', icon: Settings, section: 'Admin' },
 ];
@@ -77,9 +181,7 @@ export const CommandPalette: React.FC = () => {
 
   // Filter commands by permissions and search query
   const filteredCommands = useMemo(() => {
-    const accessible = COMMANDS.filter(
-      (cmd) => !cmd.permission || checkPermission(cmd.permission)
-    );
+    const accessible = COMMANDS.filter((cmd) => !cmd.permission || checkPermission(cmd.permission));
 
     if (!query.trim()) return accessible;
 
@@ -170,21 +272,17 @@ export const CommandPalette: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-60 overflow-y-auto">
-      <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-xs"
-        onClick={() => setIsOpen(false)}
-        aria-hidden="true"
-      />
-      <div className="relative flex items-start justify-center min-h-screen pt-[15dvh] px-4">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-xs" onClick={() => setIsOpen(false)} aria-hidden="true" />
+      <div className="relative flex min-h-screen items-start justify-center px-4 pt-[15dvh]">
         <div
-          className="w-full max-w-lg bg-theme-surface-modal rounded-xl shadow-2xl border border-theme-surface-border overflow-hidden"
+          className="bg-theme-surface-modal border-theme-surface-border w-full max-w-lg overflow-hidden rounded-xl border shadow-2xl"
           role="dialog"
           aria-modal="true"
           aria-label="Command palette"
         >
           {/* Search input */}
-          <div className="flex items-center gap-3 px-4 border-b border-theme-surface-border">
-            <Search className="w-5 h-5 text-theme-text-muted shrink-0" aria-hidden="true" />
+          <div className="border-theme-surface-border flex items-center gap-3 border-b px-4">
+            <Search className="text-theme-text-muted h-5 w-5 shrink-0" aria-hidden="true" />
             <input
               ref={inputRef}
               type="text"
@@ -195,33 +293,33 @@ export const CommandPalette: React.FC = () => {
               }}
               onKeyDown={handleKeyDown}
               placeholder="Search pages, actions..."
-              className="flex-1 py-3.5 bg-transparent text-theme-text-primary placeholder-theme-text-muted text-sm focus:outline-hidden"
+              className="text-theme-text-primary placeholder-theme-text-muted flex-1 bg-transparent py-3.5 text-sm focus:outline-hidden"
               aria-label="Search commands"
-              aria-activedescendant={filteredCommands[selectedIndex] ? `cmd-${filteredCommands[selectedIndex].id}` : undefined}
+              aria-activedescendant={
+                filteredCommands[selectedIndex] ? `cmd-${filteredCommands[selectedIndex].id}` : undefined
+              }
               aria-controls="command-palette-listbox"
               autoComplete="off"
             />
             <button
               onClick={() => setIsOpen(false)}
-              className="p-1 text-theme-text-muted hover:text-theme-text-primary"
+              className="text-theme-text-muted hover:text-theme-text-primary p-1"
               aria-label="Close command palette"
             >
-              <X className="w-4 h-4" />
+              <X className="h-4 w-4" />
             </button>
           </div>
 
           {/* Results */}
           <div ref={listRef} className="max-h-72 overflow-y-auto py-2" role="listbox" id="command-palette-listbox">
             {filteredCommands.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-theme-text-muted">
+              <div className="text-theme-text-muted px-4 py-8 text-center text-sm">
                 No results found for &quot;{query}&quot;
               </div>
             ) : (
               Array.from(sections.entries()).map(([section, items]) => (
                 <div key={section}>
-                  <div className="px-4 py-1.5 text-xs font-medium text-theme-text-muted uppercase">
-                    {section}
-                  </div>
+                  <div className="text-theme-text-muted px-4 py-1.5 text-xs font-medium uppercase">{section}</div>
                   {items.map((item) => {
                     flatIndex++;
                     const isSelected = flatIndex === selectedIndex;
@@ -232,7 +330,7 @@ export const CommandPalette: React.FC = () => {
                         id={`cmd-${item.id}`}
                         onClick={() => handleSelect(item)}
                         data-selected={isSelected}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
+                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
                           isSelected
                             ? 'bg-theme-accent-red-muted text-theme-accent-red'
                             : 'text-theme-text-primary hover:bg-theme-surface-hover'
@@ -240,11 +338,9 @@ export const CommandPalette: React.FC = () => {
                         role="option"
                         aria-selected={isSelected}
                       >
-                        <Icon className="w-4 h-4 shrink-0 opacity-60" />
+                        <Icon className="h-4 w-4 shrink-0 opacity-60" />
                         <span className="flex-1">{item.label}</span>
-                        {isSelected && (
-                          <span className="text-xs text-theme-text-muted">Enter</span>
-                        )}
+                        {isSelected && <span className="text-theme-text-muted text-xs">Enter</span>}
                       </button>
                     );
                   })}
@@ -254,24 +350,19 @@ export const CommandPalette: React.FC = () => {
           </div>
 
           {/* Footer hint */}
-          <div className="px-4 py-2 border-t border-theme-surface-border flex items-center gap-4 text-xs text-theme-text-muted">
+          <div className="border-theme-surface-border text-theme-text-muted flex items-center gap-4 border-t px-4 py-2 text-xs">
             <span>
-              <kbd className="px-1.5 py-0.5 bg-theme-surface-secondary rounded-sm text-[10px] font-mono">
+              <kbd className="bg-theme-surface-secondary rounded-sm px-1.5 py-0.5 font-mono text-[10px]">
                 &uarr;&darr;
               </kbd>{' '}
               Navigate
             </span>
             <span>
-              <kbd className="px-1.5 py-0.5 bg-theme-surface-secondary rounded-sm text-[10px] font-mono">
-                Enter
-              </kbd>{' '}
+              <kbd className="bg-theme-surface-secondary rounded-sm px-1.5 py-0.5 font-mono text-[10px]">Enter</kbd>{' '}
               Select
             </span>
             <span>
-              <kbd className="px-1.5 py-0.5 bg-theme-surface-secondary rounded-sm text-[10px] font-mono">
-                Esc
-              </kbd>{' '}
-              Close
+              <kbd className="bg-theme-surface-secondary rounded-sm px-1.5 py-0.5 font-mono text-[10px]">Esc</kbd> Close
             </span>
           </div>
         </div>

@@ -42,14 +42,7 @@ import {
   Package,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent, DraggableAttributes } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -101,8 +94,7 @@ const selectClass = 'form-input';
 
 const labelClass = 'form-label';
 
-const checkboxClass =
-  'h-4 w-4 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500';
+const checkboxClass = 'h-4 w-4 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500';
 
 // ============================================================================
 // Item Form State
@@ -219,12 +211,8 @@ interface SortableItemWrapperProps {
   }) => React.ReactNode;
 }
 
-const SortableItemWrapper: React.FC<SortableItemWrapperProps> = ({
-  id,
-  children,
-}) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
+const SortableItemWrapper: React.FC<SortableItemWrapperProps> = ({ id, children }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -236,7 +224,7 @@ const SortableItemWrapper: React.FC<SortableItemWrapperProps> = ({
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
       {children({
-        listeners: (listeners ?? undefined),
+        listeners: listeners ?? undefined,
         setNodeRef,
         style,
         attributes,
@@ -255,12 +243,8 @@ interface SortableCompartmentWrapperProps {
   }) => React.ReactNode;
 }
 
-const SortableCompartmentWrapper: React.FC<SortableCompartmentWrapperProps> = ({
-  id,
-  children,
-}) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
+const SortableCompartmentWrapper: React.FC<SortableCompartmentWrapperProps> = ({ id, children }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -270,12 +254,14 @@ const SortableCompartmentWrapper: React.FC<SortableCompartmentWrapperProps> = ({
   };
 
   return (
-    <>{children({
-      listeners: (listeners ?? undefined),
-      setNodeRef,
-      style,
-      attributes,
-    })}</>
+    <>
+      {children({
+        listeners: listeners ?? undefined,
+        setNodeRef,
+        style,
+        attributes,
+      })}
+    </>
   );
 };
 
@@ -318,7 +304,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const autoSaveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Apparatus options for the dropdown
-  const [apparatusOptions, setApparatusOptions] = useState<Array<{ id?: string; name: string; unit_number?: string; apparatus_type: string }>>([]);
+  const [apparatusOptions, setApparatusOptions] = useState<
+    Array<{ id?: string; name: string; unit_number?: string; apparatus_type: string }>
+  >([]);
 
   useEffect(() => {
     const loadApparatusOptions = async () => {
@@ -370,7 +358,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             isRequired: item.isRequired,
             requiredQuantity: item.requiredQuantity != null ? String(Number(item.requiredQuantity)) : '',
             expectedQuantity: item.expectedQuantity != null ? String(Number(item.expectedQuantity)) : '',
-            criticalMinimumQuantity: item.criticalMinimumQuantity != null ? String(Number(item.criticalMinimumQuantity)) : '',
+            criticalMinimumQuantity:
+              item.criticalMinimumQuantity != null ? String(Number(item.criticalMinimumQuantity)) : '',
             minLevel: item.minLevel != null ? String(Number(item.minLevel)) : '',
             levelUnit: item.levelUnit ?? '',
             serialNumber: item.serialNumber ?? '',
@@ -423,9 +412,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const togglePosition = (pos: string) => {
     setForm((prev) => {
       const current = prev.assignedPositions;
-      const next = current.includes(pos)
-        ? current.filter((p) => p !== pos)
-        : [...current, pos];
+      const next = current.includes(pos) ? current.filter((p) => p !== pos) : [...current, pos];
       return { ...prev, assignedPositions: next };
     });
   };
@@ -516,10 +503,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
   };
 
-  const updateCompartmentField = (
-    idx: number,
-    patch: Partial<CompartmentFormState>,
-  ) => {
+  const updateCompartmentField = (idx: number, patch: Partial<CompartmentFormState>) => {
     setCompartments((prev) => {
       const next = [...prev];
       const existing = next[idx];
@@ -536,9 +520,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     const itemCount = comp.items.length;
     const label = comp.name || 'Untitled Compartment';
-    const msg = itemCount > 0
-      ? `Delete "${label}" and its ${itemCount} item${itemCount !== 1 ? 's' : ''}? This cannot be undone.`
-      : `Delete "${label}"? This cannot be undone.`;
+    const msg =
+      itemCount > 0
+        ? `Delete "${label}" and its ${itemCount} item${itemCount !== 1 ? 's' : ''}? This cannot be undone.`
+        : `Delete "${label}"? This cannot be undone.`;
     if (!window.confirm(msg)) return;
 
     if (comp.id) {
@@ -620,19 +605,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     } else {
       updateCompartmentField(compartmentIdx, {
-        items: [
-          ...comp.items,
-          { ...emptyItem(), name: 'Section Header', checkType: 'header', isRequired: false },
-        ],
+        items: [...comp.items, { ...emptyItem(), name: 'Section Header', checkType: 'header', isRequired: false }],
       });
     }
   };
 
-  const updateItemField = (
-    compartmentIdx: number,
-    itemIdx: number,
-    patch: Partial<ItemFormState>,
-  ) => {
+  const updateItemField = (compartmentIdx: number, itemIdx: number, patch: Partial<ItemFormState>) => {
     setCompartments((prev) => {
       const next = [...prev];
       const comp = next[compartmentIdx];
@@ -715,19 +693,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (movedItem) reorderedItems.splice(newIdx, 0, movedItem);
       const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
       if (savedIds.length > 0) {
-        void schedulingService
-          .reorderItems(comp.id, savedIds)
-          .catch(() => toast.error('Failed to save item order'));
+        void schedulingService.reorderItems(comp.id, savedIds).catch(() => toast.error('Failed to save item order'));
       }
     }
     markDirty();
   };
 
-  const moveItemToCompartment = async (
-    fromCompIdx: number,
-    itemIdx: number,
-    toCompIdx: number,
-  ) => {
+  const moveItemToCompartment = async (fromCompIdx: number, itemIdx: number, toCompIdx: number) => {
     if (fromCompIdx === toCompIdx) return;
     const fromComp = compartments[fromCompIdx];
     const toComp = compartments[toCompIdx];
@@ -847,7 +819,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         deletePromises.push(
           schedulingService.deleteCheckItem(item.id).catch((err: unknown) => {
             toast.error(getErrorMessage(err, `Failed to delete ${item.name || 'item'}`));
-          }),
+          })
         );
       }
     }
@@ -890,7 +862,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           isRequired: created.isRequired,
           requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
           expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
-          criticalMinimumQuantity: created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
+          criticalMinimumQuantity:
+            created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
           minLevel: created.minLevel != null ? String(created.minLevel) : '',
           levelUnit: created.levelUnit ?? '',
           serialNumber: created.serialNumber ?? '',
@@ -920,7 +893,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const text = (bulkPasteValues[key] ?? '').trim();
     if (!text) return;
 
-    const names = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    const names = text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
     if (names.length === 0) return;
 
     if (comp.id) {
@@ -942,7 +918,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             isRequired: created.isRequired,
             requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
             expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
-            criticalMinimumQuantity: created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
+            criticalMinimumQuantity:
+              created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
             minLevel: created.minLevel != null ? String(created.minLevel) : '',
             levelUnit: created.levelUnit ?? '',
             serialNumber: created.serialNumber ?? '',
@@ -1023,7 +1000,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             isRequired: created.isRequired,
             requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
             expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
-            criticalMinimumQuantity: created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
+            criticalMinimumQuantity:
+              created.criticalMinimumQuantity != null ? String(created.criticalMinimumQuantity) : '',
             minLevel: created.minLevel != null ? String(created.minLevel) : '',
             levelUnit: created.levelUnit ?? '',
             serialNumber: created.serialNumber ?? '',
@@ -1093,7 +1071,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     markDirty();
-    toast.success(`Set ${selected.size} item${selected.size !== 1 ? 's' : ''} to ${CHECK_TYPES.find((ct) => ct.value === checkType)?.label ?? checkType}`);
+    toast.success(
+      `Set ${selected.size} item${selected.size !== 1 ? 's' : ''} to ${CHECK_TYPES.find((ct) => ct.value === checkType)?.label ?? checkType}`
+    );
   };
 
   const bulkToggleRequired = (compartmentIdx: number, required: boolean) => {
@@ -1124,7 +1104,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     markDirty();
-    toast.success(`Set ${selected.size} item${selected.size !== 1 ? 's' : ''} to ${required ? 'required' : 'optional'}`);
+    toast.success(
+      `Set ${selected.size} item${selected.size !== 1 ? 's' : ''} to ${required ? 'required' : 'optional'}`
+    );
   };
 
   // ---------------------------------------------------------------------------
@@ -1181,15 +1163,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           });
       }, 1500);
     },
-    [isEditing],
+    [isEditing]
   );
 
   // Enhanced updateItemField that triggers auto-save for persisted items
-  const updateItemFieldWithAutoSave = (
-    compartmentIdx: number,
-    itemIdx: number,
-    patch: Partial<ItemFormState>,
-  ) => {
+  const updateItemFieldWithAutoSave = (compartmentIdx: number, itemIdx: number, patch: Partial<ItemFormState>) => {
     updateItemField(compartmentIdx, itemIdx, patch);
 
     const comp = compartments[compartmentIdx];
@@ -1200,9 +1178,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (patch.description !== undefined) apiPatch.description = patch.description.trim() || undefined;
       if (patch.checkType !== undefined) apiPatch.check_type = patch.checkType;
       if (patch.isRequired !== undefined) apiPatch.is_required = patch.isRequired;
-      if (patch.requiredQuantity !== undefined) apiPatch.required_quantity = patch.requiredQuantity ? Number(patch.requiredQuantity) : undefined;
-      if (patch.expectedQuantity !== undefined) apiPatch.expected_quantity = patch.expectedQuantity ? Number(patch.expectedQuantity) : undefined;
-      if (patch.criticalMinimumQuantity !== undefined) apiPatch.critical_minimum_quantity = patch.criticalMinimumQuantity ? Number(patch.criticalMinimumQuantity) : undefined;
+      if (patch.requiredQuantity !== undefined)
+        apiPatch.required_quantity = patch.requiredQuantity ? Number(patch.requiredQuantity) : undefined;
+      if (patch.expectedQuantity !== undefined)
+        apiPatch.expected_quantity = patch.expectedQuantity ? Number(patch.expectedQuantity) : undefined;
+      if (patch.criticalMinimumQuantity !== undefined)
+        apiPatch.critical_minimum_quantity = patch.criticalMinimumQuantity
+          ? Number(patch.criticalMinimumQuantity)
+          : undefined;
       if (patch.minLevel !== undefined) apiPatch.min_level = patch.minLevel ? Number(patch.minLevel) : undefined;
       if (patch.levelUnit !== undefined) apiPatch.level_unit = patch.levelUnit.trim() || undefined;
       if (patch.serialNumber !== undefined) apiPatch.serial_number = patch.serialNumber.trim() || undefined;
@@ -1210,7 +1193,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (patch.inventoryItemId !== undefined) apiPatch.inventory_item_id = patch.inventoryItemId || undefined;
       if (patch.hasExpiration !== undefined) apiPatch.has_expiration = patch.hasExpiration;
       if (patch.expirationDate !== undefined) apiPatch.expiration_date = patch.expirationDate.trim() || undefined;
-      if (patch.expirationWarningDays !== undefined) apiPatch.expiration_warning_days = patch.expirationWarningDays ? Number(patch.expirationWarningDays) : undefined;
+      if (patch.expirationWarningDays !== undefined)
+        apiPatch.expiration_warning_days = patch.expirationWarningDays
+          ? Number(patch.expirationWarningDays)
+          : undefined;
       if (patch.imageUrl !== undefined) apiPatch.image_url = patch.imageUrl.trim() || undefined;
 
       if (Object.keys(apiPatch).length > 0) {
@@ -1253,7 +1239,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         if (item.checkType === 'quantity' && !item.requiredQuantity && !item.expectedQuantity) {
           warnings.push(`"${item.name || 'Untitled'}" is a quantity check but has no expected quantity.`);
         }
-        if (item.checkType === 'quantity' && item.criticalMinimumQuantity && item.expectedQuantity && Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)) {
+        if (
+          item.checkType === 'quantity' &&
+          item.criticalMinimumQuantity &&
+          item.expectedQuantity &&
+          Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
+        ) {
           warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
         }
         if (item.checkType === 'level' && !item.minLevel) {
@@ -1265,9 +1256,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     if (warnings.length > 0) {
-      const proceed = window.confirm(
-        `Save with warnings?\n\n${warnings.join('\n')}\n\nContinue anyway?`,
-      );
+      const proceed = window.confirm(`Save with warnings?\n\n${warnings.join('\n')}\n\nContinue anyway?`);
       if (!proceed) return;
     }
 
@@ -1300,9 +1289,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             image_url: item.imageUrl.trim() || undefined,
             has_expiration: item.hasExpiration,
             expiration_date: item.expirationDate.trim() || undefined,
-            expiration_warning_days: item.expirationWarningDays
-              ? Number(item.expirationWarningDays)
-              : undefined,
+            expiration_warning_days: item.expirationWarningDays ? Number(item.expirationWarningDays) : undefined,
           })),
         }));
 
@@ -1335,7 +1322,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 is_header: comp.isHeader,
                 container_type: comp.containerType || undefined,
                 parent_compartment_id: comp.parentCompartmentId || undefined,
-              }),
+              })
             );
 
             for (const item of comp.items) {
@@ -1348,7 +1335,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     is_required: item.isRequired,
                     required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
                     expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
-                    critical_minimum_quantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
+                    critical_minimum_quantity: item.criticalMinimumQuantity
+                      ? Number(item.criticalMinimumQuantity)
+                      : undefined,
                     min_level: item.minLevel ? Number(item.minLevel) : undefined,
                     level_unit: item.levelUnit.trim() || undefined,
                     serial_number: item.serialNumber.trim() || undefined,
@@ -1360,7 +1349,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     expiration_warning_days: item.expirationWarningDays
                       ? Number(item.expirationWarningDays)
                       : undefined,
-                  }),
+                  })
                 );
               }
             }
@@ -1396,7 +1385,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               is_required: item.isRequired,
               required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
               expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
-              critical_minimum_quantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
+              critical_minimum_quantity: item.criticalMinimumQuantity
+                ? Number(item.criticalMinimumQuantity)
+                : undefined,
               min_level: item.minLevel ? Number(item.minLevel) : undefined,
               level_unit: item.levelUnit.trim() || undefined,
               serial_number: item.serialNumber.trim() || undefined,
@@ -1405,9 +1396,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               image_url: item.imageUrl.trim() || undefined,
               has_expiration: item.hasExpiration,
               expiration_date: item.expirationDate.trim() || undefined,
-              expiration_warning_days: item.expirationWarningDays
-                ? Number(item.expirationWarningDays)
-                : undefined,
+              expiration_warning_days: item.expirationWarningDays ? Number(item.expirationWarningDays) : undefined,
             })),
           })),
         };
@@ -1437,7 +1426,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [showPresetPicker, setShowPresetPicker] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
-  const [changelogEntries, setChangelogEntries] = useState<Array<{ id: string; userName: string; action: string; entityType: string; entityName?: string; changes?: Record<string, unknown>; createdAt?: string }>>([]);
+  const [changelogEntries, setChangelogEntries] = useState<
+    Array<{
+      id: string;
+      userName: string;
+      action: string;
+      entityType: string;
+      entityName?: string;
+      changes?: Record<string, unknown>;
+      createdAt?: string;
+    }>
+  >([]);
   const [changelogTotal, setChangelogTotal] = useState(0);
   const [changelogLoading, setChangelogLoading] = useState(false);
 
@@ -1459,29 +1458,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const preset = VEHICLE_PRESETS[presetKey];
     if (!preset) return;
 
-    const newCompartments: CompartmentFormState[] = preset.compartments.map(
-      (comp) => ({
-        name: comp.name,
-        description: '',
-        imageUrl: '',
-        isHeader: false,
-        containerType: 'compartment',
-        parentCompartmentId: '',
-        items: comp.items.map((item) => ({
-          ...emptyItem(),
-          name: item.name,
-          checkType: item.checkType,
-        })),
-      }),
-    );
+    const newCompartments: CompartmentFormState[] = preset.compartments.map((comp) => ({
+      name: comp.name,
+      description: '',
+      imageUrl: '',
+      isHeader: false,
+      containerType: 'compartment',
+      parentCompartmentId: '',
+      items: comp.items.map((item) => ({
+        ...emptyItem(),
+        name: item.name,
+        checkType: item.checkType,
+      })),
+    }));
 
     if (compartments.length > 0) {
-      if (
-        !window.confirm(
-          'Loading a preset will replace all existing compartments. Continue?',
-        )
-      )
-        return;
+      if (!window.confirm('Loading a preset will replace all existing compartments. Continue?')) return;
     }
 
     setCompartments(newCompartments);
@@ -1590,7 +1582,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           if (!window.confirm('Importing will replace all current compartments. Continue?')) return;
         }
 
-        if (data.name) setForm((prev) => ({ ...prev, name: data.name ?? prev.name, description: data.description ?? prev.description }));
+        if (data.name)
+          setForm((prev) => ({
+            ...prev,
+            name: data.name ?? prev.name,
+            description: data.description ?? prev.description,
+          }));
 
         const imported: CompartmentFormState[] = data.compartments.map((c) => ({
           name: c.name || 'Untitled',
@@ -1607,14 +1604,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             isRequired: Boolean(item.isRequired),
             requiredQuantity: item.requiredQuantity != null ? String(Number(item.requiredQuantity)) : '',
             expectedQuantity: item.expectedQuantity != null ? String(Number(item.expectedQuantity)) : '',
-            criticalMinimumQuantity: item.criticalMinimumQuantity != null ? String(Number(item.criticalMinimumQuantity)) : '',
+            criticalMinimumQuantity:
+              item.criticalMinimumQuantity != null ? String(Number(item.criticalMinimumQuantity)) : '',
             minLevel: item.minLevel != null ? String(Number(item.minLevel)) : '',
             levelUnit: (item.levelUnit as string) ?? '',
             serialNumber: (item.serialNumber as string) ?? '',
             lotNumber: (item.lotNumber as string) ?? '',
             hasExpiration: Boolean(item.hasExpiration),
             expirationDate: (item.expirationDate as string) ?? '',
-            expirationWarningDays: item.expirationWarningDays != null ? String(Number(item.expirationWarningDays)) : '30',
+            expirationWarningDays:
+              item.expirationWarningDays != null ? String(Number(item.expirationWarningDays)) : '30',
             imageUrl: (item.imageUrl as string) ?? '',
           })),
         }));
@@ -1634,7 +1633,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   };
 
   const csvImportRef = useRef<HTMLInputElement>(null);
-  const [csvPreview, setCsvPreview] = useState<{ compartment: string; name: string; checkType: string; expectedQty: string; criticalMin: string; levelUnit: string }[] | null>(null);
+  const [csvPreview, setCsvPreview] = useState<
+    | {
+        compartment: string;
+        name: string;
+        checkType: string;
+        expectedQty: string;
+        criticalMin: string;
+        levelUnit: string;
+      }[]
+    | null
+  >(null);
 
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1644,7 +1653,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     reader.onload = (ev) => {
       try {
         const text = ev.target?.result as string;
-        const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+        const lines = text
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean);
         if (lines.length < 2) {
           toast.error('CSV file must have a header row and at least one data row');
           return;
@@ -1682,7 +1694,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     for (const row of csvPreview) {
       const compName = row.compartment || 'Uncategorized';
       if (!compMap.has(compName)) compMap.set(compName, []);
-      const validCheckTypes = ['pass_fail', 'present', 'functional', 'quantity', 'level', 'date_lot', 'reading', 'text', 'header'];
+      const validCheckTypes = [
+        'pass_fail',
+        'present',
+        'functional',
+        'quantity',
+        'level',
+        'date_lot',
+        'reading',
+        'text',
+        'header',
+      ];
       const checkType = (validCheckTypes.includes(row.checkType) ? row.checkType : 'pass_fail') as CheckType;
       compMap.get(compName)?.push({
         ...emptyItem(),
@@ -1826,13 +1848,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const compartmentKey = useCallback(
-    (comp: CompartmentFormState, flatIdx: number) => comp.id ?? `comp-${flatIdx}`,
-    [],
-  );
+  const compartmentKey = useCallback((comp: CompartmentFormState, flatIdx: number) => comp.id ?? `comp-${flatIdx}`, []);
 
   // Depth-first display order: each top-level compartment is followed by its
   // nested containers (a "pack" inside a "bag" inside a "compartment"), so the
@@ -1878,7 +1897,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const compartmentIds = useMemo(
     () => orderedCompartments.map(({ comp, idx }) => compartmentKey(comp, idx)),
-    [orderedCompartments, compartmentKey],
+    [orderedCompartments, compartmentKey]
   );
 
   const handleCompartmentDragEnd = (event: DragEndEvent) => {
@@ -1886,12 +1905,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!over || active.id === over.id) return;
 
     // Map the dragged/target ids back to their positions in the flat array.
-    const activeFlat = orderedCompartments.find(
-      (o) => compartmentKey(o.comp, o.idx) === String(active.id),
-    )?.idx;
-    const overFlat = orderedCompartments.find(
-      (o) => compartmentKey(o.comp, o.idx) === String(over.id),
-    )?.idx;
+    const activeFlat = orderedCompartments.find((o) => compartmentKey(o.comp, o.idx) === String(active.id))?.idx;
+    const overFlat = orderedCompartments.find((o) => compartmentKey(o.comp, o.idx) === String(over.id))?.idx;
     if (activeFlat == null || overFlat == null) return;
 
     setCompartments((prev) => {
@@ -1909,11 +1924,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (movedId) flatIds.splice(overFlat, 0, movedId);
       const savedIds = flatIds.filter((id) => !id.startsWith('comp-'));
       if (savedIds.length > 0) {
-        void schedulingService
-          .reorderCompartments(templateId, savedIds)
-          .catch(() => {
-            toast.error('Failed to save compartment order');
-          });
+        void schedulingService.reorderCompartments(templateId, savedIds).catch(() => {
+          toast.error('Failed to save compartment order');
+        });
       }
     }
   };
@@ -1925,9 +1938,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const comp = compartments[compIdx];
     if (!comp) return;
 
-    const itemIds = comp.items.map(
-      (item, i) => item.id ?? `item-${compIdx}-${i}`,
-    );
+    const itemIds = comp.items.map((item, i) => item.id ?? `item-${compIdx}-${i}`);
     const oldIndex = itemIds.indexOf(String(active.id));
     const newIndex = itemIds.indexOf(String(over.id));
     if (oldIndex === -1 || newIndex === -1) return;
@@ -1951,9 +1962,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (movedItem) reorderedItems.splice(newIndex, 0, movedItem);
       const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
       if (savedIds.length > 0) {
-        void schedulingService
-          .reorderItems(comp.id, savedIds)
-          .catch(() => toast.error('Failed to save item order'));
+        void schedulingService.reorderItems(comp.id, savedIds).catch(() => toast.error('Failed to save item order'));
       }
     }
   };
@@ -1965,7 +1974,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
-        <Loader2 className="h-8 w-8 animate-spin text-theme-text-muted" />
+        <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
       </div>
     );
   }
@@ -1979,7 +1988,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     itemIdx: number,
     item: ItemFormState,
     dragHandleProps?: Record<string, unknown>,
-    totalItems?: number,
+    totalItems?: number
   ) => {
     const itemKey = item.id ?? `item-${compIdx}-${itemIdx}`;
     const isItemExpanded = expandedItems.has(itemKey);
@@ -1994,9 +2003,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     return (
       <div
         key={itemKey}
-        className={`rounded-md border overflow-hidden transition-colors ${
+        className={`overflow-hidden rounded-md border transition-colors ${
           isSelected
-            ? 'border-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-900/10'
+            ? 'border-blue-400 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-900/10'
             : isHeader
               ? 'border-theme-surface-border bg-theme-surface'
               : 'border-theme-surface-border bg-theme-surface'
@@ -2004,26 +2013,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       >
         {/* Compact row — always visible */}
         <div
-          className="group/item flex flex-wrap sm:flex-nowrap items-center gap-1.5 px-2 sm:px-3 py-2 cursor-pointer hover:bg-theme-surface-secondary/50 transition-colors"
+          className="group/item hover:bg-theme-surface-secondary/50 flex cursor-pointer flex-wrap items-center gap-1.5 px-2 py-2 transition-colors sm:flex-nowrap sm:px-3"
           onClick={() => toggleItemExpanded(itemKey)}
         >
           {/* Bulk selection checkbox */}
           <button
             type="button"
-            className="p-0.5 flex-shrink-0"
-            onClick={(e) => { e.stopPropagation(); toggleItemSelection(compIdx, itemIdx); }}
+            className="flex-shrink-0 p-0.5"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleItemSelection(compIdx, itemIdx);
+            }}
             aria-label={isSelected ? 'Deselect item' : 'Select item'}
           >
             {isSelected ? (
               <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             ) : (
-              <Square className="h-4 w-4 text-theme-text-muted hover:text-theme-text-secondary" />
+              <Square className="text-theme-text-muted hover:text-theme-text-secondary h-4 w-4" />
             )}
           </button>
 
           <button
             type="button"
-            className="p-0.5 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+            className="text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
             onClick={(e) => e.stopPropagation()}
             aria-label="Drag to reorder"
             {...(dragHandleProps ?? {})}
@@ -2033,26 +2045,25 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           <button
             type="button"
-            className="p-0.5 flex-shrink-0 text-theme-text-muted hover:text-theme-text-primary"
-            onClick={(e) => { e.stopPropagation(); toggleItemExpanded(itemKey); }}
+            className="text-theme-text-muted hover:text-theme-text-primary flex-shrink-0 p-0.5"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleItemExpanded(itemKey);
+            }}
             aria-expanded={isItemExpanded}
             aria-label={`${isItemExpanded ? 'Collapse' : 'Expand'} ${item.name.trim() || 'item'}`}
           >
-            {isItemExpanded ? (
-              <ChevronDown className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5" />
-            )}
+            {isItemExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
 
-          {isHeader && <Type className="h-3.5 w-3.5 text-theme-text-muted flex-shrink-0" />}
+          {isHeader && <Type className="text-theme-text-muted h-3.5 w-3.5 flex-shrink-0" />}
 
           {/* Inline editable name */}
           {isInlineEditing ? (
             <input
               ref={inlineInputRef}
               type="text"
-              className="flex-1 text-sm font-medium text-theme-text-primary bg-transparent border-b border-blue-400 outline-none min-w-0 px-1"
+              className="text-theme-text-primary min-w-0 flex-1 border-b border-blue-400 bg-transparent px-1 text-sm font-medium outline-none"
               value={inlineEditValue}
               onChange={(e) => setInlineEditValue(e.target.value)}
               onBlur={() => commitInlineEdit(compIdx, itemIdx)}
@@ -2066,7 +2077,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             />
           ) : (
             <span
-              className={`flex-1 text-sm truncate ${isHeader ? 'text-theme-text-primary font-bold' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
+              className={`flex-1 truncate text-sm ${isHeader ? 'text-theme-text-primary font-bold' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
               onDoubleClick={(e) => startInlineEdit(itemKey, item.name, e)}
               title="Double-click to rename"
             >
@@ -2076,36 +2087,37 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           <button
             type="button"
-            className="p-0.5 flex-shrink-0 text-theme-text-muted hover:text-blue-600 sm:opacity-0 sm:group-hover/item:opacity-100 transition-opacity"
-            onClick={(e) => { e.stopPropagation(); startInlineEdit(itemKey, item.name, e); }}
+            className="text-theme-text-muted flex-shrink-0 p-0.5 transition-opacity hover:text-blue-600 sm:opacity-0 sm:group-hover/item:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              startInlineEdit(itemKey, item.name, e);
+            }}
             aria-label={`Rename ${item.name.trim() || 'item'}`}
           >
             <Pencil className="h-3 w-3" />
           </button>
 
           {/* Badges */}
-          <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-theme-surface-secondary text-theme-text-muted">
+          <div className="hidden flex-shrink-0 items-center gap-1.5 sm:flex">
+            <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-[10px] font-medium">
               {checkTypeLabel}
             </span>
             {item.isRequired && (
-              <span className="rounded-full bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400">
+              <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
                 Req
               </span>
             )}
-            {item.hasExpiration && (
-              <AlertTriangle className="h-3 w-3 text-yellow-500" />
-            )}
+            {item.hasExpiration && <AlertTriangle className="h-3 w-3 text-yellow-500" />}
           </div>
 
           {/* Actions — stop propagation so clicking them doesn't toggle expansion */}
-          <div className="hidden sm:flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="hidden flex-shrink-0 items-center gap-0.5 sm:flex" onClick={(e) => e.stopPropagation()}>
             {/* Move up/down buttons */}
             <button
               type="button"
               onClick={() => moveItem(compIdx, itemIdx, 'up')}
               disabled={itemIdx === 0}
-              className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${item.name || 'item'} up`}
             >
               <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
@@ -2114,7 +2126,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => moveItem(compIdx, itemIdx, 'down')}
               disabled={itemIdx === itemCount - 1}
-              className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${item.name || 'item'} down`}
             >
               <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
@@ -2122,16 +2134,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => duplicateItem(compIdx, itemIdx)}
-              className="p-1 text-theme-text-muted hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+              className="text-theme-text-muted rounded p-1 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20"
               aria-label={`Duplicate ${item.name || 'item'}`}
             >
               <Copy className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
             {compartments.length > 1 && (
-              <div className="relative p-1 text-theme-text-muted hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition-colors">
-                <ArrowRightLeft className="h-3.5 w-3.5 pointer-events-none" aria-hidden="true" />
+              <div className="text-theme-text-muted relative rounded p-1 transition-colors hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/20">
+                <ArrowRightLeft className="pointer-events-none h-3.5 w-3.5" aria-hidden="true" />
                 <select
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                   value=""
                   onChange={(e) => {
                     const targetIdx = Number(e.target.value);
@@ -2143,17 +2155,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   onClick={(e) => e.stopPropagation()}
                   aria-label={`Move ${item.name || 'item'} to another compartment`}
                 >
-                  <option value="" disabled>Move to…</option>
-                  {compartments.map((c, ci) => ci !== compIdx ? (
-                    <option key={ci} value={ci}>{c.name || `Compartment ${ci + 1}`}</option>
-                  ) : null)}
+                  <option value="" disabled>
+                    Move to…
+                  </option>
+                  {compartments.map((c, ci) =>
+                    ci !== compIdx ? (
+                      <option key={ci} value={ci}>
+                        {c.name || `Compartment ${ci + 1}`}
+                      </option>
+                    ) : null
+                  )}
                 </select>
               </div>
             )}
             <button
               type="button"
               onClick={() => void deleteItem(compIdx, itemIdx)}
-              className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+              className="rounded p-1 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
               aria-label={`Delete ${item.name || 'item'}`}
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -2163,9 +2181,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         {/* Expanded form — visible on click */}
         {isItemExpanded && (
-          <div className="border-t border-theme-surface-border px-3 py-3 space-y-3">
+          <div className="border-theme-surface-border space-y-3 border-t px-3 py-3">
             {/* Name + Description */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className={labelClass}>{isHeader ? 'Header Title' : 'Name'}</label>
                 <input
@@ -2188,165 +2206,264 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
             </div>
 
-            {!isHeader && (<>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Check Type */}
-              <div>
-                <label className={labelClass}>Check Type</label>
-                <select
-                  className={selectClass}
-                  value={item.checkType}
-                  onChange={(e) =>
-                    updateItemFieldWithAutoSave(compIdx, itemIdx, {
-                      checkType: e.target.value as ItemFormState['checkType'],
-                    })
-                  }
-                >
-                  {CHECK_TYPES.map((ct) => (
-                    <option key={ct.value} value={ct.value}>
-                      {ct.label}
-                    </option>
-                  ))}
-                </select>
-                {CHECK_TYPE_HELP[item.checkType] && (
-                  <p className="mt-1 text-[10px] text-theme-text-muted leading-tight">
-                    {CHECK_TYPE_HELP[item.checkType]}
-                  </p>
-                )}
-              </div>
-
-              {/* Required */}
-              <div className="flex items-end pb-2">
-                <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
-                  <input
-                    type="checkbox"
-                    className={checkboxClass}
-                    checked={item.isRequired}
-                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { isRequired: e.target.checked })}
-                  />
-                  Required
-                </label>
-              </div>
-
-              {/* Conditional: Quantity */}
-              {item.checkType === 'quantity' && (
-                <>
+            {!isHeader && (
+              <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {/* Check Type */}
                   <div>
-                    <label className={labelClass}>Expected Qty</label>
-                    <p className="text-xs text-theme-text-secondary mb-1">How many should be on the apparatus</p>
-                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.expectedQuantity} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })} />
+                    <label className={labelClass}>Check Type</label>
+                    <select
+                      className={selectClass}
+                      value={item.checkType}
+                      onChange={(e) =>
+                        updateItemFieldWithAutoSave(compIdx, itemIdx, {
+                          checkType: e.target.value as ItemFormState['checkType'],
+                        })
+                      }
+                    >
+                      {CHECK_TYPES.map((ct) => (
+                        <option key={ct.value} value={ct.value}>
+                          {ct.label}
+                        </option>
+                      ))}
+                    </select>
+                    {CHECK_TYPE_HELP[item.checkType] && (
+                      <p className="text-theme-text-muted mt-1 text-[10px] leading-tight">
+                        {CHECK_TYPE_HELP[item.checkType]}
+                      </p>
+                    )}
                   </div>
-                  <div>
-                    <label className={labelClass}>Min to Pass</label>
-                    <p className="text-xs text-theme-text-secondary mb-1">Below this count = auto-fail</p>
-                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.requiredQuantity} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })} />
+
+                  {/* Required */}
+                  <div className="flex items-end pb-2">
+                    <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className={checkboxClass}
+                        checked={item.isRequired}
+                        onChange={(e) =>
+                          updateItemFieldWithAutoSave(compIdx, itemIdx, { isRequired: e.target.checked })
+                        }
+                      />
+                      Required
+                    </label>
                   </div>
+
+                  {/* Conditional: Quantity */}
+                  {item.checkType === 'quantity' && (
+                    <>
+                      <div>
+                        <label className={labelClass}>Expected Qty</label>
+                        <p className="text-theme-text-secondary mb-1 text-xs">How many should be on the apparatus</p>
+                        <input
+                          type="number"
+                          className={inputClass}
+                          min="0"
+                          placeholder="0"
+                          value={item.expectedQuantity}
+                          onChange={(e) =>
+                            updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Min to Pass</label>
+                        <p className="text-theme-text-secondary mb-1 text-xs">Below this count = auto-fail</p>
+                        <input
+                          type="number"
+                          className={inputClass}
+                          min="0"
+                          placeholder="0"
+                          value={item.requiredQuantity}
+                          onChange={(e) =>
+                            updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>
+                          <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-red-500" />
+                          Critical Min
+                        </label>
+                        <p className="text-theme-text-secondary mb-1 text-xs">
+                          Below this = urgent alert to leadership
+                        </p>
+                        <input
+                          type="number"
+                          className={inputClass}
+                          min="0"
+                          placeholder="0"
+                          value={item.criticalMinimumQuantity}
+                          onChange={(e) =>
+                            updateItemFieldWithAutoSave(compIdx, itemIdx, { criticalMinimumQuantity: e.target.value })
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Conditional: Level */}
+                  {item.checkType === 'level' && (
+                    <>
+                      <div>
+                        <label className={labelClass}>Min Level</label>
+                        <input
+                          type="number"
+                          className={inputClass}
+                          min="0"
+                          step="0.1"
+                          placeholder="0"
+                          value={item.minLevel}
+                          onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Unit</label>
+                        <div className="flex gap-1.5">
+                          <select
+                            className={selectClass}
+                            value={
+                              LEVEL_UNIT_PRESETS.includes(item.levelUnit as (typeof LEVEL_UNIT_PRESETS)[number])
+                                ? item.levelUnit
+                                : '__custom__'
+                            }
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val !== '__custom__') {
+                                updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: val });
+                              }
+                            }}
+                          >
+                            {LEVEL_UNIT_PRESETS.map((u) => (
+                              <option key={u} value={u}>
+                                {u}
+                              </option>
+                            ))}
+                            <option value="__custom__">Custom...</option>
+                          </select>
+                          {!LEVEL_UNIT_PRESETS.includes(item.levelUnit as (typeof LEVEL_UNIT_PRESETS)[number]) && (
+                            <input
+                              type="text"
+                              className={inputClass}
+                              placeholder="Custom unit"
+                              value={item.levelUnit}
+                              onChange={(e) =>
+                                updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })
+                              }
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Conditional: Serial/Lot */}
+                  {(item.checkType === 'date_lot' || item.checkType === 'quantity') && (
+                    <>
+                      <div>
+                        <label className={labelClass}>Serial #</label>
+                        <input
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
+                          type="text"
+                          className={inputClass}
+                          placeholder="Serial number"
+                          value={item.serialNumber}
+                          onChange={(e) =>
+                            updateItemFieldWithAutoSave(compIdx, itemIdx, { serialNumber: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Lot #</label>
+                        <input
+                          type="text"
+                          className={inputClass}
+                          placeholder="Lot number"
+                          value={item.lotNumber}
+                          onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { lotNumber: e.target.value })}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Image URL */}
                   <div>
                     <label className={labelClass}>
-                      <AlertTriangle className="inline h-3.5 w-3.5 mr-1 text-red-500" />
-                      Critical Min
+                      <Image className="mr-1 inline h-3.5 w-3.5" />
+                      Image URL
                     </label>
-                    <p className="text-xs text-theme-text-secondary mb-1">Below this = urgent alert to leadership</p>
-                    <input type="number" className={inputClass} min="0" placeholder="0" value={item.criticalMinimumQuantity} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { criticalMinimumQuantity: e.target.value })} />
+                    <input
+                      type="text"
+                      className={inputClass}
+                      placeholder="https://..."
+                      value={item.imageUrl}
+                      onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { imageUrl: e.target.value })}
+                    />
                   </div>
-                </>
-              )}
+                </div>
 
-              {/* Conditional: Level */}
-              {item.checkType === 'level' && (
-                <>
-                  <div>
-                    <label className={labelClass}>Min Level</label>
-                    <input type="number" className={inputClass} min="0" step="0.1" placeholder="0" value={item.minLevel} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Unit</label>
-                    <div className="flex gap-1.5">
-                      <select
-                        className={selectClass}
-                        value={LEVEL_UNIT_PRESETS.includes(item.levelUnit as typeof LEVEL_UNIT_PRESETS[number]) ? item.levelUnit : '__custom__'}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val !== '__custom__') {
-                            updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: val });
+                {/* Inventory link — connects to the catalog for ready-stock + swaps */}
+                <div>
+                  <label className={labelClass}>
+                    <Package className="mr-1 inline h-3.5 w-3.5" />
+                    Linked Inventory Item
+                  </label>
+                  <InventoryItemPicker
+                    value={item.inventoryItemId || undefined}
+                    onChange={(id) => updateItemFieldWithAutoSave(compIdx, itemIdx, { inventoryItemId: id ?? '' })}
+                  />
+                  <p className="text-theme-text-muted mt-1 text-[11px]">
+                    Link to track replacement stock and enable lot swaps during checks.
+                  </p>
+                </div>
+
+                {/* Expiration row */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className={checkboxClass}
+                      checked={item.hasExpiration}
+                      onChange={(e) =>
+                        updateItemFieldWithAutoSave(compIdx, itemIdx, { hasExpiration: e.target.checked })
+                      }
+                    />
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Has Expiration
+                  </label>
+                  {item.hasExpiration && (
+                    <>
+                      <div>
+                        <label className={labelClass}>Expiration Date</label>
+                        <input
+                          type="date"
+                          className={inputClass}
+                          value={item.expirationDate}
+                          onChange={(e) =>
+                            updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationDate: e.target.value })
                           }
-                        }}
-                      >
-                        {LEVEL_UNIT_PRESETS.map((u) => (
-                          <option key={u} value={u}>{u}</option>
-                        ))}
-                        <option value="__custom__">Custom...</option>
-                      </select>
-                      {!LEVEL_UNIT_PRESETS.includes(item.levelUnit as typeof LEVEL_UNIT_PRESETS[number]) && (
-                        <input type="text" className={inputClass} placeholder="Custom unit" value={item.levelUnit} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })} />
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* Conditional: Serial/Lot */}
-              {(item.checkType === 'date_lot' || item.checkType === 'quantity') && (
-                <>
-                  <div>
-                    <label className={labelClass}>Serial #</label>
-                    <input autoCapitalize="none" autoCorrect="off" spellCheck={false} type="text" className={inputClass} placeholder="Serial number" value={item.serialNumber} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { serialNumber: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Lot #</label>
-                    <input type="text" className={inputClass} placeholder="Lot number" value={item.lotNumber} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { lotNumber: e.target.value })} />
-                  </div>
-                </>
-              )}
-
-              {/* Image URL */}
-              <div>
-                <label className={labelClass}>
-                  <Image className="inline h-3.5 w-3.5 mr-1" />
-                  Image URL
-                </label>
-                <input type="text" className={inputClass} placeholder="https://..." value={item.imageUrl} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { imageUrl: e.target.value })} />
-              </div>
-            </div>
-
-            {/* Inventory link — connects to the catalog for ready-stock + swaps */}
-            <div>
-              <label className={labelClass}>
-                <Package className="inline h-3.5 w-3.5 mr-1" />
-                Linked Inventory Item
-              </label>
-              <InventoryItemPicker
-                value={item.inventoryItemId || undefined}
-                onChange={(id) =>
-                  updateItemFieldWithAutoSave(compIdx, itemIdx, { inventoryItemId: id ?? '' })
-                }
-              />
-              <p className="mt-1 text-[11px] text-theme-text-muted">
-                Link to track replacement stock and enable lot swaps during checks.
-              </p>
-            </div>
-
-            {/* Expiration row */}
-            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
-              <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
-                <input type="checkbox" className={checkboxClass} checked={item.hasExpiration} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { hasExpiration: e.target.checked })} />
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Has Expiration
-              </label>
-              {item.hasExpiration && (
-                <>
-                  <div>
-                    <label className={labelClass}>Expiration Date</label>
-                    <input type="date" className={inputClass} value={item.expirationDate} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationDate: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Warning Days</label>
-                    <input type="number" className={inputClass} min="0" placeholder="30" value={item.expirationWarningDays} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })} />
-                  </div>
-                </>
-              )}
-            </div>
-            </>)}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Warning Days</label>
+                        <input
+                          type="number"
+                          className={inputClass}
+                          min="0"
+                          placeholder="30"
+                          value={item.expirationWarningDays}
+                          onChange={(e) =>
+                            updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })
+                          }
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -2372,7 +2489,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     sortableRef?: React.Ref<HTMLDivElement>,
     sortableStyle?: React.CSSProperties,
     sortableAttributes?: DraggableAttributes,
-    depth = 0,
+    depth = 0
   ) => {
     const key = comp.id ?? `comp-${idx}`;
     const isExpanded = expandedCompartments.has(key);
@@ -2389,38 +2506,38 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           ref={sortableRef}
           style={sortableStyle}
           {...(sortableAttributes ?? {})}
-          className="rounded-lg border border-theme-surface-border bg-theme-surface overflow-hidden"
+          className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border"
         >
-          <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-3">
+          <div className="flex items-center gap-1.5 px-2 py-3 sm:gap-2 sm:px-4">
             <button
               type="button"
-              className="p-0.5 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+              className="text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
               aria-label="Drag to reorder section"
               {...(dragHandleProps ?? {})}
             >
               <GripVertical className="h-5 w-5" />
             </button>
 
-            <Type className="h-4 w-4 text-theme-text-muted flex-shrink-0" />
+            <Type className="text-theme-text-muted h-4 w-4 flex-shrink-0" />
 
             <input
               type="text"
-              className="flex-1 min-w-0 bg-transparent border-none outline-none text-theme-text-primary font-bold text-sm placeholder:font-normal placeholder:text-theme-text-muted"
+              className="text-theme-text-primary placeholder:text-theme-text-muted min-w-0 flex-1 border-none bg-transparent text-sm font-bold outline-none placeholder:font-normal"
               placeholder="Section heading..."
               value={comp.name}
               onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
             />
 
-            <span className="rounded-full bg-theme-surface-secondary px-2 py-0.5 text-[10px] font-medium text-theme-text-muted flex-shrink-0">
+            <span className="bg-theme-surface-secondary text-theme-text-muted flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium">
               Section
             </span>
 
-            <div className="hidden sm:flex items-center gap-0.5 flex-shrink-0">
+            <div className="hidden flex-shrink-0 items-center gap-0.5 sm:flex">
               <button
                 type="button"
                 onClick={() => moveCompartment(idx, 'up')}
                 disabled={idx === 0}
-                className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section up"
               >
                 <ChevronUp className="h-4 w-4" aria-hidden="true" />
@@ -2429,7 +2546,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 type="button"
                 onClick={() => moveCompartment(idx, 'down')}
                 disabled={idx === compartments.length - 1}
-                className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section down"
               >
                 <ChevronDown className="h-4 w-4" aria-hidden="true" />
@@ -2437,7 +2554,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void deleteCompartment(idx)}
-                className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                className="rounded p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
                 aria-label="Delete section header"
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -2445,8 +2562,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </div>
           </div>
           {comp.description && (
-            <div className="px-4 pb-2 -mt-1">
-              <p className="text-xs text-theme-text-muted">{comp.description}</p>
+            <div className="-mt-1 px-4 pb-2">
+              <p className="text-theme-text-muted text-xs">{comp.description}</p>
             </div>
           )}
         </div>
@@ -2459,13 +2576,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         ref={sortableRef}
         style={sortableStyle}
         {...(sortableAttributes ?? {})}
-        className="rounded-lg border border-theme-surface-border bg-theme-surface overflow-hidden"
+        className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border"
       >
         {/* Compartment header */}
-        <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-3 bg-theme-surface">
+        <div className="bg-theme-surface flex items-center gap-1.5 px-2 py-3 sm:gap-2 sm:px-4">
           <button
             type="button"
-            className="p-0.5 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+            className="text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
             aria-label="Drag to reorder compartment"
             {...(dragHandleProps ?? {})}
           >
@@ -2475,50 +2592,48 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <button
             type="button"
             onClick={() => toggleCompartmentExpanded(key)}
-            className="flex items-center gap-2 flex-1 text-left min-w-0"
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
             aria-expanded={isExpanded}
           >
             {isExpanded ? (
-              <ChevronUp className="h-4 w-4 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
+              <ChevronUp className="text-theme-text-muted h-4 w-4 flex-shrink-0" aria-hidden="true" />
             ) : (
-              <ChevronDown className="h-4 w-4 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
+              <ChevronDown className="text-theme-text-muted h-4 w-4 flex-shrink-0" aria-hidden="true" />
             )}
-            {depth > 0 && (
-              <Package className="h-3.5 w-3.5 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
-            )}
-            <span className="font-medium text-theme-text-primary truncate">
-              {comp.name || `Untitled ${typeLabel}`}
-            </span>
-            <span className="rounded-full bg-theme-surface-secondary px-2 py-0.5 text-[10px] font-medium text-theme-text-muted flex-shrink-0">
+            {depth > 0 && <Package className="text-theme-text-muted h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
+            <span className="text-theme-text-primary truncate font-medium">{comp.name || `Untitled ${typeLabel}`}</span>
+            <span className="bg-theme-surface-secondary text-theme-text-muted flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium">
               {typeLabel}
             </span>
             {parentName && (
-              <span className="hidden md:inline text-[10px] text-theme-text-muted truncate flex-shrink-0">
+              <span className="text-theme-text-muted hidden flex-shrink-0 truncate text-[10px] md:inline">
                 in {parentName}
               </span>
             )}
           </button>
 
           {/* Status badges */}
-          <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
+          <div className="hidden flex-shrink-0 items-center gap-1.5 sm:flex">
             {(() => {
               const status = getCompartmentStatus(comp);
               return (
                 <>
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    status === 'complete'
-                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                      : status === 'warning'
-                        ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                        : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-                  }`}>
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      status === 'complete'
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : status === 'warning'
+                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                          : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                    }`}
+                  >
                     {status === 'complete' && <CheckCircle2 className="h-2.5 w-2.5" aria-hidden="true" />}
                     {status === 'warning' && <AlertTriangle className="h-2.5 w-2.5" aria-hidden="true" />}
                     {status === 'empty' && <Circle className="h-2.5 w-2.5" aria-hidden="true" />}
                     {comp.items.length} item{comp.items.length !== 1 ? 's' : ''}
                   </span>
                   {comp.items.filter((i) => i.isRequired).length > 0 && (
-                    <span className="rounded-full bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400">
+                    <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
                       {comp.items.filter((i) => i.isRequired).length} req
                     </span>
                   )}
@@ -2528,12 +2643,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
 
           {/* Move up/down + delete */}
-          <div className="hidden sm:flex items-center gap-0.5 flex-shrink-0">
+          <div className="hidden flex-shrink-0 items-center gap-0.5 sm:flex">
             <button
               type="button"
               onClick={() => moveCompartment(idx, 'up')}
               disabled={idx === 0}
-              className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} up`}
             >
               <ChevronUp className="h-4 w-4" aria-hidden="true" />
@@ -2542,7 +2657,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => moveCompartment(idx, 'down')}
               disabled={idx === compartments.length - 1}
-              className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} down`}
             >
               <ChevronDown className="h-4 w-4" aria-hidden="true" />
@@ -2550,7 +2665,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => duplicateCompartment(idx)}
-              className="p-1 text-theme-text-muted hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+              className="text-theme-text-muted rounded p-1 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20"
               aria-label={`Duplicate ${comp.name || 'compartment'}`}
             >
               <Copy className="h-4 w-4" aria-hidden="true" />
@@ -2558,7 +2673,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => void deleteCompartment(idx)}
-              className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+              className="rounded p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
               aria-label={`Delete ${comp.name || 'compartment'}`}
             >
               <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -2568,11 +2683,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         {/* Compartment body */}
         {isExpanded && (
-          <div className="border-t border-theme-surface-border px-4 py-4 space-y-4">
+          <div className="border-theme-surface-border space-y-4 border-t px-4 py-4">
             {/* Compartment fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label htmlFor={`comp-name-${key}`} className={labelClass}>{typeLabel} Name</label>
+                <label htmlFor={`comp-name-${key}`} className={labelClass}>
+                  {typeLabel} Name
+                </label>
                 <input
                   id={`comp-name-${key}`}
                   type="text"
@@ -2583,7 +2700,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 />
               </div>
               <div>
-                <label htmlFor={`comp-desc-${key}`} className={labelClass}>Description</label>
+                <label htmlFor={`comp-desc-${key}`} className={labelClass}>
+                  Description
+                </label>
                 <input
                   id={`comp-desc-${key}`}
                   type="text"
@@ -2595,17 +2714,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {/* Storage type: presets + a free-text "Custom…" option so each
                   department can describe how their equipment is stored. */}
               {(() => {
-                const inCustom =
-                  customContainerKeys.has(key) ||
-                  !isPresetContainerType(comp.containerType);
+                const inCustom = customContainerKeys.has(key) || !isPresetContainerType(comp.containerType);
                 return (
                   <div>
                     <label className={labelClass}>
-                      <Package className="inline h-3.5 w-3.5 mr-1" />
+                      <Package className="mr-1 inline h-3.5 w-3.5" />
                       Storage Type
                     </label>
                     <select
@@ -2641,9 +2758,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         placeholder="e.g. Trauma Kit, Top Shelf, Red Bag"
                         aria-label="Custom storage type label"
                         value={comp.containerType}
-                        onChange={(e) =>
-                          updateCompartmentField(idx, { containerType: e.target.value })
-                        }
+                        onChange={(e) => updateCompartmentField(idx, { containerType: e.target.value })}
                       />
                     )}
                   </div>
@@ -2654,24 +2769,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <select
                   className={selectClass}
                   value={comp.parentCompartmentId}
-                  onChange={(e) =>
-                    updateCompartmentField(idx, { parentCompartmentId: e.target.value })
-                  }
+                  onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
                 >
                   <option value="">Nothing (top-level)</option>
                   {compartments
                     .filter((other, cIdx) => cIdx !== idx && Boolean(other.id))
                     .map((other) => (
                       <option key={other.id} value={other.id ?? ''}>
-                        {containerTypeLabel(other.containerType)}:{' '}
-                        {other.name || 'Untitled'}
+                        {containerTypeLabel(other.containerType)}: {other.name || 'Untitled'}
                       </option>
                     ))}
                 </select>
               </div>
               <div className="sm:col-span-2">
                 <label className={labelClass}>
-                  <Image className="inline h-3.5 w-3.5 mr-1" />
+                  <Image className="mr-1 inline h-3.5 w-3.5" />
                   Image URL
                 </label>
                 <input
@@ -2686,20 +2798,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
             {/* Items */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <h4 className="text-sm font-semibold text-theme-text-primary">Check Items</h4>
-                <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-theme-text-primary text-sm font-semibold">Check Items</h4>
+                <div className="flex flex-wrap items-center gap-2">
                   {/* Bulk selection controls */}
                   {comp.items.length > 0 && (
-                    <div className="flex items-center gap-1 flex-wrap">
+                    <div className="flex flex-wrap items-center gap-1">
                       {getSelectedCount(idx) > 0 ? (
                         <>
-                          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium mr-1">
+                          <span className="mr-1 text-xs font-medium text-blue-600 dark:text-blue-400">
                             {getSelectedCount(idx)} selected
                           </span>
                           {/* Bulk edit: set check type */}
                           <select
-                            className="rounded-md border border-blue-300 dark:border-blue-700 bg-theme-surface px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400"
+                            className="bg-theme-surface rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-600 dark:border-blue-700 dark:text-blue-400"
                             value=""
                             onChange={(e) => {
                               if (e.target.value) {
@@ -2707,9 +2819,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                               }
                             }}
                           >
-                            <option value="" disabled>Set type...</option>
+                            <option value="" disabled>
+                              Set type...
+                            </option>
                             {CHECK_TYPES.map((ct) => (
-                              <option key={ct.value} value={ct.value}>{ct.label}</option>
+                              <option key={ct.value} value={ct.value}>
+                                {ct.label}
+                              </option>
                             ))}
                           </select>
                           {/* Bulk edit: toggle required */}
@@ -2721,7 +2837,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                               const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
                               bulkToggleRequired(idx, !allRequired);
                             }}
-                            className="flex items-center gap-1 rounded-md border border-blue-300 dark:border-blue-700 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                            className="flex items-center gap-1 rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
                             title="Toggle required status for selected items"
                           >
                             {(() => {
@@ -2734,7 +2850,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => void deleteSelectedItems(idx)}
-                            className="flex items-center gap-1 rounded-md border border-red-300 dark:border-red-700 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            className="flex items-center gap-1 rounded-md border border-red-300 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
                             aria-label="Delete selected items"
                           >
                             <Trash2 className="h-3 w-3" aria-hidden="true" />
@@ -2743,7 +2859,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => deselectAllItems(idx)}
-                            className="rounded-md px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                            className="text-theme-text-muted hover:text-theme-text-primary rounded-md px-2 py-1 text-xs transition-colors"
                           >
                             Clear
                           </button>
@@ -2752,7 +2868,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => selectAllItems(idx)}
-                          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                          className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
                           title="Select all items"
                         >
                           <CheckSquare className="h-3 w-3" />
@@ -2767,7 +2883,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       const compKey = getCompKey(idx);
                       setShowEquipmentPresets((prev) => ({ ...prev, [compKey]: !prev[compKey] }));
                     }}
-                    className="flex items-center gap-1 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 transition-colors"
+                    className="flex items-center gap-1 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400"
                     title="Add a pre-built equipment kit"
                   >
                     <Package className="h-3.5 w-3.5" />
@@ -2776,7 +2892,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void addHeader(idx)}
-                    className="flex items-center gap-1 rounded-md border border-dashed border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-muted hover:border-theme-text-primary hover:text-theme-text-primary transition-colors"
+                    className="border-theme-surface-border text-theme-text-muted hover:border-theme-text-primary hover:text-theme-text-primary flex items-center gap-1 rounded-md border border-dashed px-3 py-1.5 text-xs font-medium transition-colors"
                   >
                     <Type className="h-3.5 w-3.5" />
                     Header
@@ -2787,28 +2903,26 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               {/* Equipment Preset Picker */}
               {(showEquipmentPresets[getCompKey(idx)] ?? false) && (
                 <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-theme-text-primary">Add equipment kit:</p>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-theme-text-primary text-xs font-medium">Add equipment kit:</p>
                     <button
                       type="button"
                       onClick={() => setShowEquipmentPresets((prev) => ({ ...prev, [getCompKey(idx)]: false }))}
-                      className="p-0.5 text-theme-text-muted hover:text-theme-text-primary"
+                      className="text-theme-text-muted hover:text-theme-text-primary p-0.5"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4">
                     {Object.entries(EQUIPMENT_PRESETS).map(([presetKey, preset]) => (
                       <button
                         key={presetKey}
                         type="button"
                         onClick={() => void addEquipmentPreset(idx, presetKey)}
-                        className="rounded-md border border-theme-surface-border bg-theme-surface px-2 py-1.5 text-xs text-theme-text-primary hover:border-green-500/40 hover:bg-green-500/10 transition-colors text-left"
+                        className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-md border px-2 py-1.5 text-left text-xs transition-colors hover:border-green-500/40 hover:bg-green-500/10"
                       >
                         <span className="font-medium">{preset.label}</span>
-                        <span className="block text-[10px] text-theme-text-muted">
-                          {preset.items.length} items
-                        </span>
+                        <span className="text-theme-text-muted block text-[10px]">{preset.items.length} items</span>
                       </button>
                     ))}
                   </div>
@@ -2816,7 +2930,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               )}
 
               {comp.items.length === 0 && (
-                <p className="text-sm text-theme-text-muted italic py-2">
+                <p className="text-theme-text-muted py-2 text-sm italic">
                   No items yet. Type a name below and press Enter, or use &ldquo;Add Kit&rdquo; for pre-built groups.
                 </p>
               )}
@@ -2827,9 +2941,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 onDragEnd={(e: DragEndEvent) => handleItemDragEnd(idx, e)}
               >
                 <SortableContext
-                  items={comp.items.map(
-                    (item, i) => item.id ?? `item-${idx}-${i}`,
-                  )}
+                  items={comp.items.map((item, i) => item.id ?? `item-${idx}-${i}`)}
                   strategy={verticalListSortingStrategy}
                 >
                   {comp.items.map((item, itemIdx) => (
@@ -2851,9 +2963,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 const isBulkPaste = bulkPasteMode[compKey] ?? false;
 
                 return (
-                  <div className="mt-2 rounded-md border border-dashed border-theme-surface-border bg-theme-surface-secondary/30 p-2">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="text-[10px] font-medium text-theme-text-muted uppercase tracking-wide">
+                  <div className="border-theme-surface-border bg-theme-surface-secondary/30 mt-2 rounded-md border border-dashed p-2">
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <span className="text-theme-text-muted text-[10px] font-medium tracking-wide uppercase">
                         {isBulkPaste ? 'Bulk Add' : 'Quick Add'}
                       </span>
                       <button
@@ -2861,7 +2973,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         onClick={() => setBulkPasteMode((prev) => ({ ...prev, [compKey]: !isBulkPaste }))}
                         className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${
                           isBulkPaste
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                            ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
                             : 'text-theme-text-muted hover:text-theme-text-secondary'
                         }`}
                         title={isBulkPaste ? 'Switch to single add' : 'Switch to bulk paste (one item per line)'}
@@ -2880,7 +2992,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                           onChange={(e) => setBulkPasteValues((prev) => ({ ...prev, [compKey]: e.target.value }))}
                         />
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-theme-text-muted">
+                          <span className="text-theme-text-muted text-[10px]">
                             {(() => {
                               const lines = (bulkPasteValues[compKey] ?? '').split('\n').filter((l) => l.trim()).length;
                               return lines > 0 ? `${lines} item${lines !== 1 ? 's' : ''} to add` : 'Paste a list';
@@ -2890,7 +3002,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                             type="button"
                             onClick={() => void handleBulkPaste(idx)}
                             disabled={(bulkPasteValues[compKey] ?? '').trim().length === 0}
-                            className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                            className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
                           >
                             <Plus className="h-3 w-3" />
                             Add All
@@ -2901,7 +3013,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
-                          className="form-input text-sm flex-1"
+                          className="form-input flex-1 text-sm"
                           placeholder="Type item name and press Enter..."
                           value={quickAddValues[compKey] ?? ''}
                           onChange={(e) => setQuickAddValues((prev) => ({ ...prev, [compKey]: e.target.value }))}
@@ -2916,7 +3028,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                           type="button"
                           onClick={() => void handleQuickAdd(idx)}
                           disabled={!(quickAddValues[compKey] ?? '').trim()}
-                          className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40 transition-colors flex-shrink-0"
+                          className="flex flex-shrink-0 items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
                         >
                           <Plus className="h-3 w-3" />
                           Add
@@ -2952,22 +3064,38 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         <label className={labelClass}>
           Name <span className="text-red-500">*</span>
         </label>
-        <input type="text" className={inputClass} placeholder="e.g. Engine Daily Check" value={form.name} onChange={(e) => updateForm({ name: e.target.value })} />
+        <input
+          type="text"
+          className={inputClass}
+          placeholder="e.g. Engine Daily Check"
+          value={form.name}
+          onChange={(e) => updateForm({ name: e.target.value })}
+        />
       </div>
 
       {/* Description */}
       <div>
         <label className={labelClass}>Description</label>
-        <textarea className={inputClass} rows={2} placeholder="Describe what this template covers..." value={form.description} onChange={(e) => updateForm({ description: e.target.value })} />
+        <textarea
+          className={inputClass}
+          rows={2}
+          placeholder="Describe what this template covers..."
+          value={form.description}
+          onChange={(e) => updateForm({ description: e.target.value })}
+        />
       </div>
 
       {/* Check Timing */}
       <div>
         <label className={labelClass}>
-          <Clock className="inline h-3.5 w-3.5 mr-1" />
+          <Clock className="mr-1 inline h-3.5 w-3.5" />
           Check Timing
         </label>
-        <select className={selectClass} value={form.checkTiming} onChange={(e) => updateForm({ checkTiming: e.target.value as TemplateFormState['checkTiming'] })}>
+        <select
+          className={selectClass}
+          value={form.checkTiming}
+          onChange={(e) => updateForm({ checkTiming: e.target.value as TemplateFormState['checkTiming'] })}
+        >
           <option value="start_of_shift">Start of Shift</option>
           <option value="end_of_shift">End of Shift</option>
         </select>
@@ -2976,9 +3104,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Template Type */}
       <div>
         <label className={labelClass}>Template Type</label>
-        <select className={selectClass} value={form.templateType} onChange={(e) => updateForm({ templateType: e.target.value as TemplateType })}>
+        <select
+          className={selectClass}
+          value={form.templateType}
+          onChange={(e) => updateForm({ templateType: e.target.value as TemplateType })}
+        >
           {(Object.entries(TEMPLATE_TYPE_LABELS) as [TemplateType, string][]).map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
+            <option key={value} value={value}>
+              {label}
+            </option>
           ))}
         </select>
       </div>
@@ -2986,10 +3120,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Assigned Positions */}
       <div>
         <label className={labelClass}>Assigned Positions</label>
-        <div className="flex flex-wrap gap-2 mt-1">
+        <div className="mt-1 flex flex-wrap gap-2">
           {POSITIONS.map((pos) => (
-            <label key={pos} className="flex items-center gap-1.5 text-xs text-theme-text-secondary capitalize">
-              <input type="checkbox" className={checkboxClass} checked={form.assignedPositions.includes(pos)} onChange={() => togglePosition(pos)} />
+            <label key={pos} className="text-theme-text-secondary flex items-center gap-1.5 text-xs capitalize">
+              <input
+                type="checkbox"
+                className={checkboxClass}
+                checked={form.assignedPositions.includes(pos)}
+                onChange={() => togglePosition(pos)}
+              />
               {pos}
             </label>
           ))}
@@ -2999,10 +3138,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Apparatus Type */}
       <div>
         <label className={labelClass}>Apparatus Type</label>
-        <select className={selectClass} value={form.apparatusType} onChange={(e) => updateForm({ apparatusType: e.target.value })}>
+        <select
+          className={selectClass}
+          value={form.apparatusType}
+          onChange={(e) => updateForm({ apparatusType: e.target.value })}
+        >
           <option value="">-- Select Type --</option>
           {APPARATUS_TYPES.map((t) => (
-            <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+            <option key={t} value={t}>
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </option>
           ))}
         </select>
       </div>
@@ -3025,20 +3170,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </option>
             ))}
         </select>
-        <p className="mt-1 text-xs text-theme-text-muted">
-          Leave as &quot;All of type&quot; to use this template as the default for all {form.apparatusType || 'apparatus'} units
+        <p className="text-theme-text-muted mt-1 text-xs">
+          Leave as &quot;All of type&quot; to use this template as the default for all{' '}
+          {form.apparatusType || 'apparatus'} units
         </p>
       </div>
 
       {/* Active toggle */}
       <div className="flex items-center gap-2">
-        <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
-          <input type="checkbox" className={checkboxClass} checked={form.isActive} onChange={(e) => updateForm({ isActive: e.target.checked })} />
+        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className={checkboxClass}
+            checked={form.isActive}
+            onChange={(e) => updateForm({ isActive: e.target.checked })}
+          />
           Active
         </label>
-        <span className="text-[10px] text-theme-text-muted">
-          Inactive = hidden from shift checklists
-        </span>
+        <span className="text-theme-text-muted text-[10px]">Inactive = hidden from shift checklists</span>
       </div>
     </div>
   );
@@ -3050,30 +3199,30 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   return (
     <div className="pb-16">
       {/* Header */}
-      <div className="mx-auto max-w-7xl flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="mx-auto mb-4 flex max-w-7xl items-center justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={() => {
               if (isDirty && !window.confirm('You have unsaved changes. Leave anyway?')) return;
               void navigate(-1);
             }}
-            className="p-2 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors flex-shrink-0"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface flex-shrink-0 rounded-md p-2 transition-colors"
             title="Go back"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-2xl font-bold text-theme-text-primary truncate">
+          <h1 className="text-theme-text-primary truncate text-2xl font-bold">
             {isEditing ? `Edit: ${form.name || 'Template'}` : 'New Equipment Check Template'}
           </h1>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex flex-shrink-0 items-center gap-2">
           {isEditing && templateId && (
             <button
               type="button"
               onClick={() => void handleClone()}
               disabled={cloning}
-              className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
+              className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
               title="Clone this template"
             >
               {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
@@ -3084,7 +3233,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             type="button"
             onClick={exportTemplateJson}
             disabled={compartments.length === 0}
-            className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
+            className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
             title="Export template as JSON"
           >
             <Download className="h-4 w-4" />
@@ -3094,42 +3243,30 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => importFileRef.current?.click()}
-              className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
               title="Import template from JSON"
             >
               <Upload className="h-4 w-4" />
               <span className="hidden sm:inline">Import JSON</span>
             </button>
-            <input
-              ref={importFileRef}
-              type="file"
-              accept=".json"
-              className="hidden"
-              onChange={handleImportTemplate}
-            />
+            <input ref={importFileRef} type="file" accept=".json" className="hidden" onChange={handleImportTemplate} />
           </div>
           <div className="relative">
             <button
               type="button"
               onClick={() => csvImportRef.current?.click()}
-              className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
               title="Import items from CSV spreadsheet"
             >
               <Upload className="h-4 w-4" />
               <span className="hidden sm:inline">Import CSV</span>
             </button>
-            <input
-              ref={csvImportRef}
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={handleCsvImport}
-            />
+            <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={handleCsvImport} />
           </div>
           <a
             href={schedulingService.getCsvSampleUrl()}
             download
-            className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+            className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
             title="Download a sample CSV file for import"
           >
             <Download className="h-4 w-4" />
@@ -3138,8 +3275,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           {templateId && (
             <button
               type="button"
-              onClick={() => { setShowChangelog(true); void loadChangelog(); }}
-              className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              onClick={() => {
+                setShowChangelog(true);
+                void loadChangelog();
+              }}
+              className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
               title="View change history (admin only)"
             >
               <Clock className="h-4 w-4" />
@@ -3150,7 +3290,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             type="button"
             onClick={() => setShowPreview(true)}
             disabled={compartments.length === 0}
-            className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
+            className="border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50"
           >
             <Eye className="h-4 w-4" />
             <span className="hidden sm:inline">Preview</span>
@@ -3159,7 +3299,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             type="button"
             onClick={() => void handleSave()}
             disabled={saving}
-            className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? 'Saving...' : 'Save'}
@@ -3168,16 +3308,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       </div>
 
       {/* Sidebar + Main content */}
-      <div className="mx-auto max-w-7xl flex flex-col lg:flex-row gap-4 lg:gap-6">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:gap-6">
         {/* Sidebar — Template details */}
-        <div className={`flex-shrink-0 transition-all duration-200 ${sidebarOpen ? 'w-full lg:w-72' : 'w-0'} overflow-hidden`}>
-          <div className="w-full lg:w-72 rounded-lg border border-theme-surface-border bg-theme-surface p-4 lg:sticky lg:top-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-theme-text-primary uppercase tracking-wide">Template Details</h2>
+        <div
+          className={`flex-shrink-0 transition-all duration-200 ${sidebarOpen ? 'w-full lg:w-72' : 'w-0'} overflow-hidden`}
+        >
+          <div className="border-theme-surface-border bg-theme-surface w-full rounded-lg border p-4 lg:sticky lg:top-4 lg:w-72">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-theme-text-primary text-sm font-semibold tracking-wide uppercase">
+                Template Details
+              </h2>
               <button
                 type="button"
                 onClick={() => setSidebarOpen(false)}
-                className="p-1 text-theme-text-muted hover:text-theme-text-primary rounded transition-colors lg:hidden"
+                className="text-theme-text-muted hover:text-theme-text-primary rounded p-1 transition-colors lg:hidden"
                 title="Close sidebar"
               >
                 <PanelLeftClose className="h-4 w-4" />
@@ -3188,26 +3332,28 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </div>
 
         {/* Main — Compartments */}
-        <div className="flex-1 min-w-0 space-y-4">
+        <div className="min-w-0 flex-1 space-y-4">
           {/* Sidebar toggle (when collapsed) + section header */}
-          <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-3">
               {!sidebarOpen && (
                 <button
                   type="button"
                   onClick={() => setSidebarOpen(true)}
-                  className="p-1.5 rounded-md border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors"
+                  className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-md border p-1.5 transition-colors"
                   title="Show template details"
                 >
                   <PanelLeftOpen className="h-4 w-4" />
                 </button>
               )}
-              <h2 className="text-lg font-semibold text-theme-text-primary">Compartments</h2>
+              <h2 className="text-theme-text-primary text-lg font-semibold">Compartments</h2>
               {compartments.length > 1 && (
                 <button
                   type="button"
-                  onClick={expandedCompartments.size === compartments.length ? collapseAllCompartments : expandAllCompartments}
-                  className="flex items-center gap-1 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  onClick={
+                    expandedCompartments.size === compartments.length ? collapseAllCompartments : expandAllCompartments
+                  }
+                  className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors"
                   title={expandedCompartments.size === compartments.length ? 'Collapse all' : 'Expand all'}
                 >
                   <ChevronsUpDown className="h-3.5 w-3.5" />
@@ -3220,7 +3366,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPresetPicker(!showPresetPicker)}
-                  className="flex items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm font-medium text-orange-700 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
+                  className="flex items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
                 >
                   <Truck className="h-4 w-4" />
                   Load Vehicle Preset
@@ -3229,7 +3375,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void addSectionHeader()}
-                className="flex items-center gap-1.5 rounded-md border border-dashed border-theme-surface-border px-3 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-secondary hover:text-theme-text-primary transition-colors"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary hover:text-theme-text-primary flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm font-medium transition-colors"
               >
                 <Type className="h-4 w-4" />
                 Add Section
@@ -3237,7 +3383,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void addCompartment()}
-                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
               >
                 <Plus className="h-4 w-4" />
                 Add Compartment
@@ -3248,20 +3394,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           {/* Vehicle Preset Picker */}
           {showPresetPicker && (
             <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
-              <p className="text-sm font-medium text-theme-text-primary mb-3">
+              <p className="text-theme-text-primary mb-3 text-sm font-medium">
                 Choose a pre-built vehicle check template:
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
                 {Object.entries(VEHICLE_PRESETS).map(([key, preset]) => (
                   <button
                     key={key}
                     type="button"
                     onClick={() => loadVehiclePreset(key)}
-                    className="rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm text-theme-text-primary hover:border-orange-500/40 hover:bg-orange-500/10 transition-colors text-left"
+                    className="border-theme-surface-border bg-theme-surface text-theme-text-primary rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:border-orange-500/40 hover:bg-orange-500/10"
                   >
                     <span className="font-medium">{preset.label}</span>
-                    <span className="block text-xs text-theme-text-muted mt-0.5">
-                      {preset.compartments.length} sections, {preset.compartments.reduce((sum, c) => sum + c.items.length, 0)} items
+                    <span className="text-theme-text-muted mt-0.5 block text-xs">
+                      {preset.compartments.length} sections,{' '}
+                      {preset.compartments.reduce((sum, c) => sum + c.items.length, 0)} items
                     </span>
                   </button>
                 ))}
@@ -3270,8 +3417,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           )}
 
           {compartments.length === 0 && (
-            <div className="rounded-lg border border-dashed border-theme-surface-border bg-theme-surface p-8 text-center">
-              <p className="text-sm text-theme-text-muted">
+            <div className="border-theme-surface-border bg-theme-surface rounded-lg border border-dashed p-8 text-center">
+              <p className="text-theme-text-muted text-sm">
                 No compartments yet.
                 {form.templateType === 'vehicle' || form.templateType === 'combined'
                   ? ' Use "Load Vehicle Preset" above or add compartments manually.'
@@ -3288,11 +3435,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   <div
                     key={id}
                     style={depth > 0 ? { marginLeft: depth * 20 } : undefined}
-                    className={
-                      depth > 0
-                        ? 'border-l-2 border-theme-surface-border/60 pl-2'
-                        : undefined
-                    }
+                    className={depth > 0 ? 'border-theme-surface-border/60 border-l-2 pl-2' : undefined}
                   >
                     <SortableCompartmentWrapper id={id}>
                       {({ listeners: compListeners, setNodeRef, style, attributes }) =>
@@ -3309,9 +3452,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
       {/* Sticky footer stats bar */}
       {stats.totalItems > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-theme-surface-border bg-theme-surface/95 backdrop-blur-sm pb-safe">
-          <div className="mx-auto max-w-7xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-0 px-4 py-2">
-            <div className="flex items-center gap-4 text-xs text-theme-text-muted">
+        <div className="border-theme-surface-border bg-theme-surface/95 pb-safe fixed right-0 bottom-0 left-0 z-40 border-t backdrop-blur-sm">
+          <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-1 px-4 py-2 sm:flex-row sm:items-center sm:gap-0">
+            <div className="text-theme-text-muted flex items-center gap-4 text-xs">
               <span className="flex items-center gap-1">
                 <Hash className="h-3 w-3" />
                 {stats.compartmentCount} compartment{stats.compartmentCount !== 1 ? 's' : ''}
@@ -3335,7 +3478,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               {autoSaveStatus === 'saving' && (
-                <span className="flex items-center gap-1 text-xs text-blue-500 animate-pulse">
+                <span className="flex animate-pulse items-center gap-1 text-xs text-blue-500">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   Saving…
                 </span>
@@ -3353,11 +3496,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </span>
               )}
               {stats.completeness < 100 && (
-                <span className="text-xs text-yellow-600 dark:text-yellow-400">
-                  {stats.completeness}% items named
-                </span>
+                <span className="text-xs text-yellow-600 dark:text-yellow-400">{stats.completeness}% items named</span>
               )}
-              <div className="w-20 h-1.5 rounded-full bg-theme-surface-border overflow-hidden">
+              <div className="bg-theme-surface-border h-1.5 w-20 overflow-hidden rounded-full">
                 <div
                   className={`h-full rounded-full transition-all ${stats.completeness === 100 ? 'bg-green-500' : 'bg-yellow-500'}`}
                   style={{ width: `${stats.completeness}%` }}
@@ -3371,12 +3512,19 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Change Log Modal (admin only) */}
       {showChangelog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-2xl rounded-lg bg-theme-surface shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between border-b border-theme-surface-border px-6 py-4">
-              <h3 className="text-lg font-semibold text-theme-text-primary">
-                Change History {changelogTotal > 0 && <span className="text-sm font-normal text-theme-text-secondary">({changelogTotal} entries)</span>}
+          <div className="bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+            <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
+              <h3 className="text-theme-text-primary text-lg font-semibold">
+                Change History{' '}
+                {changelogTotal > 0 && (
+                  <span className="text-theme-text-secondary text-sm font-normal">({changelogTotal} entries)</span>
+                )}
               </h3>
-              <button type="button" onClick={() => setShowChangelog(false)} className="text-theme-text-muted hover:text-theme-text-primary">
+              <button
+                type="button"
+                onClick={() => setShowChangelog(false)}
+                className="text-theme-text-muted hover:text-theme-text-primary"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -3386,39 +3534,50 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
                 </div>
               ) : changelogEntries.length === 0 ? (
-                <p className="py-8 text-center text-sm text-theme-text-secondary">No changes recorded yet.</p>
+                <p className="text-theme-text-secondary py-8 text-center text-sm">No changes recorded yet.</p>
               ) : (
                 <div className="space-y-3">
                   {changelogEntries.map((entry) => {
-                    const actionColors: Record<string, string> = { add: 'text-green-600', update: 'text-blue-600', delete: 'text-red-600' };
+                    const actionColors: Record<string, string> = {
+                      add: 'text-green-600',
+                      update: 'text-blue-600',
+                      delete: 'text-red-600',
+                    };
                     const actionLabels: Record<string, string> = { add: 'Added', update: 'Updated', delete: 'Removed' };
                     return (
-                      <div key={entry.id} className="rounded-md border border-theme-surface-border p-3">
+                      <div key={entry.id} className="border-theme-surface-border rounded-md border p-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="text-sm">
-                            <span className="font-medium text-theme-text-primary">{entry.userName}</span>
-                            {' '}
+                            <span className="text-theme-text-primary font-medium">{entry.userName}</span>{' '}
                             <span className={actionColors[entry.action] ?? 'text-theme-text-secondary'}>
                               {actionLabels[entry.action] ?? entry.action}
-                            </span>
-                            {' '}
+                            </span>{' '}
                             <span className="text-theme-text-secondary">{entry.entityType}</span>
                             {entry.entityName && (
-                              <span className="font-medium text-theme-text-primary"> &quot;{entry.entityName}&quot;</span>
+                              <span className="text-theme-text-primary font-medium">
+                                {' '}
+                                &quot;{entry.entityName}&quot;
+                              </span>
                             )}
                           </div>
                           {entry.createdAt && (
-                            <span className="shrink-0 text-xs text-theme-text-muted">
+                            <span className="text-theme-text-muted shrink-0 text-xs">
                               {formatDateTime(entry.createdAt, tz)}
                             </span>
                           )}
                         </div>
                         {entry.changes && Object.keys(entry.changes).length > 0 && (
-                          <div className="mt-2 text-xs text-theme-text-secondary">
+                          <div className="text-theme-text-secondary mt-2 text-xs">
                             {Object.entries(entry.changes).map(([key, val]) => (
                               <span key={key} className="mr-3 inline-block">
                                 <span className="font-medium">{key.replace(/_/g, ' ')}:</span>{' '}
-                                {val == null ? '—' : typeof val === 'string' ? val : typeof val === 'number' || typeof val === 'boolean' ? String(val) : JSON.stringify(val)}
+                                {val == null
+                                  ? '—'
+                                  : typeof val === 'string'
+                                    ? val
+                                    : typeof val === 'number' || typeof val === 'boolean'
+                                      ? String(val)
+                                      : JSON.stringify(val)}
                               </span>
                             ))}
                           </div>
@@ -3429,11 +3588,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </div>
               )}
             </div>
-            <div className="flex justify-end border-t border-theme-surface-border px-6 py-3">
+            <div className="border-theme-surface-border flex justify-end border-t px-6 py-3">
               <button
                 type="button"
                 onClick={() => setShowChangelog(false)}
-                className="rounded-md border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+                className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-md border px-4 py-2 text-sm font-medium transition-colors"
               >
                 Close
               </button>
@@ -3445,31 +3604,35 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* CSV Preview Confirmation Modal */}
       {csvPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-2xl rounded-lg bg-theme-surface shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between border-b border-theme-surface-border px-6 py-4">
-              <h3 className="text-lg font-semibold text-theme-text-primary">
+          <div className="bg-theme-surface w-full max-w-2xl overflow-hidden rounded-lg shadow-xl">
+            <div className="border-theme-surface-border flex items-center justify-between border-b px-6 py-4">
+              <h3 className="text-theme-text-primary text-lg font-semibold">
                 CSV Import Preview — {csvPreview.length} item(s)
               </h3>
-              <button type="button" onClick={() => setCsvPreview(null)} className="text-theme-text-muted hover:text-theme-text-primary">
+              <button
+                type="button"
+                onClick={() => setCsvPreview(null)}
+                className="text-theme-text-muted hover:text-theme-text-primary"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="max-h-[60dvh] overflow-auto px-6 py-4">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-theme-surface-border text-left text-theme-text-secondary">
-                    <th className="pb-2 pr-3">Compartment</th>
-                    <th className="pb-2 pr-3">Item</th>
-                    <th className="pb-2 pr-3">Type</th>
-                    <th className="pb-2 pr-3">Expected</th>
+                  <tr className="border-theme-surface-border text-theme-text-secondary border-b text-left">
+                    <th className="pr-3 pb-2">Compartment</th>
+                    <th className="pr-3 pb-2">Item</th>
+                    <th className="pr-3 pb-2">Type</th>
+                    <th className="pr-3 pb-2">Expected</th>
                     <th className="pb-2">Critical Min</th>
                   </tr>
                 </thead>
                 <tbody>
                   {csvPreview.map((row, i) => (
-                    <tr key={i} className="border-b border-theme-surface-border/50">
-                      <td className="py-1.5 pr-3 text-theme-text-secondary">{row.compartment}</td>
-                      <td className="py-1.5 pr-3 text-theme-text-primary">{row.name}</td>
+                    <tr key={i} className="border-theme-surface-border/50 border-b">
+                      <td className="text-theme-text-secondary py-1.5 pr-3">{row.compartment}</td>
+                      <td className="text-theme-text-primary py-1.5 pr-3">{row.name}</td>
                       <td className="py-1.5 pr-3">{row.checkType}</td>
                       <td className="py-1.5 pr-3">{row.expectedQty || '—'}</td>
                       <td className="py-1.5">{row.criticalMin || '—'}</td>
@@ -3478,18 +3641,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </tbody>
               </table>
             </div>
-            <div className="flex justify-end gap-3 border-t border-theme-surface-border px-6 py-4">
+            <div className="border-theme-surface-border flex justify-end gap-3 border-t px-6 py-4">
               <button
                 type="button"
                 onClick={() => setCsvPreview(null)}
-                className="rounded-md border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+                className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-md border px-4 py-2 text-sm font-medium transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={applyCsvImport}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
               >
                 Import {csvPreview.length} Items
               </button>
@@ -3506,34 +3669,34 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowPreview(false)}
-              className="absolute -top-2 -right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-theme-surface text-theme-text-muted shadow-lg hover:text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              className="bg-theme-surface text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary absolute -top-2 -right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full shadow-lg transition-colors"
               aria-label="Close preview"
             >
               <X className="h-5 w-5" />
             </button>
 
             {/* Phone frame */}
-            <div className="relative w-[375px] max-w-[90vw] rounded-[2.5rem] border-[6px] border-gray-800 dark:border-gray-600 bg-theme-surface shadow-2xl overflow-hidden">
+            <div className="bg-theme-surface relative w-[375px] max-w-[90vw] overflow-hidden rounded-[2.5rem] border-[6px] border-gray-800 shadow-2xl dark:border-gray-600">
               {/* Phone notch */}
-              <div className="relative h-7 bg-gray-800 dark:bg-gray-600 flex items-end justify-center">
-                <div className="w-28 h-5 rounded-b-2xl bg-gray-800 dark:bg-gray-600" />
+              <div className="relative flex h-7 items-end justify-center bg-gray-800 dark:bg-gray-600">
+                <div className="h-5 w-28 rounded-b-2xl bg-gray-800 dark:bg-gray-600" />
               </div>
 
               {/* Phone status bar */}
-              <div className="flex items-center justify-between px-6 py-1 bg-theme-surface text-[10px] text-theme-text-muted">
+              <div className="bg-theme-surface text-theme-text-muted flex items-center justify-between px-6 py-1 text-[10px]">
                 <span>9:41</span>
                 <div className="flex items-center gap-1">
                   <span>5G</span>
-                  <div className="w-6 h-2.5 rounded-sm border border-theme-text-muted relative">
-                    <div className="absolute inset-0.5 bg-theme-text-muted rounded-[1px]" style={{ width: '75%' }} />
+                  <div className="border-theme-text-muted relative h-2.5 w-6 rounded-sm border">
+                    <div className="bg-theme-text-muted absolute inset-0.5 rounded-[1px]" style={{ width: '75%' }} />
                   </div>
                 </div>
               </div>
 
               {/* Scrollable content area */}
-              <div className="overflow-y-auto bg-theme-surface" style={{ height: 'min(70vh, 640px)' }}>
+              <div className="bg-theme-surface overflow-y-auto" style={{ height: 'min(70vh, 640px)' }}>
                 <div className="px-1 pb-4">
-                  <div className="mb-3 mx-3 mt-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+                  <div className="mx-3 mt-2 mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
                     <p className="text-[10px] text-blue-700 dark:text-blue-400">
                       Preview — inputs are interactive but nothing will be submitted.
                     </p>
@@ -3543,13 +3706,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
 
               {/* Phone home indicator bar */}
-              <div className="flex justify-center py-2 bg-theme-surface">
-                <div className="w-32 h-1 rounded-full bg-gray-800/30 dark:bg-gray-400/30" />
+              <div className="bg-theme-surface flex justify-center py-2">
+                <div className="h-1 w-32 rounded-full bg-gray-800/30 dark:bg-gray-400/30" />
               </div>
             </div>
 
             {/* Label */}
-            <p className="text-xs text-gray-400 text-center">
+            <p className="text-center text-xs text-gray-400">
               Mobile preview — most members will complete checks on their phone
             </p>
           </div>

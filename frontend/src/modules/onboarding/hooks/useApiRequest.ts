@@ -52,7 +52,7 @@ export const useApiRequest = () => {
    * and ability to cancel ongoing requests
    */
   const execute = useCallback(
-    async <T,>(
+    async <T>(
       apiCall: (signal: AbortSignal) => Promise<T>,
       options: ApiRequestOptions
     ): Promise<{ data: T | null; error: string | null }> => {
@@ -102,9 +102,10 @@ export const useApiRequest = () => {
         const errorMessage = isError ? err.message : 'An unexpected error occurred';
 
         // Extract response details if available (e.g., from Axios errors)
-        const response = typeof err === 'object' && err !== null && 'response' in err
-          ? (err as { response?: { data?: unknown; status?: number } }).response
-          : undefined;
+        const response =
+          typeof err === 'object' && err !== null && 'response' in err
+            ? (err as { response?: { data?: unknown; status?: number } }).response
+            : undefined;
 
         setIsLoading(false);
         setError(errorMessage);

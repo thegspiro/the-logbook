@@ -30,8 +30,7 @@ vi.mock('../../../services/api', () => ({
     updateFacility: (...args: unknown[]) => mockUpdateFacility(...args) as unknown,
     archiveFacility: (...args: unknown[]) => mockArchiveFacility(...args) as unknown,
     restoreFacility: (...args: unknown[]) => mockRestoreFacility(...args) as unknown,
-    getMaintenanceRecords: (...args: unknown[]) =>
-      mockGetMaintenanceRecords(...args) as unknown,
+    getMaintenanceRecords: (...args: unknown[]) => mockGetMaintenanceRecords(...args) as unknown,
     getInspections: (...args: unknown[]) => mockGetInspections(...args) as unknown,
   },
 }));
@@ -106,7 +105,7 @@ describe('facilitiesStore', () => {
       mockGetFacilities.mockReturnValue(
         new Promise<unknown[]>((resolve) => {
           resolvePromise = resolve;
-        }),
+        })
       );
 
       const loadPromise = useFacilitiesStore.getState().loadFacilities();
@@ -119,7 +118,6 @@ describe('facilitiesStore', () => {
 
       expect(useFacilitiesStore.getState().isLoading).toBe(false);
     });
-
   });
 
   describe('loadLookupData', () => {
@@ -183,7 +181,7 @@ describe('facilitiesStore', () => {
       mockGetFacility.mockReturnValue(
         new Promise((resolve) => {
           resolvePromise = resolve;
-        }),
+        })
       );
 
       const loadPromise = useFacilitiesStore.getState().loadFacilityDetail('f1');
@@ -215,9 +213,7 @@ describe('facilitiesStore', () => {
     it('should propagate errors on creation failure', async () => {
       mockCreateFacility.mockRejectedValue(new Error('Validation error'));
 
-      await expect(
-        useFacilitiesStore.getState().createFacility({ name: '' }),
-      ).rejects.toThrow('Validation error');
+      await expect(useFacilitiesStore.getState().createFacility({ name: '' })).rejects.toThrow('Validation error');
     });
   });
 
@@ -237,9 +233,7 @@ describe('facilitiesStore', () => {
     it('should propagate errors on update failure', async () => {
       mockUpdateFacility.mockRejectedValue(new Error('Update failed'));
 
-      await expect(
-        useFacilitiesStore.getState().updateFacility('f1', { name: '' }),
-      ).rejects.toThrow('Update failed');
+      await expect(useFacilitiesStore.getState().updateFacility('f1', { name: '' })).rejects.toThrow('Update failed');
     });
   });
 
@@ -267,17 +261,13 @@ describe('facilitiesStore', () => {
     it('should propagate errors on archive failure', async () => {
       mockArchiveFacility.mockRejectedValue(new Error('Archive failed'));
 
-      await expect(
-        useFacilitiesStore.getState().archiveFacility('f1'),
-      ).rejects.toThrow('Archive failed');
+      await expect(useFacilitiesStore.getState().archiveFacility('f1')).rejects.toThrow('Archive failed');
     });
 
     it('should propagate errors on restore failure', async () => {
       mockRestoreFacility.mockRejectedValue(new Error('Restore failed'));
 
-      await expect(
-        useFacilitiesStore.getState().restoreFacility('f1'),
-      ).rejects.toThrow('Restore failed');
+      await expect(useFacilitiesStore.getState().restoreFacility('f1')).rejects.toThrow('Restore failed');
     });
   });
 
@@ -285,9 +275,23 @@ describe('facilitiesStore', () => {
     it('clearSelectedFacility should reset selected state', () => {
       useFacilitiesStore.setState({
         selectedFacility: mockFacility,
-        selectedFacilityRooms: [{ id: 'r1', facilityId: 'f1', name: 'Bay 1', condition: 'good', createdAt: '', updatedAt: '' }] as never[],
-        selectedFacilitySystems: [{ id: 's1', facilityId: 'f1', name: 'HVAC', systemType: 'hvac', condition: 'good', createdAt: '', updatedAt: '' }] as never[],
-        selectedFacilityContacts: [{ id: 'c1', facilityId: 'f1', contactType: 'plumber', createdAt: '', updatedAt: '' }] as never[],
+        selectedFacilityRooms: [
+          { id: 'r1', facilityId: 'f1', name: 'Bay 1', condition: 'good', createdAt: '', updatedAt: '' },
+        ] as never[],
+        selectedFacilitySystems: [
+          {
+            id: 's1',
+            facilityId: 'f1',
+            name: 'HVAC',
+            systemType: 'hvac',
+            condition: 'good',
+            createdAt: '',
+            updatedAt: '',
+          },
+        ] as never[],
+        selectedFacilityContacts: [
+          { id: 'c1', facilityId: 'f1', contactType: 'plumber', createdAt: '', updatedAt: '' },
+        ] as never[],
       });
 
       useFacilitiesStore.getState().clearSelectedFacility();

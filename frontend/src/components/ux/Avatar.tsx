@@ -52,14 +52,7 @@ function getInitials(firstName?: string | null, lastName?: string | null): strin
   return (first + last).toUpperCase() || '?';
 }
 
-export const Avatar: React.FC<AvatarProps> = ({
-  firstName,
-  lastName,
-  photoUrl,
-  size = 'md',
-  className = '',
-  alt,
-}) => {
+export const Avatar: React.FC<AvatarProps> = ({ firstName, lastName, photoUrl, size = 'md', className = '', alt }) => {
   const sizeClass = SIZE_CLASSES[size];
   const fullName = `${firstName || ''} ${lastName || ''}`.trim();
   const altText = alt ?? (fullName || 'Member avatar');
@@ -71,7 +64,7 @@ export const Avatar: React.FC<AvatarProps> = ({
         alt={altText}
         loading="lazy"
         decoding="async"
-        className={`${sizeClass} rounded-full object-cover shrink-0 ${className}`}
+        className={`${sizeClass} shrink-0 rounded-full object-cover ${className}`}
       />
     );
   }
@@ -84,7 +77,7 @@ export const Avatar: React.FC<AvatarProps> = ({
     <div
       role="img"
       aria-label={altText}
-      className={`${sizeClass} ${bgClass} rounded-full flex items-center justify-center font-semibold shrink-0 ${className}`}
+      className={`${sizeClass} ${bgClass} flex shrink-0 items-center justify-center rounded-full font-semibold ${className}`}
     >
       {getInitials(firstName, lastName)}
     </div>

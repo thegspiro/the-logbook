@@ -7,9 +7,16 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  Clock, Check, XCircle, ArrowLeftRight, CalendarOff,
-  Loader2, ChevronDown, AlertTriangle,
-  Bell, LogIn,
+  Clock,
+  Check,
+  XCircle,
+  ArrowLeftRight,
+  CalendarOff,
+  Loader2,
+  ChevronDown,
+  AlertTriangle,
+  Bell,
+  LogIn,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
@@ -33,18 +40,16 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const platoon = useAuthStore((s) => s.user?.platoon);
   const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
   const loadSettings = useSchedulingStore((s) => s.loadSettings);
-  useEffect(() => { void loadSettings(); }, [loadSettings]);
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
   const [searchParams] = useSearchParams();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'upcoming' | 'past'>(
-    searchParams.get('view') === 'past' ? 'past' : 'upcoming',
-  );
+  const [view, setView] = useState<'upcoming' | 'past'>(searchParams.get('view') === 'past' ? 'past' : 'upcoming');
 
   // Attendance history for hours display, keyed by shift_id.
-  const [attendanceMap, setAttendanceMap] = useState<
-    Map<string, ShiftAttendanceRecord>
-  >(new Map());
+  const [attendanceMap, setAttendanceMap] = useState<Map<string, ShiftAttendanceRecord>>(new Map());
 
   // Swap request modal
   const [showSwapModal, setShowSwapModal] = useState(false);
@@ -92,7 +97,9 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     }
   }, []);
 
-  useEffect(() => { void loadData(); }, [loadData]);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const handleConfirm = async (assignmentId: string) => {
     setConfirmingId(assignmentId);
@@ -119,9 +126,10 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   };
 
   const toggleSelection = (id: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -156,7 +164,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       const today = getTodayLocalDate(tz);
       const data = await schedulingService.getShifts({ start_date: today, limit: 50 });
       // Filter out the current shift
-      setAvailableShifts(data.shifts.filter(s => s.id !== assignment.shift_id));
+      setAvailableShifts(data.shifts.filter((s) => s.id !== assignment.shift_id));
     } catch {
       // Non-critical — user can still submit open swap
     }
@@ -168,7 +176,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     try {
       await schedulingService.createSwapRequest({
         offering_shift_id: swapAssignment.shift_id,
-        requesting_shift_id: (swapForm.target_shift_id && swapForm.target_shift_id !== 'pick') ? swapForm.target_shift_id : undefined,
+        requesting_shift_id:
+          swapForm.target_shift_id && swapForm.target_shift_id !== 'pick' ? swapForm.target_shift_id : undefined,
         reason: swapForm.reason || undefined,
       });
       toast.success('Swap request submitted — check Requests tab for status');
@@ -186,15 +195,22 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     if (!timeOffForm.start_date) return [];
     const start = timeOffForm.start_date;
     const end = timeOffForm.end_date || timeOffForm.start_date;
-    return assignments.filter(a => {
+    return assignments.filter((a) => {
       const shiftDate = a.shift?.shift_date || '';
-      return shiftDate >= start && shiftDate <= end &&
-        a.status !== AssignmentStatus.DECLINED && a.status !== AssignmentStatus.CANCELLED;
+      return (
+        shiftDate >= start &&
+        shiftDate <= end &&
+        a.status !== AssignmentStatus.DECLINED &&
+        a.status !== AssignmentStatus.CANCELLED
+      );
     });
   }, [assignments, timeOffForm.start_date, timeOffForm.end_date]);
 
   const handleTimeOffRequest = async () => {
-    if (!timeOffForm.start_date) { toast.error('Start date is required'); return; }
+    if (!timeOffForm.start_date) {
+      toast.error('Start date is required');
+      return;
+    }
     setSubmittingTimeOff(true);
     try {
       await schedulingService.createTimeOff({
@@ -214,11 +230,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   };
 
   const today = getTodayLocalDate(tz);
-  const upcoming = assignments.filter(a => {
+  const upcoming = assignments.filter((a) => {
     const shiftDate = a.shift?.shift_date || '';
     return shiftDate >= today && a.status !== AssignmentStatus.DECLINED && a.status !== AssignmentStatus.CANCELLED;
   });
-  const pastAssignments = assignments.filter(a => {
+  const pastAssignments = assignments.filter((a) => {
     const shiftDate = a.shift?.shift_date || '';
     return shiftDate < today;
   });
@@ -228,9 +244,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   // assignment-shaped entries for those so the Past list matches the hours
   // counted on the dashboard. The synthetic 'completed' status isn't in the
   // backend AssignmentStatus enum, so we cast through unknown.
-  const assignedShiftIds = new Set(
-    pastAssignments.map(a => a.shift_id).filter((id): id is string => Boolean(id)),
-  );
+  const assignedShiftIds = new Set(pastAssignments.map((a) => a.shift_id).filter((id): id is string => Boolean(id)));
   const attendanceOnlyPast = [...attendanceMap.entries()]
     .filter(([shiftId, att]) => {
       if (assignedShiftIds.has(shiftId)) return false;
@@ -260,14 +274,14 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const displayList = view === 'upcoming' ? upcoming : past;
 
   // Bulk selection helpers — must be after 'upcoming' is defined
-  const pendingAssigned = upcoming.filter(a => a.status === AssignmentStatus.ASSIGNED);
-  const allPendingSelected = pendingAssigned.length > 0 && pendingAssigned.every(a => selectedIds.has(a.id));
+  const pendingAssigned = upcoming.filter((a) => a.status === AssignmentStatus.ASSIGNED);
+  const allPendingSelected = pendingAssigned.length > 0 && pendingAssigned.every((a) => selectedIds.has(a.id));
 
   const toggleSelectAll = () => {
     if (allPendingSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(pendingAssigned.map(a => a.id)));
+      setSelectedIds(new Set(pendingAssigned.map((a) => a.id)));
     }
   };
 
@@ -279,7 +293,9 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       try {
         await schedulingService.confirmAssignment(id);
         count++;
-      } catch { failed++; }
+      } catch {
+        failed++;
+      }
     }
     if (count > 0) toast.success(`${count} shift${count > 1 ? 's' : ''} confirmed`);
     if (failed > 0) toast.error(`${failed} shift${failed > 1 ? 's' : ''} could not be confirmed`);
@@ -296,7 +312,9 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       try {
         await schedulingService.updateAssignment(id, { assignment_status: 'declined' });
         count++;
-      } catch { failed++; }
+      } catch {
+        failed++;
+      }
     }
     if (count > 0) toast.success(`${count} shift${count > 1 ? 's' : ''} declined`);
     if (failed > 0) toast.error(`${failed} shift${failed > 1 ? 's' : ''} could not be declined`);
@@ -305,12 +323,18 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     void loadData();
   };
 
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-violet-500';
+  const inputCls =
+    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-4 py-2.5 text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-violet-500';
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20" role="status" aria-live="polite" aria-label="Loading shifts">
-        <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" aria-hidden="true" />
+      <div
+        className="flex items-center justify-center py-20"
+        role="status"
+        aria-live="polite"
+        aria-label="Loading shifts"
+      >
+        <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" aria-hidden="true" />
         <span className="sr-only">Loading your shifts…</span>
       </div>
     );
@@ -320,37 +344,44 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     <div className="space-y-6">
       <CalendarSubscribeCard />
       {/* Actions Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div className="flex items-center gap-3">
-          <div className="flex bg-theme-input-bg rounded-lg p-1">
-          <button onClick={() => setView('upcoming')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'upcoming' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
-          >
-            Upcoming ({upcoming.length})
-          </button>
-          <button onClick={() => setView('past')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'past' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
-          >
-            Past ({past.length})
-          </button>
+          <div className="bg-theme-input-bg flex rounded-lg p-1">
+            <button
+              onClick={() => setView('upcoming')}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'upcoming' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+            >
+              Upcoming ({upcoming.length})
+            </button>
+            <button
+              onClick={() => setView('past')}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors sm:flex-none ${view === 'past' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+            >
+              Past ({past.length})
+            </button>
           </div>
           {platoonsEnabled && platoon && (
-            <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20 whitespace-nowrap">
+            <span className="rounded-lg border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-xs font-medium whitespace-nowrap text-violet-700 dark:text-violet-300">
               Platoon {platoon}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <button onClick={() => { setTimeOffForm({ start_date: '', end_date: '', reason: '' }); setShowTimeOffModal(true); }}
-            className="flex items-center justify-center gap-2 px-4 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors flex-1 sm:flex-none"
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <button
+            onClick={() => {
+              setTimeOffForm({ start_date: '', end_date: '', reason: '' });
+              setShowTimeOffModal(true);
+            }}
+            className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors sm:flex-none"
           >
-            <CalendarOff className="w-4 h-4" /> Request Time Off
+            <CalendarOff className="h-4 w-4" /> Request Time Off
           </button>
-          <Link to="/notifications?filter=schedule_change"
-            className="flex items-center justify-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted hover:text-violet-600 dark:hover:text-violet-400 hover:bg-theme-surface-hover rounded-lg transition-colors"
+          <Link
+            to="/notifications?filter=schedule_change"
+            className="text-theme-text-muted hover:bg-theme-surface-hover flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors hover:text-violet-600 dark:hover:text-violet-400"
             title="View scheduling notification history"
           >
-            <Bell className="w-4 h-4" />
+            <Bell className="h-4 w-4" />
             <span className="hidden sm:inline">Alerts</span>
           </Link>
         </div>
@@ -359,59 +390,73 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       {/* Hours summary for past shifts */}
       {view === 'past' && attendanceMap.size > 0 && (
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-3 text-center">
-            <p className="text-xl font-bold text-theme-text-primary">
+          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-center">
+            <p className="text-theme-text-primary text-xl font-bold">
               {Math.round(
-                [...attendanceMap.values()]
-                  .filter(a => a.duration_minutes)
-                  .reduce((sum, a) => sum + (a.duration_minutes ?? 0), 0) / 60 * 10
+                ([...attendanceMap.values()]
+                  .filter((a) => a.duration_minutes)
+                  .reduce((sum, a) => sum + (a.duration_minutes ?? 0), 0) /
+                  60) *
+                  10
               ) / 10}
             </p>
-            <p className="text-xs text-theme-text-muted">Total Hours</p>
+            <p className="text-theme-text-muted text-xs">Total Hours</p>
           </div>
-          <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-3 text-center">
-            <p className="text-xl font-bold text-theme-text-primary">
-              {[...attendanceMap.values()].filter(a => a.checked_in_at).length}
+          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-center">
+            <p className="text-theme-text-primary text-xl font-bold">
+              {[...attendanceMap.values()].filter((a) => a.checked_in_at).length}
             </p>
-            <p className="text-xs text-theme-text-muted">Shifts Logged</p>
+            <p className="text-theme-text-muted text-xs">Shifts Logged</p>
           </div>
-          <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-3 text-center">
-            <p className="text-xl font-bold text-theme-text-primary">
+          <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-3 text-center">
+            <p className="text-theme-text-primary text-xl font-bold">
               {attendanceMap.size > 0
                 ? Math.round(
-                    [...attendanceMap.values()]
-                      .filter(a => a.duration_minutes)
-                      .reduce((sum, a) => sum + (a.duration_minutes ?? 0), 0)
-                    / [...attendanceMap.values()].filter(a => a.duration_minutes).length
-                    / 60 * 10
+                    ([...attendanceMap.values()]
+                      .filter((a) => a.duration_minutes)
+                      .reduce((sum, a) => sum + (a.duration_minutes ?? 0), 0) /
+                      [...attendanceMap.values()].filter((a) => a.duration_minutes).length /
+                      60) *
+                      10
                   ) / 10 || 0
                 : 0}
             </p>
-            <p className="text-xs text-theme-text-muted">Avg Hours/Shift</p>
+            <p className="text-theme-text-muted text-xs">Avg Hours/Shift</p>
           </div>
         </div>
       )}
 
       {/* Bulk action bar */}
       {view === 'upcoming' && pendingAssigned.length > 1 && (
-        <div className="flex items-center justify-between gap-3 p-3 bg-theme-surface-hover/50 border border-theme-surface-border rounded-lg">
-          <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer select-none">
-            <input type="checkbox" checked={allPendingSelected} onChange={toggleSelectAll}
-              className="w-4 h-4 rounded border-theme-input-border text-violet-600 focus:ring-violet-500"
+        <div className="bg-theme-surface-hover/50 border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border p-3">
+          <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm select-none">
+            <input
+              type="checkbox"
+              checked={allPendingSelected}
+              onChange={toggleSelectAll}
+              className="border-theme-input-border h-4 w-4 rounded text-violet-600 focus:ring-violet-500"
             />
             {selectedIds.size > 0 ? `${selectedIds.size} selected` : `Select all ${pendingAssigned.length} pending`}
           </label>
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-2">
-              <button onClick={() => { void handleBulkConfirm(); }} disabled={bulkActioning}
-                className="px-3 py-1.5 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-1"
+              <button
+                onClick={() => {
+                  void handleBulkConfirm();
+                }}
+                disabled={bulkActioning}
+                className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
               >
-                <Check className="w-3.5 h-3.5" /> Confirm All
+                <Check className="h-3.5 w-3.5" /> Confirm All
               </button>
-              <button onClick={() => { void handleBulkDecline(); }} disabled={bulkActioning}
-                className="px-3 py-1.5 text-xs font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-1"
+              <button
+                onClick={() => {
+                  void handleBulkDecline();
+                }}
+                disabled={bulkActioning}
+                className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
               >
-                <XCircle className="w-3.5 h-3.5" /> Decline All
+                <XCircle className="h-3.5 w-3.5" /> Decline All
               </button>
             </div>
           )}
@@ -420,12 +465,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
       {/* Shift List */}
       {displayList.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-theme-surface-border rounded-xl">
-          <Clock className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
-          <h3 className="text-lg font-medium text-theme-text-primary mb-1">
+        <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
+          <Clock className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+          <h3 className="text-theme-text-primary mb-1 text-lg font-medium">
             {view === 'upcoming' ? 'No upcoming shifts' : 'No past shifts found'}
           </h3>
-          <p className="text-theme-text-muted text-sm max-w-sm mx-auto">
+          <p className="text-theme-text-muted mx-auto max-w-sm text-sm">
             {view === 'upcoming'
               ? 'You have no scheduled shifts coming up. Check the Open Shifts tab to browse and sign up for available shifts.'
               : 'Your completed shift history will appear here once you have past assignments.'}
@@ -433,39 +478,48 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
         </div>
       ) : (
         <div className="space-y-3">
-          {displayList.map(assignment => {
+          {displayList.map((assignment) => {
             const shift = assignment.shift;
             const statusColor = ASSIGNMENT_STATUS_COLORS[assignment.status] || ASSIGNMENT_STATUS_COLORS.assigned;
             const shiftDate = shift ? new Date(shift.shift_date + 'T12:00:00') : null;
 
             return (
-              <div key={assignment.id}
-                className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 hover:border-theme-text-muted/30 transition-colors"
+              <div
+                key={assignment.id}
+                className="bg-theme-surface border-theme-surface-border hover:border-theme-text-muted/30 rounded-xl border p-4 transition-colors sm:p-5"
               >
-                <div className="flex items-start sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                    {view === 'upcoming' && assignment.status === AssignmentStatus.ASSIGNED && pendingAssigned.length > 1 && (
-                      <input type="checkbox" checked={selectedIds.has(assignment.id)}
-                        onChange={() => toggleSelection(assignment.id)}
-                        className="w-4 h-4 rounded border-theme-input-border text-violet-600 focus:ring-violet-500 shrink-0"
-                        aria-label={`Select shift for ${shiftDate ? formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz) : 'unknown date'}`}
-                      />
-                    )}
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
-                      <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
+                <div className="flex items-start justify-between gap-3 sm:items-center">
+                  <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                    {view === 'upcoming' &&
+                      assignment.status === AssignmentStatus.ASSIGNED &&
+                      pendingAssigned.length > 1 && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(assignment.id)}
+                          onChange={() => toggleSelection(assignment.id)}
+                          className="border-theme-input-border h-4 w-4 shrink-0 rounded text-violet-600 focus:ring-violet-500"
+                          aria-label={`Select shift for ${shiftDate ? formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz) : 'unknown date'}`}
+                        />
+                      )}
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
+                      <Clock className="h-5 w-5 text-violet-500 sm:h-6 sm:w-6" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm sm:text-base font-semibold text-theme-text-primary truncate">
-                        {shiftDate ? formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz) : 'Unknown Date'}
+                      <p className="text-theme-text-primary truncate text-sm font-semibold sm:text-base">
+                        {shiftDate
+                          ? formatDateCustom(shiftDate, { weekday: 'short', month: 'short', day: 'numeric' }, tz)
+                          : 'Unknown Date'}
                       </p>
-                      <p className="text-xs sm:text-sm text-theme-text-secondary">
-                        {shift?.start_time ? `${formatTime(shift.start_time, tz)}${shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}` : ''}
+                      <p className="text-theme-text-secondary text-xs sm:text-sm">
+                        {shift?.start_time
+                          ? `${formatTime(shift.start_time, tz)}${shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}`
+                          : ''}
                       </p>
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <p className="text-xs text-theme-text-muted capitalize">
-                          Position: {assignment.position}
-                        </p>
-                        <span className={`px-2 py-0.5 text-[10px] sm:hidden font-medium rounded-full border capitalize ${statusColor}`}>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                        <p className="text-theme-text-muted text-xs capitalize">Position: {assignment.position}</p>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize sm:hidden ${statusColor}`}
+                        >
                           {assignment.status}
                         </span>
                         {(() => {
@@ -474,15 +528,15 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                           if (att.checked_out_at && att.duration_minutes) {
                             const hrs = Math.round((att.duration_minutes / 60) * 10) / 10;
                             return (
-                              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-green-500/10 text-green-700 dark:text-green-400 inline-flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> {hrs}h
+                              <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-400">
+                                <Clock className="h-3 w-3" /> {hrs}h
                               </span>
                             );
                           }
                           if (att.checked_in_at) {
                             return (
-                              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 inline-flex items-center gap-1">
-                                <LogIn className="w-3 h-3" /> Checked in
+                              <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400">
+                                <LogIn className="h-3 w-3" /> Checked in
                               </span>
                             );
                           }
@@ -491,48 +545,82 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                    <span className={`hidden sm:inline-block px-2.5 py-1 text-xs font-medium rounded-full border capitalize ${statusColor}`}>
+                  <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                    <span
+                      className={`hidden rounded-full border px-2.5 py-1 text-xs font-medium capitalize sm:inline-block ${statusColor}`}
+                    >
                       {assignment.status}
                     </span>
-                    {view === 'upcoming' && assignment.status === AssignmentStatus.ASSIGNED && confirmingDecline !== assignment.id && (
-                      <>
-                        <button onClick={() => { void handleConfirm(assignment.id); }}
-                          disabled={confirmingId === assignment.id}
-                          className="p-2 text-green-600 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Confirm shift" aria-label="Confirm shift assignment"
-                        >
-                          {confirmingId === assignment.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
-                        </button>
-                        <button onClick={() => setConfirmingDecline(assignment.id)}
-                          className="p-2 text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Decline shift" aria-label="Decline shift assignment"
-                        >
-                          <XCircle className="w-5 h-5" />
-                        </button>
-                      </>
-                    )}
+                    {view === 'upcoming' &&
+                      assignment.status === AssignmentStatus.ASSIGNED &&
+                      confirmingDecline !== assignment.id && (
+                        <>
+                          <button
+                            onClick={() => {
+                              void handleConfirm(assignment.id);
+                            }}
+                            disabled={confirmingId === assignment.id}
+                            className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 text-green-600 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+                            title="Confirm shift"
+                            aria-label="Confirm shift assignment"
+                          >
+                            {confirmingId === assignment.id ? (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : (
+                              <Check className="h-5 w-5" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setConfirmingDecline(assignment.id)}
+                            className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 text-red-500 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                            title="Decline shift"
+                            aria-label="Decline shift assignment"
+                          >
+                            <XCircle className="h-5 w-5" />
+                          </button>
+                        </>
+                      )}
                     {confirmingDecline === assignment.id && (
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs text-red-500 dark:text-red-400">Decline?</span>
-                        <button onClick={() => { void handleDecline(assignment.id); }}
-                          className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm decline"
-                        >Yes</button>
-                        <button onClick={() => setConfirmingDecline(null)}
-                          className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"
-                        >No</button>
+                        <button
+                          onClick={() => {
+                            void handleDecline(assignment.id);
+                          }}
+                          className="btn-primary rounded-md px-2 py-1 text-xs"
+                          aria-label="Confirm decline"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setConfirmingDecline(null)}
+                          className="text-theme-text-muted hover:text-theme-text-primary px-2 py-1 text-xs"
+                          aria-label="Cancel decline"
+                        >
+                          No
+                        </button>
                       </div>
                     )}
                     {view === 'upcoming' && (
-                      <button onClick={() => { void openSwapRequest(assignment); }}
-                        className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="Request swap" aria-label="Request shift swap"
+                      <button
+                        onClick={() => {
+                          void openSwapRequest(assignment);
+                        }}
+                        className="text-theme-text-muted flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-500"
+                        title="Request swap"
+                        aria-label="Request shift swap"
                       >
-                        <ArrowLeftRight className="w-5 h-5" />
+                        <ArrowLeftRight className="h-5 w-5" />
                       </button>
                     )}
                     {shift && onViewShift && (
-                      <button onClick={() => onViewShift(shift)}
-                        className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center" title="View details" aria-label="View shift details"
+                      <button
+                        onClick={() => onViewShift(shift)}
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 transition-colors"
+                        title="View details"
+                        aria-label="View shift details"
                       >
-                        <ChevronDown className="w-5 h-5" />
+                        <ChevronDown className="h-5 w-5" />
                       </button>
                     )}
                   </div>
@@ -545,62 +633,81 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
       {/* Swap Request Modal */}
       {showSwapModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Request shift swap">
-          <div ref={swapModalRef} className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
-            <div className="p-6 border-b border-theme-surface-border">
-              <h2 className="text-lg font-bold text-theme-text-primary">Request Shift Swap</h2>
-              <p className="text-sm text-theme-text-secondary mt-1">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Request shift swap"
+        >
+          <div
+            ref={swapModalRef}
+            className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border"
+          >
+            <div className="border-theme-surface-border border-b p-6">
+              <h2 className="text-theme-text-primary text-lg font-bold">Request Shift Swap</h2>
+              <p className="text-theme-text-secondary mt-1 text-sm">
                 {swapAssignment?.shift?.shift_date
                   ? `Submit a swap request for your shift on ${formatDateCustom(swapAssignment.shift.shift_date + 'T12:00:00', { weekday: 'short', month: 'short', day: 'numeric' }, tz)}`
                   : 'Submit a swap request for your shift'}
               </p>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="space-y-4 p-6">
               {/* Swap type selector */}
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-2">Swap Type</label>
+                <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Swap Type</label>
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button"
-                    onClick={() => setSwapForm(p => ({...p, target_shift_id: ''}))}
-                    className={`p-3 rounded-lg border text-left text-sm transition-colors ${
+                  <button
+                    type="button"
+                    onClick={() => setSwapForm((p) => ({ ...p, target_shift_id: '' }))}
+                    className={`rounded-lg border p-3 text-left text-sm transition-colors ${
                       !swapForm.target_shift_id
-                        ? 'border-violet-500 bg-violet-500/10 text-theme-text-primary'
+                        ? 'text-theme-text-primary border-violet-500 bg-violet-500/10'
                         : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
                     }`}
                   >
-                    <span className="font-medium block">Open Swap</span>
-                    <span className="text-xs text-theme-text-muted">Any member can pick it up</span>
+                    <span className="block font-medium">Open Swap</span>
+                    <span className="text-theme-text-muted text-xs">Any member can pick it up</span>
                   </button>
-                  <button type="button"
-                    onClick={() => setSwapForm(p => ({...p, target_shift_id: availableShifts[0]?.id ?? 'pick'}))}
-                    className={`p-3 rounded-lg border text-left text-sm transition-colors ${
+                  <button
+                    type="button"
+                    onClick={() => setSwapForm((p) => ({ ...p, target_shift_id: availableShifts[0]?.id ?? 'pick' }))}
+                    className={`rounded-lg border p-3 text-left text-sm transition-colors ${
                       swapForm.target_shift_id
-                        ? 'border-violet-500 bg-violet-500/10 text-theme-text-primary'
+                        ? 'text-theme-text-primary border-violet-500 bg-violet-500/10'
                         : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
                     }`}
                   >
-                    <span className="font-medium block">Specific Shift</span>
-                    <span className="text-xs text-theme-text-muted">Choose which shift you want</span>
+                    <span className="block font-medium">Specific Shift</span>
+                    <span className="text-theme-text-muted text-xs">Choose which shift you want</span>
                   </button>
                 </div>
               </div>
               {/* Target shift picker — only shown when "Specific Shift" is selected */}
               {swapForm.target_shift_id && (
                 <div>
-                  <label htmlFor="swap-target-shift" className="block text-sm font-medium text-theme-text-secondary mb-1">Select Shift</label>
-                  <select id="swap-target-shift" value={swapForm.target_shift_id}
-                    onChange={e => setSwapForm(p => ({...p, target_shift_id: e.target.value}))}
+                  <label
+                    htmlFor="swap-target-shift"
+                    className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                  >
+                    Select Shift
+                  </label>
+                  <select
+                    id="swap-target-shift"
+                    value={swapForm.target_shift_id}
+                    onChange={(e) => setSwapForm((p) => ({ ...p, target_shift_id: e.target.value }))}
                     className={inputCls}
                   >
                     {availableShifts.length === 0 && (
-                      <option value="pick" disabled>Loading shifts...</option>
+                      <option value="pick" disabled>
+                        Loading shifts...
+                      </option>
                     )}
-                    {availableShifts.map(s => {
+                    {availableShifts.map((s) => {
                       const d = new Date(s.shift_date + 'T12:00:00');
                       return (
                         <option key={s.id} value={s.id}>
-                          {formatDateCustom(d, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}
-                          {' '}{formatTime(s.start_time, tz)}
+                          {formatDateCustom(d, { weekday: 'short', month: 'short', day: 'numeric' }, tz)}{' '}
+                          {formatTime(s.start_time, tz)}
                           {s.end_time ? ` - ${formatTime(s.end_time, tz)}` : ''}
                           {s.apparatus_unit_number ? ` (${s.apparatus_unit_number})` : ''}
                         </option>
@@ -610,17 +717,29 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 </div>
               )}
               <div>
-                <label htmlFor="swap-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
-                <textarea id="swap-reason" value={swapForm.reason}
-                  onChange={e => setSwapForm(p => ({...p, reason: e.target.value}))}
-                  rows={3} placeholder="Reason for swap request" className={inputCls + ' resize-none'}
+                <label htmlFor="swap-reason" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  Reason
+                </label>
+                <textarea
+                  id="swap-reason"
+                  value={swapForm.reason}
+                  onChange={(e) => setSwapForm((p) => ({ ...p, reason: e.target.value }))}
+                  rows={3}
+                  placeholder="Reason for swap request"
+                  className={inputCls + ' resize-none'}
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-3 p-6 border-t border-theme-surface-border">
-              <button onClick={() => setShowSwapModal(false)} className="px-4 py-2 text-theme-text-secondary">Cancel</button>
-              <button onClick={() => { void handleSwapRequest(); }} disabled={submittingSwap}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
+            <div className="border-theme-surface-border flex justify-end gap-3 border-t p-6">
+              <button onClick={() => setShowSwapModal(false)} className="text-theme-text-secondary px-4 py-2">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  void handleSwapRequest();
+                }}
+                disabled={submittingSwap}
+                className="rounded-lg bg-violet-600 px-4 py-2 text-white hover:bg-violet-700 disabled:opacity-50"
               >
                 {submittingSwap ? 'Submitting...' : 'Submit Request'}
               </button>
@@ -631,42 +750,77 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
       {/* Time Off Modal */}
       {showTimeOffModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Request time off">
-          <div ref={timeOffModalRef} className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
-            <div className="p-6 border-b border-theme-surface-border">
-              <h2 className="text-lg font-bold text-theme-text-primary">Request Time Off</h2>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Request time off"
+        >
+          <div
+            ref={timeOffModalRef}
+            className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border"
+          >
+            <div className="border-theme-surface-border border-b p-6">
+              <h2 className="text-theme-text-primary text-lg font-bold">Request Time Off</h2>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="space-y-4 p-6">
               <div className="form-grid-2">
                 <div>
-                  <label htmlFor="timeoff-start" className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date *</label>
-                  <input id="timeoff-start" type="date" value={timeOffForm.start_date}
-                    onChange={e => setTimeOffForm(p => ({...p, start_date: e.target.value}))} className={inputCls}
+                  <label htmlFor="timeoff-start" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                    Start Date *
+                  </label>
+                  <input
+                    id="timeoff-start"
+                    type="date"
+                    value={timeOffForm.start_date}
+                    onChange={(e) => setTimeOffForm((p) => ({ ...p, start_date: e.target.value }))}
+                    className={inputCls}
                   />
                 </div>
                 <div>
-                  <label htmlFor="timeoff-end" className="block text-sm font-medium text-theme-text-secondary mb-1">End Date</label>
-                  <input id="timeoff-end" type="date" value={timeOffForm.end_date}
-                    onChange={e => setTimeOffForm(p => ({...p, end_date: e.target.value}))} className={inputCls}
+                  <label htmlFor="timeoff-end" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                    End Date
+                  </label>
+                  <input
+                    id="timeoff-end"
+                    type="date"
+                    value={timeOffForm.end_date}
+                    onChange={(e) => setTimeOffForm((p) => ({ ...p, end_date: e.target.value }))}
+                    className={inputCls}
                   />
                 </div>
               </div>
               <div>
-                <label htmlFor="timeoff-reason" className="block text-sm font-medium text-theme-text-secondary mb-1">Reason</label>
-                <textarea id="timeoff-reason" value={timeOffForm.reason}
-                  onChange={e => setTimeOffForm(p => ({...p, reason: e.target.value}))}
-                  rows={3} placeholder="Reason for time off (helps your manager understand the request)" className={inputCls + ' resize-none'}
+                <label htmlFor="timeoff-reason" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                  Reason
+                </label>
+                <textarea
+                  id="timeoff-reason"
+                  value={timeOffForm.reason}
+                  onChange={(e) => setTimeOffForm((p) => ({ ...p, reason: e.target.value }))}
+                  rows={3}
+                  placeholder="Reason for time off (helps your manager understand the request)"
+                  className={inputCls + ' resize-none'}
                 />
               </div>
               {timeOffConflicts.length > 0 && (
-                <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
                   <div className="text-sm text-amber-700 dark:text-amber-300">
-                    <p className="font-medium">You have {timeOffConflicts.length} shift{timeOffConflicts.length > 1 ? 's' : ''} during this period:</p>
+                    <p className="font-medium">
+                      You have {timeOffConflicts.length} shift{timeOffConflicts.length > 1 ? 's' : ''} during this
+                      period:
+                    </p>
                     <ul className="mt-1 space-y-0.5 text-xs">
-                      {timeOffConflicts.map(a => (
+                      {timeOffConflicts.map((a) => (
                         <li key={a.id}>
-                          {a.shift?.shift_date ? formatDateCustom(a.shift.shift_date + 'T12:00:00', { weekday: 'short', month: 'short', day: 'numeric' }, tz) : 'Unknown date'}
+                          {a.shift?.shift_date
+                            ? formatDateCustom(
+                                a.shift.shift_date + 'T12:00:00',
+                                { weekday: 'short', month: 'short', day: 'numeric' },
+                                tz
+                              )
+                            : 'Unknown date'}
                           {a.shift?.start_time ? ` at ${formatTime(a.shift.start_time, tz)}` : ''}
                         </li>
                       ))}
@@ -676,10 +830,16 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                 </div>
               )}
             </div>
-            <div className="flex justify-end gap-3 p-6 border-t border-theme-surface-border">
-              <button onClick={() => setShowTimeOffModal(false)} className="px-4 py-2 text-theme-text-secondary">Cancel</button>
-              <button onClick={() => { void handleTimeOffRequest(); }} disabled={submittingTimeOff || !timeOffForm.start_date}
-                className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50"
+            <div className="border-theme-surface-border flex justify-end gap-3 border-t p-6">
+              <button onClick={() => setShowTimeOffModal(false)} className="text-theme-text-secondary px-4 py-2">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  void handleTimeOffRequest();
+                }}
+                disabled={submittingTimeOff || !timeOffForm.start_date}
+                className="rounded-lg bg-violet-600 px-4 py-2 text-white hover:bg-violet-700 disabled:opacity-50"
               >
                 {submittingTimeOff ? 'Submitting...' : 'Submit Request'}
               </button>

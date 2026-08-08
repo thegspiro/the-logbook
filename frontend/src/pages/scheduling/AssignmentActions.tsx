@@ -42,50 +42,83 @@ export const AssignmentActions: React.FC<AssignmentActionsProps> = ({
 
   return (
     <>
-      <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${statusColor}`}>
+      <span
+        className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize sm:px-2 sm:text-xs ${statusColor}`}
+      >
         {effectiveStatus}
       </span>
       {isCurrentUser && isAssigned && !confirmingDecline && (
         <>
-          <button onClick={() => onConfirm(assignmentId)} disabled={pendingConfirming}
-            className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-50" aria-label="Confirm assignment"
+          <button
+            onClick={() => onConfirm(assignmentId)}
+            disabled={pendingConfirming}
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-1.5 text-green-600 transition-colors hover:bg-green-500/10 disabled:opacity-50 dark:text-green-400 dark:hover:bg-green-500/20"
+            aria-label="Confirm assignment"
           >
-            {pendingConfirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            {pendingConfirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           </button>
-          <button onClick={() => setConfirmingDecline(true)}
-            className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Decline assignment"
+          <button
+            onClick={() => setConfirmingDecline(true)}
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-1.5 text-red-500 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+            aria-label="Decline assignment"
           >
-            <XCircle className="w-4 h-4" />
+            <XCircle className="h-4 w-4" />
           </button>
         </>
       )}
       {confirmingDecline && (
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-red-500 dark:text-red-400">Decline?</span>
-          <button onClick={() => { onDecline(assignmentId); setConfirmingDecline(false); }} disabled={pendingDeclining}
-            className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm decline"
-          >{pendingDeclining ? '...' : 'Yes'}</button>
-          <button onClick={() => setConfirmingDecline(false)}
-            className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"
-          >No</button>
+          <button
+            onClick={() => {
+              onDecline(assignmentId);
+              setConfirmingDecline(false);
+            }}
+            disabled={pendingDeclining}
+            className="btn-primary rounded-md px-2 py-1 text-xs"
+            aria-label="Confirm decline"
+          >
+            {pendingDeclining ? '...' : 'Yes'}
+          </button>
+          <button
+            onClick={() => setConfirmingDecline(false)}
+            className="text-theme-text-muted hover:text-theme-text-primary px-2 py-1 text-xs"
+            aria-label="Cancel decline"
+          >
+            No
+          </button>
         </div>
       )}
       {canAssign && !isCurrentUser && !confirmingRemove && (
-        <button onClick={() => setConfirmingRemove(true)}
-          className="p-1.5 text-theme-text-muted hover:text-red-500 dark:hover:text-red-400 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Remove assignment"
+        <button
+          onClick={() => setConfirmingRemove(true)}
+          className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-1.5 transition-colors hover:text-red-500 dark:hover:text-red-400"
+          aria-label="Remove assignment"
         >
-          <XCircle className="w-4 h-4" />
+          <XCircle className="h-4 w-4" />
         </button>
       )}
       {confirmingRemove && (
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-red-500 dark:text-red-400">Remove?</span>
-          <button onClick={() => { onRemove(assignmentId); setConfirmingRemove(false); }} disabled={pendingRemoving}
-            className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm removal"
-          >{pendingRemoving ? '...' : 'Yes'}</button>
-          <button onClick={() => setConfirmingRemove(false)}
-            className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel removal"
-          >No</button>
+          <button
+            onClick={() => {
+              onRemove(assignmentId);
+              setConfirmingRemove(false);
+            }}
+            disabled={pendingRemoving}
+            className="btn-primary rounded-md px-2 py-1 text-xs"
+            aria-label="Confirm removal"
+          >
+            {pendingRemoving ? '...' : 'Yes'}
+          </button>
+          <button
+            onClick={() => setConfirmingRemove(false)}
+            className="text-theme-text-muted hover:text-theme-text-primary px-2 py-1 text-xs"
+            aria-label="Cancel removal"
+          >
+            No
+          </button>
         </div>
       )}
     </>

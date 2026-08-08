@@ -5,11 +5,7 @@
  */
 
 import { create } from 'zustand';
-import {
-  scheduledEmailsService,
-  type ScheduledEmail,
-  type ScheduledEmailCreate,
-} from '../../../services/api';
+import { scheduledEmailsService, type ScheduledEmail, type ScheduledEmailCreate } from '../../../services/api';
 import { createFetchAction, handleStoreError } from '../../../utils/storeHelpers';
 
 interface ScheduledEmailsState {
@@ -35,7 +31,7 @@ export const useScheduledEmailsStore = create<ScheduledEmailsState>((set) => ({
     set,
     (statusFilter?: string) => scheduledEmailsService.list(statusFilter),
     'scheduledEmails',
-    'Failed to load scheduled emails',
+    'Failed to load scheduled emails'
   ),
 
   scheduleEmail: async (data: ScheduledEmailCreate) => {
@@ -72,9 +68,7 @@ export const useScheduledEmailsStore = create<ScheduledEmailsState>((set) => ({
         scheduled_at: scheduledAt,
       });
       set((state) => ({
-        scheduledEmails: state.scheduledEmails.map((e) =>
-          e.id === id ? updated : e,
-        ),
+        scheduledEmails: state.scheduledEmails.map((e) => (e.id === id ? updated : e)),
         isSaving: false,
       }));
     } catch (err: unknown) {

@@ -60,59 +60,52 @@ const Welcome: React.FC = () => {
   // Show a brief loading state while we check onboarding status
   if (checking) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
+      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-theme-accent-red mb-4"></div>
+          <div className="border-theme-accent-red mb-4 inline-block h-12 w-12 animate-spin rounded-full border-t-4 border-b-4"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4 relative">
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to relative flex min-h-screen items-center justify-center bg-linear-to-br p-4">
       <ThemeToggle className="absolute top-4 right-4" />
-      <div className="max-w-3xl w-full text-center space-y-8">
+      <div className="w-full max-w-3xl space-y-8 text-center">
         {/* Title */}
         <h1
-          className={`text-6xl md:text-7xl font-bold text-theme-text-primary transition-all duration-1000 ${
-            showTitle
-              ? 'opacity-100 translate-y-0'
-              : 'opacity-0 translate-y-8'
+          className={`text-theme-text-primary text-6xl font-bold transition-all duration-1000 md:text-7xl ${
+            showTitle ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
           }`}
         >
           Welcome to{' '}
-          <span className="bg-linear-to-r from-red-400 to-orange-500 bg-clip-text text-transparent">
-            The Logbook
-          </span>
+          <span className="bg-linear-to-r from-red-400 to-orange-500 bg-clip-text text-transparent">The Logbook</span>
         </h1>
 
         {/* Paragraph */}
         <div
-          className={`transition-all duration-1000 delay-300 ${
-            showParagraph
-              ? 'opacity-100 translate-y-0'
-              : 'opacity-0 translate-y-8'
+          className={`transition-all delay-300 duration-1000 ${
+            showParagraph ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'
           }`}
         >
-          <p className="text-xl md:text-2xl text-theme-text-secondary leading-relaxed">
-            A secure department intranet built by a local volunteer fire
-            department and shared with the world to help other volunteer
-            departments manage their operations, training, and community
-            service. Designed with HIPAA requirements in mind.
+          <p className="text-theme-text-secondary text-xl leading-relaxed md:text-2xl">
+            A secure department intranet built by a local volunteer fire department and shared with the world to help
+            other volunteer departments manage their operations, training, and community service. Designed with HIPAA
+            requirements in mind.
           </p>
 
           {/* Badge indicators */}
           <div className="mt-8 flex flex-wrap justify-center gap-4 text-sm">
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-xs rounded-full text-theme-text-secondary border border-theme-surface-border">
+            <span className="bg-theme-surface text-theme-text-secondary border-theme-surface-border rounded-full border px-4 py-2 backdrop-blur-xs">
               HIPAA-Oriented Security
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-xs rounded-full text-theme-text-secondary border border-theme-surface-border">
+            <span className="bg-theme-surface text-theme-text-secondary border-theme-surface-border rounded-full border px-4 py-2 backdrop-blur-xs">
               Section 508 Accessible
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-xs rounded-full text-theme-text-secondary border border-theme-surface-border">
+            <span className="bg-theme-surface text-theme-text-secondary border-theme-surface-border rounded-full border px-4 py-2 backdrop-blur-xs">
               Zero Plain Text Passwords
             </span>
-            <span className="px-4 py-2 bg-theme-surface backdrop-blur-xs rounded-full text-theme-text-secondary border border-theme-surface-border">
+            <span className="bg-theme-surface text-theme-text-secondary border-theme-surface-border rounded-full border px-4 py-2 backdrop-blur-xs">
               Tamper-Proof Audit Logs
             </span>
           </div>
@@ -121,21 +114,16 @@ const Welcome: React.FC = () => {
           <div className="mt-12">
             <button
               onClick={() => void navigate('/onboarding')}
-              className="px-8 py-4 bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white text-lg font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              className="transform rounded-lg bg-linear-to-r from-red-600 to-orange-600 px-8 py-4 text-lg font-semibold text-white shadow-lg transition-all duration-300 hover:scale-105 hover:from-red-700 hover:to-orange-700 hover:shadow-xl"
             >
               Get Started
             </button>
           </div>
 
           {/* Footer */}
-          <div className="mt-12 text-theme-text-muted text-sm">
-            <p>
-              Built with care by volunteer firefighters, for volunteer
-              firefighters
-            </p>
-            <p className="mt-2">
-              Open Source | MIT Licensed | Community Driven
-            </p>
+          <div className="text-theme-text-muted mt-12 text-sm">
+            <p>Built with care by volunteer firefighters, for volunteer firefighters</p>
+            <p className="mt-2">Open Source | MIT Licensed | Community Driven</p>
           </div>
         </div>
       </div>

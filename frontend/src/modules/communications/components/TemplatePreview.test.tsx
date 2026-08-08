@@ -5,19 +5,13 @@ import { TemplatePreview } from './TemplatePreview';
 
 describe('TemplatePreview', () => {
   it('renders empty state when no preview', () => {
-    render(
-      <TemplatePreview preview={null} isPreviewing={false} onRefresh={vi.fn()} />,
-    );
+    render(<TemplatePreview preview={null} isPreviewing={false} onRefresh={vi.fn()} />);
 
-    expect(
-      screen.getByText(/click "refresh" to generate a preview/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/click "refresh" to generate a preview/i)).toBeInTheDocument();
   });
 
   it('renders loading state', () => {
-    render(
-      <TemplatePreview preview={null} isPreviewing={true} onRefresh={vi.fn()} />,
-    );
+    render(<TemplatePreview preview={null} isPreviewing={true} onRefresh={vi.fn()} />);
 
     expect(screen.getByText('Loading preview...')).toBeInTheDocument();
   });
@@ -29,9 +23,7 @@ describe('TemplatePreview', () => {
       text_body: 'Hello John',
     };
 
-    render(
-      <TemplatePreview preview={preview} isPreviewing={false} onRefresh={vi.fn()} />,
-    );
+    render(<TemplatePreview preview={preview} isPreviewing={false} onRefresh={vi.fn()} />);
 
     expect(screen.getByText('Welcome to Sample Department')).toBeInTheDocument();
   });
@@ -43,9 +35,7 @@ describe('TemplatePreview', () => {
       text_body: 'Hello',
     };
 
-    render(
-      <TemplatePreview preview={preview} isPreviewing={false} onRefresh={vi.fn()} />,
-    );
+    render(<TemplatePreview preview={preview} isPreviewing={false} onRefresh={vi.fn()} />);
 
     expect(screen.getByTitle('Email template preview')).toBeInTheDocument();
   });
@@ -54,27 +44,21 @@ describe('TemplatePreview', () => {
     const user = userEvent.setup();
     const onRefresh = vi.fn();
 
-    render(
-      <TemplatePreview preview={null} isPreviewing={false} onRefresh={onRefresh} />,
-    );
+    render(<TemplatePreview preview={null} isPreviewing={false} onRefresh={onRefresh} />);
 
     await user.click(screen.getByRole('button', { name: /refresh/i }));
     expect(onRefresh).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
   it('has desktop/mobile viewport toggle', () => {
-    render(
-      <TemplatePreview preview={null} isPreviewing={false} onRefresh={vi.fn()} />,
-    );
+    render(<TemplatePreview preview={null} isPreviewing={false} onRefresh={vi.fn()} />);
 
     expect(screen.getByTitle('Desktop preview')).toBeInTheDocument();
     expect(screen.getByTitle('Mobile preview')).toBeInTheDocument();
   });
 
   it('disables refresh when previewing', () => {
-    render(
-      <TemplatePreview preview={null} isPreviewing={true} onRefresh={vi.fn()} />,
-    );
+    render(<TemplatePreview preview={null} isPreviewing={true} onRefresh={vi.fn()} />);
 
     const refreshBtn = screen.getByRole('button', { name: /refresh/i });
     expect(refreshBtn).toBeDisabled();

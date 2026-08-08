@@ -52,7 +52,9 @@ export const TrainingProgressRenderer: React.FC<Props> = ({ data }) => {
           withdrawn: 'bg-theme-surface-secondary text-theme-text-muted',
         };
         return (
-          <span className={`rounded-sm px-2 py-0.5 text-xs capitalize ${colors[s] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}>
+          <span
+            className={`rounded-sm px-2 py-0.5 text-xs capitalize ${colors[s] ?? 'bg-theme-surface-secondary text-theme-text-muted'}`}
+          >
             {s}
           </span>
         );

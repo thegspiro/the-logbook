@@ -17,8 +17,7 @@ const mockGetUsers = vi.fn();
 
 vi.mock('../../services/api', () => ({
   courseCohortService: {
-    previewSchedule: (...args: unknown[]) =>
-      mockPreviewSchedule(...args) as unknown,
+    previewSchedule: (...args: unknown[]) => mockPreviewSchedule(...args) as unknown,
     createCohort: (...args: unknown[]) => mockCreateCohort(...args) as unknown,
   },
   trainingService: {
@@ -68,10 +67,7 @@ const preview = {
   ],
 };
 
-const advanceTo = async (
-  user: ReturnType<typeof userEvent.setup>,
-  step: 'schedule' | 'preview',
-) => {
+const advanceTo = async (user: ReturnType<typeof userEvent.setup>, step: 'schedule' | 'preview') => {
   await user.selectOptions(screen.getByLabelText('Course'), 'course-1');
   await user.click(screen.getByRole('button', { name: /Next/i }));
   if (step === 'preview') {
@@ -82,9 +78,7 @@ const advanceTo = async (
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetCourses.mockResolvedValue([course]);
-  mockGetUsers.mockResolvedValue([
-    { id: 'u1', first_name: 'Dana', last_name: 'Reyes', email: 'dana@fd.org' },
-  ]);
+  mockGetUsers.mockResolvedValue([{ id: 'u1', first_name: 'Dana', last_name: 'Reyes', email: 'dana@fd.org' }]);
   mockPreviewSchedule.mockResolvedValue(preview);
 });
 
@@ -146,9 +140,7 @@ describe('CohortWizard', () => {
     });
     expect(screen.getByText('SCBA Operations')).toBeInTheDocument();
     // The roll warning must be visible before anything is created.
-    expect(
-      screen.getByText(/Moved from 2026-09-12 to 2026-09-14/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Moved from 2026-09-12 to 2026-09-14/)).toBeInTheDocument();
   });
 
   it('offers the holidays inside the course span as blackout dates', async () => {

@@ -148,7 +148,7 @@ export type OnboardingStep =
   | 'it-team-backup'
   | 'positions'
   | 'system-owner'
-  | 'admin-user'  // Legacy alias
+  | 'admin-user' // Legacy alias
   | 'security-check'
   | 'complete';
 

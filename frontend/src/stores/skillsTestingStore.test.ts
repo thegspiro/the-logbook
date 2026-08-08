@@ -226,10 +226,12 @@ describe('skillsTestingStore', () => {
     it('should handle create template error and re-throw', async () => {
       vi.mocked(skillsTestingService.createTemplate).mockRejectedValue(new Error('Validation error'));
 
-      await expect(useSkillsTestingStore.getState().createTemplate({
-        name: 'Bad Template',
-        sections: [],
-      })).rejects.toThrow();
+      await expect(
+        useSkillsTestingStore.getState().createTemplate({
+          name: 'Bad Template',
+          sections: [],
+        })
+      ).rejects.toThrow();
 
       expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });
@@ -237,9 +239,11 @@ describe('skillsTestingStore', () => {
     it('should handle update template error and re-throw', async () => {
       vi.mocked(skillsTestingService.updateTemplate).mockRejectedValue(new Error('Update failed'));
 
-      await expect(useSkillsTestingStore.getState().updateTemplate('tpl-1', {
-        name: 'Updated Name',
-      })).rejects.toThrow();
+      await expect(
+        useSkillsTestingStore.getState().updateTemplate('tpl-1', {
+          name: 'Updated Name',
+        })
+      ).rejects.toThrow();
 
       expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });
@@ -320,7 +324,18 @@ describe('skillsTestingStore', () => {
 
     it('should delete a test and remove it from the list', async () => {
       useSkillsTestingStore.setState({
-        tests: [{ id: 'test-1', template_name: 'T', candidate_name: 'C', examiner_name: 'E', status: 'completed', result: 'pass', is_practice: false, created_at: '' }],
+        tests: [
+          {
+            id: 'test-1',
+            template_name: 'T',
+            candidate_name: 'C',
+            examiner_name: 'E',
+            status: 'completed',
+            result: 'pass',
+            is_practice: false,
+            created_at: '',
+          },
+        ],
         currentTest: mockTest,
       });
       vi.mocked(skillsTestingService.deleteTest).mockResolvedValue(undefined);
@@ -333,7 +348,18 @@ describe('skillsTestingStore', () => {
 
     it('should discard a practice test', async () => {
       useSkillsTestingStore.setState({
-        tests: [{ id: 'test-1', template_name: 'T', candidate_name: 'C', examiner_name: 'E', status: 'in_progress', result: 'incomplete', is_practice: false, created_at: '' }],
+        tests: [
+          {
+            id: 'test-1',
+            template_name: 'T',
+            candidate_name: 'C',
+            examiner_name: 'E',
+            status: 'in_progress',
+            result: 'incomplete',
+            is_practice: false,
+            created_at: '',
+          },
+        ],
         currentTest: mockTest,
       });
       vi.mocked(skillsTestingService.discardPracticeTest).mockResolvedValue(undefined);
@@ -375,9 +401,7 @@ describe('skillsTestingStore', () => {
           section_results: [
             {
               section_id: 'sec-1',
-              criteria_results: [
-                { criterion_id: 'crit-1', passed: null },
-              ],
+              criteria_results: [{ criterion_id: 'crit-1', passed: null }],
             },
           ],
         },
@@ -449,10 +473,12 @@ describe('skillsTestingStore', () => {
     it('should handle create test error and re-throw', async () => {
       vi.mocked(skillsTestingService.createTest).mockRejectedValue(new Error('Create error'));
 
-      await expect(useSkillsTestingStore.getState().createTest({
-        template_id: 'tpl-1',
-        candidate_id: 'user-1',
-      })).rejects.toThrow();
+      await expect(
+        useSkillsTestingStore.getState().createTest({
+          template_id: 'tpl-1',
+          candidate_id: 'user-1',
+        })
+      ).rejects.toThrow();
 
       expect(useSkillsTestingStore.getState().error).toBeTypeOf('string');
     });

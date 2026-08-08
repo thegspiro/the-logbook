@@ -62,7 +62,7 @@ async function waitForLoginCookies(csrfBefore: string | null): Promise<void> {
     const csrfNow = getCsrfCookie();
     // New cookie appeared (fresh session) or value changed (re-login)
     if (csrfNow && csrfNow !== csrfBefore) return;
-    await new Promise(r => setTimeout(r, COOKIE_SETTLE_POLL_MS));
+    await new Promise((r) => setTimeout(r, COOKIE_SETTLE_POLL_MS));
   }
   // Timed out — proceed anyway; dashboard calls may still succeed
   // if the httpOnly cookies were stored independently of the csrf one.
@@ -233,18 +233,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (attempts >= LOGIN_LOCKOUT_THRESHOLD) {
         const backoffMs = Math.min(
           LOGIN_BACKOFF_BASE_MS * Math.pow(2, attempts - LOGIN_LOCKOUT_THRESHOLD),
-          LOGIN_MAX_LOCKOUT_MS,
+          LOGIN_MAX_LOCKOUT_MS
         );
         newLockedUntil = Date.now() + backoffMs;
       }
 
       // If the backend returned a Retry-After header (429), honour it
-      const rawRetryAfter = appError.status === 429
-        ? appError.details?.retryAfter
-        : undefined;
-      const retryAfter = typeof rawRetryAfter === 'number'
-        ? rawRetryAfter
-        : parseInt(typeof rawRetryAfter === 'string' ? rawRetryAfter : '0', 10);
+      const rawRetryAfter = appError.status === 429 ? appError.details?.retryAfter : undefined;
+      const retryAfter =
+        typeof rawRetryAfter === 'number'
+          ? rawRetryAfter
+          : parseInt(typeof rawRetryAfter === 'string' ? rawRetryAfter : '0', 10);
       if (retryAfter > 0) {
         newLockedUntil = Date.now() + retryAfter * 1_000;
       }

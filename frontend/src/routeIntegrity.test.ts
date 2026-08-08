@@ -66,9 +66,7 @@ for (const file of files) {
     .forEach((line, index) => {
       // Only literal in-app paths are checkable; a template literal carrying an
       // interpolation has no fixed value to compare against a route pattern.
-      for (const match of line.matchAll(
-        /(?:\bto=|navigate\(|<Navigate\s+to=)\s*\{?\s*['"`](\/[^'"`$\n]*)['"`]/g
-      )) {
+      for (const match of line.matchAll(/(?:\bto=|navigate\(|<Navigate\s+to=)\s*\{?\s*['"`](\/[^'"`$\n]*)['"`]/g)) {
         navTargets.push({ file: relative, line: index + 1, target: match[1] ?? '' });
       }
     });
@@ -78,11 +76,9 @@ for (const file of files) {
 const routeMatcher = (routePath: string): RegExp =>
   new RegExp(`^${routePath.replace(/\*/g, '.*').replace(/:[^/]+/g, '[^/]+')}$`);
 
-const matchers = [...declaredRoutes]
-  .filter((routePath) => routePath !== '*')
-  .map(routeMatcher);
+const matchers = [...declaredRoutes].filter((routePath) => routePath !== '*').map(routeMatcher);
 
-const pathOf = (target: string): string => (target.split(/[?#]/)[0] || '/');
+const pathOf = (target: string): string => target.split(/[?#]/)[0] || '/';
 
 describe('route integrity', () => {
   it('finds the routes and navigation targets it is meant to check', () => {

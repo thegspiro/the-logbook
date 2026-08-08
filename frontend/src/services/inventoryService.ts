@@ -4,24 +4,66 @@
 
 import api from './apiClient';
 import type {
-  UserCheckoutItem, UserInventoryResponse, InventoryCategory, InventoryItem,
-  LowStockAlert, MaintenanceRecord, MaintenanceRecordCreate, StorageAreaResponse,
-  StorageAreaCreate, EquipmentRequestItem, WriteOffRequestItem, InventoryItemCreate,
-  ItemIssuance, InventoryItemsListResponse, ItemHistoryEvent, InventorySummary,
-  InventoryCategoryCreate, ScanLookupResponse, BatchCheckoutRequest, BatchCheckoutResponse,
-  BatchReturnRequest, BatchReturnResponse, LabelFormat, NFPACompliance, NFPAExposureRecord,
-  NFPASummary, NFPARetirementDueItem, MembersInventoryListResponse, InventoryImportResult,
-  SizeVariantCreate, BulkIssuanceTarget, BulkIssuanceResponse, IssuanceAllowance, AllowanceCheck,
-  ChargeManagementResponse, ReturnRequestItem, LocationInventorySummary,
-  ReorderRequest, ReorderRequestCreate, ReorderRequestUpdate,
-  ItemVariantGroup, ItemVariantGroupCreate,
-  EquipmentKit, EquipmentKitCreate,
-  MemberSizePreferences, MemberSizePreferencesCreate,
-  ImpactPlannerOptions, ImpactPlannerRequest, ImpactPlannerResult,
-  ImpactPlannerReorderRequest, ImpactPlannerReorderResponse,
-  ImpactPlannerIssueRequest, ImpactPlannerIssueResponse,
-  ImpactPlan, ImpactPlanCreate, ImpactPlannerRequestSizesResponse,
-  InventoryLot, InventoryLotCreate, InventoryLotUpdate, ExpiringLot,
+  UserCheckoutItem,
+  UserInventoryResponse,
+  InventoryCategory,
+  InventoryItem,
+  LowStockAlert,
+  MaintenanceRecord,
+  MaintenanceRecordCreate,
+  StorageAreaResponse,
+  StorageAreaCreate,
+  EquipmentRequestItem,
+  WriteOffRequestItem,
+  InventoryItemCreate,
+  ItemIssuance,
+  InventoryItemsListResponse,
+  ItemHistoryEvent,
+  InventorySummary,
+  InventoryCategoryCreate,
+  ScanLookupResponse,
+  BatchCheckoutRequest,
+  BatchCheckoutResponse,
+  BatchReturnRequest,
+  BatchReturnResponse,
+  LabelFormat,
+  NFPACompliance,
+  NFPAExposureRecord,
+  NFPASummary,
+  NFPARetirementDueItem,
+  MembersInventoryListResponse,
+  InventoryImportResult,
+  SizeVariantCreate,
+  BulkIssuanceTarget,
+  BulkIssuanceResponse,
+  IssuanceAllowance,
+  AllowanceCheck,
+  ChargeManagementResponse,
+  ReturnRequestItem,
+  LocationInventorySummary,
+  ReorderRequest,
+  ReorderRequestCreate,
+  ReorderRequestUpdate,
+  ItemVariantGroup,
+  ItemVariantGroupCreate,
+  EquipmentKit,
+  EquipmentKitCreate,
+  MemberSizePreferences,
+  MemberSizePreferencesCreate,
+  ImpactPlannerOptions,
+  ImpactPlannerRequest,
+  ImpactPlannerResult,
+  ImpactPlannerReorderRequest,
+  ImpactPlannerReorderResponse,
+  ImpactPlannerIssueRequest,
+  ImpactPlannerIssueResponse,
+  ImpactPlan,
+  ImpactPlanCreate,
+  ImpactPlannerRequestSizesResponse,
+  InventoryLot,
+  InventoryLotCreate,
+  InventoryLotUpdate,
+  ExpiringLot,
 } from './eventServices';
 import { asArray } from '../utils/asArray';
 
@@ -66,7 +108,10 @@ export const inventoryService = {
   },
 
   async requestMemberSizes(request: ImpactPlannerRequest): Promise<ImpactPlannerRequestSizesResponse> {
-    const response = await api.post<ImpactPlannerRequestSizesResponse>('/inventory/impact-planner/request-sizes', request);
+    const response = await api.post<ImpactPlannerRequestSizesResponse>(
+      '/inventory/impact-planner/request-sizes',
+      request
+    );
     return response.data;
   },
 
@@ -148,17 +193,27 @@ export const inventoryService = {
     await api.post(`/inventory/items/${itemId}/retire`, { notes });
   },
 
-  async assignItem(itemId: string, userId: string, options?: { assignment_type?: string; assignment_reason?: string }): Promise<{ id: string; item_id: string; user_id: string; is_active: boolean }> {
-    const response = await api.post<{ id: string; item_id: string; user_id: string; is_active: boolean }>(`/inventory/items/${itemId}/assign`, {
-      item_id: itemId,
-      user_id: userId,
-      assignment_type: options?.assignment_type ?? 'permanent',
-      assignment_reason: options?.assignment_reason,
-    });
+  async assignItem(
+    itemId: string,
+    userId: string,
+    options?: { assignment_type?: string; assignment_reason?: string }
+  ): Promise<{ id: string; item_id: string; user_id: string; is_active: boolean }> {
+    const response = await api.post<{ id: string; item_id: string; user_id: string; is_active: boolean }>(
+      `/inventory/items/${itemId}/assign`,
+      {
+        item_id: itemId,
+        user_id: userId,
+        assignment_type: options?.assignment_type ?? 'permanent',
+        assignment_reason: options?.assignment_reason,
+      }
+    );
     return response.data;
   },
 
-  async unassignItem(itemId: string, options?: { return_condition?: string; return_notes?: string }): Promise<{ message: string }> {
+  async unassignItem(
+    itemId: string,
+    options?: { return_condition?: string; return_notes?: string }
+  ): Promise<{ message: string }> {
     const response = await api.post<{ message: string }>(`/inventory/items/${itemId}/unassign`, {
       return_condition: options?.return_condition,
       return_notes: options?.return_notes,
@@ -166,17 +221,31 @@ export const inventoryService = {
     return response.data;
   },
 
-  async checkoutItem(data: { item_id: string; user_id: string; expected_return_at?: string; checkout_reason?: string }): Promise<{ id: string }> {
+  async checkoutItem(data: {
+    item_id: string;
+    user_id: string;
+    expected_return_at?: string;
+    checkout_reason?: string;
+  }): Promise<{ id: string }> {
     const response = await api.post<{ id: string }>('/inventory/checkout', data);
     return response.data;
   },
 
   async checkInItem(checkoutId: string, returnCondition: string, damageNotes?: string): Promise<void> {
-    await api.post(`/inventory/checkout/${checkoutId}/checkin`, { return_condition: returnCondition, damage_notes: damageNotes });
+    await api.post(`/inventory/checkout/${checkoutId}/checkin`, {
+      return_condition: returnCondition,
+      damage_notes: damageNotes,
+    });
   },
 
-  async extendCheckout(checkoutId: string, expectedReturnAt: string): Promise<{ message: string; expected_return_at: string }> {
-    const response = await api.patch<{ message: string; expected_return_at: string }>(`/inventory/checkout/${checkoutId}/extend`, { expected_return_at: expectedReturnAt });
+  async extendCheckout(
+    checkoutId: string,
+    expectedReturnAt: string
+  ): Promise<{ message: string; expected_return_at: string }> {
+    const response = await api.patch<{ message: string; expected_return_at: string }>(
+      `/inventory/checkout/${checkoutId}/extend`,
+      { expected_return_at: expectedReturnAt }
+    );
     return response.data;
   },
 
@@ -196,7 +265,9 @@ export const inventoryService = {
   },
 
   async getMaintenanceDueItems(daysAhead: number = 30): Promise<InventoryItem[]> {
-    const response = await api.get<InventoryItem[]>('/inventory/maintenance/due', { params: { days_ahead: daysAhead } });
+    const response = await api.get<InventoryItem[]>('/inventory/maintenance/due', {
+      params: { days_ahead: daysAhead },
+    });
     return asArray(response.data);
   },
 
@@ -210,13 +281,21 @@ export const inventoryService = {
     return response.data;
   },
 
-  async updateMaintenanceRecord(itemId: string, recordId: string, data: Partial<MaintenanceRecordCreate>): Promise<MaintenanceRecord> {
+  async updateMaintenanceRecord(
+    itemId: string,
+    recordId: string,
+    data: Partial<MaintenanceRecordCreate>
+  ): Promise<MaintenanceRecord> {
     const response = await api.patch<MaintenanceRecord>(`/inventory/items/${itemId}/maintenance/${recordId}`, data);
     return response.data;
   },
 
   // Storage Areas
-  async getStorageAreas(params?: { location_id?: string; parent_id?: string; flat?: boolean }): Promise<StorageAreaResponse[]> {
+  async getStorageAreas(params?: {
+    location_id?: string;
+    parent_id?: string;
+    flat?: boolean;
+  }): Promise<StorageAreaResponse[]> {
     const response = await api.get<StorageAreaResponse[]>('/inventory/storage-areas', { params });
     return asArray(response.data);
   },
@@ -236,7 +315,12 @@ export const inventoryService = {
   },
 
   // Pool item issuance
-  async issueFromPool(itemId: string, userId: string, quantity: number = 1, issueReason?: string): Promise<ItemIssuance> {
+  async issueFromPool(
+    itemId: string,
+    userId: string,
+    quantity: number = 1,
+    issueReason?: string
+  ): Promise<ItemIssuance> {
     const response = await api.post<ItemIssuance>(`/inventory/items/${itemId}/issue`, {
       user_id: userId,
       quantity,
@@ -245,7 +329,10 @@ export const inventoryService = {
     return response.data;
   },
 
-  async returnToPool(issuanceId: string, options?: { return_condition?: string; return_notes?: string; quantity_returned?: number }): Promise<{ message: string }> {
+  async returnToPool(
+    issuanceId: string,
+    options?: { return_condition?: string; return_notes?: string; quantity_returned?: number }
+  ): Promise<{ message: string }> {
     const response = await api.post<{ message: string }>(`/inventory/issuances/${issuanceId}/return`, {
       return_condition: options?.return_condition,
       return_notes: options?.return_notes,
@@ -263,7 +350,10 @@ export const inventoryService = {
 
   // Size variant quick-create
   async createSizeVariants(data: SizeVariantCreate): Promise<{ created_count: number; items: InventoryItem[] }> {
-    const response = await api.post<{ created_count: number; items: InventoryItem[] }>('/inventory/items/create-variants', data);
+    const response = await api.post<{ created_count: number; items: InventoryItem[] }>(
+      '/inventory/items/create-variants',
+      data
+    );
     return response.data;
   },
 
@@ -279,12 +369,20 @@ export const inventoryService = {
     return asArray(response.data);
   },
 
-  async createAllowance(data: { category_id: string; role_id?: string | undefined; max_quantity: number; period_type?: string }): Promise<IssuanceAllowance> {
+  async createAllowance(data: {
+    category_id: string;
+    role_id?: string | undefined;
+    max_quantity: number;
+    period_type?: string;
+  }): Promise<IssuanceAllowance> {
     const response = await api.post<IssuanceAllowance>('/inventory/allowances', data);
     return response.data;
   },
 
-  async updateAllowance(id: string, data: { max_quantity?: number; period_type?: string; is_active?: boolean }): Promise<IssuanceAllowance> {
+  async updateAllowance(
+    id: string,
+    data: { max_quantity?: number; period_type?: string; is_active?: boolean }
+  ): Promise<IssuanceAllowance> {
     const response = await api.put<IssuanceAllowance>(`/inventory/allowances/${id}`, data);
     return response.data;
   },
@@ -343,22 +441,23 @@ export const inventoryService = {
     customWidth?: number,
     customHeight?: number,
     autoRotate?: boolean,
-    extraLines?: string[],
+    extraLines?: string[]
   ): Promise<{ blob: Blob; autoPopulated: number }> {
-    const response = await api.post<Blob>('/inventory/labels/generate', {
-      item_ids: itemIds,
-      label_format: labelFormat,
-      custom_width: customWidth,
-      custom_height: customHeight,
-      auto_rotate: autoRotate,
-      extra_lines: extraLines && extraLines.length > 0 ? extraLines : undefined,
-    }, {
-      responseType: 'blob',
-    });
-    const autoPopulated = parseInt(
-      (response.headers?.['x-barcodes-auto-populated'] as string) ?? '0',
-      10,
+    const response = await api.post<Blob>(
+      '/inventory/labels/generate',
+      {
+        item_ids: itemIds,
+        label_format: labelFormat,
+        custom_width: customWidth,
+        custom_height: customHeight,
+        auto_rotate: autoRotate,
+        extra_lines: extraLines && extraLines.length > 0 ? extraLines : undefined,
+      },
+      {
+        responseType: 'blob',
+      }
     );
+    const autoPopulated = parseInt((response.headers?.['x-barcodes-auto-populated'] as string) ?? '0', 10);
     return { blob: response.data, autoPopulated: isNaN(autoPopulated) ? 0 : autoPopulated };
   },
 
@@ -386,7 +485,7 @@ export const inventoryService = {
   }): Promise<{ preset: string | null; position_id?: string | null }> {
     const response = await api.put<{ preset: string | null; position_id?: string | null }>(
       '/inventory/label-preset',
-      data,
+      data
     );
     return response.data;
   },
@@ -396,7 +495,11 @@ export const inventoryService = {
     return response.data;
   },
 
-  async exportItemsCsv(params?: { category_id?: string | undefined; status?: string | undefined; search?: string | undefined }): Promise<Blob> {
+  async exportItemsCsv(params?: {
+    category_id?: string | undefined;
+    status?: string | undefined;
+    search?: string | undefined;
+  }): Promise<Blob> {
     const response = await api.get<Blob>('/inventory/items/export', { params, responseType: 'blob' });
     return response.data;
   },
@@ -416,23 +519,65 @@ export const inventoryService = {
   },
 
   // Equipment requests
-  async createEquipmentRequest(data: { item_name: string; item_id?: string | undefined; category_id?: string | undefined; quantity?: number; request_type?: string; priority?: string; reason?: string | undefined }): Promise<{ id: string; item_name: string; status: string; message: string }> {
-    const response = await api.post<{ id: string; item_name: string; status: string; message: string }>('/inventory/requests', data);
+  async createEquipmentRequest(data: {
+    item_name: string;
+    item_id?: string | undefined;
+    category_id?: string | undefined;
+    quantity?: number;
+    request_type?: string;
+    priority?: string;
+    reason?: string | undefined;
+  }): Promise<{ id: string; item_name: string; status: string; message: string }> {
+    const response = await api.post<{ id: string; item_name: string; status: string; message: string }>(
+      '/inventory/requests',
+      data
+    );
     return response.data;
   },
 
-  async getEquipmentRequests(params?: { status?: string; mine_only?: boolean }): Promise<{ requests: EquipmentRequestItem[]; total: number }> {
-    const response = await api.get<{ requests: EquipmentRequestItem[]; total: number }>('/inventory/requests', { params });
+  async getEquipmentRequests(params?: {
+    status?: string;
+    mine_only?: boolean;
+  }): Promise<{ requests: EquipmentRequestItem[]; total: number }> {
+    const response = await api.get<{ requests: EquipmentRequestItem[]; total: number }>('/inventory/requests', {
+      params,
+    });
     return response.data;
   },
 
-  async reviewEquipmentRequest(requestId: string, data: { status: string; review_notes?: string | undefined }): Promise<{ id: string; status: string; message: string }> {
-    const response = await api.put<{ id: string; status: string; message: string }>(`/inventory/requests/${requestId}/review`, data);
+  async reviewEquipmentRequest(
+    requestId: string,
+    data: { status: string; review_notes?: string | undefined }
+  ): Promise<{ id: string; status: string; message: string }> {
+    const response = await api.put<{ id: string; status: string; message: string }>(
+      `/inventory/requests/${requestId}/review`,
+      data
+    );
     return response.data;
   },
 
-  async fulfillEquipmentRequest(requestId: string, data?: { item_id?: string | undefined; quantity?: number | undefined; expected_return_at?: string | undefined; override_allowance?: boolean }): Promise<{ id: string; status: string; fulfillment_type: string | null; fulfillment_reference_id: string | null; message: string }> {
-    const response = await api.put<{ id: string; status: string; fulfillment_type: string | null; fulfillment_reference_id: string | null; message: string }>(`/inventory/requests/${requestId}/fulfill`, data ?? {});
+  async fulfillEquipmentRequest(
+    requestId: string,
+    data?: {
+      item_id?: string | undefined;
+      quantity?: number | undefined;
+      expected_return_at?: string | undefined;
+      override_allowance?: boolean;
+    }
+  ): Promise<{
+    id: string;
+    status: string;
+    fulfillment_type: string | null;
+    fulfillment_reference_id: string | null;
+    message: string;
+  }> {
+    const response = await api.put<{
+      id: string;
+      status: string;
+      fulfillment_type: string | null;
+      fulfillment_reference_id: string | null;
+      message: string;
+    }>(`/inventory/requests/${requestId}/fulfill`, data ?? {});
     return response.data;
   },
 
@@ -442,13 +587,23 @@ export const inventoryService = {
     return asArray(response.data);
   },
 
-  async createWriteOffRequest(data: { item_id: string; reason: string; description: string }): Promise<WriteOffRequestItem> {
+  async createWriteOffRequest(data: {
+    item_id: string;
+    reason: string;
+    description: string;
+  }): Promise<WriteOffRequestItem> {
     const response = await api.post<WriteOffRequestItem>('/inventory/write-offs', data);
     return response.data;
   },
 
-  async reviewWriteOff(writeOffId: string, data: { status: string; review_notes?: string | undefined }): Promise<{ id: string; status: string; message: string }> {
-    const response = await api.put<{ id: string; status: string; message: string }>(`/inventory/write-offs/${writeOffId}/review`, data);
+  async reviewWriteOff(
+    writeOffId: string,
+    data: { status: string; review_notes?: string | undefined }
+  ): Promise<{ id: string; status: string; message: string }> {
+    const response = await api.put<{ id: string; status: string; message: string }>(
+      `/inventory/write-offs/${writeOffId}/review`,
+      data
+    );
     return response.data;
   },
 
@@ -478,7 +633,10 @@ export const inventoryService = {
     return asArray(response.data);
   },
 
-  async createExposureRecord(itemId: string, data: Omit<NFPAExposureRecord, 'id' | 'item_id' | 'organization_id' | 'created_at' | 'updated_at'>): Promise<NFPAExposureRecord> {
+  async createExposureRecord(
+    itemId: string,
+    data: Omit<NFPAExposureRecord, 'id' | 'item_id' | 'organization_id' | 'created_at' | 'updated_at'>
+  ): Promise<NFPAExposureRecord> {
     const response = await api.post<NFPAExposureRecord>(`/inventory/items/${itemId}/exposures`, data);
     return response.data;
   },
@@ -489,7 +647,10 @@ export const inventoryService = {
   },
 
   async getNFPARetirementDue(daysAhead = 180): Promise<{ items: NFPARetirementDueItem[]; total: number }> {
-    const response = await api.get<{ items: NFPARetirementDueItem[]; total: number }>('/inventory/nfpa/retirement-due', { params: { days_ahead: daysAhead } });
+    const response = await api.get<{ items: NFPARetirementDueItem[]; total: number }>(
+      '/inventory/nfpa/retirement-due',
+      { params: { days_ahead: daysAhead } }
+    );
     return response.data;
   },
 
@@ -516,13 +677,22 @@ export const inventoryService = {
     return response.data;
   },
 
-  async getReturnRequests(params?: { status?: string | undefined; mine_only?: boolean | undefined }): Promise<ReturnRequestItem[]> {
+  async getReturnRequests(params?: {
+    status?: string | undefined;
+    mine_only?: boolean | undefined;
+  }): Promise<ReturnRequestItem[]> {
     const response = await api.get<ReturnRequestItem[]>('/inventory/return-requests', { params });
     return asArray(response.data);
   },
 
-  async reviewReturnRequest(requestId: string, data: { status: string; review_notes?: string | undefined; override_condition?: string | undefined }): Promise<{ id: string; status: string; message: string }> {
-    const response = await api.put<{ id: string; status: string; message: string }>(`/inventory/return-requests/${requestId}/review`, data);
+  async reviewReturnRequest(
+    requestId: string,
+    data: { status: string; review_notes?: string | undefined; override_condition?: string | undefined }
+  ): Promise<{ id: string; status: string; message: string }> {
+    const response = await api.put<{ id: string; status: string; message: string }>(
+      `/inventory/return-requests/${requestId}/review`,
+      data
+    );
     return response.data;
   },
 
@@ -533,7 +703,11 @@ export const inventoryService = {
   },
 
   // Reorder Requests
-  async getReorderRequests(params?: { status?: string | undefined; urgency?: string | undefined; search?: string | undefined }): Promise<ReorderRequest[]> {
+  async getReorderRequests(params?: {
+    status?: string | undefined;
+    urgency?: string | undefined;
+    search?: string | undefined;
+  }): Promise<ReorderRequest[]> {
     const response = await api.get<ReorderRequest[]>('/inventory/reorder-requests', { params });
     return asArray(response.data);
   },
@@ -575,7 +749,10 @@ export const inventoryService = {
     return response.data;
   },
 
-  async updateVariantGroup(id: string, data: Partial<ItemVariantGroupCreate> & { active?: boolean }): Promise<ItemVariantGroup> {
+  async updateVariantGroup(
+    id: string,
+    data: Partial<ItemVariantGroupCreate> & { active?: boolean }
+  ): Promise<ItemVariantGroup> {
     const response = await api.patch<ItemVariantGroup>(`/inventory/variant-groups/${id}`, data);
     return response.data;
   },
@@ -598,13 +775,18 @@ export const inventoryService = {
     return response.data;
   },
 
-  async updateEquipmentKit(id: string, data: Partial<EquipmentKitCreate> & { active?: boolean }): Promise<EquipmentKit> {
+  async updateEquipmentKit(
+    id: string,
+    data: Partial<EquipmentKitCreate> & { active?: boolean }
+  ): Promise<EquipmentKit> {
     const response = await api.patch<EquipmentKit>(`/inventory/kits/${id}`, data);
     return response.data;
   },
 
   async issueKitToMember(kitId: string, userId: string): Promise<{ message: string; items_issued: number }> {
-    const response = await api.post<{ message: string; items_issued: number }>(`/inventory/kits/${kitId}/issue/${userId}`);
+    const response = await api.post<{ message: string; items_issued: number }>(
+      `/inventory/kits/${kitId}/issue/${userId}`
+    );
     return response.data;
   },
 

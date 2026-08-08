@@ -47,24 +47,22 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
     }
     return (
       <span className="badge inline-flex items-center gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-300">
-        <Clock className="h-3.5 w-3.5" aria-hidden="true" /> Pending{' '}
-        {batch.attestations.length}/{batch.required_attestations}
+        <Clock className="h-3.5 w-3.5" aria-hidden="true" /> Pending {batch.attestations.length}/
+        {batch.required_attestations}
       </span>
     );
   };
 
   return (
     <div className="card mb-6">
-      <h3 className="text-lg font-medium text-theme-text-primary mb-1">Paper-Ballot Batches</h3>
-      <p className="text-sm text-theme-text-secondary mb-4">
-        Pending batches do not count in results until the required officers
-        confirm the tally. The recording officer cannot attest their own batch.
+      <h3 className="text-theme-text-primary mb-1 text-lg font-medium">Paper-Ballot Batches</h3>
+      <p className="text-theme-text-secondary mb-4 text-sm">
+        Pending batches do not count in results until the required officers confirm the tally. The recording officer
+        cannot attest their own batch.
       </p>
       <ul className="space-y-4">
         {batches.map((batch) => {
-          const alreadyAttested = batch.attestations.some(
-            (a) => a.user_id != null && a.user_id === currentUserId,
-          );
+          const alreadyAttested = batch.attestations.some((a) => a.user_id != null && a.user_id === currentUserId);
           const canAttest =
             electionOpen &&
             batch.status === 'pending' &&
@@ -73,14 +71,11 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
             !alreadyAttested;
           const canVoid = electionOpen && batch.status !== 'voided';
           return (
-            <li
-              key={batch.batch_id}
-              className="border border-theme-surface-border rounded-md p-4"
-            >
+            <li key={batch.batch_id} className="border-theme-surface-border rounded-md border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   {statusBadge(batch)}
-                  <span className="text-sm text-theme-text-primary font-medium">
+                  <span className="text-theme-text-primary text-sm font-medium">
                     {batch.total_ballots} ballot{batch.total_ballots !== 1 ? 's' : ''}
                   </span>
                 </div>
@@ -90,7 +85,7 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
                       type="button"
                       onClick={() => onAttest(batch.batch_id)}
                       disabled={attestingBatchId === batch.batch_id}
-                      className="px-3 py-1.5 bg-teal-600 text-white rounded-md hover:bg-teal-700 text-sm disabled:opacity-50"
+                      className="rounded-md bg-teal-600 px-3 py-1.5 text-sm text-white hover:bg-teal-700 disabled:opacity-50"
                     >
                       {attestingBatchId === batch.batch_id ? 'Attesting…' : 'Attest Count'}
                     </button>
@@ -99,7 +94,7 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
                     <button
                       type="button"
                       onClick={() => onVoid(batch.batch_id)}
-                      className="px-3 py-1.5 border border-red-500/50 text-red-600 dark:text-red-400 rounded-md hover:bg-red-500/10 text-sm"
+                      className="rounded-md border border-red-500/50 px-3 py-1.5 text-sm text-red-600 hover:bg-red-500/10 dark:text-red-400"
                     >
                       Void Batch
                     </button>
@@ -107,7 +102,7 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
                 </div>
               </div>
 
-              <div className="mt-2 text-sm text-theme-text-secondary">
+              <div className="text-theme-text-secondary mt-2 text-sm">
                 {batch.totals.map((t) => (
                   <span key={t.candidate_id} className="mr-3">
                     {t.candidate_name}
@@ -116,23 +111,18 @@ const PaperBallotBatchesPanel: React.FC<PaperBallotBatchesPanelProps> = ({
                 ))}
               </div>
 
-              <div className="mt-2 text-xs text-theme-text-muted">
+              <div className="text-theme-text-muted mt-2 text-xs">
                 Recorded by {batch.recorded_by_name ?? 'unknown'}
-                {batch.recorded_at
-                  ? ` on ${formatDateTime(batch.recorded_at, tz)}`
-                  : ''}
+                {batch.recorded_at ? ` on ${formatDateTime(batch.recorded_at, tz)}` : ''}
                 {batch.notes ? ` — ${batch.notes}` : ''}
               </div>
 
               {batch.attestations.length > 0 && (
-                <div className="mt-1 text-xs text-theme-text-muted">
+                <div className="text-theme-text-muted mt-1 text-xs">
                   Attested by{' '}
                   {batch.attestations
                     .map(
-                      (a) =>
-                        `${a.name ?? 'unknown'}${
-                          a.attested_at ? ` (${formatDateTime(a.attested_at, tz)})` : ''
-                        }`,
+                      (a) => `${a.name ?? 'unknown'}${a.attested_at ? ` (${formatDateTime(a.attested_at, tz)})` : ''}`
                     )
                     .join(', ')}
                 </div>

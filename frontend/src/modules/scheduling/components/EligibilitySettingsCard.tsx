@@ -79,45 +79,38 @@ export const EligibilitySettingsCard: React.FC = () => {
   };
 
   const toggleExcludedType = (type: string) => {
-    setExcludedTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
-    );
+    setExcludedTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
   };
 
   const toggleOpenPosition = (pos: string) => {
-    setOpenPositions((prev) =>
-      prev.includes(pos) ? prev.filter((p) => p !== pos) : [...prev, pos],
-    );
+    setOpenPositions((prev) => (prev.includes(pos) ? prev.filter((p) => p !== pos) : [...prev, pos]));
   };
 
   if (loading) {
     return (
-      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 flex items-center justify-center py-12">
-        <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
+      <div className="bg-theme-surface border-theme-surface-border flex items-center justify-center rounded-xl border p-5 py-12">
+        <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 space-y-6">
+    <div className="bg-theme-surface border-theme-surface-border space-y-6 rounded-xl border p-5">
       <div>
-        <h3 className="text-base font-semibold text-theme-text-primary flex items-center gap-2">
-          <Shield className="w-4 h-4" /> Position Eligibility
+        <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
+          <Shield className="h-4 w-4" /> Position Eligibility
         </h3>
-        <p className="text-sm text-theme-text-muted mt-1">
-          Control which membership types can self-signup for shifts and which
-          positions are available to all members.
+        <p className="text-theme-text-muted mt-1 text-sm">
+          Control which membership types can self-signup for shifts and which positions are available to all members.
         </p>
       </div>
 
       {/* Excluded Membership Types */}
       <div>
-        <h4 className="text-sm font-medium text-theme-text-primary mb-2">
-          Excluded from Self-Signup
-        </h4>
-        <p className="text-xs text-theme-text-muted mb-3">
-          Members with these membership types cannot sign themselves up for
-          shifts. Admins can still assign them manually.
+        <h4 className="text-theme-text-primary mb-2 text-sm font-medium">Excluded from Self-Signup</h4>
+        <p className="text-theme-text-muted mb-3 text-xs">
+          Members with these membership types cannot sign themselves up for shifts. Admins can still assign them
+          manually.
         </p>
         <div className="flex flex-wrap gap-2">
           {ALL_MEMBERSHIP_TYPES.map((type) => {
@@ -126,9 +119,9 @@ export const EligibilitySettingsCard: React.FC = () => {
               <button
                 key={type}
                 onClick={() => toggleExcludedType(type)}
-                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                   isExcluded
-                    ? 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-400'
+                    ? 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400'
                     : 'bg-theme-surface-hover/50 border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >
@@ -141,12 +134,10 @@ export const EligibilitySettingsCard: React.FC = () => {
 
       {/* Open Positions */}
       <div>
-        <h4 className="text-sm font-medium text-theme-text-primary mb-2">
-          Open Positions
-        </h4>
-        <p className="text-xs text-theme-text-muted mb-3">
-          These positions are available to all eligible members regardless of
-          rank or training. Select positions that anyone can sign up for.
+        <h4 className="text-theme-text-primary mb-2 text-sm font-medium">Open Positions</h4>
+        <p className="text-theme-text-muted mb-3 text-xs">
+          These positions are available to all eligible members regardless of rank or training. Select positions that
+          anyone can sign up for.
         </p>
         <div className="flex flex-wrap gap-2">
           {POSITION_KEYS.map((pos) => {
@@ -155,9 +146,9 @@ export const EligibilitySettingsCard: React.FC = () => {
               <button
                 key={pos}
                 onClick={() => toggleOpenPosition(pos)}
-                className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                   isOpen
-                    ? 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400'
+                    ? 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400'
                     : 'bg-theme-surface-hover/50 border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >
@@ -173,9 +164,9 @@ export const EligibilitySettingsCard: React.FC = () => {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-5 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+          className="flex items-center gap-2 rounded-lg bg-violet-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
         >
-          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
           Save Eligibility Settings
         </button>
       </div>

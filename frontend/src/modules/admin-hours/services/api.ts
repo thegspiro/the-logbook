@@ -260,7 +260,9 @@ export const eventHourMappingService = {
 
 export const adminHoursSeedService = {
   async seedDefaults(): Promise<{ categories_count: number; category_names: string[]; mappings_created: number }> {
-    const response = await api.post<{ categories_count: number; category_names: string[]; mappings_created: number }>('/admin-hours/seed-defaults');
+    const response = await api.post<{ categories_count: number; category_names: string[]; mappings_created: number }>(
+      '/admin-hours/seed-defaults'
+    );
     return response.data;
   },
 };

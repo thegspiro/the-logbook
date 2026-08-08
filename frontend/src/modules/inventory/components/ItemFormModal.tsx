@@ -14,30 +14,65 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import type {
-  InventoryItem, InventoryCategory, InventoryItemCreate,
-  StorageAreaResponse, Location, SizeVariantCreate,
+  InventoryItem,
+  InventoryCategory,
+  InventoryItemCreate,
+  StorageAreaResponse,
+  Location,
+  SizeVariantCreate,
 } from '../types';
-import {
-  ITEM_TYPE_FIELDS, getItemTypeFromCategory,
-  STANDARD_SIZES, GARMENT_STYLES,
-} from '../types';
+import { ITEM_TYPE_FIELDS, getItemTypeFromCategory, STANDARD_SIZES, GARMENT_STYLES } from '../types';
 
 interface FD {
-  name: string; description: string; category_id: string; tracking_type: string;
-  serial_number: string; asset_tag: string; barcode: string; size: string; color: string;
-  purchase_price: string; current_value: string; purchase_date: string; vendor: string; warranty_expiration: string;
-  replacement_cost: string; location_id: string; storage_area_id: string;
-  quantity: string; unit_of_measure: string; reorder_point: string; inspection_interval_days: string;
-  condition: string; notes: string;
+  name: string;
+  description: string;
+  category_id: string;
+  tracking_type: string;
+  serial_number: string;
+  asset_tag: string;
+  barcode: string;
+  size: string;
+  color: string;
+  purchase_price: string;
+  current_value: string;
+  purchase_date: string;
+  vendor: string;
+  warranty_expiration: string;
+  replacement_cost: string;
+  location_id: string;
+  storage_area_id: string;
+  quantity: string;
+  unit_of_measure: string;
+  reorder_point: string;
+  inspection_interval_days: string;
+  condition: string;
+  notes: string;
 }
 
 const EMPTY: FD = {
-  name: '', description: '', category_id: '', tracking_type: 'individual',
-  serial_number: '', asset_tag: '', barcode: '', size: '', color: '',
-  purchase_price: '', current_value: '', purchase_date: '', vendor: '', warranty_expiration: '',
-  replacement_cost: '', location_id: '', storage_area_id: '',
-  quantity: '1', unit_of_measure: '', reorder_point: '', inspection_interval_days: '',
-  condition: 'good', notes: '',
+  name: '',
+  description: '',
+  category_id: '',
+  tracking_type: 'individual',
+  serial_number: '',
+  asset_tag: '',
+  barcode: '',
+  size: '',
+  color: '',
+  purchase_price: '',
+  current_value: '',
+  purchase_date: '',
+  vendor: '',
+  warranty_expiration: '',
+  replacement_cost: '',
+  location_id: '',
+  storage_area_id: '',
+  quantity: '1',
+  unit_of_measure: '',
+  reorder_point: '',
+  inspection_interval_days: '',
+  condition: 'good',
+  notes: '',
 };
 
 export interface ItemFormModalProps {
@@ -54,12 +89,24 @@ export interface ItemFormModalProps {
  *  batteries, lights, etc. — any category where items come in different
  *  sizes, colors, or styles). */
 const VARIANT_ITEM_TYPES = new Set([
-  'uniform', 'ppe', 'tool', 'equipment', 'vehicle',
-  'electronics', 'consumable', 'other',
+  'uniform',
+  'ppe',
+  'tool',
+  'equipment',
+  'vehicle',
+  'electronics',
+  'consumable',
+  'other',
 ]);
 
 export const ItemFormModal: React.FC<ItemFormModalProps> = ({
-  isOpen, onClose, onSaved, categories, locations, storageAreas, editItem,
+  isOpen,
+  onClose,
+  onSaved,
+  categories,
+  locations,
+  storageAreas,
+  editItem,
 }) => {
   const [f, setF] = useState<FD>(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -74,23 +121,34 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   useEffect(() => {
     if (editItem) {
       setF({
-        name: editItem.name, description: editItem.description ?? '',
-        category_id: editItem.category_id ?? '', tracking_type: editItem.tracking_type,
-        serial_number: editItem.serial_number ?? '', asset_tag: editItem.asset_tag ?? '',
-        barcode: editItem.barcode ?? '', size: editItem.size ?? '', color: editItem.color ?? '',
+        name: editItem.name,
+        description: editItem.description ?? '',
+        category_id: editItem.category_id ?? '',
+        tracking_type: editItem.tracking_type,
+        serial_number: editItem.serial_number ?? '',
+        asset_tag: editItem.asset_tag ?? '',
+        barcode: editItem.barcode ?? '',
+        size: editItem.size ?? '',
+        color: editItem.color ?? '',
         purchase_price: editItem.purchase_price != null ? String(editItem.purchase_price) : '',
         current_value: editItem.current_value != null ? String(editItem.current_value) : '',
-        purchase_date: editItem.purchase_date ?? '', vendor: editItem.vendor ?? '',
+        purchase_date: editItem.purchase_date ?? '',
+        vendor: editItem.vendor ?? '',
         warranty_expiration: editItem.warranty_expiration ?? '',
         replacement_cost: editItem.replacement_cost != null ? String(editItem.replacement_cost) : '',
-        location_id: editItem.location_id ?? '', storage_area_id: editItem.storage_area_id ?? '',
-        quantity: String(editItem.quantity), unit_of_measure: editItem.unit_of_measure ?? '',
+        location_id: editItem.location_id ?? '',
+        storage_area_id: editItem.storage_area_id ?? '',
+        quantity: String(editItem.quantity),
+        unit_of_measure: editItem.unit_of_measure ?? '',
         reorder_point: editItem.reorder_point != null ? String(editItem.reorder_point) : '',
-        inspection_interval_days: editItem.inspection_interval_days != null
-          ? String(editItem.inspection_interval_days) : '',
-        condition: editItem.condition, notes: editItem.notes ?? '',
+        inspection_interval_days:
+          editItem.inspection_interval_days != null ? String(editItem.inspection_interval_days) : '',
+        condition: editItem.condition,
+        notes: editItem.notes ?? '',
       });
-    } else { setF(EMPTY); }
+    } else {
+      setF(EMPTY);
+    }
     setShowFin(false);
     setGenerateVariants(false);
     setSelectedSizes([]);
@@ -102,8 +160,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   const itemType = getItemTypeFromCategory(cat);
   const tf = ITEM_TYPE_FIELDS[itemType] ?? [];
   const areas = useMemo(
-    () => f.location_id ? storageAreas.filter((a) => a.location_id === f.location_id) : storageAreas,
-    [storageAreas, f.location_id],
+    () => (f.location_id ? storageAreas.filter((a) => a.location_id === f.location_id) : storageAreas),
+    [storageAreas, f.location_id]
   );
   const has = (k: string) => tf.includes(k);
   const up = (k: keyof FD, v: string) => setF((p) => ({ ...p, [k]: v }));
@@ -117,21 +175,20 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   }, [supportsVariants]);
 
   const toggleSize = useCallback((value: string) => {
-    setSelectedSizes((prev) =>
-      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
-    );
+    setSelectedSizes((prev) => (prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]));
   }, []);
 
   const toggleStyle = useCallback((value: string) => {
-    setSelectedStyles((prev) =>
-      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
-    );
+    setSelectedStyles((prev) => (prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]));
   }, []);
 
   /** Compute how many items will be generated for the preview label */
   const variantCount = useMemo(() => {
     if (!generateVariants || selectedSizes.length === 0) return 0;
-    const colorList = variantColors.split(',').map((c) => c.trim()).filter(Boolean);
+    const colorList = variantColors
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean);
     const colorMult = colorList.length || 1;
     const styleMult = selectedStyles.length || 1;
     return selectedSizes.length * colorMult * styleMult;
@@ -139,14 +196,23 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!f.name.trim()) { toast.error('Name is required'); return; }
+    if (!f.name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
 
     // Variant generation path
     if (generateVariants) {
-      if (selectedSizes.length === 0) { toast.error('Select at least one size'); return; }
+      if (selectedSizes.length === 0) {
+        toast.error('Select at least one size');
+        return;
+      }
       setSaving(true);
       try {
-        const colorList = variantColors.split(',').map((c) => c.trim()).filter(Boolean);
+        const colorList = variantColors
+          .split(',')
+          .map((c) => c.trim())
+          .filter(Boolean);
         const data: SizeVariantCreate = {
           base_name: f.name.trim(),
           sizes: selectedSizes,
@@ -164,9 +230,13 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         };
         const result = await inventoryService.createSizeVariants(data);
         toast.success(`Created ${result.created_count} variant items`);
-        onSaved(); onClose();
-      } catch (err: unknown) { toast.error(getErrorMessage(err, 'Failed to create variants')); }
-      finally { setSaving(false); }
+        onSaved();
+        onClose();
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to create variants'));
+      } finally {
+        setSaving(false);
+      }
       return;
     }
 
@@ -198,46 +268,74 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         condition: f.condition || undefined,
         notes: f.notes.trim() || undefined,
       };
-      if (editItem) { await inventoryService.updateItem(editItem.id, p); toast.success('Item updated'); }
-      else { await inventoryService.createItem(p); toast.success('Item created'); }
-      onSaved(); onClose();
-    } catch (err: unknown) { toast.error(getErrorMessage(err, 'Failed to save item')); }
-    finally { setSaving(false); }
+      if (editItem) {
+        await inventoryService.updateItem(editItem.id, p);
+        toast.success('Item updated');
+      } else {
+        await inventoryService.createItem(p);
+        toast.success('Item created');
+      }
+      onSaved();
+      onClose();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save item'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const lbl = 'form-label';
   const inp = 'form-input';
-  const chipBase = 'inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer select-none border transition-colors';
+  const chipBase =
+    'inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer select-none border transition-colors';
   const chipOn = 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/40';
-  const chipOff = 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border hover:border-theme-text-muted';
+  const chipOff =
+    'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border hover:border-theme-text-muted';
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={editItem ? 'Edit Item' : 'Add Item'} size="lg"
-      footer={<>
-        <button type="submit" form="item-form" disabled={saving} className="btn-info btn-md ml-2">
-          {saving ? 'Saving...' : editItem ? 'Update' : generateVariants ? `Create ${variantCount} Items` : 'Create'}
-        </button>
-        <button type="button" onClick={onClose} className="btn-secondary btn-md">Cancel</button>
-      </>}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editItem ? 'Edit Item' : 'Add Item'}
+      size="lg"
+      footer={
+        <>
+          <button type="submit" form="item-form" disabled={saving} className="btn-info btn-md ml-2">
+            {saving ? 'Saving...' : editItem ? 'Update' : generateVariants ? `Create ${variantCount} Items` : 'Create'}
+          </button>
+          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+            Cancel
+          </button>
+        </>
+      }
     >
       <form id="item-form" onSubmit={(e) => void submit(e)} className="space-y-5">
         {/* Basic */}
         <fieldset>
-          <legend className="text-sm font-semibold text-theme-text-primary mb-2">Basic Info</legend>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Basic Info</legend>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className={lbl}>Name *</label>
               <input className={inp} value={f.name} onChange={(e) => up('name', e.target.value)} required />
             </div>
             <div className="sm:col-span-2">
               <label className={lbl}>Description</label>
-              <textarea className={inp} rows={2} value={f.description} onChange={(e) => up('description', e.target.value)} />
+              <textarea
+                className={inp}
+                rows={2}
+                value={f.description}
+                onChange={(e) => up('description', e.target.value)}
+              />
             </div>
             <div>
               <label className={lbl}>Category</label>
               <select className={inp} value={f.category_id} onChange={(e) => up('category_id', e.target.value)}>
                 <option value="">-- Select --</option>
-                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -253,11 +351,28 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* Identity — barcode is always available; serial/asset tag depend on category */}
         {!generateVariants && (
           <fieldset>
-            <legend className="text-sm font-semibold text-theme-text-primary mb-2">Identity</legend>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {has('serial_number') && <div><label className={lbl}>Serial #</label><input className={inp} value={f.serial_number} onChange={(e) => up('serial_number', e.target.value)} /></div>}
-              {has('asset_tag') && <div><label className={lbl}>Asset Tag</label><input className={inp} value={f.asset_tag} onChange={(e) => up('asset_tag', e.target.value)} /></div>}
-              <div><label className={lbl}>Barcode</label><input className={inp} value={f.barcode} onChange={(e) => up('barcode', e.target.value)} /></div>
+            <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Identity</legend>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {has('serial_number') && (
+                <div>
+                  <label className={lbl}>Serial #</label>
+                  <input
+                    className={inp}
+                    value={f.serial_number}
+                    onChange={(e) => up('serial_number', e.target.value)}
+                  />
+                </div>
+              )}
+              {has('asset_tag') && (
+                <div>
+                  <label className={lbl}>Asset Tag</label>
+                  <input className={inp} value={f.asset_tag} onChange={(e) => up('asset_tag', e.target.value)} />
+                </div>
+              )}
+              <div>
+                <label className={lbl}>Barcode</label>
+                <input className={inp} value={f.barcode} onChange={(e) => up('barcode', e.target.value)} />
+              </div>
             </div>
           </fieldset>
         )}
@@ -265,23 +380,22 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* Generate Sizes & Styles toggle (new uniform/PPE items only) */}
         {supportsVariants && (
           <fieldset>
-            <div className="flex items-center gap-2 mb-2">
-              <label className="relative inline-flex items-center cursor-pointer">
+            <div className="mb-2 flex items-center gap-2">
+              <label className="relative inline-flex cursor-pointer items-center">
                 <input
                   type="checkbox"
                   checked={generateVariants}
                   onChange={(e) => setGenerateVariants(e.target.checked)}
-                  className="sr-only peer"
+                  className="peer sr-only"
                 />
-                <div className="w-9 h-5 bg-theme-surface-secondary rounded-full peer peer-checked:bg-blue-500 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white dark:after:bg-gray-200 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full border border-theme-surface-border" />
+                <div className="bg-theme-surface-secondary peer border-theme-surface-border h-5 w-9 rounded-full border peer-checked:bg-blue-500 after:absolute after:top-0.5 after:left-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full dark:after:bg-gray-200" />
               </label>
-              <span className="text-sm font-semibold text-theme-text-primary">
-                Generate Sizes &amp; Styles
-              </span>
+              <span className="text-theme-text-primary text-sm font-semibold">Generate Sizes &amp; Styles</span>
             </div>
             {generateVariants && (
-              <p className="text-xs text-theme-text-muted mb-3">
-                Select the sizes and styles below. One pool item will be created for each combination and grouped together automatically.
+              <p className="text-theme-text-muted mb-3 text-xs">
+                Select the sizes and styles below. One pool item will be created for each combination and grouped
+                together automatically.
               </p>
             )}
           </fieldset>
@@ -293,7 +407,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             {/* Sizes */}
             <div>
               <label className={lbl}>Sizes *</label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
+              <div className="mt-1 flex flex-wrap gap-1.5">
                 {STANDARD_SIZES.map((s) => (
                   <button
                     key={s.value}
@@ -306,7 +420,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 ))}
               </div>
               {selectedSizes.length > 0 && (
-                <p className="text-xs text-theme-text-muted mt-1">
+                <p className="text-theme-text-muted mt-1 text-xs">
                   {selectedSizes.length} size{selectedSizes.length !== 1 ? 's' : ''} selected
                 </p>
               )}
@@ -315,7 +429,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             {/* Styles */}
             <div>
               <label className={lbl}>Styles</label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
+              <div className="mt-1 flex flex-wrap gap-1.5">
                 {GARMENT_STYLES.map((s) => (
                   <button
                     key={s.value}
@@ -328,7 +442,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 ))}
               </div>
               {selectedStyles.length > 0 && (
-                <p className="text-xs text-theme-text-muted mt-1">
+                <p className="text-theme-text-muted mt-1 text-xs">
                   {selectedStyles.length} style{selectedStyles.length !== 1 ? 's' : ''} selected
                 </p>
               )}
@@ -347,14 +461,18 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
             {/* Preview */}
             {variantCount > 0 && (
-              <div className="rounded-lg border border-theme-surface-border bg-theme-surface-secondary/50 p-3">
-                <p className="text-sm font-medium text-theme-text-primary">
+              <div className="border-theme-surface-border bg-theme-surface-secondary/50 rounded-lg border p-3">
+                <p className="text-theme-text-primary text-sm font-medium">
                   {variantCount} item{variantCount !== 1 ? 's' : ''} will be created
                 </p>
-                <p className="text-xs text-theme-text-muted mt-0.5">
+                <p className="text-theme-text-muted mt-0.5 text-xs">
                   {selectedSizes.length} size{selectedSizes.length !== 1 ? 's' : ''}
-                  {selectedStyles.length > 0 && ` × ${selectedStyles.length} style${selectedStyles.length !== 1 ? 's' : ''}`}
-                  {(() => { const n = variantColors.split(',').filter((c) => c.trim()).length; return n > 0 ? ` × ${n} color${n !== 1 ? 's' : ''}` : ''; })()}
+                  {selectedStyles.length > 0 &&
+                    ` × ${selectedStyles.length} style${selectedStyles.length !== 1 ? 's' : ''}`}
+                  {(() => {
+                    const n = variantColors.split(',').filter((c) => c.trim()).length;
+                    return n > 0 ? ` × ${n} color${n !== 1 ? 's' : ''}` : '';
+                  })()}
                 </p>
               </div>
             )}
@@ -364,47 +482,123 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* Physical — only when NOT generating variants */}
         {!generateVariants && (has('size') || has('color')) && (
           <fieldset>
-            <legend className="text-sm font-semibold text-theme-text-primary mb-2">Physical</legend>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {has('size') && <div><label className={lbl}>Size</label><input className={inp} value={f.size} onChange={(e) => up('size', e.target.value)} /></div>}
-              {has('color') && <div><label className={lbl}>Color</label><input className={inp} value={f.color} onChange={(e) => up('color', e.target.value)} /></div>}
+            <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Physical</legend>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {has('size') && (
+                <div>
+                  <label className={lbl}>Size</label>
+                  <input className={inp} value={f.size} onChange={(e) => up('size', e.target.value)} />
+                </div>
+              )}
+              {has('color') && (
+                <div>
+                  <label className={lbl}>Color</label>
+                  <input className={inp} value={f.color} onChange={(e) => up('color', e.target.value)} />
+                </div>
+              )}
             </div>
           </fieldset>
         )}
 
         {/* Financial (collapsible) */}
         <fieldset>
-          <button type="button" className="flex items-center gap-1 text-sm font-semibold text-theme-text-primary mb-2" onClick={() => setShowFin(!showFin)}>
-            Financial {showFin ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <button
+            type="button"
+            className="text-theme-text-primary mb-2 flex items-center gap-1 text-sm font-semibold"
+            onClick={() => setShowFin(!showFin)}
+          >
+            Financial {showFin ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
           {showFin && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className={lbl}>Purchase Price</label><input type="number" step="0.01" className={inp} value={f.purchase_price} onChange={(e) => up('purchase_price', e.target.value)} /></div>
-              <div><label className={lbl}>Current Value</label><input type="number" step="0.01" className={inp} value={f.current_value} onChange={(e) => up('current_value', e.target.value)} /></div>
-              <div><label className={lbl}>Purchase Date</label><input type="date" className={inp} value={f.purchase_date} onChange={(e) => up('purchase_date', e.target.value)} /></div>
-              <div><label className={lbl}>Vendor</label><input className={inp} value={f.vendor} onChange={(e) => up('vendor', e.target.value)} /></div>
-              <div><label className={lbl}>Warranty Expiration</label><input type="date" className={inp} value={f.warranty_expiration} onChange={(e) => up('warranty_expiration', e.target.value)} /></div>
-              <div><label className={lbl}>Replacement Cost</label><input type="number" step="0.01" className={inp} value={f.replacement_cost} onChange={(e) => up('replacement_cost', e.target.value)} /></div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className={lbl}>Purchase Price</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className={inp}
+                  value={f.purchase_price}
+                  onChange={(e) => up('purchase_price', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={lbl}>Current Value</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className={inp}
+                  value={f.current_value}
+                  onChange={(e) => up('current_value', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={lbl}>Purchase Date</label>
+                <input
+                  type="date"
+                  className={inp}
+                  value={f.purchase_date}
+                  onChange={(e) => up('purchase_date', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={lbl}>Vendor</label>
+                <input className={inp} value={f.vendor} onChange={(e) => up('vendor', e.target.value)} />
+              </div>
+              <div>
+                <label className={lbl}>Warranty Expiration</label>
+                <input
+                  type="date"
+                  className={inp}
+                  value={f.warranty_expiration}
+                  onChange={(e) => up('warranty_expiration', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className={lbl}>Replacement Cost</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className={inp}
+                  value={f.replacement_cost}
+                  onChange={(e) => up('replacement_cost', e.target.value)}
+                />
+              </div>
             </div>
           )}
         </fieldset>
 
         {/* Location */}
         <fieldset>
-          <legend className="text-sm font-semibold text-theme-text-primary mb-2">Location</legend>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Location</legend>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={lbl}>Facility / Room</label>
-              <select className={inp} value={f.location_id} onChange={(e) => { up('location_id', e.target.value); up('storage_area_id', ''); }}>
+              <select
+                className={inp}
+                value={f.location_id}
+                onChange={(e) => {
+                  up('location_id', e.target.value);
+                  up('storage_area_id', '');
+                }}
+              >
                 <option value="">-- Select --</option>
-                {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
               <label className={lbl}>Storage Area</label>
               <select className={inp} value={f.storage_area_id} onChange={(e) => up('storage_area_id', e.target.value)}>
                 <option value="">-- Select --</option>
-                {areas.map((a) => <option key={a.id} value={a.id}>{a.name}{a.label ? ` (${a.label})` : ''}</option>)}
+                {areas.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                    {a.label ? ` (${a.label})` : ''}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -413,20 +607,41 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* Quantity (pool or variant generation) */}
         {(f.tracking_type === 'pool' || generateVariants) && (
           <fieldset>
-            <legend className="text-sm font-semibold text-theme-text-primary mb-2">
+            <legend className="text-theme-text-primary mb-2 text-sm font-semibold">
               {generateVariants ? 'Quantity Per Variant' : 'Quantity & Reorder'}
             </legend>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className={lbl}>{generateVariants ? 'Starting Quantity (each)' : 'Quantity'}</label>
-                <input type="number" min="0" className={inp} value={f.quantity} onChange={(e) => up('quantity', e.target.value)} />
+                <input
+                  type="number"
+                  min="0"
+                  className={inp}
+                  value={f.quantity}
+                  onChange={(e) => up('quantity', e.target.value)}
+                />
               </div>
-              <div><label className={lbl}>Unit of Measure</label><input className={inp} placeholder="e.g. pairs, boxes" value={f.unit_of_measure} onChange={(e) => up('unit_of_measure', e.target.value)} /></div>
+              <div>
+                <label className={lbl}>Unit of Measure</label>
+                <input
+                  className={inp}
+                  placeholder="e.g. pairs, boxes"
+                  value={f.unit_of_measure}
+                  onChange={(e) => up('unit_of_measure', e.target.value)}
+                />
+              </div>
               {!generateVariants && (
                 <div>
                   <label className={lbl}>Reorder Point</label>
-                  <input type="number" min="0" className={inp} value={f.reorder_point} onChange={(e) => up('reorder_point', e.target.value)} placeholder="Alert when qty falls to this level" />
-                  <p className="text-xs text-theme-text-muted mt-1">Leave empty to disable item-level alerts</p>
+                  <input
+                    type="number"
+                    min="0"
+                    className={inp}
+                    value={f.reorder_point}
+                    onChange={(e) => up('reorder_point', e.target.value)}
+                    placeholder="Alert when qty falls to this level"
+                  />
+                  <p className="text-theme-text-muted mt-1 text-xs">Leave empty to disable item-level alerts</p>
                 </div>
               )}
             </div>
@@ -436,13 +651,26 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         {/* Maintenance */}
         {!generateVariants && has('inspection_interval_days') && (
           <fieldset>
-            <legend className="text-sm font-semibold text-theme-text-primary mb-2">Maintenance</legend>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div><label className={lbl}>Inspection Interval (days)</label><input type="number" min="0" className={inp} value={f.inspection_interval_days} onChange={(e) => up('inspection_interval_days', e.target.value)} /></div>
+            <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Maintenance</legend>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className={lbl}>Inspection Interval (days)</label>
+                <input
+                  type="number"
+                  min="0"
+                  className={inp}
+                  value={f.inspection_interval_days}
+                  onChange={(e) => up('inspection_interval_days', e.target.value)}
+                />
+              </div>
               <div>
                 <label className={lbl}>Condition</label>
                 <select className={inp} value={f.condition} onChange={(e) => up('condition', e.target.value)}>
-                  {ITEM_CONDITION_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  {ITEM_CONDITION_OPTIONS.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -451,7 +679,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
         {/* Notes */}
         <fieldset>
-          <legend className="text-sm font-semibold text-theme-text-primary mb-2">Notes</legend>
+          <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Notes</legend>
           <textarea className={inp} rows={2} value={f.notes} onChange={(e) => up('notes', e.target.value)} />
         </fieldset>
       </form>

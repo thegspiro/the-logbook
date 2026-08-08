@@ -14,73 +14,40 @@
  * Requires: training.manage permission
  */
 
-import React, { Suspense, useState, useEffect } from "react";
-import { useSearchParams } from "react-router";
-import type { LucideIcon } from "lucide-react";
-import {
-  LayoutDashboard,
-  ClipboardList,
-  Settings,
-  ClipboardCheck,
-  TrendingUp,
-  Shield,
-} from "lucide-react";
-import { HelpLink } from "../components/HelpLink";
-import { lazyWithRetry } from "../utils/lazyWithRetry";
+import React, { Suspense, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router';
+import type { LucideIcon } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, Settings, ClipboardCheck, TrendingUp, Shield } from 'lucide-react';
+import { HelpLink } from '../components/HelpLink';
+import { lazyWithRetry } from '../utils/lazyWithRetry';
 
 // Lazy-loaded tab components
-const TrainingOfficerDashboard = lazyWithRetry(
-  () => import("./TrainingOfficerDashboard"),
-);
-const ComplianceMatrixTab = lazyWithRetry(
-  () => import("./ComplianceMatrixTab"),
-);
-const ExpiringCertsTab = lazyWithRetry(() => import("./ExpiringCertsTab"));
-const TrainingWaiversTab = lazyWithRetry(() => import("./TrainingWaiversTab"));
+const TrainingOfficerDashboard = lazyWithRetry(() => import('./TrainingOfficerDashboard'));
+const ComplianceMatrixTab = lazyWithRetry(() => import('./ComplianceMatrixTab'));
+const ExpiringCertsTab = lazyWithRetry(() => import('./ExpiringCertsTab'));
+const TrainingWaiversTab = lazyWithRetry(() => import('./TrainingWaiversTab'));
 
-const ReviewSubmissionsPage = lazyWithRetry(
-  () => import("./ReviewSubmissionsPage"),
-);
-const CreateTrainingSessionPage = lazyWithRetry(
-  () => import("./CreateTrainingSessionPage"),
-);
-const ShiftReportPage = lazyWithRetry(() => import("./ShiftReportPage"));
-const ManualEntrySettingsPanel = lazyWithRetry(
-  () => import("./training/ManualEntrySettingsPanel"),
-);
+const ReviewSubmissionsPage = lazyWithRetry(() => import('./ReviewSubmissionsPage'));
+const CreateTrainingSessionPage = lazyWithRetry(() => import('./CreateTrainingSessionPage'));
+const ShiftReportPage = lazyWithRetry(() => import('./ShiftReportPage'));
+const ManualEntrySettingsPanel = lazyWithRetry(() => import('./training/ManualEntrySettingsPanel'));
 
-const TrainingRequirementsPage = lazyWithRetry(
-  () => import("./TrainingRequirementsPage"),
-);
-const CreatePipelinePage = lazyWithRetry(() => import("./CreatePipelinePage"));
-const ExternalTrainingPage = lazyWithRetry(
-  () => import("./ExternalTrainingPage"),
-);
-const HistoricalImportPage = lazyWithRetry(
-  () => import("./HistoricalImportPage"),
-);
+const TrainingRequirementsPage = lazyWithRetry(() => import('./TrainingRequirementsPage'));
+const CreatePipelinePage = lazyWithRetry(() => import('./CreatePipelinePage'));
+const ExternalTrainingPage = lazyWithRetry(() => import('./ExternalTrainingPage'));
+const HistoricalImportPage = lazyWithRetry(() => import('./HistoricalImportPage'));
 
-const SkillsTestingTemplatesTab = lazyWithRetry(
-  () => import("./SkillsTestingTemplatesTab"),
-);
-const SkillsTestingTestRecordsTab = lazyWithRetry(
-  () => import("./SkillsTestingTestRecordsTab"),
-);
-const TrainingEnhancementsTab = lazyWithRetry(
-  () => import("./TrainingEnhancementsTab"),
-);
-const ComplianceOfficerDashboard = lazyWithRetry(
-  () => import("./ComplianceOfficerDashboard"),
-);
-const CourseLibraryPage = lazyWithRetry(() => import("./CourseLibraryPage"));
-const CohortsPage = lazyWithRetry(() => import("./training/CohortsPage"));
-const MemberTrainingStatusPage = lazyWithRetry(
-  () => import("./MemberTrainingStatusPage"),
-);
+const SkillsTestingTemplatesTab = lazyWithRetry(() => import('./SkillsTestingTemplatesTab'));
+const SkillsTestingTestRecordsTab = lazyWithRetry(() => import('./SkillsTestingTestRecordsTab'));
+const TrainingEnhancementsTab = lazyWithRetry(() => import('./TrainingEnhancementsTab'));
+const ComplianceOfficerDashboard = lazyWithRetry(() => import('./ComplianceOfficerDashboard'));
+const CourseLibraryPage = lazyWithRetry(() => import('./CourseLibraryPage'));
+const CohortsPage = lazyWithRetry(() => import('./training/CohortsPage'));
+const MemberTrainingStatusPage = lazyWithRetry(() => import('./MemberTrainingStatusPage'));
 
 // ── Type definitions ────────────────────────────────────────────
 
-type PageId = "dashboard" | "records" | "setup" | "skills-testing" | "enhancements" | "compliance";
+type PageId = 'dashboard' | 'records' | 'setup' | 'skills-testing' | 'enhancements' | 'compliance';
 
 interface TabDef {
   id: string;
@@ -100,123 +67,120 @@ interface PageDef {
 
 const pages: PageDef[] = [
   {
-    id: "dashboard",
-    label: "Dashboard",
+    id: 'dashboard',
+    label: 'Dashboard',
     icon: LayoutDashboard,
-    description:
-      "Training overview, compliance tracking, and certificate monitoring",
+    description: 'Training overview, compliance tracking, and certificate monitoring',
     tabs: [
-      { id: "overview", label: "Overview" },
-      { id: "compliance", label: "Compliance Matrix" },
-      { id: "expiring-certs", label: "Expiring Certs" },
-      { id: "waivers", label: "Training Waivers" },
+      { id: 'overview', label: 'Overview' },
+      { id: 'compliance', label: 'Compliance Matrix' },
+      { id: 'expiring-certs', label: 'Expiring Certs' },
+      { id: 'waivers', label: 'Training Waivers' },
     ],
-    defaultTab: "overview",
+    defaultTab: 'overview',
   },
   {
-    id: "records",
-    label: "Records",
+    id: 'records',
+    label: 'Records',
     icon: ClipboardList,
-    description:
-      "Review submissions, manage sessions, and generate shift reports",
+    description: 'Review submissions, manage sessions, and generate shift reports',
     tabs: [
-      { id: "submissions", label: "Submissions" },
-      { id: "sessions", label: "Sessions" },
-      { id: "cohorts", label: "Course Cohorts" },
-      { id: "shift-reports", label: "Shift Reports" },
-      { id: "member-status", label: "Monthly Status" },
+      { id: 'submissions', label: 'Submissions' },
+      { id: 'sessions', label: 'Sessions' },
+      { id: 'cohorts', label: 'Course Cohorts' },
+      { id: 'shift-reports', label: 'Shift Reports' },
+      { id: 'member-status', label: 'Monthly Status' },
     ],
-    defaultTab: "submissions",
+    defaultTab: 'submissions',
   },
   {
-    id: "setup",
-    label: "Setup",
+    id: 'setup',
+    label: 'Setup',
     icon: Settings,
-    description:
-      "Configure requirements, pipelines, integrations, and data imports",
+    description: 'Configure requirements, pipelines, integrations, and data imports',
     tabs: [
-      { id: "requirements", label: "Requirements" },
-      { id: "courses", label: "Course Library" },
-      { id: "pipelines", label: "Pipelines" },
-      { id: "manual-entry", label: "Manual Entry" },
-      { id: "integrations", label: "Integrations" },
-      { id: "import", label: "Import History" },
+      { id: 'requirements', label: 'Requirements' },
+      { id: 'courses', label: 'Course Library' },
+      { id: 'pipelines', label: 'Pipelines' },
+      { id: 'manual-entry', label: 'Manual Entry' },
+      { id: 'integrations', label: 'Integrations' },
+      { id: 'import', label: 'Import History' },
     ],
-    defaultTab: "requirements",
+    defaultTab: 'requirements',
   },
   {
-    id: "skills-testing",
-    label: "Skills Testing",
+    id: 'skills-testing',
+    label: 'Skills Testing',
     icon: ClipboardCheck,
-    description: "Create evaluation templates and conduct skill assessments",
+    description: 'Create evaluation templates and conduct skill assessments',
     tabs: [
-      { id: "templates", label: "Templates" },
-      { id: "tests", label: "Test Records" },
+      { id: 'templates', label: 'Templates' },
+      { id: 'tests', label: 'Test Records' },
     ],
-    defaultTab: "templates",
+    defaultTab: 'templates',
   },
   {
-    id: "enhancements",
-    label: "Advanced",
+    id: 'enhancements',
+    label: 'Advanced',
     icon: TrendingUp,
     description:
-      "Recertification pathways, competency tracking, instructor qualifications, effectiveness, and multi-agency training",
+      'Recertification pathways, competency tracking, instructor qualifications, effectiveness, and multi-agency training',
     tabs: [
-      { id: "recertification", label: "Recertification" },
-      { id: "competency", label: "Competency" },
-      { id: "instructors", label: "Instructors" },
-      { id: "effectiveness", label: "Effectiveness" },
-      { id: "multi-agency", label: "Multi-Agency" },
-      { id: "reports", label: "Reports" },
+      { id: 'recertification', label: 'Recertification' },
+      { id: 'competency', label: 'Competency' },
+      { id: 'instructors', label: 'Instructors' },
+      { id: 'effectiveness', label: 'Effectiveness' },
+      { id: 'multi-agency', label: 'Multi-Agency' },
+      { id: 'reports', label: 'Reports' },
     ],
-    defaultTab: "recertification",
+    defaultTab: 'recertification',
   },
   {
-    id: "compliance",
-    label: "Compliance",
+    id: 'compliance',
+    label: 'Compliance',
     icon: Shield,
     description:
-      "Annual compliance reporting, ISO readiness scoring, NFPA 1401 record quality, and formal attestation workflow",
+      'Annual compliance reporting, ISO readiness scoring, NFPA 1401 record quality, and formal attestation workflow',
     tabs: [
-      { id: "annual-report", label: "Annual Report" },
-      { id: "iso-readiness", label: "ISO Readiness" },
-      { id: "record-completeness", label: "Record Quality" },
-      { id: "attestations", label: "Attestations" },
-      { id: "forecast", label: "Forecast" },
+      { id: 'annual-report', label: 'Annual Report' },
+      { id: 'iso-readiness', label: 'ISO Readiness' },
+      { id: 'record-completeness', label: 'Record Quality' },
+      { id: 'attestations', label: 'Attestations' },
+      { id: 'forecast', label: 'Forecast' },
     ],
-    defaultTab: "annual-report",
+    defaultTab: 'annual-report',
   },
 ];
 
 // Map from old flat tab IDs to new page+tab for backwards compatibility
 const legacyTabMap: Record<string, { page: PageId; tab: string }> = {
-  dashboard: { page: "dashboard", tab: "overview" },
-  compliance: { page: "dashboard", tab: "compliance" },
-  "expiring-certs": { page: "dashboard", tab: "expiring-certs" },
-  waivers: { page: "dashboard", tab: "waivers" },
-  submissions: { page: "records", tab: "submissions" },
-  sessions: { page: "records", tab: "sessions" },
-  cohorts: { page: "records", tab: "cohorts" },
-  "shift-reports": { page: "records", tab: "shift-reports" },
-  "member-status": { page: "records", tab: "member-status" },
-  requirements: { page: "setup", tab: "requirements" },
-  courses: { page: "setup", tab: "courses" },
-  pipelines: { page: "setup", tab: "pipelines" },
-  integrations: { page: "setup", tab: "integrations" },
-  import: { page: "setup", tab: "import" },
-  templates: { page: "skills-testing", tab: "templates" },
-  tests: { page: "skills-testing", tab: "tests" },
-  recertification: { page: "enhancements", tab: "recertification" },
-  competency: { page: "enhancements", tab: "competency" },
-  instructors: { page: "enhancements", tab: "instructors" },
-  effectiveness: { page: "enhancements", tab: "effectiveness" },
-  "multi-agency": { page: "enhancements", tab: "multi-agency" },
-  reports: { page: "enhancements", tab: "reports" },
-  "annual-report": { page: "compliance", tab: "annual-report" },
-  "iso-readiness": { page: "compliance", tab: "iso-readiness" },
-  "record-completeness": { page: "compliance", tab: "record-completeness" },
-  attestations: { page: "compliance", tab: "attestations" },
-  forecast: { page: "compliance", tab: "forecast" },
+  dashboard: { page: 'dashboard', tab: 'overview' },
+  compliance: { page: 'dashboard', tab: 'compliance' },
+  'expiring-certs': { page: 'dashboard', tab: 'expiring-certs' },
+  waivers: { page: 'dashboard', tab: 'waivers' },
+  submissions: { page: 'records', tab: 'submissions' },
+  sessions: { page: 'records', tab: 'sessions' },
+  cohorts: { page: 'records', tab: 'cohorts' },
+  'shift-reports': { page: 'records', tab: 'shift-reports' },
+  'member-status': { page: 'records', tab: 'member-status' },
+  requirements: { page: 'setup', tab: 'requirements' },
+  courses: { page: 'setup', tab: 'courses' },
+  pipelines: { page: 'setup', tab: 'pipelines' },
+  integrations: { page: 'setup', tab: 'integrations' },
+  import: { page: 'setup', tab: 'import' },
+  templates: { page: 'skills-testing', tab: 'templates' },
+  tests: { page: 'skills-testing', tab: 'tests' },
+  recertification: { page: 'enhancements', tab: 'recertification' },
+  competency: { page: 'enhancements', tab: 'competency' },
+  instructors: { page: 'enhancements', tab: 'instructors' },
+  effectiveness: { page: 'enhancements', tab: 'effectiveness' },
+  'multi-agency': { page: 'enhancements', tab: 'multi-agency' },
+  reports: { page: 'enhancements', tab: 'reports' },
+  'annual-report': { page: 'compliance', tab: 'annual-report' },
+  'iso-readiness': { page: 'compliance', tab: 'iso-readiness' },
+  'record-completeness': { page: 'compliance', tab: 'record-completeness' },
+  attestations: { page: 'compliance', tab: 'attestations' },
+  forecast: { page: 'compliance', tab: 'forecast' },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -227,14 +191,12 @@ const getPage = (id: PageId): PageDef => {
   return found;
 };
 
-const isValidPage = (id: string): id is PageId =>
-  pages.some((p) => p.id === id);
+const isValidPage = (id: string): id is PageId => pages.some((p) => p.id === id);
 
-const isValidTab = (page: PageDef, tabId: string): boolean =>
-  page.tabs.some((t) => t.id === tabId);
+const isValidTab = (page: PageDef, tabId: string): boolean => page.tabs.some((t) => t.id === tabId);
 
 const TabLoading = () => (
-  <div className="flex justify-center items-center h-64">
+  <div className="flex h-64 items-center justify-center">
     <div className="text-theme-text-muted">Loading...</div>
   </div>
 );
@@ -243,45 +205,45 @@ const TabLoading = () => (
 
 const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
   // Dashboard sub-page
-  if (page === "dashboard") {
-    if (tab === "overview") return <TrainingOfficerDashboard />;
-    if (tab === "compliance") return <ComplianceMatrixTab />;
-    if (tab === "expiring-certs") return <ExpiringCertsTab />;
-    if (tab === "waivers") return <TrainingWaiversTab />;
+  if (page === 'dashboard') {
+    if (tab === 'overview') return <TrainingOfficerDashboard />;
+    if (tab === 'compliance') return <ComplianceMatrixTab />;
+    if (tab === 'expiring-certs') return <ExpiringCertsTab />;
+    if (tab === 'waivers') return <TrainingWaiversTab />;
   }
 
   // Records sub-page
-  if (page === "records") {
-    if (tab === "submissions") return <ReviewSubmissionsPage />;
-    if (tab === "sessions") return <CreateTrainingSessionPage />;
-    if (tab === "cohorts") return <CohortsPage embedded />;
-    if (tab === "shift-reports") return <ShiftReportPage />;
-    if (tab === "member-status") return <MemberTrainingStatusPage />;
+  if (page === 'records') {
+    if (tab === 'submissions') return <ReviewSubmissionsPage />;
+    if (tab === 'sessions') return <CreateTrainingSessionPage />;
+    if (tab === 'cohorts') return <CohortsPage embedded />;
+    if (tab === 'shift-reports') return <ShiftReportPage />;
+    if (tab === 'member-status') return <MemberTrainingStatusPage />;
   }
 
   // Setup sub-page
-  if (page === "setup") {
-    if (tab === "requirements") return <TrainingRequirementsPage />;
-    if (tab === "courses") return <CourseLibraryPage embedded />;
-    if (tab === "pipelines") return <CreatePipelinePage />;
-    if (tab === "manual-entry") return <ManualEntrySettingsPanel />;
-    if (tab === "integrations") return <ExternalTrainingPage />;
-    if (tab === "import") return <HistoricalImportPage />;
+  if (page === 'setup') {
+    if (tab === 'requirements') return <TrainingRequirementsPage />;
+    if (tab === 'courses') return <CourseLibraryPage embedded />;
+    if (tab === 'pipelines') return <CreatePipelinePage />;
+    if (tab === 'manual-entry') return <ManualEntrySettingsPanel />;
+    if (tab === 'integrations') return <ExternalTrainingPage />;
+    if (tab === 'import') return <HistoricalImportPage />;
   }
 
   // Skills Testing sub-page
-  if (page === "skills-testing") {
-    if (tab === "templates") return <SkillsTestingTemplatesTab />;
-    if (tab === "tests") return <SkillsTestingTestRecordsTab />;
+  if (page === 'skills-testing') {
+    if (tab === 'templates') return <SkillsTestingTemplatesTab />;
+    if (tab === 'tests') return <SkillsTestingTestRecordsTab />;
   }
 
   // Advanced / Enhancements sub-page
-  if (page === "enhancements") {
+  if (page === 'enhancements') {
     return <TrainingEnhancementsTab activeTab={tab} />;
   }
 
   // Compliance Officer sub-page
-  if (page === "compliance") {
+  if (page === 'compliance') {
     return <ComplianceOfficerDashboard activeTab={tab} />;
   }
 
@@ -295,25 +257,22 @@ export const TrainingAdminPage: React.FC = () => {
 
   // Resolve initial state from URL params (supports both old and new format)
   const resolveInitial = (): { page: PageId; tab: string } => {
-    const pageParam = searchParams.get("page");
-    const tabParam = searchParams.get("tab");
+    const pageParam = searchParams.get('page');
+    const tabParam = searchParams.get('tab');
 
     // New format: ?page=dashboard&tab=overview
     if (pageParam && isValidPage(pageParam)) {
       const pageDef = getPage(pageParam);
-      const tab =
-        tabParam && isValidTab(pageDef, tabParam)
-          ? tabParam
-          : pageDef.defaultTab;
+      const tab = tabParam && isValidTab(pageDef, tabParam) ? tabParam : pageDef.defaultTab;
       return { page: pageParam, tab };
     }
 
     // Legacy format: ?tab=submissions (old flat tab IDs)
     if (tabParam && tabParam in legacyTabMap) {
-      return legacyTabMap[tabParam] ?? { page: "dashboard", tab: "overview" };
+      return legacyTabMap[tabParam] ?? { page: 'dashboard', tab: 'overview' };
     }
 
-    return { page: "dashboard", tab: "overview" };
+    return { page: 'dashboard', tab: 'overview' };
   };
 
   const initial = resolveInitial();
@@ -344,14 +303,12 @@ export const TrainingAdminPage: React.FC = () => {
 
   return (
     <div>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+      <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
         {/* Page Header */}
         <div className="mb-6 flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-theme-text-primary">
-              Training Administration
-            </h1>
-            <p className="mt-1 text-sm text-theme-text-muted">
+            <h1 className="text-theme-text-primary text-2xl font-bold">Training Administration</h1>
+            <p className="text-theme-text-muted mt-1 text-sm">
               Manage training submissions, requirements, sessions, and more
             </p>
           </div>
@@ -362,11 +319,7 @@ export const TrainingAdminPage: React.FC = () => {
         </div>
 
         {/* Top-level sub-page selector */}
-        <div
-          className="flex space-x-2 mb-6 hscroll"
-          role="tablist"
-          aria-label="Training admin sections"
-        >
+        <div className="hscroll mb-6 flex space-x-2" role="tablist" aria-label="Training admin sections">
           {pages.map((page) => {
             const Icon = page.icon;
             const isActive = activePage === page.id;
@@ -376,13 +329,13 @@ export const TrainingAdminPage: React.FC = () => {
                 onClick={() => handlePageChange(page.id)}
                 role="tab"
                 aria-selected={isActive}
-                className={`flex items-center space-x-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) ${
+                className={`focus:ring-theme-focus-ring flex items-center space-x-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden ${
                   isActive
-                    ? "bg-red-600 text-white"
-                    : "bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover"
+                    ? 'bg-red-600 text-white'
+                    : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
                 }`}
               >
-                <Icon className="w-4 h-4" aria-hidden="true" />
+                <Icon className="h-4 w-4" aria-hidden="true" />
                 <span>{page.label}</span>
               </button>
             );
@@ -390,21 +343,18 @@ export const TrainingAdminPage: React.FC = () => {
         </div>
 
         {/* Inner tab bar */}
-        <div className="border-b border-theme-surface-border">
-          <nav
-            className="flex space-x-1 hscroll"
-            aria-label={`${currentPage.label} tabs`}
-          >
+        <div className="border-theme-surface-border border-b">
+          <nav className="hscroll flex space-x-1" aria-label={`${currentPage.label} tabs`}>
             {currentPage.tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`whitespace-nowrap px-4 py-3 text-sm font-medium border-b-2 transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                className={`focus:ring-theme-focus-ring border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors focus:ring-2 focus:outline-hidden ${
                   activeTab === tab.id
-                    ? "border-red-500 text-theme-text-primary"
-                    : "border-transparent text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border"
+                    ? 'text-theme-text-primary border-red-500'
+                    : 'text-theme-text-muted hover:text-theme-text-primary hover:border-theme-surface-border border-transparent'
                 }`}
-                aria-current={activeTab === tab.id ? "page" : undefined}
+                aria-current={activeTab === tab.id ? 'page' : undefined}
               >
                 {tab.label}
               </button>

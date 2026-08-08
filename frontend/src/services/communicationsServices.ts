@@ -4,15 +4,30 @@
 
 import api from './apiClient';
 import type {
-  NotificationRuleRecord, NotificationLogRecord, NotificationsSummary,
-  DepartmentMessageRecord, InboxMessage, MessageStats, AcknowledgmentReport, RoleOption,
-  EmailTemplate, EmailAttachment, EmailTemplateUpdate, EmailTemplatePreview,
+  NotificationRuleRecord,
+  NotificationLogRecord,
+  NotificationsSummary,
+  DepartmentMessageRecord,
+  InboxMessage,
+  MessageStats,
+  AcknowledgmentReport,
+  RoleOption,
+  EmailTemplate,
+  EmailAttachment,
+  EmailTemplateUpdate,
+  EmailTemplatePreview,
 } from './adminServices';
 import { asArray } from '../utils/asArray';
 
 export const notificationsService = {
-  async getRules(params?: { category?: string; enabled?: boolean; search?: string }): Promise<{ rules: NotificationRuleRecord[]; total: number }> {
-    const response = await api.get<{ rules: NotificationRuleRecord[]; total: number }>('/notifications/rules', { params });
+  async getRules(params?: {
+    category?: string;
+    enabled?: boolean;
+    search?: string;
+  }): Promise<{ rules: NotificationRuleRecord[]; total: number }> {
+    const response = await api.get<{ rules: NotificationRuleRecord[]; total: number }>('/notifications/rules', {
+      params,
+    });
     return response.data;
   },
 
@@ -36,12 +51,21 @@ export const notificationsService = {
   },
 
   async toggleRule(ruleId: string, enabled: boolean): Promise<NotificationRuleRecord> {
-    const response = await api.post<NotificationRuleRecord>(`/notifications/rules/${ruleId}/toggle`, null, { params: { enabled } });
+    const response = await api.post<NotificationRuleRecord>(`/notifications/rules/${ruleId}/toggle`, null, {
+      params: { enabled },
+    });
     return response.data;
   },
 
-  async getLogs(params?: { channel?: string; skip?: number; limit?: number }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }>('/notifications/logs', { params });
+  async getLogs(params?: {
+    channel?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }>(
+      '/notifications/logs',
+      { params }
+    );
     return response.data;
   },
 
@@ -61,8 +85,16 @@ export const notificationsService = {
   },
 
   // User-facing notification inbox
-  async getMyNotifications(params?: { include_expired?: boolean; include_read?: boolean; skip?: number; limit?: number }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
-    const response = await api.get<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }>('/notifications/my', { params });
+  async getMyNotifications(params?: {
+    include_expired?: boolean;
+    include_read?: boolean;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }> {
+    const response = await api.get<{ logs: NotificationLogRecord[]; total: number; skip: number; limit: number }>(
+      '/notifications/my',
+      { params }
+    );
     return response.data;
   },
 
@@ -82,7 +114,9 @@ export const notificationsService = {
   },
 
   async toggleMyNotificationPin(logId: string, pinned: boolean): Promise<NotificationLogRecord> {
-    const response = await api.post<NotificationLogRecord>(`/notifications/my/${logId}/pin`, null, { params: { pinned } });
+    const response = await api.post<NotificationLogRecord>(`/notifications/my/${logId}/pin`, null, {
+      params: { pinned },
+    });
     return response.data;
   },
 };
@@ -179,7 +213,12 @@ export const emailTemplatesService = {
     return response.data;
   },
 
-  async previewTemplate(templateId: string, context?: Record<string, unknown>, overrides?: { subject?: string; html_body?: string; css_styles?: string }, memberId?: string): Promise<EmailTemplatePreview> {
+  async previewTemplate(
+    templateId: string,
+    context?: Record<string, unknown>,
+    overrides?: { subject?: string; html_body?: string; css_styles?: string },
+    memberId?: string
+  ): Promise<EmailTemplatePreview> {
     const response = await api.post<EmailTemplatePreview>(`/email-templates/${templateId}/preview`, {
       context: context || {},
       ...overrides,
@@ -366,18 +405,12 @@ export const messageHistoryService = {
     sent_after?: string | undefined;
     sent_before?: string | undefined;
   }): Promise<MessageHistoryListResponse> {
-    const response = await api.get<MessageHistoryListResponse>(
-      '/message-history',
-      { params },
-    );
+    const response = await api.get<MessageHistoryListResponse>('/message-history', { params });
     return response.data;
   },
 
   async sendTestEmail(data: SendTestEmailRequest): Promise<MessageHistoryRecord> {
-    const response = await api.post<MessageHistoryRecord>(
-      '/message-history/test-email',
-      data,
-    );
+    const response = await api.post<MessageHistoryRecord>('/message-history/test-email', data);
     return response.data;
   },
 };
@@ -426,7 +459,13 @@ export interface LocationCreate {
 
 export const messagesService = {
   // Admin CRUD
-  async getMessages(params?: { include_inactive?: boolean; search?: string; priority?: string; skip?: number; limit?: number }): Promise<{ messages: DepartmentMessageRecord[]; total: number }> {
+  async getMessages(params?: {
+    include_inactive?: boolean;
+    search?: string;
+    priority?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<{ messages: DepartmentMessageRecord[]; total: number }> {
     const response = await api.get<{ messages: DepartmentMessageRecord[]; total: number }>('/messages', { params });
     return response.data;
   },

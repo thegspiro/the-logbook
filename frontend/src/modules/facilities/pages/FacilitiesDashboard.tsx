@@ -46,10 +46,7 @@ export default function FacilitiesDashboard() {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const facilityMap = useMemo(
-    () => new Map(facilities.map(f => [f.id, f.name])),
-    [facilities],
-  );
+  const facilityMap = useMemo(() => new Map(facilities.map((f) => [f.id, f.name])), [facilities]);
   const getFacilityName = (id: string) => facilityMap.get(id) || 'Unknown';
 
   useEffect(() => {
@@ -72,26 +69,21 @@ export default function FacilitiesDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-theme-text-primary">Facilities</h1>
-          <p className="text-theme-text-secondary mt-1">
-            Manage stations, buildings, maintenance, and inspections
-          </p>
+          <h1 className="text-theme-text-primary text-3xl font-bold">Facilities</h1>
+          <p className="text-theme-text-secondary mt-1">Manage stations, buildings, maintenance, and inspections</p>
         </div>
         <div className="flex items-center gap-2">
           {facilities.length > 0 && (
             <button
-              onClick={() => void navigate(`/facilities/print-labels?ids=${facilities.map(f => f.id).join(',')}`)}
-              className="flex gap-2 items-center py-2.5 px-3 border border-theme-surface-border rounded-lg text-sm text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              onClick={() => void navigate(`/facilities/print-labels?ids=${facilities.map((f) => f.id).join(',')}`)}
+              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="h-4 w-4" />
               Print Labels
             </button>
           )}
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="btn-primary flex gap-2 items-center py-2.5"
-          >
-            <Plus className="w-4 h-4" />
+          <button onClick={() => setShowCreateModal(true)} className="btn-primary flex items-center gap-2 py-2.5">
+            <Plus className="h-4 w-4" />
             Add Facility
           </button>
         </div>
@@ -100,12 +92,12 @@ export default function FacilitiesDashboard() {
       {/* Loading */}
       {isLoadingDashboard && !stats ? (
         <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-          <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
+          <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
         </div>
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
               icon={Building2}
               label="Total Facilities"
@@ -117,7 +109,11 @@ export default function FacilitiesDashboard() {
               icon={CheckCircle2}
               label="Operational"
               value={stats?.operationalCount ?? 0}
-              subtext={stats?.totalFacilities ? `${Math.round(((stats.operationalCount) / stats.totalFacilities) * 100)}% of total` : 'No facilities'}
+              subtext={
+                stats?.totalFacilities
+                  ? `${Math.round((stats.operationalCount / stats.totalFacilities) * 100)}% of total`
+                  : 'No facilities'
+              }
               color="emerald"
             />
             <SummaryCard
@@ -139,26 +135,26 @@ export default function FacilitiesDashboard() {
           </div>
 
           {/* Action Items & Recent Activity */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Overdue Maintenance */}
-            <div className="bg-theme-surface border border-theme-surface-border rounded-xl">
-              <div className="flex items-center justify-between p-5 border-b border-theme-surface-border">
+            <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-500" />
-                  <h2 className="text-sm font-semibold text-theme-text-primary">Overdue Maintenance</h2>
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  <h2 className="text-theme-text-primary text-sm font-semibold">Overdue Maintenance</h2>
                 </div>
                 <button
                   onClick={() => void navigate('/facilities/maintenance?status=overdue')}
-                  className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 transition-colors max-md:min-h-[44px]"
+                  className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors max-md:min-h-[44px]"
                 >
-                  View all <ArrowRight className="w-3 h-3" />
+                  View all <ArrowRight className="h-3 w-3" />
                 </button>
               </div>
               <div className="p-5">
                 {!stats?.overdueMaintenanceRecords.length ? (
-                  <div className="text-center py-6">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                    <p className="text-sm text-theme-text-muted">No overdue maintenance items</p>
+                  <div className="py-6 text-center">
+                    <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-500" />
+                    <p className="text-theme-text-muted text-sm">No overdue maintenance items</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -167,19 +163,17 @@ export default function FacilitiesDashboard() {
                       return (
                         <div
                           key={record.id}
-                          className="flex items-start gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/10"
+                          className="flex items-start gap-3 rounded-lg border border-red-500/10 bg-red-500/5 p-3"
                         >
-                          <Wrench className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                          <Wrench className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-theme-text-primary truncate">
+                            <p className="text-theme-text-primary truncate text-sm font-medium">
                               {record.description || 'Untitled maintenance'}
                             </p>
-                            <div className="flex items-center gap-2 text-xs text-theme-text-muted mt-0.5">
+                            <div className="text-theme-text-muted mt-0.5 flex items-center gap-2 text-xs">
                               <span>{facilityName}</span>
                               {record.dueDate && (
-                                <span className="text-red-500 font-medium">
-                                  Due: {formatDate(record.dueDate, tz)}
-                                </span>
+                                <span className="font-medium text-red-500">Due: {formatDate(record.dueDate, tz)}</span>
                               )}
                             </div>
                           </div>
@@ -192,24 +186,24 @@ export default function FacilitiesDashboard() {
             </div>
 
             {/* Upcoming Inspections */}
-            <div className="bg-theme-surface border border-theme-surface-border rounded-xl">
-              <div className="flex items-center justify-between p-5 border-b border-theme-surface-border">
+            <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-5">
                 <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-amber-500" />
-                  <h2 className="text-sm font-semibold text-theme-text-primary">Upcoming Inspections</h2>
+                  <Calendar className="h-4 w-4 text-amber-500" />
+                  <h2 className="text-theme-text-primary text-sm font-semibold">Upcoming Inspections</h2>
                 </div>
                 <button
                   onClick={() => void navigate('/facilities/inspections')}
-                  className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 transition-colors max-md:min-h-[44px]"
+                  className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors max-md:min-h-[44px]"
                 >
-                  View all <ArrowRight className="w-3 h-3" />
+                  View all <ArrowRight className="h-3 w-3" />
                 </button>
               </div>
               <div className="p-5">
                 {!stats?.upcomingInspections.length ? (
-                  <div className="text-center py-6">
-                    <ClipboardCheck className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
-                    <p className="text-sm text-theme-text-muted">No inspections in the next 30 days</p>
+                  <div className="py-6 text-center">
+                    <ClipboardCheck className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
+                    <p className="text-theme-text-muted text-sm">No inspections in the next 30 days</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -218,19 +212,15 @@ export default function FacilitiesDashboard() {
                       return (
                         <div
                           key={insp.id}
-                          className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/10"
+                          className="flex items-start gap-3 rounded-lg border border-amber-500/10 bg-amber-500/5 p-3"
                         >
-                          <ClipboardCheck className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                          <ClipboardCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-theme-text-primary truncate">
-                              {insp.title}
-                            </p>
-                            <div className="flex items-center gap-2 text-xs text-theme-text-muted mt-0.5">
+                            <p className="text-theme-text-primary truncate text-sm font-medium">{insp.title}</p>
+                            <div className="text-theme-text-muted mt-0.5 flex items-center gap-2 text-xs">
                               <span>{facilityName}</span>
                               {insp.nextInspectionDate && (
-                                <span className="font-medium">
-                                  {formatDate(insp.nextInspectionDate, tz)}
-                                </span>
+                                <span className="font-medium">{formatDate(insp.nextInspectionDate, tz)}</span>
                               )}
                             </div>
                           </div>
@@ -245,26 +235,26 @@ export default function FacilitiesDashboard() {
 
           {/* Recent Activity */}
           {stats?.recentActivity && stats.recentActivity.length > 0 && (
-            <div className="bg-theme-surface border border-theme-surface-border rounded-xl">
-              <div className="flex items-center gap-2 p-5 border-b border-theme-surface-border">
-                <Activity className="w-4 h-4 text-theme-text-muted" />
-                <h2 className="text-sm font-semibold text-theme-text-primary">Recent Activity</h2>
+            <div className="bg-theme-surface border-theme-surface-border rounded-xl border">
+              <div className="border-theme-surface-border flex items-center gap-2 border-b p-5">
+                <Activity className="text-theme-text-muted h-4 w-4" />
+                <h2 className="text-theme-text-primary text-sm font-semibold">Recent Activity</h2>
               </div>
-              <div className="divide-y divide-theme-surface-border">
+              <div className="divide-theme-surface-border divide-y">
                 {stats.recentActivity.map((record) => {
                   const facilityName = getFacilityName(record.facilityId);
                   return (
                     <div key={record.id} className="flex items-center gap-3 px-5 py-3">
-                      <div className="w-7 h-7 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-theme-text-primary truncate">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-theme-text-primary truncate text-sm">
                           {record.description || 'Maintenance completed'}
                         </p>
-                        <p className="text-xs text-theme-text-muted">{facilityName}</p>
+                        <p className="text-theme-text-muted text-xs">{facilityName}</p>
                       </div>
-                      <span className="text-xs text-theme-text-muted shrink-0">
+                      <span className="text-theme-text-muted shrink-0 text-xs">
                         {record.completedDate ? formatDate(record.completedDate, tz) : ''}
                       </span>
                     </div>
@@ -276,37 +266,28 @@ export default function FacilitiesDashboard() {
 
           {/* Facility Grid */}
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-theme-text-primary">All Facilities</h2>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-theme-text-primary text-lg font-semibold">All Facilities</h2>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="text-sm text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 transition-colors max-md:min-h-[44px]"
+                className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-sm transition-colors max-md:min-h-[44px]"
               >
-                <Plus className="w-3.5 h-3.5" /> Add Facility
+                <Plus className="h-3.5 w-3.5" /> Add Facility
               </button>
             </div>
 
             {facilities.length === 0 ? (
-              <div className="text-center py-16 bg-theme-surface border border-theme-surface-border rounded-xl">
-                <Building2 className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
-                <p className="text-theme-text-muted mb-4">
-                  No facilities yet. Add your first facility to get started.
-                </p>
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="btn-primary inline-flex gap-2 items-center"
-                >
-                  <Plus className="w-4 h-4" /> Add Facility
+              <div className="bg-theme-surface border-theme-surface-border rounded-xl border py-16 text-center">
+                <Building2 className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+                <p className="text-theme-text-muted mb-4">No facilities yet. Add your first facility to get started.</p>
+                <button onClick={() => setShowCreateModal(true)} className="btn-primary inline-flex items-center gap-2">
+                  <Plus className="h-4 w-4" /> Add Facility
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {facilities.map((facility) => (
-                  <FacilityCard
-                    key={facility.id}
-                    facility={facility}
-                    onClick={handleFacilityClick}
-                  />
+                  <FacilityCard key={facility.id} facility={facility} onClick={handleFacilityClick} />
                 ))}
               </div>
             )}
@@ -354,20 +335,18 @@ function SummaryCard({ icon: Icon, label, value, subtext, color, onClick }: Summ
   return (
     <Wrapper
       onClick={onClick}
-      className={`bg-theme-surface border border-theme-surface-border rounded-xl p-5 text-left transition-all ${
-        onClick ? 'hover:shadow-md hover:border-theme-surface-border cursor-pointer' : ''
+      className={`bg-theme-surface border-theme-surface-border rounded-xl border p-5 text-left transition-all ${
+        onClick ? 'hover:border-theme-surface-border cursor-pointer hover:shadow-md' : ''
       }`}
     >
-      <div className="flex items-center gap-3 mb-3">
-        <div className={`w-9 h-9 rounded-lg ${colors.bg} flex items-center justify-center`}>
-          <Icon className={`w-4.5 h-4.5 ${colors.icon}`} />
+      <div className="mb-3 flex items-center gap-3">
+        <div className={`h-9 w-9 rounded-lg ${colors.bg} flex items-center justify-center`}>
+          <Icon className={`h-4.5 w-4.5 ${colors.icon}`} />
         </div>
-        <span className="text-xs font-medium text-theme-text-muted uppercase tracking-wide">
-          {label}
-        </span>
+        <span className="text-theme-text-muted text-xs font-medium tracking-wide uppercase">{label}</span>
       </div>
-      <p className="text-2xl font-bold text-theme-text-primary">{value}</p>
-      <p className="text-xs text-theme-text-muted mt-1">{subtext}</p>
+      <p className="text-theme-text-primary text-2xl font-bold">{value}</p>
+      <p className="text-theme-text-muted mt-1 text-xs">{subtext}</p>
     </Wrapper>
   );
 }
@@ -378,58 +357,50 @@ interface FacilityCardProps {
 }
 
 function FacilityCard({ facility, onClick }: FacilityCardProps) {
-  const address = [facility.addressLine1, facility.city, facility.state]
-    .filter(Boolean)
-    .join(', ');
+  const address = [facility.addressLine1, facility.city, facility.state].filter(Boolean).join(', ');
 
   return (
     <button
       onClick={() => onClick(facility)}
-      className={`text-left p-5 rounded-xl border transition-all hover:shadow-md bg-theme-surface hover:border-theme-surface-border ${
-        facility.isArchived
-          ? 'border-amber-500/20 opacity-60'
-          : 'border-theme-surface-border'
+      className={`bg-theme-surface hover:border-theme-surface-border rounded-xl border p-5 text-left transition-all hover:shadow-md ${
+        facility.isArchived ? 'border-amber-500/20 opacity-60' : 'border-theme-surface-border'
       }`}
     >
-      <div className="flex items-start justify-between mb-3">
+      <div className="mb-3 flex items-start justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
-            <Building2 className="w-4.5 h-4.5 text-red-500" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
+            <Building2 className="h-4.5 w-4.5 text-red-500" />
           </div>
           <div>
-            <h3 className="font-semibold text-theme-text-primary">{facility.name}</h3>
-            {facility.facilityNumber && (
-              <p className="text-xs text-theme-text-muted">{facility.facilityNumber}</p>
-            )}
+            <h3 className="text-theme-text-primary font-semibold">{facility.name}</h3>
+            {facility.facilityNumber && <p className="text-theme-text-muted text-xs">{facility.facilityNumber}</p>}
           </div>
         </div>
         {facility.isArchived && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
+          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400">
             Archived
           </span>
         )}
       </div>
 
       {address && (
-        <div className="flex items-center gap-1.5 text-sm text-theme-text-secondary mb-3">
-          <MapPin className="w-3.5 h-3.5 shrink-0" />
+        <div className="text-theme-text-secondary mb-3 flex items-center gap-1.5 text-sm">
+          <MapPin className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{address}</span>
         </div>
       )}
 
       <div className="flex items-center justify-between">
         {facility.facilityType && (
-          <span className="text-xs px-2.5 py-1 rounded-full bg-theme-surface-hover text-theme-text-muted">
+          <span className="bg-theme-surface-hover text-theme-text-muted rounded-full px-2.5 py-1 text-xs">
             {facility.facilityType.name}
           </span>
         )}
         {facility.statusRecord && (
           <span
-            className="text-xs px-2.5 py-1 rounded-full font-medium"
+            className="rounded-full px-2.5 py-1 text-xs font-medium"
             style={{
-              backgroundColor: facility.statusRecord.color
-                ? `${facility.statusRecord.color}20`
-                : undefined,
+              backgroundColor: facility.statusRecord.color ? `${facility.statusRecord.color}20` : undefined,
               color: facility.statusRecord.color || undefined,
             }}
           >

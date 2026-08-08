@@ -2,7 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Users, Shield, Plus, Trash2, AlertCircle, Phone, Mail, User } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
+import {
+  OnboardingHeader,
+  ProgressIndicator,
+  BackButton,
+  ResetProgressButton,
+  ErrorAlert,
+  AutoSaveNotification,
+} from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { apiClient } from '../services/api-client';
@@ -18,25 +25,25 @@ interface ITTeamMember {
 
 const ITTeamBackupAccess: React.FC = () => {
   const navigate = useNavigate();
-  const departmentName = useOnboardingStore(state => state.departmentName);
-  const logoPreview = useOnboardingStore(state => state.logoData);
-  const lastSaved = useOnboardingStore(state => state.lastSaved);
+  const departmentName = useOnboardingStore((state) => state.departmentName);
+  const logoPreview = useOnboardingStore((state) => state.logoData);
+  const lastSaved = useOnboardingStore((state) => state.lastSaved);
   const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
   // Use Zustand store for persisted IT Team data
-  const itTeam = useOnboardingStore(state => state.itTeamMembers);
-  const setItTeam = useOnboardingStore(state => state.setITTeamMembers);
-  const backupEmail = useOnboardingStore(state => state.backupEmail);
-  const setBackupEmail = useOnboardingStore(state => state.setBackupEmail);
-  const backupPhone = useOnboardingStore(state => state.backupPhone);
-  const setBackupPhone = useOnboardingStore(state => state.setBackupPhone);
-  const secondaryAdminEmail = useOnboardingStore(state => state.secondaryAdminEmail);
-  const setSecondaryAdminEmail = useOnboardingStore(state => state.setSecondaryAdminEmail);
+  const itTeam = useOnboardingStore((state) => state.itTeamMembers);
+  const setItTeam = useOnboardingStore((state) => state.setITTeamMembers);
+  const backupEmail = useOnboardingStore((state) => state.backupEmail);
+  const setBackupEmail = useOnboardingStore((state) => state.setBackupEmail);
+  const backupPhone = useOnboardingStore((state) => state.backupPhone);
+  const setBackupPhone = useOnboardingStore((state) => state.setBackupPhone);
+  const secondaryAdminEmail = useOnboardingStore((state) => state.secondaryAdminEmail);
+  const setSecondaryAdminEmail = useOnboardingStore((state) => state.setSecondaryAdminEmail);
 
   // System Owner info for auto-populating primary IT contact
-  const systemOwnerFirstName = useOnboardingStore(state => state.systemOwnerFirstName);
-  const systemOwnerLastName = useOnboardingStore(state => state.systemOwnerLastName);
-  const systemOwnerEmail = useOnboardingStore(state => state.systemOwnerEmail);
+  const systemOwnerFirstName = useOnboardingStore((state) => state.systemOwnerFirstName);
+  const systemOwnerLastName = useOnboardingStore((state) => state.systemOwnerLastName);
+  const systemOwnerEmail = useOnboardingStore((state) => state.systemOwnerEmail);
 
   // Validation errors (local state - no need to persist)
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -60,7 +67,7 @@ const ITTeamBackupAccess: React.FC = () => {
         setItTeam([updatedPrimary, ...itTeam.slice(1)]);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate, departmentName]);
 
   const addITMember = () => {
@@ -81,11 +88,7 @@ const ITTeamBackupAccess: React.FC = () => {
   };
 
   const updateITMember = (id: string, field: keyof ITTeamMember, value: string) => {
-    setItTeam(
-      itTeam.map((member) =>
-        member.id === id ? { ...member, [field]: value } : member
-      )
-    );
+    setItTeam(itTeam.map((member) => (member.id === id ? { ...member, [field]: value } : member)));
   };
 
   const validateForm = (): boolean => {
@@ -208,65 +211,67 @@ const ITTeamBackupAccess: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col safe-top">
-      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
+      <OnboardingHeader
+        departmentName={departmentName}
+        logoPreview={logoPreview}
+        icon={<Mail aria-hidden="true" className="h-6 w-6 text-white" />}
+      />
 
-      <main className="flex-1 flex items-center justify-center p-4 py-8">
-        <div className="max-w-4xl w-full">
+      <main className="flex flex-1 items-center justify-center p-4 py-8">
+        <div className="w-full max-w-4xl">
           {/* Navigation Buttons */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="mb-6 flex items-center justify-between">
             <BackButton to="/onboarding/system-owner" />
             <ResetProgressButton />
           </div>
 
           {/* Page Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-cyan-600 rounded-full mb-4">
-              <Users aria-hidden="true" className="w-8 h-8 text-white" />
+          <div className="mb-8 text-center">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-cyan-600">
+              <Users aria-hidden="true" className="h-8 w-8 text-white" />
             </div>
-            <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
-              IT Team & Backup Access
-            </h2>
-            <p className="text-xl text-theme-text-secondary mb-2">
+            <h2 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">IT Team & Backup Access</h2>
+            <p className="text-theme-text-secondary mb-2 text-xl">
               Configure system administration and recovery options
             </p>
-            <p className="text-sm text-theme-text-muted">
-              Essential for system maintenance and emergency access
-            </p>
+            <p className="text-theme-text-muted text-sm">Essential for system maintenance and emergency access</p>
           </div>
 
-          <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-6">
+          <form
+            onSubmit={(e) => {
+              void handleSubmit(e);
+            }}
+            className="space-y-6"
+          >
             {/* IT Team Section */}
             <div className="card p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <Users aria-hidden="true" className="w-6 h-6 text-theme-accent-cyan" />
-                  <h3 className="text-xl font-bold text-theme-text-primary">IT Team Contacts</h3>
+                  <Users aria-hidden="true" className="text-theme-accent-cyan h-6 w-6" />
+                  <h3 className="text-theme-text-primary text-xl font-bold">IT Team Contacts</h3>
                 </div>
                 <button
                   type="button"
                   onClick={addITMember}
-                  className="flex items-center space-x-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  className="flex items-center space-x-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-700"
                 >
-                  <Plus aria-hidden="true" className="w-4 h-4" />
+                  <Plus aria-hidden="true" className="h-4 w-4" />
                   <span>Add Member</span>
                 </button>
               </div>
 
-              <p className="text-theme-text-muted text-sm mb-6">
+              <p className="text-theme-text-muted mb-6 text-sm">
                 Add contact information for your IT support team. The first person listed will be the primary contact.
               </p>
 
               {itTeam.map((member, index) => (
-                <div
-                  key={member.id}
-                  className="card-secondary mb-4 p-4"
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-theme-text-primary font-semibold flex items-center">
-                      <User aria-hidden="true" className="w-4 h-4 mr-2" />
+                <div key={member.id} className="card-secondary mb-4 p-4">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h4 className="text-theme-text-primary flex items-center font-semibold">
+                      <User aria-hidden="true" className="mr-2 h-4 w-4" />
                       {index === 0 ? 'Primary IT Contact' : `IT Team Member ${index + 1}`}
-                      {index === 0 && <span className="ml-2 text-xs text-theme-accent-red">*Required</span>}
+                      {index === 0 && <span className="text-theme-accent-red ml-2 text-xs">*Required</span>}
                     </h4>
                     {index > 0 && (
                       <button
@@ -275,22 +280,22 @@ const ITTeamBackupAccess: React.FC = () => {
                         className="text-theme-accent-red hover:text-theme-accent-red transition-colors"
                         aria-label="Remove team member"
                       >
-                        <Trash2 aria-hidden="true" className="w-4 h-4" />
+                        <Trash2 aria-hidden="true" className="h-4 w-4" />
                       </button>
                     )}
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid gap-4 md:grid-cols-2">
                     {/* Name */}
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                      <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
                         Full Name {index === 0 && <span className="text-theme-accent-red">*</span>}
                       </label>
                       <input
                         type="text"
                         value={member.name}
                         onChange={(e) => updateITMember(member.id, 'name', e.target.value)}
-                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 transition-all ${
+                        className={`bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted w-full rounded-lg border px-4 py-3 transition-all focus:ring-2 focus:outline-hidden ${
                           errors[index === 0 ? 'primaryName' : `member${index}Name`]
                             ? 'border-theme-accent-red focus:ring-theme-focus-ring'
                             : 'border-theme-input-border focus:ring-theme-focus-ring'
@@ -298,7 +303,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         placeholder="John Doe"
                       />
                       {errors[index === 0 ? 'primaryName' : `member${index}Name`] && (
-                        <p className="mt-1 text-sm text-theme-accent-red">
+                        <p className="text-theme-accent-red mt-1 text-sm">
                           {errors[index === 0 ? 'primaryName' : `member${index}Name`]}
                         </p>
                       )}
@@ -306,9 +311,7 @@ const ITTeamBackupAccess: React.FC = () => {
 
                     {/* Role */}
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-                        Role/Title
-                      </label>
+                      <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Role/Title</label>
                       <input
                         type="text"
                         value={member.role}
@@ -320,14 +323,14 @@ const ITTeamBackupAccess: React.FC = () => {
 
                     {/* Email */}
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                      <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
                         Email {index === 0 && <span className="text-theme-accent-red">*</span>}
                       </label>
                       <input
                         type="email"
                         value={member.email}
                         onChange={(e) => updateITMember(member.id, 'email', e.target.value)}
-                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 transition-all ${
+                        className={`bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted w-full rounded-lg border px-4 py-3 transition-all focus:ring-2 focus:outline-hidden ${
                           errors[index === 0 ? 'primaryEmail' : `member${index}Email`]
                             ? 'border-theme-accent-red focus:ring-theme-focus-ring'
                             : 'border-theme-input-border focus:ring-theme-focus-ring'
@@ -335,7 +338,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         placeholder="john@example.com"
                       />
                       {errors[index === 0 ? 'primaryEmail' : `member${index}Email`] && (
-                        <p className="mt-1 text-sm text-theme-accent-red">
+                        <p className="text-theme-accent-red mt-1 text-sm">
                           {errors[index === 0 ? 'primaryEmail' : `member${index}Email`]}
                         </p>
                       )}
@@ -343,14 +346,14 @@ const ITTeamBackupAccess: React.FC = () => {
 
                     {/* Phone */}
                     <div>
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                      <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
                         Phone {index === 0 && <span className="text-theme-accent-red">*</span>}
                       </label>
                       <input
                         type="tel"
                         value={member.phone}
                         onChange={(e) => updateITMember(member.id, 'phone', e.target.value)}
-                        className={`w-full px-4 py-3 bg-theme-input-bg border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 transition-all ${
+                        className={`bg-theme-input-bg text-theme-text-primary placeholder-theme-text-muted w-full rounded-lg border px-4 py-3 transition-all focus:ring-2 focus:outline-hidden ${
                           errors[index === 0 ? 'primaryPhone' : `member${index}Phone`]
                             ? 'border-theme-accent-red focus:ring-theme-focus-ring'
                             : 'border-theme-input-border focus:ring-theme-focus-ring'
@@ -358,7 +361,7 @@ const ITTeamBackupAccess: React.FC = () => {
                         placeholder="(555) 123-4567"
                       />
                       {errors[index === 0 ? 'primaryPhone' : `member${index}Phone`] && (
-                        <p className="mt-1 text-sm text-theme-accent-red">
+                        <p className="text-theme-accent-red mt-1 text-sm">
                           {errors[index === 0 ? 'primaryPhone' : `member${index}Phone`]}
                         </p>
                       )}
@@ -370,21 +373,21 @@ const ITTeamBackupAccess: React.FC = () => {
 
             {/* Backup Access Section */}
             <div className="card p-6">
-              <div className="flex items-center space-x-3 mb-4">
-                <Shield aria-hidden="true" className="w-6 h-6 text-theme-alert-warning-icon" />
-                <h3 className="text-xl font-bold text-theme-text-primary">Backup Access Methods</h3>
+              <div className="mb-4 flex items-center space-x-3">
+                <Shield aria-hidden="true" className="text-theme-alert-warning-icon h-6 w-6" />
+                <h3 className="text-theme-text-primary text-xl font-bold">Backup Access Methods</h3>
               </div>
 
               <div className="alert-warning mb-6">
                 <div className="flex items-start space-x-3">
-                  <AlertCircle className="w-5 h-5 text-theme-alert-warning-icon shrink-0 mt-0.5" />
+                  <AlertCircle className="text-theme-alert-warning-icon mt-0.5 h-5 w-5 shrink-0" />
                   <div>
-                    <p className="text-theme-alert-warning-title text-sm font-medium mb-1">
+                    <p className="text-theme-alert-warning-title mb-1 text-sm font-medium">
                       Critical for Account Recovery
                     </p>
                     <p className="text-theme-alert-warning-text text-sm">
-                      These backup methods will be used to recover access if the primary admin account
-                      is locked or credentials are lost. Keep this information current.
+                      These backup methods will be used to recover access if the primary admin account is locked or
+                      credentials are lost. Keep this information current.
                     </p>
                   </div>
                 </div>
@@ -393,81 +396,84 @@ const ITTeamBackupAccess: React.FC = () => {
               <div className="space-y-4">
                 {/* Backup Recovery Email */}
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
                     Backup Recovery Email <span className="text-theme-accent-red">*</span>
                   </label>
                   <div className="relative">
-                    <Mail aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
+                    <Mail
+                      aria-hidden="true"
+                      className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2"
+                    />
                     <input
                       type="email"
                       value={backupEmail}
                       onChange={(e) => setBackupEmail(e.target.value)}
-                      className={`form-input pl-12 placeholder-theme-text-muted pr-4 py-3 transition-all ${
- errors.backupEmail
- ? 'border-theme-accent-red focus:ring-theme-focus-ring'
- : 'border-theme-input-border focus:ring-theme-focus-ring'
- }`}
+                      className={`form-input placeholder-theme-text-muted py-3 pr-4 pl-12 transition-all ${
+                        errors.backupEmail
+                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                          : 'border-theme-input-border focus:ring-theme-focus-ring'
+                      }`}
                       placeholder="backup-admin@example.com"
                     />
                   </div>
-                  {errors.backupEmail && (
-                    <p className="mt-1 text-sm text-theme-accent-red">{errors.backupEmail}</p>
-                  )}
-                  <p className="mt-1 text-xs text-theme-text-muted">
+                  {errors.backupEmail && <p className="text-theme-accent-red mt-1 text-sm">{errors.backupEmail}</p>}
+                  <p className="text-theme-text-muted mt-1 text-xs">
                     Use a different email than the primary admin account
                   </p>
                 </div>
 
                 {/* Backup Phone */}
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
                     Backup Phone Number <span className="text-theme-accent-red">*</span>
                   </label>
                   <div className="relative">
-                    <Phone aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
+                    <Phone
+                      aria-hidden="true"
+                      className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2"
+                    />
                     <input
                       type="tel"
                       value={backupPhone}
                       onChange={(e) => setBackupPhone(e.target.value)}
-                      className={`form-input pl-12 placeholder-theme-text-muted pr-4 py-3 transition-all ${
- errors.backupPhone
- ? 'border-theme-accent-red focus:ring-theme-focus-ring'
- : 'border-theme-input-border focus:ring-theme-focus-ring'
- }`}
+                      className={`form-input placeholder-theme-text-muted py-3 pr-4 pl-12 transition-all ${
+                        errors.backupPhone
+                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                          : 'border-theme-input-border focus:ring-theme-focus-ring'
+                      }`}
                       placeholder="(555) 987-6543"
                     />
                   </div>
-                  {errors.backupPhone && (
-                    <p className="mt-1 text-sm text-theme-accent-red">{errors.backupPhone}</p>
-                  )}
-                  <p className="mt-1 text-xs text-theme-text-muted">
-                    For SMS verification and account recovery
-                  </p>
+                  {errors.backupPhone && <p className="text-theme-accent-red mt-1 text-sm">{errors.backupPhone}</p>}
+                  <p className="text-theme-text-muted mt-1 text-xs">For SMS verification and account recovery</p>
                 </div>
 
                 {/* Secondary Admin Email (Optional) */}
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                  <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
                     Secondary Admin Email <span className="text-theme-text-muted">(Optional)</span>
                   </label>
                   <div className="relative">
-                    <User aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
+                    <User
+                      aria-hidden="true"
+                      className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2"
+                    />
                     <input
                       type="email"
                       value={secondaryAdminEmail}
                       onChange={(e) => setSecondaryAdminEmail(e.target.value)}
-                      className={`form-input pl-12 placeholder-theme-text-muted pr-4 py-3 transition-all ${
- errors.secondaryAdminEmail
- ? 'border-theme-accent-red focus:ring-theme-focus-ring'
- : 'border-theme-input-border focus:ring-theme-focus-ring'
- }`}
+                      className={`form-input placeholder-theme-text-muted py-3 pr-4 pl-12 transition-all ${
+                        errors.secondaryAdminEmail
+                          ? 'border-theme-accent-red focus:ring-theme-focus-ring'
+                          : 'border-theme-input-border focus:ring-theme-focus-ring'
+                      }`}
                       placeholder="secondary-admin@example.com"
                     />
                   </div>
                   {errors.secondaryAdminEmail && (
-                    <p className="mt-1 text-sm text-theme-accent-red">{errors.secondaryAdminEmail}</p>
+                    <p className="text-theme-accent-red mt-1 text-sm">{errors.secondaryAdminEmail}</p>
                   )}
-                  <p className="mt-1 text-xs text-theme-text-muted">
+                  <p className="text-theme-text-muted mt-1 text-xs">
                     An additional admin who can help with account recovery
                   </p>
                 </div>
@@ -475,38 +481,46 @@ const ITTeamBackupAccess: React.FC = () => {
             </div>
 
             {/* Submit Button */}
-            <div className="max-w-md mx-auto">
+            <div className="mx-auto max-w-md">
               {error && (
                 <div className="mb-6">
-                  <ErrorAlert message={error} canRetry={canRetry} onRetry={() => { void handleSubmit({ preventDefault: () => {} } as React.FormEvent); }} onDismiss={clearError} />
+                  <ErrorAlert
+                    message={error}
+                    canRetry={canRetry}
+                    onRetry={() => {
+                      void handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+                    }}
+                    onDismiss={clearError}
+                  />
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={isSaving}
-                className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 ${
+                className={`w-full rounded-lg px-8 py-4 text-lg font-semibold transition-all duration-300 ${
                   isSaving
                     ? 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
-                    : 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                    : 'transform bg-linear-to-r from-red-600 to-orange-600 text-white shadow-lg hover:scale-105 hover:from-red-700 hover:to-orange-700 hover:shadow-xl'
                 }`}
               >
                 {isSaving ? 'Saving Securely...' : 'Continue to Module Selection'}
               </button>
-
             </div>
 
             {/* Progress Indicator */}
-            <ProgressIndicator step="it_team" className="mt-6 pt-6 border-t border-theme-nav-border" />
+            <ProgressIndicator step="it_team" className="border-theme-nav-border mt-6 border-t pt-6" />
             <AutoSaveNotification showTimestamp lastSaved={lastSaved} className="mt-4" />
           </form>
         </div>
       </main>
 
-      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
-        <div className="max-w-7xl mx-auto text-center">
-          <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
-          <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
+      <footer className="bg-theme-nav-bg border-theme-nav-border border-t px-6 py-4 backdrop-blur-xs">
+        <div className="mx-auto max-w-7xl text-center">
+          <p className="text-theme-text-secondary text-sm">
+            © {currentYear} {departmentName}. All rights reserved.
+          </p>
+          <p className="text-theme-text-muted mt-1 text-xs">Powered by The Logbook</p>
         </div>
       </footer>
     </div>

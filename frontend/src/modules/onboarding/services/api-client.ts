@@ -48,33 +48,41 @@ interface HealthStatus {
   version?: string | undefined;
   environment?: string | undefined;
   timestamp?: string | undefined;
-  checks?: {
-    database: string;
-    redis: string;
-    configuration?: string | undefined;
-    schema?: string | undefined;
-    security?: {
-      status: string;
-      critical_issues?: number | undefined;
-      warnings?: number | undefined;
-    } | undefined;
-  } | undefined;
+  checks?:
+    | {
+        database: string;
+        redis: string;
+        configuration?: string | undefined;
+        schema?: string | undefined;
+        security?:
+          | {
+              status: string;
+              critical_issues?: number | undefined;
+              warnings?: number | undefined;
+            }
+          | undefined;
+      }
+    | undefined;
   warnings?: string[] | undefined;
   schema_error?: string | undefined;
-  startup?: {
-    phase: string;
-    message: string;
-    ready: boolean;
-    detailed_message?: string | undefined;
-    migrations?: {
-      total: number;
-      completed: number;
-      current: string | null;
-      progress_percent: number;
-    } | undefined;
-    uptime_seconds: number;
-    errors?: string[] | undefined;
-  } | undefined;
+  startup?:
+    | {
+        phase: string;
+        message: string;
+        ready: boolean;
+        detailed_message?: string | undefined;
+        migrations?:
+          | {
+              total: number;
+              completed: number;
+              current: string | null;
+              progress_percent: number;
+            }
+          | undefined;
+        uptime_seconds: number;
+        errors?: string[] | undefined;
+      }
+    | undefined;
 }
 
 class SecureApiClient {
@@ -252,7 +260,7 @@ class SecureApiClient {
     endpoint: string,
     body?: Record<string, unknown>,
     requiresCSRF: boolean = false,
-    _isRetry: boolean = false,
+    _isRetry: boolean = false
   ): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseUrl}${endpoint}`;
@@ -291,7 +299,7 @@ class SecureApiClient {
           }
         }
 
-        const errorData = await response.json().catch(() => ({})) as Record<string, unknown>;
+        const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
         return this.handleHttpError(response.status, errorData);
       }
 
@@ -471,13 +479,15 @@ class SecureApiClient {
       permissions: Record<string, { view: boolean; manage: boolean }>;
       is_custom?: boolean | undefined;
     }>;
-  }): Promise<ApiResponse<{
-    success: boolean;
-    message: string;
-    created: string[];
-    updated: string[];
-    total_positions: number;
-  }>> {
+  }): Promise<
+    ApiResponse<{
+      success: boolean;
+      message: string;
+      created: string[];
+      updated: string[];
+      total_positions: number;
+    }>
+  > {
     return this.request('POST', '/onboarding/session/positions', data, true);
   }
 
@@ -491,12 +501,17 @@ class SecureApiClient {
     description?: string | undefined;
     timezone?: string | undefined;
   }): Promise<ApiResponse<Record<string, unknown>>> {
-    return this.request('POST', '/onboarding/organization', {
-      name: data.name,
-      organization_type: data.organization_type || 'fire_department',
-      description: data.description,
-      timezone: data.timezone || 'America/New_York'
-    }, true);
+    return this.request(
+      'POST',
+      '/onboarding/organization',
+      {
+        name: data.name,
+        organization_type: data.organization_type || 'fire_department',
+        description: data.description,
+        timezone: data.timezone || 'America/New_York',
+      },
+      true
+    );
   }
 
   /**
@@ -521,14 +536,16 @@ class SecureApiClient {
       country?: string | undefined;
     };
     physical_address_same: boolean;
-    physical_address?: {
-      line1: string;
-      line2?: string | undefined;
-      city: string;
-      state: string;
-      zip_code: string;
-      country?: string | undefined;
-    } | undefined;
+    physical_address?:
+      | {
+          line1: string;
+          line2?: string | undefined;
+          city: string;
+          state: string;
+          zip_code: string;
+          country?: string | undefined;
+        }
+      | undefined;
     identifier_type: 'fdid' | 'state_id' | 'department_id';
     fdid?: string | undefined;
     state_id?: string | undefined;
@@ -537,15 +554,17 @@ class SecureApiClient {
     founded_year?: number | undefined;
     tax_id?: string | undefined;
     logo?: string | undefined;
-  }): Promise<ApiResponse<{
-    id: string;
-    name: string;
-    slug: string;
-    organization_type: string;
-    timezone: string;
-    active: boolean;
-    created_at: string;
-  }>> {
+  }): Promise<
+    ApiResponse<{
+      id: string;
+      name: string;
+      slug: string;
+      organization_type: string;
+      timezone: string;
+      active: boolean;
+      created_at: string;
+    }>
+  > {
     return this.request('POST', '/onboarding/session/organization', data, true);
   }
 
@@ -563,7 +582,12 @@ class SecureApiClient {
     last_name: string;
     membership_number?: string | undefined;
   }): Promise<ApiResponse<{ authenticated?: boolean | undefined }>> {
-    const response = await this.request<{ authenticated?: boolean | undefined }>('POST', '/onboarding/system-owner', data, true);
+    const response = await this.request<{ authenticated?: boolean | undefined }>(
+      'POST',
+      '/onboarding/system-owner',
+      data,
+      true
+    );
 
     // SECURITY: Clear password from memory immediately
     data.password = '';

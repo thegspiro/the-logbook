@@ -80,9 +80,7 @@ describe('EventEditPage', () => {
 
   describe('Loading State', () => {
     it('should display loading spinner while fetching event', () => {
-      vi.mocked(eventService.getEvent).mockImplementation(
-        () => new Promise(() => {})
-      );
+      vi.mocked(eventService.getEvent).mockImplementation(() => new Promise(() => {}));
 
       renderWithRouter(<EventEditPage />);
 
@@ -92,9 +90,7 @@ describe('EventEditPage', () => {
 
   describe('Error State', () => {
     it('should display error when event fails to load', async () => {
-      vi.mocked(eventService.getEvent).mockRejectedValue(
-        makeApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getEvent).mockRejectedValue(makeApiError('Event not found', 404));
 
       renderWithRouter(<EventEditPage />);
 
@@ -104,9 +100,7 @@ describe('EventEditPage', () => {
     });
 
     it('should show back to events link on error', async () => {
-      vi.mocked(eventService.getEvent).mockRejectedValue(
-        makeApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getEvent).mockRejectedValue(makeApiError('Event not found', 404));
 
       renderWithRouter(<EventEditPage />);
 
@@ -180,18 +174,19 @@ describe('EventEditPage', () => {
       await user.click(screen.getByRole('button', { name: /save changes/i }));
 
       await waitFor(() => {
-        expect(eventService.updateEvent).toHaveBeenCalledWith('evt-1', expect.objectContaining({
-          title: 'Updated Event Title',
-        }));
+        expect(eventService.updateEvent).toHaveBeenCalledWith(
+          'evt-1',
+          expect.objectContaining({
+            title: 'Updated Event Title',
+          })
+        );
         expect(mockNavigate).toHaveBeenCalledWith('/events/evt-1');
       });
     });
 
     it('should display error on failed update', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue(mockEvent);
-      vi.mocked(eventService.updateEvent).mockRejectedValue(
-        makeApiError('Location conflict', 409)
-      );
+      vi.mocked(eventService.updateEvent).mockRejectedValue(makeApiError('Location conflict', 409));
 
       const user = userEvent.setup();
       renderWithRouter(<EventEditPage />);
@@ -230,9 +225,7 @@ describe('EventEditPage', () => {
 
   describe('Accessibility', () => {
     it('should have accessible error alerts', async () => {
-      vi.mocked(eventService.getEvent).mockRejectedValue(
-        makeApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getEvent).mockRejectedValue(makeApiError('Event not found', 404));
 
       renderWithRouter(<EventEditPage />);
 

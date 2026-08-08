@@ -86,15 +86,18 @@ export interface OnboardingState {
   stations: OnboardingStationDraft[];
   apparatus: OnboardingApparatusDraft[];
 
-  positionsConfig: Record<string, {
-    id: string;
-    name: string;
-    description: string;
-    icon?: string | undefined;
-    priority: number;
-    permissions: Record<string, { view: boolean; manage: boolean }>;
-    isCustom?: boolean | undefined;
-  }> | null;
+  positionsConfig: Record<
+    string,
+    {
+      id: string;
+      name: string;
+      description: string;
+      icon?: string | undefined;
+      priority: number;
+      permissions: Record<string, { view: boolean; manage: boolean }>;
+      isCustom?: boolean | undefined;
+    }
+  > | null;
 
   // Module Selection
   selectedModules: string[];
@@ -358,7 +361,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         if (status === FeatureStatus.ENABLED && !newSelectedModules.includes(moduleId)) {
           newSelectedModules.push(moduleId);
         } else if (status !== FeatureStatus.ENABLED) {
-          newSelectedModules = newSelectedModules.filter(id => id !== moduleId);
+          newSelectedModules = newSelectedModules.filter((id) => id !== moduleId);
         }
 
         set({ moduleStatuses: newStatuses, selectedModules: newSelectedModules });

@@ -14,19 +14,16 @@ function setUserAgent(ua: string) {
 }
 
 function setStandalone(value: boolean) {
-  vi.mocked(window.matchMedia).mockImplementation(
-    (query: string) =>
-      ({
-        matches: query === '(display-mode: standalone)' ? value : false,
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      }),
-  );
+  vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+    matches: query === '(display-mode: standalone)' ? value : false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
 }
 
 describe('usePWAInstall', () => {

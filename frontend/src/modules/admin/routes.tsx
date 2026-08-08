@@ -12,18 +12,10 @@ import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const ErrorMonitoringPage = lazyWithRetry(
-  () => import('../../pages/ErrorMonitoringPage'),
-);
-const AnalyticsDashboardPage = lazyWithRetry(
-  () => import('../../pages/AnalyticsDashboardPage'),
-);
-const PlatformAnalyticsPage = lazyWithRetry(
-  () => import('../../pages/PlatformAnalyticsPage'),
-);
-const AuditLogPage = lazyWithRetry(
-  () => import('../../pages/AuditLogPage'),
-);
+const ErrorMonitoringPage = lazyWithRetry(() => import('../../pages/ErrorMonitoringPage'));
+const AnalyticsDashboardPage = lazyWithRetry(() => import('../../pages/AnalyticsDashboardPage'));
+const PlatformAnalyticsPage = lazyWithRetry(() => import('../../pages/PlatformAnalyticsPage'));
+const AuditLogPage = lazyWithRetry(() => import('../../pages/AuditLogPage'));
 
 export const getAdminRoutes = () => {
   return (

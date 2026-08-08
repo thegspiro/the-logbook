@@ -80,15 +80,17 @@ const Members: React.FC = () => {
       // Calculate stats from real data
       const calculatedStats: MemberStats = {
         total: users.length,
-        active: users.filter(u => u.status === UserStatus.ACTIVE).length,
-        inactive: users.filter(u => u.status === UserStatus.INACTIVE).length,
-        onLeave: users.filter(u => u.status === UserStatus.LEAVE).length,
-        retired: users.filter(u => u.status === UserStatus.RETIRED).length,
+        active: users.filter((u) => u.status === UserStatus.ACTIVE).length,
+        inactive: users.filter((u) => u.status === UserStatus.INACTIVE).length,
+        onLeave: users.filter((u) => u.status === UserStatus.LEAVE).length,
+        retired: users.filter((u) => u.status === UserStatus.RETIRED).length,
         expiringCertifications: 0,
       };
       setStats(calculatedStats);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Unable to load the member list. Please check your connection and refresh the page.'));
+      setError(
+        getErrorMessage(err, 'Unable to load the member list. Please check your connection and refresh the page.')
+      );
     } finally {
       setLoading(false);
     }
@@ -142,10 +144,7 @@ const Members: React.FC = () => {
         (member.membership_number && member.membership_number.toLowerCase().includes(searchLower)) ||
         (member.email && member.email.toLowerCase().includes(searchLower));
 
-      const matchesFilter =
-        filterStatus === 'all' ||
-        member.status === filterStatus ||
-        filterStatus === member.status;
+      const matchesFilter = filterStatus === 'all' || member.status === filterStatus || filterStatus === member.status;
 
       return matchesSearch && matchesFilter;
     });
@@ -153,11 +152,16 @@ const Members: React.FC = () => {
     // Apply sorting (#30)
     result = sortItems(result, sortField, sortDirection, (item, field) => {
       switch (field) {
-        case 'name': return `${item.first_name || ''} ${item.last_name || ''}`;
-        case 'status': return item.status;
-        case 'hire_date': return item.hire_date || '';
-        case 'membership_number': return item.membership_number || '';
-        default: return (item as unknown as Record<string, unknown>)[field] as string;
+        case 'name':
+          return `${item.first_name || ''} ${item.last_name || ''}`;
+        case 'status':
+          return item.status;
+        case 'hire_date':
+          return item.hire_date || '';
+        case 'membership_number':
+          return item.membership_number || '';
+        default:
+          return (item as unknown as Record<string, unknown>)[field] as string;
       }
     });
 
@@ -182,9 +186,10 @@ const Members: React.FC = () => {
 
   // #33: Bulk selection helpers
   const toggleSelect = useCallback((id: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);
@@ -193,17 +198,15 @@ const Members: React.FC = () => {
     if (selectedIds.size === paginatedMembers.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(paginatedMembers.map(m => m.id)));
+      setSelectedIds(new Set(paginatedMembers.map((m) => m.id)));
     }
   }, [paginatedMembers, selectedIds.size]);
 
   // #48: CSV export for members (also used for bulk export of selected)
   const handleExportCSV = useCallback(() => {
-    const exportSet = selectedIds.size > 0
-      ? filteredMembers.filter(m => selectedIds.has(m.id))
-      : filteredMembers;
+    const exportSet = selectedIds.size > 0 ? filteredMembers.filter((m) => selectedIds.has(m.id)) : filteredMembers;
     const headers = ['First Name', 'Last Name', 'Username', 'Email', 'Status', 'Membership #', 'Hire Date'];
-    const rows = exportSet.map(m => [
+    const rows = exportSet.map((m) => [
       m.first_name || '',
       m.last_name || '',
       m.username || '',
@@ -212,7 +215,7 @@ const Members: React.FC = () => {
       m.membership_number || '',
       m.hire_date ? formatDate(m.hire_date, tz) : '',
     ]);
-    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -239,18 +242,18 @@ const Members: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <Breadcrumbs />
 
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-6 sm:mb-8">
+        <div className="mb-6 flex items-center justify-between sm:mb-8">
           <div className="flex items-center space-x-3">
-            <div className="bg-blue-600 rounded-lg p-2">
-              <Users className="w-6 h-6 text-white" />
+            <div className="rounded-lg bg-blue-600 p-2">
+              <Users className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-theme-text-primary text-xl sm:text-2xl font-bold">Membership Management</h1>
-              <p className="text-theme-text-muted text-sm hidden sm:block">Manage department members and records</p>
+              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Membership Management</h1>
+              <p className="text-theme-text-muted hidden text-sm sm:block">Manage department members and records</p>
             </div>
           </div>
           {filteredMembers.length > 0 && (
@@ -266,68 +269,71 @@ const Members: React.FC = () => {
         </div>
         {/* Error Banner */}
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0" />
-            <p className="text-red-700 dark:text-red-300 text-sm flex-1">{error}</p>
+          <div className="mb-6 flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+            <AlertCircle className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
+            <p className="flex-1 text-sm text-red-700 dark:text-red-300">{error}</p>
             <button
-              onClick={() => { void loadMembers(); }}
-              className="flex items-center gap-1 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm"
+              onClick={() => {
+                void loadMembers();
+              }}
+              className="flex items-center gap-1 text-sm text-red-700 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className="h-4 w-4" />
               Retry
             </button>
           </div>
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total Members</p>
-            <p className="text-theme-text-primary text-2xl font-bold mt-1">{stats.total}</p>
+            <p className="text-theme-text-primary mt-1 text-2xl font-bold">{stats.total}</p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Active</p>
-            <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{stats.active}</p>
+            <p className="mt-1 text-2xl font-bold text-green-700 dark:text-green-400">{stats.active}</p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Inactive</p>
-            <p className="text-theme-text-muted text-2xl font-bold mt-1">{stats.inactive}</p>
+            <p className="text-theme-text-muted mt-1 text-2xl font-bold">{stats.inactive}</p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">On Leave</p>
-            <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">{stats.onLeave}</p>
+            <p className="mt-1 text-2xl font-bold text-yellow-700 dark:text-yellow-400">{stats.onLeave}</p>
           </div>
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Retired</p>
-            <p className="text-blue-700 dark:text-blue-400 text-2xl font-bold mt-1">{stats.retired}</p>
+            <p className="mt-1 text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.retired}</p>
           </div>
         </div>
 
         {/* Actions Bar */}
         <div className="card mb-6 p-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             {/* Search */}
-            <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-theme-text-muted" />
+            <div className="relative w-full flex-1 md:max-w-md">
+              <Search className="text-theme-text-muted absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2 transform" />
               <input
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
                 type="text"
-                aria-label="Search by name, membership number, or email..." placeholder="Search by name, membership number, or email..."
+                aria-label="Search by name, membership number, or email..."
+                placeholder="Search by name, membership number, or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="form-input pl-10 placeholder-theme-text-muted pr-4"
+                className="form-input placeholder-theme-text-muted pr-4 pl-10"
               />
             </div>
 
             {/* Filter */}
             <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-theme-text-muted" />
+              <Filter className="text-theme-text-muted h-5 w-5" />
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-2 max-md:min-h-[44px] bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden max-md:min-h-[44px]"
               >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
@@ -338,20 +344,20 @@ const Members: React.FC = () => {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center space-x-2 sm:space-x-3 w-full md:w-auto">
+            <div className="flex w-full items-center space-x-2 sm:space-x-3 md:w-auto">
               <button
                 onClick={() => void navigate('/members/import')}
-                className="flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 max-md:min-h-[44px] bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex-1 md:flex-none"
+                className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-purple-600 px-3 py-2 text-white transition-colors hover:bg-purple-700 max-md:min-h-[44px] sm:px-4 md:flex-none"
               >
-                <Upload className="w-4 h-4" />
+                <Upload className="h-4 w-4" />
                 <span className="hidden sm:inline">Import CSV</span>
                 <span className="sm:hidden">Import</span>
               </button>
               <button
                 onClick={() => void navigate('/members/add')}
-                className="btn-info flex flex-1 items-center justify-center md:flex-none px-3 sm:px-4 space-x-2"
+                className="btn-info flex flex-1 items-center justify-center space-x-2 px-3 sm:px-4 md:flex-none"
               >
-                <UserPlus className="w-4 h-4" />
+                <UserPlus className="h-4 w-4" />
                 <span className="hidden sm:inline">Add Member</span>
                 <span className="sm:hidden">Add</span>
               </button>
@@ -361,10 +367,10 @@ const Members: React.FC = () => {
 
         {/* Contact Info Privacy Notice */}
         {contactInfoEnabled.enabled && (
-          <div className="mb-6 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-            <p className="text-blue-700 dark:text-blue-300 text-sm">
-              <strong>Privacy Notice:</strong> Contact information is displayed for department purposes only.
-              This information should not be used for commercial purposes or shared outside the organization.
+          <div className="mb-6 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              <strong>Privacy Notice:</strong> Contact information is displayed for department purposes only. This
+              information should not be used for commercial purposes or shared outside the organization.
             </p>
           </div>
         )}
@@ -385,7 +391,12 @@ const Members: React.FC = () => {
               actions={
                 !(searchQuery || filterStatus !== 'all')
                   ? [
-                      { label: 'Import CSV', onClick: () => void navigate('/members/import'), icon: Upload, variant: 'secondary' },
+                      {
+                        label: 'Import CSV',
+                        onClick: () => void navigate('/members/import'),
+                        icon: Upload,
+                        variant: 'secondary',
+                      },
                       { label: 'Add Member', onClick: () => void navigate('/members/add'), icon: UserPlus },
                     ]
                   : undefined
@@ -394,257 +405,284 @@ const Members: React.FC = () => {
           </div>
         ) : (
           <>
-          {/* Mobile card view */}
-          <div className="md:hidden space-y-3">
-            {paginatedMembers.map((member) => (
-              <div
-                key={member.id}
-                className="card p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center min-w-0 flex-1">
-                    <Avatar
-                      firstName={member.first_name}
-                      lastName={member.last_name}
-                      photoUrl={member.photo_url}
-                      size="md"
-                    />
-                    <div className="ml-3 min-w-0">
-                      <div className="text-theme-text-primary font-medium truncate">
-                        {member.first_name} {member.last_name}
+            {/* Mobile card view */}
+            <div className="space-y-3 md:hidden">
+              {paginatedMembers.map((member) => (
+                <div key={member.id} className="card p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex min-w-0 flex-1 items-center">
+                      <Avatar
+                        firstName={member.first_name}
+                        lastName={member.last_name}
+                        photoUrl={member.photo_url}
+                        size="md"
+                      />
+                      <div className="ml-3 min-w-0">
+                        <div className="text-theme-text-primary truncate font-medium">
+                          {member.first_name} {member.last_name}
+                        </div>
+                        <div className="text-theme-text-muted text-sm">@{member.username}</div>
                       </div>
-                      <div className="text-theme-text-muted text-sm">@{member.username}</div>
+                    </div>
+                    <span
+                      className={`ml-2 shrink-0 rounded-sm border px-2 py-1 text-xs font-semibold ${getStatusColor(member.status)}`}
+                    >
+                      {member.status.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-sm">
+                    <div className="text-theme-text-muted space-y-1">
+                      {member.membership_number && <div className="font-mono text-xs">#{member.membership_number}</div>}
+                      {contactInfoEnabled.enabled && contactInfoEnabled.show_phone && member.phone && (
+                        <div className="flex items-center gap-1">
+                          <Phone className="h-3 w-3" />
+                          {member.phone}
+                        </div>
+                      )}
+                      {contactInfoEnabled.enabled && contactInfoEnabled.show_email && member.email && (
+                        <div className="flex items-center gap-1 truncate">
+                          <Mail className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{member.email}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center space-x-1">
+                      <button
+                        onClick={() => void navigate(`/members/${member.id}`)}
+                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 dark:text-blue-400"
+                        title="View/Edit Profile"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      {currentUser?.id !== member.id && (
+                        <button
+                          onClick={() => handleDeleteMember(member)}
+                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <span
-                    className={`px-2 py-1 text-xs font-semibold rounded-sm border shrink-0 ml-2 ${getStatusColor(member.status)}`}
-                  >
-                    {member.status.replace('_', ' ').toUpperCase()}
-                  </span>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-sm">
-                  <div className="text-theme-text-muted space-y-1">
-                    {member.membership_number && (
-                      <div className="font-mono text-xs">#{member.membership_number}</div>
-                    )}
-                    {contactInfoEnabled.enabled && contactInfoEnabled.show_phone && member.phone && (
-                      <div className="flex items-center gap-1">
-                        <Phone className="w-3 h-3" />
-                        {member.phone}
-                      </div>
-                    )}
-                    {contactInfoEnabled.enabled && contactInfoEnabled.show_email && member.email && (
-                      <div className="flex items-center gap-1 truncate">
-                        <Mail className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{member.email}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center space-x-1 shrink-0">
-                    <button
-                      onClick={() => void navigate(`/members/${member.id}`)}
-                      className="p-2 text-blue-700 dark:text-blue-400 hover:bg-blue-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                      title="View/Edit Profile"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    {currentUser?.id !== member.id && (
-                      <button
-                        onClick={() => handleDeleteMember(member)}
-                        className="p-2 text-red-700 dark:text-red-400 hover:bg-red-500/10 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Bulk action bar (#33) */}
-          {selectedIds.size > 0 && (
-            <div className="hidden md:flex items-center gap-3 mb-3 bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-2">
-              <span className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-                {selectedIds.size} selected
-              </span>
-              <div className="flex items-center gap-2 ml-auto">
-                <button
-                  onClick={() => void navigate(`/members/print-labels?ids=${[...selectedIds].join(',')}`)}
-                  className="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-sm transition-colors inline-flex items-center gap-1"
-                >
-                  <Printer className="w-3 h-3" />
-                  Print Badges
-                </button>
-                <button
-                  onClick={handleExportCSV}
-                  className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-sm transition-colors inline-flex items-center gap-1"
-                >
-                  <Download className="w-3 h-3" />
-                  Export Selected
-                </button>
-                <button
-                  onClick={() => setSelectedIds(new Set())}
-                  className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                >
-                  Clear Selection
-                </button>
-              </div>
+              ))}
             </div>
-          )}
 
-          {/* Desktop table view */}
-          <div className="card hidden md:block overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-theme-input-bg border-b border-theme-surface-border">
-                  <tr>
-                    <th scope="col" className="pl-4 pr-1 py-3 w-10">
-                      <input
-                        type="checkbox"
-                        checked={paginatedMembers.length > 0 && selectedIds.size === paginatedMembers.length}
-                        onChange={toggleSelectAll}
-                        className="rounded-sm border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
-                        aria-label="Select all members"
-                      />
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left">
-                      <SortableHeader label="Member" field="name" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left">
-                      <SortableHeader label="Member #" field="membership_number" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
-                    </th>
-                    {contactInfoEnabled.enabled && (
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
-                        Contact
-                      </th>
-                    )}
-                    <th scope="col" className="px-6 py-3 text-left">
-                      <SortableHeader label="Status" field="status" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left">
-                      <SortableHeader label="Hire Date" field="hire_date" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} />
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-theme-text-secondary uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-theme-surface-border">
-                  {paginatedMembers.map((member) => (
-                    <tr key={member.id} className={`hover:bg-theme-surface-secondary transition-colors ${selectedIds.has(member.id) ? 'bg-blue-500/5' : ''}`}>
-                      <td className="pl-4 pr-1 py-4 w-10">
+            {/* Bulk action bar (#33) */}
+            {selectedIds.size > 0 && (
+              <div className="mb-3 hidden items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 md:flex">
+                <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  {selectedIds.size} selected
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    onClick={() => void navigate(`/members/print-labels?ids=${[...selectedIds].join(',')}`)}
+                    className="inline-flex items-center gap-1 rounded-sm bg-emerald-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-emerald-700"
+                  >
+                    <Printer className="h-3 w-3" />
+                    Print Badges
+                  </button>
+                  <button
+                    onClick={handleExportCSV}
+                    className="inline-flex items-center gap-1 rounded-sm bg-blue-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-blue-700"
+                  >
+                    <Download className="h-3 w-3" />
+                    Export Selected
+                  </button>
+                  <button
+                    onClick={() => setSelectedIds(new Set())}
+                    className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1.5 text-xs transition-colors"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Desktop table view */}
+            <div className="card hidden overflow-hidden md:block">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-theme-input-bg border-theme-surface-border border-b">
+                    <tr>
+                      <th scope="col" className="w-10 py-3 pr-1 pl-4">
                         <input
                           type="checkbox"
-                          checked={selectedIds.has(member.id)}
-                          onChange={() => toggleSelect(member.id)}
-                          className="rounded-sm border-theme-input-border text-blue-600 focus:ring-theme-focus-ring"
-                          aria-label={`Select ${member.first_name} ${member.last_name}`}
+                          checked={paginatedMembers.length > 0 && selectedIds.size === paginatedMembers.length}
+                          onChange={toggleSelectAll}
+                          className="border-theme-input-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
+                          aria-label="Select all members"
                         />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <Avatar
-                            firstName={member.first_name}
-                            lastName={member.last_name}
-                            photoUrl={member.photo_url}
-                            size="md"
-                          />
-                          <div className="ml-3">
-                            <div className="text-theme-text-primary font-medium">
-                              {member.first_name} {member.last_name}
-                            </div>
-                            <div className="text-theme-text-muted text-sm">@{member.username}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {member.membership_number && (
-                          <div className="text-theme-text-primary font-mono text-sm">{member.membership_number}</div>
-                        )}
-                        {!member.membership_number && (
-                          <div className="text-theme-text-muted">-</div>
-                        )}
-                      </td>
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left">
+                        <SortableHeader
+                          label="Member"
+                          field="name"
+                          currentSort={sortField}
+                          currentDirection={sortDirection}
+                          onSort={handleSort}
+                        />
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left">
+                        <SortableHeader
+                          label="Member #"
+                          field="membership_number"
+                          currentSort={sortField}
+                          currentDirection={sortDirection}
+                          onSort={handleSort}
+                        />
+                      </th>
                       {contactInfoEnabled.enabled && (
-                        <td className="px-6 py-4">
-                          <div className="text-sm">
-                            {contactInfoEnabled.show_phone && member.phone && (
-                              <div className="flex items-center text-theme-text-secondary mb-1">
-                                <Phone className="w-3 h-3 mr-1" />
-                                {member.phone}
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-6 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                        >
+                          Contact
+                        </th>
+                      )}
+                      <th scope="col" className="px-6 py-3 text-left">
+                        <SortableHeader
+                          label="Status"
+                          field="status"
+                          currentSort={sortField}
+                          currentDirection={sortDirection}
+                          onSort={handleSort}
+                        />
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left">
+                        <SortableHeader
+                          label="Hire Date"
+                          field="hire_date"
+                          currentSort={sortField}
+                          currentDirection={sortDirection}
+                          onSort={handleSort}
+                        />
+                      </th>
+                      <th
+                        scope="col"
+                        className="text-theme-text-secondary px-6 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                      >
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-theme-surface-border divide-y">
+                    {paginatedMembers.map((member) => (
+                      <tr
+                        key={member.id}
+                        className={`hover:bg-theme-surface-secondary transition-colors ${selectedIds.has(member.id) ? 'bg-blue-500/5' : ''}`}
+                      >
+                        <td className="w-10 py-4 pr-1 pl-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(member.id)}
+                            onChange={() => toggleSelect(member.id)}
+                            className="border-theme-input-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
+                            aria-label={`Select ${member.first_name} ${member.last_name}`}
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <Avatar
+                              firstName={member.first_name}
+                              lastName={member.last_name}
+                              photoUrl={member.photo_url}
+                              size="md"
+                            />
+                            <div className="ml-3">
+                              <div className="text-theme-text-primary font-medium">
+                                {member.first_name} {member.last_name}
                               </div>
-                            )}
-                            {contactInfoEnabled.show_mobile && member.mobile && !member.phone && (
-                              <div className="flex items-center text-theme-text-secondary mb-1">
-                                <Phone className="w-3 h-3 mr-1" />
-                                {member.mobile}
-                              </div>
-                            )}
-                            {contactInfoEnabled.show_email && member.email && (
-                              <div className="flex items-center text-theme-text-muted text-xs">
-                                <Mail className="w-3 h-3 mr-1" />
-                                {member.email}
-                              </div>
-                            )}
-                            {!member.phone && !member.mobile && !member.email && (
-                              <span className="text-theme-text-muted">-</span>
+                              <div className="text-theme-text-muted text-sm">@{member.username}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {member.membership_number && (
+                            <div className="text-theme-text-primary font-mono text-sm">{member.membership_number}</div>
+                          )}
+                          {!member.membership_number && <div className="text-theme-text-muted">-</div>}
+                        </td>
+                        {contactInfoEnabled.enabled && (
+                          <td className="px-6 py-4">
+                            <div className="text-sm">
+                              {contactInfoEnabled.show_phone && member.phone && (
+                                <div className="text-theme-text-secondary mb-1 flex items-center">
+                                  <Phone className="mr-1 h-3 w-3" />
+                                  {member.phone}
+                                </div>
+                              )}
+                              {contactInfoEnabled.show_mobile && member.mobile && !member.phone && (
+                                <div className="text-theme-text-secondary mb-1 flex items-center">
+                                  <Phone className="mr-1 h-3 w-3" />
+                                  {member.mobile}
+                                </div>
+                              )}
+                              {contactInfoEnabled.show_email && member.email && (
+                                <div className="text-theme-text-muted flex items-center text-xs">
+                                  <Mail className="mr-1 h-3 w-3" />
+                                  {member.email}
+                                </div>
+                              )}
+                              {!member.phone && !member.mobile && !member.email && (
+                                <span className="text-theme-text-muted">-</span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`rounded border px-2 py-1 text-xs font-semibold ${getStatusColor(
+                              member.status
+                            )}`}
+                          >
+                            {member.status.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-theme-text-secondary text-sm">
+                            {member.hire_date ? formatDate(member.hire_date, tz) : '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end space-x-2">
+                            <button
+                              onClick={() => void navigate(`/members/${member.id}`)}
+                              className="rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                              title="View/Edit Profile"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            {currentUser?.id !== member.id && (
+                              <button
+                                onClick={() => handleDeleteMember(member)}
+                                className="rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                             )}
                           </div>
                         </td>
-                      )}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`px-2 py-1 text-xs font-semibold rounded border ${getStatusColor(
-                            member.status
-                          )}`}
-                        >
-                          {member.status.replace('_', ' ').toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-theme-text-secondary">
-                          {member.hire_date
-                            ? formatDate(member.hire_date, tz)
-                            : '-'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="flex items-center justify-end space-x-2">
-                          <button
-                            onClick={() => void navigate(`/members/${member.id}`)}
-                            className="p-2 text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded-sm transition-colors"
-                            title="View/Edit Profile"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          {currentUser?.id !== member.id && (
-                            <button
-                              onClick={() => handleDeleteMember(member)}
-                              className="p-2 text-red-700 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 rounded-sm transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-          {/* Pagination (#11) */}
-          <Pagination
-            currentPage={currentPage}
-            totalItems={filteredMembers.length}
-            pageSize={pageSize}
-            onPageChange={setCurrentPage}
-            onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
-            className="mt-4"
-          />
+            {/* Pagination (#11) */}
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredMembers.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setCurrentPage(1);
+              }}
+              className="mt-4"
+            />
           </>
         )}
       </main>
@@ -653,12 +691,18 @@ const Members: React.FC = () => {
         <DeleteMemberModal
           isOpen={!!deleteModalMember}
           onClose={() => setDeleteModalMember(null)}
-          member={deleteModalMember ? {
-            id: deleteModalMember.id,
-            full_name: deleteModalMember.full_name || `${deleteModalMember.first_name || ''} ${deleteModalMember.last_name || ''}`.trim(),
-            username: deleteModalMember.username,
-            status: deleteModalMember.status,
-          } : null}
+          member={
+            deleteModalMember
+              ? {
+                  id: deleteModalMember.id,
+                  full_name:
+                    deleteModalMember.full_name ||
+                    `${deleteModalMember.first_name || ''} ${deleteModalMember.last_name || ''}`.trim(),
+                  username: deleteModalMember.username,
+                  status: deleteModalMember.status,
+                }
+              : null
+          }
           onSoftDelete={handleSoftDelete}
           onHardDelete={handleHardDelete}
         />

@@ -54,9 +54,7 @@ describe('EventSelfCheckInPage', () => {
 
   describe('Error State - Loading Event', () => {
     it('should display error message when API call fails', async () => {
-      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
-        createMockApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(createMockApiError('Event not found', 404));
 
       renderWithRouter(<EventSelfCheckInPage />);
 
@@ -67,9 +65,7 @@ describe('EventSelfCheckInPage', () => {
     });
 
     it('should display generic error message when error has no detail', async () => {
-      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
-        new Error('Network error')
-      );
+      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(new Error('Network error'));
 
       renderWithRouter(<EventSelfCheckInPage />);
 
@@ -79,9 +75,7 @@ describe('EventSelfCheckInPage', () => {
     });
 
     it('should show link to all events when error occurs', async () => {
-      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(
-        createMockApiError('Event not found', 404)
-      );
+      vi.mocked(eventService.getQRCheckInData).mockRejectedValue(createMockApiError('Event not found', 404));
 
       renderWithRouter(<EventSelfCheckInPage />);
 
@@ -186,7 +180,7 @@ describe('EventSelfCheckInPage', () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
       vi.mocked(eventService.selfCheckIn).mockResolvedValue({
         ...mockRSVP,
-        notice: 'You\'re a bit early. The official check-in window for this event opens at 07:00 PM EDT.',
+        notice: "You're a bit early. The official check-in window for this event opens at 07:00 PM EDT.",
       });
 
       const user = userEvent.setup();
@@ -262,9 +256,7 @@ describe('EventSelfCheckInPage', () => {
   describe('Failed Check-In Flow', () => {
     it('should display error message when check-in fails', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
-      vi.mocked(eventService.selfCheckIn).mockRejectedValue(
-        createMockApiError('You are already checked in', 400)
-      );
+      vi.mocked(eventService.selfCheckIn).mockRejectedValue(createMockApiError('You are already checked in', 400));
 
       const user = userEvent.setup();
       renderWithRouter(<EventSelfCheckInPage />);
@@ -281,9 +273,7 @@ describe('EventSelfCheckInPage', () => {
 
     it('should display generic error message when error has no detail', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
-      vi.mocked(eventService.selfCheckIn).mockRejectedValue(
-        new Error('Network error')
-      );
+      vi.mocked(eventService.selfCheckIn).mockRejectedValue(new Error('Network error'));
 
       const user = userEvent.setup();
       renderWithRouter(<EventSelfCheckInPage />);
@@ -300,9 +290,7 @@ describe('EventSelfCheckInPage', () => {
 
     it('should keep check-in button enabled after error', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
-      vi.mocked(eventService.selfCheckIn).mockRejectedValue(
-        createMockApiError('You are already checked in', 400)
-      );
+      vi.mocked(eventService.selfCheckIn).mockRejectedValue(createMockApiError('You are already checked in', 400));
 
       const user = userEvent.setup();
       renderWithRouter(<EventSelfCheckInPage />);

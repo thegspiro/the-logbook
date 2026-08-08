@@ -49,50 +49,64 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
     resetForm();
   }, [resetForm]);
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!eventId) return;
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!eventId) return;
 
-    try {
-      setSubmitting(true);
-      setSubmitError(null);
+      try {
+        setSubmitting(true);
+        setSubmitError(null);
 
-      const rsvpPayload = {
-        status: rsvpStatus,
-        guest_count: guestCount,
-        notes: rsvpNotes || undefined,
-        dietary_restrictions: rsvpDietaryRestrictions || undefined,
-        accessibility_needs: rsvpAccessibilityNeeds || undefined,
-      };
+        const rsvpPayload = {
+          status: rsvpStatus,
+          guest_count: guestCount,
+          notes: rsvpNotes || undefined,
+          dietary_restrictions: rsvpDietaryRestrictions || undefined,
+          accessibility_needs: rsvpAccessibilityNeeds || undefined,
+        };
 
-      if (rsvpApplyToSeries && event && (event.is_recurring || event.recurrence_parent_id)) {
-        const result = await eventService.rsvpToSeries(eventId, rsvpPayload);
-        toast.success(`RSVP applied to ${result.rsvp_count} events in the series`);
-      } else {
-        try {
-          await eventService.createOrUpdateRSVP(eventId, rsvpPayload);
-        } catch (err) {
-          // Soft pipeline phase gate — confirm, then retry with override.
-          const warning = getPhaseGateWarning(err);
-          if (!warning) throw err;
-          if (!window.confirm(`${warning}\n\nRSVP anyway?`)) {
-            setSubmitting(false);
-            return;
+        if (rsvpApplyToSeries && event && (event.is_recurring || event.recurrence_parent_id)) {
+          const result = await eventService.rsvpToSeries(eventId, rsvpPayload);
+          toast.success(`RSVP applied to ${result.rsvp_count} events in the series`);
+        } else {
+          try {
+            await eventService.createOrUpdateRSVP(eventId, rsvpPayload);
+          } catch (err) {
+            // Soft pipeline phase gate — confirm, then retry with override.
+            const warning = getPhaseGateWarning(err);
+            if (!warning) throw err;
+            if (!window.confirm(`${warning}\n\nRSVP anyway?`)) {
+              setSubmitting(false);
+              return;
+            }
+            await eventService.createOrUpdateRSVP(eventId, rsvpPayload, true);
           }
-          await eventService.createOrUpdateRSVP(eventId, rsvpPayload, true);
+          toast.success('RSVP submitted successfully');
         }
-        toast.success('RSVP submitted successfully');
-      }
 
-      setShowRSVPModal(false);
-      resetForm();
-      await onSuccess();
-    } catch (err) {
-      setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to submit RSVP');
-    } finally {
-      setSubmitting(false);
-    }
-  }, [eventId, event, rsvpStatus, guestCount, rsvpNotes, rsvpDietaryRestrictions, rsvpAccessibilityNeeds, rsvpApplyToSeries, onSuccess, resetForm]);
+        setShowRSVPModal(false);
+        resetForm();
+        await onSuccess();
+      } catch (err) {
+        setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to submit RSVP');
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [
+      eventId,
+      event,
+      rsvpStatus,
+      guestCount,
+      rsvpNotes,
+      rsvpDietaryRestrictions,
+      rsvpAccessibilityNeeds,
+      rsvpApplyToSeries,
+      onSuccess,
+      resetForm,
+    ]
+  );
 
   return {
     showRSVPModal,

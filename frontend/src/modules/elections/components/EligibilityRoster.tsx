@@ -61,20 +61,29 @@ const MemberRow: React.FC<{
   return (
     <>
       <tr
-        className={`${rowBg} hover:bg-theme-surface-hover transition-colors cursor-pointer`}
+        className={`${rowBg} hover:bg-theme-surface-hover cursor-pointer transition-colors`}
         onClick={hasItems ? onToggle : undefined}
         role={hasItems ? 'row' : undefined}
         aria-expanded={hasItems ? expanded : undefined}
         tabIndex={hasItems ? 0 : undefined}
-        onKeyDown={hasItems ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } } : undefined}
+        onKeyDown={
+          hasItems
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onToggle();
+                }
+              }
+            : undefined
+        }
       >
         {/* Expand/collapse */}
-        <td className="pl-3 pr-1 py-3 w-8">
+        <td className="w-8 py-3 pr-1 pl-3">
           {hasItems ? (
             expanded ? (
-              <ChevronDown className="h-4 w-4 text-theme-text-muted" />
+              <ChevronDown className="text-theme-text-muted h-4 w-4" />
             ) : (
-              <ChevronRight className="h-4 w-4 text-theme-text-muted" />
+              <ChevronRight className="text-theme-text-muted h-4 w-4" />
             )
           ) : (
             <span className="w-4" />
@@ -84,10 +93,8 @@ const MemberRow: React.FC<{
         {/* Name + membership type */}
         <td className="py-3 pr-3">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-sm text-theme-text-primary">
-              {member.full_name}
-            </span>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-theme-surface-secondary text-theme-text-muted capitalize">
+            <span className="text-theme-text-primary text-sm font-medium">{member.full_name}</span>
+            <span className="bg-theme-surface-secondary text-theme-text-muted rounded px-1.5 py-0.5 text-xs capitalize">
               {member.membership_type}
             </span>
           </div>
@@ -95,20 +102,20 @@ const MemberRow: React.FC<{
 
         {/* Status badges */}
         <td className="py-3 pr-3">
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex flex-wrap items-center gap-1.5">
             {member.has_override && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400">
                 <ShieldCheck className="h-3 w-3" />
                 Override
               </span>
             )}
             {member.is_attending && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
                 Present
               </span>
             )}
             {member.has_voted && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-theme-text-muted bg-theme-surface-secondary px-2 py-0.5 rounded-full">
+              <span className="text-theme-text-muted bg-theme-surface-secondary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium">
                 <Vote className="h-3 w-3" />
                 Voted
               </span>
@@ -123,27 +130,23 @@ const MemberRow: React.FC<{
               {member.eligible_item_count}/{member.total_item_count}
             </span>
           ) : (
-            <span className="text-sm font-semibold text-red-600 dark:text-red-400">
-              0/{member.total_item_count}
-            </span>
+            <span className="text-sm font-semibold text-red-600 dark:text-red-400">0/{member.total_item_count}</span>
           )}
         </td>
 
         {/* Will receive ballot */}
         <td className="py-3 pr-3 text-center">
           {member.will_receive_ballot ? (
-            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 mx-auto" />
+            <CheckCircle2 className="mx-auto h-5 w-5 text-green-600 dark:text-green-400" />
           ) : (
-            <XCircle className="h-5 w-5 text-red-500 dark:text-red-400 mx-auto" />
+            <XCircle className="mx-auto h-5 w-5 text-red-500 dark:text-red-400" />
           )}
         </td>
 
         {/* Reason (if ineligible) */}
         <td className="py-3 pr-4">
           {member.ineligibility_reason && (
-            <span className="text-xs text-red-600 dark:text-red-400">
-              {member.ineligibility_reason}
-            </span>
+            <span className="text-xs text-red-600 dark:text-red-400">{member.ineligibility_reason}</span>
           )}
         </td>
       </tr>
@@ -151,21 +154,16 @@ const MemberRow: React.FC<{
       {/* Expanded per-item detail */}
       {expanded && hasItems && (
         <tr>
-          <td colSpan={6} className="px-4 pb-3 pt-0">
-            <div className="ml-6 bg-theme-surface rounded-lg border border-theme-surface-border p-3">
-              <div className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider mb-2">
+          <td colSpan={6} className="px-4 pt-0 pb-3">
+            <div className="bg-theme-surface border-theme-surface-border ml-6 rounded-lg border p-3">
+              <div className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
                 Per-Item Eligibility
               </div>
               <div className="space-y-1.5">
                 {member.item_eligibility.map((item) => (
-                  <div
-                    key={item.ballot_item_id}
-                    className="flex items-center justify-between text-sm"
-                  >
-                    <span className="text-theme-text-secondary truncate mr-3">
-                      {item.ballot_item_title}
-                    </span>
-                    <div className="flex items-center gap-2 shrink-0">
+                  <div key={item.ballot_item_id} className="flex items-center justify-between text-sm">
+                    <span className="text-theme-text-secondary mr-3 truncate">{item.ballot_item_title}</span>
+                    <div className="flex shrink-0 items-center gap-2">
                       {item.eligible ? (
                         <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
                           <CheckCircle2 className="h-3.5 w-3.5" />
@@ -189,9 +187,7 @@ const MemberRow: React.FC<{
   );
 };
 
-export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({
-  electionId,
-}) => {
+export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId }) => {
   const [roster, setRoster] = useState<EligibilityRosterType | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -241,7 +237,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({
         (m) =>
           m.full_name.toLowerCase().includes(q) ||
           m.email.toLowerCase().includes(q) ||
-          m.membership_type.toLowerCase().includes(q),
+          m.membership_type.toLowerCase().includes(q)
       );
     }
 
@@ -260,44 +256,40 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({
   }, [roster, search, filter]);
 
   return (
-    <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg overflow-hidden">
+    <div className="bg-theme-surface overflow-hidden rounded-lg shadow-sm backdrop-blur-xs">
       {/* Header / Toggle */}
       <button
-        className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-theme-surface-hover transition-colors"
+        className="hover:bg-theme-surface-hover flex w-full items-center justify-between px-6 py-4 text-left transition-colors"
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center gap-3">
-          <Users className="h-5 w-5 text-theme-text-muted" />
+          <Users className="text-theme-text-muted h-5 w-5" />
           <div>
-            <span className="text-lg font-semibold text-theme-text-primary">
-              Voter Eligibility Roster
-            </span>
+            <span className="text-theme-text-primary text-lg font-semibold">Voter Eligibility Roster</span>
             {roster && (
-              <span className="ml-3 text-sm text-theme-text-muted">
+              <span className="text-theme-text-muted ml-3 text-sm">
                 {roster.total_eligible} eligible / {roster.total_members} total
               </span>
             )}
           </div>
         </div>
         <ChevronDown
-          className={`h-5 w-5 text-theme-text-muted transform transition-transform ${
-            isOpen ? 'rotate-180' : ''
-          }`}
+          className={`text-theme-text-muted h-5 w-5 transform transition-transform ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
       {isOpen && (
-        <div className="border-t border-theme-surface-border">
+        <div className="border-theme-surface-border border-t">
           {loading && (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-theme-text-muted" />
-              <span className="ml-2 text-sm text-theme-text-muted">Loading roster...</span>
+              <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+              <span className="text-theme-text-muted ml-2 text-sm">Loading roster...</span>
             </div>
           )}
 
           {error && (
             <div className="p-4">
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3" role="alert">
                 <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
               </div>
             </div>
@@ -306,67 +298,51 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({
           {roster && !loading && (
             <>
               {/* Summary cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
-                <div className="bg-green-500/10 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-green-700 dark:text-green-400">
-                    {roster.total_eligible}
-                  </div>
-                  <div className="text-xs text-green-600 dark:text-green-500 font-medium">
-                    Will Receive Ballot
-                  </div>
+              <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
+                <div className="rounded-lg bg-green-500/10 p-3 text-center">
+                  <div className="text-2xl font-bold text-green-700 dark:text-green-400">{roster.total_eligible}</div>
+                  <div className="text-xs font-medium text-green-600 dark:text-green-500">Will Receive Ballot</div>
                 </div>
-                <div className="bg-red-500/10 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-red-700 dark:text-red-400">
-                    {roster.total_ineligible}
-                  </div>
-                  <div className="text-xs text-red-600 dark:text-red-500 font-medium">
-                    Ineligible
-                  </div>
+                <div className="rounded-lg bg-red-500/10 p-3 text-center">
+                  <div className="text-2xl font-bold text-red-700 dark:text-red-400">{roster.total_ineligible}</div>
+                  <div className="text-xs font-medium text-red-600 dark:text-red-500">Ineligible</div>
                 </div>
-                <div className="bg-blue-500/10 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">
-                    {roster.total_overrides}
-                  </div>
-                  <div className="text-xs text-blue-600 dark:text-blue-500 font-medium">
-                    Secretary Overrides
-                  </div>
+                <div className="rounded-lg bg-blue-500/10 p-3 text-center">
+                  <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">{roster.total_overrides}</div>
+                  <div className="text-xs font-medium text-blue-600 dark:text-blue-500">Secretary Overrides</div>
                 </div>
                 <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-theme-text-primary">
-                    {roster.total_voted}
-                  </div>
-                  <div className="text-xs text-theme-text-muted font-medium">
-                    Already Voted
-                  </div>
+                  <div className="text-theme-text-primary text-2xl font-bold">{roster.total_voted}</div>
+                  <div className="text-theme-text-muted text-xs font-medium">Already Voted</div>
                 </div>
               </div>
 
               {/* Ineligible members warning */}
               {roster.total_ineligible > 0 && (
-                <div className="mx-4 mb-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                <div className="mx-4 mb-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
                   <p className="text-xs text-amber-700 dark:text-amber-300">
-                    <span className="font-semibold">{roster.total_ineligible} member(s)</span> will
-                    not receive a ballot. Use <span className="font-semibold">Voter Overrides</span> below
-                    to grant exceptions, or expand each row to see per-item reasons.
+                    <span className="font-semibold">{roster.total_ineligible} member(s)</span> will not receive a
+                    ballot. Use <span className="font-semibold">Voter Overrides</span> below to grant exceptions, or
+                    expand each row to see per-item reasons.
                   </p>
                 </div>
               )}
 
               {/* Search + Filter bar */}
-              <div className="px-4 pb-3 flex flex-col sm:flex-row gap-2">
+              <div className="flex flex-col gap-2 px-4 pb-3 sm:flex-row">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted" />
+                  <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                   <input
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search by name, email, or membership type..."
                     aria-label="Search members"
-                    className="w-full pl-9 pr-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-sm text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+                    className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-md border py-2 pr-3 pl-9 text-sm focus:outline-hidden"
                   />
                 </div>
-                <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter members by status">
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter members by status">
                   {FILTER_OPTIONS.map((opt) => {
                     const Icon = opt.icon;
                     const isActive = filter === opt.value;
@@ -375,7 +351,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({
                         key={opt.value}
                         onClick={() => setFilter(opt.value)}
                         aria-pressed={isActive}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                        className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
                           isActive
                             ? 'bg-blue-600 text-white'
                             : 'bg-theme-surface-secondary text-theme-text-muted hover:bg-theme-surface-hover'
@@ -393,29 +369,29 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({
               <div className="overflow-x-auto">
                 <table className="w-full text-sm" aria-label="Voter eligibility roster">
                   <thead>
-                    <tr className="bg-theme-surface-secondary border-y border-theme-surface-border">
-                      <th className="pl-3 pr-1 py-2 w-8" />
-                      <th className="py-2 pr-3 text-left text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
+                    <tr className="bg-theme-surface-secondary border-theme-surface-border border-y">
+                      <th className="w-8 py-2 pr-1 pl-3" />
+                      <th className="text-theme-text-muted py-2 pr-3 text-left text-xs font-semibold tracking-wider uppercase">
                         Member
                       </th>
-                      <th className="py-2 pr-3 text-left text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
+                      <th className="text-theme-text-muted py-2 pr-3 text-left text-xs font-semibold tracking-wider uppercase">
                         Status
                       </th>
-                      <th className="py-2 pr-3 text-center text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
+                      <th className="text-theme-text-muted py-2 pr-3 text-center text-xs font-semibold tracking-wider uppercase">
                         Items
                       </th>
-                      <th className="py-2 pr-3 text-center text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
+                      <th className="text-theme-text-muted py-2 pr-3 text-center text-xs font-semibold tracking-wider uppercase">
                         Ballot
                       </th>
-                      <th className="py-2 pr-4 text-left text-xs font-semibold text-theme-text-muted uppercase tracking-wider">
+                      <th className="text-theme-text-muted py-2 pr-4 text-left text-xs font-semibold tracking-wider uppercase">
                         Reason
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-theme-surface-border">
+                  <tbody className="divide-theme-surface-border divide-y">
                     {filteredRoster.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-sm text-theme-text-muted">
+                        <td colSpan={6} className="text-theme-text-muted py-8 text-center text-sm">
                           {search || filter !== 'all'
                             ? 'No members match your search/filter.'
                             : 'No active members found.'}
@@ -436,14 +412,14 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({
               </div>
 
               {/* Footer with refresh */}
-              <div className="px-4 py-3 border-t border-theme-surface-border flex items-center justify-between">
-                <span className="text-xs text-theme-text-muted">
+              <div className="border-theme-surface-border flex items-center justify-between border-t px-4 py-3">
+                <span className="text-theme-text-muted text-xs">
                   Showing {filteredRoster.length} of {roster.total_members} members
                 </span>
                 <button
                   onClick={() => void fetchRoster()}
                   disabled={loading}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
+                  className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   Refresh
                 </button>

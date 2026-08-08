@@ -40,9 +40,7 @@ export const PlatoonRosterPanel: React.FC = () => {
         .filter((u) => u.status === UserStatus.ACTIVE)
         .map((u) => ({
           id: String(u.id),
-          name:
-            `${u.first_name || ''} ${u.last_name || ''}`.trim() ||
-            String(u.email || u.id),
+          name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || String(u.email || u.id),
           platoon: u.platoon || '',
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -62,18 +60,12 @@ export const PlatoonRosterPanel: React.FC = () => {
   const setPlatoon = (id: string, platoon: string) =>
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, platoon } : r)));
 
-  const changed = useMemo(
-    () => rows.filter((r) => r.platoon !== (original[r.id] ?? '')),
-    [rows, original],
-  );
+  const changed = useMemo(() => rows.filter((r) => r.platoon !== (original[r.id] ?? '')), [rows, original]);
 
   // Platoon options: A–D plus any custom values already in use.
   const platoonOptions = useMemo(
-    () =>
-      Array.from(
-        new Set([...BASE_PLATOONS, ...rows.map((r) => r.platoon).filter(Boolean)]),
-      ),
-    [rows],
+    () => Array.from(new Set([...BASE_PLATOONS, ...rows.map((r) => r.platoon).filter(Boolean)])),
+    [rows]
   );
 
   const counts = useMemo(() => {
@@ -86,7 +78,7 @@ export const PlatoonRosterPanel: React.FC = () => {
 
   const filtered = useMemo(
     () => rows.filter((r) => r.name.toLowerCase().includes(search.toLowerCase())),
-    [rows, search],
+    [rows, search]
   );
 
   const handleSave = async () => {
@@ -104,20 +96,15 @@ export const PlatoonRosterPanel: React.FC = () => {
       }
     }
     if (ok > 0) toast.success(`Updated ${ok} member${ok === 1 ? '' : 's'}`);
-    if (failed > 0)
-      toast.error(`${failed} update${failed === 1 ? '' : 's'} failed`);
+    if (failed > 0) toast.error(`${failed} update${failed === 1 ? '' : 's'} failed`);
     await load();
     setSaving(false);
   };
 
   if (loading) {
     return (
-      <div
-        className="flex items-center justify-center py-16"
-        role="status"
-        aria-live="polite"
-      >
-        <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
+      <div className="flex items-center justify-center py-16" role="status" aria-live="polite">
+        <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
         <span className="sr-only">Loading members…</span>
       </div>
     );
@@ -126,13 +113,12 @@ export const PlatoonRosterPanel: React.FC = () => {
   return (
     <div className="space-y-4">
       <div>
-        <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-1.5">
-          <Users className="w-4 h-4" /> Platoon Roster
+        <h3 className="text-theme-text-primary flex items-center gap-1.5 text-sm font-semibold">
+          <Users className="h-4 w-4" /> Platoon Roster
         </h3>
-        <p className="text-xs text-theme-text-muted mt-1">
-          Assign each member to a duty platoon. Shift rotations staff their
-          shifts from these assignments, so changes flow into future generated
-          shifts automatically.
+        <p className="text-theme-text-muted mt-1 text-xs">
+          Assign each member to a duty platoon. Shift rotations staff their shifts from these assignments, so changes
+          flow into future generated shifts automatically.
         </p>
       </div>
 
@@ -140,7 +126,7 @@ export const PlatoonRosterPanel: React.FC = () => {
         {platoonOptions.map((p) => (
           <span
             key={p}
-            className="px-2 py-0.5 text-[11px] rounded-full bg-violet-500/10 text-theme-text-secondary border border-violet-500/20"
+            className="text-theme-text-secondary rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-[11px]"
           >
             Platoon {p}: {counts[p] || 0}
           </span>
@@ -148,14 +134,14 @@ export const PlatoonRosterPanel: React.FC = () => {
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted" />
+        <div className="relative max-w-xs flex-1">
+          <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search members…"
-            className="w-full pl-9 pr-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder-theme-text-muted w-full rounded-lg border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-hidden"
           />
         </div>
         <button
@@ -163,22 +149,16 @@ export const PlatoonRosterPanel: React.FC = () => {
             void handleSave();
           }}
           disabled={saving || changed.length === 0}
-          className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-700 disabled:opacity-50"
         >
-          {saving ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <Save className="w-3.5 h-3.5" />
-          )}
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
           Save{changed.length > 0 ? ` (${changed.length})` : ''}
         </button>
       </div>
 
-      <div className="max-h-[28rem] overflow-y-auto space-y-1.5 pr-1">
+      <div className="max-h-[28rem] space-y-1.5 overflow-y-auto pr-1">
         {filtered.length === 0 ? (
-          <p className="text-sm text-theme-text-muted py-6 text-center">
-            No members found.
-          </p>
+          <p className="text-theme-text-muted py-6 text-center text-sm">No members found.</p>
         ) : (
           filtered.map((row) => {
             const isChanged = row.platoon !== (original[row.id] ?? '');
@@ -186,14 +166,10 @@ export const PlatoonRosterPanel: React.FC = () => {
               <div
                 key={row.id}
                 className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 ${
-                  isChanged
-                    ? 'border-violet-500/40 bg-violet-500/5'
-                    : 'border-theme-surface-border'
+                  isChanged ? 'border-violet-500/40 bg-violet-500/5' : 'border-theme-surface-border'
                 }`}
               >
-                <span className="text-sm text-theme-text-primary truncate">
-                  {row.name}
-                </span>
+                <span className="text-theme-text-primary truncate text-sm">{row.name}</span>
                 <select
                   value={row.platoon}
                   onChange={(e) => setPlatoon(row.id, e.target.value)}

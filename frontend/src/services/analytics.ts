@@ -73,11 +73,7 @@ class AnalyticsService {
   /**
    * Track successful check-in
    */
-  trackCheckInSuccess(
-    eventId: string,
-    userId: string,
-    timeToCheckIn: number
-  ): void {
+  trackCheckInSuccess(eventId: string, userId: string, timeToCheckIn: number): void {
     this.trackEvent('check_in_success', eventId, userId, {
       timeToCheckIn,
       deviceType: this.getDeviceType(),
@@ -88,12 +84,7 @@ class AnalyticsService {
   /**
    * Track failed check-in
    */
-  trackCheckInFailure(
-    eventId: string,
-    userId: string | undefined,
-    errorType: string,
-    errorMessage: string
-  ): void {
+  trackCheckInFailure(eventId: string, userId: string | undefined, errorType: string, errorMessage: string): void {
     this.trackEvent('check_in_failure', eventId, userId, {
       errorType,
       errorMessage,
@@ -131,14 +122,16 @@ class AnalyticsService {
     userId: string | undefined,
     metadata: Record<string, unknown>
   ): void {
-    void analyticsApiService.trackEvent({
-      event_type: eventType,
-      event_id: eventId,
-      user_id: userId,
-      metadata,
-    }).catch(() => {
-      // Silently fail - analytics should not block the user
-    });
+    void analyticsApiService
+      .trackEvent({
+        event_type: eventType,
+        event_id: eventId,
+        user_id: userId,
+        metadata,
+      })
+      .catch(() => {
+        // Silently fail - analytics should not block the user
+      });
   }
 
   /**
@@ -175,7 +168,11 @@ class AnalyticsService {
       return 'tablet';
     }
 
-    if (/mobile|iphone|ipod|android|blackberry|opera mini|opera mobi|skyfire|maemo|windows phone|palm|iemobile|symbian|symbianos|fennec/i.test(ua)) {
+    if (
+      /mobile|iphone|ipod|android|blackberry|opera mini|opera mobi|skyfire|maemo|windows phone|palm|iemobile|symbian|symbianos|fennec/i.test(
+        ua
+      )
+    ) {
       return 'mobile';
     }
 

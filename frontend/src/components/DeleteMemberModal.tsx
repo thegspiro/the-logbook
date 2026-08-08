@@ -80,8 +80,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
     }
   };
 
-  const isConfirmNameValid =
-    confirmName.trim().toLowerCase() === memberDisplayName.trim().toLowerCase();
+  const isConfirmNameValid = confirmName.trim().toLowerCase() === memberDisplayName.trim().toLowerCase();
 
   if (!member) return null;
 
@@ -96,7 +95,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
     >
       {/* Tab Toggle */}
       <div className="mb-4">
-        <div className="inline-flex rounded-md shadow-xs w-full" role="tablist" aria-label="Delete mode">
+        <div className="inline-flex w-full rounded-md shadow-xs" role="tablist" aria-label="Delete mode">
           <button
             type="button"
             role="tab"
@@ -105,9 +104,9 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
             aria-controls="tabpanel-soft-delete"
             onClick={() => setActiveTab('soft')}
             disabled={deleting}
-            className={`flex-1 px-4 py-2 text-sm font-medium border ${
+            className={`flex-1 border px-4 py-2 text-sm font-medium ${
               activeTab === 'soft'
-                ? 'bg-yellow-600 text-white border-yellow-600 z-10'
+                ? 'z-10 border-yellow-600 bg-yellow-600 text-white'
                 : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
             } rounded-l-lg focus:z-10 focus:ring-2 focus:ring-yellow-500 disabled:opacity-50`}
           >
@@ -121,11 +120,11 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
             aria-controls="tabpanel-hard-delete"
             onClick={() => setActiveTab('hard')}
             disabled={deleting}
-            className={`flex-1 px-4 py-2 text-sm font-medium border ${
+            className={`flex-1 border px-4 py-2 text-sm font-medium ${
               activeTab === 'hard'
-                ? 'bg-red-700 text-white border-red-700 z-10'
+                ? 'z-10 border-red-700 bg-red-700 text-white'
                 : 'bg-theme-surface text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover'
-            } rounded-r-lg focus:z-10 focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50`}
+            } focus:ring-theme-focus-ring rounded-r-lg focus:z-10 focus:ring-2 disabled:opacity-50`}
           >
             Permanently Delete
           </button>
@@ -135,22 +134,24 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
       {/* Loading State */}
       {loadingImpact && (
         <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
-          <Loader2 className="h-6 w-6 animate-spin text-theme-text-muted" />
-          <span className="ml-2 text-sm text-theme-text-muted">Loading impact assessment...</span>
+          <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+          <span className="text-theme-text-muted ml-2 text-sm">Loading impact assessment...</span>
         </div>
       )}
 
       {/* Error State */}
       {impactError && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-700 dark:text-red-400 shrink-0" />
+            <AlertTriangle className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
             <p className="text-sm text-red-700 dark:text-red-400">{impactError}</p>
           </div>
           <button
             type="button"
-            onClick={() => { void fetchImpact(member.id); }}
-            className="mt-2 text-sm text-red-700 dark:text-red-400 underline hover:text-red-800 dark:hover:text-red-300"
+            onClick={() => {
+              void fetchImpact(member.id);
+            }}
+            className="mt-2 text-sm text-red-700 underline hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
           >
             Retry
           </button>
@@ -164,23 +165,23 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
           {activeTab === 'soft' && (
             <div className="space-y-4" role="tabpanel" id="tabpanel-soft-delete" aria-labelledby="tab-soft-delete">
               {/* Member Info */}
-              <div className="flex items-center gap-3 p-3 bg-theme-surface-secondary rounded-lg">
-                <UserX className="h-8 w-8 text-yellow-500 shrink-0" />
+              <div className="bg-theme-surface-secondary flex items-center gap-3 rounded-lg p-3">
+                <UserX className="h-8 w-8 shrink-0 text-yellow-500" />
                 <div>
-                  <p className="text-sm font-medium text-theme-text-primary">{memberDisplayName}</p>
-                  <p className="text-xs text-theme-text-muted">
+                  <p className="text-theme-text-primary text-sm font-medium">{memberDisplayName}</p>
+                  <p className="text-theme-text-muted text-xs">
                     Current status: <span className="capitalize">{member.status}</span>
                   </p>
                 </div>
               </div>
 
               {/* Impact Summary */}
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+              <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-5 w-5 text-yellow-500 shrink-0 mt-0.5" />
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-500" />
                   <div>
                     <p className="text-sm font-medium text-yellow-500">Impact Summary</p>
-                    <p className="text-sm text-theme-text-secondary mt-1">
+                    <p className="text-theme-text-secondary mt-1 text-sm">
                       {impact.training_records} training record{impact.training_records !== 1 ? 's' : ''},{' '}
                       {impact.inventory_items} inventory item{impact.inventory_items !== 1 ? 's' : ''}
                     </p>
@@ -189,10 +190,9 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
               </div>
 
               {/* Explanation */}
-              <p className="text-sm text-theme-text-secondary">
-                This member will be deactivated. Their records will be preserved but hidden from
-                regular views. You can reactivate their account later from the archived members
-                section.
+              <p className="text-theme-text-secondary text-sm">
+                This member will be deactivated. Their records will be preserved but hidden from regular views. You can
+                reactivate their account later from the archived members section.
               </p>
 
               {/* Action Button */}
@@ -201,15 +201,17 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                   type="button"
                   onClick={onClose}
                   disabled={deleting}
-                  className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-(--ring-offset-bg) disabled:opacity-50"
+                  className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={() => { void handleSoftDelete(); }}
+                  onClick={() => {
+                    void handleSoftDelete();
+                  }}
                   disabled={deleting}
-                  className="btn-warning focus:ring-offset-(--ring-offset-bg) font-medium rounded-md text-sm"
+                  className="btn-warning rounded-md text-sm font-medium focus:ring-offset-(--ring-offset-bg)"
                 >
                   {deleting ? (
                     <span className="flex items-center gap-2">
@@ -228,16 +230,16 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
           {activeTab === 'hard' && (
             <div className="space-y-4" role="tabpanel" id="tabpanel-hard-delete" aria-labelledby="tab-hard-delete">
               {/* Danger Warning */}
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
                 <div className="flex items-start gap-2">
-                  <ShieldAlert className="h-5 w-5 text-red-700 dark:text-red-400 shrink-0 mt-0.5" />
+                  <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
                   <div>
                     <p className="text-sm font-medium text-red-700 dark:text-red-400">
                       This action is PERMANENT and cannot be undone.
                     </p>
-                    <p className="text-sm text-red-700 dark:text-red-400/80 mt-1">
-                      Training history and inventory assignments will be permanently deleted.
-                      Uploaded documents are kept, but will no longer show an uploader.
+                    <p className="mt-1 text-sm text-red-700 dark:text-red-400/80">
+                      Training history and inventory assignments will be permanently deleted. Uploaded documents are
+                      kept, but will no longer show an uploader.
                     </p>
                   </div>
                 </div>
@@ -245,44 +247,31 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
 
               {/* Impact Details */}
               <div className="bg-theme-surface-secondary rounded-lg p-3">
-                <p className="text-xs text-theme-text-muted uppercase font-medium mb-2">
-                  Records affected
-                </p>
-                <ul className="space-y-1 text-sm text-theme-text-secondary">
+                <p className="text-theme-text-muted mb-2 text-xs font-medium uppercase">Records affected</p>
+                <ul className="text-theme-text-secondary space-y-1 text-sm">
                   <li className="flex justify-between">
                     <span>Training records</span>
-                    <span className="font-medium text-theme-text-primary">
-                      {impact.training_records}
-                    </span>
+                    <span className="text-theme-text-primary font-medium">{impact.training_records}</span>
                   </li>
                   <li className="flex justify-between">
                     <span>Inventory items</span>
-                    <span className="font-medium text-theme-text-primary">
-                      {impact.inventory_items}
-                    </span>
+                    <span className="text-theme-text-primary font-medium">{impact.inventory_items}</span>
                   </li>
                   <li className="flex justify-between">
                     <span>Documents (uploader cleared)</span>
-                    <span className="font-medium text-theme-text-primary">
-                      {impact.documents}
-                    </span>
+                    <span className="text-theme-text-primary font-medium">{impact.documents}</span>
                   </li>
-                  <li className="flex justify-between border-t border-theme-surface-border pt-1 mt-1">
+                  <li className="border-theme-surface-border mt-1 flex justify-between border-t pt-1">
                     <span className="font-medium">Total</span>
-                    <span className="font-medium text-red-700 dark:text-red-400">
-                      {impact.total_records}
-                    </span>
+                    <span className="font-medium text-red-700 dark:text-red-400">{impact.total_records}</span>
                   </li>
                 </ul>
               </div>
 
               {/* Confirmation Input */}
               <div>
-                <label
-                  htmlFor="confirm-delete-name"
-                  className="block text-sm text-theme-text-secondary mb-1"
-                >
-                  Type <span className="font-semibold text-theme-text-primary">{memberDisplayName}</span> to confirm:
+                <label htmlFor="confirm-delete-name" className="text-theme-text-secondary mb-1 block text-sm">
+                  Type <span className="text-theme-text-primary font-semibold">{memberDisplayName}</span> to confirm:
                 </label>
                 <input
                   id="confirm-delete-name"
@@ -290,7 +279,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                   value={confirmName}
                   onChange={(e) => setConfirmName(e.target.value)}
                   disabled={deleting}
-                  className="w-full px-3 py-2 border border-theme-input-border rounded-md text-sm text-theme-text-primary bg-theme-input-bg focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50"
+                  className="border-theme-input-border text-theme-text-primary bg-theme-input-bg focus:ring-theme-focus-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden disabled:opacity-50"
                   placeholder={memberDisplayName}
                   autoComplete="off"
                 />
@@ -302,15 +291,17 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
                   type="button"
                   onClick={onClose}
                   disabled={deleting}
-                  className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-(--ring-offset-bg) disabled:opacity-50"
+                  className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover focus:ring-theme-focus-ring rounded-md border px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={() => { void handleHardDelete(); }}
+                  onClick={() => {
+                    void handleHardDelete();
+                  }}
                   disabled={deleting || !isConfirmNameValid}
-                  className="px-4 py-2 bg-red-700 text-white text-sm font-medium rounded-md hover:bg-red-800 disabled:opacity-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-(--ring-offset-bg)"
+                  className="focus:ring-theme-focus-ring rounded-md bg-red-700 px-4 py-2 text-sm font-medium text-white hover:bg-red-800 focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--ring-offset-bg) focus:outline-hidden disabled:opacity-50"
                 >
                   {deleting ? (
                     <span className="flex items-center gap-2">

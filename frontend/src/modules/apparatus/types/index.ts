@@ -9,15 +9,7 @@
 // =============================================================================
 
 export type ApparatusCategory =
-  | 'fire'
-  | 'ems'
-  | 'rescue'
-  | 'support'
-  | 'command'
-  | 'marine'
-  | 'aircraft'
-  | 'admin'
-  | 'other';
+  'fire' | 'ems' | 'rescue' | 'support' | 'command' | 'marine' | 'aircraft' | 'admin' | 'other';
 
 export type DefaultApparatusType =
   | 'engine'
@@ -38,52 +30,17 @@ export type DefaultApparatusType =
   | 'other';
 
 export type DefaultApparatusStatus =
-  | 'in_service'
-  | 'out_of_service'
-  | 'in_maintenance'
-  | 'reserve'
-  | 'on_order'
-  | 'sold'
-  | 'disposed';
+  'in_service' | 'out_of_service' | 'in_maintenance' | 'reserve' | 'on_order' | 'sold' | 'disposed';
 
-export type FuelType =
-  | 'gasoline'
-  | 'diesel'
-  | 'electric'
-  | 'hybrid'
-  | 'propane'
-  | 'cng'
-  | 'other';
+export type FuelType = 'gasoline' | 'diesel' | 'electric' | 'hybrid' | 'propane' | 'cng' | 'other';
 
 export type CustomFieldType =
-  | 'text'
-  | 'number'
-  | 'decimal'
-  | 'date'
-  | 'datetime'
-  | 'boolean'
-  | 'select'
-  | 'multi_select'
-  | 'url'
-  | 'email';
+  'text' | 'number' | 'decimal' | 'date' | 'datetime' | 'boolean' | 'select' | 'multi_select' | 'url' | 'email';
 
 export type MaintenanceCategory =
-  | 'preventive'
-  | 'repair'
-  | 'inspection'
-  | 'certification'
-  | 'fluid'
-  | 'cleaning'
-  | 'other';
+  'preventive' | 'repair' | 'inspection' | 'certification' | 'fluid' | 'cleaning' | 'other';
 
-export type MaintenanceIntervalUnit =
-  | 'days'
-  | 'weeks'
-  | 'months'
-  | 'years'
-  | 'miles'
-  | 'kilometers'
-  | 'hours';
+export type MaintenanceIntervalUnit = 'days' | 'weeks' | 'months' | 'years' | 'miles' | 'kilometers' | 'hours';
 
 // =============================================================================
 // Apparatus Type

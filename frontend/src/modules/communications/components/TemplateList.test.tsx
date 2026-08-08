@@ -28,9 +28,7 @@ describe('TemplateList', () => {
       makeTemplate({ id: '2', name: 'My Reset Template', template_type: 'password_reset' }),
     ];
 
-    render(
-      <TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />,
-    );
+    render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
 
     expect(screen.getByText('My Welcome Template')).toBeInTheDocument();
     expect(screen.getByText('My Reset Template')).toBeInTheDocument();
@@ -45,9 +43,7 @@ describe('TemplateList', () => {
       makeTemplate({ id: '2', name: 'Our Reset Note', template_type: 'password_reset' }),
     ];
 
-    render(
-      <TemplateList templates={templates} selectedId="1" onSelect={vi.fn()} />,
-    );
+    render(<TemplateList templates={templates} selectedId="1" onSelect={vi.fn()} />);
 
     // The selected template's button carries the orange highlight class
     const selected = screen.getByRole('button', { name: /Our Welcome Note/ });
@@ -69,9 +65,7 @@ describe('TemplateList', () => {
   });
 
   it('files an unrecognised template type under Other', () => {
-    const templates = [
-      makeTemplate({ id: '1', name: 'Ad-hoc Notice', template_type: 'custom' }),
-    ];
+    const templates = [makeTemplate({ id: '1', name: 'Ad-hoc Notice', template_type: 'custom' })];
 
     render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
 
@@ -81,9 +75,7 @@ describe('TemplateList', () => {
 
   it('collapses and re-expands a category', async () => {
     const user = userEvent.setup();
-    const templates = [
-      makeTemplate({ id: '1', name: 'Welcome', template_type: 'welcome' }),
-    ];
+    const templates = [makeTemplate({ id: '1', name: 'Welcome', template_type: 'welcome' })];
 
     render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
 
@@ -97,13 +89,9 @@ describe('TemplateList', () => {
 
   it('keeps the selected template visible by expanding its category', async () => {
     const user = userEvent.setup();
-    const templates = [
-      makeTemplate({ id: '1', name: 'Welcome', template_type: 'welcome' }),
-    ];
+    const templates = [makeTemplate({ id: '1', name: 'Welcome', template_type: 'welcome' })];
 
-    const { rerender } = render(
-      <TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />,
-    );
+    const { rerender } = render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
 
     await user.click(screen.getByText('Members & Accounts'));
     expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
@@ -117,18 +105,14 @@ describe('TemplateList', () => {
     const onSelect = vi.fn();
     const templates = [makeTemplate({ id: '1', name: 'My Custom Welcome' })];
 
-    render(
-      <TemplateList templates={templates} selectedId={null} onSelect={onSelect} />,
-    );
+    render(<TemplateList templates={templates} selectedId={null} onSelect={onSelect} />);
 
     await user.click(screen.getByText('My Custom Welcome'));
     expect(onSelect).toHaveBeenCalledWith(templates[0]);
   });
 
   it('shows empty state when no templates', () => {
-    render(
-      <TemplateList templates={[]} selectedId={null} onSelect={vi.fn()} />,
-    );
+    render(<TemplateList templates={[]} selectedId={null} onSelect={vi.fn()} />);
 
     expect(screen.getByText('No templates found')).toBeInTheDocument();
   });
@@ -139,9 +123,7 @@ describe('TemplateList', () => {
       makeTemplate({ id: '2', name: 'Inactive Template', is_active: false }),
     ];
 
-    render(
-      <TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />,
-    );
+    render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
 
     // Both templates should render with status indicators
     expect(screen.getByTitle('Active')).toBeInTheDocument();
@@ -149,13 +131,9 @@ describe('TemplateList', () => {
   });
 
   it('displays template type labels', () => {
-    const templates = [
-      makeTemplate({ id: '1', name: 'My Event Notification', template_type: 'event_reminder' }),
-    ];
+    const templates = [makeTemplate({ id: '1', name: 'My Event Notification', template_type: 'event_reminder' })];
 
-    render(
-      <TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />,
-    );
+    render(<TemplateList templates={templates} selectedId={null} onSelect={vi.fn()} />);
 
     // Name and type label rendered separately
     expect(screen.getByText('My Event Notification')).toBeInTheDocument();

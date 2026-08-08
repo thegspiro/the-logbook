@@ -35,11 +35,7 @@ import {
   X,
   ChevronRight,
 } from 'lucide-react';
-import type {
-  ComplianceTaskType,
-  ComplianceTaskStatus,
-  GrantPriority,
-} from '../types';
+import type { ComplianceTaskType, ComplianceTaskStatus, GrantPriority } from '../types';
 import {
   APPLICATION_STATUS_COLORS,
   PRIORITY_COLORS,
@@ -105,7 +101,7 @@ const NOTE_TYPE_ICONS: Record<string, React.ReactNode> = {
   document: <FileText className="h-4 w-4 text-indigo-500" />,
   contact: <Users className="h-4 w-4 text-green-500" />,
   milestone: <Target className="h-4 w-4 text-amber-500" />,
-  comment: <MessageSquare className="h-4 w-4 text-theme-text-secondary" />,
+  comment: <MessageSquare className="text-theme-text-secondary h-4 w-4" />,
   submission: <Send className="h-4 w-4 text-purple-500" />,
   review: <Eye className="h-4 w-4 text-cyan-500" />,
   financial: <DollarSign className="h-4 w-4 text-emerald-500" />,
@@ -119,10 +115,9 @@ const COMPLIANCE_TASK_TYPE_ICONS: Record<string, React.ReactNode> = {
   audit: <Shield className="h-5 w-5 text-red-500" />,
   equipment_inventory: <ClipboardCheck className="h-5 w-5 text-purple-500" />,
   nfirs_submission: <Send className="h-5 w-5 text-cyan-500" />,
-  closeout_report: <FileText className="h-5 w-5 text-theme-text-muted" />,
-  other: <Info className="h-5 w-5 text-theme-text-secondary" />,
+  closeout_report: <FileText className="text-theme-text-muted h-5 w-5" />,
+  other: <Info className="text-theme-text-secondary h-5 w-5" />,
 };
-
 
 // =============================================================================
 // Modal Overlay Component
@@ -140,20 +135,14 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, title, children }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={onClose}
-        role="presentation"
-      />
-      <div className="relative z-10 mx-4 w-full max-w-lg rounded-xl border border-theme-surface-border bg-theme-surface p-6 shadow-xl">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} role="presentation" />
+      <div className="border-theme-surface-border bg-theme-surface relative z-10 mx-4 w-full max-w-lg rounded-xl border p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-theme-text-primary">
-            {title}
-          </h3>
+          <h3 className="text-theme-text-primary text-lg font-semibold">{title}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
+            className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg p-1"
           >
             <X className="h-5 w-5" />
           </button>
@@ -183,9 +172,7 @@ const labelClass = 'block text-sm font-medium text-theme-text-primary mb-1';
 const getDueDateClasses = (dueDate: string): string => {
   const now = new Date();
   const due = new Date(dueDate);
-  const diffDays = Math.ceil(
-    (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-  );
+  const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) return 'text-red-600 font-semibold';
   if (diffDays <= 7) return 'text-orange-600 font-semibold';
@@ -235,15 +222,11 @@ export const GrantDetailPage: React.FC = () => {
   const [expenditureBudgetItemId, setExpenditureBudgetItemId] = useState('');
 
   // Compliance task form
-  const [complianceType, setComplianceType] = useState<ComplianceTaskType>(
-    ComplianceTaskTypeEnum.PERFORMANCE_REPORT,
-  );
+  const [complianceType, setComplianceType] = useState<ComplianceTaskType>(ComplianceTaskTypeEnum.PERFORMANCE_REPORT);
   const [complianceTitle, setComplianceTitle] = useState('');
   const [complianceDescription, setComplianceDescription] = useState('');
   const [complianceDueDate, setComplianceDueDate] = useState('');
-  const [compliancePriority, setCompliancePriority] = useState<GrantPriority>(
-    GrantPriorityEnum.MEDIUM,
-  );
+  const [compliancePriority, setCompliancePriority] = useState<GrantPriority>(GrantPriorityEnum.MEDIUM);
   const [complianceReportTemplate, setComplianceReportTemplate] = useState('');
 
   // Activity note form
@@ -269,15 +252,9 @@ export const GrantDetailPage: React.FC = () => {
   const complianceTasks = useMemo(() => application?.complianceTasks ?? [], [application?.complianceTasks]);
   const grantNotes = useMemo(() => application?.grantNotes ?? [], [application?.grantNotes]);
 
-  const budgetTotal = useMemo(
-    () => budgetItems.reduce((sum, item) => sum + item.amountBudgeted, 0),
-    [budgetItems],
-  );
+  const budgetTotal = useMemo(() => budgetItems.reduce((sum, item) => sum + item.amountBudgeted, 0), [budgetItems]);
 
-  const spentTotal = useMemo(
-    () => budgetItems.reduce((sum, item) => sum + item.amountSpent, 0),
-    [budgetItems],
-  );
+  const spentTotal = useMemo(() => budgetItems.reduce((sum, item) => sum + item.amountSpent, 0), [budgetItems]);
 
   const remainingTotal = budgetTotal - spentTotal;
 
@@ -326,8 +303,7 @@ export const GrantDetailPage: React.FC = () => {
   };
 
   const handleAddExpenditure = async () => {
-    if (!id || !expenditureDescription || !expenditureAmount || !expenditureDate)
-      return;
+    if (!id || !expenditureDescription || !expenditureAmount || !expenditureDate) return;
     try {
       await addExpenditure(id, {
         description: expenditureDescription,
@@ -377,10 +353,7 @@ export const GrantDetailPage: React.FC = () => {
     }
   };
 
-  const handleChangeTaskStatus = async (
-    taskId: string,
-    status: ComplianceTaskStatus,
-  ) => {
+  const handleChangeTaskStatus = async (taskId: string, status: ComplianceTaskStatus) => {
     if (!id) return;
     try {
       await updateComplianceTask(id, taskId, { status });
@@ -413,7 +386,7 @@ export const GrantDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-theme-bg">
+      <div className="bg-theme-bg flex min-h-screen items-center justify-center">
         <div className="text-center">
           <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-red-500" />
           <p className="text-theme-text-secondary">Loading grant application...</p>
@@ -424,13 +397,11 @@ export const GrantDetailPage: React.FC = () => {
 
   if (!application) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-theme-bg">
+      <div className="bg-theme-bg flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <FileText className="mx-auto mb-4 h-16 w-16 text-theme-text-muted" />
-          <h2 className="mb-2 text-xl font-bold text-theme-text-primary">
-            Application Not Found
-          </h2>
-          <p className="mb-6 text-theme-text-muted">
+          <FileText className="text-theme-text-muted mx-auto mb-4 h-16 w-16" />
+          <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Application Not Found</h2>
+          <p className="text-theme-text-muted mb-6">
             The grant application you&apos;re looking for doesn&apos;t exist.
           </p>
           <button
@@ -474,18 +445,18 @@ export const GrantDetailPage: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-theme-bg">
+    <div className="bg-theme-bg min-h-screen">
       {/* ================================================================== */}
       {/* Header                                                             */}
       {/* ================================================================== */}
-      <div className="border-b border-theme-surface-border bg-theme-surface">
+      <div className="border-theme-surface-border bg-theme-surface border-b">
         <div className="mx-auto max-w-7xl px-6 py-6">
           <Breadcrumbs />
           {/* Back link */}
           <button
             type="button"
             onClick={() => void navigate('/grants/applications')}
-            className="mb-4 inline-flex items-center gap-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+            className="text-theme-text-secondary hover:text-theme-text-primary mb-4 inline-flex items-center gap-1.5 text-sm transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Applications
@@ -494,14 +465,11 @@ export const GrantDetailPage: React.FC = () => {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-theme-text-primary">
-                  {application.grantProgramName}
-                </h1>
+                <h1 className="text-theme-text-primary text-2xl font-bold">{application.grantProgramName}</h1>
                 <span
                   className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${APPLICATION_STATUS_COLORS[application.applicationStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                 >
-                  {APPLICATION_STATUS_LABELS[application.applicationStatus] ??
-                    application.applicationStatus}
+                  {APPLICATION_STATUS_LABELS[application.applicationStatus] ?? application.applicationStatus}
                 </span>
                 <span
                   className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${PRIORITY_COLORS[application.priority] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
@@ -509,17 +477,13 @@ export const GrantDetailPage: React.FC = () => {
                   {PRIORITY_LABELS[application.priority] ?? application.priority}
                 </span>
               </div>
-              <p className="mt-1 text-sm text-theme-text-secondary">
-                {application.grantAgency}
-              </p>
+              <p className="text-theme-text-secondary mt-1 text-sm">{application.grantAgency}</p>
             </div>
 
             <button
               type="button"
-              onClick={() =>
-                void navigate(`/grants/applications/${application.id}/edit`)
-              }
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+              onClick={() => void navigate(`/grants/applications/${application.id}/edit`)}
+              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
             >
               <Edit className="h-4 w-4" />
               Edit
@@ -528,17 +492,17 @@ export const GrantDetailPage: React.FC = () => {
 
           {/* Key stats */}
           <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="rounded-lg border border-theme-surface-border bg-theme-bg p-4">
-              <div className="flex items-center gap-2 text-sm text-theme-text-secondary">
+            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+              <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <DollarSign className="h-4 w-4" />
                 Amount Requested
               </div>
-              <p className="mt-1 text-xl font-bold text-theme-text-primary">
+              <p className="text-theme-text-primary mt-1 text-xl font-bold">
                 {formatCurrencyWhole(application.amountRequested)}
               </p>
             </div>
-            <div className="rounded-lg border border-theme-surface-border bg-theme-bg p-4">
-              <div className="flex items-center gap-2 text-sm text-theme-text-secondary">
+            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+              <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <DollarSign className="h-4 w-4" />
                 Amount Awarded
               </div>
@@ -546,28 +510,23 @@ export const GrantDetailPage: React.FC = () => {
                 {formatCurrencyWhole(application.amountAwarded)}
               </p>
             </div>
-            <div className="rounded-lg border border-theme-surface-border bg-theme-bg p-4">
-              <div className="flex items-center gap-2 text-sm text-theme-text-secondary">
+            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+              <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <Target className="h-4 w-4" />
                 Match Required
               </div>
-              <p className="mt-1 text-xl font-bold text-theme-text-primary">
+              <p className="text-theme-text-primary mt-1 text-xl font-bold">
                 {formatCurrencyWhole(application.matchAmount)}
               </p>
             </div>
-            <div className="rounded-lg border border-theme-surface-border bg-theme-bg p-4">
-              <div className="flex items-center gap-2 text-sm text-theme-text-secondary">
+            <div className="border-theme-surface-border bg-theme-bg rounded-lg border p-4">
+              <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <Calendar className="h-4 w-4" />
                 Grant Period
               </div>
-              <p className="mt-1 text-sm font-semibold text-theme-text-primary">
-                {application.grantStartDate
-                  ? formatDate(application.grantStartDate, tz)
-                  : '--'}{' '}
-                &mdash;{' '}
-                {application.grantEndDate
-                  ? formatDate(application.grantEndDate, tz)
-                  : '--'}
+              <p className="text-theme-text-primary mt-1 text-sm font-semibold">
+                {application.grantStartDate ? formatDate(application.grantStartDate, tz) : '--'} &mdash;{' '}
+                {application.grantEndDate ? formatDate(application.grantEndDate, tz) : '--'}
               </p>
             </div>
           </div>
@@ -588,13 +547,13 @@ export const GrantDetailPage: React.FC = () => {
       {/* Tabs                                                               */}
       {/* ================================================================== */}
       <div className="mx-auto max-w-7xl px-6 pt-6">
-        <div className="flex space-x-1 overflow-x-auto rounded-lg border border-theme-surface-border bg-theme-surface p-1">
+        <div className="border-theme-surface-border bg-theme-surface flex space-x-1 overflow-x-auto rounded-lg border p-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === tab.id
                   ? 'bg-red-600 text-white'
                   : 'text-theme-text-muted hover:bg-theme-surface-secondary hover:text-theme-text-primary'
@@ -617,42 +576,34 @@ export const GrantDetailPage: React.FC = () => {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Project description */}
-            <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-              <h3 className="text-lg font-semibold text-theme-text-primary">
-                Project Description
-              </h3>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-theme-text-secondary">
+            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+              <h3 className="text-theme-text-primary text-lg font-semibold">Project Description</h3>
+              <p className="text-theme-text-secondary mt-2 text-sm leading-relaxed whitespace-pre-wrap">
                 {application.projectDescription ?? 'No description provided.'}
               </p>
             </div>
 
             {/* Narrative summary */}
             {application.narrativeSummary && (
-              <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-                <h3 className="text-lg font-semibold text-theme-text-primary">
-                  Narrative Summary
-                </h3>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-theme-text-secondary">
+              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+                <h3 className="text-theme-text-primary text-lg font-semibold">Narrative Summary</h3>
+                <p className="text-theme-text-secondary mt-2 text-sm leading-relaxed whitespace-pre-wrap">
                   {application.narrativeSummary}
                 </p>
               </div>
             )}
 
             {/* Key contacts */}
-            <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-              <h3 className="text-lg font-semibold text-theme-text-primary">
-                Key Contacts
-              </h3>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-theme-text-secondary">
+            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+              <h3 className="text-theme-text-primary text-lg font-semibold">Key Contacts</h3>
+              <p className="text-theme-text-secondary mt-2 text-sm whitespace-pre-wrap">
                 {application.keyContacts ?? 'No contacts recorded.'}
               </p>
             </div>
 
             {/* Key dates timeline */}
-            <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
-              <h3 className="mb-4 text-lg font-semibold text-theme-text-primary">
-                Key Dates
-              </h3>
+            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-6">
+              <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Key Dates</h3>
               <div className="space-y-3">
                 {[
                   {
@@ -693,13 +644,11 @@ export const GrantDetailPage: React.FC = () => {
                 ].map((item) => (
                   <div
                     key={item.label}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-theme-surface-hover"
+                    className="hover:bg-theme-surface-hover flex items-center gap-3 rounded-lg px-3 py-2"
                   >
                     {item.icon}
-                    <span className="w-40 text-sm font-medium text-theme-text-primary">
-                      {item.label}
-                    </span>
-                    <span className="text-sm text-theme-text-secondary">
+                    <span className="text-theme-text-primary w-40 text-sm font-medium">{item.label}</span>
+                    <span className="text-theme-text-secondary text-sm">
                       {item.date ? formatDate(item.date, tz) : '--'}
                     </span>
                   </div>
@@ -716,23 +665,17 @@ export const GrantDetailPage: React.FC = () => {
           <div className="space-y-6">
             {/* Summary bar */}
             <div className="grid grid-cols-3 gap-4">
-              <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4 text-center">
-                <p className="text-sm text-theme-text-secondary">Total Budgeted</p>
-                <p className="mt-1 text-xl font-bold text-theme-text-primary">
-                  {formatCurrency(budgetTotal)}
-                </p>
+              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 text-center">
+                <p className="text-theme-text-secondary text-sm">Total Budgeted</p>
+                <p className="text-theme-text-primary mt-1 text-xl font-bold">{formatCurrency(budgetTotal)}</p>
               </div>
-              <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4 text-center">
-                <p className="text-sm text-theme-text-secondary">Total Spent</p>
-                <p className="mt-1 text-xl font-bold text-red-600">
-                  {formatCurrency(spentTotal)}
-                </p>
+              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 text-center">
+                <p className="text-theme-text-secondary text-sm">Total Spent</p>
+                <p className="mt-1 text-xl font-bold text-red-600">{formatCurrency(spentTotal)}</p>
               </div>
-              <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4 text-center">
-                <p className="text-sm text-theme-text-secondary">Remaining</p>
-                <p
-                  className={`mt-1 text-xl font-bold ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}
-                >
+              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 text-center">
+                <p className="text-theme-text-secondary text-sm">Remaining</p>
+                <p className={`mt-1 text-xl font-bold ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {formatCurrency(remainingTotal)}
                 </p>
               </div>
@@ -743,7 +686,7 @@ export const GrantDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowBudgetModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
               >
                 <Plus className="h-4 w-4" />
                 Add Item
@@ -751,81 +694,87 @@ export const GrantDetailPage: React.FC = () => {
             </div>
 
             {/* Budget table */}
-            <div className="overflow-hidden rounded-lg border border-theme-surface-border bg-theme-surface">
+            <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
               {budgetItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <Wallet className="mb-3 h-12 w-12 text-theme-text-secondary opacity-40" />
-                  <p className="text-theme-text-secondary">
-                    No budget items yet
-                  </p>
+                  <Wallet className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
+                  <p className="text-theme-text-secondary">No budget items yet</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-theme-surface-border">
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                      <tr className="border-theme-surface-border border-b">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                        >
                           Category
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                        >
                           Description
                         </th>
-                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                        >
                           Budgeted
                         </th>
-                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                        >
                           Spent
                         </th>
-                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                        >
                           Remaining
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                        >
                           Progress
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-theme-surface-border">
+                    <tbody className="divide-theme-surface-border divide-y">
                       {budgetItems.map((item) => {
-                        const remaining =
-                          item.amountBudgeted - item.amountSpent;
+                        const remaining = item.amountBudgeted - item.amountSpent;
                         const percent =
-                          item.amountBudgeted > 0
-                            ? Math.min(
-                                (item.amountSpent / item.amountBudgeted) * 100,
-                                100,
-                              )
-                            : 0;
+                          item.amountBudgeted > 0 ? Math.min((item.amountSpent / item.amountBudgeted) * 100, 100) : 0;
                         const isOver = item.amountSpent > item.amountBudgeted;
                         return (
                           <tr key={item.id}>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-theme-text-primary">
+                            <td className="text-theme-text-primary px-4 py-3 text-sm font-medium whitespace-nowrap">
                               {item.category}
                             </td>
-                            <td className="px-4 py-3 text-sm text-theme-text-secondary">
-                              {item.description}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-theme-text-primary">
+                            <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.description}</td>
+                            <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
                               {formatCurrency(item.amountBudgeted)}
                             </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-theme-text-primary">
+                            <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
                               {formatCurrency(item.amountSpent)}
                             </td>
                             <td
-                              className={`whitespace-nowrap px-4 py-3 text-right text-sm font-medium ${isOver ? 'text-red-600' : 'text-green-600'}`}
+                              className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${isOver ? 'text-red-600' : 'text-green-600'}`}
                             >
                               {formatCurrency(remaining)}
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="h-2 w-24 overflow-hidden rounded-full bg-theme-surface-hover">
+                                <div className="bg-theme-surface-hover h-2 w-24 overflow-hidden rounded-full">
                                   <div
                                     className={`h-full rounded-full transition-all ${isOver ? 'bg-red-500' : 'bg-green-500'}`}
                                     style={{ width: `${percent}%` }}
                                   />
                                 </div>
-                                <span className="text-xs text-theme-text-secondary">
-                                  {Math.round(percent)}%
-                                </span>
+                                <span className="text-theme-text-secondary text-xs">{Math.round(percent)}%</span>
                               </div>
                             </td>
                           </tr>
@@ -833,18 +782,16 @@ export const GrantDetailPage: React.FC = () => {
                       })}
                       {/* Total row */}
                       <tr className="bg-theme-surface-secondary font-semibold">
-                        <td className="px-4 py-3 text-sm text-theme-text-primary">
-                          Total
-                        </td>
+                        <td className="text-theme-text-primary px-4 py-3 text-sm">Total</td>
                         <td className="px-4 py-3" />
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-theme-text-primary">
+                        <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
                           {formatCurrency(budgetTotal)}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-theme-text-primary">
+                        <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
                           {formatCurrency(spentTotal)}
                         </td>
                         <td
-                          className={`whitespace-nowrap px-4 py-3 text-right text-sm ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                          className={`px-4 py-3 text-right text-sm whitespace-nowrap ${remainingTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}
                         >
                           {formatCurrency(remainingTotal)}
                         </td>
@@ -864,80 +811,85 @@ export const GrantDetailPage: React.FC = () => {
         {activeTab === 'expenditures' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-theme-text-primary">
-                Expenditures
-              </h3>
+              <h3 className="text-theme-text-primary text-lg font-semibold">Expenditures</h3>
               <button
                 type="button"
                 onClick={() => setShowExpenditureModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
               >
                 <Plus className="h-4 w-4" />
                 Record Expenditure
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-theme-surface-border bg-theme-surface">
+            <div className="border-theme-surface-border bg-theme-surface overflow-hidden rounded-lg border">
               {expenditures.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <Receipt className="mb-3 h-12 w-12 text-theme-text-secondary opacity-40" />
-                  <p className="text-theme-text-secondary">
-                    No expenditures recorded
-                  </p>
+                  <Receipt className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
+                  <p className="text-theme-text-secondary">No expenditures recorded</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b border-theme-surface-border">
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                      <tr className="border-theme-surface-border border-b">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                        >
                           Date
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                        >
                           Description
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                        >
                           Vendor
                         </th>
-                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                        >
                           Amount
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                        >
                           Budget Category
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                        >
                           Receipt
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-theme-surface-border">
+                    <tbody className="divide-theme-surface-border divide-y">
                       {expenditures.map((exp) => {
-                        const linkedBudgetItem = budgetItems.find(
-                          (b) => b.id === exp.budgetItemId,
-                        );
+                        const linkedBudgetItem = budgetItems.find((b) => b.id === exp.budgetItemId);
                         return (
-                          <tr
-                            key={exp.id}
-                            className="transition-colors hover:bg-theme-surface-hover"
-                          >
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-primary">
+                          <tr key={exp.id} className="hover:bg-theme-surface-hover transition-colors">
+                            <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
                               {formatDate(exp.expenditureDate, tz)}
                             </td>
-                            <td className="px-4 py-3 text-sm text-theme-text-primary">
-                              {exp.description}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
+                            <td className="text-theme-text-primary px-4 py-3 text-sm">{exp.description}</td>
+                            <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                               {exp.vendor ?? '--'}
                             </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">
+                            <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
                               {formatCurrency(exp.amount)}
                             </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
-                              {linkedBudgetItem
-                                ? linkedBudgetItem.category
-                                : '--'}
+                            <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                              {linkedBudgetItem ? linkedBudgetItem.category : '--'}
                             </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm">
+                            <td className="px-4 py-3 text-sm whitespace-nowrap">
                               {exp.receiptUrl ? (
                                 <a
                                   href={exp.receiptUrl}
@@ -949,9 +901,7 @@ export const GrantDetailPage: React.FC = () => {
                                   View
                                 </a>
                               ) : (
-                                <span className="text-theme-text-secondary">
-                                  --
-                                </span>
+                                <span className="text-theme-text-secondary">--</span>
                               )}
                             </td>
                           </tr>
@@ -971,13 +921,11 @@ export const GrantDetailPage: React.FC = () => {
         {activeTab === 'compliance' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-theme-text-primary">
-                Compliance & Follow-Up Tasks
-              </h3>
+              <h3 className="text-theme-text-primary text-lg font-semibold">Compliance & Follow-Up Tasks</h3>
               <button
                 type="button"
                 onClick={() => setShowComplianceModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
               >
                 <Plus className="h-4 w-4" />
                 Add Task
@@ -985,58 +933,44 @@ export const GrantDetailPage: React.FC = () => {
             </div>
 
             {complianceTasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-lg border border-theme-surface-border bg-theme-surface py-12">
-                <ClipboardCheck className="mb-3 h-12 w-12 text-theme-text-secondary opacity-40" />
-                <p className="text-theme-text-secondary">
-                  No compliance tasks yet
-                </p>
+              <div className="border-theme-surface-border bg-theme-surface flex flex-col items-center justify-center rounded-lg border py-12">
+                <ClipboardCheck className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
+                <p className="text-theme-text-secondary">No compliance tasks yet</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {complianceTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="rounded-lg border border-theme-surface-border bg-theme-surface p-4"
-                  >
+                  <div key={task.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
                     <div className="flex items-start gap-4">
                       {/* Type icon */}
                       <div className="mt-0.5 flex-shrink-0">
                         {COMPLIANCE_TASK_TYPE_ICONS[task.taskType] ?? (
-                          <Info className="h-5 w-5 text-theme-text-secondary" />
+                          <Info className="text-theme-text-secondary h-5 w-5" />
                         )}
                       </div>
 
                       {/* Content */}
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h4 className="text-sm font-semibold text-theme-text-primary">
-                            {task.title}
-                          </h4>
+                          <h4 className="text-theme-text-primary text-sm font-semibold">{task.title}</h4>
                           <span
                             className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[task.priority] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                           >
                             {PRIORITY_LABELS[task.priority] ?? task.priority}
                           </span>
-                          <span className="text-xs text-theme-text-secondary">
-                            {COMPLIANCE_TASK_TYPE_LABELS[task.taskType] ??
-                              task.taskType}
+                          <span className="text-theme-text-secondary text-xs">
+                            {COMPLIANCE_TASK_TYPE_LABELS[task.taskType] ?? task.taskType}
                           </span>
                         </div>
 
                         {task.description && (
-                          <p className="mt-1 text-sm text-theme-text-secondary">
-                            {task.description}
-                          </p>
+                          <p className="text-theme-text-secondary mt-1 text-sm">{task.description}</p>
                         )}
 
                         <div className="mt-2 flex flex-wrap items-center gap-4 text-xs">
-                          <span className={getDueDateClasses(task.dueDate)}>
-                            Due: {formatDate(task.dueDate, tz)}
-                          </span>
+                          <span className={getDueDateClasses(task.dueDate)}>Due: {formatDate(task.dueDate, tz)}</span>
                           {task.assignedTo && (
-                            <span className="text-theme-text-secondary">
-                              Assigned: {task.assignedTo}
-                            </span>
+                            <span className="text-theme-text-secondary">Assigned: {task.assignedTo}</span>
                           )}
                         </div>
                       </div>
@@ -1045,30 +979,21 @@ export const GrantDetailPage: React.FC = () => {
                       <div className="flex flex-shrink-0 items-center gap-2">
                         <select
                           value={task.status}
-                          onChange={(e) =>
-                            void handleChangeTaskStatus(
-                              task.id,
-                              e.target.value as ComplianceTaskStatus,
-                            )
-                          }
-                          className={`rounded-full border-0 px-2.5 py-0.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-500 ${COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
+                          onChange={(e) => void handleChangeTaskStatus(task.id, e.target.value as ComplianceTaskStatus)}
+                          className={`rounded-full border-0 px-2.5 py-0.5 text-xs font-medium focus:ring-2 focus:ring-red-500 focus:outline-none ${COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                         >
-                          {Object.entries(COMPLIANCE_STATUS_LABELS).map(
-                            ([value, label]) => (
-                              <option key={value} value={value}>
-                                {label}
-                              </option>
-                            ),
-                          )}
+                          {Object.entries(COMPLIANCE_STATUS_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
                         </select>
 
                         {task.status !== ComplianceTaskStatusEnum.COMPLETED && (
                           <button
                             type="button"
-                            onClick={() =>
-                              void handleMarkTaskComplete(task.id)
-                            }
-                            className="inline-flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-500/20 transition-colors"
+                            onClick={() => void handleMarkTaskComplete(task.id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/20"
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             Mark Complete
@@ -1088,14 +1013,12 @@ export const GrantDetailPage: React.FC = () => {
         {/* ---------------------------------------------------------------- */}
         {activeTab === 'activity' && (
           <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-theme-text-primary">
-              Activity Log
-            </h3>
+            <h3 className="text-theme-text-primary text-lg font-semibold">Activity Log</h3>
 
             {/* Timeline */}
             {grantNotes.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-lg border border-theme-surface-border bg-theme-surface py-12">
-                <MessageSquare className="mb-3 h-12 w-12 text-theme-text-secondary opacity-40" />
+              <div className="border-theme-surface-border bg-theme-surface flex flex-col items-center justify-center rounded-lg border py-12">
+                <MessageSquare className="text-theme-text-secondary mb-3 h-12 w-12 opacity-40" />
                 <p className="text-theme-text-secondary">No activity yet</p>
               </div>
             ) : (
@@ -1104,22 +1027,18 @@ export const GrantDetailPage: React.FC = () => {
                   <div key={note.id} className="flex gap-4">
                     {/* Timeline line + icon */}
                     <div className="flex flex-col items-center">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full border border-theme-surface-border bg-theme-surface">
+                      <div className="border-theme-surface-border bg-theme-surface flex h-8 w-8 items-center justify-center rounded-full border">
                         {NOTE_TYPE_ICONS[note.noteType] ?? (
-                          <MessageSquare className="h-4 w-4 text-theme-text-secondary" />
+                          <MessageSquare className="text-theme-text-secondary h-4 w-4" />
                         )}
                       </div>
-                      {index < grantNotes.length - 1 && (
-                        <div className="w-px flex-1 bg-theme-surface-border" />
-                      )}
+                      {index < grantNotes.length - 1 && <div className="bg-theme-surface-border w-px flex-1" />}
                     </div>
 
                     {/* Content */}
                     <div className="mb-6 min-w-0 flex-1 pb-2">
-                      <p className="text-sm text-theme-text-primary">
-                        {note.content}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2 text-xs text-theme-text-secondary">
+                      <p className="text-theme-text-primary text-sm">{note.content}</p>
+                      <div className="text-theme-text-secondary mt-1 flex items-center gap-2 text-xs">
                         {note.createdBy && <span>{note.createdBy}</span>}
                         {note.createdBy && <span>&middot;</span>}
                         <span>{formatDate(note.createdAt, tz)}</span>
@@ -1131,7 +1050,7 @@ export const GrantDetailPage: React.FC = () => {
             )}
 
             {/* Add note */}
-            <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
+            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
               <label htmlFor="new-note" className={labelClass}>
                 Add Note
               </label>
@@ -1148,13 +1067,9 @@ export const GrantDetailPage: React.FC = () => {
                   type="button"
                   disabled={!newNoteContent.trim() || isSubmittingNote}
                   onClick={() => void handleAddNote()}
-                  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isSubmittingNote ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="h-4 w-4" />
-                  )}
+                  {isSubmittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   Add Note
                 </button>
               </div>
@@ -1234,7 +1149,7 @@ export const GrantDetailPage: React.FC = () => {
                 setShowBudgetModal(false);
                 resetBudgetForm();
               }}
-              className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
             >
               Cancel
             </button>
@@ -1242,7 +1157,7 @@ export const GrantDetailPage: React.FC = () => {
               type="button"
               disabled={!budgetCategory || !budgetDescription || !budgetAmount}
               onClick={() => void handleAddBudgetItem()}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Add Item
             </button>
@@ -1353,19 +1268,15 @@ export const GrantDetailPage: React.FC = () => {
                 setShowExpenditureModal(false);
                 resetExpenditureForm();
               }}
-              className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
             >
               Cancel
             </button>
             <button
               type="button"
-              disabled={
-                !expenditureDescription ||
-                !expenditureAmount ||
-                !expenditureDate
-              }
+              disabled={!expenditureDescription || !expenditureAmount || !expenditureDate}
               onClick={() => void handleAddExpenditure()}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Record Expenditure
             </button>
@@ -1390,18 +1301,14 @@ export const GrantDetailPage: React.FC = () => {
             <select
               id="comp-type"
               value={complianceType}
-              onChange={(e) =>
-                setComplianceType(e.target.value as ComplianceTaskType)
-              }
+              onChange={(e) => setComplianceType(e.target.value as ComplianceTaskType)}
               className={selectClass}
             >
-              {Object.entries(COMPLIANCE_TASK_TYPE_LABELS).map(
-                ([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ),
-              )}
+              {Object.entries(COMPLIANCE_TASK_TYPE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -1450,9 +1357,7 @@ export const GrantDetailPage: React.FC = () => {
               <select
                 id="comp-priority"
                 value={compliancePriority}
-                onChange={(e) =>
-                  setCompliancePriority(e.target.value as GrantPriority)
-                }
+                onChange={(e) => setCompliancePriority(e.target.value as GrantPriority)}
                 className={selectClass}
               >
                 {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
@@ -1483,7 +1388,7 @@ export const GrantDetailPage: React.FC = () => {
                 setShowComplianceModal(false);
                 resetComplianceForm();
               }}
-              className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
             >
               Cancel
             </button>
@@ -1491,7 +1396,7 @@ export const GrantDetailPage: React.FC = () => {
               type="button"
               disabled={!complianceTitle || !complianceDueDate}
               onClick={() => void handleAddComplianceTask()}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Add Task
             </button>

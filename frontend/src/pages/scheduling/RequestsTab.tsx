@@ -6,10 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  ArrowLeftRight, CalendarOff, Check, X,
-  Loader2, Filter,
-} from 'lucide-react';
+import { ArrowLeftRight, CalendarOff, Check, X, Loader2, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { SwapRequest, TimeOffRequest } from '../../types/scheduling';
@@ -61,7 +58,9 @@ export const RequestsTab: React.FC = () => {
     }
   }, [statusFilter]);
 
-  useEffect(() => { void loadData(); }, [loadData]);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   // Escape key closes modals and inline confirmations
   useEffect(() => {
@@ -141,24 +140,29 @@ export const RequestsTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Tab + Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex bg-theme-input-bg rounded-lg p-1">
-          <button onClick={() => setActiveView('swaps')}
-            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 sm:gap-2 ${activeView === 'swaps' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+        <div className="bg-theme-input-bg flex rounded-lg p-1">
+          <button
+            onClick={() => setActiveView('swaps')}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'swaps' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
-            <ArrowLeftRight className="w-4 h-4" /> <span className="hidden sm:inline">Swap Requests</span><span className="sm:hidden">Swaps</span> ({swapRequests.length})
+            <ArrowLeftRight className="h-4 w-4" /> <span className="hidden sm:inline">Swap Requests</span>
+            <span className="sm:hidden">Swaps</span> ({swapRequests.length})
           </button>
-          <button onClick={() => setActiveView('timeoff')}
-            className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 sm:gap-2 ${activeView === 'timeoff' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+          <button
+            onClick={() => setActiveView('timeoff')}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors sm:flex-none sm:gap-2 sm:px-4 ${activeView === 'timeoff' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
-            <CalendarOff className="w-4 h-4" /> Time Off ({timeOffRequests.length})
+            <CalendarOff className="h-4 w-4" /> Time Off ({timeOffRequests.length})
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-theme-text-muted shrink-0" />
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          <Filter className="text-theme-text-muted h-4 w-4 shrink-0" />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
             aria-label="Filter requests by status"
-            className="flex-1 sm:flex-none bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary flex-1 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-hidden sm:flex-none"
           >
             <option value="">All Statuses</option>
             <option value="pending">Pending</option>
@@ -171,16 +175,16 @@ export const RequestsTab: React.FC = () => {
 
       {loading ? (
         <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-          <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" aria-hidden="true" />
+          <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" aria-hidden="true" />
           <span className="sr-only">Loading requests…</span>
         </div>
       ) : activeView === 'swaps' ? (
         /* Swap Requests */
         swapRequests.length === 0 ? (
-          <div className="text-center py-16 border border-dashed border-theme-surface-border rounded-xl">
-            <ArrowLeftRight className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
-            <h3 className="text-lg font-medium text-theme-text-primary mb-1">No swap requests</h3>
-            <p className="text-theme-text-muted text-sm max-w-sm mx-auto">
+          <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
+            <ArrowLeftRight className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+            <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No swap requests</h3>
+            <p className="text-theme-text-muted mx-auto max-w-sm text-sm">
               {canManage
                 ? 'No swap requests to review. Pending requests from members will appear here.'
                 : 'Your swap requests will appear here. Go to My Shifts to request a swap for an upcoming shift.'}
@@ -188,38 +192,54 @@ export const RequestsTab: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {swapRequests.map(req => {
+            {swapRequests.map((req) => {
               const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
               return (
-                <div key={req.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5">
-                  <div className="flex items-start sm:items-center justify-between gap-3">
-                    <div className="flex items-start sm:items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
-                        <ArrowLeftRight className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
+                <div key={req.id} className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-3 sm:items-center">
+                    <div className="flex min-w-0 items-start gap-3 sm:items-center">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500/10 sm:h-10 sm:w-10">
+                        <ArrowLeftRight className="h-4 w-4 text-orange-500 sm:h-5 sm:w-5" />
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-theme-text-primary">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-theme-text-primary text-sm font-semibold">
                             {(req.requesting_user_id ?? req.user_id) === currentUser?.id
                               ? 'Your swap request'
                               : `${req.requesting_user_name || req.user_name || 'Member'} requests swap`}
                           </p>
-                          <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full border capitalize ${statusColor}`}>
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize sm:text-xs ${statusColor}`}
+                          >
                             {req.status}
                           </span>
                         </div>
-                        <p className="text-xs text-theme-text-muted mt-0.5">
+                        <p className="text-theme-text-muted mt-0.5 text-xs">
                           {req.offering_shift_date ? (
                             <>
-                              Offering: {formatDateCustom(req.offering_shift_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}
+                              Offering:{' '}
+                              {formatDateCustom(
+                                req.offering_shift_date + 'T12:00:00',
+                                { month: 'short', day: 'numeric' },
+                                tz
+                              )}
                               {req.offering_shift_start_time ? ` ${formatTime(req.offering_shift_start_time, tz)}` : ''}
                             </>
                           ) : (
                             <>Offering shift (details unavailable)</>
                           )}
                           {req.requesting_shift_date ? (
-                            <> {' \u2192 '} {formatDateCustom(req.requesting_shift_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}
-                              {req.requesting_shift_start_time ? ` ${formatTime(req.requesting_shift_start_time, tz)}` : ''}
+                            <>
+                              {' '}
+                              {' \u2192 '}{' '}
+                              {formatDateCustom(
+                                req.requesting_shift_date + 'T12:00:00',
+                                { month: 'short', day: 'numeric' },
+                                tz
+                              )}
+                              {req.requesting_shift_start_time
+                                ? ` ${formatTime(req.requesting_shift_start_time, tz)}`
+                                : ''}
                             </>
                           ) : req.requesting_shift_id ? (
                             <> {' \u2192 '} Requested shift (details unavailable)</>
@@ -227,49 +247,76 @@ export const RequestsTab: React.FC = () => {
                             <> {' \u2192 '} Open swap</>
                           )}
                         </p>
-                        {req.reason && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{req.reason}</p>}
-                        <p className="text-xs text-theme-text-muted mt-1">
-                          {formatDate(req.created_at, tz)}
-                        </p>
+                        {req.reason && (
+                          <p className="text-theme-text-secondary mt-1 line-clamp-2 text-xs">{req.reason}</p>
+                        )}
+                        <p className="text-theme-text-muted mt-1 text-xs">{formatDate(req.created_at, tz)}</p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-1 shrink-0">
+                    <div className="flex shrink-0 flex-wrap items-center gap-1">
                       {canManage && req.status === RequestStatus.PENDING && (
                         <>
-                          <button onClick={() => { void handleQuickReview('swap', req.id, 'approved'); }}
-                            className="px-2.5 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Approve swap"
+                          <button
+                            onClick={() => {
+                              void handleQuickReview('swap', req.id, 'approved');
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+                            aria-label="Approve swap"
                           >
-                            <Check className="w-3.5 h-3.5" /> Approve
+                            <Check className="h-3.5 w-3.5" /> Approve
                           </button>
-                          <button onClick={() => { void handleQuickReview('swap', req.id, 'denied'); }}
-                            className="px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Deny swap"
+                          <button
+                            onClick={() => {
+                              void handleQuickReview('swap', req.id, 'denied');
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                            aria-label="Deny swap"
                           >
-                            <X className="w-3.5 h-3.5" /> Deny
+                            <X className="h-3.5 w-3.5" /> Deny
                           </button>
-                          <button onClick={() => { setReviewing({ type: 'swap', id: req.id }); setReviewNotes(''); }}
-                            className="px-2 py-1.5 text-[10px] text-theme-text-muted hover:text-theme-text-primary rounded-lg transition-colors" aria-label="Review with notes"
+                          <button
+                            onClick={() => {
+                              setReviewing({ type: 'swap', id: req.id });
+                              setReviewNotes('');
+                            }}
+                            className="text-theme-text-muted hover:text-theme-text-primary rounded-lg px-2 py-1.5 text-[10px] transition-colors"
+                            aria-label="Review with notes"
                             title="Add reviewer notes"
                           >
                             + Notes
                           </button>
                         </>
                       )}
-                      {req.status === RequestStatus.PENDING && (req.requesting_user_id ?? req.user_id) === currentUser?.id && confirmingCancel?.id !== req.id && (
-                        <button onClick={() => setConfirmingCancel({ type: 'swap', id: req.id })}
-                          className="p-2 text-theme-text-muted hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel swap request"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
+                      {req.status === RequestStatus.PENDING &&
+                        (req.requesting_user_id ?? req.user_id) === currentUser?.id &&
+                        confirmingCancel?.id !== req.id && (
+                          <button
+                            onClick={() => setConfirmingCancel({ type: 'swap', id: req.id })}
+                            className="text-theme-text-muted flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
+                            aria-label="Cancel swap request"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
                       {confirmingCancel?.id === req.id && confirmingCancel.type === 'swap' && (
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-red-500 dark:text-red-400">Cancel?</span>
-                          <button onClick={() => { void handleCancel('swap', req.id); }}
-                            className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm cancellation"
-                          >Yes</button>
-                          <button onClick={() => setConfirmingCancel(null)}
-                            className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Keep request"
-                          >No</button>
+                          <button
+                            onClick={() => {
+                              void handleCancel('swap', req.id);
+                            }}
+                            className="btn-primary rounded-md px-2 py-1 text-xs"
+                            aria-label="Confirm cancellation"
+                          >
+                            Yes
+                          </button>
+                          <button
+                            onClick={() => setConfirmingCancel(null)}
+                            className="text-theme-text-muted hover:text-theme-text-primary px-2 py-1 text-xs"
+                            aria-label="Keep request"
+                          >
+                            No
+                          </button>
                         </div>
                       )}
                     </div>
@@ -279,121 +326,183 @@ export const RequestsTab: React.FC = () => {
             })}
           </div>
         )
+      ) : /* Time Off Requests */
+      timeOffRequests.length === 0 ? (
+        <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
+          <CalendarOff className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
+          <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No time-off requests</h3>
+          <p className="text-theme-text-muted mx-auto max-w-sm text-sm">
+            {canManage
+              ? 'No time-off requests to review. Pending requests from members will appear here.'
+              : 'Your time-off requests will appear here. Use the My Shifts tab to request time off.'}
+          </p>
+        </div>
       ) : (
-        /* Time Off Requests */
-        timeOffRequests.length === 0 ? (
-          <div className="text-center py-16 border border-dashed border-theme-surface-border rounded-xl">
-            <CalendarOff className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
-            <h3 className="text-lg font-medium text-theme-text-primary mb-1">No time-off requests</h3>
-            <p className="text-theme-text-muted text-sm max-w-sm mx-auto">
-              {canManage
-                ? 'No time-off requests to review. Pending requests from members will appear here.'
-                : 'Your time-off requests will appear here. Use the My Shifts tab to request time off.'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {timeOffRequests.map(req => {
-              const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
-              return (
-                <div key={req.id} className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5">
-                  <div className="flex items-start sm:items-center justify-between gap-3">
-                    <div className="flex items-start sm:items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                        <CalendarOff className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold text-theme-text-primary">
-                            {req.user_id === currentUser?.id
-                              ? 'Your time-off request'
-                              : `${req.user_name || 'Member'} — Time Off`}
-                          </p>
-                          <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full border capitalize ${statusColor}`}>
-                            {req.status}
-                          </span>
-                        </div>
-                        <p className="text-xs text-theme-text-muted mt-0.5">
-                          {formatDateCustom(req.start_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}
-                          {req.end_date !== req.start_date && ` - ${formatDateCustom(req.end_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}`}
-                        </p>
-                        {req.reason && <p className="text-xs text-theme-text-secondary mt-1 line-clamp-2">{req.reason}</p>}
-                      </div>
+        <div className="space-y-3">
+          {timeOffRequests.map((req) => {
+            const statusColor = REQUEST_STATUS_COLORS[req.status] || REQUEST_STATUS_COLORS.pending;
+            return (
+              <div key={req.id} className="bg-theme-surface border-theme-surface-border rounded-xl border p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3 sm:items-center">
+                  <div className="flex min-w-0 items-start gap-3 sm:items-center">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 sm:h-10 sm:w-10">
+                      <CalendarOff className="h-4 w-4 text-blue-500 sm:h-5 sm:w-5" />
                     </div>
-                    <div className="flex flex-wrap items-center gap-1 shrink-0">
-                      {canManage && req.status === RequestStatus.PENDING && (
-                        <>
-                          <button onClick={() => { void handleQuickReview('timeoff', req.id, 'approved'); }}
-                            className="px-2.5 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Approve time off"
-                          >
-                            <Check className="w-3.5 h-3.5" /> Approve
-                          </button>
-                          <button onClick={() => { void handleQuickReview('timeoff', req.id, 'denied'); }}
-                            className="px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg transition-colors inline-flex items-center gap-1" aria-label="Deny time off"
-                          >
-                            <X className="w-3.5 h-3.5" /> Deny
-                          </button>
-                          <button onClick={() => { setReviewing({ type: 'timeoff', id: req.id }); setReviewNotes(''); }}
-                            className="px-2 py-1.5 text-[10px] text-theme-text-muted hover:text-theme-text-primary rounded-lg transition-colors" aria-label="Review with notes"
-                            title="Add reviewer notes"
-                          >
-                            + Notes
-                          </button>
-                        </>
-                      )}
-                      {req.status === RequestStatus.PENDING && req.user_id === currentUser?.id && confirmingCancel?.id !== req.id && (
-                        <button onClick={() => setConfirmingCancel({ type: 'timeoff', id: req.id })}
-                          className="p-2 text-theme-text-muted hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-lg min-w-[40px] min-h-[40px] flex items-center justify-center" aria-label="Cancel time-off request"
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-theme-text-primary text-sm font-semibold">
+                          {req.user_id === currentUser?.id
+                            ? 'Your time-off request'
+                            : `${req.user_name || 'Member'} — Time Off`}
+                        </p>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize sm:text-xs ${statusColor}`}
                         >
-                          <X className="w-4 h-4" />
+                          {req.status}
+                        </span>
+                      </div>
+                      <p className="text-theme-text-muted mt-0.5 text-xs">
+                        {formatDateCustom(req.start_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}
+                        {req.end_date !== req.start_date &&
+                          ` - ${formatDateCustom(req.end_date + 'T12:00:00', { month: 'short', day: 'numeric' }, tz)}`}
+                      </p>
+                      {req.reason && (
+                        <p className="text-theme-text-secondary mt-1 line-clamp-2 text-xs">{req.reason}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-1">
+                    {canManage && req.status === RequestStatus.PENDING && (
+                      <>
+                        <button
+                          onClick={() => {
+                            void handleQuickReview('timeoff', req.id, 'approved');
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+                          aria-label="Approve time off"
+                        >
+                          <Check className="h-3.5 w-3.5" /> Approve
+                        </button>
+                        <button
+                          onClick={() => {
+                            void handleQuickReview('timeoff', req.id, 'denied');
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                          aria-label="Deny time off"
+                        >
+                          <X className="h-3.5 w-3.5" /> Deny
+                        </button>
+                        <button
+                          onClick={() => {
+                            setReviewing({ type: 'timeoff', id: req.id });
+                            setReviewNotes('');
+                          }}
+                          className="text-theme-text-muted hover:text-theme-text-primary rounded-lg px-2 py-1.5 text-[10px] transition-colors"
+                          aria-label="Review with notes"
+                          title="Add reviewer notes"
+                        >
+                          + Notes
+                        </button>
+                      </>
+                    )}
+                    {req.status === RequestStatus.PENDING &&
+                      req.user_id === currentUser?.id &&
+                      confirmingCancel?.id !== req.id && (
+                        <button
+                          onClick={() => setConfirmingCancel({ type: 'timeoff', id: req.id })}
+                          className="text-theme-text-muted flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg p-2 hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
+                          aria-label="Cancel time-off request"
+                        >
+                          <X className="h-4 w-4" />
                         </button>
                       )}
-                      {confirmingCancel?.id === req.id && confirmingCancel.type === 'timeoff' && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-red-500 dark:text-red-400">Cancel?</span>
-                          <button onClick={() => { void handleCancel('timeoff', req.id); }}
-                            className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm cancellation"
-                          >Yes</button>
-                          <button onClick={() => setConfirmingCancel(null)}
-                            className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Keep request"
-                          >No</button>
-                        </div>
-                      )}
-                    </div>
+                    {confirmingCancel?.id === req.id && confirmingCancel.type === 'timeoff' && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-red-500 dark:text-red-400">Cancel?</span>
+                        <button
+                          onClick={() => {
+                            void handleCancel('timeoff', req.id);
+                          }}
+                          className="btn-primary rounded-md px-2 py-1 text-xs"
+                          aria-label="Confirm cancellation"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setConfirmingCancel(null)}
+                          className="text-theme-text-muted hover:text-theme-text-primary px-2 py-1 text-xs"
+                          aria-label="Keep request"
+                        >
+                          No
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* Review Modal */}
       {reviewing && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Review request">
-          <div ref={reviewModalRef} className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
-            <div className="p-6 border-b border-theme-surface-border">
-              <h2 className="text-lg font-bold text-theme-text-primary">Review Request</h2>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Review request"
+        >
+          <div
+            ref={reviewModalRef}
+            className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border"
+          >
+            <div className="border-theme-surface-border border-b p-6">
+              <h2 className="text-theme-text-primary text-lg font-bold">Review Request</h2>
             </div>
             <div className="p-6">
-              <label htmlFor="reviewer-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Reviewer Notes (optional)</label>
-              <textarea id="reviewer-notes" value={reviewNotes} onChange={e => setReviewNotes(e.target.value)}
-                rows={3} placeholder="Add reviewer notes"
-                className="form-input focus:ring-violet-500 placeholder-theme-text-muted py-2.5 resize-none"
+              <label htmlFor="reviewer-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                Reviewer Notes (optional)
+              </label>
+              <textarea
+                id="reviewer-notes"
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)}
+                rows={3}
+                placeholder="Add reviewer notes"
+                className="form-input placeholder-theme-text-muted resize-none py-2.5 focus:ring-violet-500"
               />
             </div>
-            <div className="flex justify-end gap-3 p-6 border-t border-theme-surface-border">
-              <button onClick={() => setReviewing(null)} className="px-4 py-2 text-theme-text-secondary">Cancel</button>
-              <button onClick={() => { void handleReview('denied'); }} disabled={submittingReview}
-                className="btn-primary gap-1.5 inline-flex items-center"
+            <div className="border-theme-surface-border flex justify-end gap-3 border-t p-6">
+              <button onClick={() => setReviewing(null)} className="text-theme-text-secondary px-4 py-2">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  void handleReview('denied');
+                }}
+                disabled={submittingReview}
+                className="btn-primary inline-flex items-center gap-1.5"
               >
-                {reviewAction === RequestStatus.DENIED ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                {reviewAction === RequestStatus.DENIED ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <X className="h-3.5 w-3.5" />
+                )}
                 Deny
               </button>
-              <button onClick={() => { void handleReview('approved'); }} disabled={submittingReview}
-                className="btn-success gap-1.5 inline-flex items-center"
+              <button
+                onClick={() => {
+                  void handleReview('approved');
+                }}
+                disabled={submittingReview}
+                className="btn-success inline-flex items-center gap-1.5"
               >
-                {reviewAction === RequestStatus.APPROVED ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                {reviewAction === RequestStatus.APPROVED ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Check className="h-3.5 w-3.5" />
+                )}
                 Approve
               </button>
             </div>

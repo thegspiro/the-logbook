@@ -49,51 +49,44 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ recor
   const pct = Math.round(record.progress_percentage);
   // A count-based target ("12 / 24 hrs") gets a mini fill bar; a knowledge-test
   // target ("Pass ≥ 70%") is a threshold, not something to fill toward.
-  const showBar =
-    !!target && record.requirement?.requirement_type !== 'knowledge_test' && !done;
+  const showBar = !!target && record.requirement?.requirement_type !== 'knowledge_test' && !done;
   return (
-    <div className="flex items-start justify-between gap-3 bg-theme-surface-secondary rounded-lg p-3">
-      <div className="flex items-start gap-2 min-w-0 flex-1">
+    <div className="bg-theme-surface-secondary flex items-start justify-between gap-3 rounded-lg p-3">
+      <div className="flex min-w-0 flex-1 items-start gap-2">
         {done ? (
-          <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
         ) : (
-          <div className="w-4 h-4 rounded-full border border-theme-surface-border mt-0.5 shrink-0" />
+          <div className="border-theme-surface-border mt-0.5 h-4 w-4 shrink-0 rounded-full border" />
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-sm text-theme-text-primary truncate">
-            {record.requirement?.name || 'Requirement'}
-          </p>
-          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-xs mt-0.5">
+          <p className="text-theme-text-primary truncate text-sm">{record.requirement?.name || 'Requirement'}</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
             <span className={meta.className}>{meta.label}</span>
-            {target && (
-              <span className="text-theme-text-secondary tabular-nums font-medium">· {target}</span>
-            )}
-            {typeof score === 'number' && (
-              <span className="text-theme-text-muted">· score {score}%</span>
-            )}
+            {target && <span className="text-theme-text-secondary font-medium tabular-nums">· {target}</span>}
+            {typeof score === 'number' && <span className="text-theme-text-muted">· score {score}%</span>}
             {record.verified_by && (
               <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400">
-                <BadgeCheck className="w-3 h-3" /> Verified
+                <BadgeCheck className="h-3 w-3" /> Verified
               </span>
             )}
           </div>
           {showBar && (
-            <div className="w-full bg-theme-surface rounded-full h-1 mt-1.5" aria-hidden="true">
+            <div className="bg-theme-surface mt-1.5 h-1 w-full rounded-full" aria-hidden="true">
               <div
-                className="bg-blue-500 h-1 rounded-full transition-all"
+                className="h-1 rounded-full bg-blue-500 transition-all"
                 style={{ width: `${Math.min(100, pct)}%` }}
               />
             </div>
           )}
           {!done && action && (
-            <p className="flex items-center gap-1 text-xs text-theme-text-muted mt-1">
-              <ArrowRight className="w-3 h-3 shrink-0" aria-hidden="true" />
+            <p className="text-theme-text-muted mt-1 flex items-center gap-1 text-xs">
+              <ArrowRight className="h-3 w-3 shrink-0" aria-hidden="true" />
               <span>{action}</span>
             </p>
           )}
         </div>
       </div>
-      <span className="text-xs text-theme-text-muted shrink-0 tabular-nums">{pct}%</span>
+      <span className="text-theme-text-muted shrink-0 text-xs tabular-nums">{pct}%</span>
     </div>
   );
 };
@@ -136,12 +129,14 @@ const MyProgramProgressPage: React.FC = () => {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [enrollmentId, navigate]);
 
   const groups = useMemo(
     () => (data ? groupRecordsByPhase(data.requirement_progress, phases, programReqs) : []),
-    [data, phases, programReqs],
+    [data, phases, programReqs]
   );
 
   const handleLeave = async () => {
@@ -160,8 +155,11 @@ const MyProgramProgressPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" role="status" aria-live="polite">
-        <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" aria-hidden="true" />
+      <div className="flex min-h-screen items-center justify-center" role="status" aria-live="polite">
+        <div
+          className="inline-block h-10 w-10 animate-spin rounded-full border-b-2 border-red-500"
+          aria-hidden="true"
+        />
       </div>
     );
   }
@@ -173,19 +171,19 @@ const MyProgramProgressPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-start gap-3 mb-6">
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-6 flex items-start gap-3">
           <button
             onClick={() => void navigate('/training')}
-            className="mt-1 p-2 text-theme-text-muted hover:text-theme-text-primary rounded-lg hover:bg-theme-surface-hover"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover mt-1 rounded-lg p-2"
             aria-label="Back to my training"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-theme-text-primary">{data.program.name}</h1>
+            <h1 className="text-theme-text-primary text-2xl font-bold">{data.program.name}</h1>
             {data.current_phase && (
-              <p className="text-sm text-theme-text-muted mt-1">
+              <p className="text-theme-text-muted mt-1 text-sm">
                 Current phase:{' '}
                 <span className="text-theme-text-secondary">
                   Phase {data.current_phase.phase_number} — {data.current_phase.name}
@@ -196,34 +194,34 @@ const MyProgramProgressPage: React.FC = () => {
           {(data.enrollment.status === 'active' || data.enrollment.status === 'on_hold') && (
             <button
               onClick={() => setShowLeave(true)}
-              className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover"
+              className="text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover mt-1 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:text-red-600 dark:hover:text-red-400"
               title="Remove yourself from this program"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="h-4 w-4" />
               Leave program
             </button>
           )}
         </div>
 
         {/* Overall progress */}
-        <div className="bg-theme-surface rounded-lg p-4 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-theme-text-secondary">
+        <div className="bg-theme-surface mb-4 rounded-lg p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-theme-text-secondary text-sm">
               {data.completed_requirements}/{data.total_requirements} requirements complete
             </span>
-            <span className="text-sm font-semibold text-theme-text-primary">{overall}%</span>
+            <span className="text-theme-text-primary text-sm font-semibold">{overall}%</span>
           </div>
-          <div className="w-full bg-theme-surface-secondary rounded-full h-2">
-            <div className="bg-red-500 h-2 rounded-full transition-all" style={{ width: `${overall}%` }} />
+          <div className="bg-theme-surface-secondary h-2 w-full rounded-full">
+            <div className="h-2 rounded-full bg-red-500 transition-all" style={{ width: `${overall}%` }} />
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-theme-text-muted mt-3">
+          <div className="text-theme-text-muted mt-3 flex flex-wrap items-center gap-3 text-xs">
             <span>Enrolled: {formatDate(data.enrollment.enrolled_at, tz)}</span>
             {data.enrollment.target_completion_date && (
               <span>Target: {formatDate(data.enrollment.target_completion_date, tz)}</span>
             )}
             {typeof data.time_remaining_days === 'number' && (
               <span className="flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5" />
+                <Clock className="h-3.5 w-3.5" />
                 {data.time_remaining_days >= 0
                   ? `${data.time_remaining_days} days left`
                   : `${Math.abs(data.time_remaining_days)} days overdue`}
@@ -231,7 +229,7 @@ const MyProgramProgressPage: React.FC = () => {
             )}
             {data.is_behind_schedule && (
               <span className="flex items-center gap-1 text-yellow-700 dark:text-yellow-400">
-                <AlertTriangle className="w-3.5 h-3.5" /> Behind schedule
+                <AlertTriangle className="h-3.5 w-3.5" /> Behind schedule
               </span>
             )}
           </div>
@@ -239,13 +237,13 @@ const MyProgramProgressPage: React.FC = () => {
 
         {/* Next milestones */}
         {data.next_milestones.length > 0 && (
-          <div className="bg-theme-surface rounded-lg p-4 mb-4">
-            <h2 className="text-sm font-semibold text-theme-text-primary mb-2 flex items-center gap-2">
-              <Flag className="w-4 h-4 text-yellow-600 dark:text-yellow-400" /> Next milestones
+          <div className="bg-theme-surface mb-4 rounded-lg p-4">
+            <h2 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
+              <Flag className="h-4 w-4 text-yellow-600 dark:text-yellow-400" /> Next milestones
             </h2>
             <div className="space-y-1">
               {data.next_milestones.map((m) => (
-                <div key={m.id} className="flex items-center justify-between text-xs text-theme-text-secondary">
+                <div key={m.id} className="text-theme-text-secondary flex items-center justify-between text-xs">
                   <span>{m.name}</span>
                   <span className="text-theme-text-muted">at {Math.round(m.completion_percentage_threshold)}%</span>
                 </div>
@@ -256,7 +254,7 @@ const MyProgramProgressPage: React.FC = () => {
 
         {/* Requirements grouped by phase */}
         {groups.length === 0 ? (
-          <div className="text-center py-10 bg-theme-surface rounded-lg text-theme-text-muted text-sm">
+          <div className="bg-theme-surface text-theme-text-muted rounded-lg py-10 text-center text-sm">
             No requirements to track yet.
           </div>
         ) : (
@@ -266,16 +264,21 @@ const MyProgramProgressPage: React.FC = () => {
               const complete = isPhaseGroupComplete(group.records, programReqs);
               return (
                 <div key={group.phase?.id ?? 'program-level'} className="bg-theme-surface rounded-lg p-4">
-                  <div className="flex items-center gap-2 flex-wrap mb-3">
-                    <Layers className="w-4 h-4 text-theme-text-muted" />
-                    <h2 className="text-sm font-semibold text-theme-text-primary">
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <Layers className="text-theme-text-muted h-4 w-4" />
+                    <h2 className="text-theme-text-primary text-sm font-semibold">
                       {group.phase ? `Phase ${group.phase.phase_number}: ${group.phase.name}` : 'Program-level'}
                     </h2>
                     {isCurrent && (
-                      <span className="px-2 py-0.5 bg-red-500/15 text-red-700 dark:text-red-400 text-xs rounded-sm">You are here</span>
+                      <span className="rounded-sm bg-red-500/15 px-2 py-0.5 text-xs text-red-700 dark:text-red-400">
+                        You are here
+                      </span>
                     )}
                     {complete && (
-                      <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" aria-label="Phase complete" />
+                      <CheckCircle2
+                        className="h-4 w-4 text-green-600 dark:text-green-400"
+                        aria-label="Phase complete"
+                      />
                     )}
                   </div>
                   <div className="space-y-2">
@@ -293,7 +296,9 @@ const MyProgramProgressPage: React.FC = () => {
       <ConfirmDialog
         isOpen={showLeave}
         onClose={() => setShowLeave(false)}
-        onConfirm={() => { void handleLeave(); }}
+        onConfirm={() => {
+          void handleLeave();
+        }}
         title="Leave this program?"
         message={
           `You'll be removed from "${data.program.name}" and it will no longer appear on your ` +

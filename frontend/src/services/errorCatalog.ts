@@ -18,8 +18,7 @@ export interface ErrorMapping {
 
 export const ERROR_MAPPINGS: Record<string, ErrorMapping> = {
   EVENT_NOT_FOUND: {
-    userMessage:
-      'This event could not be found. It may have been deleted or you may not have permission to view it.',
+    userMessage: 'This event could not be found. It may have been deleted or you may not have permission to view it.',
     troubleshootingSteps: [
       "Verify you're using the correct QR code for this event",
       'Check if the event has been cancelled or deleted',
@@ -149,8 +148,7 @@ export const ERROR_MAPPINGS: Record<string, ErrorMapping> = {
     ],
   },
   REPORTING_THROTTLED: {
-    userMessage:
-      'Further errors occurred but were not individually reported (client rate cap).',
+    userMessage: 'Further errors occurred but were not individually reported (client rate cap).',
     troubleshootingSteps: [
       'A burst of errors hit this member — the surrounding entries show what',
       'Treat the count as a floor, not a total',
@@ -200,11 +198,7 @@ export function detectErrorType(message: string): string {
   if (lowerMessage.includes('network') || lowerMessage.includes('connection')) {
     return 'NETWORK_ERROR';
   }
-  if (
-    lowerMessage.includes('unauthorized') ||
-    lowerMessage.includes('login') ||
-    lowerMessage.includes('401')
-  ) {
+  if (lowerMessage.includes('unauthorized') || lowerMessage.includes('login') || lowerMessage.includes('401')) {
     return 'AUTHENTICATION_REQUIRED';
   }
   if (lowerMessage.includes('not a member') || lowerMessage.includes('organization')) {

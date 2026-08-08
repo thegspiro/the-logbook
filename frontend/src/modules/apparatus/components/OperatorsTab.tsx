@@ -59,9 +59,9 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
   return (
     <>
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-theme-text-primary font-bold flex items-center gap-2">
-            <Users className="w-5 h-5" />
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-theme-text-primary flex items-center gap-2 font-bold">
+            <Users className="h-5 w-5" />
             Certified Operators
           </h2>
           <button onClick={handleAdd} className="btn-primary text-sm">
@@ -69,65 +69,64 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
           </button>
         </div>
         {loadingTab ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-theme-text-primary mx-auto"></div>
+          <div className="py-8 text-center">
+            <div className="border-theme-text-primary mx-auto h-8 w-8 animate-spin rounded-full border-b-2"></div>
           </div>
         ) : operators.length === 0 ? (
-          <p className="text-theme-text-muted text-center py-8">No operators assigned.</p>
+          <p className="text-theme-text-muted py-8 text-center">No operators assigned.</p>
         ) : (
           <div className="space-y-3">
             {operators.map((op) => (
-              <div
-                key={op.id}
-                className="card-secondary flex items-center justify-between p-4"
-              >
+              <div key={op.id} className="card-secondary flex items-center justify-between p-4">
                 <div className="min-w-0 flex-1">
                   <p className="text-theme-text-primary font-medium">Operator ID: {op.userId}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div className="mt-0.5 flex items-center gap-2">
                     <p className="text-theme-text-muted text-sm">
                       {op.isCertified ? 'Certified' : 'Not Certified'}
                       {op.certificationExpiration && ` • Expires ${formatDate(op.certificationExpiration, timezone)}`}
                     </p>
                     {op.evocLevel && (
-                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-blue-500/10 text-blue-700 dark:text-blue-400">
+                      <span className="inline-flex items-center rounded bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400">
                         {op.evocLevel.name}
                       </span>
                     )}
                   </div>
                   {op.licenseTypeRequired && (
-                    <p className="text-theme-text-muted text-xs mt-0.5">
+                    <p className="text-theme-text-muted mt-0.5 text-xs">
                       License: {op.licenseTypeRequired}
                       {op.licenseVerified && ' (Verified)'}
                     </p>
                   )}
                   {op.hasRestrictions && (
-                    <p className="text-yellow-700 dark:text-yellow-400 text-sm mt-1">
+                    <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-400">
                       Has Restrictions
                       {op.restrictionNotes && ` — ${op.restrictionNotes}`}
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-3 ml-4">
+                <div className="ml-4 flex items-center gap-3">
                   <span
-                    className={`px-2 py-1 text-xs rounded ${
-                      op.isActive ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'
+                    className={`rounded px-2 py-1 text-xs ${
+                      op.isActive
+                        ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                        : 'bg-theme-surface-secondary text-theme-text-muted'
                     }`}
                   >
                     {op.isActive ? 'Active' : 'Inactive'}
                   </span>
                   <button
                     onClick={() => handleEdit(op)}
-                    className="p-1.5 text-theme-text-muted hover:text-theme-text-primary transition-colors rounded-md hover:bg-theme-surface-secondary"
+                    className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors"
                     title="Edit operator"
                   >
-                    <Pencil className="w-4 h-4" />
+                    <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => setDeleteTarget(op)}
-                    className="p-1.5 text-theme-text-muted hover:text-red-600 transition-colors rounded-md hover:bg-theme-surface-secondary"
+                    className="text-theme-text-muted hover:bg-theme-surface-secondary rounded-md p-1.5 transition-colors hover:text-red-600"
                     title="Remove operator"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>

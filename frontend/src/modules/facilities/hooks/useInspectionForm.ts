@@ -109,9 +109,11 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
     }
   }, [facilityId]);
 
-  useEffect(() => { void loadInspections(); }, [loadInspections]);
+  useEffect(() => {
+    void loadInspections();
+  }, [loadInspections]);
 
-  const filtered = inspections.filter(i => {
+  const filtered = inspections.filter((i) => {
     if (resultFilter === 'passed' && i.passed !== true) return false;
     if (resultFilter === 'failed' && i.passed !== false) return false;
     if (resultFilter === 'pending' && i.passed !== null && i.passed !== undefined) return false;
@@ -139,9 +141,18 @@ export function useInspectionForm({ facilityId }: UseInspectionFormOptions = {})
   };
 
   const handleSave = async () => {
-    if (!facilityId && !formData.facility_id) { toast.error('Please select a facility'); return; }
-    if (!formData.title.trim()) { toast.error('Title is required'); return; }
-    if (!formData.inspection_date) { toast.error('Inspection date is required'); return; }
+    if (!facilityId && !formData.facility_id) {
+      toast.error('Please select a facility');
+      return;
+    }
+    if (!formData.title.trim()) {
+      toast.error('Title is required');
+      return;
+    }
+    if (!formData.inspection_date) {
+      toast.error('Inspection date is required');
+      return;
+    }
     setIsSaving(true);
     try {
       const payload = formToPayload(formData);

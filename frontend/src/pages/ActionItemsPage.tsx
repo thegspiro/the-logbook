@@ -7,13 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  CheckCircle2,
-  Clock,
-  Filter,
-  ClipboardList,
-  Loader2,
-} from 'lucide-react';
+import { CheckCircle2, Clock, Filter, ClipboardList, Loader2 } from 'lucide-react';
 import { dashboardService } from '../services/api';
 import type { ActionItemSummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
@@ -76,49 +70,47 @@ const ActionItemsPage: React.FC = () => {
     return 'text-theme-text-secondary';
   };
 
-  const overdue = items.filter(i => {
+  const overdue = items.filter((i) => {
     if (!i.due_date) return false;
     return new Date(i.due_date) < new Date() && !['completed', 'cancelled'].includes(i.status);
   }).length;
 
-  const open = items.filter(i => !['completed', 'cancelled'].includes(i.status)).length;
+  const open = items.filter((i) => !['completed', 'cancelled'].includes(i.status)).length;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-theme-text-primary flex items-center gap-2">
+        <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold">
           <ClipboardList className="h-6 w-6 text-red-700 dark:text-red-400" />
           Action Items
         </h1>
-        <p className="mt-1 text-sm text-theme-text-muted">
-          Unified view of action items from meetings and minutes
-        </p>
+        <p className="text-theme-text-muted mt-1 text-sm">Unified view of action items from meetings and minutes</p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card-secondary p-4">
-          <p className="text-sm text-theme-text-muted">Total Items</p>
-          <p className="text-2xl font-bold text-theme-text-primary">{items.length}</p>
+          <p className="text-theme-text-muted text-sm">Total Items</p>
+          <p className="text-theme-text-primary text-2xl font-bold">{items.length}</p>
         </div>
         <div className="card-secondary p-4">
-          <p className="text-sm text-theme-text-muted">Open</p>
+          <p className="text-theme-text-muted text-sm">Open</p>
           <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{open}</p>
         </div>
         <div className="card-secondary p-4">
-          <p className="text-sm text-theme-text-muted">Overdue</p>
+          <p className="text-theme-text-muted text-sm">Overdue</p>
           <p className="text-2xl font-bold text-red-700 dark:text-red-400">{overdue}</p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      <div className="mb-6 flex flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-theme-text-muted" />
+          <Filter className="text-theme-text-muted h-4 w-4" />
           <select
             value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="bg-theme-input-bg border border-theme-input-border rounded-md px-3 py-1.5 max-md:min-h-[44px] text-sm text-theme-text-primary"
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-md border px-3 py-1.5 text-sm max-md:min-h-[44px]"
           >
             <option value="">All Statuses</option>
             <option value="open">Open</option>
@@ -127,12 +119,12 @@ const ActionItemsPage: React.FC = () => {
             <option value="completed">Completed</option>
           </select>
         </div>
-        <label className="flex items-center gap-2 max-md:min-h-[44px] text-sm text-theme-text-secondary cursor-pointer">
+        <label className="text-theme-text-secondary flex cursor-pointer items-center gap-2 text-sm max-md:min-h-[44px]">
           <input
             type="checkbox"
             checked={assignedToMe}
-            onChange={e => setAssignedToMe(e.target.checked)}
-            className="rounded-sm border-theme-input-border bg-theme-input-bg"
+            onChange={(e) => setAssignedToMe(e.target.checked)}
+            className="border-theme-input-border bg-theme-input-bg rounded-sm"
           />
           Assigned to me
         </label>
@@ -141,10 +133,10 @@ const ActionItemsPage: React.FC = () => {
       {/* Content */}
       {loading ? (
         <div className="flex justify-center py-12" role="status" aria-live="polite">
-          <Loader2 className="h-8 w-8 text-theme-text-muted animate-spin" />
+          <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
         </div>
       ) : error ? (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 text-red-700 dark:text-red-400">
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-red-700 dark:text-red-400">
           {error}
         </div>
       ) : items.length === 0 ? (
@@ -155,10 +147,10 @@ const ActionItemsPage: React.FC = () => {
         />
       ) : (
         <div className="space-y-2">
-          {items.map(item => (
+          {items.map((item) => (
             <div
               key={`${item.source}-${item.id}`}
-              className="card-secondary cursor-pointer hover:bg-theme-surface-hover p-4 transition-colors"
+              className="card-secondary hover:bg-theme-surface-hover cursor-pointer p-4 transition-colors"
               onClick={() => {
                 if (item.source === 'meeting') {
                   void navigate(`/minutes`);
@@ -168,37 +160,35 @@ const ActionItemsPage: React.FC = () => {
               }}
             >
               <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="text-theme-text-primary text-sm font-medium truncate">
-                    {item.description}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-theme-surface-secondary text-theme-text-primary'}`}>
+                <div className="min-w-0 flex-1">
+                  <p className="text-theme-text-primary truncate text-sm font-medium">{item.description}</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                    <span
+                      className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-theme-surface-secondary text-theme-text-primary'}`}
+                    >
                       {item.status.replace('_', ' ')}
                     </span>
                     {item.priority && (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium ${PRIORITY_BADGES[item.priority] || ''}`}>
+                      <span
+                        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${PRIORITY_BADGES[item.priority] || ''}`}
+                      >
                         {item.priority}
                       </span>
                     )}
-                    <span className="text-xs text-theme-text-muted">
+                    <span className="text-theme-text-muted text-xs">
                       {item.source === 'meeting' ? 'Meeting' : 'Minutes'}
                     </span>
-                    {item.assignee_name && (
-                      <span className="text-xs text-theme-text-muted">
-                        {item.assignee_name}
-                      </span>
-                    )}
+                    {item.assignee_name && <span className="text-theme-text-muted text-xs">{item.assignee_name}</span>}
                   </div>
                 </div>
-                <div className="text-right shrink-0">
+                <div className="shrink-0 text-right">
                   {item.due_date ? (
                     <div className={`text-sm ${getDueDateClass(item.due_date)}`}>
-                      <Clock className="h-3 w-3 inline mr-1" />
+                      <Clock className="mr-1 inline h-3 w-3" />
                       {formatDate(item.due_date, tz)}
                     </div>
                   ) : (
-                    <span className="text-xs text-theme-text-muted">No due date</span>
+                    <span className="text-theme-text-muted text-xs">No due date</span>
                   )}
                 </div>
               </div>

@@ -21,10 +21,4 @@ export type {
 } from './types';
 
 // Hooks
-export {
-  usePortalConfig,
-  useAPIKeys,
-  useAccessLogs,
-  useUsageStats,
-  useDataWhitelist,
-} from './hooks/usePublicPortal';
+export { usePortalConfig, useAPIKeys, useAccessLogs, useUsageStats, useDataWhitelist } from './hooks/usePublicPortal';

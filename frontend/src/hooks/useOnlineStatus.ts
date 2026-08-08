@@ -9,9 +9,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export function useOnlineStatus(): boolean {
-  const [isOnline, setIsOnline] = useState(() =>
-    typeof navigator !== 'undefined' ? navigator.onLine : true,
-  );
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
 
   const goOnline = useCallback(() => setIsOnline(true), []);
   const goOffline = useCallback(() => setIsOnline(false), []);

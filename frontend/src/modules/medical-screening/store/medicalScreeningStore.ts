@@ -30,10 +30,7 @@ interface MedicalScreeningState {
   error: string | null;
 
   // Requirements
-  fetchRequirements: (params?: {
-    is_active?: boolean;
-    screening_type?: string;
-  }) => Promise<void>;
+  fetchRequirements: (params?: { is_active?: boolean; screening_type?: string }) => Promise<void>;
   createRequirement: (data: ScreeningRequirementCreate) => Promise<ScreeningRequirement>;
   updateRequirement: (id: string, data: ScreeningRequirementUpdate) => Promise<ScreeningRequirement>;
   deleteRequirement: (id: string) => Promise<void>;
@@ -66,59 +63,54 @@ export const useMedicalScreeningStore = create<MedicalScreeningState>((set) => (
   // Requirements — fetch / CRUD
   fetchRequirements: createFetchAction(
     set,
-    (params?: { is_active?: boolean; screening_type?: string }) =>
-      medicalScreeningService.listRequirements(params),
+    (params?: { is_active?: boolean; screening_type?: string }) => medicalScreeningService.listRequirements(params),
     'requirements',
-    'Failed to load requirements',
+    'Failed to load requirements'
   ),
 
-  createRequirement: createCreateAction<
-    MedicalScreeningState,
-    ScreeningRequirementCreate,
-    ScreeningRequirement
-  >(set, (data) => medicalScreeningService.createRequirement(data), 'requirements'),
+  createRequirement: createCreateAction<MedicalScreeningState, ScreeningRequirementCreate, ScreeningRequirement>(
+    set,
+    (data) => medicalScreeningService.createRequirement(data),
+    'requirements'
+  ),
 
-  updateRequirement: createUpdateAction<
-    MedicalScreeningState,
-    ScreeningRequirementUpdate,
-    ScreeningRequirement
-  >(set, (id, data) => medicalScreeningService.updateRequirement(id, data), 'requirements'),
+  updateRequirement: createUpdateAction<MedicalScreeningState, ScreeningRequirementUpdate, ScreeningRequirement>(
+    set,
+    (id, data) => medicalScreeningService.updateRequirement(id, data),
+    'requirements'
+  ),
 
   deleteRequirement: createDeleteAction<MedicalScreeningState, ScreeningRequirement>(
     set,
     (id) => medicalScreeningService.deleteRequirement(id),
-    'requirements',
+    'requirements'
   ),
 
   // Records — fetch / CRUD
   fetchRecords: createFetchAction(
     set,
-    (params?: {
-      user_id?: string;
-      prospect_id?: string;
-      screening_type?: string;
-      status?: string;
-    }) => medicalScreeningService.listRecords(params),
+    (params?: { user_id?: string; prospect_id?: string; screening_type?: string; status?: string }) =>
+      medicalScreeningService.listRecords(params),
     'records',
-    'Failed to load records',
+    'Failed to load records'
   ),
 
-  createRecord: createCreateAction<
-    MedicalScreeningState,
-    ScreeningRecordCreate,
-    ScreeningRecord
-  >(set, (data) => medicalScreeningService.createRecord(data), 'records'),
+  createRecord: createCreateAction<MedicalScreeningState, ScreeningRecordCreate, ScreeningRecord>(
+    set,
+    (data) => medicalScreeningService.createRecord(data),
+    'records'
+  ),
 
-  updateRecord: createUpdateAction<
-    MedicalScreeningState,
-    ScreeningRecordUpdate,
-    ScreeningRecord
-  >(set, (id, data) => medicalScreeningService.updateRecord(id, data), 'records'),
+  updateRecord: createUpdateAction<MedicalScreeningState, ScreeningRecordUpdate, ScreeningRecord>(
+    set,
+    (id, data) => medicalScreeningService.updateRecord(id, data),
+    'records'
+  ),
 
   deleteRecord: createDeleteAction<MedicalScreeningState, ScreeningRecord>(
     set,
     (id) => medicalScreeningService.deleteRecord(id),
-    'records',
+    'records'
   ),
 
   // Compliance
@@ -126,20 +118,20 @@ export const useMedicalScreeningStore = create<MedicalScreeningState>((set) => (
     set,
     (userId: string) => medicalScreeningService.getUserCompliance(userId),
     'compliance',
-    'Failed to load compliance',
+    'Failed to load compliance'
   ),
 
   fetchProspectCompliance: createFetchAction(
     set,
     (prospectId: string) => medicalScreeningService.getProspectCompliance(prospectId),
     'compliance',
-    'Failed to load compliance',
+    'Failed to load compliance'
   ),
 
   fetchExpiringScreenings: createFetchAction(
     set,
     (days?: number) => medicalScreeningService.getExpiringScreenings(days),
     'expiringScreenings',
-    'Failed to load expiring screenings',
+    'Failed to load expiring screenings'
   ),
 }));

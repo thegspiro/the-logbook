@@ -32,10 +32,7 @@ const emptyForm: ProxyFormState = {
   reason: '',
 };
 
-export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
-  electionId,
-  canManage,
-}) => {
+export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({ electionId, canManage }) => {
   const tz = useTimezone();
   const [authorizations, setAuthorizations] = useState<ProxyAuthorization[]>([]);
   const [proxyVotingEnabled, setProxyVotingEnabled] = useState(false);
@@ -118,21 +115,23 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
 
   if (loading) {
     return (
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
-        <div className="text-theme-text-muted text-center py-4">Loading proxy authorizations...</div>
+      <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+        <div className="text-theme-text-muted py-4 text-center">Loading proxy authorizations...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
-        <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3">
+      <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
+        <div className="mb-4 rounded-sm border border-red-500/30 bg-red-500/10 p-3">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
         <button
           type="button"
-          onClick={() => { void fetchAuthorizations(); }}
+          onClick={() => {
+            void fetchAuthorizations();
+          }}
           className="btn-info rounded-md text-sm"
         >
           Retry
@@ -142,16 +141,19 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
   }
 
   return (
-    <div className="bg-theme-surface backdrop-blur-xs rounded-lg p-6">
+    <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
       {/* Header */}
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium text-theme-text-primary">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-theme-text-primary text-lg font-medium">
           Proxy Voting ({activeAuthorizations.length} active)
         </h3>
         {canManage && proxyVotingEnabled && (
           <button
             type="button"
-            onClick={() => { setShowForm(!showForm); setFormData(emptyForm); }}
+            onClick={() => {
+              setShowForm(!showForm);
+              setFormData(emptyForm);
+            }}
             className="btn-info rounded-md text-sm"
           >
             {showForm ? 'Cancel' : '+ Add Authorization'}
@@ -160,11 +162,15 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
       </div>
 
       {/* Proxy voting status */}
-      <div className={`mb-4 rounded p-3 text-sm ${
-        proxyVotingEnabled
-          ? 'bg-green-500/10 border border-green-500/30 text-green-700 dark:text-green-300'
-          : 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-700 dark:text-yellow-300'
-      }`} role="status" aria-live="polite">
+      <div
+        className={`mb-4 rounded p-3 text-sm ${
+          proxyVotingEnabled
+            ? 'border border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300'
+            : 'border border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300'
+        }`}
+        role="status"
+        aria-live="polite"
+      >
         {proxyVotingEnabled
           ? 'Proxy voting is enabled for this organization.'
           : 'Proxy voting is not enabled for this organization. Contact an administrator to enable it.'}
@@ -173,34 +179,32 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
       {/* Add Authorization Form */}
       {showForm && canManage && (
         <div className="card-secondary mb-6 p-4">
-          <h4 className="text-sm font-semibold text-theme-text-primary mb-3">New Proxy Authorization</h4>
+          <h4 className="text-theme-text-primary mb-3 text-sm font-semibold">New Proxy Authorization</h4>
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-theme-text-primary">
-                Delegating Member (Absent) *
-              </label>
+              <label className="text-theme-text-primary block text-sm font-medium">Delegating Member (Absent) *</label>
               <input
                 type="text"
                 value={formData.delegating_user_id}
                 onChange={(e) => setFormData((prev) => ({ ...prev, delegating_user_id: e.target.value }))}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
                 placeholder="User ID of the absent member"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-primary">
+              <label className="text-theme-text-primary block text-sm font-medium">
                 Proxy Member (Voting on behalf) *
               </label>
               <input
                 type="text"
                 value={formData.proxy_user_id}
                 onChange={(e) => setFormData((prev) => ({ ...prev, proxy_user_id: e.target.value }))}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
                 placeholder="User ID of the proxy voter"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-primary">Type *</label>
+              <label className="text-theme-text-primary block text-sm font-medium">Type *</label>
               <select
                 value={formData.proxy_type}
                 onChange={(e) =>
@@ -209,19 +213,19 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                     proxy_type: e.target.value as 'single_election' | 'regular',
                   }))
                 }
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
               >
                 <option value="single_election">Single Election</option>
                 <option value="regular">Regular (Ongoing)</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-theme-text-primary">Reason *</label>
+              <label className="text-theme-text-primary block text-sm font-medium">Reason *</label>
               <textarea
                 value={formData.reason}
                 onChange={(e) => setFormData((prev) => ({ ...prev, reason: e.target.value }))}
                 rows={2}
-                className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring text-sm"
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring focus:border-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:ring-2 focus:outline-hidden"
                 placeholder="Reason for proxy authorization (e.g., medical leave, out of town)"
               />
             </div>
@@ -229,14 +233,21 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="px-3 py-2 text-sm border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-secondary"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md border px-3 py-2 text-sm"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={() => { void handleAdd(); }}
-                disabled={submitting || !formData.delegating_user_id.trim() || !formData.proxy_user_id.trim() || !formData.reason.trim()}
+                onClick={() => {
+                  void handleAdd();
+                }}
+                disabled={
+                  submitting ||
+                  !formData.delegating_user_id.trim() ||
+                  !formData.proxy_user_id.trim() ||
+                  !formData.reason.trim()
+                }
                 className="btn-info rounded-md text-sm"
               >
                 {submitting ? 'Adding...' : 'Add Authorization'}
@@ -248,42 +259,41 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
 
       {/* Authorizations List */}
       {activeAuthorizations.length === 0 && revokedAuthorizations.length === 0 ? (
-        <div className="text-center py-8 text-theme-text-muted">
+        <div className="text-theme-text-muted py-8 text-center">
           <p>No proxy authorizations for this election.</p>
           {canManage && proxyVotingEnabled && (
-            <p className="text-sm mt-1">Click &quot;Add Authorization&quot; to authorize a proxy voter.</p>
+            <p className="mt-1 text-sm">Click &quot;Add Authorization&quot; to authorize a proxy voter.</p>
           )}
         </div>
       ) : (
         <div className="space-y-2">
           {activeAuthorizations.map((auth) => (
-            <div
-              key={auth.id}
-              className="card-secondary p-4"
-            >
+            <div key={auth.id} className="card-secondary p-4">
               <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-theme-text-primary">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-theme-text-primary font-medium">
                       {auth.delegating_user_name || auth.delegating_user_id}
                     </span>
                     <span className="text-theme-text-muted text-sm">via</span>
-                    <span className="font-medium text-theme-text-primary">
+                    <span className="text-theme-text-primary font-medium">
                       {auth.proxy_user_name || auth.proxy_user_id}
                     </span>
-                    <span className={`px-2 py-0.5 text-xs rounded ${
-                      auth.proxy_type === 'single_election'
-                        ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
-                        : 'bg-purple-500/20 text-purple-700 dark:text-purple-300'
-                    }`}>
+                    <span
+                      className={`rounded px-2 py-0.5 text-xs ${
+                        auth.proxy_type === 'single_election'
+                          ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
+                          : 'bg-purple-500/20 text-purple-700 dark:text-purple-300'
+                      }`}
+                    >
                       {auth.proxy_type === 'single_election' ? 'Single Election' : 'Regular'}
                     </span>
-                    <span className="px-2 py-0.5 text-xs bg-green-500/20 text-green-700 dark:text-green-300 rounded-sm">
+                    <span className="rounded-sm bg-green-500/20 px-2 py-0.5 text-xs text-green-700 dark:text-green-300">
                       Active
                     </span>
                   </div>
-                  <p className="mt-1 text-sm text-theme-text-muted truncate">{auth.reason}</p>
-                  <p className="text-xs text-theme-text-muted mt-1">
+                  <p className="text-theme-text-muted mt-1 truncate text-sm">{auth.reason}</p>
+                  <p className="text-theme-text-muted mt-1 text-xs">
                     Authorized {formatDate(auth.authorized_at, tz)}
                     {auth.authorized_by_name ? ` by ${auth.authorized_by_name}` : ''}
                   </p>
@@ -291,10 +301,12 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
                 {canManage && (
                   <button
                     type="button"
-                    onClick={() => { void handleRevoke(auth.id, auth.delegating_user_name); }}
+                    onClick={() => {
+                      void handleRevoke(auth.id, auth.delegating_user_name);
+                    }}
                     disabled={revokingId === auth.id}
                     aria-label={`Revoke proxy authorization for ${auth.delegating_user_name || auth.delegating_user_id}`}
-                    className="ml-4 px-3 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded-sm hover:bg-red-500/30 disabled:opacity-50"
+                    className="ml-4 rounded-sm bg-red-500/20 px-3 py-1 text-xs text-red-700 hover:bg-red-500/30 disabled:opacity-50 dark:text-red-300"
                   >
                     {revokingId === auth.id ? 'Revoking...' : 'Revoke'}
                   </button>
@@ -306,35 +318,34 @@ export const ProxyVotingManagement: React.FC<ProxyVotingManagementProps> = ({
           {/* Revoked Authorizations */}
           {revokedAuthorizations.length > 0 && (
             <>
-              <h4 className="text-sm font-semibold text-theme-text-muted uppercase tracking-wider mt-6 mb-2">
+              <h4 className="text-theme-text-muted mt-6 mb-2 text-sm font-semibold tracking-wider uppercase">
                 Revoked ({revokedAuthorizations.length})
               </h4>
               {revokedAuthorizations.map((auth) => (
-                <div
-                  key={auth.id}
-                  className="card-secondary opacity-50 p-4"
-                >
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-theme-text-muted">
+                <div key={auth.id} className="card-secondary p-4 opacity-50">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-theme-text-muted font-medium">
                       {auth.delegating_user_name || auth.delegating_user_id}
                     </span>
                     <span className="text-theme-text-muted text-sm">via</span>
-                    <span className="font-medium text-theme-text-muted">
+                    <span className="text-theme-text-muted font-medium">
                       {auth.proxy_user_name || auth.proxy_user_id}
                     </span>
-                    <span className={`px-2 py-0.5 text-xs rounded ${
-                      auth.proxy_type === 'single_election'
-                        ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
-                        : 'bg-purple-500/20 text-purple-700 dark:text-purple-300'
-                    }`}>
+                    <span
+                      className={`rounded px-2 py-0.5 text-xs ${
+                        auth.proxy_type === 'single_election'
+                          ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
+                          : 'bg-purple-500/20 text-purple-700 dark:text-purple-300'
+                      }`}
+                    >
                       {auth.proxy_type === 'single_election' ? 'Single Election' : 'Regular'}
                     </span>
-                    <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded-sm">
+                    <span className="rounded-sm bg-red-500/20 px-2 py-0.5 text-xs text-red-700 dark:text-red-300">
                       Revoked
                     </span>
                   </div>
-                  <p className="mt-1 text-sm text-theme-text-muted truncate">{auth.reason}</p>
-                  <p className="text-xs text-theme-text-muted mt-1">
+                  <p className="text-theme-text-muted mt-1 truncate text-sm">{auth.reason}</p>
+                  <p className="text-theme-text-muted mt-1 text-xs">
                     Revoked {auth.revoked_at ? formatDate(auth.revoked_at, tz) : ''}
                   </p>
                 </div>

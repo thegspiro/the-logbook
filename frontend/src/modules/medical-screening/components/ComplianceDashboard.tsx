@@ -20,9 +20,7 @@ export const ComplianceDashboard: React.FC = () => {
     <div className="space-y-6">
       {/* Expiring Soon */}
       <div>
-        <h3 className="text-theme-text-primary mb-3 text-sm font-medium">
-          Screenings Expiring Within 60 Days
-        </h3>
+        <h3 className="text-theme-text-primary mb-3 text-sm font-medium">Screenings Expiring Within 60 Days</h3>
         {expiringScreenings.length === 0 ? (
           <div className="border-theme-surface-border rounded-lg border border-dashed py-8 text-center">
             <CheckCircle className="mx-auto mb-2 h-6 w-6 text-green-500" />

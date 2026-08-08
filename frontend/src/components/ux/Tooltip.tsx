@@ -14,12 +14,7 @@ interface TooltipProps {
   delay?: number;
 }
 
-export const Tooltip: React.FC<TooltipProps> = ({
-  content,
-  children,
-  position = 'top',
-  delay = 300,
-}) => {
+export const Tooltip: React.FC<TooltipProps> = ({ content, children, position = 'top', delay = 300 }) => {
   const [visible, setVisible] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const autoHideRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -71,22 +66,23 @@ export const Tooltip: React.FC<TooltipProps> = ({
       onBlur={hide}
       onTouchStart={handleTouch}
     >
-      <div aria-describedby={visible ? tooltipId.current : undefined}>
-        {children}
-      </div>
+      <div aria-describedby={visible ? tooltipId.current : undefined}>{children}</div>
       {visible && (
         <div
           id={tooltipId.current}
           role="tooltip"
-          className={`absolute z-50 px-2.5 py-1.5 text-xs font-medium text-white bg-gray-900 dark:bg-gray-700 rounded-md shadow-lg whitespace-nowrap pointer-events-none animate-scale-in ${positionClasses[position]}`}
+          className={`animate-scale-in pointer-events-none absolute z-50 rounded-md bg-gray-900 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-white shadow-lg dark:bg-gray-700 ${positionClasses[position]}`}
         >
           {content}
           <span
-            className={`absolute w-2 h-2 bg-gray-900 dark:bg-gray-700 rotate-45 ${
-              position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-              position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-              position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-              'right-full top-1/2 -translate-y-1/2 -mr-1'
+            className={`absolute h-2 w-2 rotate-45 bg-gray-900 dark:bg-gray-700 ${
+              position === 'top'
+                ? 'top-full left-1/2 -mt-1 -translate-x-1/2'
+                : position === 'bottom'
+                  ? 'bottom-full left-1/2 -mb-1 -translate-x-1/2'
+                  : position === 'left'
+                    ? 'top-1/2 left-full -ml-1 -translate-y-1/2'
+                    : 'top-1/2 right-full -mr-1 -translate-y-1/2'
             }`}
             aria-hidden="true"
           />

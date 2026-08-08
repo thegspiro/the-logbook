@@ -6,16 +6,12 @@
  * multiple tabs and components don't re-fetch redundantly.
  */
 
-import { create } from "zustand";
-import { userService } from "../../../services/api";
-import { schedulingService } from "../services/api";
-import type {
-  SchedulingSummary,
-  ShiftTemplateRecord,
-  BasicApparatusRecord,
-} from "../services/api";
-import { getErrorMessage } from "../../../utils/errorHandling";
-import { UserStatus } from "../../../constants/enums";
+import { create } from 'zustand';
+import { userService } from '../../../services/api';
+import { schedulingService } from '../services/api';
+import type { SchedulingSummary, ShiftTemplateRecord, BasicApparatusRecord } from '../services/api';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { UserStatus } from '../../../constants/enums';
 
 interface MemberOption {
   id: string;
@@ -107,9 +103,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
         .filter((m) => m.status === UserStatus.ACTIVE)
         .map((m) => ({
           id: String(m.id),
-          label:
-            `${m.first_name || ""} ${m.last_name || ""}`.trim() ||
-            String(m.email || m.id),
+          label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || String(m.email || m.id),
           platoon: m.platoon || undefined,
         }));
       set({ members, membersLoaded: true });
@@ -154,7 +148,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
       const summary = await schedulingService.getSummary();
       set({ summary });
     } catch (err) {
-      const message = getErrorMessage(err, "Failed to load scheduling summary");
+      const message = getErrorMessage(err, 'Failed to load scheduling summary');
       set({ summaryError: message });
     } finally {
       set({ summaryLoading: false });
@@ -165,10 +159,8 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   loadInitialData: async () => {
     const state = get();
     const promises: Promise<void>[] = [];
-    if (!state.membersLoaded && !state.membersLoading)
-      promises.push(state.loadMembers());
-    if (!state.templatesLoaded && !state.templatesLoading)
-      promises.push(state.loadTemplates());
+    if (!state.membersLoaded && !state.membersLoading) promises.push(state.loadMembers());
+    if (!state.templatesLoaded && !state.templatesLoading) promises.push(state.loadTemplates());
     if (!state.apparatusLoaded) promises.push(state.loadApparatus());
     if (!state.settingsLoaded) promises.push(state.loadSettings());
     await Promise.all(promises);

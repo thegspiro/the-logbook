@@ -20,15 +20,8 @@ import {
   ChevronsUpDown,
   X,
 } from 'lucide-react';
-import type {
-  GrantApplication,
-  ApplicationStatus,
-} from '../types';
-import {
-  ApplicationStatus as ApplicationStatusEnum,
-  APPLICATION_STATUS_COLORS,
-  PRIORITY_COLORS,
-} from '../types';
+import type { GrantApplication, ApplicationStatus } from '../types';
+import { ApplicationStatus as ApplicationStatusEnum, APPLICATION_STATUS_COLORS, PRIORITY_COLORS } from '../types';
 import { useGrantsStore } from '../store/grantsStore';
 import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
@@ -103,31 +96,25 @@ interface PipelineCardProps {
 const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone }) => {
   const navigate = useNavigate();
 
-  const deadlineDate = application.applicationDeadline
-    ? new Date(application.applicationDeadline)
-    : null;
+  const deadlineDate = application.applicationDeadline ? new Date(application.applicationDeadline) : null;
   const isOverdue = deadlineDate ? deadlineDate < new Date() : false;
 
   return (
     <button
       type="button"
       onClick={() => void navigate(`/grants/applications/${application.id}`)}
-      className="w-full rounded-lg border border-theme-surface-border bg-theme-surface p-3 text-left shadow-sm transition-shadow hover:shadow-md"
+      className="border-theme-surface-border bg-theme-surface w-full rounded-lg border p-3 text-left shadow-sm transition-shadow hover:shadow-md"
     >
-      <p className="text-sm font-medium text-theme-text-primary line-clamp-2">
-        {application.grantProgramName}
-      </p>
+      <p className="text-theme-text-primary line-clamp-2 text-sm font-medium">{application.grantProgramName}</p>
 
       {application.amountRequested != null && (
-        <p className="mt-1 text-lg font-bold text-theme-text-primary">
+        <p className="text-theme-text-primary mt-1 text-lg font-bold">
           {formatCurrencyWhole(application.amountRequested)}
         </p>
       )}
 
       {application.applicationDeadline && (
-        <p
-          className={`mt-1 text-xs ${isOverdue ? 'font-semibold text-red-600' : 'text-theme-text-secondary'}`}
-        >
+        <p className={`mt-1 text-xs ${isOverdue ? 'font-semibold text-red-600' : 'text-theme-text-secondary'}`}>
           Deadline: {formatDate(application.applicationDeadline, timezone)}
         </p>
       )}
@@ -141,9 +128,7 @@ const PipelineCard: React.FC<PipelineCardProps> = ({ application, timezone }) =>
       </div>
 
       {application.assignedTo && (
-        <p className="mt-2 truncate text-xs text-theme-text-secondary">
-          {application.assignedTo}
-        </p>
+        <p className="text-theme-text-secondary mt-2 truncate text-xs">{application.assignedTo}</p>
       )}
     </button>
   );
@@ -159,38 +144,25 @@ interface PipelineColumnProps {
   timezone: string;
 }
 
-const PipelineColumn: React.FC<PipelineColumnProps> = ({
-  status,
-  applications,
-  timezone,
-}) => {
-  const colorClasses =
-    APPLICATION_STATUS_COLORS[status] ?? 'bg-theme-surface-secondary text-theme-text-secondary';
+const PipelineColumn: React.FC<PipelineColumnProps> = ({ status, applications, timezone }) => {
+  const colorClasses = APPLICATION_STATUS_COLORS[status] ?? 'bg-theme-surface-secondary text-theme-text-secondary';
 
   return (
-    <div className="flex h-full w-72 flex-shrink-0 flex-col rounded-lg border border-theme-surface-border bg-theme-bg">
+    <div className="border-theme-surface-border bg-theme-bg flex h-full w-72 flex-shrink-0 flex-col rounded-lg border">
       {/* Column header */}
-      <div className="flex items-center justify-between border-b border-theme-surface-border px-3 py-2">
-        <span
-          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${colorClasses}`}
-        >
+      <div className="border-theme-surface-border flex items-center justify-between border-b px-3 py-2">
+        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${colorClasses}`}>
           {APPLICATION_STATUS_LABELS[status] ?? status}
         </span>
-        <span className="text-xs font-medium text-theme-text-secondary">
-          {applications.length}
-        </span>
+        <span className="text-theme-text-secondary text-xs font-medium">{applications.length}</span>
       </div>
 
       {/* Cards */}
       <div className="flex-1 space-y-2 overflow-y-auto p-2">
         {applications.length === 0 ? (
-          <p className="py-4 text-center text-xs text-theme-text-secondary">
-            No applications
-          </p>
+          <p className="text-theme-text-secondary py-4 text-center text-xs">No applications</p>
         ) : (
-          applications.map((app) => (
-            <PipelineCard key={app.id} application={app} timezone={timezone} />
-          ))
+          applications.map((app) => <PipelineCard key={app.id} application={app} timezone={timezone} />)
         )}
       </div>
     </div>
@@ -209,20 +181,17 @@ interface SortableHeaderProps {
   onSort: (field: SortField) => void;
 }
 
-const SortableHeader: React.FC<SortableHeaderProps> = ({
-  label,
-  field,
-  currentSort,
-  currentDir,
-  onSort,
-}) => {
+const SortableHeader: React.FC<SortableHeaderProps> = ({ label, field, currentSort, currentDir, onSort }) => {
   const isActive = currentSort === field;
   return (
-    <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+    <th
+      scope="col"
+      className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+    >
       <button
         type="button"
         onClick={() => onSort(field)}
-        className="inline-flex items-center gap-1 hover:text-theme-text-primary"
+        className="hover:text-theme-text-primary inline-flex items-center gap-1"
       >
         {label}
         {isActive ? (
@@ -247,12 +216,7 @@ export const GrantApplicationsPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
 
-  const {
-    applications,
-    isLoading,
-    error,
-    fetchApplications,
-  } = useGrantsStore();
+  const { applications, isLoading, error, fetchApplications } = useGrantsStore();
 
   const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
   const [searchText, setSearchText] = useState('');
@@ -273,17 +237,11 @@ export const GrantApplicationsPage: React.FC = () => {
     return applications.filter((app) => {
       const matchesSearch =
         !searchText ||
-        app.grantProgramName
-          .toLowerCase()
-          .includes(searchText.toLowerCase()) ||
+        app.grantProgramName.toLowerCase().includes(searchText.toLowerCase()) ||
         app.grantAgency.toLowerCase().includes(searchText.toLowerCase()) ||
-        (app.assignedTo ?? '')
-          .toLowerCase()
-          .includes(searchText.toLowerCase());
-      const matchesStatus =
-        !statusFilter || app.applicationStatus === statusFilter;
-      const matchesPriority =
-        !priorityFilter || app.priority === priorityFilter;
+        (app.assignedTo ?? '').toLowerCase().includes(searchText.toLowerCase());
+      const matchesStatus = !statusFilter || app.applicationStatus === statusFilter;
+      const matchesPriority = !priorityFilter || app.priority === priorityFilter;
       return matchesSearch && matchesStatus && matchesPriority;
     });
   }, [applications, searchText, statusFilter, priorityFilter]);
@@ -322,19 +280,13 @@ export const GrantApplicationsPage: React.FC = () => {
           cmp = (a.amountAwarded ?? 0) - (b.amountAwarded ?? 0);
           break;
         case 'applicationDeadline': {
-          const da = a.applicationDeadline
-            ? new Date(a.applicationDeadline).getTime()
-            : Infinity;
-          const db = b.applicationDeadline
-            ? new Date(b.applicationDeadline).getTime()
-            : Infinity;
+          const da = a.applicationDeadline ? new Date(a.applicationDeadline).getTime() : Infinity;
+          const db = b.applicationDeadline ? new Date(b.applicationDeadline).getTime() : Infinity;
           cmp = da - db;
           break;
         }
         case 'priority':
-          cmp =
-            (PRIORITY_SORT_ORDER[a.priority] ?? 99) -
-            (PRIORITY_SORT_ORDER[b.priority] ?? 99);
+          cmp = (PRIORITY_SORT_ORDER[a.priority] ?? 99) - (PRIORITY_SORT_ORDER[b.priority] ?? 99);
           break;
         case 'assignedTo':
           cmp = (a.assignedTo ?? '').localeCompare(b.assignedTo ?? '');
@@ -380,21 +332,19 @@ export const GrantApplicationsPage: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-theme-bg">
+    <div className="bg-theme-bg min-h-screen">
       <div className="mx-auto max-w-full px-4 py-6 sm:px-6 lg:px-8">
         {/* Page header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-theme-text-primary">
-              Grant Applications
-            </h1>
-            <p className="mt-1 text-sm text-theme-text-secondary">
+            <h1 className="text-theme-text-primary text-2xl font-bold">Grant Applications</h1>
+            <p className="text-theme-text-secondary mt-1 text-sm">
               Track and manage grant applications through the pipeline
             </p>
           </div>
           <div className="flex items-center gap-3">
             {/* View toggle */}
-            <div className="flex rounded-lg border border-theme-surface-border bg-theme-surface p-0.5">
+            <div className="border-theme-surface-border bg-theme-surface flex rounded-lg border p-0.5">
               <button
                 type="button"
                 onClick={() => setViewMode('pipeline')}
@@ -424,7 +374,7 @@ export const GrantApplicationsPage: React.FC = () => {
             {/* New Application */}
             <Link
               to="/grants/applications/new"
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
             >
               <Plus className="h-4 w-4" />
               New Application
@@ -435,23 +385,24 @@ export const GrantApplicationsPage: React.FC = () => {
         {/* Search & filters */}
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <div className="relative min-w-[240px] flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-theme-text-secondary" />
+            <Search className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
             <input
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
               type="text"
-              aria-label="Search programs, agencies, assignees..." placeholder="Search programs, agencies, assignees..."
+              aria-label="Search programs, agencies, assignees..."
+              placeholder="Search programs, agencies, assignees..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="w-full rounded-lg border border-theme-input-border bg-theme-input-bg py-2 pl-10 pr-4 text-sm text-theme-text-primary placeholder:text-theme-text-secondary focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              className="border-theme-input-border bg-theme-input-bg text-theme-text-primary placeholder:text-theme-text-secondary w-full rounded-lg border py-2 pr-4 pl-10 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 focus:outline-none"
             />
           </div>
 
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="border-theme-input-border bg-theme-input-bg text-theme-text-primary rounded-lg border px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
           >
             <option value="">All Statuses</option>
             {PIPELINE_COLUMNS.map((s) => (
@@ -464,7 +415,7 @@ export const GrantApplicationsPage: React.FC = () => {
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="border-theme-input-border bg-theme-input-bg text-theme-text-primary rounded-lg border px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
           >
             <option value="">All Priorities</option>
             {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
@@ -478,7 +429,7 @@ export const GrantApplicationsPage: React.FC = () => {
             <button
               type="button"
               onClick={clearFilters}
-              className="inline-flex items-center gap-1 rounded-lg border border-theme-surface-border px-3 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+              className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary inline-flex items-center gap-1 rounded-lg border px-3 py-2 text-sm transition-colors"
             >
               <X className="h-3.5 w-3.5" />
               Clear
@@ -497,18 +448,14 @@ export const GrantApplicationsPage: React.FC = () => {
         {isLoading ? (
           <div className="mt-16 flex flex-col items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-red-500" />
-            <p className="mt-3 text-sm text-theme-text-secondary">
-              Loading applications...
-            </p>
+            <p className="text-theme-text-secondary mt-3 text-sm">Loading applications...</p>
           </div>
         ) : filteredApplications.length === 0 ? (
           /* Empty state */
           <div className="mt-16 flex flex-col items-center justify-center">
-            <FileText className="h-16 w-16 text-theme-text-secondary opacity-40" />
-            <h3 className="mt-4 text-lg font-semibold text-theme-text-primary">
-              No grant applications found
-            </h3>
-            <p className="mt-1 text-sm text-theme-text-secondary">
+            <FileText className="text-theme-text-secondary h-16 w-16 opacity-40" />
+            <h3 className="text-theme-text-primary mt-4 text-lg font-semibold">No grant applications found</h3>
+            <p className="text-theme-text-secondary mt-1 text-sm">
               {hasFilters
                 ? 'Try adjusting your search or filters.'
                 : 'Get started by creating your first grant application.'}
@@ -527,7 +474,7 @@ export const GrantApplicationsPage: React.FC = () => {
           /* ================================================================ */
           /* Pipeline (Kanban) View                                           */
           /* ================================================================ */
-          <div className="mt-6 -mx-4 overflow-x-auto px-4 pb-4">
+          <div className="-mx-4 mt-6 overflow-x-auto px-4 pb-4">
             <div className="inline-flex gap-3" style={{ minHeight: '60vh' }}>
               {PIPELINE_COLUMNS.map((status) => (
                 <PipelineColumn
@@ -543,11 +490,11 @@ export const GrantApplicationsPage: React.FC = () => {
           /* ================================================================ */
           /* Table View                                                       */
           /* ================================================================ */
-          <div className="mt-6 overflow-hidden rounded-lg border border-theme-surface-border bg-theme-surface">
+          <div className="border-theme-surface-border bg-theme-surface mt-6 overflow-hidden rounded-lg border">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-theme-surface-border bg-theme-surface">
+                  <tr className="border-theme-surface-border bg-theme-surface border-b">
                     <SortableHeader
                       label="Program Name"
                       field="grantProgramName"
@@ -604,57 +551,53 @@ export const GrantApplicationsPage: React.FC = () => {
                       currentDir={sortDir}
                       onSort={handleSort}
                     />
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+                    <th
+                      scope="col"
+                      className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+                    >
                       <span className="sr-only">Actions</span>
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-theme-surface-border">
+                <tbody className="divide-theme-surface-border divide-y">
                   {sortedApplications.map((app) => (
                     <tr
                       key={app.id}
-                      onClick={() =>
-                        void navigate(`/grants/applications/${app.id}`)
-                      }
-                      className="cursor-pointer transition-colors hover:bg-theme-surface-hover"
+                      onClick={() => void navigate(`/grants/applications/${app.id}`)}
+                      className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
                     >
-                      <td className="px-4 py-3 text-sm font-medium text-theme-text-primary">
-                        {app.grantProgramName}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
+                      <td className="text-theme-text-primary px-4 py-3 text-sm font-medium">{app.grantProgramName}</td>
+                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                         {app.grantAgency}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <span
                           className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${APPLICATION_STATUS_COLORS[app.applicationStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                         >
-                          {APPLICATION_STATUS_LABELS[app.applicationStatus] ??
-                            app.applicationStatus}
+                          {APPLICATION_STATUS_LABELS[app.applicationStatus] ?? app.applicationStatus}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-theme-text-primary">
+                      <td className="text-theme-text-primary px-4 py-3 text-sm font-semibold whitespace-nowrap">
                         {formatCurrencyWhole(app.amountRequested)}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-primary">
+                      <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
                         {formatCurrencyWhole(app.amountAwarded)}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
-                        {app.applicationDeadline
-                          ? formatDate(app.applicationDeadline, tz)
-                          : '--'}
+                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                        {app.applicationDeadline ? formatDate(app.applicationDeadline, tz) : '--'}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <span
                           className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[app.priority] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                         >
                           {PRIORITY_LABELS[app.priority] ?? app.priority}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
+                      <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                         {app.assignedTo ?? '--'}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <ExternalLink className="h-4 w-4 text-theme-text-secondary" />
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <ExternalLink className="text-theme-text-secondary h-4 w-4" />
                       </td>
                     </tr>
                   ))}

@@ -15,13 +15,7 @@ interface MergeWriteInsModalProps {
  * sources; votes are never mutated — results simply count merged variants
  * under the target. The merge is audited.
  */
-const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({
-  candidates,
-  merging,
-  error,
-  onSubmit,
-  onClose,
-}) => {
+const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({ candidates, merging, error, onSubmit, onClose }) => {
   const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
   const [targetId, setTargetId] = useState('');
 
@@ -31,15 +25,11 @@ const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({
         onClose();
       }
     },
-    [onClose],
+    [onClose]
   );
 
-  const writeIns = candidates.filter(
-    (c) => c.is_write_in && !c.merged_into_candidate_id,
-  );
-  const targets = candidates.filter(
-    (c) => !c.merged_into_candidate_id && !selectedSources.has(c.id),
-  );
+  const writeIns = candidates.filter((c) => c.is_write_in && !c.merged_into_candidate_id);
+  const targets = candidates.filter((c) => !c.merged_into_candidate_id && !selectedSources.has(c.id));
 
   const toggleSource = (id: string) => {
     setSelectedSources((prev) => {
@@ -58,39 +48,36 @@ const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="merge-write-ins-title"
       onKeyDown={handleKeyDown}
     >
-      <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
-        <div className="px-6 py-4 border-b border-theme-surface-border">
-          <h3 id="merge-write-ins-title" className="text-lg font-medium text-theme-text-primary">
+      <div className="bg-theme-surface-modal w-full max-w-md rounded-lg shadow-xl">
+        <div className="border-theme-surface-border border-b px-6 py-4">
+          <h3 id="merge-write-ins-title" className="text-theme-text-primary text-lg font-medium">
             Merge Write-In Variants
           </h3>
         </div>
 
-        <div className="px-6 py-4 modal-body">
-          <p className="text-sm text-theme-text-secondary mb-4">
-            Select the misspelled write-in entries, then the candidate they
-            should count for. Vote records are never modified — results simply
-            count the variants under the chosen candidate. The merge is audited.
+        <div className="modal-body px-6 py-4">
+          <p className="text-theme-text-secondary mb-4 text-sm">
+            Select the misspelled write-in entries, then the candidate they should count for. Vote records are never
+            modified — results simply count the variants under the chosen candidate. The merge is audited.
           </p>
 
           {error && (
-            <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
+            <div className="mb-4 rounded-sm border border-red-500/30 bg-red-500/10 p-3" role="alert">
               <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
             </div>
           )}
 
-          <p className="text-sm font-medium text-theme-text-secondary mb-2">
-            Variants to merge (write-ins only)
-          </p>
+          <p className="text-theme-text-secondary mb-2 text-sm font-medium">Variants to merge (write-ins only)</p>
           {writeIns.length === 0 ? (
-            <p className="text-sm text-theme-text-muted mb-4">No write-in candidates.</p>
+            <p className="text-theme-text-muted mb-4 text-sm">No write-in candidates.</p>
           ) : (
-            <div className="space-y-2 mb-4">
+            <div className="mb-4 space-y-2">
               {writeIns.map((c) => (
                 <label key={c.id} className="flex items-center gap-2">
                   <input
@@ -99,25 +86,23 @@ const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({
                     onChange={() => toggleSource(c.id)}
                     className="form-checkbox"
                   />
-                  <span className="text-sm text-theme-text-primary">
+                  <span className="text-theme-text-primary text-sm">
                     {c.name}
-                    {c.position && (
-                      <span className="text-xs text-theme-text-muted ml-1">({c.position})</span>
-                    )}
+                    {c.position && <span className="text-theme-text-muted ml-1 text-xs">({c.position})</span>}
                   </span>
                 </label>
               ))}
             </div>
           )}
 
-          <label htmlFor="merge-target" className="block text-sm font-medium text-theme-text-secondary">
+          <label htmlFor="merge-target" className="text-theme-text-secondary block text-sm font-medium">
             Count their votes for
           </label>
           <select
             id="merge-target"
             value={targetId}
             onChange={(e) => setTargetId(e.target.value)}
-            className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring"
+            className="bg-theme-input-bg border-theme-input-border text-theme-text-primary focus:ring-theme-focus-ring mt-1 block w-full rounded-md border px-3 py-2 focus:outline-hidden"
           >
             <option value="">Select a candidate…</option>
             {targets.map((c) => (
@@ -133,7 +118,7 @@ const MergeWriteInsModal: React.FC<MergeWriteInsModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={merging}
-              className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 disabled:opacity-50"
             >
               Cancel
             </button>

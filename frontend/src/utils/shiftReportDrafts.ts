@@ -31,9 +31,7 @@ export function saveDraft(draft: ShiftReportDraft): void {
   try {
     localStorage.setItem(getDraftKey(draft.shiftId), JSON.stringify(draft));
 
-    const index: string[] = JSON.parse(
-      localStorage.getItem(DRAFT_INDEX_KEY) || '[]',
-    ) as string[];
+    const index: string[] = JSON.parse(localStorage.getItem(DRAFT_INDEX_KEY) || '[]') as string[];
     if (!index.includes(draft.shiftId)) {
       index.push(draft.shiftId);
     }
@@ -62,10 +60,8 @@ export function loadDraft(shiftId: string): ShiftReportDraft | null {
 export function deleteDraft(shiftId: string): void {
   try {
     localStorage.removeItem(getDraftKey(shiftId));
-    const index: string[] = JSON.parse(
-      localStorage.getItem(DRAFT_INDEX_KEY) || '[]',
-    ) as string[];
-    const filtered = index.filter(id => id !== shiftId);
+    const index: string[] = JSON.parse(localStorage.getItem(DRAFT_INDEX_KEY) || '[]') as string[];
+    const filtered = index.filter((id) => id !== shiftId);
     localStorage.setItem(DRAFT_INDEX_KEY, JSON.stringify(filtered));
   } catch {
     // silent fail
@@ -84,10 +80,8 @@ export function deleteDraft(shiftId: string): void {
  */
 export function clearAllDrafts(): number {
   try {
-    const index: string[] = JSON.parse(
-      localStorage.getItem(DRAFT_INDEX_KEY) || '[]',
-    ) as string[];
-    index.forEach(shiftId => localStorage.removeItem(getDraftKey(shiftId)));
+    const index: string[] = JSON.parse(localStorage.getItem(DRAFT_INDEX_KEY) || '[]') as string[];
+    index.forEach((shiftId) => localStorage.removeItem(getDraftKey(shiftId)));
     localStorage.removeItem(DRAFT_INDEX_KEY);
 
     // Belt and braces: the index can drift from reality if a write failed

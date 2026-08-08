@@ -1,4 +1,4 @@
-import type React from "react";
+import type React from 'react';
 
 /**
  * WCAG-compliant color contrast utilities.
@@ -10,14 +10,12 @@ import type React from "react";
  */
 
 /** Parse a hex color (#abc or #aabbcc) to RGB components. */
-export const hexToRgb = (
-  hex: string,
-): { r: number; g: number; b: number } | undefined => {
-  const stripped = hex.replace("#", "");
+export const hexToRgb = (hex: string): { r: number; g: number; b: number } | undefined => {
+  const stripped = hex.replace('#', '');
   if (stripped.length === 3) {
-    const r = parseInt((stripped[0] ?? "0") + (stripped[0] ?? "0"), 16);
-    const g = parseInt((stripped[1] ?? "0") + (stripped[1] ?? "0"), 16);
-    const b = parseInt((stripped[2] ?? "0") + (stripped[2] ?? "0"), 16);
+    const r = parseInt((stripped[0] ?? '0') + (stripped[0] ?? '0'), 16);
+    const g = parseInt((stripped[1] ?? '0') + (stripped[1] ?? '0'), 16);
+    const b = parseInt((stripped[2] ?? '0') + (stripped[2] ?? '0'), 16);
     return { r, g, b };
   }
   if (stripped.length === 6) {
@@ -32,12 +30,12 @@ export const hexToRgb = (
 
 /** Format RGB components back to a hex string. */
 export const rgbToHex = (r: number, g: number, b: number): string =>
-  `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+  `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 
 /** Relative luminance per WCAG 2.x (0 = black, 1 = white). */
 export const relativeLuminance = (r: number, g: number, b: number): number => {
   const [rs, gs, bs] = [r / 255, g / 255, b / 255].map((c) =>
-    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4),
+    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
   ) as [number, number, number];
   return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
 };
@@ -55,50 +53,42 @@ export const contrastRatio = (l1: number, l2: number): number => {
  * Falls back to theme-appropriate defaults when getComputedStyle is
  * unavailable (e.g. SSR or test environments).
  */
-const getSurfaceBgRgb = (
-  resolvedTheme: "light" | "dark" | "high-contrast",
-): { r: number; g: number; b: number } => {
+const getSurfaceBgRgb = (resolvedTheme: 'light' | 'dark' | 'high-contrast'): { r: number; g: number; b: number } => {
   // Theme-specific fallbacks that match index.css definitions
   const fallbacks: Record<string, { r: number; g: number; b: number }> = {
     light: { r: 255, g: 255, b: 255 }, // #ffffff
     dark: { r: 15, g: 23, b: 42 }, // #0f172a (slate-900 gradient base)
-    "high-contrast": { r: 0, g: 0, b: 0 }, // #000000
+    'high-contrast': { r: 0, g: 0, b: 0 }, // #000000
   };
 
-  if (typeof document === "undefined") {
-    return fallbacks[resolvedTheme] ?? fallbacks["light"] ?? { r: 255, g: 255, b: 255 };
+  if (typeof document === 'undefined') {
+    return fallbacks[resolvedTheme] ?? fallbacks['light'] ?? { r: 255, g: 255, b: 255 };
   }
 
   try {
-    const raw = getComputedStyle(document.documentElement)
-      .getPropertyValue("--surface-bg")
-      .trim();
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--surface-bg').trim();
 
     // Handle hex values
-    if (raw.startsWith("#")) {
+    if (raw.startsWith('#')) {
       const parsed = hexToRgb(raw);
       if (parsed) return parsed;
     }
 
     // Handle rgba() — for dark mode the surface-bg is rgba(255,255,255,0.1)
     // over the gradient base. Composite it against the gradient-from color.
-    const rgbaMatch = raw.match(
-      /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/,
-    );
+    const rgbaMatch = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/);
     if (rgbaMatch) {
       const fg = {
-        r: parseInt(rgbaMatch[1] ?? "0", 10),
-        g: parseInt(rgbaMatch[2] ?? "0", 10),
-        b: parseInt(rgbaMatch[3] ?? "0", 10),
+        r: parseInt(rgbaMatch[1] ?? '0', 10),
+        g: parseInt(rgbaMatch[2] ?? '0', 10),
+        b: parseInt(rgbaMatch[3] ?? '0', 10),
       };
-      const alpha = parseFloat(rgbaMatch[4] ?? "1");
+      const alpha = parseFloat(rgbaMatch[4] ?? '1');
 
       if (alpha < 1) {
         // Composite over the gradient base
-        const gradFrom = getComputedStyle(document.documentElement)
-          .getPropertyValue("--bg-gradient-from")
-          .trim();
-        const base = hexToRgb(gradFrom) ?? fallbacks[resolvedTheme] ?? fallbacks["light"] ?? { r: 255, g: 255, b: 255 };
+        const gradFrom = getComputedStyle(document.documentElement).getPropertyValue('--bg-gradient-from').trim();
+        const base = hexToRgb(gradFrom) ?? fallbacks[resolvedTheme] ?? fallbacks['light'] ?? { r: 255, g: 255, b: 255 };
         return {
           r: Math.round(fg.r * alpha + base.r * (1 - alpha)),
           g: Math.round(fg.g * alpha + base.g * (1 - alpha)),
@@ -112,7 +102,7 @@ const getSurfaceBgRgb = (
     // getComputedStyle can throw in edge-case environments
   }
 
-  return fallbacks[resolvedTheme] ?? fallbacks["light"] ?? { r: 255, g: 255, b: 255 };
+  return fallbacks[resolvedTheme] ?? fallbacks['light'] ?? { r: 255, g: 255, b: 255 };
 };
 
 /**
@@ -122,10 +112,7 @@ const getSurfaceBgRgb = (
  * works correctly across light, dark, and high-contrast themes. Adjusts
  * the color iteratively until it meets WCAG AA contrast (4.5:1).
  */
-export const accessibleTextColor = (
-  hex: string,
-  resolvedTheme: "light" | "dark" | "high-contrast",
-): string => {
+export const accessibleTextColor = (hex: string, resolvedTheme: 'light' | 'dark' | 'high-contrast'): string => {
   const rgb = hexToRgb(hex);
   if (!rgb) return hex;
 
@@ -161,7 +148,7 @@ export const accessibleTextColor = (
  */
 export const colorCardStyle = (
   hex: string,
-  resolvedTheme: "light" | "dark" | "high-contrast",
+  resolvedTheme: 'light' | 'dark' | 'high-contrast'
 ): React.CSSProperties => ({
   backgroundColor: `${hex}18`,
   borderColor: `${hex}4D`,

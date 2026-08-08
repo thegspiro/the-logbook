@@ -109,9 +109,7 @@ describe('EventCreatePage', () => {
     });
 
     it('should display error on failed creation', async () => {
-      vi.mocked(eventService.createEvent).mockRejectedValue(
-        makeApiError('Title is already taken', 400)
-      );
+      vi.mocked(eventService.createEvent).mockRejectedValue(makeApiError('Title is already taken', 400));
 
       const user = userEvent.setup();
       renderWithRouter(<EventCreatePage />);

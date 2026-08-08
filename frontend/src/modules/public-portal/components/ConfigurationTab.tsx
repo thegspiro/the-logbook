@@ -66,13 +66,11 @@ const ConfigurationTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* CORS Origins */}
-      <div className="bg-theme-surface rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
-          Allowed Origins (CORS)
-        </h3>
-        <p className="text-sm text-theme-text-secondary mb-4">
-          Specify which domains can make requests to your public API. Leave empty
-          to allow all origins (not recommended for production).
+      <div className="bg-theme-surface rounded-lg p-6 shadow-sm">
+        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Allowed Origins (CORS)</h3>
+        <p className="text-theme-text-secondary mb-4 text-sm">
+          Specify which domains can make requests to your public API. Leave empty to allow all origins (not recommended
+          for production).
         </p>
 
         <div className="space-y-3">
@@ -82,14 +80,14 @@ const ConfigurationTab: React.FC = () => {
               {allowedOrigins.map((origin) => (
                 <div
                   key={origin}
-                  className="flex items-center justify-between bg-theme-surface-secondary px-4 py-2 rounded-lg"
+                  className="bg-theme-surface-secondary flex items-center justify-between rounded-lg px-4 py-2"
                 >
-                  <span className="text-sm font-mono text-theme-text-secondary">{origin}</span>
+                  <span className="text-theme-text-secondary font-mono text-sm">{origin}</span>
                   <button
                     onClick={() => handleRemoveOrigin(origin)}
-                    className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
               ))}
@@ -97,20 +95,17 @@ const ConfigurationTab: React.FC = () => {
           )}
 
           {/* Add Origin */}
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <input
               type="url"
               value={newOrigin}
               onChange={(e) => setNewOrigin(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAddOrigin()}
               placeholder="https://example.com"
-              className="flex-1 px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
+              className="border-theme-surface-border focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2"
             />
-            <button
-              onClick={handleAddOrigin}
-              className="btn-info flex items-center justify-center gap-2 shrink-0"
-            >
-              <Plus className="w-4 h-4" />
+            <button onClick={handleAddOrigin} className="btn-info flex shrink-0 items-center justify-center gap-2">
+              <Plus className="h-4 w-4" />
               <span>Add</span>
             </button>
           </div>
@@ -118,17 +113,14 @@ const ConfigurationTab: React.FC = () => {
       </div>
 
       {/* Rate Limiting */}
-      <div className="bg-theme-surface rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
-          Rate Limiting
-        </h3>
-        <p className="text-sm text-theme-text-secondary mb-4">
-          Set the default rate limit for API keys. Individual keys can override
-          this value.
+      <div className="bg-theme-surface rounded-lg p-6 shadow-sm">
+        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Rate Limiting</h3>
+        <p className="text-theme-text-secondary mb-4 text-sm">
+          Set the default rate limit for API keys. Individual keys can override this value.
         </p>
 
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+          <label className="text-theme-text-secondary mb-2 block text-sm font-medium">
             Default Rate Limit (requests per hour)
           </label>
           <input
@@ -137,48 +129,44 @@ const ConfigurationTab: React.FC = () => {
             onChange={(e) => setDefaultRateLimit(parseInt(e.target.value, 10))}
             min={1}
             max={100000}
-            className="w-full px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
+            className="border-theme-surface-border focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2"
           />
-          <p className="mt-1 text-xs text-theme-text-muted">
+          <p className="text-theme-text-muted mt-1 text-xs">
             Recommended: 1000 for public websites, 10000 for high-traffic sites
           </p>
         </div>
       </div>
 
       {/* Caching */}
-      <div className="bg-theme-surface rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-theme-text-primary mb-4">Caching</h3>
-        <p className="text-sm text-theme-text-secondary mb-4">
+      <div className="bg-theme-surface rounded-lg p-6 shadow-sm">
+        <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">Caching</h3>
+        <p className="text-theme-text-secondary mb-4 text-sm">
           Configure how long responses are cached to reduce database load.
         </p>
 
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-2">
-            Cache TTL (seconds)
-          </label>
+          <label className="text-theme-text-secondary mb-2 block text-sm font-medium">Cache TTL (seconds)</label>
           <input
             type="number"
             value={cacheTTL}
             onChange={(e) => setCacheTTL(parseInt(e.target.value, 10))}
             min={0}
             max={3600}
-            className="w-full px-4 py-2 border border-theme-surface-border rounded-lg focus:ring-2 focus:ring-theme-focus-ring focus:border-transparent"
+            className="border-theme-surface-border focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:border-transparent focus:ring-2"
           />
-          <p className="mt-1 text-xs text-theme-text-muted">
+          <p className="text-theme-text-muted mt-1 text-xs">
             Recommended: 300 seconds (5 minutes). Set to 0 to disable caching.
           </p>
         </div>
       </div>
 
       {/* Security Notice */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
         <div className="flex">
-          <AlertCircle className="w-5 h-5 text-blue-600 shrink-0" />
+          <AlertCircle className="h-5 w-5 shrink-0 text-blue-600" />
           <div className="ml-3">
-            <h4 className="text-sm font-medium text-blue-900">
-              Security Best Practices
-            </h4>
-            <ul className="mt-2 text-sm text-blue-800 list-disc list-inside space-y-1">
+            <h4 className="text-sm font-medium text-blue-900">Security Best Practices</h4>
+            <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-blue-800">
               <li>Always specify allowed origins in production</li>
               <li>Use conservative rate limits to prevent abuse</li>
               <li>Monitor access logs regularly for suspicious activity</li>
@@ -191,11 +179,13 @@ const ConfigurationTab: React.FC = () => {
       {/* Save Button */}
       <div className="flex justify-end">
         <button
-          onClick={() => { void handleSave(); }}
+          onClick={() => {
+            void handleSave();
+          }}
           disabled={saving}
-          className="btn-info disabled:cursor-not-allowed flex items-center px-6 space-x-2"
+          className="btn-info flex items-center space-x-2 px-6 disabled:cursor-not-allowed"
         >
-          <Save className="w-4 h-4" />
+          <Save className="h-4 w-4" />
           <span>{saving ? 'Saving...' : 'Save Configuration'}</span>
         </button>
       </div>

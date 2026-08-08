@@ -47,8 +47,18 @@ const ORDINALS = [
 ];
 
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 /**
@@ -116,25 +126,46 @@ const CreateTrainingSessionPage: React.FC = () => {
 
   useEffect(() => {
     // Load available courses, members, apparatus, and locations from API
-    trainingService.getCourses().then(setAvailableCourses).catch(() => { /* non-critical */ });
-    userService.getUsers().then(setMembers).catch(() => { /* non-critical */ });
-    schedulingService.getBasicApparatus({ is_active: true }).then((data) => {
-      setApparatusList(data.map((a) => ({ id: a.id, name: a.name || a.unit_number || 'Unknown' })));
-    }).catch(() => { /* non-critical */ });
-    locationsService.getLocations({ is_active: true }).then((data) => {
-      setLocations(data);
-      if (data.length === 0) setLocationMode('other');
-    }).catch(() => {
-      setLocationMode('other');
-    });
+    trainingService
+      .getCourses()
+      .then(setAvailableCourses)
+      .catch(() => {
+        /* non-critical */
+      });
+    userService
+      .getUsers()
+      .then(setMembers)
+      .catch(() => {
+        /* non-critical */
+      });
+    schedulingService
+      .getBasicApparatus({ is_active: true })
+      .then((data) => {
+        setApparatusList(data.map((a) => ({ id: a.id, name: a.name || a.unit_number || 'Unknown' })));
+      })
+      .catch(() => {
+        /* non-critical */
+      });
+    locationsService
+      .getLocations({ is_active: true })
+      .then((data) => {
+        setLocations(data);
+        if (data.length === 0) setLocationMode('other');
+      })
+      .catch(() => {
+        setLocationMode('other');
+      });
   }, []);
 
-  const updateField = (field: keyof TrainingSessionCreate, value: TrainingSessionCreate[keyof TrainingSessionCreate]) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const updateField = (
+    field: keyof TrainingSessionCreate,
+    value: TrainingSessionCreate[keyof TrainingSessionCreate]
+  ) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const getRecurrenceLabel = (): string => {
-    const match = RECURRENCE_PATTERNS.find(p => p.value === recurrencePattern);
+    const match = RECURRENCE_PATTERNS.find((p) => p.value === recurrencePattern);
     return match?.label ?? recurrencePattern;
   };
 
@@ -232,18 +263,18 @@ const CreateTrainingSessionPage: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => void navigate('/training/officer')}
-            className="flex items-center text-theme-text-muted hover:text-theme-text-primary transition-colors mb-4"
+            className="text-theme-text-muted hover:text-theme-text-primary mb-4 flex items-center transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 mr-2" />
+            <ArrowLeft className="mr-2 h-5 w-5" />
             Back to Training Sessions
           </button>
-          <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-            <Calendar className="w-8 h-8 text-red-700" />
+          <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
+            <Calendar className="h-8 w-8 text-red-700" />
             <span>Create Training Session</span>
           </h1>
           <p className="text-theme-text-muted mt-1">
@@ -263,18 +294,18 @@ const CreateTrainingSessionPage: React.FC = () => {
                 <React.Fragment key={step.number}>
                   <div className="flex flex-col items-center">
                     <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all ${
+                      className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all ${
                         isComplete
-                          ? 'bg-green-600 border-green-600'
+                          ? 'border-green-600 bg-green-600'
                           : isActive
-                          ? 'bg-red-600 border-red-600'
-                          : 'bg-theme-input-bg border-theme-input-border'
+                            ? 'border-red-600 bg-red-600'
+                            : 'bg-theme-input-bg border-theme-input-border'
                       }`}
                     >
                       {isComplete ? (
-                        <CheckCircle className="w-6 h-6 text-white" />
+                        <CheckCircle className="h-6 w-6 text-white" />
                       ) : (
-                        <Icon className={`w-6 h-6 ${isActive ? 'text-white' : 'text-theme-text-muted'}`} />
+                        <Icon className={`h-6 w-6 ${isActive ? 'text-white' : 'text-theme-text-muted'}`} />
                       )}
                     </div>
                     <p
@@ -285,9 +316,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       {step.title}
                     </p>
                   </div>
-                  {index < steps.length - 1 && (
-                    <div className="flex-1 h-0.5 bg-theme-surface-hover mx-4" />
-                  )}
+                  {index < steps.length - 1 && <div className="bg-theme-surface-hover mx-4 h-0.5 flex-1" />}
                 </React.Fragment>
               );
             })}
@@ -295,15 +324,15 @@ const CreateTrainingSessionPage: React.FC = () => {
         </div>
 
         {/* Form Content */}
-        <div className="card p-8 space-y-8">
+        <div className="card space-y-8 p-8">
           {/* Step 1: Event Details */}
           {currentStep === 1 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-bold text-theme-text-primary mb-4">Event Details</h2>
+              <h2 className="text-theme-text-primary mb-4 text-xl font-bold">Event Details</h2>
 
               {/* Title */}
               <div>
-                <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                   Training Title <span className="text-red-700">*</span>
                 </label>
                 <input
@@ -317,9 +346,7 @@ const CreateTrainingSessionPage: React.FC = () => {
 
               {/* Description */}
               <div>
-                <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                  Description
-                </label>
+                <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => updateField('description', e.target.value)}
@@ -330,9 +357,9 @@ const CreateTrainingSessionPage: React.FC = () => {
               </div>
 
               {/* Date and Time */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                  <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                     Start Date & Time <span className="text-red-700">*</span>
                   </label>
                   <DateTimeQuarterHour
@@ -343,7 +370,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                  <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                     End Date & Time <span className="text-red-700">*</span>
                   </label>
                   <DateTimeQuarterHour
@@ -358,7 +385,7 @@ const CreateTrainingSessionPage: React.FC = () => {
               {/* Quick Duration */}
               {formData.start_datetime && (
                 <div>
-                  <span className="block text-sm font-semibold text-theme-text-primary mb-2">Quick Duration</span>
+                  <span className="text-theme-text-primary mb-2 block text-sm font-semibold">Quick Duration</span>
                   <div className="flex flex-wrap gap-2">
                     {[1, 2, 4, 8].map((h) => (
                       <button
@@ -369,7 +396,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                           const end = new Date(new Date(startUtc).getTime() + h * 60 * 60 * 1000);
                           updateField('end_datetime', formatForDateTimeInput(end, tz));
                         }}
-                        className="px-4 py-2 text-sm font-medium text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring transition-colors"
+                        className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
                       >
                         {h} {h === 1 ? 'hour' : 'hours'}
                       </button>
@@ -388,17 +415,17 @@ const CreateTrainingSessionPage: React.FC = () => {
                     onChange={(e) => setIsRecurring(e.target.checked)}
                     className="form-checkbox"
                   />
-                  <label htmlFor="is-recurring" className="text-theme-text-secondary text-sm flex items-center gap-2">
-                    <Repeat className="w-4 h-4" />
+                  <label htmlFor="is-recurring" className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                    <Repeat className="h-4 w-4" />
                     Make this a recurring training session
                   </label>
                 </div>
 
                 {isRecurring && (
-                  <div className="space-y-4 pl-6 border-l-2 border-red-500/30">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4 border-l-2 border-red-500/30 pl-6">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div>
-                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                        <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                           Repeats <span className="text-red-700">*</span>
                         </label>
                         <select
@@ -407,12 +434,14 @@ const CreateTrainingSessionPage: React.FC = () => {
                           className="form-input py-3"
                         >
                           {RECURRENCE_PATTERNS.map((p) => (
-                            <option key={p.value} value={p.value}>{p.label}</option>
+                            <option key={p.value} value={p.value}>
+                              {p.label}
+                            </option>
                           ))}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                        <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                           Repeat Until <span className="text-red-700">*</span>
                         </label>
                         <input
@@ -426,7 +455,7 @@ const CreateTrainingSessionPage: React.FC = () => {
 
                     {recurrencePattern === 'custom' && (
                       <div>
-                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                        <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                           Days of the Week
                         </label>
                         <div className="flex flex-wrap gap-2">
@@ -439,9 +468,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                                   prev.includes(index) ? prev.filter((d) => d !== index) : [...prev, index]
                                 );
                               }}
-                              className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                              className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                                 recurrenceCustomDays.includes(index)
-                                  ? 'bg-red-700 text-white border-red-700'
+                                  ? 'border-red-700 bg-red-700 text-white'
                                   : 'text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary'
                               }`}
                             >
@@ -453,9 +482,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                     )}
 
                     {(recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday') && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
-                          <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                          <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                             Which Occurrence
                           </label>
                           <select
@@ -464,12 +493,14 @@ const CreateTrainingSessionPage: React.FC = () => {
                             className="form-input py-3"
                           >
                             {ORDINALS.map((o) => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
                             ))}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                          <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                             Day of Week
                           </label>
                           <select
@@ -478,7 +509,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                             className="form-input py-3"
                           >
                             {WEEKDAYS.map((day, index) => (
-                              <option key={day} value={index}>{day}</option>
+                              <option key={day} value={index}>
+                                {day}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -487,16 +520,16 @@ const CreateTrainingSessionPage: React.FC = () => {
 
                     {recurrencePattern === 'annually_weekday' && (
                       <div className="max-w-xs">
-                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                          Month
-                        </label>
+                        <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Month</label>
                         <select
                           value={recurrenceMonth}
                           onChange={(e) => setRecurrenceMonth(parseInt(e.target.value))}
                           className="form-input py-3"
                         >
                           {MONTHS.map((m, index) => (
-                            <option key={m} value={index + 1}>{m}</option>
+                            <option key={m} value={index + 1}>
+                              {m}
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -507,14 +540,12 @@ const CreateTrainingSessionPage: React.FC = () => {
 
               {/* Location */}
               <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                      Location
-                    </label>
+                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Location</label>
                     {locations.length > 0 ? (
                       <select
-                        value={locationMode === 'other' ? '__other__' : (formData.location_id || '')}
+                        value={locationMode === 'other' ? '__other__' : formData.location_id || ''}
                         onChange={(e) => {
                           const val = e.target.value;
                           if (val === '__other__') {
@@ -536,7 +567,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                         <option value="">-- Select a location --</option>
                         {locations.map((loc) => (
                           <option key={loc.id} value={loc.id}>
-                            {loc.name}{loc.building ? ` (${loc.building})` : ''}{loc.room_number ? ` #${loc.room_number}` : ''}
+                            {loc.name}
+                            {loc.building ? ` (${loc.building})` : ''}
+                            {loc.room_number ? ` #${loc.room_number}` : ''}
                           </option>
                         ))}
                         <option value="__other__">Other (off-site / enter manually)</option>
@@ -552,7 +585,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                       {locationMode === 'other' ? 'Location Name / Address' : 'Location Details'}
                     </label>
                     {locationMode === 'other' && locations.length > 0 ? (
@@ -575,29 +608,39 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </div>
                 </div>
                 {/* Selected location details */}
-                {locationMode === 'select' && formData.location_id && (() => {
-                  const selected = locations.find(l => l.id === formData.location_id);
-                  if (!selected) return null;
-                  const address = [selected.address, selected.city, selected.state, selected.zip].filter(Boolean).join(', ');
-                  return (
-                    <div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                      <MapPin className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-                      <div className="text-sm">
-                        <p className="font-medium text-theme-text-primary">{selected.name}</p>
-                        {address && <p className="text-theme-text-secondary">{address}</p>}
-                        <div className="flex flex-wrap gap-3 mt-1">
-                          {selected.building && <span className="text-xs text-theme-text-muted">Building: {selected.building}</span>}
-                          {selected.floor && <span className="text-xs text-theme-text-muted">Floor {selected.floor}</span>}
-                          {selected.capacity && <span className="text-xs text-theme-text-muted">Capacity: {selected.capacity}</span>}
+                {locationMode === 'select' &&
+                  formData.location_id &&
+                  (() => {
+                    const selected = locations.find((l) => l.id === formData.location_id);
+                    if (!selected) return null;
+                    const address = [selected.address, selected.city, selected.state, selected.zip]
+                      .filter(Boolean)
+                      .join(', ');
+                    return (
+                      <div className="flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
+                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+                        <div className="text-sm">
+                          <p className="text-theme-text-primary font-medium">{selected.name}</p>
+                          {address && <p className="text-theme-text-secondary">{address}</p>}
+                          <div className="mt-1 flex flex-wrap gap-3">
+                            {selected.building && (
+                              <span className="text-theme-text-muted text-xs">Building: {selected.building}</span>
+                            )}
+                            {selected.floor && (
+                              <span className="text-theme-text-muted text-xs">Floor {selected.floor}</span>
+                            )}
+                            {selected.capacity && (
+                              <span className="text-theme-text-muted text-xs">Capacity: {selected.capacity}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
               </div>
 
               {/* RSVP Settings */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="flex items-center space-x-3">
                   <input
                     type="checkbox"
@@ -625,11 +668,9 @@ const CreateTrainingSessionPage: React.FC = () => {
               </div>
 
               {formData.requires_rsvp && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                      RSVP Deadline
-                    </label>
+                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">RSVP Deadline</label>
                     <DateTimeQuarterHour
                       value={formatForDateTimeInput(formData.rsvp_deadline, tz)}
                       onChange={(v) => updateField('rsvp_deadline', v)}
@@ -637,13 +678,14 @@ const CreateTrainingSessionPage: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                      Max Participants
-                    </label>
+                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Max Participants</label>
                     <input
                       type="number"
                       value={formData.max_attendees || ''}
-                      onChange={(e) => { const n = parseInt(e.target.value); updateField('max_attendees', Number.isNaN(n) ? undefined : n); }}
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value);
+                        updateField('max_attendees', Number.isNaN(n) ? undefined : n);
+                      }}
                       placeholder="Unlimited"
                       className="form-input placeholder-theme-text-muted py-3"
                     />
@@ -656,31 +698,31 @@ const CreateTrainingSessionPage: React.FC = () => {
           {/* Step 2: Training Info */}
           {currentStep === 2 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-bold text-theme-text-primary mb-4">Training Information</h2>
+              <h2 className="text-theme-text-primary mb-4 text-xl font-bold">Training Information</h2>
 
               {/* Use Existing Course or Create New */}
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
+              <div className="mb-6 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
                 <div className="flex items-start">
-                  <AlertCircle className="w-5 h-5 text-blue-700 mt-0.5 mr-3 shrink-0" />
+                  <AlertCircle className="mt-0.5 mr-3 h-5 w-5 shrink-0 text-blue-700" />
                   <div className="flex-1">
-                    <p className="text-blue-700 font-semibold mb-2">Course Selection</p>
+                    <p className="mb-2 font-semibold text-blue-700">Course Selection</p>
                     <fieldset className="space-y-3">
                       <legend className="sr-only">Course selection method</legend>
-                      <label className="flex items-center space-x-3 cursor-pointer">
+                      <label className="flex cursor-pointer items-center space-x-3">
                         <input
                           type="radio"
                           checked={!formData.use_existing_course}
                           onChange={() => updateField('use_existing_course', false)}
-                          className="w-4 h-4 text-blue-600 focus:ring-theme-focus-ring"
+                          className="focus:ring-theme-focus-ring h-4 w-4 text-blue-600"
                         />
                         <span className="text-theme-text-secondary text-sm">Create new course for this training</span>
                       </label>
-                      <label className="flex items-center space-x-3 cursor-pointer">
+                      <label className="flex cursor-pointer items-center space-x-3">
                         <input
                           type="radio"
                           checked={formData.use_existing_course}
                           onChange={() => updateField('use_existing_course', true)}
-                          className="w-4 h-4 text-blue-600 focus:ring-theme-focus-ring"
+                          className="focus:ring-theme-focus-ring h-4 w-4 text-blue-600"
                         />
                         <span className="text-theme-text-secondary text-sm">Use existing course template</span>
                       </label>
@@ -692,7 +734,7 @@ const CreateTrainingSessionPage: React.FC = () => {
               {formData.use_existing_course ? (
                 /* Existing Course Selection */
                 <div>
-                  <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                  <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                     Select Course <span className="text-red-700">*</span>
                   </label>
                   <select
@@ -701,9 +743,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                       const courseId = e.target.value;
                       updateField('course_id', courseId);
                       // Auto-populate fields from selected course
-                      const course = availableCourses.find(c => c.id === courseId);
+                      const course = availableCourses.find((c) => c.id === courseId);
                       if (course) {
-                        setFormData(prev => ({
+                        setFormData((prev) => ({
                           ...prev,
                           course_id: courseId,
                           course_name: course.name,
@@ -721,36 +763,38 @@ const CreateTrainingSessionPage: React.FC = () => {
                     <option value="">Select a course...</option>
                     {availableCourses.map((course) => (
                       <option key={course.id} value={course.id}>
-                        {course.code ? `${course.code} - ` : ''}{course.name}
+                        {course.code ? `${course.code} - ` : ''}
+                        {course.name}
                       </option>
                     ))}
                   </select>
                   {/* Show selected course details */}
-                  {formData.course_id && (() => {
-                    const course = availableCourses.find(c => c.id === formData.course_id);
-                    if (!course) return null;
-                    return (
-                      <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                        <p className="text-sm font-medium text-theme-text-primary">{course.name}</p>
-                        {course.description && (
-                          <p className="text-xs text-theme-text-secondary mt-1">{course.description}</p>
-                        )}
-                        <div className="flex flex-wrap gap-3 mt-2 text-xs text-theme-text-muted">
-                          <span>Type: {course.training_type}</span>
-                          {course.credit_hours != null && <span>Credits: {course.credit_hours}h</span>}
-                          {course.expiration_months && <span>Expires: {course.expiration_months} months</span>}
-                          {course.instructor && <span>Instructor: {course.instructor}</span>}
+                  {formData.course_id &&
+                    (() => {
+                      const course = availableCourses.find((c) => c.id === formData.course_id);
+                      if (!course) return null;
+                      return (
+                        <div className="mt-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
+                          <p className="text-theme-text-primary text-sm font-medium">{course.name}</p>
+                          {course.description && (
+                            <p className="text-theme-text-secondary mt-1 text-xs">{course.description}</p>
+                          )}
+                          <div className="text-theme-text-muted mt-2 flex flex-wrap gap-3 text-xs">
+                            <span>Type: {course.training_type}</span>
+                            {course.credit_hours != null && <span>Credits: {course.credit_hours}h</span>}
+                            {course.expiration_months && <span>Expires: {course.expiration_months} months</span>}
+                            {course.instructor && <span>Instructor: {course.instructor}</span>}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
                 </div>
               ) : (
                 /* New Course Fields */
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                         Course Name <span className="text-red-700">*</span>
                       </label>
                       <input
@@ -762,9 +806,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                        Course Code
-                      </label>
+                      <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Course Code</label>
                       <input
                         type="text"
                         value={formData.course_code}
@@ -775,9 +817,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
-                      <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                         Training Type <span className="text-red-700">*</span>
                       </label>
                       <select
@@ -794,7 +836,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                         Credit Hours <span className="text-red-700">*</span>
                       </label>
                       <input
@@ -809,51 +851,48 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                      Lead Instructor
-                    </label>
+                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Lead Instructor</label>
                     <select
                       value={instructorId}
                       onChange={(e) => {
                         setInstructorId(e.target.value);
-                        const member = members.find(m => m.id === e.target.value);
+                        const member = members.find((m) => m.id === e.target.value);
                         updateField('instructor', member ? `${member.first_name} ${member.last_name}` : '');
                       }}
                       className="form-input py-3"
                     >
                       <option value="">Select instructor...</option>
-                      {members.map(m => (
+                      {members.map((m) => (
                         <option key={m.id} value={m.id}>
-                          {m.first_name} {m.last_name}{m.rank ? ` (${formatRank(m.rank)})` : ''}
+                          {m.first_name} {m.last_name}
+                          {m.rank ? ` (${formatRank(m.rank)})` : ''}
                         </option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-theme-text-primary mb-2">
-                      Apparatus
-                    </label>
+                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Apparatus</label>
                     <select
                       value={apparatusId}
                       onChange={(e) => setApparatusId(e.target.value)}
                       className="form-input py-3"
                     >
                       <option value="">No apparatus</option>
-                      {apparatusList.map(a => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
+                      {apparatusList.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
                       ))}
                     </select>
-                    <p className="text-xs text-theme-text-muted mt-1">
-                      Apparatus used during this training session
-                    </p>
+                    <p className="text-theme-text-muted mt-1 text-xs">Apparatus used during this training session</p>
                   </div>
                 </>
               )}
 
               {/* Certification Settings */}
-              <div className="border-t border-theme-surface-border pt-6">
-                <div className="flex items-center space-x-3 mb-4">
+              <div className="border-theme-surface-border border-t pt-6">
+                <div className="mb-4 flex items-center space-x-3">
                   <input
                     type="checkbox"
                     id="issues_certification"
@@ -868,9 +907,9 @@ const CreateTrainingSessionPage: React.FC = () => {
 
                 {formData.issues_certification && (
                   <div className="space-y-4 pl-7">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div>
-                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                        <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                           Issuing Agency
                         </label>
                         <input
@@ -882,7 +921,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                        <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                           Cert Number Prefix
                         </label>
                         <input
@@ -895,13 +934,16 @@ const CreateTrainingSessionPage: React.FC = () => {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-theme-text-primary mb-2">
+                      <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
                         Expiration (months)
                       </label>
                       <input
                         type="number"
                         value={formData.expiration_months || ''}
-                        onChange={(e) => { const n = parseInt(e.target.value); updateField('expiration_months', Number.isNaN(n) ? undefined : n); }}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value);
+                          updateField('expiration_months', Number.isNaN(n) ? undefined : n);
+                        }}
                         placeholder="e.g., 24 (for 2 years)"
                         className="form-input placeholder-theme-text-muted py-3"
                       />
@@ -915,16 +957,16 @@ const CreateTrainingSessionPage: React.FC = () => {
           {/* Step 3: Settings */}
           {currentStep === 3 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-bold text-theme-text-primary mb-4">Attendance & Completion Settings</h2>
+              <h2 className="text-theme-text-primary mb-4 text-xl font-bold">Attendance & Completion Settings</h2>
 
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-6">
+              <div className="mb-6 rounded-lg border border-green-500/30 bg-green-500/10 p-4">
                 <div className="flex items-start">
-                  <QrCode className="w-5 h-5 text-green-700 mt-0.5 mr-3 shrink-0" />
+                  <QrCode className="mt-0.5 mr-3 h-5 w-5 shrink-0 text-green-700" />
                   <div>
-                    <p className="text-green-700 font-semibold mb-1">QR Code Check-In</p>
+                    <p className="mb-1 font-semibold text-green-700">QR Code Check-In</p>
                     <p className="text-theme-text-secondary text-sm">
-                      A QR code will be automatically generated for this training. Members can scan it to check in
-                      and verify their attendance.
+                      A QR code will be automatically generated for this training. Members can scan it to check in and
+                      verify their attendance.
                     </p>
                   </div>
                 </div>
@@ -940,15 +982,17 @@ const CreateTrainingSessionPage: React.FC = () => {
                     className="form-checkbox mt-1"
                   />
                   <div>
-                    <label htmlFor="counts_toward_certification" className="text-theme-text-primary font-semibold block">
+                    <label
+                      htmlFor="counts_toward_certification"
+                      className="text-theme-text-primary block font-semibold"
+                    >
                       Counts toward certification requirements
                     </label>
-                    <p className="text-theme-text-muted text-sm mt-1">
-                      When on, attendance advances any linked certificate/pipeline requirements
-                      (NFPA, NREMT, recruit school). Turn it off for sessions that give members
-                      credit but aren't delivered in a way a certifying body would accept — members
-                      still get the training record and hours, but the hours won't count toward
-                      their certificate.
+                    <p className="text-theme-text-muted mt-1 text-sm">
+                      When on, attendance advances any linked certificate/pipeline requirements (NFPA, NREMT, recruit
+                      school). Turn it off for sessions that give members credit but aren't delivered in a way a
+                      certifying body would accept — members still get the training record and hours, but the hours
+                      won't count toward their certificate.
                     </p>
                   </div>
                 </div>
@@ -962,10 +1006,10 @@ const CreateTrainingSessionPage: React.FC = () => {
                     className="form-checkbox mt-1"
                   />
                   <div>
-                    <label htmlFor="auto_create_records" className="text-theme-text-primary font-semibold block">
+                    <label htmlFor="auto_create_records" className="text-theme-text-primary block font-semibold">
                       Auto-create training records on check-in
                     </label>
-                    <p className="text-theme-text-muted text-sm mt-1">
+                    <p className="text-theme-text-muted mt-1 text-sm">
                       Automatically create a training record for each member who checks in via QR code
                     </p>
                   </div>
@@ -980,10 +1024,13 @@ const CreateTrainingSessionPage: React.FC = () => {
                     className="form-checkbox mt-1"
                   />
                   <div>
-                    <label htmlFor="require_completion_confirmation" className="text-theme-text-primary font-semibold block">
+                    <label
+                      htmlFor="require_completion_confirmation"
+                      className="text-theme-text-primary block font-semibold"
+                    >
                       Require instructor confirmation
                     </label>
-                    <p className="text-theme-text-muted text-sm mt-1">
+                    <p className="text-theme-text-muted mt-1 text-sm">
                       Training records will be marked as "pending" until instructor confirms completion
                     </p>
                   </div>
@@ -995,9 +1042,9 @@ const CreateTrainingSessionPage: React.FC = () => {
           {/* Step 4: Review */}
           {currentStep === 4 && (
             <div className="space-y-6">
-              <h2 className="text-xl font-bold text-theme-text-primary mb-4">Review Training Session</h2>
+              <h2 className="text-theme-text-primary mb-4 text-xl font-bold">Review Training Session</h2>
 
-              <div className="bg-theme-input-bg/50 rounded-lg p-6 space-y-4">
+              <div className="bg-theme-input-bg/50 space-y-4 rounded-lg p-6">
                 <ReviewSection title="Event Details">
                   <ReviewItem label="Title" value={formData.title} />
                   <ReviewItem label="Start" value={formatDateTime(formData.start_datetime, tz)} />
@@ -1007,7 +1054,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       label="Location"
                       value={
                         formData.location_id
-                          ? locations.find(l => l.id === formData.location_id)?.name || 'Selected location'
+                          ? locations.find((l) => l.id === formData.location_id)?.name || 'Selected location'
                           : formData.location || ''
                       }
                     />
@@ -1021,15 +1068,12 @@ const CreateTrainingSessionPage: React.FC = () => {
                     <ReviewItem label="Pattern" value={getRecurrenceLabel()} />
                     <ReviewItem label="Repeat Until" value={recurrenceEndDate} />
                     {recurrencePattern === 'custom' && recurrenceCustomDays.length > 0 && (
-                      <ReviewItem
-                        label="Days"
-                        value={recurrenceCustomDays.map(d => WEEKDAYS[d] ?? '').join(', ')}
-                      />
+                      <ReviewItem label="Days" value={recurrenceCustomDays.map((d) => WEEKDAYS[d] ?? '').join(', ')} />
                     )}
                     {(recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday') && (
                       <ReviewItem
                         label="Occurrence"
-                        value={`${ORDINALS.find(o => o.value === recurrenceWeekOrdinal)?.label ?? ''} ${WEEKDAYS[recurrenceWeekday] ?? ''}`}
+                        value={`${ORDINALS.find((o) => o.value === recurrenceWeekOrdinal)?.label ?? ''} ${WEEKDAYS[recurrenceWeekday] ?? ''}`}
                       />
                     )}
                     {recurrencePattern === 'annually_weekday' && (
@@ -1060,10 +1104,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     label="Counts Toward Certification"
                     value={formData.counts_toward_certification ? 'Yes' : 'No'}
                   />
-                  <ReviewItem
-                    label="Auto-create Records"
-                    value={formData.auto_create_records ? 'Yes' : 'No'}
-                  />
+                  <ReviewItem label="Auto-create Records" value={formData.auto_create_records ? 'Yes' : 'No'} />
                   <ReviewItem
                     label="Require Confirmation"
                     value={formData.require_completion_confirmation ? 'Yes' : 'No'}
@@ -1074,36 +1115,35 @@ const CreateTrainingSessionPage: React.FC = () => {
           )}
 
           {/* Navigation Buttons */}
-          <div className="flex justify-between pt-6 border-t border-theme-surface-border">
+          <div className="border-theme-surface-border flex justify-between border-t pt-6">
             <button
               onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
               disabled={currentStep === 1}
-              className="px-6 py-3 bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-lg px-6 py-3 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               Previous
             </button>
 
             {currentStep < 4 ? (
-              <button
-                onClick={() => setCurrentStep(currentStep + 1)}
-                className="btn-primary font-medium px-6 py-3"
-              >
+              <button onClick={() => setCurrentStep(currentStep + 1)} className="btn-primary px-6 py-3 font-medium">
                 Next
               </button>
             ) : (
               <button
-                onClick={() => { void handleSubmit(); }}
+                onClick={() => {
+                  void handleSubmit();
+                }}
                 disabled={saving}
-                className="btn-success disabled:cursor-not-allowed flex font-medium items-center px-6 py-3 space-x-2"
+                className="btn-success flex items-center space-x-2 px-6 py-3 font-medium disabled:cursor-not-allowed"
               >
                 {saving ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
                     <span>Creating...</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle className="w-5 h-5" />
+                    <CheckCircle className="h-5 w-5" />
                     <span>{isRecurring ? 'Create Recurring Sessions' : 'Create Training Session'}</span>
                   </>
                 )}
@@ -1118,7 +1158,7 @@ const CreateTrainingSessionPage: React.FC = () => {
 
 const ReviewSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div>
-    <h3 className="text-theme-text-primary font-semibold mb-3">{title}</h3>
+    <h3 className="text-theme-text-primary mb-3 font-semibold">{title}</h3>
     <div className="space-y-2">{children}</div>
   </div>
 );

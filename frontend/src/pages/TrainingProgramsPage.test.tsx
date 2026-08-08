@@ -129,9 +129,7 @@ describe('TrainingProgramsPage', () => {
     // The card only renders after getSampleTemplates resolves, so its presence
     // proves the gallery loaded.
     expect(await screen.findByText('Start from a sample template')).toBeInTheDocument();
-    expect(
-      screen.getByText('Firefighter Recruit School (NFPA 1001 FF I & II)'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Firefighter Recruit School (NFPA 1001 FF I & II)')).toBeInTheDocument();
   });
 
   it('instantiates a sample template and navigates to the new program', async () => {
@@ -140,26 +138,42 @@ describe('TrainingProgramsPage', () => {
 
     await userEvent.click(await screen.findByRole('tab', { name: /Templates/i }));
     await userEvent.click(
-      await screen.findByRole('button', { name: /Add Firefighter Recruit School.*to my department/i }),
+      await screen.findByRole('button', { name: /Add Firefighter Recruit School.*to my department/i })
     );
 
-    await waitFor(() =>
-      expect(mockInstantiateSampleTemplate).toHaveBeenCalledWith('firefighter-recruit-school'),
-    );
+    await waitFor(() => expect(mockInstantiateSampleTemplate).toHaveBeenCalledWith('firefighter-recruit-school'));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/training/programs/prog-new'));
   });
 
   it('opens a picker and imports only the selected requirements', async () => {
-    mockGetRegistries.mockResolvedValue([
-      { key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 3 },
-    ]);
+    mockGetRegistries.mockResolvedValue([{ key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 3 }]);
     mockPreviewRegistry.mockResolvedValue([
-      { registry_code: 'NREMT', name: 'EMT National Component', requirement_type: 'hours', required_hours: 50, frequency: 'biannual', already_imported: false },
-      { registry_code: 'BLS', name: 'CPR/BLS Certification', requirement_type: 'certification', already_imported: false },
-      { registry_code: 'PHTLS', name: 'PHTLS Certification', requirement_type: 'certification', already_imported: true },
+      {
+        registry_code: 'NREMT',
+        name: 'EMT National Component',
+        requirement_type: 'hours',
+        required_hours: 50,
+        frequency: 'biannual',
+        already_imported: false,
+      },
+      {
+        registry_code: 'BLS',
+        name: 'CPR/BLS Certification',
+        requirement_type: 'certification',
+        already_imported: false,
+      },
+      {
+        registry_code: 'PHTLS',
+        name: 'PHTLS Certification',
+        requirement_type: 'certification',
+        already_imported: true,
+      },
     ]);
     mockImportRegistry.mockResolvedValue({
-      registry_name: 'NREMT — EMT', imported_count: 1, skipped_count: 0, errors: [],
+      registry_name: 'NREMT — EMT',
+      imported_count: 1,
+      skipped_count: 0,
+      errors: [],
     });
     renderWithRouter(<TrainingProgramsPage />);
 
@@ -178,12 +192,8 @@ describe('TrainingProgramsPage', () => {
     expect(within(dialog).getByText('1 of 2 selected')).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: /^Import 1$/ }));
 
-    await waitFor(() =>
-      expect(mockImportRegistry).toHaveBeenCalledWith('emt', { registryCodes: ['NREMT'] }),
-    );
-    await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Imported 1 requirement/i)),
-    );
+    await waitFor(() => expect(mockImportRegistry).toHaveBeenCalledWith('emt', { registryCodes: ['NREMT'] }));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Imported 1 requirement/i)));
   });
 
   it('surfaces the error when a registry import reports one', async () => {
@@ -191,10 +201,17 @@ describe('TrainingProgramsPage', () => {
       { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 5 },
     ]);
     mockPreviewRegistry.mockResolvedValue([
-      { registry_code: 'NRP', name: 'Paramedic National Component', requirement_type: 'hours', already_imported: false },
+      {
+        registry_code: 'NRP',
+        name: 'Paramedic National Component',
+        requirement_type: 'hours',
+        already_imported: false,
+      },
     ]);
     mockImportRegistry.mockResolvedValue({
-      registry_name: 'NREMT — Paramedic', imported_count: 0, skipped_count: 0,
+      registry_name: 'NREMT — Paramedic',
+      imported_count: 0,
+      skipped_count: 0,
       errors: ['Registry file not found'],
     });
     renderWithRouter(<TrainingProgramsPage />);
@@ -205,9 +222,7 @@ describe('TrainingProgramsPage', () => {
     const dialog = await screen.findByRole('dialog', { name: /Import from NREMT — Paramedic/i });
     await userEvent.click(await within(dialog).findByRole('button', { name: /^Import 1$/ }));
 
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Registry file not found/i)),
-    );
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Registry file not found/i)));
     expect(toast.success).not.toHaveBeenCalled();
   });
 });

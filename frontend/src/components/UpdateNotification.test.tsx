@@ -33,9 +33,7 @@ describe('UpdateNotification', () => {
     render(<UpdateNotification />);
 
     expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(
-      screen.getByText('A new version of The Logbook is available.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('A new version of The Logbook is available.')).toBeInTheDocument();
     expect(screen.getByText('Reload now')).toBeInTheDocument();
   });
 

@@ -32,8 +32,12 @@ const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
   default: {
-    success: (...a: unknown[]): void => { mockToastSuccess(...a); },
-    error: (...a: unknown[]): void => { mockToastError(...a); },
+    success: (...a: unknown[]): void => {
+      mockToastSuccess(...a);
+    },
+    error: (...a: unknown[]): void => {
+      mockToastError(...a);
+    },
   },
 }));
 
@@ -95,10 +99,7 @@ describe('VariantGroupsPage', () => {
     await screen.findByText('Class A Uniform');
 
     await user.click(screen.getByRole('button', { name: /Add Group/ }));
-    await user.type(
-      await screen.findByPlaceholderText('e.g. Class A Dress Uniform'),
-      'New Group',
-    );
+    await user.type(await screen.findByPlaceholderText('e.g. Class A Dress Uniform'), 'New Group');
     await user.click(screen.getByRole('button', { name: 'Create Group' }));
 
     await waitFor(() => expect(mockCreateVariantGroup).toHaveBeenCalledTimes(1));

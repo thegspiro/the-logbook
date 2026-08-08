@@ -10,12 +10,8 @@ import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const IPSecurityAdminPage = lazyWithRetry(
-  () => import('./pages/IPSecurityAdminPage'),
-);
-const MyIPExceptionsPage = lazyWithRetry(
-  () => import('./pages/MyIPExceptionsPage'),
-);
+const IPSecurityAdminPage = lazyWithRetry(() => import('./pages/IPSecurityAdminPage'));
+const MyIPExceptionsPage = lazyWithRetry(() => import('./pages/MyIPExceptionsPage'));
 
 export const getIPSecurityRoutes = () => {
   return (

@@ -14,7 +14,7 @@ export const ScanSuccessFlash: React.FC<ScanSuccessFlashProps> = ({ active }) =>
   if (!active) return null;
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-emerald-500/40 animate-fade-in"
+      className="animate-fade-in pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-emerald-500/40"
       aria-hidden="true"
       data-testid="scan-success-flash"
     >

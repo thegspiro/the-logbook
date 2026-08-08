@@ -12,11 +12,7 @@ interface LoadingSpinnerProps {
   fullScreen?: boolean;
 }
 
-export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
-  size = 'md',
-  message,
-  fullScreen = false,
-}) => {
+export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ size = 'md', message, fullScreen = false }) => {
   const sizeClasses = {
     sm: 'h-6 w-6 border-2',
     md: 'h-12 w-12 border-b-2',
@@ -27,11 +23,12 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
     <div className="text-center">
       <div
         className={`inline-block animate-spin rounded-full ${sizeClasses[size]} border-red-600`}
-        role="status" aria-live="polite"
+        role="status"
+        aria-live="polite"
         aria-label="Loading"
       />
       {message && (
-        <p className="mt-4 text-lg text-theme-text-secondary" aria-live="polite">
+        <p className="text-theme-text-secondary mt-4 text-lg" aria-live="polite">
           {message}
         </p>
       )}
@@ -40,11 +37,11 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 
   if (fullScreen) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center">
+      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br">
         {spinner}
       </div>
     );
   }
 
-  return <div className="flex justify-center items-center py-8">{spinner}</div>;
+  return <div className="flex items-center justify-center py-8">{spinner}</div>;
 };

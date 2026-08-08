@@ -49,18 +49,16 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
   }, [isOpen]);
 
   return (
-    <div className={`border border-theme-surface-border rounded-lg overflow-hidden ${className}`}>
+    <div className={`border-theme-surface-border overflow-hidden rounded-lg border ${className}`}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between px-4 py-3 text-left text-sm font-medium text-theme-text-primary hover:bg-theme-surface-hover transition-colors ${headerClassName}`}
+        className={`text-theme-text-primary hover:bg-theme-surface-hover flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium transition-colors ${headerClassName}`}
         aria-expanded={isOpen}
         aria-controls={contentId}
       >
         <span>{title}</span>
         <ChevronDown
-          className={`w-4 h-4 text-theme-text-muted transition-transform duration-200 ${
-            isOpen ? 'rotate-180' : ''
-          }`}
+          className={`text-theme-text-muted h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
           aria-hidden="true"
         />
       </button>
@@ -69,11 +67,9 @@ export const Collapsible: React.FC<CollapsibleProps> = ({
         id={contentId}
         role="region"
         style={{ height: height !== undefined ? `${height}px` : 'auto' }}
-        className="transition-[height] duration-200 ease-in-out overflow-hidden"
+        className="overflow-hidden transition-[height] duration-200 ease-in-out"
       >
-        <div className="px-4 pb-4 pt-1">
-          {children}
-        </div>
+        <div className="px-4 pt-1 pb-4">{children}</div>
       </div>
     </div>
   );

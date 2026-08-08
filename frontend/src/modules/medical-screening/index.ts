@@ -9,9 +9,4 @@ export { getMedicalScreeningRoutes } from './routes';
 export { MedicalScreeningPage } from './pages/MedicalScreeningPage';
 export { medicalScreeningService } from './services/api';
 export { useMedicalScreeningStore } from './store/medicalScreeningStore';
-export type {
-  ScreeningRequirement,
-  ScreeningRecord,
-  ComplianceSummary,
-  ExpiringScreening,
-} from './types';
+export type { ScreeningRequirement, ScreeningRecord, ComplianceSummary, ExpiringScreening } from './types';

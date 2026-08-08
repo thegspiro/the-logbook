@@ -32,14 +32,7 @@ import InspectionsSection from '../components/InspectionsSection';
 import ContactsSection from '../components/ContactsSection';
 import ComplianceSection from '../components/ComplianceSection';
 
-type SectionId =
-  | 'overview'
-  | 'rooms'
-  | 'systems'
-  | 'maintenance'
-  | 'inspections'
-  | 'contacts'
-  | 'compliance';
+type SectionId = 'overview' | 'rooms' | 'systems' | 'maintenance' | 'inspections' | 'contacts' | 'compliance';
 
 const SECTIONS: { id: SectionId; label: string; icon: React.ElementType }[] = [
   { id: 'overview', label: 'Overview', icon: Info },
@@ -101,50 +94,45 @@ export default function FacilityDetailPage() {
   if (isLoadingDetail && !facility) {
     return (
       <div className="flex items-center justify-center py-32" role="status" aria-live="polite">
-        <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
+        <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   if (!facility) {
     return (
-      <div className="text-center py-32">
-        <Building2 className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
+      <div className="py-32 text-center">
+        <Building2 className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
         <p className="text-theme-text-muted mb-4">Facility not found</p>
-        <button
-          onClick={() => void navigate('/facilities')}
-          className="btn-primary inline-flex gap-2 items-center"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to Facilities
+        <button onClick={() => void navigate('/facilities')} className="btn-primary inline-flex items-center gap-2">
+          <ArrowLeft className="h-4 w-4" /> Back to Facilities
         </button>
       </div>
     );
   }
 
-  const address = [facility.addressLine1, facility.city, facility.state, facility.zipCode]
-    .filter(Boolean)
-    .join(', ');
+  const address = [facility.addressLine1, facility.city, facility.state, facility.zipCode].filter(Boolean).join(', ');
 
   return (
     <div className="space-y-0">
       <Breadcrumbs />
       {/* Top Bar */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={() => void navigate('/facilities')}
-            className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-2 transition-colors"
             aria-label="Back to facilities"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-red-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-500/10">
+              <Building2 className="h-5 w-5 text-red-500" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-theme-text-primary">{facility.name}</h1>
-              <div className="flex items-center gap-2 text-sm text-theme-text-muted">
+              <h1 className="text-theme-text-primary text-xl font-bold">{facility.name}</h1>
+              <div className="text-theme-text-muted flex items-center gap-2 text-sm">
                 {facility.facilityNumber && <span>{facility.facilityNumber}</span>}
                 {facility.facilityNumber && address && <span>·</span>}
                 {address && <span>{address}</span>}
@@ -156,17 +144,15 @@ export default function FacilityDetailPage() {
         <div className="flex items-center gap-2">
           {/* Status & Type badges */}
           {facility.facilityType && (
-            <span className="text-xs px-2.5 py-1 rounded-full bg-theme-surface-hover text-theme-text-muted">
+            <span className="bg-theme-surface-hover text-theme-text-muted rounded-full px-2.5 py-1 text-xs">
               {facility.facilityType.name}
             </span>
           )}
           {facility.statusRecord && (
             <span
-              className="text-xs px-2.5 py-1 rounded-full font-medium"
+              className="rounded-full px-2.5 py-1 text-xs font-medium"
               style={{
-                backgroundColor: facility.statusRecord.color
-                  ? `${facility.statusRecord.color}20`
-                  : undefined,
+                backgroundColor: facility.statusRecord.color ? `${facility.statusRecord.color}20` : undefined,
                 color: facility.statusRecord.color || undefined,
               }}
             >
@@ -174,7 +160,7 @@ export default function FacilityDetailPage() {
             </span>
           )}
           {facility.isArchived && (
-            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
+            <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs text-amber-700 dark:text-amber-400">
               Archived
             </span>
           )}
@@ -185,18 +171,18 @@ export default function FacilityDetailPage() {
               onClick={() => {
                 void handleRestore();
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-400"
             >
-              <RotateCcw className="w-3.5 h-3.5" /> Restore
+              <RotateCcw className="h-3.5 w-3.5" /> Restore
             </button>
           ) : (
             <button
               onClick={() => {
                 void handleArchive();
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-theme-text-muted border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+              className="text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors"
             >
-              <Archive className="w-3.5 h-3.5" /> Archive
+              <Archive className="h-3.5 w-3.5" /> Archive
             </button>
           )}
         </div>
@@ -206,7 +192,7 @@ export default function FacilityDetailPage() {
       <div className="flex gap-6">
         {/* Sidebar Navigation */}
         <nav className="w-56 shrink-0" aria-label="Facility sections">
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl p-2 sticky top-6">
+          <div className="bg-theme-surface-modal border-theme-surface-border sticky top-6 rounded-xl border p-2">
             {SECTIONS.map((section) => {
               const Icon = section.icon;
               const isActive = activeSection === section.id;
@@ -214,13 +200,13 @@ export default function FacilityDetailPage() {
                 <button
                   key={section.id}
                   onClick={() => setActiveSection(section.id)}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-red-500/10 text-red-700 dark:text-red-400'
                       : 'text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="h-4 w-4" />
                   {section.label}
                 </button>
               );
@@ -229,13 +215,9 @@ export default function FacilityDetailPage() {
         </nav>
 
         {/* Content Area */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           {activeSection === 'overview' && (
-            <OverviewSection
-              facility={facility}
-              facilityTypes={facilityTypes}
-              facilityStatuses={facilityStatuses}
-            />
+            <OverviewSection facility={facility} facilityTypes={facilityTypes} facilityStatuses={facilityStatuses} />
           )}
           {activeSection === 'rooms' && <RoomsSection facilityId={facility.id} />}
           {activeSection === 'systems' && <SystemsSection facilityId={facility.id} />}

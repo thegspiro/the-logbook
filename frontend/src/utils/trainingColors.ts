@@ -12,11 +12,7 @@
  * @param isMet - Whether the requirement/goal is fully met
  * @param isOverdue - Whether the deadline has passed
  */
-export function getProgressBarColor(
-  percentage: number,
-  isMet?: boolean,
-  isOverdue?: boolean,
-): string {
+export function getProgressBarColor(percentage: number, isMet?: boolean, isOverdue?: boolean): string {
   if (isMet) return 'bg-green-500';
   if (isOverdue) return 'bg-red-500';
   if (percentage >= 50) return 'bg-blue-500';

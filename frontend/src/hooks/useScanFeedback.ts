@@ -28,7 +28,7 @@ export function useScanFeedback(): { flashing: boolean; signalScanSuccess: () =>
     () => () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     },
-    [],
+    []
   );
 
   return { flashing, signalScanSuccess };

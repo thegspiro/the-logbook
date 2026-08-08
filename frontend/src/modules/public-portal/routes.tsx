@@ -9,9 +9,7 @@ import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const PublicPortalAdmin = lazyWithRetry(
-  () => import('./pages/PublicPortalAdmin'),
-);
+const PublicPortalAdmin = lazyWithRetry(() => import('./pages/PublicPortalAdmin'));
 
 export const getPublicPortalRoutes = () => {
   return (

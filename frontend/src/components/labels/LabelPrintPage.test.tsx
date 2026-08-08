@@ -27,7 +27,7 @@ const renderPage = (query: string) =>
   render(
     <MemoryRouter initialEntries={[`/apparatus/print-labels${query}`]}>
       <LabelPrintPage module="apparatus" title="Print Apparatus Labels" backTo="/apparatus" />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 
 describe('LabelPrintPage', () => {
@@ -81,7 +81,7 @@ describe('LabelPrintPage', () => {
     await waitFor(() =>
       expect(mockGenerate.mock.calls[0]?.[2]).toMatchObject({
         label_format: 'rollo_4x6',
-      }),
+      })
     );
   });
 });

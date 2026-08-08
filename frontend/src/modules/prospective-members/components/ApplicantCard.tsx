@@ -23,12 +23,7 @@ const ALERT_LEVEL_STYLES: Record<InactivityAlertLevel, { border: string; icon: s
   critical: { border: 'border-red-500/40', icon: 'text-red-700 dark:text-red-400' },
 };
 
-export const ApplicantCard: React.FC<ApplicantCardProps> = ({
-  applicant,
-  onClick,
-  onDragStart,
-  isDragging,
-}) => {
+export const ApplicantCard: React.FC<ApplicantCardProps> = ({ applicant, onClick, onDragStart, isDragging }) => {
   const initials = getInitials(applicant.first_name, applicant.last_name);
   const alertLevel = applicant.inactivity_alert_level ?? 'normal';
   const alertStyle = ALERT_LEVEL_STYLES[alertLevel];
@@ -41,19 +36,26 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
       draggable={!!onDragStart}
       onDragStart={(e) => onDragStart?.(e, applicant)}
       onClick={() => onClick(applicant)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(applicant); } }}
-      className={`bg-theme-surface-hover border rounded-lg p-3.5 cursor-pointer hover:border-theme-surface-border hover:bg-theme-surface-hover transition-all ${
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(applicant);
+        }
+      }}
+      className={`bg-theme-surface-hover hover:border-theme-surface-border hover:bg-theme-surface-hover cursor-pointer rounded-lg border p-3.5 transition-all ${
         isDragging ? 'opacity-50 ring-2 ring-red-500' : ''
       } ${alertStyle ? alertStyle.border : 'border-theme-surface-border'}`}
     >
       {/* Inactivity Warning Banner */}
       {alertLevel !== 'normal' && (
-        <div className={`flex items-center gap-1.5 mb-2 px-2 py-1 rounded text-xs ${
-          alertLevel === 'critical'
-            ? 'bg-red-500/10 text-red-700 dark:text-red-400'
-            : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-        }`}>
-          <AlertTriangle className="w-3 h-3 shrink-0" />
+        <div
+          className={`mb-2 flex items-center gap-1.5 rounded px-2 py-1 text-xs ${
+            alertLevel === 'critical'
+              ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+              : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+          }`}
+        >
+          <AlertTriangle className="h-3 w-3 shrink-0" />
           <span>
             {alertLevel === 'critical' ? 'Approaching timeout' : 'Activity slowing'}
             {applicant.days_since_activity != null && ` — ${applicant.days_since_activity}d idle`}
@@ -62,16 +64,18 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-2">
+      <div className="mb-2 flex items-start justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-linear-to-br from-red-500 to-red-700 flex items-center justify-center text-xs font-bold text-white shrink-0">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-red-500 to-red-700 text-xs font-bold text-white">
             {initials}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-theme-text-primary truncate">
+            <p className="text-theme-text-primary truncate text-sm font-medium">
               {applicant.first_name} {applicant.last_name}
             </p>
-            <span className={`inline-block text-xs px-1.5 py-0.5 rounded-sm ${APPLICANT_STATUS_COLORS[applicant.status]}`}>
+            <span
+              className={`inline-block rounded-sm px-1.5 py-0.5 text-xs ${APPLICANT_STATUS_COLORS[applicant.status]}`}
+            >
               {applicant.status.replace('_', ' ')}
             </span>
           </div>
@@ -79,33 +83,31 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
       </div>
 
       {/* Contact Info */}
-      <div className="space-y-1 mb-2.5">
+      <div className="mb-2.5 space-y-1">
         {applicant.email && (
-          <div className="flex items-center gap-1.5 text-xs text-theme-text-muted">
-            <Mail className="w-3 h-3 shrink-0" />
+          <div className="text-theme-text-muted flex items-center gap-1.5 text-xs">
+            <Mail className="h-3 w-3 shrink-0" />
             <span className="truncate">{applicant.email}</span>
           </div>
         )}
         {applicant.phone && (
-          <div className="flex items-center gap-1.5 text-xs text-theme-text-muted">
-            <Phone className="w-3 h-3 shrink-0" />
+          <div className="text-theme-text-muted flex items-center gap-1.5 text-xs">
+            <Phone className="h-3 w-3 shrink-0" />
             <span>{applicant.phone}</span>
           </div>
         )}
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-theme-surface-border">
-        <div className="flex items-center gap-1 text-xs text-theme-text-muted">
-          <Clock className="w-3 h-3" />
-          <span>
-            {applicant.days_in_stage}d in stage
-          </span>
+      <div className="border-theme-surface-border flex items-center justify-between border-t pt-2">
+        <div className="text-theme-text-muted flex items-center gap-1 text-xs">
+          <Clock className="h-3 w-3" />
+          <span>{applicant.days_in_stage}d in stage</span>
         </div>
         {applicant.target_role_name && (
-          <div className="flex items-center gap-1 text-xs text-theme-text-muted">
-            <ArrowRight className="w-3 h-3" />
-            <span className="truncate max-w-[80px]">{applicant.target_role_name}</span>
+          <div className="text-theme-text-muted flex items-center gap-1 text-xs">
+            <ArrowRight className="h-3 w-3" />
+            <span className="max-w-[80px] truncate">{applicant.target_role_name}</span>
           </div>
         )}
       </div>

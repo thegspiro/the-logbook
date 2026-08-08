@@ -27,7 +27,9 @@ export const MfaPolicyCard: React.FC = () => {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const toggle = async (next: boolean) => {
@@ -44,26 +46,28 @@ export const MfaPolicyCard: React.FC = () => {
   };
 
   return (
-    <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+    <div className="bg-theme-surface border-theme-surface-border rounded-xl border p-5">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold text-theme-text-primary flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4" /> Require two-factor authentication
+          <h3 className="text-theme-text-primary flex items-center gap-2 text-base font-semibold">
+            <ShieldCheck className="h-4 w-4" /> Require two-factor authentication
           </h3>
-          <p className="text-sm text-theme-text-muted mt-1">
-            When on, members must set up an authenticator app before they can
-            use the app. Each member enrolls from their own Security settings.
+          <p className="text-theme-text-muted mt-1 text-sm">
+            When on, members must set up an authenticator app before they can use the app. Each member enrolls from
+            their own Security settings.
           </p>
         </div>
         {loading ? (
-          <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
+          <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" />
         ) : (
           <button
             type="button"
             role="switch"
             aria-checked={required}
             disabled={saving}
-            onClick={() => { void toggle(!required); }}
+            onClick={() => {
+              void toggle(!required);
+            }}
             className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
               required ? 'bg-violet-600' : 'bg-theme-surface-border'
             }`}

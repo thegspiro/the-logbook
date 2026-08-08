@@ -96,9 +96,7 @@ test.describe('Dashboard', () => {
     });
 
     test('should display the Training Progress section heading', async ({ page }) => {
-      const heading = page
-        .getByRole('heading', { name: /my training progress/i })
-        .first();
+      const heading = page.getByRole('heading', { name: /my training progress/i }).first();
       await expect(heading).toBeVisible({ timeout: 15000 });
     });
 
@@ -109,9 +107,7 @@ test.describe('Dashboard', () => {
     });
 
     test('should display progress percentages for programs', async ({ page }) => {
-      await expect(
-        visibleText(page, `${TRAINING_FIRST_PROGRESS}%`),
-      ).toBeVisible({ timeout: 15000 });
+      await expect(visibleText(page, `${TRAINING_FIRST_PROGRESS}%`)).toBeVisible({ timeout: 15000 });
     });
   });
 
@@ -126,9 +122,7 @@ test.describe('Dashboard', () => {
       });
     });
 
-    test('should display Total Hours, Training, Standby, and Administrative cards', async ({
-      page,
-    }) => {
+    test('should display Total Hours, Training, Standby, and Administrative cards', async ({ page }) => {
       const summary = page.locator('[aria-label="Hours summary"]');
       for (const label of ['Total Hours', 'Training', 'Standby', 'Administrative']) {
         await expect(summary.getByText(label).first()).toBeVisible({ timeout: 10000 });
@@ -144,12 +138,8 @@ test.describe('Dashboard', () => {
       const greeting = page.getByRole('heading', { level: 2 }).first();
       await expect(greeting).toBeVisible({ timeout: 10000 });
 
-      await expect(
-        page.getByRole('heading', { name: /notifications/i }).first(),
-      ).toBeVisible();
-      await expect(
-        page.getByRole('heading', { name: /upcoming shifts/i }).first(),
-      ).toBeVisible();
+      await expect(page.getByRole('heading', { name: /notifications/i }).first()).toBeVisible();
+      await expect(page.getByRole('heading', { name: /upcoming shifts/i }).first()).toBeVisible();
       await expect(page.locator('main')).toBeVisible();
     });
 
@@ -161,9 +151,7 @@ test.describe('Dashboard', () => {
         timeout: 10000,
       });
 
-      const notifications = page
-        .getByRole('heading', { name: /notifications/i })
-        .first();
+      const notifications = page.getByRole('heading', { name: /notifications/i }).first();
       const shifts = page.getByRole('heading', { name: /upcoming shifts/i }).first();
       await expect(notifications).toBeVisible({ timeout: 10000 });
       await expect(shifts).toBeVisible();
@@ -188,9 +176,7 @@ test.describe('Dashboard', () => {
       // browser closes the outer element early, so the inner control escapes
       // its row and assistive technology receives a broken tree. React only
       // logs this to the console, where it is easy to miss.
-      const nested = await page
-        .locator('button button, button a[href], a[href] button')
-        .count();
+      const nested = await page.locator('button button, button a[href], a[href] button').count();
       expect(nested).toBe(0);
     });
   });
@@ -202,9 +188,7 @@ test.describe('Dashboard', () => {
       await expect(page.getByText(/no notifications/i).first()).toBeVisible({
         timeout: 10000,
       });
-      await expect(
-        page.getByText(/no upcoming shifts scheduled/i).first(),
-      ).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(/no upcoming shifts scheduled/i).first()).toBeVisible({ timeout: 10000 });
     });
   });
 });

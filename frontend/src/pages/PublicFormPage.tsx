@@ -71,11 +71,7 @@ const PublicFormPage = () => {
     try {
       setSubmitting(true);
       setError(null);
-      const result = await publicFormsService.submitForm(
-        slug ?? '',
-        formData,
-        honeypotRef.current?.value || undefined
-      );
+      const result = await publicFormsService.submitForm(slug ?? '', formData, honeypotRef.current?.value || undefined);
       setSubmitted(true);
       setSubmitMessage(result.message);
     } catch (err: unknown) {
@@ -212,14 +208,14 @@ const PublicFormPage = () => {
           <fieldset className="space-y-2">
             <legend className="sr-only">{field.label}</legend>
             {field.options?.map((opt) => (
-              <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
+              <label key={opt.value} className="flex cursor-pointer items-center gap-3">
                 <input
                   type="radio"
                   name={field.id}
                   value={opt.value}
                   checked={value === opt.value}
                   onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                  className="w-4 h-4 text-blue-600"
+                  className="h-4 w-4 text-blue-600"
                 />
                 <span className="text-theme-text-secondary">{opt.label}</span>
               </label>
@@ -233,7 +229,7 @@ const PublicFormPage = () => {
             {field.options?.map((opt) => {
               const checked = value.split(',').includes(opt.value);
               return (
-                <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
+                <label key={opt.value} className="flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
                     checked={checked}
@@ -255,9 +251,9 @@ const PublicFormPage = () => {
 
       case FieldType.SECTION_HEADER:
         return (
-          <div className="border-b border-theme-surface-border pb-2 -mb-2">
-            <h3 className="text-lg font-semibold text-theme-text-primary">{clean(field.label)}</h3>
-            {field.help_text && <p className="text-sm text-theme-text-muted mt-1">{clean(field.help_text)}</p>}
+          <div className="border-theme-surface-border -mb-2 border-b pb-2">
+            <h3 className="text-theme-text-primary text-lg font-semibold">{clean(field.label)}</h3>
+            {field.help_text && <p className="text-theme-text-muted mt-1 text-sm">{clean(field.help_text)}</p>}
           </div>
         );
 
@@ -277,9 +273,9 @@ const PublicFormPage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center">
+      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-3 border-b-3 border-blue-500 mb-4"></div>
+          <div className="mb-4 inline-block h-10 w-10 animate-spin rounded-full border-t-3 border-b-3 border-blue-500"></div>
           <p className="text-theme-text-secondary">Loading form...</p>
         </div>
       </div>
@@ -288,14 +284,24 @@ const PublicFormPage = () => {
 
   if (error && !form) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
-        <div className="bg-theme-surface rounded-xl shadow-lg p-8 max-w-md text-center">
-          <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-700 dark:text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+        <div className="bg-theme-surface max-w-md rounded-xl p-8 text-center shadow-lg">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
+            <svg
+              className="h-8 w-8 text-red-700 dark:text-red-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+              />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-theme-text-primary mb-2">Form Not Available</h2>
+          <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Form Not Available</h2>
           <p className="text-theme-text-secondary">{error}</p>
         </div>
       </div>
@@ -304,14 +310,19 @@ const PublicFormPage = () => {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center p-4">
-        <div className="bg-theme-surface rounded-xl shadow-lg p-8 max-w-md text-center">
-          <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-700 dark:text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4">
+        <div className="bg-theme-surface max-w-md rounded-xl p-8 text-center shadow-lg">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-500/10">
+            <svg
+              className="h-8 w-8 text-green-700 dark:text-green-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-theme-text-primary mb-2">Submission Received</h2>
+          <h2 className="text-theme-text-primary mb-2 text-xl font-bold">Submission Received</h2>
           <p className="text-theme-text-secondary">{submitMessage || 'Thank you for your submission!'}</p>
           {form?.allow_multiple_submissions && (
             <button
@@ -332,26 +343,27 @@ const PublicFormPage = () => {
   if (!form) return null;
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-8 px-4">
-      <div className="max-w-2xl mx-auto">
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br px-4 py-8">
+      <div className="mx-auto max-w-2xl">
         {/* Header */}
-        <div className="bg-theme-surface rounded-xl shadow-lg overflow-hidden mb-6">
+        <div className="bg-theme-surface mb-6 overflow-hidden rounded-xl shadow-lg">
           <div className="bg-linear-to-r from-blue-600 to-blue-700 px-8 py-6">
-            {form.organization_name && (
-              <p className="text-blue-100 text-sm mb-1">{clean(form.organization_name)}</p>
-            )}
+            {form.organization_name && <p className="mb-1 text-sm text-blue-100">{clean(form.organization_name)}</p>}
             <h1 className="text-2xl font-bold text-white">{clean(form.name)}</h1>
-            {form.description && (
-              <p className="text-blue-100 mt-2">{clean(form.description)}</p>
-            )}
+            {form.description && <p className="mt-2 text-blue-100">{clean(form.description)}</p>}
           </div>
         </div>
 
         {/* Form */}
-        <form onSubmit={(e) => { void handleSubmit(e); }} className="bg-theme-surface rounded-xl shadow-lg p-8">
+        <form
+          onSubmit={(e) => {
+            void handleSubmit(e);
+          }}
+          className="bg-theme-surface rounded-xl p-8 shadow-lg"
+        >
           {error && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
-              <p className="text-red-700 dark:text-red-400 text-sm">{error}</p>
+            <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+              <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
             </div>
           )}
 
@@ -369,14 +381,21 @@ const PublicFormPage = () => {
               }
 
               return (
-                <div key={field.id} className={field.width === 'half' ? 'w-1/2 inline-block pr-2' : field.width === 'third' ? 'w-1/3 inline-block pr-2' : ''}>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                <div
+                  key={field.id}
+                  className={
+                    field.width === 'half'
+                      ? 'inline-block w-1/2 pr-2'
+                      : field.width === 'third'
+                        ? 'inline-block w-1/3 pr-2'
+                        : ''
+                  }
+                >
+                  <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
                     {clean(field.label)}
-                    {field.required && <span className="text-red-700 dark:text-red-500 ml-1">*</span>}
+                    {field.required && <span className="ml-1 text-red-700 dark:text-red-500">*</span>}
                   </label>
-                  {field.help_text && (
-                    <p className="text-xs text-theme-text-muted mb-2">{clean(field.help_text)}</p>
-                  )}
+                  {field.help_text && <p className="text-theme-text-muted mb-2 text-xs">{clean(field.help_text)}</p>}
                   {renderField(field)}
                 </div>
               );
@@ -384,29 +403,33 @@ const PublicFormPage = () => {
           </div>
 
           {/* Honeypot field - hidden from real users, catches bots */}
-          <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', top: '-9999px', opacity: 0, height: 0, overflow: 'hidden' }}>
+          <div
+            aria-hidden="true"
+            style={{ position: 'absolute', left: '-9999px', top: '-9999px', opacity: 0, height: 0, overflow: 'hidden' }}
+          >
             <label htmlFor="website">Website</label>
-            <input
-              type="text"
-              id="website"
-              name="website"
-              tabIndex={-1}
-              autoComplete="off"
-              ref={honeypotRef}
-            />
+            <input type="text" id="website" name="website" tabIndex={-1} autoComplete="off" ref={honeypotRef} />
           </div>
 
           {/* Submit */}
-          <div className="mt-8 pt-6 border-t border-theme-surface-border">
+          <div className="border-theme-surface-border mt-8 border-t pt-6">
             <button
               type="submit"
               disabled={submitting}
-              className="btn-info disabled:cursor-not-allowed font-semibold px-6 py-3 w-full"
+              className="btn-info w-full px-6 py-3 font-semibold disabled:cursor-not-allowed"
             >
               {submitting ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24">
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                    />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
                   Submitting...
@@ -419,9 +442,7 @@ const PublicFormPage = () => {
         </form>
 
         {/* Footer */}
-        <p className="text-center text-theme-text-muted text-xs mt-6">
-          Powered by The Logbook
-        </p>
+        <p className="text-theme-text-muted mt-6 text-center text-xs">Powered by The Logbook</p>
       </div>
     </div>
   );

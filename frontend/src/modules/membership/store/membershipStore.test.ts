@@ -195,9 +195,7 @@ describe('membershipStore', () => {
     });
 
     it('should clamp page number to valid range', async () => {
-      const members = [
-        makeMember({ id: 'u1', status: 'active' }),
-      ];
+      const members = [makeMember({ id: 'u1', status: 'active' })];
       mockGetUsers.mockResolvedValue(members);
 
       // Request page 100 with only 1 member (1 page total)

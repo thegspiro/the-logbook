@@ -163,7 +163,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
       {
         id: 'deputy_chief',
         name: 'Deputy Chief',
-        description: 'Second in command, oversees operations in the Chief\'s absence',
+        description: "Second in command, oversees operations in the Chief's absence",
         icon: Flame,
         priority: 90,
         permissions: generateRolePermissions(modules, 'leadership'),
@@ -196,12 +196,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Company officer assisting the Captain with crew supervision',
         icon: Star,
         priority: 60,
-        permissions: generateRolePermissions(modules, 'officer', [
-          'training',
-          'scheduling',
-          'events',
-          'apparatus',
-        ]),
+        permissions: generateRolePermissions(modules, 'officer', ['training', 'scheduling', 'events', 'apparatus']),
       },
       {
         id: 'engineer',
@@ -285,12 +280,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Assists the secretary with records and communications',
         icon: Briefcase,
         priority: 70,
-        permissions: generateRolePermissions(modules, 'officer', [
-          'members',
-          'events',
-          'documents',
-          'minutes',
-        ]),
+        permissions: generateRolePermissions(modules, 'officer', ['members', 'events', 'documents', 'minutes']),
       },
       {
         id: 'treasurer',
@@ -306,11 +296,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Manages training programs and certifications',
         icon: GraduationCap,
         priority: 65,
-        permissions: generateRolePermissions(modules, 'specialist', [
-          'training',
-          'events',
-          'documents',
-        ]),
+        permissions: generateRolePermissions(modules, 'specialist', ['training', 'events', 'documents']),
       },
       {
         id: 'safety_officer',
@@ -333,12 +319,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Public information, website, social media, newsletters, and notification management',
         icon: Megaphone,
         priority: 55,
-        permissions: generateRolePermissions(modules, 'specialist', [
-          'notifications',
-          'mobile',
-          'events',
-          'documents',
-        ]),
+        permissions: generateRolePermissions(modules, 'specialist', ['notifications', 'mobile', 'events', 'documents']),
       },
     ],
   },
@@ -486,8 +467,23 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
 
 // Icon lookup map for serialization/deserialization
 const ICON_MAP: Record<string, React.ElementType> = {
-  Shield, Crown, Star, Briefcase, GraduationCap, ClipboardList, Wrench, Users, UserCog,
-  Truck, Monitor, UserPlus, BadgeCheck, Megaphone, Building2, Flame, HeartPulse,
+  Shield,
+  Crown,
+  Star,
+  Briefcase,
+  GraduationCap,
+  ClipboardList,
+  Wrench,
+  Users,
+  UserCog,
+  Truck,
+  Monitor,
+  UserPlus,
+  BadgeCheck,
+  Megaphone,
+  Building2,
+  Flame,
+  HeartPulse,
 };
 
 const getIconName = (icon: React.ElementType): string => {
@@ -509,11 +505,11 @@ interface RoleConfig {
 
 const PositionSetup: React.FC = () => {
   const navigate = useNavigate();
-  const departmentName = useOnboardingStore(state => state.departmentName);
-  const logoPreview = useOnboardingStore(state => state.logoData);
-  const lastSaved = useOnboardingStore(state => state.lastSaved);
-  const savedPositionsConfig = useOnboardingStore(state => state.positionsConfig);
-  const setPositionsConfig = useOnboardingStore(state => state.setPositionsConfig);
+  const departmentName = useOnboardingStore((state) => state.departmentName);
+  const logoPreview = useOnboardingStore((state) => state.logoData);
+  const lastSaved = useOnboardingStore((state) => state.lastSaved);
+  const savedPositionsConfig = useOnboardingStore((state) => state.positionsConfig);
+  const setPositionsConfig = useOnboardingStore((state) => state.setPositionsConfig);
 
   // Build permission categories and position templates from the module registry
   // This ensures new modules automatically appear in position configuration
@@ -539,9 +535,9 @@ const PositionSetup: React.FC = () => {
 
     // Pre-select essential positions
     const initial: Record<string, RoleConfig> = {};
-    ['it_manager', 'fire_chief', 'president', 'secretary', 'training_officer', 'member'].forEach(posId => {
-      Object.values(templates).forEach(category => {
-        const position = category.positions.find(p => p.id === posId);
+    ['it_manager', 'fire_chief', 'president', 'secretary', 'training_officer', 'member'].forEach((posId) => {
+      Object.values(templates).forEach((category) => {
+        const position = category.positions.find((p) => p.id === posId);
         if (position) {
           initial[posId] = { ...position };
         }
@@ -551,7 +547,12 @@ const PositionSetup: React.FC = () => {
   });
 
   // Expanded categories
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(['system', 'operational_ranks', 'leadership', 'officers']);
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([
+    'system',
+    'operational_ranks',
+    'leadership',
+    'officers',
+  ]);
 
   // Position being edited
   const [editingPosition, setEditingPosition] = useState<string | null>(null);
@@ -572,15 +573,18 @@ const PositionSetup: React.FC = () => {
 
   // Persist position changes to Zustand store (survives navigation)
   useEffect(() => {
-    const serializable: Record<string, {
-      id: string;
-      name: string;
-      description: string;
-      icon: string;
-      priority: number;
-      permissions: Record<string, { view: boolean; manage: boolean }>;
-      isCustom?: boolean | undefined;
-    }> = {};
+    const serializable: Record<
+      string,
+      {
+        id: string;
+        name: string;
+        description: string;
+        icon: string;
+        priority: number;
+        permissions: Record<string, { view: boolean; manage: boolean }>;
+        isCustom?: boolean | undefined;
+      }
+    > = {};
     for (const [posId, position] of Object.entries(selectedPositions)) {
       serializable[posId] = {
         id: position.id,
@@ -596,17 +600,15 @@ const PositionSetup: React.FC = () => {
   }, [selectedPositions, setPositionsConfig]);
 
   const toggleCategory = (categoryId: string) => {
-    setExpandedCategories(prev =>
-      prev.includes(categoryId)
-        ? prev.filter(c => c !== categoryId)
-        : [...prev, categoryId]
+    setExpandedCategories((prev) =>
+      prev.includes(categoryId) ? prev.filter((c) => c !== categoryId) : [...prev, categoryId]
     );
   };
 
   const togglePosition = (position: RoleConfig) => {
     if (position.id === 'it_manager') return; // IT Manager cannot be removed
 
-    setSelectedPositions(prev => {
+    setSelectedPositions((prev) => {
       if (prev[position.id]) {
         const { [position.id]: removed, ...rest } = prev;
         return rest;
@@ -619,7 +621,7 @@ const PositionSetup: React.FC = () => {
   const updatePositionPermission = (positionId: string, category: string, type: 'view' | 'manage', value: boolean) => {
     if (positionId === 'it_manager') return; // IT Manager always has all permissions
 
-    setSelectedPositions(prev => {
+    setSelectedPositions((prev) => {
       if (!prev[positionId]) return prev;
       return {
         ...prev,
@@ -665,7 +667,7 @@ const PositionSetup: React.FC = () => {
       permissions: generateDefaultPermissions(MODULE_REGISTRY, { view: true, manage: false }),
     };
 
-    setSelectedPositions(prev => ({ ...prev, [posId]: newPosition }));
+    setSelectedPositions((prev) => ({ ...prev, [posId]: newPosition }));
     setCustomPositionName('');
     setCustomPositionDescription('');
     setShowCustomModal(false);
@@ -719,40 +721,39 @@ const PositionSetup: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col safe-top">
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
       <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} />
 
       <main className="flex-1 p-4 py-8">
-        <div className="max-w-6xl w-full mx-auto">
+        <div className="mx-auto w-full max-w-6xl">
           <BackButton to="/onboarding/it-team" className="mb-6" />
 
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-              <Users className="w-8 h-8 text-white" aria-hidden="true" />
+          <div className="mb-8 text-center">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-600">
+              <Users className="h-8 w-8 text-white" aria-hidden="true" />
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
+            <h1 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">
               Set Up Positions & Permissions
             </h1>
-            <p className="text-xl text-theme-text-secondary mb-2">
-              Choose which positions your organization needs
-            </p>
-            <p className="text-sm text-theme-text-muted max-w-2xl mx-auto">
-              Select from common fire department positions or create your own. Each position determines what members can view and manage.
+            <p className="text-theme-text-secondary mb-2 text-xl">Choose which positions your organization needs</p>
+            <p className="text-theme-text-muted mx-auto max-w-2xl text-sm">
+              Select from common fire department positions or create your own. Each position determines what members can
+              view and manage.
             </p>
           </div>
 
           {/* Info Banners */}
-          <div className="space-y-4 mb-6">
+          <div className="mb-6 space-y-4">
             <div className="alert-info">
               <div className="flex items-start">
-                <Info className="w-5 h-5 text-theme-alert-info-icon mt-0.5 mr-3 shrink-0" aria-hidden="true" />
+                <Info className="text-theme-alert-info-icon mt-0.5 mr-3 h-5 w-5 shrink-0" aria-hidden="true" />
                 <div>
-                  <p className="text-theme-alert-info-title font-semibold mb-1">How Permissions Work</p>
+                  <p className="text-theme-alert-info-title mb-1 font-semibold">How Permissions Work</p>
                   <p className="text-theme-text-secondary text-sm">
                     Each position has <strong className="text-theme-alert-success-text">View</strong> (see content) and{' '}
-                    <strong className="text-theme-alert-warning-icon">Manage</strong> (create/edit/delete) permissions per module.
-                    Click on a selected position to customize its permissions.
+                    <strong className="text-theme-alert-warning-icon">Manage</strong> (create/edit/delete) permissions
+                    per module. Click on a selected position to customize its permissions.
                   </p>
                 </div>
               </div>
@@ -760,12 +761,18 @@ const PositionSetup: React.FC = () => {
 
             <div className="alert-success">
               <div className="flex items-start">
-                <CheckCircle className="w-5 h-5 text-theme-alert-success-icon mt-0.5 mr-3 shrink-0" aria-hidden="true" />
+                <CheckCircle
+                  className="text-theme-alert-success-icon mt-0.5 mr-3 h-5 w-5 shrink-0"
+                  aria-hidden="true"
+                />
                 <div>
-                  <p className="text-theme-alert-success-title font-semibold mb-1">Don't Worry - You Can Change These Later</p>
+                  <p className="text-theme-alert-success-title mb-1 font-semibold">
+                    Don't Worry - You Can Change These Later
+                  </p>
                   <p className="text-theme-text-secondary text-sm">
-                    Positions and permissions can be updated anytime in <strong>Settings → Positions & Permissions</strong>.
-                    You can add new positions, modify permissions, or remove positions as your organization's needs evolve.
+                    Positions and permissions can be updated anytime in{' '}
+                    <strong>Settings → Positions & Permissions</strong>. You can add new positions, modify permissions,
+                    or remove positions as your organization's needs evolve.
                   </p>
                 </div>
               </div>
@@ -773,7 +780,7 @@ const PositionSetup: React.FC = () => {
           </div>
 
           {/* Stats Bar */}
-          <div className="card flex flex-wrap gap-4 items-center justify-between mb-6 p-4">
+          <div className="card mb-6 flex flex-wrap items-center justify-between gap-4 p-4">
             <div className="flex items-center space-x-4">
               <div className="text-theme-text-primary">
                 <span className="text-2xl font-bold">{selectedCount}</span>
@@ -783,17 +790,19 @@ const PositionSetup: React.FC = () => {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCustomModal(true)}
-                className="px-4 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg font-medium transition-colors flex items-center gap-2"
+                className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary flex items-center gap-2 rounded-lg px-4 py-2 font-medium transition-colors"
               >
-                <Plus className="w-4 h-4" aria-hidden="true" />
+                <Plus className="h-4 w-4" aria-hidden="true" />
                 Create Custom Position
               </button>
               <button
-                onClick={() => { void handleContinue(); }}
+                onClick={() => {
+                  void handleContinue();
+                }}
                 disabled={isSaving || selectedCount < 2}
-                className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                className={`rounded-lg px-6 py-2 font-semibold transition-all ${
                   selectedCount >= 2 && !isSaving
-                    ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
+                    ? 'bg-linear-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700'
                     : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
                 }`}
               >
@@ -802,44 +811,49 @@ const PositionSetup: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid gap-6 lg:grid-cols-2">
             {/* Left: Position Templates */}
             <div className="space-y-4">
-              <h2 className="text-theme-text-primary font-bold text-lg mb-4">Available Position Templates</h2>
+              <h2 className="text-theme-text-primary mb-4 text-lg font-bold">Available Position Templates</h2>
 
               {Object.entries(positionTemplates).map(([categoryId, category]) => (
                 <div key={categoryId} className="card-secondary overflow-hidden">
                   <button
                     onClick={() => toggleCategory(categoryId)}
-                    className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-theme-surface-hover transition-colors"
+                    className="hover:bg-theme-surface-hover flex w-full items-center justify-between px-4 py-3 text-left transition-colors"
                   >
                     <div>
                       <h3 className="text-theme-text-primary font-semibold">{category.name}</h3>
                       <p className="text-theme-text-muted text-sm">{category.description}</p>
                     </div>
                     {expandedCategories.includes(categoryId) ? (
-                      <ChevronDown className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
+                      <ChevronDown className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
                     ) : (
-                      <ChevronRight className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
+                      <ChevronRight className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
                     )}
                   </button>
 
                   {expandedCategories.includes(categoryId) && (
-                    <div className="px-4 pb-4 space-y-2">
-                      {category.positions.map(position => {
+                    <div className="space-y-2 px-4 pb-4">
+                      {category.positions.map((position) => {
                         const isSelected = !!selectedPositions[position.id];
                         const Icon = position.icon;
 
                         return (
                           <div
                             key={position.id}
-                            className={`p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                            className={`cursor-pointer rounded-lg border-2 p-3 transition-all ${
                               isSelected
                                 ? 'border-theme-accent-green bg-theme-accent-green-muted'
                                 : 'border-theme-surface-border hover:border-theme-surface-hover'
                             }`}
                             onClick={() => togglePosition(position)}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePosition(position); } }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                togglePosition(position);
+                              }
+                            }}
                             tabIndex={0}
                             role="checkbox"
                             aria-checked={isSelected}
@@ -847,20 +861,24 @@ const PositionSetup: React.FC = () => {
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                  isSelected ? 'bg-green-600' : 'bg-theme-surface'
-                                }`}>
-                                  <Icon className="w-5 h-5 text-white" aria-hidden="true" />
+                                <div
+                                  className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                                    isSelected ? 'bg-green-600' : 'bg-theme-surface'
+                                  }`}
+                                >
+                                  <Icon className="h-5 w-5 text-white" aria-hidden="true" />
                                 </div>
                                 <div>
-                                  <p className={`font-semibold ${isSelected ? 'text-theme-accent-green' : 'text-theme-text-primary'}`}>
+                                  <p
+                                    className={`font-semibold ${isSelected ? 'text-theme-accent-green' : 'text-theme-text-primary'}`}
+                                  >
                                     {position.name}
                                   </p>
                                   <p className="text-theme-text-muted text-xs">{position.description}</p>
                                 </div>
                               </div>
                               {isSelected && (
-                                <CheckCircle className="w-5 h-5 text-theme-accent-green shrink-0" aria-hidden="true" />
+                                <CheckCircle className="text-theme-accent-green h-5 w-5 shrink-0" aria-hidden="true" />
                               )}
                             </div>
                           </div>
@@ -874,12 +892,12 @@ const PositionSetup: React.FC = () => {
 
             {/* Right: Selected Positions & Permissions */}
             <div>
-              <h2 className="text-theme-text-primary font-bold text-lg mb-4">Selected Positions & Permissions</h2>
+              <h2 className="text-theme-text-primary mb-4 text-lg font-bold">Selected Positions & Permissions</h2>
 
               <div className="space-y-3">
                 {Object.values(selectedPositions)
                   .sort((a, b) => b.priority - a.priority)
-                  .map(position => {
+                  .map((position) => {
                     const Icon = position.icon;
                     const isEditing = editingPosition === position.id;
                     const isITManager = position.id === 'it_manager';
@@ -892,30 +910,37 @@ const PositionSetup: React.FC = () => {
                         }`}
                       >
                         <div
-                          className="p-4 flex items-center justify-between cursor-pointer"
+                          className="flex cursor-pointer items-center justify-between p-4"
                           onClick={() => setEditingPosition(isEditing ? null : position.id)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingPosition(isEditing ? null : position.id); } }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setEditingPosition(isEditing ? null : position.id);
+                            }
+                          }}
                           tabIndex={0}
                           role="button"
                           aria-expanded={isEditing}
                           aria-label={`${position.name} - click to ${isEditing ? 'collapse' : 'expand'} permissions`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                              isITManager ? 'bg-purple-600' : position.isCustom ? 'bg-blue-600' : 'bg-green-600'
-                            }`}>
-                              <Icon className="w-5 h-5 text-white" aria-hidden="true" />
+                            <div
+                              className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                                isITManager ? 'bg-purple-600' : position.isCustom ? 'bg-blue-600' : 'bg-green-600'
+                              }`}
+                            >
+                              <Icon className="h-5 w-5 text-white" aria-hidden="true" />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
                                 <p className="text-theme-text-primary font-semibold">{position.name}</p>
                                 {isITManager && (
-                                  <span className="text-xs bg-theme-alert-purple-bg text-theme-alert-purple-text px-2 py-0.5 rounded-sm">
+                                  <span className="bg-theme-alert-purple-bg text-theme-alert-purple-text rounded-sm px-2 py-0.5 text-xs">
                                     System
                                   </span>
                                 )}
                                 {position.isCustom && (
-                                  <span className="text-xs bg-theme-alert-info-bg text-theme-alert-info-text px-2 py-0.5 rounded-sm">
+                                  <span className="bg-theme-alert-info-bg text-theme-alert-info-text rounded-sm px-2 py-0.5 text-xs">
                                     Custom
                                   </span>
                                 )}
@@ -930,24 +955,24 @@ const PositionSetup: React.FC = () => {
                                   e.stopPropagation();
                                   togglePosition(position);
                                 }}
-                                className="p-1 hover:bg-theme-accent-orange-muted rounded-sm text-theme-text-muted hover:text-theme-accent-red transition-colors"
+                                className="hover:bg-theme-accent-orange-muted text-theme-text-muted hover:text-theme-accent-red rounded-sm p-1 transition-colors"
                                 aria-label={`Remove ${position.name} position`}
                               >
-                                <X className="w-4 h-4" aria-hidden="true" />
+                                <X className="h-4 w-4" aria-hidden="true" />
                               </button>
                             )}
                             {isEditing ? (
-                              <ChevronDown className="w-5 h-5 text-theme-accent-orange" aria-hidden="true" />
+                              <ChevronDown className="text-theme-accent-orange h-5 w-5" aria-hidden="true" />
                             ) : (
-                              <ChevronRight className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
+                              <ChevronRight className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
                             )}
                           </div>
                         </div>
 
                         {/* Expanded permissions editor */}
                         {isEditing && (
-                          <div className="px-4 pb-4 border-t border-theme-nav-border pt-4">
-                            <p className="text-theme-text-muted text-sm mb-3">
+                          <div className="border-theme-nav-border border-t px-4 pt-4 pb-4">
+                            <p className="text-theme-text-muted mb-3 text-sm">
                               {isITManager
                                 ? 'IT Manager has full access to all features.'
                                 : 'Click to toggle permissions for each module:'}
@@ -959,34 +984,38 @@ const PositionSetup: React.FC = () => {
                                 return (
                                   <div
                                     key={catId}
-                                    className="flex items-center justify-between py-2 px-3 bg-theme-surface-secondary rounded-sm"
+                                    className="bg-theme-surface-secondary flex items-center justify-between rounded-sm px-3 py-2"
                                   >
                                     <span className="text-theme-text-secondary text-sm">{cat.name}</span>
                                     <div className="flex items-center gap-2">
                                       <button
-                                        onClick={() => updatePositionPermission(position.id, catId, 'view', !perms.view)}
+                                        onClick={() =>
+                                          updatePositionPermission(position.id, catId, 'view', !perms.view)
+                                        }
                                         disabled={isITManager}
                                         aria-label={`${perms.view ? 'Disable' : 'Enable'} view permission for ${cat.name}`}
-                                        className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                        className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
                                           perms.view
                                             ? 'bg-theme-accent-green-muted text-theme-accent-green'
                                             : 'bg-theme-surface text-theme-text-muted'
                                         } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
-                                        <Eye className="w-3 h-3" aria-hidden="true" />
+                                        <Eye className="h-3 w-3" aria-hidden="true" />
                                         View
                                       </button>
                                       <button
-                                        onClick={() => updatePositionPermission(position.id, catId, 'manage', !perms.manage)}
+                                        onClick={() =>
+                                          updatePositionPermission(position.id, catId, 'manage', !perms.manage)
+                                        }
                                         disabled={isITManager}
                                         aria-label={`${perms.manage ? 'Disable' : 'Enable'} manage permission for ${cat.name}`}
-                                        className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                        className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
                                           perms.manage
                                             ? 'bg-theme-accent-orange-muted text-theme-accent-orange'
                                             : 'bg-theme-surface text-theme-text-muted'
                                         } ${isITManager ? 'cursor-not-allowed' : 'hover:opacity-80'}`}
                                       >
-                                        <Edit3 className="w-3 h-3" aria-hidden="true" />
+                                        <Edit3 className="h-3 w-3" aria-hidden="true" />
                                         Manage
                                       </button>
                                     </div>
@@ -1014,18 +1043,25 @@ const PositionSetup: React.FC = () => {
       {/* Custom Position Modal */}
       {showCustomModal && (
         <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
           role="dialog"
           aria-modal="true"
           aria-labelledby="custom-position-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowCustomModal(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setShowCustomModal(false);
+          }}
         >
-          <div className="bg-theme-surface-modal rounded-lg p-6 max-w-md w-full border border-theme-surface-border">
-            <h3 id="custom-position-modal-title" className="text-theme-text-primary font-bold text-xl mb-4">Create Custom Position</h3>
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-lg border p-6">
+            <h3 id="custom-position-modal-title" className="text-theme-text-primary mb-4 text-xl font-bold">
+              Create Custom Position
+            </h3>
 
             <div className="space-y-4">
               <div>
-                <label htmlFor="custom-position-name" className="block text-sm font-semibold text-theme-text-secondary mb-2">
+                <label
+                  htmlFor="custom-position-name"
+                  className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                >
                   Position Name <span aria-hidden="true">*</span>
                 </label>
                 <input
@@ -1041,7 +1077,10 @@ const PositionSetup: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="custom-position-description" className="block text-sm font-semibold text-theme-text-secondary mb-2">
+                <label
+                  htmlFor="custom-position-description"
+                  className="text-theme-text-secondary mb-2 block text-sm font-semibold"
+                >
                   Description
                 </label>
                 <input
@@ -1055,16 +1094,16 @@ const PositionSetup: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex gap-3 mt-6">
+            <div className="mt-6 flex gap-3">
               <button
                 onClick={() => setShowCustomModal(false)}
-                className="flex-1 px-4 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
+                className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary flex-1 rounded-lg px-4 py-2 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={createCustomPosition}
-                className="flex-1 px-4 py-2 bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white rounded-lg font-semibold transition-colors"
+                className="flex-1 rounded-lg bg-linear-to-r from-red-600 to-orange-600 px-4 py-2 font-semibold text-white transition-colors hover:from-red-700 hover:to-orange-700"
               >
                 Create Position
               </button>
@@ -1073,10 +1112,12 @@ const PositionSetup: React.FC = () => {
         </div>
       )}
 
-      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
-        <div className="max-w-7xl mx-auto text-center">
-          <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
-          <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
+      <footer className="bg-theme-nav-bg border-theme-nav-border border-t px-6 py-4 backdrop-blur-xs">
+        <div className="mx-auto max-w-7xl text-center">
+          <p className="text-theme-text-secondary text-sm">
+            © {currentYear} {departmentName}. All rights reserved.
+          </p>
+          <p className="text-theme-text-muted mt-1 text-xs">Powered by The Logbook</p>
         </div>
       </footer>
     </div>

@@ -197,9 +197,7 @@ describe('FacilitiesDashboard', () => {
     await user.click(modalSubmit);
 
     await waitFor(() => {
-      expect(mockCreateFacility).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'Station 3' }),
-      );
+      expect(mockCreateFacility).toHaveBeenCalledWith(expect.objectContaining({ name: 'Station 3' }));
     });
   });
 
@@ -208,9 +206,7 @@ describe('FacilitiesDashboard', () => {
     renderPage();
 
     await waitFor(() => {
-      expect(
-        screen.getByText('No facilities yet. Add your first facility to get started.'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('No facilities yet. Add your first facility to get started.')).toBeInTheDocument();
     });
   });
 

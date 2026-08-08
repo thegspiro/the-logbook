@@ -40,18 +40,9 @@ import { PipelineBuilder } from '../components/PipelineBuilder';
 import { ReportStageGroupsEditor } from '../components/ReportStageGroupsEditor';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import type {
-  Pipeline,
-  PipelineListItem,
-  InactivityConfig,
-  InactivityTimeoutPreset,
-} from '../types';
-import {
-  DEFAULT_INACTIVITY_CONFIG,
-  TIMEOUT_PRESET_LABELS,
-} from '../types';
+import type { Pipeline, PipelineListItem, InactivityConfig, InactivityTimeoutPreset } from '../types';
+import { DEFAULT_INACTIVITY_CONFIG, TIMEOUT_PRESET_LABELS } from '../types';
 import { getEffectiveTimeoutDays } from '../utils';
-
 
 export const PipelineSettingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -162,9 +153,7 @@ export const PipelineSettingsPage: React.FC = () => {
       });
       setCurrentPipeline(updated);
       await fetchPipelines();
-      toast.success(
-        updated.is_active ? 'Pipeline activated' : 'Pipeline deactivated'
-      );
+      toast.success(updated.is_active ? 'Pipeline activated' : 'Pipeline deactivated');
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to toggle pipeline');
       toast.error(msg);
@@ -295,11 +284,7 @@ export const PipelineSettingsPage: React.FC = () => {
         public_status_enabled: !currentPipeline.public_status_enabled,
       });
       setCurrentPipeline(updated);
-      toast.success(
-        updated.public_status_enabled
-          ? 'Public status page enabled'
-          : 'Public status page disabled'
-      );
+      toast.success(updated.public_status_enabled ? 'Public status page enabled' : 'Public status page disabled');
     } catch (err: unknown) {
       const msg = getErrorMessage(err, 'Failed to toggle setting');
       toast.error(msg);
@@ -317,53 +302,48 @@ export const PipelineSettingsPage: React.FC = () => {
   // Stages with stage-level inactivity overrides
   const stagesWithOverrides = useMemo(() => {
     if (!currentPipeline) return [];
-    return currentPipeline.stages.filter(
-      (s) => s.inactivity_timeout_days != null && s.inactivity_timeout_days > 0
-    );
+    return currentPipeline.stages.filter((s) => s.inactivity_timeout_days != null && s.inactivity_timeout_days > 0);
   }, [currentPipeline]);
 
   // Non-template pipelines for sidebar display
-  const visiblePipelines = useMemo(
-    () => pipelines.filter((p) => !p.is_template),
-    [pipelines]
-  );
+  const visiblePipelines = useMemo(() => pipelines.filter((p) => !p.is_template), [pipelines]);
 
   return (
-    <div className="px-4 sm:px-6 py-6 max-w-5xl mx-auto">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
+      <div className="mb-6 flex items-center gap-4">
         <button
           onClick={() => void navigate('/prospective-members')}
-          className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+          className="text-theme-text-muted hover:text-theme-text-primary p-2 transition-colors"
           aria-label="Back to prospective members"
         >
-          <ArrowLeft className="w-5 h-5" aria-hidden="true" />
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-theme-text-primary flex items-center gap-3">
-            <Settings className="w-7 h-7 text-red-700 dark:text-red-500" aria-hidden="true" />
+          <h1 className="text-theme-text-primary flex items-center gap-3 text-2xl font-bold">
+            <Settings className="h-7 w-7 text-red-700 dark:text-red-500" aria-hidden="true" />
             Pipeline Settings
           </h1>
-          <p className="text-theme-text-muted mt-1">
-            Configure the stages prospective members go through
-          </p>
+          <p className="text-theme-text-muted mt-1">Configure the stages prospective members go through</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Pipeline List Sidebar */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg">
-            <div className="flex items-center justify-between p-4 border-b border-theme-surface-border">
-              <h2 className="text-sm font-medium text-theme-text-primary">Pipelines</h2>
+        <div className="space-y-4 lg:col-span-4">
+          <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border">
+            <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
+              <h2 className="text-theme-text-primary text-sm font-medium">Pipelines</h2>
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => { void handleOpenTemplateGallery(); }}
-                  className="p-1.5 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  onClick={() => {
+                    void handleOpenTemplateGallery();
+                  }}
+                  className="text-theme-text-muted hover:text-theme-text-primary p-1.5 transition-colors"
                   aria-label="Browse templates"
                   title="Browse templates"
                 >
-                  <BookTemplate className="w-4 h-4" aria-hidden="true" />
+                  <BookTemplate className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <button
                   onClick={() => {
@@ -371,49 +351,47 @@ export const PipelineSettingsPage: React.FC = () => {
                     setPipelineDescription('');
                     setShowCreateModal(true);
                   }}
-                  className="p-1.5 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                  className="text-theme-text-muted hover:text-theme-text-primary p-1.5 transition-colors"
                   aria-label="Create pipeline"
                 >
-                  <Plus className="w-4 h-4" aria-hidden="true" />
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
 
             {isLoadingPipelines ? (
               <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
-                <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" aria-hidden="true" />
+                <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" aria-hidden="true" />
                 <span className="sr-only">Loading pipelines...</span>
               </div>
             ) : visiblePipelines.length === 0 ? (
-              <div className="p-4 text-center text-sm text-theme-text-muted">
-                No pipelines yet
-              </div>
+              <div className="text-theme-text-muted p-4 text-center text-sm">No pipelines yet</div>
             ) : (
               <div className="p-2">
                 {visiblePipelines.map((p) => (
                   <button
                     key={p.id}
                     onClick={() => selectPipeline(p)}
-                    className={`w-full text-left p-3 rounded-lg mb-1 transition-all ${
+                    className={`mb-1 w-full rounded-lg p-3 text-left transition-all ${
                       currentPipeline?.id === p.id
-                        ? 'bg-red-600/20 border border-red-500/30'
+                        ? 'border border-red-500/30 bg-red-600/20'
                         : 'hover:bg-theme-surface-secondary border border-transparent'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-theme-text-primary truncate flex items-center gap-1.5">
+                      <span className="text-theme-text-primary flex items-center gap-1.5 truncate text-sm font-medium">
                         {p.name}
                         {p.is_default && (
-                          <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" aria-label="Default" />
+                          <Star className="h-3 w-3 shrink-0 fill-amber-500 text-amber-500" aria-label="Default" />
                         )}
                       </span>
                       <span
-                        className={`w-2 h-2 rounded-full shrink-0 ${
+                        className={`h-2 w-2 shrink-0 rounded-full ${
                           p.is_active ? 'bg-emerald-400' : 'bg-theme-surface-hover'
                         }`}
                       />
                     </div>
-                    <p className="text-xs text-theme-text-muted mt-1">
+                    <p className="text-theme-text-muted mt-1 text-xs">
                       {p.stage_count} stages &middot; {p.applicant_count} applicants
                     </p>
                   </button>
@@ -427,18 +405,16 @@ export const PipelineSettingsPage: React.FC = () => {
         <div className="lg:col-span-8">
           {isLoadingPipeline ? (
             <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-              <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" aria-hidden="true" />
+              <Loader2 className="h-8 w-8 animate-spin text-red-700 dark:text-red-500" aria-hidden="true" />
               <span className="sr-only">Loading pipeline...</span>
             </div>
           ) : !currentPipeline ? (
-            <div className="text-center py-20 bg-theme-input-bg rounded-lg border border-dashed border-theme-surface-border">
-              <Settings className="w-12 h-12 text-theme-text-muted mx-auto mb-4" aria-hidden="true" />
-              <h3 className="text-lg font-medium text-theme-text-primary mb-2">
-                {visiblePipelines.length === 0
-                  ? 'Create your first pipeline'
-                  : 'Select a pipeline'}
+            <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border border-dashed py-20 text-center">
+              <Settings className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
+              <h3 className="text-theme-text-primary mb-2 text-lg font-medium">
+                {visiblePipelines.length === 0 ? 'Create your first pipeline' : 'Select a pipeline'}
               </h3>
-              <p className="text-sm text-theme-text-muted mb-4">
+              <p className="text-theme-text-muted mb-4 text-sm">
                 {visiblePipelines.length === 0
                   ? 'Set up the stages prospective members will go through.'
                   : 'Choose a pipeline from the left to configure its stages.'}
@@ -456,10 +432,12 @@ export const PipelineSettingsPage: React.FC = () => {
                     Create Pipeline
                   </button>
                   <button
-                    onClick={() => { void handleOpenTemplateGallery(); }}
-                    className="px-4 py-2 text-sm text-theme-text-secondary border border-theme-surface-border rounded-lg hover:text-theme-text-primary hover:border-theme-surface-border transition-colors flex items-center gap-2"
+                    onClick={() => {
+                      void handleOpenTemplateGallery();
+                    }}
+                    className="text-theme-text-secondary border-theme-surface-border hover:text-theme-text-primary hover:border-theme-surface-border flex items-center gap-2 rounded-lg border px-4 py-2 text-sm transition-colors"
                   >
-                    <BookTemplate className="w-4 h-4" aria-hidden="true" />
+                    <BookTemplate className="h-4 w-4" aria-hidden="true" />
                     Use Template
                   </button>
                 </div>
@@ -469,21 +447,26 @@ export const PipelineSettingsPage: React.FC = () => {
             <div className="space-y-4">
               {/* Active Pipeline Warning Banner */}
               {currentPipeline.is_active && (currentPipeline.applicant_count ?? 0) > 0 && (
-                <div className="flex items-start gap-3 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
-                  <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+                <div className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                  <AlertTriangle
+                    className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400"
+                    aria-hidden="true"
+                  />
                   <div>
                     <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                      Active pipeline with {currentPipeline.applicant_count} applicant{currentPipeline.applicant_count === 1 ? '' : 's'}
+                      Active pipeline with {currentPipeline.applicant_count} applicant
+                      {currentPipeline.applicant_count === 1 ? '' : 's'}
                     </p>
-                    <p className="text-xs text-amber-700/80 dark:text-amber-300/60 mt-0.5">
-                      Changes to stages will affect in-progress applications. Consider cloning this pipeline before making major changes.
+                    <p className="mt-0.5 text-xs text-amber-700/80 dark:text-amber-300/60">
+                      Changes to stages will affect in-progress applications. Consider cloning this pipeline before
+                      making major changes.
                     </p>
                   </div>
                 </div>
               )}
 
               {/* Pipeline Name & Controls */}
-              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
+              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
                 {editingPipelineName ? (
                   <div className="space-y-3">
                     <input
@@ -491,7 +474,7 @@ export const PipelineSettingsPage: React.FC = () => {
                       value={pipelineName}
                       onChange={(e) => setPipelineName(e.target.value)}
                       aria-label="Pipeline name"
-                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                     />
                     <textarea
                       value={pipelineDescription}
@@ -499,7 +482,7 @@ export const PipelineSettingsPage: React.FC = () => {
                       placeholder="Description (optional)"
                       aria-label="Pipeline description"
                       rows={2}
-                      className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                     />
                     <div className="flex items-center justify-end gap-2">
                       <button
@@ -508,15 +491,17 @@ export const PipelineSettingsPage: React.FC = () => {
                           setPipelineName(currentPipeline.name);
                           setPipelineDescription(currentPipeline.description ?? '');
                         }}
-                        className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                        className="text-theme-text-secondary hover:text-theme-text-primary px-3 py-1.5 text-sm transition-colors"
                       >
                         Cancel
                       </button>
                       <button
-                        onClick={() => { void handleUpdatePipelineName(); }}
-                        className="btn-primary flex gap-1.5 items-center px-3 py-1.5 text-sm"
+                        onClick={() => {
+                          void handleUpdatePipelineName();
+                        }}
+                        className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-sm"
                       >
-                        <Save className="w-3.5 h-3.5" aria-hidden="true" />
+                        <Save className="h-3.5 w-3.5" aria-hidden="true" />
                         Save
                       </button>
                     </div>
@@ -524,12 +509,10 @@ export const PipelineSettingsPage: React.FC = () => {
                 ) : (
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="text-lg font-bold text-theme-text-primary">
-                          {currentPipeline.name}
-                        </h2>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-theme-text-primary text-lg font-bold">{currentPipeline.name}</h2>
                         <span
-                          className={`text-xs px-2 py-0.5 rounded ${
+                          className={`rounded px-2 py-0.5 text-xs ${
                             currentPipeline.is_active
                               ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
                               : 'bg-theme-surface-hover text-theme-text-muted'
@@ -538,46 +521,46 @@ export const PipelineSettingsPage: React.FC = () => {
                           {currentPipeline.is_active ? 'Active' : 'Inactive'}
                         </span>
                         {currentPipeline.is_default && (
-                          <span className="text-xs px-2 py-0.5 rounded-sm bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                            <Star className="w-2.5 h-2.5 fill-current" aria-hidden="true" />
+                          <span className="flex items-center gap-1 rounded-sm bg-amber-500/20 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400">
+                            <Star className="h-2.5 w-2.5 fill-current" aria-hidden="true" />
                             Default
                           </span>
                         )}
                       </div>
                       {currentPipeline.description && (
-                        <p className="text-sm text-theme-text-muted mt-1">
-                          {currentPipeline.description}
-                        </p>
+                        <p className="text-theme-text-muted mt-1 text-sm">{currentPipeline.description}</p>
                       )}
                     </div>
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => setEditingPipelineName(true)}
-                        className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary p-2 transition-colors"
                         aria-label="Edit pipeline name"
                         title="Edit"
                       >
-                        <Edit2 className="w-4 h-4" aria-hidden="true" />
+                        <Edit2 className="h-4 w-4" aria-hidden="true" />
                       </button>
                       <button
                         onClick={() => {
                           setCloneName(`${currentPipeline.name} (Copy)`);
                           setShowCloneModal(true);
                         }}
-                        className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary p-2 transition-colors"
                         aria-label="Clone pipeline"
                         title="Clone"
                       >
-                        <Copy className="w-4 h-4" aria-hidden="true" />
+                        <Copy className="h-4 w-4" aria-hidden="true" />
                       </button>
                       {!currentPipeline.is_default && (
                         <button
-                          onClick={() => { void handleSetDefault(); }}
-                          className="p-2 text-theme-text-muted hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                          onClick={() => {
+                            void handleSetDefault();
+                          }}
+                          className="text-theme-text-muted p-2 transition-colors hover:text-amber-600 dark:hover:text-amber-400"
                           aria-label="Set as default pipeline"
                           title="Set as default"
                         >
-                          <Star className="w-4 h-4" aria-hidden="true" />
+                          <Star className="h-4 w-4" aria-hidden="true" />
                         </button>
                       )}
                       <button
@@ -585,31 +568,33 @@ export const PipelineSettingsPage: React.FC = () => {
                           setTemplateName(`${currentPipeline.name} Template`);
                           setShowSaveTemplateModal(true);
                         }}
-                        className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                        className="text-theme-text-muted hover:text-theme-text-primary p-2 transition-colors"
                         aria-label="Save as template"
                         title="Save as template"
                       >
-                        <BookTemplate className="w-4 h-4" aria-hidden="true" />
+                        <BookTemplate className="h-4 w-4" aria-hidden="true" />
                       </button>
                       <button
-                        onClick={() => { void handleToggleActive(); }}
-                        className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
+                        onClick={() => {
+                          void handleToggleActive();
+                        }}
+                        className="text-theme-text-muted hover:text-theme-text-primary p-2 transition-colors"
                         aria-label={currentPipeline.is_active ? 'Deactivate pipeline' : 'Activate pipeline'}
                         title={currentPipeline.is_active ? 'Deactivate' : 'Activate'}
                       >
                         {currentPipeline.is_active ? (
-                          <PowerOff className="w-4 h-4" aria-hidden="true" />
+                          <PowerOff className="h-4 w-4" aria-hidden="true" />
                         ) : (
-                          <Power className="w-4 h-4" aria-hidden="true" />
+                          <Power className="h-4 w-4" aria-hidden="true" />
                         )}
                       </button>
                       <button
                         onClick={() => setDeleteConfirmOpen(true)}
-                        className="p-2 text-theme-text-muted hover:text-red-700 dark:hover:text-red-400 transition-colors"
+                        className="text-theme-text-muted p-2 transition-colors hover:text-red-700 dark:hover:text-red-400"
                         aria-label="Delete pipeline"
                         title="Delete"
                       >
-                        <Trash2 className="w-4 h-4" aria-hidden="true" />
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -618,12 +603,12 @@ export const PipelineSettingsPage: React.FC = () => {
 
               {/* Pipeline Stats Dashboard */}
               {pipelineStats && !isLoadingStats && (
-                <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <BarChart3 className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
-                    <h3 className="text-sm font-medium text-theme-text-secondary">Pipeline Statistics</h3>
+                <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <BarChart3 className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+                    <h3 className="text-theme-text-secondary text-sm font-medium">Pipeline Statistics</h3>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <StatCard
                       icon={Users}
                       label="Active"
@@ -650,7 +635,7 @@ export const PipelineSettingsPage: React.FC = () => {
                     />
                   </div>
                   {pipelineStats.avg_days_to_convert > 0 && (
-                    <p className="text-xs text-theme-text-muted mt-3">
+                    <p className="text-theme-text-muted mt-3 text-xs">
                       Average {Math.round(pipelineStats.avg_days_to_convert)} days to convert
                       {pipelineStats.on_hold_count > 0 && ` \u00B7 ${pipelineStats.on_hold_count} on hold`}
                       {pipelineStats.withdrawn_count > 0 && ` \u00B7 ${pipelineStats.withdrawn_count} withdrawn`}
@@ -661,36 +646,30 @@ export const PipelineSettingsPage: React.FC = () => {
 
               {/* Pipeline Flow Visualization */}
               {currentPipeline.stages.length > 0 && (
-                <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-theme-text-secondary mb-3">
-                    Pipeline Flow
-                  </h3>
+                <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+                  <h3 className="text-theme-text-secondary mb-3 text-sm font-medium">Pipeline Flow</h3>
                   <div className="flex items-center gap-1 overflow-x-auto pb-2">
                     {[...currentPipeline.stages]
                       .sort((a, b) => a.sort_order - b.sort_order)
                       .map((stage, idx) => {
                         const Icon = STAGE_TYPE_ICONS[stage.stage_type];
                         const colorClass = STAGE_TYPE_COLORS[stage.stage_type];
-                        const stageStats = pipelineStats?.by_stage.find(
-                          (s) => s.stage_id === stage.id
-                        );
+                        const stageStats = pipelineStats?.by_stage.find((s) => s.stage_id === stage.id);
                         return (
                           <React.Fragment key={stage.id}>
                             {idx > 0 && (
-                              <ArrowRight className="w-4 h-4 text-theme-text-muted shrink-0" aria-hidden="true" />
+                              <ArrowRight className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
                             )}
                             <div
-                              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-theme-surface-border shrink-0 ${colorClass}`}
+                              className={`border-theme-surface-border flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 ${colorClass}`}
                               title={stage.name}
                             >
-                              <Icon className="w-3.5 h-3.5" aria-hidden="true" />
-                              <span className="text-xs font-medium whitespace-nowrap max-w-[100px] truncate">
+                              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                              <span className="max-w-[100px] truncate text-xs font-medium whitespace-nowrap">
                                 {stage.name}
                               </span>
                               {stageStats && stageStats.count > 0 && (
-                                <span className="text-[10px] font-bold opacity-70 ml-0.5">
-                                  {stageStats.count}
-                                </span>
+                                <span className="ml-0.5 text-[10px] font-bold opacity-70">{stageStats.count}</span>
                               )}
                             </div>
                           </React.Fragment>
@@ -701,58 +680,45 @@ export const PipelineSettingsPage: React.FC = () => {
               )}
 
               {/* Stage Builder */}
-              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
-                <h3 className="text-sm font-medium text-theme-text-secondary mb-4">
-                  Pipeline Stages
-                </h3>
-                <PipelineBuilder
-                  pipeline={currentPipeline}
-                  onPipelineUpdated={handlePipelineUpdated}
-                />
+              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+                <h3 className="text-theme-text-secondary mb-4 text-sm font-medium">Pipeline Stages</h3>
+                <PipelineBuilder pipeline={currentPipeline} onPipelineUpdated={handlePipelineUpdated} />
               </div>
 
               {/* Inactivity Configuration */}
-              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Clock className="w-4 h-4 text-amber-700 dark:text-amber-400" aria-hidden="true" />
-                  <h3 className="text-sm font-medium text-theme-text-secondary">
-                    Inactivity Timeout
-                  </h3>
+              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-4">
+                <div className="mb-1 flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-amber-700 dark:text-amber-400" aria-hidden="true" />
+                  <h3 className="text-theme-text-secondary text-sm font-medium">Inactivity Timeout</h3>
                 </div>
-                <p className="text-xs text-theme-text-muted mb-5">
-                  Applications with no activity within the timeout period will be automatically
-                  marked inactive. Individual stages can override this default in their settings.
+                <p className="text-theme-text-muted mb-5 text-xs">
+                  Applications with no activity within the timeout period will be automatically marked inactive.
+                  Individual stages can override this default in their settings.
                 </p>
 
                 {/* Timeout Preset */}
                 <div className="space-y-5">
                   <div>
-                    <label className="block text-sm text-theme-text-muted mb-2">
-                      Default Inactivity Period
-                    </label>
+                    <label className="text-theme-text-muted mb-2 block text-sm">Default Inactivity Period</label>
                     <div className="flex flex-wrap gap-2">
-                      {(Object.keys(TIMEOUT_PRESET_LABELS) as InactivityTimeoutPreset[]).map(
-                        (preset) => (
-                          <button
-                            key={preset}
-                            onClick={() =>
-                              setInactivityConfig({ ...inactivityConfig, timeout_preset: preset })
-                            }
-                            className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                              inactivityConfig.timeout_preset === preset
-                                ? 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-400'
-                                : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-border'
-                            }`}
-                          >
-                            {TIMEOUT_PRESET_LABELS[preset]}
-                          </button>
-                        )
-                      )}
+                      {(Object.keys(TIMEOUT_PRESET_LABELS) as InactivityTimeoutPreset[]).map((preset) => (
+                        <button
+                          key={preset}
+                          onClick={() => setInactivityConfig({ ...inactivityConfig, timeout_preset: preset })}
+                          className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                            inactivityConfig.timeout_preset === preset
+                              ? 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-400'
+                              : 'border-theme-surface-border text-theme-text-secondary hover:border-theme-surface-border'
+                          }`}
+                        >
+                          {TIMEOUT_PRESET_LABELS[preset]}
+                        </button>
+                      ))}
                     </div>
                     {/* Calculated days display */}
                     {effectiveTimeoutDays && (
-                      <p className="text-xs text-theme-text-muted mt-2 flex items-center gap-1">
-                        <Clock className="w-3 h-3" aria-hidden="true" />
+                      <p className="text-theme-text-muted mt-2 flex items-center gap-1 text-xs">
+                        <Clock className="h-3 w-3" aria-hidden="true" />
                         Applications will go inactive after <strong>{effectiveTimeoutDays} days</strong> of no activity
                       </p>
                     )}
@@ -761,7 +727,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   {/* Custom Days Input */}
                   {inactivityConfig.timeout_preset === 'custom' && (
                     <div>
-                      <label htmlFor="custom-timeout-days" className="block text-sm text-theme-text-muted mb-2">
+                      <label htmlFor="custom-timeout-days" className="text-theme-text-muted mb-2 block text-sm">
                         Custom Timeout (days)
                       </label>
                       <input
@@ -776,7 +742,7 @@ export const PipelineSettingsPage: React.FC = () => {
                             custom_timeout_days: Math.max(1, Number(e.target.value)),
                           })
                         }
-                        className="w-32 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-32 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                       />
                     </div>
                   )}
@@ -784,7 +750,7 @@ export const PipelineSettingsPage: React.FC = () => {
                   {/* Warning Threshold */}
                   {inactivityConfig.timeout_preset !== 'never' && (
                     <div>
-                      <label htmlFor="warning-threshold" className="block text-sm text-theme-text-muted mb-2">
+                      <label htmlFor="warning-threshold" className="text-theme-text-muted mb-2 block text-sm">
                         Warning Threshold
                       </label>
                       <div className="flex items-center gap-3">
@@ -803,12 +769,12 @@ export const PipelineSettingsPage: React.FC = () => {
                           }
                           className="flex-1 accent-red-500"
                         />
-                        <span className="text-sm text-theme-text-secondary w-12 text-right">
+                        <span className="text-theme-text-secondary w-12 text-right text-sm">
                           {inactivityConfig.warning_threshold_percent}%
                         </span>
                       </div>
                       {warningDays && effectiveTimeoutDays && (
-                        <p className="text-xs text-theme-text-muted mt-1">
+                        <p className="text-theme-text-muted mt-1 text-xs">
                           Warning at {warningDays} days, inactive at {effectiveTimeoutDays} days
                         </p>
                       )}
@@ -817,15 +783,15 @@ export const PipelineSettingsPage: React.FC = () => {
 
                   {/* Stage Override Indicators */}
                   {stagesWithOverrides.length > 0 && (
-                    <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
-                      <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-2">
+                    <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                      <p className="mb-2 text-xs font-medium text-blue-700 dark:text-blue-400">
                         Stage-specific timeout overrides:
                       </p>
                       <div className="space-y-1">
                         {stagesWithOverrides.map((stage) => (
                           <div key={stage.id} className="flex items-center justify-between text-xs">
                             <span className="text-theme-text-secondary">{stage.name}</span>
-                            <span className="text-blue-700 dark:text-blue-400 font-medium">
+                            <span className="font-medium text-blue-700 dark:text-blue-400">
                               {stage.inactivity_timeout_days} days
                             </span>
                           </div>
@@ -836,12 +802,12 @@ export const PipelineSettingsPage: React.FC = () => {
 
                   {/* Notifications */}
                   <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Bell className="w-3.5 h-3.5 text-theme-text-muted" aria-hidden="true" />
-                      <label className="text-sm text-theme-text-muted">Notifications</label>
+                    <div className="mb-3 flex items-center gap-2">
+                      <Bell className="text-theme-text-muted h-3.5 w-3.5" aria-hidden="true" />
+                      <label className="text-theme-text-muted text-sm">Notifications</label>
                     </div>
-                    <div className="space-y-2 ml-5">
-                      <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                    <div className="ml-5 space-y-2">
+                      <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                         <input
                           type="checkbox"
                           checked={inactivityConfig.notify_coordinator}
@@ -851,11 +817,11 @@ export const PipelineSettingsPage: React.FC = () => {
                               notify_coordinator: e.target.checked,
                             })
                           }
-                          className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                          className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                         />
                         Notify membership coordinator when applications approach timeout
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                      <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                         <input
                           type="checkbox"
                           checked={inactivityConfig.notify_applicant}
@@ -865,7 +831,7 @@ export const PipelineSettingsPage: React.FC = () => {
                               notify_applicant: e.target.checked,
                             })
                           }
-                          className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                          className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                         />
                         Notify the applicant that their application is going inactive
                       </label>
@@ -873,12 +839,12 @@ export const PipelineSettingsPage: React.FC = () => {
                   </div>
 
                   {/* Auto-Purge */}
-                  <div className="border-t border-theme-surface-border pt-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Trash className="w-3.5 h-3.5 text-red-700 dark:text-red-400" aria-hidden="true" />
-                      <label className="text-sm text-theme-text-muted">Auto-Purge</label>
+                  <div className="border-theme-surface-border border-t pt-5">
+                    <div className="mb-3 flex items-center gap-2">
+                      <Trash className="h-3.5 w-3.5 text-red-700 dark:text-red-400" aria-hidden="true" />
+                      <label className="text-theme-text-muted text-sm">Auto-Purge</label>
                     </div>
-                    <label className="flex items-center gap-2 text-sm text-theme-text-secondary mb-3">
+                    <label className="text-theme-text-secondary mb-3 flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"
                         checked={inactivityConfig.auto_purge_enabled}
@@ -888,13 +854,13 @@ export const PipelineSettingsPage: React.FC = () => {
                             auto_purge_enabled: e.target.checked,
                           })
                         }
-                        className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                        className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                       />
                       Permanently delete inactive applications after a set period
                     </label>
                     {inactivityConfig.auto_purge_enabled && (
                       <>
-                        <div className="flex items-center gap-3 ml-6 mb-3">
+                        <div className="mb-3 ml-6 flex items-center gap-3">
                           <input
                             type="number"
                             min={30}
@@ -907,18 +873,18 @@ export const PipelineSettingsPage: React.FC = () => {
                               })
                             }
                             aria-label="Days after becoming inactive before purging"
-                            className="w-24 bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                            className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-24 rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                           />
-                          <span className="text-sm text-theme-text-muted">
-                            days after becoming inactive
-                          </span>
+                          <span className="text-theme-text-muted text-sm">days after becoming inactive</span>
                         </div>
-                        <div className="flex items-start gap-2 ml-6 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
-                          <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+                        <div className="ml-6 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                          <AlertTriangle
+                            className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400"
+                            aria-hidden="true"
+                          />
                           <p className="text-xs text-amber-700 dark:text-amber-300/80">
-                            Purged applications are permanently deleted and cannot be recovered. This
-                            helps reduce the amount of private information stored in the event of a
-                            security incident.
+                            Purged applications are permanently deleted and cannot be recovered. This helps reduce the
+                            amount of private information stored in the event of a security incident.
                           </p>
                         </div>
                       </>
@@ -928,14 +894,16 @@ export const PipelineSettingsPage: React.FC = () => {
                   {/* Save Button */}
                   <div className="flex items-center justify-end pt-2">
                     <button
-                      onClick={() => { void handleSaveInactivitySettings(); }}
+                      onClick={() => {
+                        void handleSaveInactivitySettings();
+                      }}
                       disabled={isSavingInactivity}
-                      className="btn-primary flex gap-2 items-center text-sm"
+                      className="btn-primary flex items-center gap-2 text-sm"
                     >
                       {isSavingInactivity ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                       ) : (
-                        <Save className="w-3.5 h-3.5" aria-hidden="true" />
+                        <Save className="h-3.5 w-3.5" aria-hidden="true" />
                       )}
                       Save Inactivity Settings
                     </button>
@@ -944,34 +912,31 @@ export const PipelineSettingsPage: React.FC = () => {
               </div>
 
               {/* Public Status Page Settings */}
-              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Globe className="w-4 h-4 text-theme-text-muted" aria-hidden="true" />
-                  <h3 className="text-sm font-semibold text-theme-text-primary">
-                    Public Application Status Page
-                  </h3>
+              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <Globe className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+                  <h3 className="text-theme-text-primary text-sm font-semibold">Public Application Status Page</h3>
                 </div>
-                <p className="text-xs text-theme-text-muted mb-4">
-                  When enabled, prospects receive a link to check their application status.
-                  Only stages marked as &quot;public visible&quot; in the stage settings will be shown.
+                <p className="text-theme-text-muted mb-4 text-xs">
+                  When enabled, prospects receive a link to check their application status. Only stages marked as
+                  &quot;public visible&quot; in the stage settings will be shown.
                 </p>
-                <label className="flex items-center gap-2 text-sm text-theme-text-secondary">
+                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
                     checked={currentPipeline.public_status_enabled}
-                    onChange={() => { void handleTogglePublicStatus(); }}
-                    className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    onChange={() => {
+                      void handleTogglePublicStatus();
+                    }}
+                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
                   />
                   Allow prospects to check their application status via a public link
                 </label>
               </div>
 
               {/* Report Stage Groups */}
-              <div className="bg-theme-input-bg border border-theme-surface-border rounded-lg p-5">
-                <ReportStageGroupsEditor
-                  pipeline={currentPipeline}
-                  onSaved={handlePipelineUpdated}
-                />
+              <div className="bg-theme-input-bg border-theme-surface-border rounded-lg border p-5">
+                <ReportStageGroupsEditor pipeline={currentPipeline} onSaved={handlePipelineUpdated} />
               </div>
             </div>
           )}
@@ -982,7 +947,9 @@ export const PipelineSettingsPage: React.FC = () => {
       <ConfirmDialog
         isOpen={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}
-        onConfirm={() => { void handleDeletePipeline(); }}
+        onConfirm={() => {
+          void handleDeletePipeline();
+        }}
         title="Delete Pipeline"
         message={
           currentPipeline && (currentPipeline.applicant_count ?? 0) > 0
@@ -997,16 +964,21 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Clone Pipeline Modal */}
       {showCloneModal && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="clone-pipeline-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowCloneModal(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setShowCloneModal(false);
+          }}
         >
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
-              <h2 id="clone-pipeline-title" className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
-                <Copy className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+              <h2
+                id="clone-pipeline-title"
+                className="text-theme-text-primary flex items-center gap-2 text-lg font-bold"
+              >
+                <Copy className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
                 Clone Pipeline
               </h2>
               <button
@@ -1014,14 +986,14 @@ export const PipelineSettingsPage: React.FC = () => {
                 className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 aria-label="Close dialog"
               >
-                <Plus className="w-5 h-5 rotate-45" aria-hidden="true" />
+                <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
               </button>
             </div>
             <div className="p-6">
-              <p className="text-sm text-theme-text-muted mb-4">
+              <p className="text-theme-text-muted mb-4 text-sm">
                 Create a copy of &quot;{currentPipeline?.name}&quot; with all its stages.
               </p>
-              <label htmlFor="clone-pipeline-name" className="block text-sm text-theme-text-muted mb-1">
+              <label htmlFor="clone-pipeline-name" className="text-theme-text-muted mb-1 block text-sm">
                 New Pipeline Name <span aria-hidden="true">*</span>
               </label>
               <input
@@ -1032,22 +1004,24 @@ export const PipelineSettingsPage: React.FC = () => {
                 placeholder="e.g., New Member Onboarding (Copy)"
                 required
                 aria-required="true"
-                className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
               />
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
+            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
               <button
                 onClick={() => setShowCloneModal(false)}
-                className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => { void handleClonePipeline(); }}
+                onClick={() => {
+                  void handleClonePipeline();
+                }}
                 disabled={isCloning || !cloneName.trim()}
-                className="btn-primary flex gap-2 items-center px-6"
+                className="btn-primary flex items-center gap-2 px-6"
               >
-                {isCloning && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
+                {isCloning && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 Clone
               </button>
             </div>
@@ -1058,16 +1032,21 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Save as Template Modal */}
       {showSaveTemplateModal && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="save-template-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowSaveTemplateModal(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setShowSaveTemplateModal(false);
+          }}
         >
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
-              <h2 id="save-template-title" className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
-                <BookTemplate className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+              <h2
+                id="save-template-title"
+                className="text-theme-text-primary flex items-center gap-2 text-lg font-bold"
+              >
+                <BookTemplate className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
                 Save as Template
               </h2>
               <button
@@ -1075,14 +1054,14 @@ export const PipelineSettingsPage: React.FC = () => {
                 className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 aria-label="Close dialog"
               >
-                <Plus className="w-5 h-5 rotate-45" aria-hidden="true" />
+                <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
               </button>
             </div>
             <div className="p-6">
-              <p className="text-sm text-theme-text-muted mb-4">
+              <p className="text-theme-text-muted mb-4 text-sm">
                 Save &quot;{currentPipeline?.name}&quot; as a reusable template for future pipelines.
               </p>
-              <label htmlFor="template-name" className="block text-sm text-theme-text-muted mb-1">
+              <label htmlFor="template-name" className="text-theme-text-muted mb-1 block text-sm">
                 Template Name <span aria-hidden="true">*</span>
               </label>
               <input
@@ -1093,22 +1072,24 @@ export const PipelineSettingsPage: React.FC = () => {
                 placeholder="e.g., Standard Onboarding Template"
                 required
                 aria-required="true"
-                className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
               />
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
+            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
               <button
                 onClick={() => setShowSaveTemplateModal(false)}
-                className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => { void handleSaveAsTemplate(); }}
+                onClick={() => {
+                  void handleSaveAsTemplate();
+                }}
                 disabled={isSavingTemplate || !templateName.trim()}
-                className="btn-primary flex gap-2 items-center px-6"
+                className="btn-primary flex items-center gap-2 px-6"
               >
-                {isSavingTemplate && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
+                {isSavingTemplate && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 Save Template
               </button>
             </div>
@@ -1119,16 +1100,21 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Template Gallery Modal */}
       {showTemplateGallery && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="template-gallery-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowTemplateGallery(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setShowTemplateGallery(false);
+          }}
         >
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-lg w-full max-h-[80dvh] flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
-              <h2 id="template-gallery-title" className="text-lg font-bold text-theme-text-primary flex items-center gap-2">
-                <BookTemplate className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
+          <div className="bg-theme-surface-modal border-theme-surface-border flex max-h-[80dvh] w-full max-w-lg flex-col rounded-xl border">
+            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+              <h2
+                id="template-gallery-title"
+                className="text-theme-text-primary flex items-center gap-2 text-lg font-bold"
+              >
+                <BookTemplate className="text-theme-text-muted h-5 w-5" aria-hidden="true" />
                 Template Gallery
               </h2>
               <button
@@ -1136,45 +1122,43 @@ export const PipelineSettingsPage: React.FC = () => {
                 className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 aria-label="Close dialog"
               >
-                <Plus className="w-5 h-5 rotate-45" aria-hidden="true" />
+                <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
               </button>
             </div>
-            <div className="p-6 overflow-y-auto flex-1">
+            <div className="flex-1 overflow-y-auto p-6">
               {isLoadingTemplates ? (
                 <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
-                  <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" aria-hidden="true" />
+                  <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" aria-hidden="true" />
                 </div>
               ) : templates.length === 0 ? (
-                <div className="text-center py-8">
-                  <BookTemplate className="w-10 h-10 text-theme-text-muted mx-auto mb-3" aria-hidden="true" />
-                  <p className="text-sm text-theme-text-muted mb-1">No templates available</p>
-                  <p className="text-xs text-theme-text-muted">
-                    Save a pipeline as a template to see it here.
-                  </p>
+                <div className="py-8 text-center">
+                  <BookTemplate className="text-theme-text-muted mx-auto mb-3 h-10 w-10" aria-hidden="true" />
+                  <p className="text-theme-text-muted mb-1 text-sm">No templates available</p>
+                  <p className="text-theme-text-muted text-xs">Save a pipeline as a template to see it here.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {templates.map((tpl) => (
                     <div
                       key={tpl.id}
-                      className="p-4 border border-theme-surface-border rounded-lg hover:border-red-500/30 transition-colors"
+                      className="border-theme-surface-border rounded-lg border p-4 transition-colors hover:border-red-500/30"
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-medium text-theme-text-primary">{tpl.name}</h3>
-                        <span className="text-xs text-theme-text-muted">{tpl.stage_count} stages</span>
+                      <div className="mb-2 flex items-center justify-between">
+                        <h3 className="text-theme-text-primary text-sm font-medium">{tpl.name}</h3>
+                        <span className="text-theme-text-muted text-xs">{tpl.stage_count} stages</span>
                       </div>
-                      {tpl.description && (
-                        <p className="text-xs text-theme-text-muted mb-3">{tpl.description}</p>
-                      )}
+                      {tpl.description && <p className="text-theme-text-muted mb-3 text-xs">{tpl.description}</p>}
                       <button
-                        onClick={() => { void handleUseTemplate(tpl.id, `${tpl.name} Pipeline`); }}
+                        onClick={() => {
+                          void handleUseTemplate(tpl.id, `${tpl.name} Pipeline`);
+                        }}
                         disabled={isCreatingFromTemplate}
-                        className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5"
+                        className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
                       >
                         {isCreatingFromTemplate ? (
-                          <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                          <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
                         ) : (
-                          <Plus className="w-3 h-3" aria-hidden="true" />
+                          <Plus className="h-3 w-3" aria-hidden="true" />
                         )}
                         Use Template
                       </button>
@@ -1190,26 +1174,30 @@ export const PipelineSettingsPage: React.FC = () => {
       {/* Create Pipeline Modal */}
       {showCreateModal && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="create-pipeline-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowCreateModal(false); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setShowCreateModal(false);
+          }}
         >
-          <div className="bg-theme-surface-modal border border-theme-surface-border rounded-xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-theme-surface-border">
-              <h2 id="create-pipeline-title" className="text-lg font-bold text-theme-text-primary">Create Pipeline</h2>
+          <div className="bg-theme-surface-modal border-theme-surface-border w-full max-w-md rounded-xl border">
+            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+              <h2 id="create-pipeline-title" className="text-theme-text-primary text-lg font-bold">
+                Create Pipeline
+              </h2>
               <button
                 onClick={() => setShowCreateModal(false)}
                 className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
                 aria-label="Close dialog"
               >
-                <Plus className="w-5 h-5 rotate-45" aria-hidden="true" />
+                <Plus className="h-5 w-5 rotate-45" aria-hidden="true" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="space-y-4 p-6">
               <div>
-                <label htmlFor="create-pipeline-name" className="block text-sm text-theme-text-muted mb-1">
+                <label htmlFor="create-pipeline-name" className="text-theme-text-muted mb-1 block text-sm">
                   Pipeline Name <span aria-hidden="true">*</span>
                 </label>
                 <input
@@ -1220,11 +1208,11 @@ export const PipelineSettingsPage: React.FC = () => {
                   placeholder="e.g., New Member Onboarding"
                   required
                   aria-required="true"
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 />
               </div>
               <div>
-                <label htmlFor="create-pipeline-description" className="block text-sm text-theme-text-muted mb-1">
+                <label htmlFor="create-pipeline-description" className="text-theme-text-muted mb-1 block text-sm">
                   Description
                 </label>
                 <textarea
@@ -1233,23 +1221,25 @@ export const PipelineSettingsPage: React.FC = () => {
                   onChange={(e) => setPipelineDescription(e.target.value)}
                   placeholder="Describe this pipeline's purpose..."
                   rows={3}
-                  className="w-full bg-theme-surface-hover border border-theme-surface-border rounded-lg px-3 py-2 text-theme-text-primary text-sm placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
+                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
                 />
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-theme-surface-border">
+            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors"
+                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => { void handleCreatePipeline(); }}
+                onClick={() => {
+                  void handleCreatePipeline();
+                }}
                 disabled={isCreating}
-                className="btn-primary flex gap-2 items-center px-6"
+                className="btn-primary flex items-center gap-2 px-6"
               >
-                {isCreating && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
+                {isCreating && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 Create Pipeline
               </button>
             </div>
@@ -1267,14 +1257,14 @@ const StatCard: React.FC<{
   value: number | string;
   color: string;
 }> = ({ icon: Icon, label, value, color }) => (
-  <div className="p-3 rounded-lg bg-theme-surface-hover">
-    <div className="flex items-center gap-2 mb-1">
-      <div className={`w-6 h-6 rounded-sm flex items-center justify-center ${color}`}>
-        <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+  <div className="bg-theme-surface-hover rounded-lg p-3">
+    <div className="mb-1 flex items-center gap-2">
+      <div className={`flex h-6 w-6 items-center justify-center rounded-sm ${color}`}>
+        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       </div>
-      <span className="text-xs text-theme-text-muted">{label}</span>
+      <span className="text-theme-text-muted text-xs">{label}</span>
     </div>
-    <p className="text-lg font-bold text-theme-text-primary">{value}</p>
+    <p className="text-theme-text-primary text-lg font-bold">{value}</p>
   </div>
 );
 

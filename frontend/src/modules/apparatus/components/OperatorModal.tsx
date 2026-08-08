@@ -9,12 +9,7 @@ import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { apparatusOperatorService, evocLevelService } from '../services/api';
-import type {
-  ApparatusOperator,
-  ApparatusOperatorCreate,
-  ApparatusOperatorUpdate,
-  EvocLevel,
-} from '../types';
+import type { ApparatusOperator, ApparatusOperatorCreate, ApparatusOperatorUpdate, EvocLevel } from '../types';
 
 interface OperatorModalProps {
   isOpen: boolean;
@@ -71,9 +66,12 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      void evocLevelService.getLevels().then(setEvocLevels).catch(() => {
-        /* EVOC levels may not be configured */
-      });
+      void evocLevelService
+        .getLevels()
+        .then(setEvocLevels)
+        .catch(() => {
+          /* EVOC levels may not be configured */
+        });
     }
   }, [isOpen]);
 
@@ -154,12 +152,7 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={editOperator ? 'Edit Operator' : 'Add Operator'}
-      size="md"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={editOperator ? 'Edit Operator' : 'Add Operator'} size="md">
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         {/* User ID - only for new operators */}
         {!editOperator && (
@@ -180,11 +173,7 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
         {evocLevels.length > 0 && (
           <div>
             <label className={labelClass}>EVOC Certification Level</label>
-            <select
-              className={inputClass}
-              value={f.evocLevelId}
-              onChange={(e) => up('evocLevelId', e.target.value)}
-            >
+            <select className={inputClass} value={f.evocLevelId} onChange={(e) => up('evocLevelId', e.target.value)}>
               <option value="">No EVOC level</option>
               {evocLevels.map((level) => (
                 <option key={level.id} value={level.id}>
@@ -197,45 +186,61 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
 
         {/* Certification */}
         <div className="space-y-3">
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               checked={f.isCertified}
               onChange={(e) => up('isCertified', e.target.checked)}
-              className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+              className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
             />
-            <span className="text-sm text-theme-text-secondary">Certified to operate</span>
+            <span className="text-theme-text-secondary text-sm">Certified to operate</span>
           </label>
 
           {f.isCertified && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pl-6">
+            <div className="grid grid-cols-1 gap-4 pl-6 sm:grid-cols-2">
               <div>
                 <label className={labelClass}>Certification Date</label>
-                <input type="date" className={inputClass} value={f.certificationDate} onChange={(e) => up('certificationDate', e.target.value)} />
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={f.certificationDate}
+                  onChange={(e) => up('certificationDate', e.target.value)}
+                />
               </div>
               <div>
                 <label className={labelClass}>Certification Expiration</label>
-                <input type="date" className={inputClass} value={f.certificationExpiration} onChange={(e) => up('certificationExpiration', e.target.value)} />
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={f.certificationExpiration}
+                  onChange={(e) => up('certificationExpiration', e.target.value)}
+                />
               </div>
             </div>
           )}
         </div>
 
         {/* License */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={labelClass}>License Type Required</label>
-            <input type="text" className={inputClass} value={f.licenseTypeRequired} onChange={(e) => up('licenseTypeRequired', e.target.value)} placeholder="e.g. CDL Class B" />
+            <input
+              type="text"
+              className={inputClass}
+              value={f.licenseTypeRequired}
+              onChange={(e) => up('licenseTypeRequired', e.target.value)}
+              placeholder="e.g. CDL Class B"
+            />
           </div>
           <div className="space-y-2">
-            <label className="flex items-center gap-2 cursor-pointer pt-6">
+            <label className="flex cursor-pointer items-center gap-2 pt-6">
               <input
                 type="checkbox"
                 checked={f.licenseVerified}
                 onChange={(e) => up('licenseVerified', e.target.checked)}
-                className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+                className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
               />
-              <span className="text-sm text-theme-text-secondary">License verified</span>
+              <span className="text-theme-text-secondary text-sm">License verified</span>
             </label>
           </div>
         </div>
@@ -243,39 +248,50 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
         {f.licenseVerified && (
           <div className="pl-6">
             <label className={labelClass}>License Verified Date</label>
-            <input type="date" className={inputClass} value={f.licenseVerifiedDate} onChange={(e) => up('licenseVerifiedDate', e.target.value)} />
+            <input
+              type="date"
+              className={inputClass}
+              value={f.licenseVerifiedDate}
+              onChange={(e) => up('licenseVerifiedDate', e.target.value)}
+            />
           </div>
         )}
 
         {/* Restrictions */}
         <div className="space-y-3">
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               checked={f.hasRestrictions}
               onChange={(e) => up('hasRestrictions', e.target.checked)}
-              className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+              className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
             />
-            <span className="text-sm text-theme-text-secondary">Has operating restrictions</span>
+            <span className="text-theme-text-secondary text-sm">Has operating restrictions</span>
           </label>
 
           {f.hasRestrictions && (
             <div className="pl-6">
               <label className={labelClass}>Restriction Notes</label>
-              <textarea className={inputClass} rows={2} value={f.restrictionNotes} onChange={(e) => up('restrictionNotes', e.target.value)} placeholder="Describe restrictions..." />
+              <textarea
+                className={inputClass}
+                rows={2}
+                value={f.restrictionNotes}
+                onChange={(e) => up('restrictionNotes', e.target.value)}
+                placeholder="Describe restrictions..."
+              />
             </div>
           )}
         </div>
 
         {/* Active Status */}
-        <label className="flex items-center gap-2 cursor-pointer">
+        <label className="flex cursor-pointer items-center gap-2">
           <input
             type="checkbox"
             checked={f.isActive}
             onChange={(e) => up('isActive', e.target.checked)}
-            className="w-4 h-4 rounded border-theme-surface-border text-red-600 focus:ring-red-500"
+            className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
           />
-          <span className="text-sm text-theme-text-secondary">Active operator</span>
+          <span className="text-theme-text-secondary text-sm">Active operator</span>
         </label>
 
         {/* Notes */}
@@ -285,8 +301,12 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-theme-surface-border">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-theme-text-secondary hover:text-theme-text-primary transition-colors">
+        <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+          >
             Cancel
           </button>
           <button type="submit" disabled={saving} className="btn-primary px-6 py-2">

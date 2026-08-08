@@ -79,29 +79,33 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          onBlur={() => { void handleSave(); }}
+          onBlur={() => {
+            void handleSave();
+          }}
           disabled={saving}
-          className={`px-2 py-1 text-sm bg-theme-input-bg border border-red-500 rounded-sm text-theme-text-primary focus:outline-hidden ${inputClassName}`}
+          className={`bg-theme-input-bg text-theme-text-primary rounded-sm border border-red-500 px-2 py-1 text-sm focus:outline-hidden ${inputClassName}`}
         />
         {saving ? (
-          <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
+          <Loader2 className="text-theme-text-muted h-4 w-4 animate-spin" />
         ) : (
           <>
             <button
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => { void handleSave(); }}
-              className="p-1 max-sm:min-w-[44px] max-sm:min-h-[44px] inline-flex items-center justify-center text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+              onClick={() => {
+                void handleSave();
+              }}
+              className="inline-flex items-center justify-center p-1 text-green-600 hover:text-green-700 max-sm:min-h-[44px] max-sm:min-w-[44px] dark:text-green-400 dark:hover:text-green-300"
               aria-label="Save"
             >
-              <Check className="w-3.5 h-3.5" />
+              <Check className="h-3.5 w-3.5" />
             </button>
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={handleCancel}
-              className="p-1 max-sm:min-w-[44px] max-sm:min-h-[44px] inline-flex items-center justify-center text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+              className="inline-flex items-center justify-center p-1 text-red-600 hover:text-red-700 max-sm:min-h-[44px] max-sm:min-w-[44px] dark:text-red-400 dark:hover:text-red-300"
               aria-label="Cancel"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </>
         )}
@@ -112,15 +116,17 @@ export const InlineEdit: React.FC<InlineEditProps> = ({
   return (
     <button
       onClick={() => setEditing(true)}
-      className={`group inline-flex items-center gap-1.5 text-left hover:bg-theme-surface-hover rounded-sm px-1 -mx-1 py-0.5 transition-colors ${className}`}
+      className={`group hover:bg-theme-surface-hover -mx-1 inline-flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left transition-colors ${className}`}
       title="Click to edit"
     >
-      {renderDisplay ? renderDisplay(value) : (
+      {renderDisplay ? (
+        renderDisplay(value)
+      ) : (
         <span className={value ? 'text-theme-text-primary' : 'text-theme-text-muted italic'}>
           {value || placeholder}
         </span>
       )}
-      <Pencil className="w-3 h-3 text-theme-text-muted sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
+      <Pencil className="text-theme-text-muted h-3 w-3 transition-opacity sm:opacity-0 sm:group-hover:opacity-100" />
     </button>
   );
 };

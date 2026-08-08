@@ -174,71 +174,77 @@ const FormRenderer = ({
           return true;
       }
     },
-    [formData],
+    [formData]
   );
 
   /** Validate a single field. Returns error string or null. */
-  const validateField = useCallback((field: FieldDefinition): string | null => {
-    if (field.field_type === FieldType.SECTION_HEADER) return null;
-    if (!isFieldVisible(field)) return null;
-    const val = formData[field.id]?.trim() || '';
+  const validateField = useCallback(
+    (field: FieldDefinition): string | null => {
+      if (field.field_type === FieldType.SECTION_HEADER) return null;
+      if (!isFieldVisible(field)) return null;
+      const val = formData[field.id]?.trim() || '';
 
-    if (field.required && !val) {
-      return `${field.label} is required`;
-    }
-    if (val && field.min_length && val.length < field.min_length) {
-      return `Minimum ${field.min_length} characters`;
-    }
-    if (val && field.max_length && val.length > field.max_length) {
-      return `Maximum ${field.max_length} characters`;
-    }
-    if (val && field.field_type === FieldType.NUMBER) {
-      const num = Number(val);
-      if (isNaN(num)) {
-        return 'Must be a number';
+      if (field.required && !val) {
+        return `${field.label} is required`;
       }
-      if (field.min_value !== undefined && field.min_value !== null && num < field.min_value) {
-        return `Minimum value is ${field.min_value}`;
+      if (val && field.min_length && val.length < field.min_length) {
+        return `Minimum ${field.min_length} characters`;
       }
-      if (field.max_value !== undefined && field.max_value !== null && num > field.max_value) {
-        return `Maximum value is ${field.max_value}`;
+      if (val && field.max_length && val.length > field.max_length) {
+        return `Maximum ${field.max_length} characters`;
       }
-    }
-    if (val && field.field_type === FieldType.EMAIL && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
-      return 'Invalid email address';
-    }
-    if (val && field.validation_pattern) {
-      try {
-        const regex = new RegExp(field.validation_pattern);
-        if (!regex.test(val)) {
-          return 'Invalid format';
+      if (val && field.field_type === FieldType.NUMBER) {
+        const num = Number(val);
+        if (isNaN(num)) {
+          return 'Must be a number';
         }
-      } catch {
-        // Skip invalid regex patterns
+        if (field.min_value !== undefined && field.min_value !== null && num < field.min_value) {
+          return `Minimum value is ${field.min_value}`;
+        }
+        if (field.max_value !== undefined && field.max_value !== null && num > field.max_value) {
+          return `Maximum value is ${field.max_value}`;
+        }
       }
-    }
-    return null;
-  }, [formData, isFieldVisible]);
+      if (val && field.field_type === FieldType.EMAIL && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+        return 'Invalid email address';
+      }
+      if (val && field.validation_pattern) {
+        try {
+          const regex = new RegExp(field.validation_pattern);
+          if (!regex.test(val)) {
+            return 'Invalid format';
+          }
+        } catch {
+          // Skip invalid regex patterns
+        }
+      }
+      return null;
+    },
+    [formData, isFieldVisible]
+  );
 
   /** Validate on blur — only shows errors for touched fields. */
-  const handleFieldBlur = useCallback((fieldId: string) => {
-    setTouchedFields((prev) => {
-      const next = new Set(prev);
-      next.add(fieldId);
-      return next;
-    });
-    const field = fields.find((f) => f.id === fieldId);
-    if (!field) return;
-    const fieldError = validateField(field);
-    setFieldErrors((prev) => {
-      if (fieldError) {
-        return { ...prev, [fieldId]: fieldError };
-      }
-      const next = { ...prev };
-      delete next[fieldId];
-      return next;
-    });
-  }, [fields, validateField]);
+  const handleFieldBlur = useCallback(
+    (fieldId: string) => {
+      setTouchedFields((prev) => {
+        const next = new Set(prev);
+        next.add(fieldId);
+        return next;
+      });
+      const field = fields.find((f) => f.id === fieldId);
+      if (!field) return;
+      const fieldError = validateField(field);
+      setFieldErrors((prev) => {
+        if (fieldError) {
+          return { ...prev, [fieldId]: fieldError };
+        }
+        const next = { ...prev };
+        delete next[fieldId];
+        return next;
+      });
+    },
+    [fields, validateField]
+  );
 
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
@@ -313,8 +319,8 @@ const FormRenderer = ({
   if (loading) {
     return (
       <div className="bg-theme-surface-secondary rounded-lg p-8 text-center">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-theme-text-muted" />
-        <p className="text-sm text-theme-text-muted">Loading form...</p>
+        <RefreshCw className="text-theme-text-muted mx-auto mb-2 h-6 w-6 animate-spin" />
+        <p className="text-theme-text-muted text-sm">Loading form...</p>
       </div>
     );
   }
@@ -322,15 +328,12 @@ const FormRenderer = ({
   // Success state
   if (submitted && showSuccessMessage) {
     return (
-      <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-8 text-center">
-        <CheckCircle className="w-10 h-10 mx-auto mb-3 text-green-700 dark:text-green-400" />
-        <h3 className="text-lg font-semibold mb-1 text-theme-text-primary">Submitted Successfully</h3>
-        <p className="text-sm text-theme-text-muted">Your response has been recorded.</p>
+      <div className="bg-theme-surface-secondary border-theme-surface-border rounded-lg border p-8 text-center">
+        <CheckCircle className="mx-auto mb-3 h-10 w-10 text-green-700 dark:text-green-400" />
+        <h3 className="text-theme-text-primary mb-1 text-lg font-semibold">Submitted Successfully</h3>
+        <p className="text-theme-text-muted text-sm">Your response has been recorded.</p>
         {allowResubmit && (
-          <button
-            onClick={handleReset}
-            className="btn-primary mt-4"
-          >
+          <button onClick={handleReset} className="btn-primary mt-4">
             Submit Another Response
           </button>
         )}
@@ -341,8 +344,8 @@ const FormRenderer = ({
   // No fields
   if (fields.length === 0) {
     return (
-      <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-8 text-center">
-        <p className="text-sm text-theme-text-muted">
+      <div className="bg-theme-surface-secondary border-theme-surface-border rounded-lg border p-8 text-center">
+        <p className="text-theme-text-muted text-sm">
           This form has no fields yet. Use the Form Builder to add fields.
         </p>
       </div>
@@ -353,23 +356,26 @@ const FormRenderer = ({
   const formDesc = description || form?.description;
   const hasRequired = fields.some((f) => f.required && f.field_type !== FieldType.SECTION_HEADER);
   const errorEntries = Object.entries(fieldErrors);
-  const visibleFields = fields
-    .filter((f) => isFieldVisible(f))
-    .sort((a, b) => a.sort_order - b.sort_order);
+  const visibleFields = fields.filter((f) => isFieldVisible(f)).sort((a, b) => a.sort_order - b.sort_order);
 
   return (
-    <form onSubmit={(e) => { void handleSubmit(e); }} noValidate>
+    <form
+      onSubmit={(e) => {
+        void handleSubmit(e);
+      }}
+      noValidate
+    >
       {/* Header */}
       {(formTitle || formDesc) && (
         <div className={`mb-${compact ? '4' : '6'}`}>
-          {formTitle && <h3 className="text-lg font-semibold text-theme-text-primary">{formTitle}</h3>}
-          {formDesc && <p className="text-sm mt-1 text-theme-text-muted">{formDesc}</p>}
+          {formTitle && <h3 className="text-theme-text-primary text-lg font-semibold">{formTitle}</h3>}
+          {formDesc && <p className="text-theme-text-muted mt-1 text-sm">{formDesc}</p>}
         </div>
       )}
 
       {/* Required fields legend */}
       {hasRequired && (
-        <p className="text-xs mb-4 text-theme-text-muted">
+        <p className="text-theme-text-muted mb-4 text-xs">
           Fields marked with <span className="text-red-700 dark:text-red-400">*</span> are required.
         </p>
       )}
@@ -379,16 +385,17 @@ const FormRenderer = ({
         <div
           ref={errorSummaryRef}
           tabIndex={-1}
-          role="alert" aria-live="assertive"
-          className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30"
+          role="alert"
+          aria-live="assertive"
+          className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3"
         >
-          <div className="flex items-center gap-2 mb-2">
-            <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 shrink-0" />
+          <div className="mb-2 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
             <p className="text-sm font-medium text-red-700 dark:text-red-300">
               {error || `Please fix ${errorEntries.length} ${errorEntries.length === 1 ? 'error' : 'errors'} below.`}
             </p>
           </div>
-          <ul className="list-disc list-inside space-y-0.5">
+          <ul className="list-inside list-disc space-y-0.5">
             {errorEntries.map(([fieldId, msg]) => (
               <li key={fieldId} className="text-xs text-red-700 dark:text-red-400">
                 <a
@@ -396,7 +403,9 @@ const FormRenderer = ({
                   className="underline hover:no-underline"
                   onClick={(e) => {
                     e.preventDefault();
-                    document.getElementById(`field-${fieldId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    document
+                      .getElementById(`field-${fieldId}`)
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     document.getElementById(`field-${fieldId}`)?.focus();
                   }}
                 >
@@ -410,8 +419,8 @@ const FormRenderer = ({
 
       {/* Error banner (only show if no error entries — avoids duplication) */}
       {error && errorEntries.length === 0 && (
-        <div className="mb-4 p-3 rounded-lg flex items-center gap-2 bg-red-500/10 border border-red-500/30">
-          <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400 shrink-0" />
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+          <AlertCircle className="h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
@@ -434,7 +443,9 @@ const FormRenderer = ({
 
       {/* Actions */}
       {!readOnly && (
-        <div className={`flex items-center gap-3 mt-${compact ? '4' : '6'} pt-${compact ? '3' : '4'} border-t border-theme-surface-border`}>
+        <div
+          className={`flex items-center gap-3 mt-${compact ? '4' : '6'} pt-${compact ? '3' : '4'} border-theme-surface-border border-t`}
+        >
           <button
             type="submit"
             disabled={submitting}
@@ -442,22 +453,18 @@ const FormRenderer = ({
           >
             {submitting ? (
               <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
+                <RefreshCw className="h-4 w-4 animate-spin" />
                 Submitting...
               </>
             ) : (
               <>
-                <Send className="w-4 h-4" />
+                <Send className="h-4 w-4" />
                 {submitLabel}
               </>
             )}
           </button>
           {showCancel && onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="btn-secondary"
-            >
+            <button type="button" onClick={onCancel} className="btn-secondary">
               Cancel
             </button>
           )}

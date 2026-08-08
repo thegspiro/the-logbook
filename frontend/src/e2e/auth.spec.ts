@@ -192,7 +192,10 @@ test.describe('Authentication', () => {
 
       // The navigation's logout control opens a confirmation dialog rather
       // than signing out immediately.
-      await page.getByRole('button', { name: /^logout$/i }).first().click();
+      await page
+        .getByRole('button', { name: /^logout$/i })
+        .first()
+        .click();
 
       // Scope the confirmation to the dialog. Unscoped, "Logout" also matches
       // the navigation button that opened it, and the resulting strict-mode

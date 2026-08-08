@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import {
-  getTimeRemaining,
-  getStatusBadgeClass,
-  getVictoryDescription,
-} from './electionHelpers';
+import { getTimeRemaining, getStatusBadgeClass, getVictoryDescription } from './electionHelpers';
 import { ElectionStatus, VictoryCondition } from '../constants/enums';
 import type { Election } from '../types/election';
 
@@ -69,9 +65,7 @@ describe('getStatusBadgeClass', () => {
   });
 
   it('returns muted classes for closed elections', () => {
-    expect(getStatusBadgeClass(ElectionStatus.CLOSED)).toContain(
-      'text-theme-text-muted',
-    );
+    expect(getStatusBadgeClass(ElectionStatus.CLOSED)).toContain('text-theme-text-muted');
   });
 
   it('falls back to muted classes for unknown statuses', () => {

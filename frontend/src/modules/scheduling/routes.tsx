@@ -12,52 +12,30 @@ import { Route } from 'react-router';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 
-const SchedulingPage = lazyWithRetry(
-  () => import('../../pages/SchedulingPage'),
-);
+const SchedulingPage = lazyWithRetry(() => import('../../pages/SchedulingPage'));
 
-const SchedulingTemplatesPage = lazyWithRetry(
-  () => import('../../pages/scheduling/SchedulingTemplatesPage'),
-);
+const SchedulingTemplatesPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingTemplatesPage'));
 
-const SchedulingPatternsPage = lazyWithRetry(
-  () => import('../../pages/scheduling/SchedulingPatternsPage'),
-);
+const SchedulingPatternsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingPatternsPage'));
 
-const SchedulingAdminReportsPage = lazyWithRetry(
-  () => import('../../pages/scheduling/SchedulingAdminReportsPage'),
-);
+const SchedulingAdminReportsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingAdminReportsPage'));
 
-const SchedulingSettingsPage = lazyWithRetry(
-  () => import('../../pages/scheduling/SchedulingSettingsPage'),
-);
+const SchedulingSettingsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingSettingsPage'));
 
-const SchedulingPlatoonsPage = lazyWithRetry(
-  () => import('../../pages/scheduling/SchedulingPlatoonsPage'),
-);
+const SchedulingPlatoonsPage = lazyWithRetry(() => import('../../pages/scheduling/SchedulingPlatoonsPage'));
 
 const EquipmentCheckTemplateBuilder = lazyWithRetry(
-  () => import('../../pages/scheduling/EquipmentCheckTemplateBuilder'),
+  () => import('../../pages/scheduling/EquipmentCheckTemplateBuilder')
 );
 
-const EquipmentCheckReportsPage = lazyWithRetry(
-  () => import('../../pages/scheduling/EquipmentCheckReportsPage'),
-);
+const EquipmentCheckReportsPage = lazyWithRetry(() => import('../../pages/scheduling/EquipmentCheckReportsPage'));
 
-const SupplyExpiringPage = lazyWithRetry(
-  () => import('../../pages/scheduling/SupplyExpiringPage'),
-);
+const SupplyExpiringPage = lazyWithRetry(() => import('../../pages/scheduling/SupplyExpiringPage'));
 
-const ShiftCheckInPage = lazyWithRetry(
-  () => import('../../pages/scheduling/ShiftCheckInPage'),
-);
+const ShiftCheckInPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftCheckInPage'));
 
-const ShiftCheckInPrintPage = lazyWithRetry(
-  () => import('../../pages/scheduling/ShiftCheckInPrintPage'),
-);
-const ShiftReportPrintPage = lazyWithRetry(
-  () => import('../../pages/scheduling/ShiftReportPrintPage'),
-);
+const ShiftCheckInPrintPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftCheckInPrintPage'));
+const ShiftReportPrintPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftReportPrintPage'));
 
 export const getSchedulingRoutes = () => {
   return (
@@ -154,13 +132,7 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/supply/expiring"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute
-              requiredAnyPermission={[
-                'scheduling.manage',
-                'equipment_check.view',
-                'inventory.view',
-              ]}
-            >
+            <ProtectedRoute requiredAnyPermission={['scheduling.manage', 'equipment_check.view', 'inventory.view']}>
               <SupplyExpiringPage />
             </ProtectedRoute>
           </Suspense>

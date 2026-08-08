@@ -20,32 +20,32 @@ interface CategoryFormProps {
 
 const CategoryForm: React.FC<CategoryFormProps> = ({ formData, onChange, onSubmit, isEditing, onCancel }) => {
   return (
-    <div className="bg-theme-surface rounded-lg shadow-md p-6 mb-6">
-      <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
+    <div className="bg-theme-surface mb-6 rounded-lg p-6 shadow-md">
+      <h3 className="text-theme-text-primary mb-4 text-lg font-semibold">
         {isEditing ? 'Edit Category' : 'New Category'}
       </h3>
       <form onSubmit={onSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Name *</label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Name *</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => onChange({ ...formData, name: e.target.value })}
-              className="card-secondary focus:border-transparent focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-theme-text-primary w-full"
+              className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:border-transparent focus:ring-2"
               required
               placeholder="e.g., Building Maintenance"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Color</label>
-            <div className="flex gap-2 items-center">
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Color</label>
+            <div className="flex items-center gap-2">
               {DEFAULT_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => onChange({ ...formData, color: c })}
-                  className={`w-8 h-8 rounded-full border-2 transition ${formData.color === c ? 'border-theme-surface scale-110 ring-2 ring-blue-500' : 'border-transparent'}`}
+                  className={`h-8 w-8 rounded-full border-2 transition ${formData.color === c ? 'border-theme-surface scale-110 ring-2 ring-blue-500' : 'border-transparent'}`}
                   style={{ backgroundColor: c }}
                 />
               ))}
@@ -54,49 +54,55 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ formData, onChange, onSubmi
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-1">Description</label>
+          <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Description</label>
           <textarea
             value={formData.description ?? ''}
             onChange={(e) => onChange({ ...formData, description: e.target.value })}
             rows={2}
-            className="card-secondary focus:border-transparent focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-theme-text-primary w-full"
+            className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:border-transparent focus:ring-2"
             placeholder="Brief description of this type of admin work"
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <label className="flex items-center gap-2 cursor-pointer">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <label className="flex cursor-pointer items-center gap-2">
             <input
               type="checkbox"
               checked={formData.require_approval ?? true}
               onChange={(e) => onChange({ ...formData, require_approval: e.target.checked })}
-              className="w-4 h-4 rounded-sm border-theme-input-border"
+              className="border-theme-input-border h-4 w-4 rounded-sm"
             />
-            <span className="text-sm text-theme-text-secondary">Require approval</span>
+            <span className="text-theme-text-secondary text-sm">Require approval</span>
           </label>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Auto-approve under (hours)</label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">
+              Auto-approve under (hours)
+            </label>
             <input
               type="number"
               step="0.5"
               min="0"
               value={formData.auto_approve_under_hours ?? ''}
-              onChange={(e) => onChange({ ...formData, auto_approve_under_hours: e.target.value ? parseFloat(e.target.value) : null })}
-              className="card-secondary focus:border-transparent focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-theme-text-primary w-full"
+              onChange={(e) =>
+                onChange({ ...formData, auto_approve_under_hours: e.target.value ? parseFloat(e.target.value) : null })
+              }
+              className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:border-transparent focus:ring-2"
               placeholder="e.g., 4"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Max hours per session</label>
+            <label className="text-theme-text-secondary mb-1 block text-sm font-medium">Max hours per session</label>
             <input
               type="number"
               step="0.5"
               min="0.5"
               value={formData.max_hours_per_session ?? ''}
-              onChange={(e) => onChange({ ...formData, max_hours_per_session: e.target.value ? parseFloat(e.target.value) : null })}
-              className="card-secondary focus:border-transparent focus:ring-2 focus:ring-theme-focus-ring px-3 py-2 text-theme-text-primary w-full"
+              onChange={(e) =>
+                onChange({ ...formData, max_hours_per_session: e.target.value ? parseFloat(e.target.value) : null })
+              }
+              className="card-secondary focus:ring-theme-focus-ring text-theme-text-primary w-full px-3 py-2 focus:border-transparent focus:ring-2"
               placeholder="e.g., 12"
             />
           </div>
@@ -106,7 +112,11 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ formData, onChange, onSubmi
           <button type="submit" className="btn-info transition">
             {isEditing ? 'Update' : 'Create'}
           </button>
-          <button type="button" onClick={onCancel} className="px-4 py-2 bg-theme-surface-secondary text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover transition">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg px-4 py-2 transition"
+          >
             Cancel
           </button>
         </div>

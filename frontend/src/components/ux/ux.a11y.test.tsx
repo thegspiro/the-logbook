@@ -50,13 +50,7 @@ describe('UX component accessibility', () => {
 
   it('Pagination has no axe violations', async () => {
     const { container } = render(
-      <Pagination
-        currentPage={2}
-        totalItems={120}
-        pageSize={25}
-        onPageChange={() => {}}
-        onPageSizeChange={() => {}}
-      />
+      <Pagination currentPage={2} totalItems={120} pageSize={25} onPageChange={() => {}} onPageSizeChange={() => {}} />
     );
     expect(await axe(container)).toHaveNoViolations();
   });
@@ -64,12 +58,7 @@ describe('UX component accessibility', () => {
   it('Breadcrumbs has no axe violations', async () => {
     const { container } = render(
       <MemoryRouter initialEntries={['/training/programs']}>
-        <Breadcrumbs
-          items={[
-            { label: 'Training', path: '/training' },
-            { label: 'Programs' },
-          ]}
-        />
+        <Breadcrumbs items={[{ label: 'Training', path: '/training' }, { label: 'Programs' }]} />
       </MemoryRouter>
     );
     expect(await axe(container)).toHaveNoViolations();
@@ -96,11 +85,7 @@ describe('UX component accessibility', () => {
   it('ProgressSteps has no axe violations', async () => {
     const { container } = render(
       <ProgressSteps
-        steps={[
-          { label: 'Profile', description: 'Basic info' },
-          { label: 'Contacts' },
-          { label: 'Review' },
-        ]}
+        steps={[{ label: 'Profile', description: 'Basic info' }, { label: 'Contacts' }, { label: 'Review' }]}
         currentStep={1}
       />
     );

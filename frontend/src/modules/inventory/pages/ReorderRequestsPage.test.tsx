@@ -26,8 +26,12 @@ const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 vi.mock('react-hot-toast', () => ({
   default: {
-    success: (...a: unknown[]): void => { mockToastSuccess(...a); },
-    error: (...a: unknown[]): void => { mockToastError(...a); },
+    success: (...a: unknown[]): void => {
+      mockToastSuccess(...a);
+    },
+    error: (...a: unknown[]): void => {
+      mockToastError(...a);
+    },
   },
 }));
 
@@ -101,10 +105,7 @@ describe('ReorderRequestsPage', () => {
     await screen.findByText('No reorder requests found');
 
     await user.click(screen.getByRole('button', { name: /New Request/ }));
-    await user.type(
-      await screen.findByPlaceholderText('e.g. SCBA Air Cylinders'),
-      'Hose Couplings',
-    );
+    await user.type(await screen.findByPlaceholderText('e.g. SCBA Air Cylinders'), 'Hose Couplings');
     await user.click(screen.getByRole('button', { name: 'Create Request' }));
 
     await waitFor(() => expect(mockCreateReorderRequest).toHaveBeenCalledTimes(1));
@@ -151,9 +152,7 @@ describe('ReorderRequestsPage', () => {
     await user.selectOptions(firstCombobox(), 'approved');
 
     await waitFor(() =>
-      expect(mockGetReorderRequests).toHaveBeenLastCalledWith(
-        expect.objectContaining({ status: 'approved' }),
-      ),
+      expect(mockGetReorderRequests).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'approved' }))
     );
   });
 });

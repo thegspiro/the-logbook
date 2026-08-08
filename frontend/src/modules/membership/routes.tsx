@@ -22,28 +22,35 @@
  *   /members/import → /members/admin?tab=import
  */
 
-import React, { Suspense } from "react";
-import { Route, Navigate } from "react-router";
-import { ProtectedRoute } from "../../components/ProtectedRoute";
-import { lazyWithRetry } from "../../utils/lazyWithRetry";
+import React, { Suspense } from 'react';
+import { Route, Navigate } from 'react-router';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
+import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 // Lazy-loaded pages
-const Members = lazyWithRetry(() => import("../../pages/Members"));
-const MemberProfilePage = lazyWithRetry(() => import("../../pages/MemberProfilePage"));
-const MemberTrainingHistoryPage = lazyWithRetry(() => import("../../pages/MemberTrainingHistoryPage"));
-const MembersAdminHub = lazyWithRetry(() => import("../../pages/MembersAdminHub"));
-const MemberAdminEditPage = lazyWithRetry(() => import("../../pages/MemberAdminEditPage"));
-const MemberAuditHistoryPage = lazyWithRetry(() => import("../../pages/MemberAuditHistoryPage"));
-const MemberIdCardPage = lazyWithRetry(() => import("../../pages/MemberIdCardPage"));
-const MemberScanPage = lazyWithRetry(() => import("../../pages/MemberScanPage"));
-const WaiverManagementPage = lazyWithRetry(() => import("../../pages/WaiverManagementPage"));
-const MemberLabelPrintPage = lazyWithRetry(() => import("../../pages/MemberLabelPrintPage"));
+const Members = lazyWithRetry(() => import('../../pages/Members'));
+const MemberProfilePage = lazyWithRetry(() => import('../../pages/MemberProfilePage'));
+const MemberTrainingHistoryPage = lazyWithRetry(() => import('../../pages/MemberTrainingHistoryPage'));
+const MembersAdminHub = lazyWithRetry(() => import('../../pages/MembersAdminHub'));
+const MemberAdminEditPage = lazyWithRetry(() => import('../../pages/MemberAdminEditPage'));
+const MemberAuditHistoryPage = lazyWithRetry(() => import('../../pages/MemberAuditHistoryPage'));
+const MemberIdCardPage = lazyWithRetry(() => import('../../pages/MemberIdCardPage'));
+const MemberScanPage = lazyWithRetry(() => import('../../pages/MemberScanPage'));
+const WaiverManagementPage = lazyWithRetry(() => import('../../pages/WaiverManagementPage'));
+const MemberLabelPrintPage = lazyWithRetry(() => import('../../pages/MemberLabelPrintPage'));
 
 export const getMembershipRoutes = () => {
   return (
     <React.Fragment>
       {/* Member-facing */}
-      <Route path="/members" element={<Suspense fallback={null}><Members /></Suspense>} />
+      <Route
+        path="/members"
+        element={
+          <Suspense fallback={null}>
+            <Members />
+          </Suspense>
+        }
+      />
       <Route
         path="/members/print-labels"
         element={
@@ -54,14 +61,46 @@ export const getMembershipRoutes = () => {
           </Suspense>
         }
       />
-      <Route path="/members/scan" element={<Suspense fallback={null}><MemberScanPage /></Suspense>} />
-      <Route path="/members/scan" element={<Suspense fallback={null}><MemberScanPage /></Suspense>} />
-      <Route path="/members/:userId" element={<Suspense fallback={null}><MemberProfilePage /></Suspense>} />
+      <Route
+        path="/members/scan"
+        element={
+          <Suspense fallback={null}>
+            <MemberScanPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/members/scan"
+        element={
+          <Suspense fallback={null}>
+            <MemberScanPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/members/:userId"
+        element={
+          <Suspense fallback={null}>
+            <MemberProfilePage />
+          </Suspense>
+        }
+      />
       <Route
         path="/members/:userId/training"
-        element={<Suspense fallback={null}><MemberTrainingHistoryPage /></Suspense>}
+        element={
+          <Suspense fallback={null}>
+            <MemberTrainingHistoryPage />
+          </Suspense>
+        }
       />
-      <Route path="/members/:userId/id-card" element={<Suspense fallback={null}><MemberIdCardPage /></Suspense>} />
+      <Route
+        path="/members/:userId/id-card"
+        element={
+          <Suspense fallback={null}>
+            <MemberIdCardPage />
+          </Suspense>
+        }
+      />
 
       {/* Admin Hub */}
       <Route
@@ -110,18 +149,9 @@ export const getMembershipRoutes = () => {
       />
 
       {/* Legacy redirects to admin hub */}
-      <Route
-        path="/admin/members"
-        element={<Navigate to="/members/admin" replace />}
-      />
-      <Route
-        path="/members/add"
-        element={<Navigate to="/members/admin?tab=add" replace />}
-      />
-      <Route
-        path="/members/import"
-        element={<Navigate to="/members/admin?tab=import" replace />}
-      />
+      <Route path="/admin/members" element={<Navigate to="/members/admin" replace />} />
+      <Route path="/members/add" element={<Navigate to="/members/admin?tab=add" replace />} />
+      <Route path="/members/import" element={<Navigate to="/members/admin?tab=import" replace />} />
     </React.Fragment>
   );
 };

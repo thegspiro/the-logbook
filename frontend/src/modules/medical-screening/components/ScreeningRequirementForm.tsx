@@ -6,15 +6,8 @@
 
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import {
-  ScreeningType,
-  SCREENING_TYPE_LABELS,
-} from '../types';
-import type {
-  ScreeningRequirement,
-  ScreeningRequirementCreate,
-  ScreeningRequirementUpdate,
-} from '../types';
+import { ScreeningType, SCREENING_TYPE_LABELS } from '../types';
+import type { ScreeningRequirement, ScreeningRequirementCreate, ScreeningRequirementUpdate } from '../types';
 
 interface ScreeningRequirementFormProps {
   requirement: ScreeningRequirement | null;
@@ -25,27 +18,17 @@ interface ScreeningRequirementFormProps {
 const inputClass = 'form-input';
 const labelClass = 'text-theme-text-secondary mb-2 block text-sm font-medium';
 
-export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> = ({
-  requirement,
-  onSave,
-  onClose,
-}) => {
+export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> = ({ requirement, onSave, onClose }) => {
   const [name, setName] = useState(requirement?.name ?? '');
   const [screeningType, setScreeningType] = useState<string>(
     requirement?.screening_type ?? ScreeningType.PHYSICAL_EXAM
   );
   const [description, setDescription] = useState(requirement?.description ?? '');
-  const [frequencyMonths, setFrequencyMonths] = useState<string>(
-    requirement?.frequency_months?.toString() ?? '12'
-  );
+  const [frequencyMonths, setFrequencyMonths] = useState<string>(requirement?.frequency_months?.toString() ?? '12');
   const [isOneTime, setIsOneTime] = useState(!requirement?.frequency_months);
-  const [appliesTo, setAppliesTo] = useState(
-    requirement?.applies_to_roles?.join(', ') ?? ''
-  );
+  const [appliesTo, setAppliesTo] = useState(requirement?.applies_to_roles?.join(', ') ?? '');
   const [isActive, setIsActive] = useState(requirement?.is_active ?? true);
-  const [gracePeriodDays, setGracePeriodDays] = useState<string>(
-    requirement?.grace_period_days?.toString() ?? '30'
-  );
+  const [gracePeriodDays, setGracePeriodDays] = useState<string>(requirement?.grace_period_days?.toString() ?? '30');
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -170,9 +153,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
                   onChange={(e) => setFrequencyMonths(e.target.value)}
                   className={inputClass + ' w-32'}
                 />
-                {errors.frequency && (
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.frequency}</p>
-                )}
+                {errors.frequency && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.frequency}</p>}
               </div>
             )}
           </div>
@@ -189,9 +170,7 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
               placeholder="e.g., firefighter, emt, officer"
               className={inputClass}
             />
-            <p className="text-theme-text-muted mt-1 text-xs">
-              Leave blank to apply to all members.
-            </p>
+            <p className="text-theme-text-muted mt-1 text-xs">Leave blank to apply to all members.</p>
           </div>
 
           <div>

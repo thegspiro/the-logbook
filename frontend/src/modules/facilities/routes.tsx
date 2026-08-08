@@ -18,28 +18,14 @@ import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
-const FacilitiesDashboard = lazyWithRetry(
-  () => import('./pages/FacilitiesDashboard'),
-);
-const FacilityLabelPrintPage = lazyWithRetry(
-  () => import('./pages/FacilityLabelPrintPage'),
-);
-const FacilityDetailPage = lazyWithRetry(
-  () => import('./pages/FacilityDetailPage'),
-);
-const MaintenanceListPage = lazyWithRetry(
-  () => import('./pages/MaintenanceListPage'),
-);
-const InspectionsListPage = lazyWithRetry(
-  () => import('./pages/InspectionsListPage'),
-);
+const FacilitiesDashboard = lazyWithRetry(() => import('./pages/FacilitiesDashboard'));
+const FacilityLabelPrintPage = lazyWithRetry(() => import('./pages/FacilityLabelPrintPage'));
+const FacilityDetailPage = lazyWithRetry(() => import('./pages/FacilityDetailPage'));
+const MaintenanceListPage = lazyWithRetry(() => import('./pages/MaintenanceListPage'));
+const InspectionsListPage = lazyWithRetry(() => import('./pages/InspectionsListPage'));
 const LocationsPage = lazyWithRetry(() => import('../../pages/LocationsPage'));
-const ApparatusBasicPage = lazyWithRetry(
-  () => import('../../pages/ApparatusBasicPage'),
-);
-const LocationKioskPage = lazyWithRetry(
-  () => import('../../pages/LocationKioskPage'),
-);
+const ApparatusBasicPage = lazyWithRetry(() => import('../../pages/ApparatusBasicPage'));
+const LocationKioskPage = lazyWithRetry(() => import('../../pages/LocationKioskPage'));
 
 /** Protected facilities routes (rendered inside AppLayout). */
 export const getFacilitiesRoutes = () => (

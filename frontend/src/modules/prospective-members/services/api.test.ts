@@ -1,14 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { mapProspectToApplicant } from './api';
-import type {
-  BackendProspectResponse,
-  BackendStepProgressResponse,
-} from '../types';
+import type { BackendProspectResponse, BackendStepProgressResponse } from '../types';
 import { StepProgressStatus } from '../types';
 
 /** Helper to build a minimal BackendStepProgressResponse */
 function makeStepProgress(
-  overrides: Partial<BackendStepProgressResponse> & { id: string; step_id: string; status: StepProgressStatus },
+  overrides: Partial<BackendStepProgressResponse> & { id: string; step_id: string; status: StepProgressStatus }
 ): BackendStepProgressResponse {
   return {
     prospect_id: 'prospect-1',
@@ -42,9 +39,7 @@ function makeStepProgress(
 }
 
 /** Helper to build a minimal BackendProspectResponse */
-function makeProspectResponse(
-  stepProgress: BackendStepProgressResponse[],
-): BackendProspectResponse {
+function makeProspectResponse(stepProgress: BackendStepProgressResponse[]): BackendProspectResponse {
   return {
     id: 'prospect-1',
     organization_id: 'org-1',
@@ -95,7 +90,12 @@ describe('mapProspectToApplicant', () => {
 
   it('sets total_stages to the full step_progress count including PENDING', () => {
     const stepProgress = [
-      makeStepProgress({ id: 'sp-1', step_id: 'step-1', status: StepProgressStatus.COMPLETED, completed_at: '2026-01-02T00:00:00Z' }),
+      makeStepProgress({
+        id: 'sp-1',
+        step_id: 'step-1',
+        status: StepProgressStatus.COMPLETED,
+        completed_at: '2026-01-02T00:00:00Z',
+      }),
       makeStepProgress({ id: 'sp-2', step_id: 'step-2', status: StepProgressStatus.IN_PROGRESS }),
       makeStepProgress({ id: 'sp-3', step_id: 'step-3', status: StepProgressStatus.PENDING }),
       makeStepProgress({ id: 'sp-4', step_id: 'step-4', status: StepProgressStatus.PENDING }),
@@ -109,7 +109,12 @@ describe('mapProspectToApplicant', () => {
 
   it('includes COMPLETED and SKIPPED steps in stage_history', () => {
     const stepProgress = [
-      makeStepProgress({ id: 'sp-1', step_id: 'step-1', status: StepProgressStatus.COMPLETED, completed_at: '2026-01-02T00:00:00Z' }),
+      makeStepProgress({
+        id: 'sp-1',
+        step_id: 'step-1',
+        status: StepProgressStatus.COMPLETED,
+        completed_at: '2026-01-02T00:00:00Z',
+      }),
       makeStepProgress({ id: 'sp-2', step_id: 'step-2', status: StepProgressStatus.SKIPPED }),
       makeStepProgress({ id: 'sp-3', step_id: 'step-3', status: StepProgressStatus.IN_PROGRESS }),
       makeStepProgress({ id: 'sp-4', step_id: 'step-4', status: StepProgressStatus.PENDING }),
@@ -118,7 +123,7 @@ describe('mapProspectToApplicant', () => {
     const result = mapProspectToApplicant(makeProspectResponse(stepProgress));
 
     expect(result.stage_history).toHaveLength(3);
-    expect(result.stage_history.map(s => s.stage_id)).toEqual(['step-1', 'step-2', 'step-3']);
+    expect(result.stage_history.map((s) => s.stage_id)).toEqual(['step-1', 'step-2', 'step-3']);
   });
 
   it('returns empty stage_history when all steps are PENDING', () => {

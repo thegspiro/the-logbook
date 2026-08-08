@@ -1,15 +1,16 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import {
-  Package,
-  CheckCircle,
-  XCircle,
-  Clock4,
-  Mail,
-} from 'lucide-react';
+import { Package, CheckCircle, XCircle, Clock4, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { apiClient } from '../services/api-client';
-import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, ErrorAlert, AutoSaveNotification } from '../components';
+import {
+  OnboardingHeader,
+  ProgressIndicator,
+  BackButton,
+  ResetProgressButton,
+  ErrorAlert,
+  AutoSaveNotification,
+} from '../components';
 import { useApiRequest } from '../hooks';
 import { useOnboardingStore } from '../store';
 import { getUserFacingModules, type ModuleDefinition } from '../config';
@@ -17,12 +18,12 @@ import { FeatureStatus } from '../../../constants/enums';
 
 const ModuleOverview: React.FC = () => {
   const navigate = useNavigate();
-  const departmentName = useOnboardingStore(state => state.departmentName);
-  const logoPreview = useOnboardingStore(state => state.logoData);
-  const lastSaved = useOnboardingStore(state => state.lastSaved);
-  const moduleStatuses = useOnboardingStore(state => state.moduleStatuses);
-  const setModuleStatus = useOnboardingStore(state => state.setModuleStatus);
-  const setModuleStatuses = useOnboardingStore(state => state.setModuleStatuses);
+  const departmentName = useOnboardingStore((state) => state.departmentName);
+  const logoPreview = useOnboardingStore((state) => state.logoData);
+  const lastSaved = useOnboardingStore((state) => state.lastSaved);
+  const moduleStatuses = useOnboardingStore((state) => state.moduleStatuses);
+  const setModuleStatus = useOnboardingStore((state) => state.setModuleStatus);
+  const setModuleStatuses = useOnboardingStore((state) => state.setModuleStatuses);
   const { execute, isLoading: isSaving, error, canRetry, clearError } = useApiRequest();
 
   // Guard: redirect to start if org setup hasn't been completed
@@ -39,14 +40,17 @@ const ModuleOverview: React.FC = () => {
   React.useEffect(() => {
     if (Object.keys(moduleStatuses).length === 0) {
       const initialStatuses = modules
-        .filter(m => m.priority === 'essential')
-        .reduce((acc, m) => ({ ...acc, [m.id]: 'enabled' as const }), {} as Record<string, 'enabled' | 'skipped' | 'ignored'>);
+        .filter((m) => m.priority === 'essential')
+        .reduce(
+          (acc, m) => ({ ...acc, [m.id]: 'enabled' as const }),
+          {} as Record<string, 'enabled' | 'skipped' | 'ignored'>
+        );
       setModuleStatuses(initialStatuses);
     }
   }, [modules, moduleStatuses, setModuleStatuses]);
 
   const handleModuleAction = (moduleId: string, action: 'start' | 'skip' | 'ignore') => {
-    const module = modules.find(m => m.id === moduleId);
+    const module = modules.find((m) => m.id === moduleId);
 
     if (action === 'start' && module?.configRoute) {
       // Save current state and navigate to module config
@@ -108,62 +112,70 @@ const ModuleOverview: React.FC = () => {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'essential': return 'text-theme-alert-danger-text bg-theme-alert-danger-bg border-theme-alert-danger-border';
-      case 'recommended': return 'text-theme-alert-info-text bg-theme-alert-info-bg border-theme-alert-info-border';
-      case 'optional': return 'text-theme-text-muted bg-theme-surface-secondary border-theme-surface-border';
-      default: return 'text-theme-text-muted bg-theme-surface-secondary border-theme-surface-border';
+      case 'essential':
+        return 'text-theme-alert-danger-text bg-theme-alert-danger-bg border-theme-alert-danger-border';
+      case 'recommended':
+        return 'text-theme-alert-info-text bg-theme-alert-info-bg border-theme-alert-info-border';
+      case 'optional':
+        return 'text-theme-text-muted bg-theme-surface-secondary border-theme-surface-border';
+      default:
+        return 'text-theme-text-muted bg-theme-surface-secondary border-theme-surface-border';
     }
   };
 
   const getStatusIcon = (status?: string) => {
     switch (status) {
-      case 'enabled': return <CheckCircle aria-hidden="true" className="w-4 h-4 text-theme-accent-green" />;
-      case 'skipped': return <Clock4 aria-hidden="true" className="w-4 h-4 text-theme-accent-yellow" />;
-      case 'ignored': return <XCircle aria-hidden="true" className="w-4 h-4 text-theme-text-muted" />;
-      default: return null;
+      case 'enabled':
+        return <CheckCircle aria-hidden="true" className="text-theme-accent-green h-4 w-4" />;
+      case 'skipped':
+        return <Clock4 aria-hidden="true" className="text-theme-accent-yellow h-4 w-4" />;
+      case 'ignored':
+        return <XCircle aria-hidden="true" className="text-theme-text-muted h-4 w-4" />;
+      default:
+        return null;
     }
   };
 
   const groupedModules = {
-    essential: modules.filter(m => m.priority === 'essential'),
-    recommended: modules.filter(m => m.priority === 'recommended'),
-    optional: modules.filter(m => m.priority === 'optional'),
+    essential: modules.filter((m) => m.priority === 'essential'),
+    recommended: modules.filter((m) => m.priority === 'recommended'),
+    optional: modules.filter((m) => m.priority === 'optional'),
   };
 
-  const enabledCount = Object.values(moduleStatuses).filter(s => s === FeatureStatus.ENABLED).length;
+  const enabledCount = Object.values(moduleStatuses).filter((s) => s === FeatureStatus.ENABLED).length;
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex flex-col safe-top">
-      <OnboardingHeader departmentName={departmentName} logoPreview={logoPreview} icon={<Mail aria-hidden="true" className="w-6 h-6 text-white" />} />
+    <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to safe-top flex min-h-screen flex-col bg-linear-to-br">
+      <OnboardingHeader
+        departmentName={departmentName}
+        logoPreview={logoPreview}
+        icon={<Mail aria-hidden="true" className="h-6 w-6 text-white" />}
+      />
 
       <main className="flex-1 p-4 py-8">
-        <div className="max-w-6xl w-full mx-auto">
+        <div className="mx-auto w-full max-w-6xl">
           {/* Navigation Buttons */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="mb-6 flex items-center justify-between">
             <BackButton to="/onboarding/positions" />
             <ResetProgressButton />
           </div>
 
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-600 rounded-full mb-4">
-              <Package aria-hidden="true" className="w-8 h-8 text-white" />
+          <div className="mb-8 text-center">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-red-600">
+              <Package aria-hidden="true" className="h-8 w-8 text-white" />
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
-              Choose Your Modules
-            </h1>
-            <p className="text-xl text-theme-text-secondary mb-2">
-              Select which features you want to use
-            </p>
-            <p className="text-sm text-theme-text-muted max-w-2xl mx-auto">
-              Don't worry - you can enable, disable, or reconfigure any module at any time from your dashboard.
-              The platform is designed to be flexible and adapt to your needs as they evolve.
+            <h1 className="text-theme-text-primary mb-3 text-4xl font-bold md:text-5xl">Choose Your Modules</h1>
+            <p className="text-theme-text-secondary mb-2 text-xl">Select which features you want to use</p>
+            <p className="text-theme-text-muted mx-auto max-w-2xl text-sm">
+              Don't worry - you can enable, disable, or reconfigure any module at any time from your dashboard. The
+              platform is designed to be flexible and adapt to your needs as they evolve.
             </p>
           </div>
 
           {/* Stats Banner */}
-          <div className="card flex items-center justify-between mb-6 p-4">
+          <div className="card mb-6 flex items-center justify-between p-4">
             <div className="flex items-center space-x-4">
               <div className="text-theme-text-primary">
                 <span className="text-2xl font-bold">{enabledCount}</span>
@@ -171,11 +183,13 @@ const ModuleOverview: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => { void handleContinue(); }}
+              onClick={() => {
+                void handleContinue();
+              }}
               disabled={isSaving || enabledCount === 0}
-              className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+              className={`rounded-lg px-6 py-2 font-semibold transition-all ${
                 enabledCount > 0 && !isSaving
-                  ? 'bg-linear-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 text-white'
+                  ? 'bg-linear-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700'
                   : 'bg-theme-surface text-theme-text-muted cursor-not-allowed'
               }`}
             >
@@ -184,60 +198,62 @@ const ModuleOverview: React.FC = () => {
           </div>
 
           {error && (
-            <div className="max-w-md mx-auto mb-6">
+            <div className="mx-auto mb-6 max-w-md">
               <ErrorAlert message={error} canRetry={canRetry} onRetry={handleContinue} onDismiss={clearError} />
             </div>
           )}
 
           {/* Essential Modules */}
           <div className="mb-8">
-            <div className="flex items-center mb-4">
-              <div className="flex-1 h-px bg-theme-alert-danger-border"></div>
-              <h2 className="px-4 text-lg font-bold text-theme-alert-danger-text">ESSENTIAL MODULES</h2>
-              <div className="flex-1 h-px bg-theme-alert-danger-border"></div>
+            <div className="mb-4 flex items-center">
+              <div className="bg-theme-alert-danger-border h-px flex-1"></div>
+              <h2 className="text-theme-alert-danger-text px-4 text-lg font-bold">ESSENTIAL MODULES</h2>
+              <div className="bg-theme-alert-danger-border h-px flex-1"></div>
             </div>
-            <p className="text-center text-theme-text-muted text-sm mb-6">
+            <p className="text-theme-text-muted mb-6 text-center text-sm">
               These core modules are recommended for all departments and are enabled by default
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {groupedModules.essential.map(module => {
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {groupedModules.essential.map((module) => {
                 const Icon = module.icon;
                 const status = moduleStatuses[module.id];
                 return (
                   <div
                     key={module.id}
-                    className="bg-theme-surface backdrop-blur-xs rounded-lg p-6 border-2 border-red-500/30 hover:border-red-500/50 transition-all"
+                    className="bg-theme-surface rounded-lg border-2 border-red-500/30 p-6 backdrop-blur-xs transition-all hover:border-red-500/50"
                   >
-                    <div className="flex items-start justify-between mb-4">
+                    <div className="mb-4 flex items-start justify-between">
                       <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 bg-red-600 rounded-lg flex items-center justify-center">
-                          <Icon className="w-6 h-6 text-white" />
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-600">
+                          <Icon className="h-6 w-6 text-white" />
                         </div>
                         {status && getStatusIcon(status)}
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-full border font-semibold ${getPriorityColor(module.priority)}`}>
+                      <span
+                        className={`rounded-full border px-2 py-1 text-xs font-semibold ${getPriorityColor(module.priority)}`}
+                      >
                         ESSENTIAL
                       </span>
                     </div>
-                    <h3 className="text-theme-text-primary font-bold text-lg mb-2">{module.name}</h3>
-                    <p className="text-theme-text-secondary text-sm mb-4 leading-relaxed">{module.description}</p>
+                    <h3 className="text-theme-text-primary mb-2 text-lg font-bold">{module.name}</h3>
+                    <p className="text-theme-text-secondary mb-4 text-sm leading-relaxed">{module.description}</p>
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
-                        className="btn-primary font-medium w-full"
+                        className="btn-primary w-full font-medium"
                       >
                         Configure Now
                       </button>
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleModuleAction(module.id, 'skip')}
-                          className="flex-1 px-4 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg text-sm transition-colors"
+                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Later
                         </button>
                         <button
                           onClick={() => handleModuleAction(module.id, 'ignore')}
-                          className="flex-1 px-4 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted rounded-lg text-sm transition-colors"
+                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Disable
                         </button>
@@ -251,53 +267,52 @@ const ModuleOverview: React.FC = () => {
 
           {/* Recommended Modules */}
           <div className="mb-8">
-            <div className="flex items-center mb-4">
-              <div className="flex-1 h-px bg-theme-alert-info-border"></div>
-              <h2 className="px-4 text-lg font-bold text-theme-alert-info-text">RECOMMENDED MODULES</h2>
-              <div className="flex-1 h-px bg-theme-alert-info-border"></div>
+            <div className="mb-4 flex items-center">
+              <div className="bg-theme-alert-info-border h-px flex-1"></div>
+              <h2 className="text-theme-alert-info-text px-4 text-lg font-bold">RECOMMENDED MODULES</h2>
+              <div className="bg-theme-alert-info-border h-px flex-1"></div>
             </div>
-            <p className="text-center text-theme-text-muted text-sm mb-6">
+            <p className="text-theme-text-muted mb-6 text-center text-sm">
               Popular modules that enhance operations - configure what fits your workflow
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {groupedModules.recommended.map(module => {
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {groupedModules.recommended.map((module) => {
                 const Icon = module.icon;
                 const status = moduleStatuses[module.id];
                 return (
-                  <div
-                    key={module.id}
-                    className="card hover:border-blue-500/50 p-6 transition-all"
-                  >
-                    <div className="flex items-start justify-between mb-4">
+                  <div key={module.id} className="card p-6 transition-all hover:border-blue-500/50">
+                    <div className="mb-4 flex items-start justify-between">
                       <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
-                          <Icon className="w-6 h-6 text-white" />
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-600">
+                          <Icon className="h-6 w-6 text-white" />
                         </div>
                         {status && getStatusIcon(status)}
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-full border font-semibold ${getPriorityColor(module.priority)}`}>
+                      <span
+                        className={`rounded-full border px-2 py-1 text-xs font-semibold ${getPriorityColor(module.priority)}`}
+                      >
                         RECOMMENDED
                       </span>
                     </div>
-                    <h3 className="text-theme-text-primary font-bold text-lg mb-2">{module.name}</h3>
-                    <p className="text-theme-text-secondary text-sm mb-4 leading-relaxed">{module.description}</p>
+                    <h3 className="text-theme-text-primary mb-2 text-lg font-bold">{module.name}</h3>
+                    <p className="text-theme-text-secondary mb-4 text-sm leading-relaxed">{module.description}</p>
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
-                        className="btn-info font-medium w-full"
+                        className="btn-info w-full font-medium"
                       >
                         Configure Now
                       </button>
                       <div className="flex space-x-2">
                         <button
                           onClick={() => handleModuleAction(module.id, 'skip')}
-                          className="flex-1 px-4 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary rounded-lg text-sm transition-colors"
+                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-secondary flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Skip For Now
                         </button>
                         <button
                           onClick={() => handleModuleAction(module.id, 'ignore')}
-                          className="flex-1 px-4 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted rounded-lg text-sm transition-colors"
+                          className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted flex-1 rounded-lg px-4 py-2 text-sm transition-colors"
                         >
                           Ignore
                         </button>
@@ -311,38 +326,36 @@ const ModuleOverview: React.FC = () => {
 
           {/* Optional Modules */}
           <div className="mb-8">
-            <div className="flex items-center mb-4">
-              <div className="flex-1 h-px bg-theme-surface-border"></div>
-              <h2 className="px-4 text-lg font-bold text-theme-text-muted">OPTIONAL MODULES</h2>
-              <div className="flex-1 h-px bg-theme-surface-border"></div>
+            <div className="mb-4 flex items-center">
+              <div className="bg-theme-surface-border h-px flex-1"></div>
+              <h2 className="text-theme-text-muted px-4 text-lg font-bold">OPTIONAL MODULES</h2>
+              <div className="bg-theme-surface-border h-px flex-1"></div>
             </div>
-            <p className="text-center text-theme-text-muted text-sm mb-6">
+            <p className="text-theme-text-muted mb-6 text-center text-sm">
               Advanced features you can enable when needed - completely optional
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {groupedModules.optional.map(module => {
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              {groupedModules.optional.map((module) => {
                 const Icon = module.icon;
                 const status = moduleStatuses[module.id];
                 const isEnabled = status === FeatureStatus.ENABLED;
                 return (
                   <div
                     key={module.id}
-                    className={`card-secondary backdrop-blur-xs p-5 transition-all ${
-                      isEnabled
-                        ? 'border-green-500/60 ring-1 ring-green-500/40'
-                        : 'hover:border-theme-surface-hover'
+                    className={`card-secondary p-5 backdrop-blur-xs transition-all ${
+                      isEnabled ? 'border-green-500/60 ring-1 ring-green-500/40' : 'hover:border-theme-surface-hover'
                     }`}
                   >
-                    <div className="flex items-start justify-between mb-3">
+                    <div className="mb-3 flex items-start justify-between">
                       <div className="flex items-center space-x-2">
-                        <div className="w-10 h-10 bg-theme-surface rounded-lg flex items-center justify-center">
-                          <Icon className="w-5 h-5 text-theme-text-secondary" />
+                        <div className="bg-theme-surface flex h-10 w-10 items-center justify-center rounded-lg">
+                          <Icon className="text-theme-text-secondary h-5 w-5" />
                         </div>
                         {status && getStatusIcon(status)}
                       </div>
                     </div>
-                    <h3 className="text-theme-text-primary font-bold text-base mb-2">{module.name}</h3>
-                    <p className="text-theme-text-muted text-xs mb-4 leading-relaxed">{module.description}</p>
+                    <h3 className="text-theme-text-primary mb-2 text-base font-bold">{module.name}</h3>
+                    <p className="text-theme-text-muted mb-4 text-xs leading-relaxed">{module.description}</p>
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
@@ -364,7 +377,7 @@ const ModuleOverview: React.FC = () => {
                       </button>
                       <button
                         onClick={() => handleModuleAction(module.id, 'ignore')}
-                        className="w-full px-3 py-2 bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted rounded-lg text-xs transition-colors"
+                        className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-muted w-full rounded-lg px-3 py-2 text-xs transition-colors"
                       >
                         Skip
                       </button>
@@ -383,10 +396,12 @@ const ModuleOverview: React.FC = () => {
         </div>
       </main>
 
-      <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
-        <div className="max-w-7xl mx-auto text-center">
-          <p className="text-theme-text-secondary text-sm">© {currentYear} {departmentName}. All rights reserved.</p>
-          <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
+      <footer className="bg-theme-nav-bg border-theme-nav-border border-t px-6 py-4 backdrop-blur-xs">
+        <div className="mx-auto max-w-7xl text-center">
+          <p className="text-theme-text-secondary text-sm">
+            © {currentYear} {departmentName}. All rights reserved.
+          </p>
+          <p className="text-theme-text-muted mt-1 text-xs">Powered by The Logbook</p>
         </div>
       </footer>
     </div>

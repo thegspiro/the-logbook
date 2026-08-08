@@ -29,18 +29,14 @@ describe('usePullToRefresh', () => {
   });
 
   it('starts in idle state', () => {
-    const { result } = renderHook(() =>
-      usePullToRefresh({ onRefresh })
-    );
+    const { result } = renderHook(() => usePullToRefresh({ onRefresh }));
     expect(result.current.pulling).toBe(false);
     expect(result.current.refreshing).toBe(false);
     expect(result.current.pullDistance).toBe(0);
   });
 
   it('sets pulling state on touch move', () => {
-    const { result } = renderHook(() =>
-      usePullToRefresh({ onRefresh })
-    );
+    const { result } = renderHook(() => usePullToRefresh({ onRefresh }));
 
     act(() => {
       document.dispatchEvent(
@@ -60,9 +56,7 @@ describe('usePullToRefresh', () => {
   });
 
   it('triggers refresh when pulled past threshold', async () => {
-    const { result } = renderHook(() =>
-      usePullToRefresh({ onRefresh, threshold: 40 })
-    );
+    const { result } = renderHook(() => usePullToRefresh({ onRefresh, threshold: 40 }));
 
     act(() => {
       // Pull distance is (endY - startY) * 0.5 = (200-0)*0.5 = 100, which > 40
@@ -74,9 +68,7 @@ describe('usePullToRefresh', () => {
   });
 
   it('does not trigger refresh when pull is below threshold', () => {
-    const { result } = renderHook(() =>
-      usePullToRefresh({ onRefresh, threshold: 80 })
-    );
+    const { result } = renderHook(() => usePullToRefresh({ onRefresh, threshold: 80 }));
 
     act(() => {
       // Pull distance is (20-0)*0.5 = 10, which < 80
@@ -88,9 +80,7 @@ describe('usePullToRefresh', () => {
   });
 
   it('does nothing when disabled', () => {
-    const { result } = renderHook(() =>
-      usePullToRefresh({ onRefresh, disabled: true })
-    );
+    const { result } = renderHook(() => usePullToRefresh({ onRefresh, disabled: true }));
 
     act(() => {
       simulatePull(0, 200);
@@ -103,9 +93,7 @@ describe('usePullToRefresh', () => {
   it('does not activate when page is scrolled down', () => {
     Object.defineProperty(window, 'scrollY', { value: 100, writable: true });
 
-    const { result } = renderHook(() =>
-      usePullToRefresh({ onRefresh })
-    );
+    const { result } = renderHook(() => usePullToRefresh({ onRefresh }));
 
     act(() => {
       simulatePull(0, 200);
@@ -122,9 +110,7 @@ describe('usePullToRefresh', () => {
     });
     onRefresh.mockReturnValue(pendingRefresh);
 
-    const { result } = renderHook(() =>
-      usePullToRefresh({ onRefresh, threshold: 40 })
-    );
+    const { result } = renderHook(() => usePullToRefresh({ onRefresh, threshold: 40 }));
 
     act(() => {
       simulatePull(0, 200);
@@ -144,9 +130,7 @@ describe('usePullToRefresh', () => {
 
   it('clamps pull distance to 1.5x threshold', () => {
     const threshold = 40;
-    const { result } = renderHook(() =>
-      usePullToRefresh({ onRefresh, threshold })
-    );
+    const { result } = renderHook(() => usePullToRefresh({ onRefresh, threshold }));
 
     act(() => {
       document.dispatchEvent(
@@ -199,11 +183,9 @@ describe('usePullToRefresh', () => {
           new TouchEvent('touchstart', {
             bubbles: true,
             touches: [{ clientY: 0 } as Touch],
-          }),
+          })
         );
-        document.dispatchEvent(
-          new TouchEvent('touchmove', { touches: [{ clientY: 200 } as Touch] }),
-        );
+        document.dispatchEvent(new TouchEvent('touchmove', { touches: [{ clientY: 200 } as Touch] }));
       });
 
       expect(result.current.pulling).toBe(false);
@@ -221,11 +203,9 @@ describe('usePullToRefresh', () => {
           new TouchEvent('touchstart', {
             bubbles: true,
             touches: [{ clientY: 0 } as Touch],
-          }),
+          })
         );
-        document.dispatchEvent(
-          new TouchEvent('touchmove', { touches: [{ clientY: 200 } as Touch] }),
-        );
+        document.dispatchEvent(new TouchEvent('touchmove', { touches: [{ clientY: 200 } as Touch] }));
       });
 
       expect(result.current.pulling).toBe(true);

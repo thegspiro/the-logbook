@@ -24,7 +24,15 @@ import {
   List,
   Link,
 } from 'lucide-react';
-import type { EventCreate, RecurringEventCreate, RecurrencePattern, EventType, EventCategoryConfig, RSVPStatus, EventAttachment } from '../types/event';
+import type {
+  EventCreate,
+  RecurringEventCreate,
+  RecurrencePattern,
+  EventType,
+  EventCategoryConfig,
+  RSVPStatus,
+  EventAttachment,
+} from '../types/event';
 import { eventService, locationsService } from '../services/api';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum, CheckInWindowType } from '../constants/enums';
 import type { Location } from '../services/api';
@@ -147,8 +155,18 @@ const ORDINALS = [
 ];
 
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
 
 export const EventForm: React.FC<EventFormProps> = ({
@@ -188,21 +206,25 @@ export const EventForm: React.FC<EventFormProps> = ({
   });
   const [error, setError] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
-  const [locationMode, setLocationMode] = useState<'select' | 'other'>(
-    initialData?.location ? 'other' : 'select'
-  );
+  const [locationMode, setLocationMode] = useState<'select' | 'other'>(initialData?.location ? 'other' : 'select');
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(EVENT_TYPES);
   const [customCategories, setCustomCategories] = useState<EventCategoryConfig[]>([]);
   const [visibleCustomCategories, setVisibleCustomCategories] = useState<string[]>([]);
   const [isRecurring, setIsRecurring] = useState(initialRecurrence?.is_recurring || false);
-  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>(initialRecurrence?.recurrence_pattern || 'weekly');
+  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>(
+    initialRecurrence?.recurrence_pattern || 'weekly'
+  );
   const [recurrenceEndDate, setRecurrenceEndDate] = useState(initialRecurrence?.recurrence_end_date || '');
   const [isRolling, setIsRolling] = useState(initialRecurrence?.rolling_recurrence || false);
-  const [recurrenceCustomDays, setRecurrenceCustomDays] = useState<number[]>(initialRecurrence?.recurrence_custom_days || []);
+  const [recurrenceCustomDays, setRecurrenceCustomDays] = useState<number[]>(
+    initialRecurrence?.recurrence_custom_days || []
+  );
   const [recurrenceWeekday, setRecurrenceWeekday] = useState(initialRecurrence?.recurrence_weekday ?? 0);
   const [recurrenceWeekOrdinal, setRecurrenceWeekOrdinal] = useState(initialRecurrence?.recurrence_week_ordinal ?? 1);
   const [recurrenceMonth, setRecurrenceMonth] = useState(initialRecurrence?.recurrence_month ?? 1);
-  const [recurrenceExceptions, setRecurrenceExceptions] = useState<string[]>(initialRecurrence?.recurrence_exceptions || []);
+  const [recurrenceExceptions, setRecurrenceExceptions] = useState<string[]>(
+    initialRecurrence?.recurrence_exceptions || []
+  );
   const [newExceptionDate, setNewExceptionDate] = useState('');
 
   // Existing attachments from initialData (shown when editing)
@@ -282,13 +304,16 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   useEffect(() => {
     void loadLocations();
-    eventService.getVisibleEventTypesWithCategories()
+    eventService
+      .getVisibleEventTypesWithCategories()
       .then((data) => {
         setVisibleTypes(data.visible_event_types);
         setCustomCategories(data.custom_event_categories || []);
         setVisibleCustomCategories(data.visible_custom_categories || []);
       })
-      .catch(() => { /* fall back to showing all types */ });
+      .catch(() => {
+        /* fall back to showing all types */
+      });
   }, []);
 
   const loadLocations = async () => {
@@ -455,17 +480,22 @@ export const EventForm: React.FC<EventFormProps> = ({
   };
 
   return (
-    <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-8">
+    <form
+      onSubmit={(e) => {
+        void handleSubmit(e);
+      }}
+      className="space-y-8"
+    >
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
 
       {/* === Event Details === */}
       <section className="space-y-6">
-        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
-          <FileText className="w-5 h-5 text-red-700" />
+        <h2 className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
+          <FileText className="h-5 w-5 text-red-700" />
           <span>Event Details</span>
         </h2>
 
@@ -492,11 +522,11 @@ export const EventForm: React.FC<EventFormProps> = ({
             Description
           </label>
           {/* Formatting toolbar */}
-          <div className="flex items-center gap-1 mb-1">
+          <div className="mb-1 flex items-center gap-1">
             <button
               type="button"
               onClick={() => insertMarkdown('bold')}
-              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
               title="Bold (**text**)"
               aria-label="Insert bold text"
             >
@@ -505,7 +535,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <button
               type="button"
               onClick={() => insertMarkdown('italic')}
-              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
               title="Italic (*text*)"
               aria-label="Insert italic text"
             >
@@ -514,7 +544,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             <button
               type="button"
               onClick={() => insertMarkdown('list')}
-              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
               title="Bullet list (- item)"
               aria-label="Insert bullet list"
             >
@@ -523,13 +553,13 @@ export const EventForm: React.FC<EventFormProps> = ({
             <button
               type="button"
               onClick={() => insertMarkdown('link')}
-              className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-1.5 transition-colors"
               title="Link ([text](url))"
               aria-label="Insert link"
             >
               <Link className="h-4 w-4" />
             </button>
-            <span className="ml-2 text-xs text-theme-text-muted">
+            <span className="text-theme-text-muted ml-2 text-xs">
               Supports **bold**, *italic*, - lists, [links](url)
             </span>
           </div>
@@ -572,7 +602,7 @@ export const EventForm: React.FC<EventFormProps> = ({
             )}
           </select>
           {formData.event_type === EventTypeEnum.TRAINING && (
-            <div className="mt-2 bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
+            <div className="mt-2 rounded-lg border border-purple-500/30 bg-purple-500/10 p-3">
               <p className="text-sm text-purple-700 dark:text-purple-300">
                 For training events with course tracking, use "Create Training Session" instead.
               </p>
@@ -589,22 +619,28 @@ export const EventForm: React.FC<EventFormProps> = ({
             <select
               id="custom-category"
               value={formData.custom_category || ''}
-              onChange={(e) => update(e.target.value ? { custom_category: e.target.value } : { custom_category: undefined })}
+              onChange={(e) =>
+                update(e.target.value ? { custom_category: e.target.value } : { custom_category: undefined })
+              }
               className={selectClass}
             >
               <option value="">None</option>
-              {customCategories.filter((c) => visibleCustomCategories.includes(c.value)).map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
+              {customCategories
+                .filter((c) => visibleCustomCategories.includes(c.value))
+                .map((cat) => (
+                  <option key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </option>
+                ))}
               {customCategories.some((c) => !visibleCustomCategories.includes(c.value)) && (
                 <optgroup label="Other">
-                  {customCategories.filter((c) => !visibleCustomCategories.includes(c.value)).map((cat) => (
-                    <option key={cat.value} value={cat.value}>
-                      {cat.label}
-                    </option>
-                  ))}
+                  {customCategories
+                    .filter((c) => !visibleCustomCategories.includes(c.value))
+                    .map((cat) => (
+                      <option key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </option>
+                    ))}
                 </optgroup>
               )}
             </select>
@@ -616,12 +652,12 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       {/* === Schedule === */}
       <section className="space-y-6">
-        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
-          <Clock className="w-5 h-5 text-red-700" />
+        <h2 className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
+          <Clock className="h-5 w-5 text-red-700" />
           <span>Schedule</span>
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label htmlFor="start-datetime" className={labelClass}>
               Start Date & Time <span className="text-red-700 dark:text-red-500">*</span>
@@ -650,20 +686,19 @@ export const EventForm: React.FC<EventFormProps> = ({
 
         {/* Conflict Warning */}
         {conflicts.length > 0 && (
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4" role="status" aria-live="polite">
+          <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4" role="status" aria-live="polite">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600 dark:text-yellow-400" />
               <div>
-                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
-                  Schedule Conflict Detected
-                </p>
-                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Schedule Conflict Detected</p>
+                <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
                   This time overlaps with {conflicts.length === 1 ? 'an event' : 'events'} you have RSVP&apos;d to:
                 </p>
                 <ul className="mt-2 space-y-1">
                   {conflicts.map((evt) => (
                     <li key={evt.id} className="text-sm text-yellow-700 dark:text-yellow-300">
-                      &bull; {evt.title} ({formatForDateTimeInput(evt.start_datetime, tz)} &ndash; {formatForDateTimeInput(evt.end_datetime, tz)})
+                      &bull; {evt.title} ({formatForDateTimeInput(evt.start_datetime, tz)} &ndash;{' '}
+                      {formatForDateTimeInput(evt.end_datetime, tz)})
                     </li>
                   ))}
                 </ul>
@@ -681,7 +716,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 key={h}
                 type="button"
                 onClick={() => setDuration(h)}
-                className="px-4 py-2 text-sm font-medium text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring transition-colors"
+                className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring rounded-lg border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
               >
                 {h} {h === 1 ? 'hour' : 'hours'}
               </button>
@@ -700,15 +735,15 @@ export const EventForm: React.FC<EventFormProps> = ({
                 onChange={(e) => setIsRecurring(e.target.checked)}
                 className={checkboxClass}
               />
-              <label htmlFor="is-recurring" className="text-sm text-theme-text-secondary flex items-center gap-2">
-                <Repeat className="w-4 h-4" />
+              <label htmlFor="is-recurring" className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                <Repeat className="h-4 w-4" />
                 Make this a recurring event
               </label>
             </div>
 
             {isRecurring && (
-              <div className="space-y-4 pl-6 border-l-2 border-red-500/30">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4 border-l-2 border-red-500/30 pl-6">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
                     <label htmlFor="recurrence-pattern" className={labelClass}>
                       Repeats <span className="text-red-700 dark:text-red-500">*</span>
@@ -720,7 +755,9 @@ export const EventForm: React.FC<EventFormProps> = ({
                       className={selectClass}
                     >
                       {RECURRENCE_PATTERNS.map((p) => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -729,19 +766,17 @@ export const EventForm: React.FC<EventFormProps> = ({
                       Duration {!isRolling && <span className="text-red-700 dark:text-red-500">*</span>}
                     </label>
                     <div className="space-y-3">
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <label className="flex cursor-pointer items-center gap-2 text-sm">
                         <input
                           type="checkbox"
                           checked={isRolling}
                           onChange={(e) => setIsRolling(e.target.checked)}
                           className={checkboxClass}
                         />
-                        <span className="text-theme-text-secondary">
-                          Rolling 12-month cycle
-                        </span>
+                        <span className="text-theme-text-secondary">Rolling 12-month cycle</span>
                       </label>
                       {isRolling ? (
-                        <p className="text-xs text-theme-text-muted">
+                        <p className="text-theme-text-muted text-xs">
                           New occurrences are created automatically to maintain a 12-month horizon.
                         </p>
                       ) : (
@@ -770,9 +805,9 @@ export const EventForm: React.FC<EventFormProps> = ({
                               prev.includes(index) ? prev.filter((d) => d !== index) : [...prev, index]
                             );
                           }}
-                          className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                          className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                             recurrenceCustomDays.includes(index)
-                              ? 'bg-red-700 text-white border-red-700'
+                              ? 'border-red-700 bg-red-700 text-white'
                               : 'text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary'
                           }`}
                         >
@@ -784,7 +819,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 )}
 
                 {(recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday') && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                       <label htmlFor="recurrence-ordinal" className={labelClass}>
                         Which Occurrence
@@ -796,7 +831,9 @@ export const EventForm: React.FC<EventFormProps> = ({
                         className={selectClass}
                       >
                         {ORDINALS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -811,7 +848,9 @@ export const EventForm: React.FC<EventFormProps> = ({
                         className={selectClass}
                       >
                         {WEEKDAYS.map((day, index) => (
-                          <option key={day} value={index}>{day}</option>
+                          <option key={day} value={index}>
+                            {day}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -830,7 +869,9 @@ export const EventForm: React.FC<EventFormProps> = ({
                       className={selectClass}
                     >
                       {MONTHS.map((m, index) => (
-                        <option key={m} value={index + 1}>{m}</option>
+                        <option key={m} value={index + 1}>
+                          {m}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -839,7 +880,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                 {/* Exception Dates */}
                 <div>
                   <label className={labelClass}>Exception Dates (dates to skip)</label>
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="mb-2 flex items-center gap-2">
                     <input
                       type="date"
                       value={newExceptionDate}
@@ -855,7 +896,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                         }
                       }}
                       disabled={!newExceptionDate}
-                      className="px-4 py-2 text-sm font-medium rounded-lg bg-red-700 text-white hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                      className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Add
                     </button>
@@ -863,12 +904,15 @@ export const EventForm: React.FC<EventFormProps> = ({
                   {recurrenceExceptions.length > 0 && (
                     <ul className="space-y-1">
                       {recurrenceExceptions.map((date) => (
-                        <li key={date} className="flex items-center justify-between bg-theme-surface-secondary rounded px-3 py-1.5 text-sm">
+                        <li
+                          key={date}
+                          className="bg-theme-surface-secondary flex items-center justify-between rounded px-3 py-1.5 text-sm"
+                        >
                           <span className="text-theme-text-primary">{date}</span>
                           <button
                             type="button"
                             onClick={() => setRecurrenceExceptions((prev) => prev.filter((d) => d !== date))}
-                            className="text-red-500 hover:text-red-700 text-xs font-medium"
+                            className="text-xs font-medium text-red-500 hover:text-red-700"
                           >
                             Remove
                           </button>
@@ -878,9 +922,10 @@ export const EventForm: React.FC<EventFormProps> = ({
                   )}
                 </div>
 
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
                   <p className="text-sm text-blue-700 dark:text-blue-300">
-                    Individual events will be created for each occurrence. You can edit or cancel them independently after creation.
+                    Individual events will be created for each occurrence. You can edit or cancel them independently
+                    after creation.
                   </p>
                 </div>
               </div>
@@ -893,8 +938,8 @@ export const EventForm: React.FC<EventFormProps> = ({
 
       {/* === Location === */}
       <section className="space-y-6">
-        <h2 className="text-xl font-bold text-theme-text-primary flex items-center space-x-2">
-          <MapPin className="w-5 h-5 text-red-700" />
+        <h2 className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
+          <MapPin className="h-5 w-5 text-red-700" />
           <span>Location</span>
         </h2>
 
@@ -905,7 +950,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           {locations.length > 0 ? (
             <select
               id="location-select"
-              value={locationMode === 'other' ? '__other__' : (formData.location_id || '')}
+              value={locationMode === 'other' ? '__other__' : formData.location_id || ''}
               onChange={(e) => handleLocationSelect(e.target.value)}
               className={selectClass}
             >
@@ -932,30 +977,30 @@ export const EventForm: React.FC<EventFormProps> = ({
 
         {/* Show selected location details */}
         {locationMode === 'select' && selectedLocation && (
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+          <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
             <div className="flex items-start gap-3">
-              <MapPin className="w-5 h-5 text-blue-700 mt-0.5 shrink-0" />
+              <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
               <div className="flex-1">
-                <p className="font-semibold text-theme-text-primary">{selectedLocation.name}</p>
+                <p className="text-theme-text-primary font-semibold">{selectedLocation.name}</p>
                 {selectedLocation.building && (
-                  <p className="text-sm text-theme-text-secondary mt-0.5">Building: {selectedLocation.building}</p>
+                  <p className="text-theme-text-secondary mt-0.5 text-sm">Building: {selectedLocation.building}</p>
                 )}
                 {formatLocationAddress(selectedLocation) && (
-                  <p className="text-sm text-theme-text-secondary mt-0.5">{formatLocationAddress(selectedLocation)}</p>
+                  <p className="text-theme-text-secondary mt-0.5 text-sm">{formatLocationAddress(selectedLocation)}</p>
                 )}
-                <div className="flex flex-wrap gap-4 mt-2">
+                <div className="mt-2 flex flex-wrap gap-4">
                   {selectedLocation.room_number && (
-                    <span className="inline-flex items-center text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2.5 py-1 rounded-full">
+                    <span className="inline-flex items-center rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
                       Room {selectedLocation.room_number}
                     </span>
                   )}
                   {selectedLocation.capacity && (
-                    <span className="inline-flex items-center text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2.5 py-1 rounded-full">
+                    <span className="inline-flex items-center rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
                       Capacity: {selectedLocation.capacity}
                     </span>
                   )}
                   {selectedLocation.floor && (
-                    <span className="inline-flex items-center text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2.5 py-1 rounded-full">
+                    <span className="inline-flex items-center rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
                       Floor {selectedLocation.floor}
                     </span>
                   )}
@@ -1001,11 +1046,11 @@ export const EventForm: React.FC<EventFormProps> = ({
       <hr className="border-theme-surface-border" />
 
       {/* === Attendance & RSVP Settings (side-by-side) === */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Attendance */}
         <section className="space-y-4">
-          <h2 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-            <Users className="w-5 h-5 text-red-700" />
+          <h2 className="text-theme-text-primary flex items-center space-x-2 text-lg font-bold">
+            <Users className="h-5 w-5 text-red-700" />
             <span>Attendance</span>
           </h2>
 
@@ -1017,7 +1062,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ is_mandatory: e.target.checked })}
               className={checkboxClass}
             />
-            <label htmlFor="is-mandatory" className="text-sm text-theme-text-secondary">
+            <label htmlFor="is-mandatory" className="text-theme-text-secondary text-sm">
               Mandatory attendance
             </label>
           </div>
@@ -1025,8 +1070,8 @@ export const EventForm: React.FC<EventFormProps> = ({
 
         {/* RSVP Settings */}
         <section className="space-y-4">
-          <h2 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-            <Mail className="w-5 h-5 text-red-700" />
+          <h2 className="text-theme-text-primary flex items-center space-x-2 text-lg font-bold">
+            <Mail className="h-5 w-5 text-red-700" />
             <span>RSVP Settings</span>
           </h2>
 
@@ -1038,13 +1083,13 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ requires_rsvp: e.target.checked })}
               className={checkboxClass}
             />
-            <label htmlFor="requires-rsvp" className="text-sm text-theme-text-secondary">
+            <label htmlFor="requires-rsvp" className="text-theme-text-secondary text-sm">
               Require RSVP
             </label>
           </div>
 
           {formData.requires_rsvp && (
-            <div className="space-y-4 pl-4 border-l-2 border-red-500/30">
+            <div className="space-y-4 border-l-2 border-red-500/30 pl-4">
               <div>
                 <label htmlFor="rsvp-deadline" className={labelClass}>
                   RSVP Deadline
@@ -1079,7 +1124,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                   onChange={(e) => update({ allow_guests: e.target.checked })}
                   className={checkboxClass}
                 />
-                <label htmlFor="allow-guests" className="text-sm text-theme-text-secondary">
+                <label htmlFor="allow-guests" className="text-theme-text-secondary text-sm">
                   Allow guests
                 </label>
               </div>
@@ -1087,19 +1132,25 @@ export const EventForm: React.FC<EventFormProps> = ({
               <fieldset>
                 <legend className={labelClass}>RSVP Status Options</legend>
                 <div className="flex flex-wrap gap-3">
-                  {([RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING, RSVPStatusEnum.MAYBE] as RSVPStatus[]).map((status) => (
-                    <label key={status} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.allowed_rsvp_statuses?.includes(status) || false}
-                        onChange={(e) => toggleRsvpStatus(status, e.target.checked)}
-                        className={checkboxClass}
-                      />
-                      <span className="text-theme-text-secondary">
-                        {status === RSVPStatusEnum.GOING ? 'Going' : status === RSVPStatusEnum.NOT_GOING ? 'Not Going' : 'Maybe'}
-                      </span>
-                    </label>
-                  ))}
+                  {([RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING, RSVPStatusEnum.MAYBE] as RSVPStatus[]).map(
+                    (status) => (
+                      <label key={status} className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={formData.allowed_rsvp_statuses?.includes(status) || false}
+                          onChange={(e) => toggleRsvpStatus(status, e.target.checked)}
+                          className={checkboxClass}
+                        />
+                        <span className="text-theme-text-secondary">
+                          {status === RSVPStatusEnum.GOING
+                            ? 'Going'
+                            : status === RSVPStatusEnum.NOT_GOING
+                              ? 'Not Going'
+                              : 'Maybe'}
+                        </span>
+                      </label>
+                    )
+                  )}
                 </div>
               </fieldset>
             </div>
@@ -1110,11 +1161,11 @@ export const EventForm: React.FC<EventFormProps> = ({
       <hr className="border-theme-surface-border" />
 
       {/* === Check-In Settings & Notifications (side-by-side) === */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Check-In Settings */}
         <section className="space-y-4">
-          <h2 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-            <QrCode className="w-5 h-5 text-red-700" />
+          <h2 className="text-theme-text-primary flex items-center space-x-2 text-lg font-bold">
+            <QrCode className="h-5 w-5 text-red-700" />
             <span>Check-In Settings</span>
           </h2>
 
@@ -1135,7 +1186,7 @@ export const EventForm: React.FC<EventFormProps> = ({
           </div>
 
           {formData.check_in_window_type === CheckInWindowType.WINDOW && (
-            <div className="grid grid-cols-2 gap-3 pl-4 border-l-2 border-red-500/30">
+            <div className="grid grid-cols-2 gap-3 border-l-2 border-red-500/30 pl-4">
               <div>
                 <label htmlFor="checkin-before" className={labelClass}>
                   Minutes before
@@ -1175,7 +1226,7 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ require_checkout: e.target.checked })}
               className={checkboxClass}
             />
-            <label htmlFor="require-checkout" className="text-sm text-theme-text-secondary">
+            <label htmlFor="require-checkout" className="text-theme-text-secondary text-sm">
               Require manual check-out
             </label>
           </div>
@@ -1183,8 +1234,8 @@ export const EventForm: React.FC<EventFormProps> = ({
 
         {/* Notifications */}
         <section className="space-y-4">
-          <h2 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-            <Bell className="w-5 h-5 text-red-700" />
+          <h2 className="text-theme-text-primary flex items-center space-x-2 text-lg font-bold">
+            <Bell className="h-5 w-5 text-red-700" />
             <span>Notifications</span>
           </h2>
 
@@ -1196,13 +1247,13 @@ export const EventForm: React.FC<EventFormProps> = ({
               onChange={(e) => update({ send_reminders: e.target.checked })}
               className={checkboxClass}
             />
-            <label htmlFor="send-reminders" className="text-sm text-theme-text-secondary">
+            <label htmlFor="send-reminders" className="text-theme-text-secondary text-sm">
               Send event reminders
             </label>
           </div>
 
           {formData.send_reminders && (
-            <div className="pl-4 border-l-2 border-red-500/30 space-y-3">
+            <div className="space-y-3 border-l-2 border-red-500/30 pl-4">
               <label className={labelClass}>Reminder Schedule</label>
 
               {(formData.reminder_schedule || [24]).length > 0 && (
@@ -1212,7 +1263,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                     .map((hours) => (
                       <span
                         key={hours}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/30"
+                        className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-700 dark:text-red-300"
                       >
                         {hours >= 168
                           ? `${Math.floor(hours / 168)} week${hours >= 336 ? 's' : ''}`
@@ -1224,9 +1275,7 @@ export const EventForm: React.FC<EventFormProps> = ({
                           type="button"
                           onClick={() =>
                             update({
-                              reminder_schedule: (formData.reminder_schedule || [24]).filter(
-                                (h) => h !== hours
-                              ),
+                              reminder_schedule: (formData.reminder_schedule || [24]).filter((h) => h !== hours),
                             })
                           }
                           className="ml-0.5 hover:text-red-900 dark:hover:text-red-100"
@@ -1278,11 +1327,11 @@ export const EventForm: React.FC<EventFormProps> = ({
       {/* === Attachments === */}
       <Collapsible
         title={
-          <span className="flex items-center space-x-2 text-xl font-bold text-theme-text-primary">
-            <Paperclip className="w-5 h-5 text-red-700" />
+          <span className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
+            <Paperclip className="h-5 w-5 text-red-700" />
             <span>Attachments</span>
             {existingAttachments.length > 0 && (
-              <span className="ml-2 text-xs font-normal bg-theme-surface-secondary text-theme-text-muted px-2 py-0.5 rounded-full">
+              <span className="bg-theme-surface-secondary text-theme-text-muted ml-2 rounded-full px-2 py-0.5 text-xs font-normal">
                 {existingAttachments.length}
               </span>
             )}
@@ -1295,19 +1344,17 @@ export const EventForm: React.FC<EventFormProps> = ({
           {existingAttachments.length > 0 && (
             <div className="space-y-2">
               <label className={labelClass}>Current Attachments</label>
-              <ul className="divide-y divide-theme-surface-border border border-theme-surface-border rounded-lg overflow-hidden">
+              <ul className="divide-theme-surface-border border-theme-surface-border divide-y overflow-hidden rounded-lg border">
                 {existingAttachments.map((attachment) => (
                   <li
                     key={attachment.id}
-                    className="flex items-center justify-between px-4 py-3 bg-theme-surface hover:bg-theme-surface-hover transition-colors"
+                    className="bg-theme-surface hover:bg-theme-surface-hover flex items-center justify-between px-4 py-3 transition-colors"
                   >
-                    <div className="flex items-center space-x-3 min-w-0">
-                      <FileText className="w-4 h-4 text-theme-text-muted shrink-0" />
+                    <div className="flex min-w-0 items-center space-x-3">
+                      <FileText className="text-theme-text-muted h-4 w-4 shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-theme-text-primary truncate">
-                          {attachment.file_name}
-                        </p>
-                        <p className="text-xs text-theme-text-muted">
+                        <p className="text-theme-text-primary truncate text-sm font-medium">{attachment.file_name}</p>
+                        <p className="text-theme-text-muted text-xs">
                           {formatAttachmentSize(attachment.file_size)} &middot; {attachment.file_type}
                         </p>
                       </div>
@@ -1319,8 +1366,8 @@ export const EventForm: React.FC<EventFormProps> = ({
           )}
 
           {/* Upload note */}
-          <div className="flex items-start space-x-3 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-            <Upload className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+          <div className="flex items-start space-x-3 rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
+            <Upload className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
             <div className="text-sm text-blue-700 dark:text-blue-300">
               <p className="font-medium">Upload attachments after creating the event.</p>
               <p className="mt-1 text-blue-600 dark:text-blue-400">
@@ -1332,13 +1379,13 @@ export const EventForm: React.FC<EventFormProps> = ({
       </Collapsible>
 
       {/* === Actions === */}
-      <div className="flex items-center justify-between gap-3 pt-6 border-t border-theme-surface-border">
-        <label className="inline-flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+      <div className="border-theme-surface-border flex items-center justify-between gap-3 border-t pt-6">
+        <label className="text-theme-text-secondary inline-flex cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={formData.is_draft || false}
             onChange={(e) => setFormData({ ...formData, is_draft: e.target.checked })}
-            className="rounded border-theme-input-border text-red-600 focus:ring-red-500"
+            className="border-theme-input-border rounded text-red-600 focus:ring-red-500"
           />
           Save as Draft
         </label>
@@ -1346,14 +1393,14 @@ export const EventForm: React.FC<EventFormProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="px-6 py-3 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring transition-colors"
+            className="border-theme-surface-border text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-secondary focus:ring-theme-focus-ring rounded-lg border px-6 py-3 text-sm font-medium transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-hidden"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="btn-primary border border-transparent disabled:cursor-not-allowed font-medium px-8 py-3 text-sm"
+            className="btn-primary border border-transparent px-8 py-3 text-sm font-medium disabled:cursor-not-allowed"
           >
             {isSubmitting ? 'Saving...' : submitLabel}
           </button>

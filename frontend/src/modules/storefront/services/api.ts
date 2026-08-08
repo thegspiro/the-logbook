@@ -111,17 +111,13 @@ export const storefrontService = {
   },
 
   async previewNotification(notice: string): Promise<StoreNotificationPreview> {
-    const response = await api.get<StoreNotificationPreview>(
-      `/store/settings/notifications/${notice}/preview`,
-    );
+    const response = await api.get<StoreNotificationPreview>(`/store/settings/notifications/${notice}/preview`);
     return response.data;
   },
 
   /** Sends the notice to the signed-in user's own address; no other recipient. */
   async sendNotificationTest(notice: string): Promise<StoreNotificationTest> {
-    const response = await api.post<StoreNotificationTest>(
-      `/store/settings/notifications/${notice}/test`,
-    );
+    const response = await api.post<StoreNotificationTest>(`/store/settings/notifications/${notice}/test`);
     return response.data;
   },
 

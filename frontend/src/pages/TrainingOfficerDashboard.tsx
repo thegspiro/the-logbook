@@ -127,20 +127,22 @@ const TrainingOfficerDashboard: React.FC = () => {
       setMemberMap(memberMapData);
 
       // Process expiring certifications
-      const expiringItems: ExpirationItem[] = expiring.map((record) => {
-        const member = memberMapData.get(record.user_id);
-        const expDate = new Date(record.expiration_date ?? '');
-        const now = new Date();
-        const daysLeft = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return {
-          id: record.id,
-          memberName: member?.name || 'Unknown',
-          memberId: record.user_id,
-          courseName: record.course_name,
-          daysLeft,
-          expirationDate: record.expiration_date ?? '',
-        };
-      }).sort((a, b) => a.daysLeft - b.daysLeft);
+      const expiringItems: ExpirationItem[] = expiring
+        .map((record) => {
+          const member = memberMapData.get(record.user_id);
+          const expDate = new Date(record.expiration_date ?? '');
+          const now = new Date();
+          const daysLeft = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          return {
+            id: record.id,
+            memberName: member?.name || 'Unknown',
+            memberId: record.user_id,
+            courseName: record.course_name,
+            daysLeft,
+            expirationDate: record.expiration_date ?? '',
+          };
+        })
+        .sort((a, b) => a.daysLeft - b.daysLeft);
       setExpiringCertifications(expiringItems);
 
       // Process recent completions (last 30 days)
@@ -200,7 +202,8 @@ const TrainingOfficerDashboard: React.FC = () => {
         totalMembers: members.length,
         trackedMembers: trackedCount > 0 ? trackedCount : members.length,
         compliantMembers: compliantCount,
-        compliancePercentage: complianceDenominator > 0 ? Math.round((compliantCount / complianceDenominator) * 100) : 0,
+        compliancePercentage:
+          complianceDenominator > 0 ? Math.round((compliantCount / complianceDenominator) * 100) : 0,
         expiringCount: expiringItems.length,
         completionsThisMonth: recentRecords.length,
         totalHoursThisYear: totalHours,
@@ -237,10 +240,10 @@ const TrainingOfficerDashboard: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen">
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-center h-64">
-            <div className="flex items-center space-x-3 text-theme-text-primary" role="status" aria-live="polite">
-              <RefreshCw className="w-6 h-6 animate-spin" />
+        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex h-64 items-center justify-center">
+            <div className="text-theme-text-primary flex items-center space-x-3" role="status" aria-live="polite">
+              <RefreshCw className="h-6 w-6 animate-spin" />
               <span>Loading training dashboard...</span>
             </div>
           </div>
@@ -251,51 +254,51 @@ const TrainingOfficerDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-              <GraduationCap className="w-8 h-8 text-red-700" />
+            <h1 className="text-theme-text-primary flex items-center space-x-3 text-3xl font-bold">
+              <GraduationCap className="h-8 w-8 text-red-700" />
               <span>Training Officer Dashboard</span>
             </h1>
-            <p className="text-theme-text-muted mt-1">
-              Manage training, track compliance, and monitor certifications
-            </p>
+            <p className="text-theme-text-muted mt-1">Manage training, track compliance, and monitor certifications</p>
           </div>
 
           <div className="flex items-center space-x-3">
             {/* Refresh Button */}
             <button
-              onClick={() => { void fetchDashboardData(); }}
-              className="p-2 bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
+              onClick={() => {
+                void fetchDashboardData();
+              }}
+              className="bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg p-2 transition-colors"
               title="Refresh Data"
             >
-              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
 
             {/* Quick Actions */}
             <button
               onClick={() => void navigate('/training/sessions/new')}
-              className="btn-success flex font-medium items-center space-x-2"
+              className="btn-success flex items-center space-x-2 font-medium"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="h-5 w-5" />
               <span>New Training Session</span>
             </button>
 
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="p-2 bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg transition-colors"
+              className="bg-theme-input-bg hover:bg-theme-surface-hover text-theme-text-primary rounded-lg p-2 transition-colors"
               title="Dashboard Settings"
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="h-5 w-5" />
             </button>
           </div>
         </div>
 
         {/* Error Banner */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6">
+          <div className="mb-6 rounded-lg border border-red-500/50 bg-red-500/10 p-4">
             <p className="text-red-700">{error}</p>
           </div>
         )}
@@ -303,8 +306,8 @@ const TrainingOfficerDashboard: React.FC = () => {
         {/* Dashboard Settings Panel */}
         {showSettings && (
           <div className="card mb-6 p-6">
-            <h3 className="text-theme-text-primary font-semibold mb-4">Customize Dashboard</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            <h3 className="text-theme-text-primary mb-4 font-semibold">Customize Dashboard</h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
               {[
                 { id: 'compliance-overview', title: 'Compliance Overview', icon: CheckCircle },
                 { id: 'upcoming-expirations', title: 'Upcoming Expirations', icon: AlertTriangle },
@@ -316,7 +319,7 @@ const TrainingOfficerDashboard: React.FC = () => {
                 return (
                   <label
                     key={widget.id}
-                    className="flex items-center space-x-3 p-3 bg-theme-input-bg/50 rounded-lg cursor-pointer hover:bg-theme-surface transition-colors"
+                    className="bg-theme-input-bg/50 hover:bg-theme-surface flex cursor-pointer items-center space-x-3 rounded-lg p-3 transition-colors"
                   >
                     <input
                       type="checkbox"
@@ -324,7 +327,7 @@ const TrainingOfficerDashboard: React.FC = () => {
                       onChange={() => toggleWidget(widget.id as keyof typeof enabledWidgets)}
                       className="form-checkbox"
                     />
-                    <Icon className="w-5 h-5 text-theme-text-muted" />
+                    <Icon className="text-theme-text-muted h-5 w-5" />
                     <span className="text-theme-text-secondary text-sm">{widget.title}</span>
                   </label>
                 );
@@ -334,7 +337,7 @@ const TrainingOfficerDashboard: React.FC = () => {
         )}
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
           <StatCard
             icon={Users}
             label="Total Members"
@@ -368,7 +371,7 @@ const TrainingOfficerDashboard: React.FC = () => {
         </div>
 
         {/* Main Navigation Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           <NavigationCard
             icon={FileText}
             title="Training Requirements"
@@ -414,7 +417,11 @@ const TrainingOfficerDashboard: React.FC = () => {
           <NavigationCard
             icon={ClipboardCheck}
             title="Review Submissions"
-            description={pendingSubmissionCount > 0 ? `${pendingSubmissionCount} pending submissions to review` : 'Review member self-reported training'}
+            description={
+              pendingSubmissionCount > 0
+                ? `${pendingSubmissionCount} pending submissions to review`
+                : 'Review member self-reported training'
+            }
             onClick={() => void navigate('/training/submissions')}
             color="yellow"
           />
@@ -435,7 +442,7 @@ const TrainingOfficerDashboard: React.FC = () => {
         </div>
 
         {/* Customizable Widget Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           {enabledWidgets['compliance-overview'] && (
             <div className="card">
               <ComplianceOverviewWidget stats={stats} />
@@ -451,10 +458,7 @@ const TrainingOfficerDashboard: React.FC = () => {
           )}
           {enabledWidgets['recent-completions'] && (
             <div className="card">
-              <RecentCompletionsWidget
-                completions={recentCompletions.slice(0, 5)}
-                formatDate={formatRelativeDate}
-              />
+              <RecentCompletionsWidget completions={recentCompletions.slice(0, 5)} formatDate={formatRelativeDate} />
             </div>
           )}
           {enabledWidgets['training-hours'] && (
@@ -497,18 +501,16 @@ const StatCard: React.FC<StatCardProps> = ({ icon: Icon, label, value, subtitle,
   return (
     <div
       onClick={onClick}
-      className={`card p-6 ${
- onClick ? 'cursor-pointer hover:bg-theme-surface-hover transition-colors' : ''
- }`}
+      className={`card p-6 ${onClick ? 'hover:bg-theme-surface-hover cursor-pointer transition-colors' : ''}`}
     >
       <div className="flex items-center justify-between">
         <div>
           <p className="text-theme-text-muted text-sm font-medium">{label}</p>
-          <p className="text-theme-text-primary text-3xl font-bold mt-1">{value}</p>
-          {subtitle && <p className="text-theme-text-muted text-xs mt-1">{subtitle}</p>}
+          <p className="text-theme-text-primary mt-1 text-3xl font-bold">{value}</p>
+          {subtitle && <p className="text-theme-text-muted mt-1 text-xs">{subtitle}</p>}
         </div>
         <div className={`${colorClasses[color]} rounded-full p-3`}>
-          <Icon className="w-6 h-6 text-white" />
+          <Icon className="h-6 w-6 text-white" />
         </div>
       </div>
     </div>
@@ -536,14 +538,13 @@ const NavigationCard: React.FC<NavigationCardProps> = ({ icon: Icon, title, desc
   };
 
   return (
-    <button
-      onClick={onClick}
-      className="card group hover:bg-theme-surface-hover p-6 text-left transition-all"
-    >
-      <div className={`bg-linear-to-br ${colorClasses[color]} rounded-lg p-3 w-fit mb-4 group-hover:scale-110 transition-transform`}>
-        <Icon className="w-6 h-6 text-white" />
+    <button onClick={onClick} className="card group hover:bg-theme-surface-hover p-6 text-left transition-all">
+      <div
+        className={`bg-linear-to-br ${colorClasses[color]} mb-4 w-fit rounded-lg p-3 transition-transform group-hover:scale-110`}
+      >
+        <Icon className="h-6 w-6 text-white" />
       </div>
-      <h3 className="text-theme-text-primary font-bold text-lg mb-2">{title}</h3>
+      <h3 className="text-theme-text-primary mb-2 text-lg font-bold">{title}</h3>
       <p className="text-theme-text-muted text-sm">{description}</p>
     </button>
   );
@@ -557,7 +558,7 @@ interface ComplianceOverviewWidgetProps {
 
 const ComplianceOverviewWidget: React.FC<ComplianceOverviewWidgetProps> = ({ stats }) => (
   <div className="p-6">
-    <h3 className="text-theme-text-primary font-semibold mb-4">Department Compliance</h3>
+    <h3 className="text-theme-text-primary mb-4 font-semibold">Department Compliance</h3>
     <div className="space-y-3">
       <ComplianceBar
         label="Member Compliance"
@@ -580,7 +581,7 @@ interface UpcomingExpirationsWidgetProps {
 
 const UpcomingExpirationsWidget: React.FC<UpcomingExpirationsWidgetProps> = ({ expirations, onViewMember }) => (
   <div className="p-6">
-    <h3 className="text-theme-text-primary font-semibold mb-4">Upcoming Expirations</h3>
+    <h3 className="text-theme-text-primary mb-4 font-semibold">Upcoming Expirations</h3>
     {expirations.length === 0 ? (
       <p className="text-theme-text-muted text-sm">No certifications expiring soon!</p>
     ) : (
@@ -589,15 +590,21 @@ const UpcomingExpirationsWidget: React.FC<UpcomingExpirationsWidgetProps> = ({ e
           <div
             key={item.id}
             onClick={() => onViewMember(item.memberId)}
-            className="flex items-center justify-between p-3 bg-theme-input-bg/50 rounded-sm cursor-pointer hover:bg-theme-surface transition-colors"
+            className="bg-theme-input-bg/50 hover:bg-theme-surface flex cursor-pointer items-center justify-between rounded-sm p-3 transition-colors"
           >
             <div>
               <p className="text-theme-text-primary text-sm font-medium">{item.memberName}</p>
               <p className="text-theme-text-muted text-xs">{item.courseName}</p>
             </div>
             <span
-              className={`text-xs font-semibold px-2 py-1 rounded ${
-                item.daysLeft < 0 ? 'bg-red-600 text-white' : item.daysLeft <= 14 ? 'bg-red-600 text-white' : item.daysLeft <= 30 ? 'bg-orange-600 text-white' : 'bg-yellow-600 text-white'
+              className={`rounded px-2 py-1 text-xs font-semibold ${
+                item.daysLeft < 0
+                  ? 'bg-red-600 text-white'
+                  : item.daysLeft <= 14
+                    ? 'bg-red-600 text-white'
+                    : item.daysLeft <= 30
+                      ? 'bg-orange-600 text-white'
+                      : 'bg-yellow-600 text-white'
               }`}
             >
               {item.daysLeft < 0 ? `Expired ${Math.abs(item.daysLeft)}d ago` : `${item.daysLeft} days`}
@@ -616,16 +623,16 @@ interface RecentCompletionsWidgetProps {
 
 const RecentCompletionsWidget: React.FC<RecentCompletionsWidgetProps> = ({ completions, formatDate }) => (
   <div className="p-6">
-    <h3 className="text-theme-text-primary font-semibold mb-4">Recent Completions</h3>
+    <h3 className="text-theme-text-primary mb-4 font-semibold">Recent Completions</h3>
     {completions.length === 0 ? (
       <p className="text-theme-text-muted text-sm">No recent completions.</p>
     ) : (
       <div className="space-y-3">
         {completions.map((item) => (
-          <div key={item.id} className="flex items-center space-x-3 p-3 bg-theme-input-bg/50 rounded-sm">
-            <CheckCircle className="w-5 h-5 text-green-700 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-theme-text-primary text-sm font-medium truncate">{item.memberName}</p>
+          <div key={item.id} className="bg-theme-input-bg/50 flex items-center space-x-3 rounded-sm p-3">
+            <CheckCircle className="h-5 w-5 shrink-0 text-green-700" />
+            <div className="min-w-0 flex-1">
+              <p className="text-theme-text-primary truncate text-sm font-medium">{item.memberName}</p>
               <p className="text-theme-text-muted text-xs">{item.courseName}</p>
             </div>
             <span className="text-theme-text-muted text-xs whitespace-nowrap">{formatDate(item.completionDate)}</span>
@@ -646,25 +653,25 @@ const TrainingHoursSummaryWidget: React.FC<TrainingHoursSummaryWidgetProps> = ({
 
   return (
     <div className="p-6">
-      <h3 className="text-theme-text-primary font-semibold mb-4">Training Hours (This Year)</h3>
+      <h3 className="text-theme-text-primary mb-4 font-semibold">Training Hours (This Year)</h3>
       <div className="space-y-4">
         <div>
-          <div className="flex justify-between text-sm mb-1">
+          <div className="mb-1 flex justify-between text-sm">
             <span className="text-theme-text-muted">Department Total</span>
             <span className="text-theme-text-primary font-semibold">{formatNumber(stats.totalHoursThisYear)} hrs</span>
           </div>
-          <div className="w-full bg-theme-surface rounded-full h-2">
-            <div className="bg-green-600 h-2 rounded-full" style={{ width: `${progressPercent}%` }}></div>
+          <div className="bg-theme-surface h-2 w-full rounded-full">
+            <div className="h-2 rounded-full bg-green-600" style={{ width: `${progressPercent}%` }}></div>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+        <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
           <div className="bg-theme-input-bg/50 rounded-sm p-3">
             <p className="text-theme-text-muted text-xs">Average per Member</p>
-            <p className="text-theme-text-primary font-bold text-xl">{stats.avgHoursPerMember} hrs</p>
+            <p className="text-theme-text-primary text-xl font-bold">{stats.avgHoursPerMember} hrs</p>
           </div>
           <div className="bg-theme-input-bg/50 rounded-sm p-3">
             <p className="text-theme-text-muted text-xs">Goal Progress</p>
-            <p className="text-theme-text-primary font-bold text-xl">{progressPercent}%</p>
+            <p className="text-theme-text-primary text-xl font-bold">{progressPercent}%</p>
           </div>
         </div>
       </div>
@@ -690,16 +697,14 @@ const RequirementsStatusWidget: React.FC<RequirementsStatusWidgetProps> = ({ req
 
   return (
     <div className="p-6">
-      <h3 className="text-theme-text-primary font-semibold mb-4">Requirements Status</h3>
+      <h3 className="text-theme-text-primary mb-4 font-semibold">Requirements Status</h3>
       {requirements.length === 0 ? (
         <p className="text-theme-text-muted text-sm">No active requirements.</p>
       ) : (
         <div className="space-y-3">
           {requirements.slice(0, 5).map((req) => {
             const status = getRequirementStatus(req);
-            return (
-              <RequirementStatusItem key={req.id} name={req.name} status={status} />
-            );
+            return <RequirementStatusItem key={req.id} name={req.name} status={status} />;
           })}
         </div>
       )}
@@ -717,17 +722,17 @@ interface ComplianceBarProps {
 
 const ComplianceBar: React.FC<ComplianceBarProps> = ({ label, percentage, detail }) => (
   <div>
-    <div className="flex justify-between text-sm mb-1">
+    <div className="mb-1 flex justify-between text-sm">
       <span className="text-theme-text-muted">{label}</span>
       <span className="text-theme-text-primary font-semibold">{percentage}%</span>
     </div>
-    <div className="w-full bg-theme-surface rounded-full h-2">
+    <div className="bg-theme-surface h-2 w-full rounded-full">
       <div
         className={`h-2 rounded-full ${percentage >= 80 ? 'bg-green-600' : percentage >= 60 ? 'bg-yellow-600' : 'bg-red-600'}`}
         style={{ width: `${percentage}%` }}
       ></div>
     </div>
-    {detail && <p className="text-theme-text-muted text-xs mt-1">{detail}</p>}
+    {detail && <p className="text-theme-text-muted mt-1 text-xs">{detail}</p>}
   </div>
 );
 
@@ -744,10 +749,12 @@ const RequirementStatusItem: React.FC<RequirementStatusItemProps> = ({ name, sta
   };
 
   return (
-    <div className="p-3 bg-theme-input-bg/50 rounded-sm">
+    <div className="bg-theme-input-bg/50 rounded-sm p-3">
       <div className="flex items-center justify-between">
-        <span className="text-theme-text-primary text-sm font-medium truncate flex-1 mr-2">{name}</span>
-        <span className={`text-xs font-semibold px-2 py-1 rounded-sm ${(statusConfig[status] ?? { color: 'bg-theme-surface-hover', label: status }).color} text-theme-text-primary whitespace-nowrap`}>
+        <span className="text-theme-text-primary mr-2 flex-1 truncate text-sm font-medium">{name}</span>
+        <span
+          className={`rounded-sm px-2 py-1 text-xs font-semibold ${(statusConfig[status] ?? { color: 'bg-theme-surface-hover', label: status }).color} text-theme-text-primary whitespace-nowrap`}
+        >
           {(statusConfig[status] ?? { color: 'bg-theme-surface-hover', label: status }).label}
         </span>
       </div>

@@ -33,13 +33,13 @@ const ShiftCheckInPrintPage: React.FC = () => {
 
   if (!apparatusId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white p-8">
+      <div className="flex min-h-screen items-center justify-center bg-white p-8">
         <div className="max-w-sm text-center">
-          <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto mb-3" aria-hidden="true" />
-          <h1 className="text-lg font-semibold text-gray-900 mb-1">Missing apparatus</h1>
+          <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-amber-500" aria-hidden="true" />
+          <h1 className="mb-1 text-lg font-semibold text-gray-900">Missing apparatus</h1>
           <p className="text-sm text-gray-500">
-            This check-in card link is missing its apparatus, so no QR code can be
-            generated. Reopen it from the shift details.
+            This check-in card link is missing its apparatus, so no QR code can be generated. Reopen it from the shift
+            details.
           </p>
         </div>
       </div>
@@ -47,31 +47,18 @@ const ShiftCheckInPrintPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-white p-8">
-      <div className="w-[4in] max-w-full border-2 border-gray-300 rounded-xl p-6 text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">
-          {apparatusName}
-        </h1>
-        <p className="text-sm text-gray-500 mb-4">
-          Shift Check-In / Check-Out
-        </p>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-white p-8">
+      <div className="w-[4in] max-w-full rounded-xl border-2 border-gray-300 p-6 text-center">
+        <h1 className="mb-1 text-2xl font-bold text-gray-900">{apparatusName}</h1>
+        <p className="mb-4 text-sm text-gray-500">Shift Check-In / Check-Out</p>
 
-        <div className="flex justify-center mb-4">
-          <QRCodeSVG
-            value={checkInUrl}
-            size={200}
-            level="M"
-            includeMargin
-          />
+        <div className="mb-4 flex justify-center">
+          <QRCodeSVG value={checkInUrl} size={200} level="M" includeMargin />
         </div>
 
-        <p className="text-xs text-gray-600 mb-2">
-          Scan with your phone to check in or out
-        </p>
+        <p className="mb-2 text-xs text-gray-600">Scan with your phone to check in or out</p>
         <div className="border-t border-gray-200 pt-2">
-          <p className="text-[10px] text-gray-600 break-all">
-            {checkInUrl}
-          </p>
+          <p className="text-[10px] break-all text-gray-600">{checkInUrl}</p>
         </div>
       </div>
 

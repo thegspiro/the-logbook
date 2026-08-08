@@ -52,7 +52,7 @@ export const EventRecurrenceInfo: React.FC<EventRecurrenceInfoProps> = ({
               Previous
             </Link>
           ) : (
-            <span className="inline-flex items-center gap-0.5 text-theme-text-muted cursor-default">
+            <span className="text-theme-text-muted inline-flex cursor-default items-center gap-0.5">
               <ChevronLeft className="h-4 w-4" />
               Previous
             </span>
@@ -67,7 +67,7 @@ export const EventRecurrenceInfo: React.FC<EventRecurrenceInfoProps> = ({
               <ChevronRight className="h-4 w-4" />
             </Link>
           ) : (
-            <span className="inline-flex items-center gap-0.5 text-theme-text-muted cursor-default">
+            <span className="text-theme-text-muted inline-flex cursor-default items-center gap-0.5">
               Next
               <ChevronRight className="h-4 w-4" />
             </span>
@@ -83,12 +83,15 @@ export const EventRecurrenceInfo: React.FC<EventRecurrenceInfoProps> = ({
         </button>
       </div>
       {showAllOccurrences && (
-        <div className="mt-2 ml-1 space-y-1 max-h-60 overflow-y-auto">
+        <div className="mt-2 ml-1 max-h-60 space-y-1 overflow-y-auto">
           {seriesEvents.map((se) => {
             const isCurrent = se.id === eventId;
             const isUpcoming = new Date(se.start_datetime) > new Date();
             return (
-              <div key={se.id} className={`flex items-center gap-2 text-sm ${isCurrent ? 'font-medium text-theme-text-primary' : ''}`}>
+              <div
+                key={se.id}
+                className={`flex items-center gap-2 text-sm ${isCurrent ? 'text-theme-text-primary font-medium' : ''}`}
+              >
                 {isCurrent ? (
                   <span className="text-theme-text-primary">
                     {formatShortDateTime(se.start_datetime, timezone)} &mdash; {se.title}
@@ -101,9 +104,7 @@ export const EventRecurrenceInfo: React.FC<EventRecurrenceInfoProps> = ({
                     {formatShortDateTime(se.start_datetime, timezone)} &mdash; {se.title}
                   </Link>
                 )}
-                {se.is_cancelled && (
-                  <span className="text-xs text-red-500">Cancelled</span>
-                )}
+                {se.is_cancelled && <span className="text-xs text-red-500">Cancelled</span>}
                 {!se.is_cancelled && isUpcoming && (
                   <span className="text-xs text-green-600 dark:text-green-400">Upcoming</span>
                 )}

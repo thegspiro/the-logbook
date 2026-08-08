@@ -23,16 +23,8 @@ import {
   ClipboardCheck,
 } from 'lucide-react';
 import { useGrantsStore } from '../store/grantsStore';
-import type {
-  GrantOpportunity,
-  GrantComplianceTask,
-  Donation,
-  PipelineSummaryItem,
-} from '../types';
-import {
-  APPLICATION_STATUS_COLORS,
-  COMPLIANCE_STATUS_COLORS,
-} from '../types';
+import type { GrantOpportunity, GrantComplianceTask, Donation, PipelineSummaryItem } from '../types';
+import { APPLICATION_STATUS_COLORS, COMPLIANCE_STATUS_COLORS } from '../types';
 import { Skeleton, SkeletonRow } from '../../../components/ux/Skeleton';
 import { formatDate, daysUntil } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
@@ -101,24 +93,16 @@ interface KpiCardProps {
   linkTo?: string;
 }
 
-const KpiCard: React.FC<KpiCardProps> = ({
-  label,
-  value,
-  icon,
-  iconBgClass,
-  linkTo,
-}) => {
+const KpiCard: React.FC<KpiCardProps> = ({ label, value, icon, iconBgClass, linkTo }) => {
   const content = (
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4 transition-shadow hover:shadow-md">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4 transition-shadow hover:shadow-md">
       <div className="flex items-center gap-3">
         <div className={`rounded-lg p-2 ${iconBgClass}`}>{icon}</div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm text-theme-text-secondary">{label}</p>
-          <p className="text-xl font-bold text-theme-text-primary">{value}</p>
+          <p className="text-theme-text-secondary truncate text-sm">{label}</p>
+          <p className="text-theme-text-primary text-xl font-bold">{value}</p>
         </div>
-        {linkTo && (
-          <ChevronRight className="h-4 w-4 shrink-0 text-theme-text-secondary" />
-        )}
+        {linkTo && <ChevronRight className="text-theme-text-secondary h-4 w-4 shrink-0" />}
       </div>
     </div>
   );
@@ -140,10 +124,7 @@ const DashboardSkeleton: React.FC = () => (
     {/* KPI Row 1 */}
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div
-          key={`kpi1-${String(i)}`}
-          className="rounded-lg border border-theme-surface-border bg-theme-surface p-4"
-        >
+        <div key={`kpi1-${String(i)}`} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
           <div className="flex items-center gap-3">
             <Skeleton className="h-10 w-10" rounded="lg" />
             <div className="flex-1 space-y-2">
@@ -158,10 +139,7 @@ const DashboardSkeleton: React.FC = () => (
     {/* KPI Row 2 */}
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div
-          key={`kpi2-${String(i)}`}
-          className="rounded-lg border border-theme-surface-border bg-theme-surface p-4"
-        >
+        <div key={`kpi2-${String(i)}`} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
           <div className="flex items-center gap-3">
             <Skeleton className="h-10 w-10" rounded="lg" />
             <div className="flex-1 space-y-2">
@@ -174,43 +152,33 @@ const DashboardSkeleton: React.FC = () => (
     </div>
 
     {/* Pipeline Summary */}
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
       <Skeleton className="mb-3 h-5 w-40" />
       <div className="flex flex-wrap gap-2">
         {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton
-            key={`pipe-${String(i)}`}
-            className="h-7 w-24"
-            rounded="full"
-          />
+          <Skeleton key={`pipe-${String(i)}`} className="h-7 w-24" rounded="full" />
         ))}
       </div>
     </div>
 
     {/* Two-column section */}
     <div className="grid gap-6 lg:grid-cols-2">
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface">
-        <div className="border-b border-theme-surface-border p-4">
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+        <div className="border-theme-surface-border border-b p-4">
           <Skeleton className="h-5 w-44" />
         </div>
         {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={`dl-${String(i)}`}
-            className="border-b border-theme-surface-border last:border-b-0"
-          >
+          <div key={`dl-${String(i)}`} className="border-theme-surface-border border-b last:border-b-0">
             <SkeletonRow columns={3} />
           </div>
         ))}
       </div>
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface">
-        <div className="border-b border-theme-surface-border p-4">
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+        <div className="border-theme-surface-border border-b p-4">
           <Skeleton className="h-5 w-44" />
         </div>
         {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={`ct-${String(i)}`}
-            className="border-b border-theme-surface-border last:border-b-0"
-          >
+          <div key={`ct-${String(i)}`} className="border-theme-surface-border border-b last:border-b-0">
             <SkeletonRow columns={3} />
           </div>
         ))}
@@ -218,15 +186,12 @@ const DashboardSkeleton: React.FC = () => (
     </div>
 
     {/* Recent Donations Table */}
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface">
-      <div className="border-b border-theme-surface-border p-4">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+      <div className="border-theme-surface-border border-b p-4">
         <Skeleton className="h-5 w-36" />
       </div>
       {Array.from({ length: 5 }).map((_, i) => (
-        <div
-          key={`don-${String(i)}`}
-          className="border-b border-theme-surface-border last:border-b-0"
-        >
+        <div key={`don-${String(i)}`} className="border-theme-surface-border border-b last:border-b-0">
           <SkeletonRow columns={5} />
         </div>
       ))}
@@ -257,15 +222,10 @@ const PipelineSummary: React.FC<PipelineSummaryProps> = ({ items }) => {
   const statusMap = new Map(items.map((item) => [item.status, item]));
 
   return (
-    <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
+    <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-theme-text-primary">
-          Grant Pipeline
-        </h2>
-        <Link
-          to="/grants/applications"
-          className="text-xs font-medium text-red-600 hover:text-red-700"
-        >
+        <h2 className="text-theme-text-primary text-sm font-semibold">Grant Pipeline</h2>
+        <Link to="/grants/applications" className="text-xs font-medium text-red-600 hover:text-red-700">
           View All
         </Link>
       </div>
@@ -301,65 +261,43 @@ interface UpcomingDeadlinesProps {
   timezone: string;
 }
 
-const UpcomingDeadlines: React.FC<UpcomingDeadlinesProps> = ({
-  deadlines,
-  timezone,
-}) => (
-  <div className="rounded-lg border border-theme-surface-border bg-theme-surface">
-    <div className="flex items-center justify-between border-b border-theme-surface-border p-4">
+const UpcomingDeadlines: React.FC<UpcomingDeadlinesProps> = ({ deadlines, timezone }) => (
+  <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+    <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
       <div className="flex items-center gap-2">
-        <CalendarClock className="h-4 w-4 text-theme-text-secondary" />
-        <h2 className="text-sm font-semibold text-theme-text-primary">
-          Upcoming Deadlines
-        </h2>
+        <CalendarClock className="text-theme-text-secondary h-4 w-4" />
+        <h2 className="text-theme-text-primary text-sm font-semibold">Upcoming Deadlines</h2>
       </div>
-      <Link
-        to="/grants/opportunities"
-        className="text-xs font-medium text-red-600 hover:text-red-700"
-      >
+      <Link to="/grants/opportunities" className="text-xs font-medium text-red-600 hover:text-red-700">
         View All
       </Link>
     </div>
     {deadlines.length === 0 ? (
       <div className="flex flex-col items-center justify-center py-8">
-        <CalendarClock className="mb-2 h-8 w-8 text-theme-text-secondary opacity-40" />
-        <p className="text-sm text-theme-text-secondary">
-          No upcoming deadlines
-        </p>
+        <CalendarClock className="text-theme-text-secondary mb-2 h-8 w-8 opacity-40" />
+        <p className="text-theme-text-secondary text-sm">No upcoming deadlines</p>
       </div>
     ) : (
-      <ul className="divide-y divide-theme-surface-border">
+      <ul className="divide-theme-surface-border divide-y">
         {deadlines.map((opp) => {
           const days = opp.deadlineDate ? daysUntil(opp.deadlineDate) : NaN;
           const deadlineColor = getDeadlineColor(opp.deadlineDate);
           const badgeColor = getDeadlineBadgeColor(opp.deadlineDate);
 
           return (
-            <li key={opp.id} className="p-4 transition-colors hover:bg-theme-surface-hover">
+            <li key={opp.id} className="hover:bg-theme-surface-hover p-4 transition-colors">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-theme-text-primary">
-                    {opp.name}
-                  </p>
-                  <p className="mt-0.5 truncate text-xs text-theme-text-secondary">
-                    {opp.agency}
-                  </p>
+                  <p className="text-theme-text-primary truncate text-sm font-medium">{opp.name}</p>
+                  <p className="text-theme-text-secondary mt-0.5 truncate text-xs">{opp.agency}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className={`text-xs font-medium ${deadlineColor}`}>
-                    {opp.deadlineDate
-                      ? formatDate(opp.deadlineDate, timezone)
-                      : 'No deadline'}
+                    {opp.deadlineDate ? formatDate(opp.deadlineDate, timezone) : 'No deadline'}
                   </p>
                   {!isNaN(days) && (
-                    <span
-                      className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badgeColor}`}
-                    >
-                      {days < 0
-                        ? 'Past due'
-                        : days === 0
-                          ? 'Today'
-                          : `${String(days)}d left`}
+                    <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${badgeColor}`}>
+                      {days < 0 ? 'Past due' : days === 0 ? 'Today' : `${String(days)}d left`}
                     </span>
                   )}
                 </div>
@@ -381,47 +319,34 @@ interface ComplianceTasksProps {
   timezone: string;
 }
 
-const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({
-  tasks,
-  timezone,
-}) => (
-  <div className="rounded-lg border border-theme-surface-border bg-theme-surface">
-    <div className="flex items-center justify-between border-b border-theme-surface-border p-4">
+const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({ tasks, timezone }) => (
+  <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+    <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
       <div className="flex items-center gap-2">
-        <ClipboardCheck className="h-4 w-4 text-theme-text-secondary" />
-        <h2 className="text-sm font-semibold text-theme-text-primary">
-          Compliance Tasks Due
-        </h2>
+        <ClipboardCheck className="text-theme-text-secondary h-4 w-4" />
+        <h2 className="text-theme-text-primary text-sm font-semibold">Compliance Tasks Due</h2>
       </div>
     </div>
     {tasks.length === 0 ? (
       <div className="flex flex-col items-center justify-center py-8">
-        <ClipboardCheck className="mb-2 h-8 w-8 text-theme-text-secondary opacity-40" />
-        <p className="text-sm text-theme-text-secondary">
-          No compliance tasks due
-        </p>
+        <ClipboardCheck className="text-theme-text-secondary mb-2 h-8 w-8 opacity-40" />
+        <p className="text-theme-text-secondary text-sm">No compliance tasks due</p>
       </div>
     ) : (
-      <ul className="divide-y divide-theme-surface-border">
+      <ul className="divide-theme-surface-border divide-y">
         {tasks.map((task) => {
           const statusColor =
-            COMPLIANCE_STATUS_COLORS[task.status] ??
-            'bg-theme-surface-secondary text-theme-text-secondary';
+            COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-theme-surface-secondary text-theme-text-secondary';
           const days = daysUntil(task.dueDate);
-          const urgentClass =
-            !isNaN(days) && days < 7 ? 'text-red-600' : 'text-theme-text-secondary';
+          const urgentClass = !isNaN(days) && days < 7 ? 'text-red-600' : 'text-theme-text-secondary';
 
           return (
-            <li key={task.id} className="p-4 transition-colors hover:bg-theme-surface-hover">
+            <li key={task.id} className="hover:bg-theme-surface-hover p-4 transition-colors">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-theme-text-primary">
-                    {task.title}
-                  </p>
+                  <p className="text-theme-text-primary truncate text-sm font-medium">{task.title}</p>
                   <div className="mt-1 flex items-center gap-2">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColor}`}
-                    >
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColor}`}>
                       {task.status.replace('_', ' ')}
                     </span>
                     <Link
@@ -433,9 +358,7 @@ const ComplianceTasksDue: React.FC<ComplianceTasksProps> = ({
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className={`text-xs font-medium ${urgentClass}`}>
-                    {formatDate(task.dueDate, timezone)}
-                  </p>
+                  <p className={`text-xs font-medium ${urgentClass}`}>{formatDate(task.dueDate, timezone)}</p>
                   {!isNaN(days) && days < 7 && (
                     <span className="mt-1 inline-flex items-center gap-1 text-xs text-red-600">
                       <AlertTriangle className="h-3 w-3" />
@@ -461,72 +384,72 @@ interface RecentDonationsProps {
   timezone: string;
 }
 
-const RecentDonationsTable: React.FC<RecentDonationsProps> = ({
-  donations,
-  timezone,
-}) => (
-  <div className="rounded-lg border border-theme-surface-border bg-theme-surface">
-    <div className="flex items-center justify-between border-b border-theme-surface-border p-4">
+const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timezone }) => (
+  <div className="border-theme-surface-border bg-theme-surface rounded-lg border">
+    <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
       <div className="flex items-center gap-2">
-        <HandCoins className="h-4 w-4 text-theme-text-secondary" />
-        <h2 className="text-sm font-semibold text-theme-text-primary">
-          Recent Donations
-        </h2>
+        <HandCoins className="text-theme-text-secondary h-4 w-4" />
+        <h2 className="text-theme-text-primary text-sm font-semibold">Recent Donations</h2>
       </div>
-      <Link
-        to="/grants/donations"
-        className="text-xs font-medium text-red-600 hover:text-red-700"
-      >
+      <Link to="/grants/donations" className="text-xs font-medium text-red-600 hover:text-red-700">
         View All
       </Link>
     </div>
     {donations.length === 0 ? (
       <div className="flex flex-col items-center justify-center py-8">
-        <HandCoins className="mb-2 h-8 w-8 text-theme-text-secondary opacity-40" />
-        <p className="text-sm text-theme-text-secondary">
-          No recent donations
-        </p>
+        <HandCoins className="text-theme-text-secondary mb-2 h-8 w-8 opacity-40" />
+        <p className="text-theme-text-secondary text-sm">No recent donations</p>
       </div>
     ) : (
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-theme-surface-border bg-theme-surface">
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+            <tr className="border-theme-surface-border bg-theme-surface border-b">
+              <th
+                scope="col"
+                className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+              >
                 Date
               </th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+              <th
+                scope="col"
+                className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+              >
                 Donor
               </th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+              <th
+                scope="col"
+                className="text-theme-text-secondary px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
+              >
                 Amount
               </th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+              <th
+                scope="col"
+                className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+              >
                 Campaign
               </th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-theme-text-secondary">
+              <th
+                scope="col"
+                className="text-theme-text-secondary px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
+              >
                 Method
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-theme-surface-border">
+          <tbody className="divide-theme-surface-border divide-y">
             {donations.map((donation) => (
-              <tr
-                key={donation.id}
-                className="transition-colors hover:bg-theme-surface-hover"
-              >
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-primary">
+              <tr key={donation.id} className="hover:bg-theme-surface-hover transition-colors">
+                <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
                   {formatDate(donation.donationDate, timezone)}
                 </td>
-                <td className="px-4 py-3 text-sm font-medium text-theme-text-primary">
-                  {donation.isAnonymous
-                    ? 'Anonymous'
-                    : donation.donorName ?? 'Unknown'}
+                <td className="text-theme-text-primary px-4 py-3 text-sm font-medium">
+                  {donation.isAnonymous ? 'Anonymous' : (donation.donorName ?? 'Unknown')}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-theme-text-primary">
+                <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
                   {formatCurrencyWhole(Number(donation.amount))}
                 </td>
-                <td className="px-4 py-3 text-sm text-theme-text-secondary">
+                <td className="text-theme-text-secondary px-4 py-3 text-sm">
                   {donation.campaignId ? (
                     <Link
                       to={`/grants/campaigns/${donation.campaignId}`}
@@ -538,9 +461,8 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({
                     <span className="text-theme-text-secondary">--</span>
                   )}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-theme-text-secondary">
-                  {PAYMENT_METHOD_LABELS[donation.paymentMethod] ??
-                    donation.paymentMethod}
+                <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                  {PAYMENT_METHOD_LABELS[donation.paymentMethod] ?? donation.paymentMethod}
                 </td>
               </tr>
             ))}
@@ -557,8 +479,7 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({
 
 const GrantsDashboardPage: React.FC = () => {
   const tz = useTimezone();
-  const { dashboard, isLoading, error, fetchDashboard, clearError } =
-    useGrantsStore();
+  const { dashboard, isLoading, error, fetchDashboard, clearError } = useGrantsStore();
 
   useEffect(() => {
     void fetchDashboard();
@@ -579,10 +500,8 @@ const GrantsDashboardPage: React.FC = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">
-            Grants & Fundraising
-          </h1>
-          <p className="mt-1 text-sm text-theme-text-secondary">
+          <h1 className="text-theme-text-primary text-2xl font-bold">Grants & Fundraising</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">
             Overview of grants, campaigns, and fundraising activity
           </p>
         </div>
@@ -596,10 +515,8 @@ const GrantsDashboardPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-theme-text-primary">
-            Grants & Fundraising
-          </h1>
-          <p className="mt-1 text-sm text-theme-text-secondary">
+          <h1 className="text-theme-text-primary text-2xl font-bold">Grants & Fundraising</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">
             Overview of grants, campaigns, and fundraising activity
           </p>
         </div>
@@ -690,21 +607,12 @@ const GrantsDashboardPage: React.FC = () => {
 
       {/* Two-column: Upcoming Deadlines + Compliance Tasks */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <UpcomingDeadlines
-          deadlines={dashboard?.upcomingDeadlines ?? []}
-          timezone={tz}
-        />
-        <ComplianceTasksDue
-          tasks={dashboard?.complianceTasksDue ?? []}
-          timezone={tz}
-        />
+        <UpcomingDeadlines deadlines={dashboard?.upcomingDeadlines ?? []} timezone={tz} />
+        <ComplianceTasksDue tasks={dashboard?.complianceTasksDue ?? []} timezone={tz} />
       </div>
 
       {/* Recent Donations */}
-      <RecentDonationsTable
-        donations={(dashboard?.recentDonations ?? []).slice(0, 10)}
-        timezone={tz}
-      />
+      <RecentDonationsTable donations={(dashboard?.recentDonations ?? []).slice(0, 10)} timezone={tz} />
     </div>
   );
 };

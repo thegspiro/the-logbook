@@ -74,28 +74,28 @@ export const useIPSecurityStore = create<IPSecurityState>((set) => ({
     set,
     (includeExpired?: boolean) => ipSecurityService.getMyExceptions(includeExpired ?? false),
     'myExceptions',
-    'Failed to load your IP exceptions',
+    'Failed to load your IP exceptions'
   ),
 
   fetchPendingExceptions: createFetchAction(
     set,
     () => ipSecurityService.getPendingExceptions(),
     'pendingExceptions',
-    'Failed to load pending exceptions',
+    'Failed to load pending exceptions'
   ),
 
   fetchBlockedCountries: createFetchAction(
     set,
     () => ipSecurityService.getBlockedCountries(),
     'blockedCountries',
-    'Failed to load blocked countries',
+    'Failed to load blocked countries'
   ),
 
   fetchAuditLog: createFetchAction(
     set,
     (exceptionId: string) => ipSecurityService.getExceptionAuditLog(exceptionId),
     'auditLog',
-    'Failed to load audit log',
+    'Failed to load audit log'
   ),
 
   // Multi-key fetches — keep inline (set multiple state keys from one response)
@@ -198,9 +198,7 @@ export const useIPSecurityStore = create<IPSecurityState>((set) => ({
     try {
       await ipSecurityService.removeBlockedCountry(countryCode);
       set((state) => ({
-        blockedCountries: state.blockedCountries.filter(
-          (c) => c.countryCode !== countryCode.toUpperCase(),
-        ),
+        blockedCountries: state.blockedCountries.filter((c) => c.countryCode !== countryCode.toUpperCase()),
         isSaving: false,
       }));
     } catch (err: unknown) {

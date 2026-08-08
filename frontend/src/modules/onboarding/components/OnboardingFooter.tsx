@@ -8,12 +8,12 @@ const OnboardingFooter: React.FC<OnboardingFooterProps> = ({ departmentName }) =
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-theme-nav-bg backdrop-blur-xs border-t border-theme-nav-border px-6 py-4">
-      <div className="max-w-7xl mx-auto text-center">
+    <footer className="bg-theme-nav-bg border-theme-nav-border border-t px-6 py-4 backdrop-blur-xs">
+      <div className="mx-auto max-w-7xl text-center">
         <p className="text-theme-text-secondary text-sm">
           © {currentYear} {departmentName}. All rights reserved.
         </p>
-        <p className="text-theme-text-muted text-xs mt-1">Powered by The Logbook</p>
+        <p className="text-theme-text-muted mt-1 text-xs">Powered by The Logbook</p>
       </div>
     </footer>
   );

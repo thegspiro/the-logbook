@@ -241,154 +241,152 @@ const MessagesAdminPage: React.FC = () => {
       </div>
 
       <div aria-busy={isLoading} className={isLoading ? 'opacity-60 transition-opacity' : undefined}>
-      {messages.length === 0 && !composing && !editing ? (
-        hasFilters ? (
-          <EmptyState
-            icon={Search}
-            title="No matching messages"
-            description="No messages match your search or filters."
-          />
+        {messages.length === 0 && !composing && !editing ? (
+          hasFilters ? (
+            <EmptyState
+              icon={Search}
+              title="No matching messages"
+              description="No messages match your search or filters."
+            />
+          ) : (
+            <EmptyState
+              icon={Megaphone}
+              title="No messages yet"
+              description="Post a department announcement to reach your members."
+              actions={[{ label: 'New message', onClick: () => setComposing(true) }]}
+            />
+          )
         ) : (
-          <EmptyState
-            icon={Megaphone}
-            title="No messages yet"
-            description="Post a department announcement to reach your members."
-            actions={[{ label: 'New message', onClick: () => setComposing(true) }]}
-          />
-        )
-      ) : (
-        <ul className="space-y-3">
-          {messages.map((m) => (
-            <li key={m.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {m.is_pinned && <Pin className="text-theme-info h-4 w-4" aria-label="Pinned" />}
-                    <span className="text-theme-text-primary font-semibold">{m.title}</span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
-                        PRIORITY_BADGE[m.priority] ?? PRIORITY_BADGE.normal
-                      }`}
-                    >
-                      {m.priority}
-                    </span>
-                    {m.requires_acknowledgment && (
-                      <span className="bg-theme-surface-secondary text-theme-text-secondary rounded-full px-2 py-0.5 text-xs">
-                        Ack required
+          <ul className="space-y-3">
+            {messages.map((m) => (
+              <li key={m.id} className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {m.is_pinned && <Pin className="text-theme-info h-4 w-4" aria-label="Pinned" />}
+                      <span className="text-theme-text-primary font-semibold">{m.title}</span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+                          PRIORITY_BADGE[m.priority] ?? PRIORITY_BADGE.normal
+                        }`}
+                      >
+                        {m.priority}
                       </span>
-                    )}
-                    {!m.is_active && (
-                      <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-xs">
-                        Inactive
-                      </span>
-                    )}
-                    {m.scheduled_at && new Date(m.scheduled_at).getTime() > Date.now() && (
-                      <span className="bg-theme-info/15 text-theme-info inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
-                        <Clock className="h-3 w-3" aria-hidden="true" />
-                        Scheduled · {formatDateTime(m.scheduled_at, tz)}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-theme-text-muted mt-1 text-xs">
-                    {audienceLabel(m, roleNames)} · {formatDateTime(m.created_at, tz)}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => void handleShowReport(m.id)}
-                    aria-label="View acknowledgments"
-                    className="text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md p-2"
-                  >
-                    <BarChart3 className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => startEdit(m)}
-                    aria-label="Edit message"
-                    className="text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md p-2"
-                  >
-                    <Pencil className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPendingDelete(m)}
-                    aria-label="Delete message"
-                    className="rounded-md p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-
-              {reportFor === m.id && (
-                <div className="border-theme-surface-border text-theme-text-secondary mt-3 border-t pt-3 text-sm">
-                  {report ? (
-                    <>
-                      <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1">
-                        <span>
-                          Read:{' '}
-                          <strong className="text-theme-text-primary">
-                            {report.total_read}/{report.total_targeted}
-                          </strong>
+                      {m.requires_acknowledgment && (
+                        <span className="bg-theme-surface-secondary text-theme-text-secondary rounded-full px-2 py-0.5 text-xs">
+                          Ack required
                         </span>
-                        {report.requires_acknowledgment && (
+                      )}
+                      {!m.is_active && (
+                        <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-xs">
+                          Inactive
+                        </span>
+                      )}
+                      {m.scheduled_at && new Date(m.scheduled_at).getTime() > Date.now() && (
+                        <span className="bg-theme-info/15 text-theme-info inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
+                          <Clock className="h-3 w-3" aria-hidden="true" />
+                          Scheduled · {formatDateTime(m.scheduled_at, tz)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      {audienceLabel(m, roleNames)} · {formatDateTime(m.created_at, tz)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => void handleShowReport(m.id)}
+                      aria-label="View acknowledgments"
+                      className="text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md p-2"
+                    >
+                      <BarChart3 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(m)}
+                      aria-label="Edit message"
+                      className="text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md p-2"
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDelete(m)}
+                      aria-label="Delete message"
+                      className="rounded-md p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+
+                {reportFor === m.id && (
+                  <div className="border-theme-surface-border text-theme-text-secondary mt-3 border-t pt-3 text-sm">
+                    {report ? (
+                      <>
+                        <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1">
                           <span>
-                            Acknowledged:{' '}
+                            Read:{' '}
                             <strong className="text-theme-text-primary">
-                              {report.total_acknowledged}/{report.total_targeted}
+                              {report.total_read}/{report.total_targeted}
                             </strong>
                           </span>
+                          {report.requires_acknowledgment && (
+                            <span>
+                              Acknowledged:{' '}
+                              <strong className="text-theme-text-primary">
+                                {report.total_acknowledged}/{report.total_targeted}
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+                        {report.recipients.length === 0 ? (
+                          <p className="text-theme-text-muted">This message is not targeted at anyone.</p>
+                        ) : (
+                          <ul className="divide-theme-surface-border max-h-60 divide-y overflow-y-auto">
+                            {report.recipients.map((r) => {
+                              const state = r.is_acknowledged
+                                ? {
+                                    icon: Check,
+                                    label: 'Acknowledged',
+                                    cls: 'text-theme-success',
+                                  }
+                                : r.is_read
+                                  ? { icon: Eye, label: 'Read', cls: 'text-theme-text-muted' }
+                                  : {
+                                      icon: Clock,
+                                      label: report.requires_acknowledgment ? 'Not acknowledged' : 'Unread',
+                                      cls: 'text-amber-600 dark:text-amber-400',
+                                    };
+                              const StateIcon = state.icon;
+                              return (
+                                <li key={r.user_id} className="flex items-center justify-between gap-3 py-1.5">
+                                  <span className="text-theme-text-primary min-w-0 truncate">
+                                    {r.name}
+                                    {r.status ? (
+                                      <span className="text-theme-text-muted ml-2 text-xs capitalize">{r.status}</span>
+                                    ) : null}
+                                  </span>
+                                  <span className={`flex shrink-0 items-center gap-1 text-xs ${state.cls}`}>
+                                    <StateIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                                    {state.label}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
                         )}
-                      </div>
-                      {report.recipients.length === 0 ? (
-                        <p className="text-theme-text-muted">This message is not targeted at anyone.</p>
-                      ) : (
-                        <ul className="max-h-60 divide-y divide-theme-surface-border overflow-y-auto">
-                          {report.recipients.map((r) => {
-                            const state = r.is_acknowledged
-                              ? {
-                                  icon: Check,
-                                  label: 'Acknowledged',
-                                  cls: 'text-theme-success',
-                                }
-                              : r.is_read
-                                ? { icon: Eye, label: 'Read', cls: 'text-theme-text-muted' }
-                                : {
-                                    icon: Clock,
-                                    label: report.requires_acknowledgment
-                                      ? 'Not acknowledged'
-                                      : 'Unread',
-                                    cls: 'text-amber-600 dark:text-amber-400',
-                                  };
-                            const StateIcon = state.icon;
-                            return (
-                              <li key={r.user_id} className="flex items-center justify-between gap-3 py-1.5">
-                                <span className="text-theme-text-primary min-w-0 truncate">
-                                  {r.name}
-                                  {r.status ? (
-                                    <span className="text-theme-text-muted ml-2 text-xs capitalize">{r.status}</span>
-                                  ) : null}
-                                </span>
-                                <span className={`flex shrink-0 items-center gap-1 text-xs ${state.cls}`}>
-                                  <StateIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                                  {state.label}
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </>
-                  ) : (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  )}
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+                      </>
+                    ) : (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {total > pageSize && (

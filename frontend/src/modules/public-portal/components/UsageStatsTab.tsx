@@ -27,18 +27,14 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subtitle, icon, color
   };
 
   return (
-    <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-6">
+    <div className="bg-theme-surface border-theme-surface-border rounded-lg border p-6">
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <p className="text-sm font-medium text-theme-text-secondary">{title}</p>
-          <p className="mt-2 text-3xl font-semibold text-theme-text-primary">{value}</p>
-          {subtitle && (
-            <p className="mt-1 text-sm text-theme-text-muted">{subtitle}</p>
-          )}
+          <p className="text-theme-text-secondary text-sm font-medium">{title}</p>
+          <p className="text-theme-text-primary mt-2 text-3xl font-semibold">{value}</p>
+          {subtitle && <p className="text-theme-text-muted mt-1 text-sm">{subtitle}</p>}
         </div>
-        <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
-          {icon}
-        </div>
+        <div className={`rounded-lg p-3 ${colorClasses[color]}`}>{icon}</div>
       </div>
     </div>
   );
@@ -54,14 +50,13 @@ const EndpointBar: React.FC<EndpointStatsProps> = ({ endpoint, count, percentage
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-sm">
-        <span className="font-mono text-theme-text-secondary">{endpoint}</span>
-        <span className="text-theme-text-muted">{formatNumber(count)} ({percentage.toFixed(1)}%)</span>
+        <span className="text-theme-text-secondary font-mono">{endpoint}</span>
+        <span className="text-theme-text-muted">
+          {formatNumber(count)} ({percentage.toFixed(1)}%)
+        </span>
       </div>
-      <div className="w-full bg-theme-surface-border rounded-full h-2">
-        <div
-          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-          style={{ width: `${percentage}%` }}
-        />
+      <div className="bg-theme-surface-border h-2 w-full rounded-full">
+        <div className="h-2 rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${percentage}%` }} />
       </div>
     </div>
   );
@@ -72,15 +67,15 @@ export const UsageStatsTab: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-12" role="status" aria-live="polite">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 rounded-md p-4">
+      <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
         <p className="text-red-800 dark:text-red-400">Error loading usage statistics: {error}</p>
       </div>
     );
@@ -88,7 +83,7 @@ export const UsageStatsTab: React.FC = () => {
 
   if (!stats) {
     return (
-      <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-md p-8 text-center">
+      <div className="bg-theme-surface-secondary border-theme-surface-border rounded-md border p-8 text-center">
         <p className="text-theme-text-secondary">No usage statistics available</p>
       </div>
     );
@@ -108,19 +103,24 @@ export const UsageStatsTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-theme-text-primary">Usage Statistics</h3>
-          <p className="text-sm text-theme-text-secondary mt-1">
-            Public portal usage metrics and analytics
-          </p>
+          <h3 className="text-theme-text-primary text-lg font-semibold">Usage Statistics</h3>
+          <p className="text-theme-text-secondary mt-1 text-sm">Public portal usage metrics and analytics</p>
         </div>
         <button
-          onClick={() => { void refetch(); }}
-          className="px-4 py-2 text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
+          onClick={() => {
+            void refetch();
+          }}
+          className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-md border px-4 py-2"
         >
-          <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          <svg className="mr-2 inline h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
           </svg>
           Refresh
         </button>
@@ -128,15 +128,15 @@ export const UsageStatsTab: React.FC = () => {
 
       {/* Request Volume Cards */}
       <div>
-        <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Request Volume</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Request Volume</h4>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <StatCard
             title="Last 24 Hours"
             value={formatNumber(stats.total_requests_24h ?? 0)}
             subtitle={`Avg: ${Math.round((stats.total_requests_24h ?? 0) / 24)}/hour`}
             color="blue"
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             }
@@ -147,8 +147,13 @@ export const UsageStatsTab: React.FC = () => {
             subtitle={`Avg: ${Math.round((stats.total_requests_7d ?? 0) / 7)}/day`}
             color="green"
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
               </svg>
             }
           />
@@ -158,8 +163,13 @@ export const UsageStatsTab: React.FC = () => {
             subtitle={`Avg: ${Math.round((stats.total_requests_30d ?? 0) / 30)}/day`}
             color="purple"
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
               </svg>
             }
           />
@@ -168,15 +178,20 @@ export const UsageStatsTab: React.FC = () => {
 
       {/* Key Metrics */}
       <div>
-        <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Key Metrics</h4>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Key Metrics</h4>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <StatCard
             title="Active API Keys"
             value={stats.active_api_keys}
             color="indigo"
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                />
               </svg>
             }
           />
@@ -185,8 +200,13 @@ export const UsageStatsTab: React.FC = () => {
             value={stats.unique_ips_24h}
             color="blue"
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                />
               </svg>
             }
           />
@@ -196,8 +216,13 @@ export const UsageStatsTab: React.FC = () => {
             subtitle="Last 24 hours"
             color="yellow"
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
             }
           />
@@ -207,8 +232,13 @@ export const UsageStatsTab: React.FC = () => {
             subtitle="Last 24 hours"
             color="red"
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
             }
           />
@@ -217,15 +247,20 @@ export const UsageStatsTab: React.FC = () => {
 
       {/* Response Status Distribution */}
       <div>
-        <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Response Status Distribution (24h)</h4>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Response Status Distribution (24h)</h4>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
           <StatCard
             title="2xx Success"
             value={stats.status_2xx_24h}
             color="green"
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             }
           />
@@ -234,8 +269,13 @@ export const UsageStatsTab: React.FC = () => {
             value={stats.status_4xx_24h}
             color="yellow"
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             }
           />
@@ -244,8 +284,13 @@ export const UsageStatsTab: React.FC = () => {
             value={stats.status_5xx_24h}
             color="red"
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             }
           />
@@ -254,8 +299,13 @@ export const UsageStatsTab: React.FC = () => {
             value={`${stats.avg_response_time_ms}ms`}
             color="blue"
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             }
           />
@@ -263,10 +313,21 @@ export const UsageStatsTab: React.FC = () => {
             title="Error Rate"
             value={`${(stats.error_rate_percentage ?? 0).toFixed(2)}%`}
             subtitle="4xx + 5xx errors"
-            color={(stats.error_rate_percentage ?? 0) > 5 ? 'red' : (stats.error_rate_percentage ?? 0) > 2 ? 'yellow' : 'green'}
+            color={
+              (stats.error_rate_percentage ?? 0) > 5
+                ? 'red'
+                : (stats.error_rate_percentage ?? 0) > 2
+                  ? 'yellow'
+                  : 'green'
+            }
             icon={
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
               </svg>
             }
           />
@@ -276,8 +337,8 @@ export const UsageStatsTab: React.FC = () => {
       {/* Endpoint Usage */}
       {endpointStats.length > 0 && (
         <div>
-          <h4 className="text-sm font-semibold text-theme-text-secondary mb-3">Top Endpoints (All Time)</h4>
-          <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-6 space-y-4">
+          <h4 className="text-theme-text-secondary mb-3 text-sm font-semibold">Top Endpoints (All Time)</h4>
+          <div className="bg-theme-surface border-theme-surface-border space-y-4 rounded-lg border p-6">
             {endpointStats.map((stat) => (
               <EndpointBar
                 key={stat.endpoint}
@@ -287,7 +348,7 @@ export const UsageStatsTab: React.FC = () => {
               />
             ))}
             {Object.keys(stats.endpoint_usage || {}).length > 10 && (
-              <p className="text-xs text-theme-text-muted text-center pt-2">
+              <p className="text-theme-text-muted pt-2 text-center text-xs">
                 Showing top 10 of {Object.keys(stats.endpoint_usage || {}).length} endpoints
               </p>
             )}
@@ -296,18 +357,24 @@ export const UsageStatsTab: React.FC = () => {
       )}
 
       {/* Alerts */}
-      {((stats.error_rate_percentage ?? 0) > 5 || (stats.flagged_suspicious_24h ?? 0) > 10 || (stats.rate_limit_hits_24h ?? 0) > 50) && (
-        <div className="bg-yellow-50 dark:bg-yellow-500/10 border-l-4 border-yellow-400 p-4">
+      {((stats.error_rate_percentage ?? 0) > 5 ||
+        (stats.flagged_suspicious_24h ?? 0) > 10 ||
+        (stats.rate_limit_hits_24h ?? 0) > 50) && (
+        <div className="border-l-4 border-yellow-400 bg-yellow-50 p-4 dark:bg-yellow-500/10">
           <div className="flex">
             <div className="shrink-0">
               <svg className="h-5 w-5 text-yellow-700 dark:text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                <path
+                  fillRule="evenodd"
+                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
               </svg>
             </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-400">Attention Required</h3>
               <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-400">
-                <ul className="list-disc list-inside space-y-1">
+                <ul className="list-inside list-disc space-y-1">
                   {(stats.error_rate_percentage ?? 0) > 5 && (
                     <li>High error rate detected ({(stats.error_rate_percentage ?? 0).toFixed(2)}%)</li>
                   )}

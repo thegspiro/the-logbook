@@ -41,8 +41,7 @@ const inputClass =
 const selectClass =
   'w-full rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-theme-focus-ring';
 const labelClass = 'block text-sm font-medium text-theme-text-primary mb-1';
-const checkboxClass =
-  'h-4 w-4 rounded border-theme-input-border text-red-600 focus:ring-theme-focus-ring';
+const checkboxClass = 'h-4 w-4 rounded border-theme-input-border text-red-600 focus:ring-theme-focus-ring';
 
 export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
   initialData,
@@ -61,7 +60,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
   // Location & Duration
   const [defaultLocation, setDefaultLocation] = useState(initialData?.default_location ?? '');
   const [defaultDurationMinutes, setDefaultDurationMinutes] = useState(
-    initialData?.default_duration_minutes?.toString() ?? '',
+    initialData?.default_duration_minutes?.toString() ?? ''
   );
 
   // RSVP & Attendance
@@ -72,32 +71,24 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
 
   // Reminders
   const [sendReminders, setSendReminders] = useState(initialData?.send_reminders ?? false);
-  const [reminderSchedule, setReminderSchedule] = useState(
-    initialData?.reminder_schedule?.join(', ') ?? '',
-  );
+  const [reminderSchedule, setReminderSchedule] = useState(initialData?.reminder_schedule?.join(', ') ?? '');
 
   // Check-in settings
-  const [checkInWindowType, setCheckInWindowType] = useState(
-    initialData?.check_in_window_type ?? '',
-  );
+  const [checkInWindowType, setCheckInWindowType] = useState(initialData?.check_in_window_type ?? '');
   const [checkInMinutesBefore, setCheckInMinutesBefore] = useState(
-    initialData?.check_in_minutes_before?.toString() ?? '',
+    initialData?.check_in_minutes_before?.toString() ?? ''
   );
-  const [checkInMinutesAfter, setCheckInMinutesAfter] = useState(
-    initialData?.check_in_minutes_after?.toString() ?? '',
-  );
+  const [checkInMinutesAfter, setCheckInMinutesAfter] = useState(initialData?.check_in_minutes_after?.toString() ?? '');
   const [requireCheckout, setRequireCheckout] = useState(initialData?.require_checkout ?? false);
 
   // Collapsible sections
   const [showRsvpSection, setShowRsvpSection] = useState(
-    !!(initialData?.requires_rsvp || initialData?.is_mandatory || initialData?.allow_guests),
+    !!(initialData?.requires_rsvp || initialData?.is_mandatory || initialData?.allow_guests)
   );
   const [showCheckInSection, setShowCheckInSection] = useState(
-    !!(initialData?.check_in_window_type || initialData?.require_checkout),
+    !!(initialData?.check_in_window_type || initialData?.require_checkout)
   );
-  const [showReminderSection, setShowReminderSection] = useState(
-    !!initialData?.send_reminders,
-  );
+  const [showReminderSection, setShowReminderSection] = useState(!!initialData?.send_reminders);
 
   const [nameError, setNameError] = useState('');
 
@@ -154,9 +145,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Basic Information */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-theme-text-primary uppercase tracking-wider">
-          Basic Information
-        </h3>
+        <h3 className="text-theme-text-primary text-sm font-semibold tracking-wider uppercase">Basic Information</h3>
 
         <div>
           <label htmlFor="template-name" className={labelClass}>
@@ -166,14 +155,15 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
             id="template-name"
             type="text"
             value={name}
-            onChange={(e) => { setName(e.target.value); setNameError(''); }}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameError('');
+            }}
             className={`${inputClass} ${nameError ? 'border-red-500' : ''}`}
             placeholder="e.g., Monthly Business Meeting"
             required
           />
-          {nameError && (
-            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{nameError}</p>
-          )}
+          {nameError && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{nameError}</p>}
         </div>
 
         <div>
@@ -211,9 +201,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
 
       {/* Default Event Values */}
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-theme-text-primary uppercase tracking-wider">
-          Default Event Values
-        </h3>
+        <h3 className="text-theme-text-primary text-sm font-semibold tracking-wider uppercase">Default Event Values</h3>
 
         <div>
           <label htmlFor="template-default-title" className={labelClass}>
@@ -243,7 +231,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="template-default-location" className={labelClass}>
               Default Location
@@ -279,7 +267,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
         <button
           type="button"
           onClick={() => setShowRsvpSection((prev) => !prev)}
-          className="flex items-center gap-2 text-sm font-semibold text-theme-text-primary uppercase tracking-wider hover:text-theme-text-secondary transition-colors w-full"
+          className="text-theme-text-primary hover:text-theme-text-secondary flex w-full items-center gap-2 text-sm font-semibold tracking-wider uppercase transition-colors"
         >
           {showRsvpSection ? (
             <ChevronDown className="h-4 w-4" aria-hidden="true" />
@@ -298,7 +286,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
                 onChange={(e) => setRequiresRsvp(e.target.checked)}
                 className={checkboxClass}
               />
-              <label htmlFor="template-requires-rsvp" className="text-sm text-theme-text-primary">
+              <label htmlFor="template-requires-rsvp" className="text-theme-text-primary text-sm">
                 Requires RSVP
               </label>
             </div>
@@ -328,7 +316,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
                 onChange={(e) => setIsMandatory(e.target.checked)}
                 className={checkboxClass}
               />
-              <label htmlFor="template-is-mandatory" className="text-sm text-theme-text-primary">
+              <label htmlFor="template-is-mandatory" className="text-theme-text-primary text-sm">
                 Mandatory attendance
               </label>
             </div>
@@ -341,7 +329,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
                 onChange={(e) => setAllowGuests(e.target.checked)}
                 className={checkboxClass}
               />
-              <label htmlFor="template-allow-guests" className="text-sm text-theme-text-primary">
+              <label htmlFor="template-allow-guests" className="text-theme-text-primary text-sm">
                 Allow guests
               </label>
             </div>
@@ -354,7 +342,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
         <button
           type="button"
           onClick={() => setShowReminderSection((prev) => !prev)}
-          className="flex items-center gap-2 text-sm font-semibold text-theme-text-primary uppercase tracking-wider hover:text-theme-text-secondary transition-colors w-full"
+          className="text-theme-text-primary hover:text-theme-text-secondary flex w-full items-center gap-2 text-sm font-semibold tracking-wider uppercase transition-colors"
         >
           {showReminderSection ? (
             <ChevronDown className="h-4 w-4" aria-hidden="true" />
@@ -373,7 +361,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
                 onChange={(e) => setSendReminders(e.target.checked)}
                 className={checkboxClass}
               />
-              <label htmlFor="template-send-reminders" className="text-sm text-theme-text-primary">
+              <label htmlFor="template-send-reminders" className="text-theme-text-primary text-sm">
                 Send reminders
               </label>
             </div>
@@ -391,7 +379,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
                   className={inputClass}
                   placeholder="24, 2"
                 />
-                <p className="mt-1 text-xs text-theme-text-muted">
+                <p className="text-theme-text-muted mt-1 text-xs">
                   Enter hours before the event when reminders should be sent.
                 </p>
               </div>
@@ -405,7 +393,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
         <button
           type="button"
           onClick={() => setShowCheckInSection((prev) => !prev)}
-          className="flex items-center gap-2 text-sm font-semibold text-theme-text-primary uppercase tracking-wider hover:text-theme-text-secondary transition-colors w-full"
+          className="text-theme-text-primary hover:text-theme-text-secondary flex w-full items-center gap-2 text-sm font-semibold tracking-wider uppercase transition-colors"
         >
           {showCheckInSection ? (
             <ChevronDown className="h-4 w-4" aria-hidden="true" />
@@ -435,7 +423,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
             </div>
 
             {checkInWindowType === 'window' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label htmlFor="template-checkin-before" className={labelClass}>
                     Minutes Before Start
@@ -475,7 +463,7 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
                 onChange={(e) => setRequireCheckout(e.target.checked)}
                 className={checkboxClass}
               />
-              <label htmlFor="template-require-checkout" className="text-sm text-theme-text-primary">
+              <label htmlFor="template-require-checkout" className="text-theme-text-primary text-sm">
                 Require checkout
               </label>
             </div>
@@ -484,12 +472,12 @@ export const EventTemplateForm: React.FC<EventTemplateFormProps> = ({
       </div>
 
       {/* Form Actions */}
-      <div className="flex justify-end gap-3 pt-4 border-t border-theme-surface-border">
+      <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
         <button
           type="button"
           onClick={onCancel}
           disabled={isSubmitting}
-          className="px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+          className="text-theme-text-secondary bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
         >
           Cancel
         </button>

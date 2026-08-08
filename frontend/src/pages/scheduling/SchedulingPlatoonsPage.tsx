@@ -11,10 +11,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Users, Loader2, ShieldAlert } from 'lucide-react';
-import {
-  schedulingService,
-  type PlatoonOverview,
-} from '../../modules/scheduling/services/api';
+import { schedulingService, type PlatoonOverview } from '../../modules/scheduling/services/api';
 import { getErrorMessage } from '../../utils/errorHandling';
 
 // Standard platoon labels offered in the assign dropdown, merged with any
@@ -46,11 +43,9 @@ const SchedulingPlatoonsPage: React.FC = () => {
   }, [load]);
 
   const platoonOptions = useMemo(() => {
-    const present = (overview?.groups || [])
-      .map((g) => g.platoon)
-      .filter((p): p is string => !!p);
+    const present = (overview?.groups || []).map((g) => g.platoon).filter((p): p is string => !!p);
     return Array.from(new Set([...STANDARD_PLATOONS, ...present])).sort((a, b) =>
-      a.toUpperCase().localeCompare(b.toUpperCase()),
+      a.toUpperCase().localeCompare(b.toUpperCase())
     );
   }, [overview]);
 
@@ -71,7 +66,7 @@ const SchedulingPlatoonsPage: React.FC = () => {
       toast.success(
         platoon
           ? `Assigned ${res.updated} member${res.updated === 1 ? '' : 's'} to ${platoon}`
-          : `Cleared platoon for ${res.updated} member${res.updated === 1 ? '' : 's'}`,
+          : `Cleared platoon for ${res.updated} member${res.updated === 1 ? '' : 's'}`
       );
       setSelected(new Set());
       await load();
@@ -83,38 +78,37 @@ const SchedulingPlatoonsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-theme-bg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        <div className="flex items-center gap-3 mb-6">
+    <div className="bg-theme-bg min-h-screen">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        <div className="mb-6 flex items-center gap-3">
           <button
             onClick={() => void navigate('/scheduling')}
-            className="p-1.5 rounded-lg hover:bg-theme-surface-hover text-theme-text-muted"
+            className="hover:bg-theme-surface-hover text-theme-text-muted rounded-lg p-1.5"
             aria-label="Back to scheduling"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-violet-500" />
-            <h1 className="text-xl font-bold text-theme-text-primary">Platoon Management</h1>
+            <Users className="h-5 w-5 text-violet-500" />
+            <h1 className="text-theme-text-primary text-xl font-bold">Platoon Management</h1>
           </div>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
-            <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
+            <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
           </div>
         ) : !overview ? null : (
           <>
             {!overview.platoons_enabled && (
-              <div className="mb-6 rounded-lg bg-amber-500/10 border border-amber-500/30 p-4 flex items-start gap-3">
-                <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+              <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
                 <div className="text-sm text-amber-700 dark:text-amber-400">
-                  Platoon scheduling is turned off for your department. You can still
-                  assign members here, but platoon features won't appear until you
-                  enable it in{' '}
+                  Platoon scheduling is turned off for your department. You can still assign members here, but platoon
+                  features won't appear until you enable it in{' '}
                   <button
                     onClick={() => void navigate('/scheduling/settings?tab=platoons')}
-                    className="underline font-medium"
+                    className="font-medium underline"
                   >
                     Scheduling Settings
                   </button>
@@ -124,15 +118,13 @@ const SchedulingPlatoonsPage: React.FC = () => {
             )}
 
             {/* Bulk-assign toolbar */}
-            <div className="mb-6 rounded-lg bg-theme-surface border border-theme-surface-border p-4 flex flex-wrap items-center gap-3">
-              <span className="text-sm text-theme-text-secondary">
-                {selected.size} selected
-              </span>
+            <div className="bg-theme-surface border-theme-surface-border mb-6 flex flex-wrap items-center gap-3 rounded-lg border p-4">
+              <span className="text-theme-text-secondary text-sm">{selected.size} selected</span>
               <select
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
                 disabled={saving || selected.size === 0}
-                className="bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500 disabled:opacity-50"
+                className="bg-theme-input-bg border-theme-input-border text-theme-text-primary rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 focus:outline-hidden disabled:opacity-50"
               >
                 {platoonOptions.map((p) => (
                   <option key={p} value={p}>
@@ -143,14 +135,14 @@ const SchedulingPlatoonsPage: React.FC = () => {
               <button
                 onClick={() => void assign(target)}
                 disabled={saving || selected.size === 0}
-                className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
               >
-                {saving && <Loader2 className="w-4 h-4 animate-spin" />} Assign to platoon
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />} Assign to platoon
               </button>
               <button
                 onClick={() => void assign(null)}
                 disabled={saving || selected.size === 0}
-                className="px-4 py-2 text-sm border border-theme-surface-border text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover disabled:opacity-50"
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm disabled:opacity-50"
               >
                 Clear platoon
               </button>
@@ -163,39 +155,31 @@ const SchedulingPlatoonsPage: React.FC = () => {
                 return (
                   <div
                     key={key}
-                    className="rounded-lg bg-theme-surface border border-theme-surface-border overflow-hidden"
+                    className="bg-theme-surface border-theme-surface-border overflow-hidden rounded-lg border"
                   >
-                    <div className="px-4 py-3 border-b border-theme-surface-border flex items-center justify-between">
-                      <h2 className="font-semibold text-theme-text-primary">
+                    <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
+                      <h2 className="text-theme-text-primary font-semibold">
                         {group.platoon ? `Platoon ${group.platoon}` : 'Unassigned'}
                       </h2>
-                      <span className="text-xs text-theme-text-muted">
+                      <span className="text-theme-text-muted text-xs">
                         {group.member_count} member{group.member_count === 1 ? '' : 's'}
                       </span>
                     </div>
                     {group.members.length === 0 ? (
-                      <p className="px-4 py-6 text-sm text-theme-text-muted text-center">
-                        No members
-                      </p>
+                      <p className="text-theme-text-muted px-4 py-6 text-center text-sm">No members</p>
                     ) : (
-                      <ul className="divide-y divide-theme-surface-border">
+                      <ul className="divide-theme-surface-border divide-y">
                         {group.members.map((m) => (
                           <li key={m.user_id}>
-                            <label className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-theme-surface-hover">
+                            <label className="hover:bg-theme-surface-hover flex cursor-pointer items-center gap-3 px-4 py-2.5">
                               <input
                                 type="checkbox"
                                 checked={selected.has(m.user_id)}
                                 onChange={() => toggle(m.user_id)}
                                 className="form-checkbox border-theme-surface-border"
                               />
-                              <span className="text-sm text-theme-text-primary">
-                                {m.user_name}
-                              </span>
-                              {m.rank && (
-                                <span className="ml-auto text-xs text-theme-text-muted">
-                                  {m.rank}
-                                </span>
-                              )}
+                              <span className="text-theme-text-primary text-sm">{m.user_name}</span>
+                              {m.rank && <span className="text-theme-text-muted ml-auto text-xs">{m.rank}</span>}
                             </label>
                           </li>
                         ))}

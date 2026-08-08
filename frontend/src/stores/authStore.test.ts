@@ -103,7 +103,10 @@ describe('authStore', () => {
     }
 
     it('sets has_session flag and calls loadUser on success', async () => {
-      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return { token_type: 'bearer', expires_in: 1800 }; });
+      mockLogin.mockImplementation(async () => {
+        simulateLoginCookies();
+        return { token_type: 'bearer', expires_in: 1800 };
+      });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -124,7 +127,10 @@ describe('authStore', () => {
     });
 
     it('calls markLoginComplete without tokens (cookie-only auth)', async () => {
-      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return { token_type: 'bearer', expires_in: 1800 }; });
+      mockLogin.mockImplementation(async () => {
+        simulateLoginCookies();
+        return { token_type: 'bearer', expires_in: 1800 };
+      });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -135,7 +141,10 @@ describe('authStore', () => {
     });
 
     it('does not store tokens in localStorage', async () => {
-      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return { token_type: 'bearer', expires_in: 1800 }; });
+      mockLogin.mockImplementation(async () => {
+        simulateLoginCookies();
+        return { token_type: 'bearer', expires_in: 1800 };
+      });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -152,7 +161,7 @@ describe('authStore', () => {
       await expect(
         act(async () => {
           await getState().login({ username: 'bad', password: 'wrong' });
-        }),
+        })
       ).rejects.toThrow();
 
       const state = getState();
@@ -170,7 +179,7 @@ describe('authStore', () => {
         await expect(
           act(async () => {
             await getState().login({ username: 'bad', password: 'wrong' });
-          }),
+          })
         ).rejects.toThrow();
       }
 
@@ -192,7 +201,7 @@ describe('authStore', () => {
       await expect(
         act(async () => {
           await getState().login({ username: 'bad', password: 'wrong' });
-        }),
+        })
       ).rejects.toThrow();
 
       const stored = sessionStorage.getItem('login_lockout');
@@ -206,7 +215,10 @@ describe('authStore', () => {
       sessionStorage.setItem('login_lockout', JSON.stringify({ loginAttempts: 3, lockedUntil: null }));
       useAuthStore.setState({ loginAttempts: 3, lockedUntil: null });
 
-      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return { token_type: 'bearer', expires_in: 1800 }; });
+      mockLogin.mockImplementation(async () => {
+        simulateLoginCookies();
+        return { token_type: 'bearer', expires_in: 1800 };
+      });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -223,13 +235,16 @@ describe('authStore', () => {
       await expect(
         act(async () => {
           await getState().login({ username: 'bad', password: 'wrong' });
-        }),
+        })
       ).rejects.toThrow();
 
       expect(getState().loginAttempts).toBe(1);
 
       // Now: successful login
-      mockLogin.mockImplementation(async () => { simulateLoginCookies(); return { token_type: 'bearer', expires_in: 1800 }; });
+      mockLogin.mockImplementation(async () => {
+        simulateLoginCookies();
+        return { token_type: 'bearer', expires_in: 1800 };
+      });
       mockGetCurrentUser.mockResolvedValue(fakeUser);
 
       await act(async () => {
@@ -281,7 +296,7 @@ describe('authStore', () => {
             first_name: 'D',
             last_name: 'U',
           });
-        }),
+        })
       ).rejects.toThrow();
 
       expect(getState().error).toBe('Email already taken');

@@ -69,16 +69,12 @@ const KpiCard: React.FC<{
   icon: React.ReactNode;
   color?: string;
 }> = ({ label, value, icon, color }) => (
-  <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
+  <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
     <div className="flex items-center gap-3">
-      <div
-        className={`rounded-lg p-2 ${color ?? 'bg-theme-surface-secondary'}`}
-      >
-        {icon}
-      </div>
+      <div className={`rounded-lg p-2 ${color ?? 'bg-theme-surface-secondary'}`}>{icon}</div>
       <div>
-        <p className="text-xs uppercase text-theme-text-secondary">{label}</p>
-        <p className="text-xl font-bold text-theme-text-primary">{value}</p>
+        <p className="text-theme-text-secondary text-xs uppercase">{label}</p>
+        <p className="text-theme-text-primary text-xl font-bold">{value}</p>
       </div>
     </div>
   </div>
@@ -101,18 +97,11 @@ const HorizontalBarChart: React.FC<{
         return (
           <div key={item.label}>
             <div className="mb-0.5 flex items-center justify-between text-sm">
-              <span className="mr-2 truncate text-theme-text-secondary">
-                {item.label}
-              </span>
-              <span className="shrink-0 font-medium text-theme-text-primary">
-                {fmt(item.value)}
-              </span>
+              <span className="text-theme-text-secondary mr-2 truncate">{item.label}</span>
+              <span className="text-theme-text-primary shrink-0 font-medium">{fmt(item.value)}</span>
             </div>
-            <div className="h-4 w-full overflow-hidden rounded bg-theme-surface-hover">
-              <div
-                className={`h-full rounded transition-all ${color}`}
-                style={{ width: `${pct}%` }}
-              />
+            <div className="bg-theme-surface-hover h-4 w-full overflow-hidden rounded">
+              <div className={`h-full rounded transition-all ${color}`} style={{ width: `${pct}%` }} />
             </div>
           </div>
         );
@@ -146,8 +135,7 @@ const GrantsReportsPage: React.FC = () => {
   const [startDate, setStartDate] = useState(defaults.start);
   const [endDate, setEndDate] = useState(defaults.end);
   const [grantReport, setGrantReport] = useState<GrantReport | null>(null);
-  const [fundraisingReport, setFundraisingReport] =
-    useState<FundraisingReport | null>(null);
+  const [fundraisingReport, setFundraisingReport] = useState<FundraisingReport | null>(null);
   const [isLoadingGrants, setIsLoadingGrants] = useState(false);
   const [isLoadingFundraising, setIsLoadingFundraising] = useState(false);
 
@@ -185,26 +173,19 @@ const GrantsReportsPage: React.FC = () => {
   }, [loadReports]);
 
   // Derived data for grant reports
-  const spendingByCategory =
-    grantReport?.spendingByCategory
-      ? Object.entries(grantReport.spendingByCategory).map(
-          ([label, value]) => ({
-            label: label.charAt(0).toUpperCase() + label.slice(1),
-            value,
-          }),
-        )
-      : [];
+  const spendingByCategory = grantReport?.spendingByCategory
+    ? Object.entries(grantReport.spendingByCategory).map(([label, value]) => ({
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+        value,
+      }))
+    : [];
 
   // Derived data for fundraising reports
-  const donationsByMethod =
-    fundraisingReport?.donationsByMethod
-      ? Object.entries(fundraisingReport.donationsByMethod)
-      : [];
+  const donationsByMethod = fundraisingReport?.donationsByMethod
+    ? Object.entries(fundraisingReport.donationsByMethod)
+    : [];
 
-  const donationsByMethodTotal = donationsByMethod.reduce(
-    (sum, [, v]) => sum + v,
-    0,
-  );
+  const donationsByMethodTotal = donationsByMethod.reduce((sum, [, v]) => sum + v, 0);
 
   const monthlyTotals = fundraisingReport?.monthlyTotals ?? [];
 
@@ -226,44 +207,38 @@ const GrantsReportsPage: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-theme-text-primary">
-          Grants &amp; Fundraising Reports
-        </h1>
-        <p className="mt-1 text-sm text-theme-text-secondary">
-          Grant performance metrics and fundraising analytics
-        </p>
+        <h1 className="text-theme-text-primary text-2xl font-bold">Grants &amp; Fundraising Reports</h1>
+        <p className="text-theme-text-secondary mt-1 text-sm">Grant performance metrics and fundraising analytics</p>
       </div>
 
       {/* Date Range Filter */}
-      <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-4">
+      <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-medium text-theme-text-secondary">
-            Date Range
-          </span>
+          <span className="text-theme-text-secondary text-sm font-medium">Date Range</span>
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-1.5 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="border-theme-input-border bg-theme-input-bg text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none"
           />
-          <span className="text-sm text-theme-text-secondary">to</span>
+          <span className="text-theme-text-secondary text-sm">to</span>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="rounded-lg border border-theme-input-border bg-theme-input-bg px-3 py-1.5 text-sm text-theme-text-primary focus:border-red-500 focus:outline-none"
+            className="border-theme-input-border bg-theme-input-bg text-theme-text-primary rounded-lg border px-3 py-1.5 text-sm focus:border-red-500 focus:outline-none"
           />
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 overflow-x-auto rounded-lg border border-theme-surface-border bg-theme-surface p-1">
+      <div className="border-theme-surface-border bg-theme-surface flex space-x-1 overflow-x-auto rounded-lg border p-1">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+            className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeTab === tab.id
                 ? 'bg-red-600 text-white'
                 : 'text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary'
@@ -291,64 +266,50 @@ const GrantsReportsPage: React.FC = () => {
                 <KpiCard
                   label="Total Applications"
                   value={String(grantReport.totalApplications)}
-                  icon={
-                    <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  }
+                  icon={<FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
                   color="bg-blue-100 dark:bg-blue-900/30"
                 />
                 <KpiCard
                   label="Total Requested"
                   value={formatCurrencyWhole(grantReport.totalRequested)}
-                  icon={
-                    <DollarSign className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                  }
+                  icon={<DollarSign className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
                   color="bg-indigo-100 dark:bg-indigo-900/30"
                 />
                 <KpiCard
                   label="Total Awarded"
                   value={formatCurrencyWhole(grantReport.totalAwarded)}
-                  icon={
-                    <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  }
+                  icon={<DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />}
                   color="bg-green-100 dark:bg-green-900/30"
                 />
                 <KpiCard
                   label="Total Spent"
                   value={formatCurrencyWhole(grantReport.totalSpent)}
-                  icon={
-                    <BarChart3 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                  }
+                  icon={<BarChart3 className="h-5 w-5 text-orange-600 dark:text-orange-400" />}
                   color="bg-orange-100 dark:bg-orange-900/30"
                 />
                 <KpiCard
                   label="Success Rate"
                   value={`${grantReport.successRate}%`}
-                  icon={
-                    <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                  }
+                  icon={<TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
                   color="bg-emerald-100 dark:bg-emerald-900/30"
                 />
                 <KpiCard
                   label="Awarded / Denied"
                   value={`${grantReport.awardedCount} / ${grantReport.deniedCount}`}
-                  icon={
-                    <FileText className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                  }
+                  icon={<FileText className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
                   color="bg-purple-100 dark:bg-purple-900/30"
                 />
               </div>
 
               {/* Compliance Summary */}
-              <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-5">
-                <h3 className="mb-3 font-semibold text-theme-text-primary">
-                  Compliance Summary
-                </h3>
+              <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-5">
+                <h3 className="text-theme-text-primary mb-3 font-semibold">Compliance Summary</h3>
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex rounded-full bg-theme-surface-secondary px-2 py-0.5 text-xs font-medium text-theme-text-secondary">
+                    <span className="bg-theme-surface-secondary text-theme-text-secondary inline-flex rounded-full px-2 py-0.5 text-xs font-medium">
                       Total
                     </span>
-                    <span className="font-bold text-theme-text-primary">
+                    <span className="text-theme-text-primary font-bold">
                       {grantReport.complianceSummary.totalTasks}
                     </span>
                   </div>
@@ -359,9 +320,7 @@ const GrantsReportsPage: React.FC = () => {
                       <CheckCircle2 className="mr-1 h-3 w-3" />
                       Completed
                     </span>
-                    <span className="font-bold text-theme-text-primary">
-                      {grantReport.complianceSummary.completed}
-                    </span>
+                    <span className="text-theme-text-primary font-bold">{grantReport.complianceSummary.completed}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
@@ -370,9 +329,7 @@ const GrantsReportsPage: React.FC = () => {
                       <AlertTriangle className="mr-1 h-3 w-3" />
                       Overdue
                     </span>
-                    <span className="font-bold text-theme-text-primary">
-                      {grantReport.complianceSummary.overdue}
-                    </span>
+                    <span className="text-theme-text-primary font-bold">{grantReport.complianceSummary.overdue}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
@@ -381,30 +338,23 @@ const GrantsReportsPage: React.FC = () => {
                       <Clock className="mr-1 h-3 w-3" />
                       Pending
                     </span>
-                    <span className="font-bold text-theme-text-primary">
-                      {grantReport.complianceSummary.pending}
-                    </span>
+                    <span className="text-theme-text-primary font-bold">{grantReport.complianceSummary.pending}</span>
                   </div>
                 </div>
               </div>
 
               {/* Spending by Category */}
               {spendingByCategory.length > 0 && (
-                <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-5">
-                  <h3 className="mb-4 font-semibold text-theme-text-primary">
-                    Spending by Category
-                  </h3>
-                  <HorizontalBarChart
-                    items={spendingByCategory}
-                    formatValue={formatCurrencyWhole}
-                  />
+                <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-5">
+                  <h3 className="text-theme-text-primary mb-4 font-semibold">Spending by Category</h3>
+                  <HorizontalBarChart items={spendingByCategory} formatValue={formatCurrencyWhole} />
                 </div>
               )}
             </div>
           ) : (
-            <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-8 text-center">
-              <FileText className="mx-auto mb-2 h-8 w-8 text-theme-text-secondary opacity-40" />
-              <p className="text-sm text-theme-text-secondary">
+            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-8 text-center">
+              <FileText className="text-theme-text-secondary mx-auto mb-2 h-8 w-8 opacity-40" />
+              <p className="text-theme-text-secondary text-sm">
                 No grant report data available for the selected period.
               </p>
             </div>
@@ -428,63 +378,47 @@ const GrantsReportsPage: React.FC = () => {
                 <KpiCard
                   label="Total Donations"
                   value={formatCurrencyWhole(fundraisingReport.totalDonations)}
-                  icon={
-                    <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  }
+                  icon={<DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />}
                   color="bg-green-100 dark:bg-green-900/30"
                 />
                 <KpiCard
                   label="Donation Count"
                   value={String(fundraisingReport.donationCount)}
-                  icon={
-                    <BarChart3 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  }
+                  icon={<BarChart3 className="h-5 w-5 text-blue-600 dark:text-blue-400" />}
                   color="bg-blue-100 dark:bg-blue-900/30"
                 />
                 <KpiCard
                   label="Unique Donors"
                   value={String(fundraisingReport.uniqueDonors)}
-                  icon={
-                    <Users className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                  }
+                  icon={<Users className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
                   color="bg-indigo-100 dark:bg-indigo-900/30"
                 />
                 <KpiCard
                   label="Average Gift"
                   value={formatCurrencyWhole(fundraisingReport.averageGift)}
-                  icon={
-                    <TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                  }
+                  icon={<TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />}
                   color="bg-purple-100 dark:bg-purple-900/30"
                 />
               </div>
 
               {/* Donations by Payment Method */}
               {donationsByMethod.length > 0 && (
-                <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-5">
-                  <h3 className="mb-4 font-semibold text-theme-text-primary">
-                    Donations by Payment Method
-                  </h3>
-                  <ul className="divide-y divide-theme-surface-border">
+                <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-5">
+                  <h3 className="text-theme-text-primary mb-4 font-semibold">Donations by Payment Method</h3>
+                  <ul className="divide-theme-surface-border divide-y">
                     {donationsByMethod.map(([method, amount]) => {
-                      const pct =
-                        donationsByMethodTotal > 0
-                          ? (amount / donationsByMethodTotal) * 100
-                          : 0;
+                      const pct = donationsByMethodTotal > 0 ? (amount / donationsByMethodTotal) * 100 : 0;
 
                       return (
-                        <li
-                          key={method}
-                          className="flex items-center justify-between py-2.5"
-                        >
-                          <span className="text-sm text-theme-text-primary">
+                        <li key={method} className="flex items-center justify-between py-2.5">
+                          <span className="text-theme-text-primary text-sm">
                             {PAYMENT_METHOD_LABELS[method] ?? method}
                           </span>
                           <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium text-theme-text-primary">
+                            <span className="text-theme-text-primary text-sm font-medium">
                               {formatCurrencyWhole(amount)}
                             </span>
-                            <span className="w-14 text-right text-xs text-theme-text-secondary">
+                            <span className="text-theme-text-secondary w-14 text-right text-xs">
                               {formatPercent(pct)}
                             </span>
                           </div>
@@ -497,32 +431,25 @@ const GrantsReportsPage: React.FC = () => {
 
               {/* Monthly Totals */}
               {monthlyTotals.length > 0 && (
-                <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-5">
-                  <h3 className="mb-4 font-semibold text-theme-text-primary">
-                    Monthly Totals
-                  </h3>
+                <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-5">
+                  <h3 className="text-theme-text-primary mb-4 font-semibold">Monthly Totals</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-theme-surface-border text-left">
-                          <th scope="col" className="pb-2 font-medium text-theme-text-secondary">
+                        <tr className="border-theme-surface-border border-b text-left">
+                          <th scope="col" className="text-theme-text-secondary pb-2 font-medium">
                             Month
                           </th>
-                          <th scope="col" className="pb-2 text-right font-medium text-theme-text-secondary">
+                          <th scope="col" className="text-theme-text-secondary pb-2 text-right font-medium">
                             Total
                           </th>
                         </tr>
                       </thead>
                       <tbody>
                         {monthlyTotals.map((row) => (
-                          <tr
-                            key={row.month}
-                            className="border-b border-theme-surface-border last:border-0"
-                          >
-                            <td className="py-2 text-theme-text-primary">
-                              {row.month}
-                            </td>
-                            <td className="py-2 text-right font-medium text-theme-text-primary">
+                          <tr key={row.month} className="border-theme-surface-border border-b last:border-0">
+                            <td className="text-theme-text-primary py-2">{row.month}</td>
+                            <td className="text-theme-text-primary py-2 text-right font-medium">
                               {formatCurrencyWhole(row.total)}
                             </td>
                           </tr>
@@ -534,9 +461,9 @@ const GrantsReportsPage: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-8 text-center">
-              <DollarSign className="mx-auto mb-2 h-8 w-8 text-theme-text-secondary opacity-40" />
-              <p className="text-sm text-theme-text-secondary">
+            <div className="border-theme-surface-border bg-theme-surface rounded-lg border p-8 text-center">
+              <DollarSign className="text-theme-text-secondary mx-auto mb-2 h-8 w-8 opacity-40" />
+              <p className="text-theme-text-secondary text-sm">
                 No fundraising report data available for the selected period.
               </p>
             </div>

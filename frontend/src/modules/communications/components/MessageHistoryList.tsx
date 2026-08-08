@@ -56,9 +56,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
         status_filter: statusFilter || undefined,
         search: search || undefined,
         sent_after: sentAfter ? localToUTC(sentAfter + 'T00:00', tz) : undefined,
-        sent_before: sentBefore
-          ? localToUTC(sentBefore + 'T23:59', tz)
-          : undefined,
+        sent_before: sentBefore ? localToUTC(sentBefore + 'T23:59', tz) : undefined,
       });
       setItems(result.items);
       setTotal(result.total);
@@ -109,9 +107,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
 
   const templateLabel = (type: string | undefined) => {
     if (!type) return '';
-    return type
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+    return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
   const inputClass =
@@ -123,9 +119,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
     <div className="space-y-4">
       {/* Header with Send Test Email button */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-theme-text-primary">
-          Message History
-        </h2>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Message History</h2>
         <button
           onClick={() => setShowTestForm(!showTestForm)}
           className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
@@ -137,18 +131,14 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
 
       {/* Send Test Email Form */}
       {showTestForm && (
-        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-theme-text-primary">
-            Send Test Email
-          </h3>
-          <p className="text-xs text-theme-text-muted">
+        <div className="space-y-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
+          <h3 className="text-theme-text-primary text-sm font-semibold">Send Test Email</h3>
+          <p className="text-theme-text-muted text-xs">
             Send a test email to verify your email configuration is working correctly.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                Recipient Email *
-              </label>
+              <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Recipient Email *</label>
               <input
                 type="email"
                 value={testEmail}
@@ -158,9 +148,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-theme-text-secondary mb-1">
-                Template (optional)
-              </label>
+              <label className="text-theme-text-secondary mb-1 block text-xs font-medium">Template (optional)</label>
               <select
                 value={testTemplateId}
                 onChange={(e) => setTestTemplateId(e.target.value)}
@@ -183,16 +171,12 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
               disabled={isSendingTest || !testEmail.trim()}
               className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {isSendingTest ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
+              {isSendingTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {isSendingTest ? 'Sending...' : 'Send Test'}
             </button>
             <button
               onClick={() => setShowTestForm(false)}
-              className="rounded-md border border-theme-surface-border px-4 py-2 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border px-4 py-2 text-sm"
             >
               Cancel
             </button>
@@ -201,31 +185,28 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
       )}
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-theme-text-muted" />
+          <Search className="text-theme-text-muted absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search by subject or recipient..." placeholder="Search by subject or recipient..."
+            aria-label="Search by subject or recipient..."
+            placeholder="Search by subject or recipient..."
             className={inputClass + ' pl-9'}
           />
         </div>
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-theme-text-muted" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className={selectClass}
-          >
+          <Filter className="text-theme-text-muted h-4 w-4" />
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={selectClass}>
             <option value="">All statuses</option>
             <option value="sent">Sent</option>
             <option value="failed">Failed</option>
           </select>
         </div>
         <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-theme-text-muted" />
+          <Calendar className="text-theme-text-muted h-4 w-4" />
           <input
             type="date"
             value={sentAfter}
@@ -233,7 +214,7 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
             className={selectClass}
             title="Sent after"
           />
-          <span className="text-xs text-theme-text-muted">to</span>
+          <span className="text-theme-text-muted text-xs">to</span>
           <input
             type="date"
             value={sentBefore}
@@ -247,37 +228,40 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
       {/* Table */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
-          <Loader2 className="h-6 w-6 animate-spin text-theme-text-muted" />
+          <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
         </div>
       ) : items.length === 0 ? (
-        <div className="text-center py-12">
-          <Mail className="h-12 w-12 mx-auto text-theme-text-muted mb-3" />
+        <div className="py-12 text-center">
+          <Mail className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
           <p className="text-theme-text-secondary text-sm">
-            {search || statusFilter
-              ? 'No messages match your filters.'
-              : 'No emails have been sent yet.'}
+            {search || statusFilter ? 'No messages match your filters.' : 'No emails have been sent yet.'}
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-theme-surface-border">
+        <div className="border-theme-surface-border overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-theme-surface-secondary text-left">
-                <th scope="col" className="px-4 py-3 font-medium text-theme-text-secondary">Status</th>
-                <th scope="col" className="px-4 py-3 font-medium text-theme-text-secondary">Recipient</th>
-                <th scope="col" className="px-4 py-3 font-medium text-theme-text-secondary">Subject</th>
-                <th scope="col" className="px-4 py-3 font-medium text-theme-text-secondary hidden lg:table-cell">
+                <th scope="col" className="text-theme-text-secondary px-4 py-3 font-medium">
+                  Status
+                </th>
+                <th scope="col" className="text-theme-text-secondary px-4 py-3 font-medium">
+                  Recipient
+                </th>
+                <th scope="col" className="text-theme-text-secondary px-4 py-3 font-medium">
+                  Subject
+                </th>
+                <th scope="col" className="text-theme-text-secondary hidden px-4 py-3 font-medium lg:table-cell">
                   Type
                 </th>
-                <th scope="col" className="px-4 py-3 font-medium text-theme-text-secondary">Sent At</th>
+                <th scope="col" className="text-theme-text-secondary px-4 py-3 font-medium">
+                  Sent At
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-theme-surface-border">
+            <tbody className="divide-theme-surface-border divide-y">
               {items.map((item) => (
-                <tr
-                  key={item.id}
-                  className="bg-theme-surface hover:bg-theme-surface-hover transition-colors"
-                >
+                <tr key={item.id} className="bg-theme-surface hover:bg-theme-surface-hover transition-colors">
                   <td className="px-4 py-3">
                     {item.status === 'sent' ? (
                       <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
@@ -294,27 +278,23 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-theme-text-primary truncate max-w-[200px]">
+                  <td className="text-theme-text-primary max-w-[200px] truncate px-4 py-3">
                     {item.to_email}
                     {item.recipient_count > 1 && (
-                      <span className="ml-1 text-xs text-theme-text-muted">
-                        (+{item.recipient_count - 1})
-                      </span>
+                      <span className="text-theme-text-muted ml-1 text-xs">(+{item.recipient_count - 1})</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-theme-text-primary truncate max-w-[300px]">
-                    {item.subject}
-                  </td>
-                  <td className="px-4 py-3 text-theme-text-muted hidden lg:table-cell">
+                  <td className="text-theme-text-primary max-w-[300px] truncate px-4 py-3">{item.subject}</td>
+                  <td className="text-theme-text-muted hidden px-4 py-3 lg:table-cell">
                     {item.template_type ? (
-                      <span className="inline-flex items-center rounded-full bg-theme-surface-secondary px-2 py-0.5 text-xs">
+                      <span className="bg-theme-surface-secondary inline-flex items-center rounded-full px-2 py-0.5 text-xs">
                         {templateLabel(item.template_type)}
                       </span>
                     ) : (
-                      <span className="text-xs text-theme-text-muted">-</span>
+                      <span className="text-theme-text-muted text-xs">-</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-theme-text-muted whitespace-nowrap">
+                  <td className="text-theme-text-muted px-4 py-3 whitespace-nowrap">
                     {formatShortDateTime(item.sent_at, tz)}
                   </td>
                 </tr>
@@ -327,25 +307,24 @@ const MessageHistoryList: React.FC<MessageHistoryListProps> = ({ templates }) =>
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
-          <span className="text-xs text-theme-text-muted">
-            Showing {page * PAGE_SIZE + 1}-
-            {Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+          <span className="text-theme-text-muted text-xs">
+            Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
           </span>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="rounded-md border border-theme-surface-border p-1.5 text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-40"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border p-1.5 disabled:opacity-40"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="px-3 text-xs text-theme-text-secondary">
+            <span className="text-theme-text-secondary px-3 text-xs">
               {page + 1} / {totalPages}
             </span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="rounded-md border border-theme-surface-border p-1.5 text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-40"
+              className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-md border p-1.5 disabled:opacity-40"
             >
               <ChevronRight className="h-4 w-4" />
             </button>

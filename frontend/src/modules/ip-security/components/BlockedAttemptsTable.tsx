@@ -16,8 +16,8 @@ export const BlockedAttemptsTable: React.FC<BlockedAttemptsTableProps> = ({ atte
   const tz = useTimezone();
   if (attempts.length === 0) {
     return (
-      <div className="text-center py-12 text-theme-text-muted">
-        <ShieldOff className="w-12 h-12 mx-auto mb-3 opacity-50" />
+      <div className="text-theme-text-muted py-12 text-center">
+        <ShieldOff className="mx-auto mb-3 h-12 w-12 opacity-50" />
         <p>No blocked access attempts</p>
       </div>
     );
@@ -27,33 +27,39 @@ export const BlockedAttemptsTable: React.FC<BlockedAttemptsTableProps> = ({ atte
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-theme-surface-border text-left text-theme-text-muted">
-            <th scope="col" className="py-3 px-4 font-medium">IP Address</th>
-            <th scope="col" className="py-3 px-4 font-medium">Country</th>
-            <th scope="col" className="py-3 px-4 font-medium">Reason</th>
-            <th scope="col" className="py-3 px-4 font-medium">Path</th>
-            <th scope="col" className="py-3 px-4 font-medium">Method</th>
-            <th scope="col" className="py-3 px-4 font-medium">Blocked At</th>
+          <tr className="border-theme-surface-border text-theme-text-muted border-b text-left">
+            <th scope="col" className="px-4 py-3 font-medium">
+              IP Address
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Country
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Reason
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Path
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Method
+            </th>
+            <th scope="col" className="px-4 py-3 font-medium">
+              Blocked At
+            </th>
           </tr>
         </thead>
         <tbody>
           {attempts.map((a) => (
             <tr
               key={a.id}
-              className="border-b border-theme-surface-border/50 hover:bg-theme-surface-hover transition-colors"
+              className="border-theme-surface-border/50 hover:bg-theme-surface-hover border-b transition-colors"
             >
-              <td className="py-3 px-4 font-mono text-theme-text-primary">{a.ipAddress}</td>
-              <td className="py-3 px-4 text-theme-text-secondary">
-                {a.countryName ?? a.countryCode ?? '—'}
-              </td>
-              <td className="py-3 px-4 text-theme-text-secondary">{a.blockReason}</td>
-              <td className="py-3 px-4 font-mono text-xs text-theme-text-muted">
-                {a.requestPath ?? '—'}
-              </td>
-              <td className="py-3 px-4 text-theme-text-muted">{a.requestMethod ?? '—'}</td>
-              <td className="py-3 px-4 text-theme-text-muted">
-                {a.blockedAt ? formatDateTime(a.blockedAt, tz) : '—'}
-              </td>
+              <td className="text-theme-text-primary px-4 py-3 font-mono">{a.ipAddress}</td>
+              <td className="text-theme-text-secondary px-4 py-3">{a.countryName ?? a.countryCode ?? '—'}</td>
+              <td className="text-theme-text-secondary px-4 py-3">{a.blockReason}</td>
+              <td className="text-theme-text-muted px-4 py-3 font-mono text-xs">{a.requestPath ?? '—'}</td>
+              <td className="text-theme-text-muted px-4 py-3">{a.requestMethod ?? '—'}</td>
+              <td className="text-theme-text-muted px-4 py-3">{a.blockedAt ? formatDateTime(a.blockedAt, tz) : '—'}</td>
             </tr>
           ))}
         </tbody>

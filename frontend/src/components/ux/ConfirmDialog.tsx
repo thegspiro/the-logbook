@@ -59,25 +59,23 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm" aria-describedby="confirm-dialog-message">
       <div className="flex flex-col items-center text-center">
-        <div className={`w-12 h-12 rounded-full ${config.iconBg} flex items-center justify-center mb-4`}>
-          <Icon className={`w-6 h-6 ${config.iconColor}`} />
+        <div className={`h-12 w-12 rounded-full ${config.iconBg} mb-4 flex items-center justify-center`}>
+          <Icon className={`h-6 w-6 ${config.iconColor}`} />
         </div>
-        <p id="confirm-dialog-message" className="text-theme-text-secondary text-sm">{message}</p>
+        <p id="confirm-dialog-message" className="text-theme-text-secondary text-sm">
+          {message}
+        </p>
       </div>
-      <div className="flex gap-3 mt-6">
-        <button
-          onClick={onClose}
-          disabled={loading}
-          className="flex-1 btn-secondary"
-        >
+      <div className="mt-6 flex gap-3">
+        <button onClick={onClose} disabled={loading} className="btn-secondary flex-1">
           {cancelLabel}
         </button>
         <button
           onClick={onConfirm}
           disabled={loading}
-          className={`flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2 ${config.buttonClass}`}
+          className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 transition-colors disabled:opacity-50 ${config.buttonClass}`}
         >
-          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           {confirmLabel}
         </button>
       </div>
