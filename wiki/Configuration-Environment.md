@@ -136,8 +136,15 @@ Generate the keypair **once per deployment** and keep it stable — rotating it
 invalidates every existing device subscription:
 
 ```bash
-python3 -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); print(v.public_key, v.private_key)"
+cd backend && python scripts/generate_vapid_keys.py
 ```
+
+It prints `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` ready to paste into `.env`.
+Both are unpadded base64url, but of different things, and the encodings are not
+interchangeable: the private key is the raw 32-octet P-256 scalar (`pywebpush`
+reads any other decoded length as DER and fails), while the public key is the
+65-octet uncompressed point, the only form `pushManager.subscribe()` accepts as
+`applicationServerKey`.
 
 **Operational notes:**
 
